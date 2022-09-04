@@ -174,12 +174,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
 
         ValidatedAndroidResources resources =
             AndroidResources.from(ruleContext, "resource_files")
-                .process(
-                    ruleContext,
-                    dataContext,
-                    manifest,
-                    DataBinding.contextFrom(ruleContext),
-                    isNeverLink);
+                .process(ruleContext, dataContext, manifest, isNeverLink);
 
         MergedAndroidAssets assets =
             AndroidAssets.from(ruleContext)
@@ -217,7 +212,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       resourceApk =
           ResourceApk.processFromTransitiveLibraryData(
               dataContext,
-              DataBinding.contextFrom(ruleContext),
               resourceDeps,
               assetDeps,
               StampedAndroidManifest.createEmpty(ruleContext, /* exported = */ false));

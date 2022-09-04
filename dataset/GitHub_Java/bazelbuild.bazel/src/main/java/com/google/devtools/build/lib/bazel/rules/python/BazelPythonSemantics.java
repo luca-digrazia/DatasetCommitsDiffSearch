@@ -18,11 +18,9 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile;
-import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
@@ -42,7 +40,10 @@ import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.In
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
+import com.google.devtools.build.lib.rules.cpp.AbstractCcLinkParamsStore;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.rules.python.PyCcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.rules.python.PythonConfiguration;
@@ -60,6 +61,8 @@ import java.util.List;
 public class BazelPythonSemantics implements PythonSemantics {
   private static final Template STUB_TEMPLATE =
       Template.forResource(BazelPythonSemantics.class, "python_stub_template.txt");
+  private static final Template STUB_TEMPLATE_WINDOWS =
+      Template.forResource(BazelPythonSemantics.class, "python_stub_template_windows.txt");
   public static final InstrumentationSpec PYTHON_COLLECTION_SPEC = new InstrumentationSpec(
       FileTypeSet.of(BazelPyRuleClasses.PYTHON_SOURCE),
       "srcs", "deps", "data");
@@ -72,7 +75,10 @@ public class BazelPythonSemantics implements PythonSemantics {
 
   @Override
   public void collectRunfilesForBinary(
-      RuleContext ruleContext, Runfiles.Builder builder, PyCommon common, CcInfo ccInfo) {
+      RuleContext ruleContext,
+      Runfiles.Builder builder,
+      PyCommon common,
+      CcLinkingInfo ccLinkingInfo) {
     addRuntime(ruleContext, builder);
   }
 
@@ -98,8 +104,8 @@ public class BazelPythonSemantics implements PythonSemantics {
   }
 
   @Override
-  public List<String> getImports(RuleContext ruleContext) {
-    List<String> result = new ArrayList<>();
+  public List<PathFragment> getImports(RuleContext ruleContext) {
+    List<PathFragment> result = new ArrayList<>();
     PathFragment packageFragment = ruleContext.getLabel().getPackageIdentifier().getRunfilesPath();
     // Python scripts start with x.runfiles/ as the module space, so everything must be manually
     // adjusted to be relative to the workspace name.
@@ -116,7 +122,7 @@ public class BazelPythonSemantics implements PythonSemantics {
         ruleContext.attributeError("imports",
             "Path " + importsAttr + " references a path above the execution root");
       }
-      result.add(importsPath.getPathString());
+      result.add(importsPath);
     }
     return result;
   }
@@ -128,7 +134,10 @@ public class BazelPythonSemantics implements PythonSemantics {
 
   @Override
   public Artifact createExecutable(
-      RuleContext ruleContext, PyCommon common, CcInfo ccInfo, NestedSet<String> imports)
+      RuleContext ruleContext,
+      PyCommon common,
+      CcLinkingInfo ccLinkingInfo,
+      NestedSet<PathFragment> imports)
       throws InterruptedException {
     String main = common.determineMainExecutableSource(/*withWorkspaceName=*/ true);
     Artifact executable = common.getExecutable();
@@ -136,18 +145,10 @@ public class BazelPythonSemantics implements PythonSemantics {
     String pythonBinary = getPythonBinary(ruleContext, config);
 
     if (!ruleContext.getFragment(PythonConfiguration.class).buildPythonZip()) {
-      Artifact stubOutput = executable;
-      if (OS.getCurrent() == OS.WINDOWS) {
-        // On Windows, use a Windows native binary to launch the python launcher script (stub file).
-        stubOutput = common.getPythonLauncherArtifact(executable);
-        executable =
-            createWindowsExeLauncher(ruleContext, pythonBinary, executable, /*useZipFile*/ false);
-      }
-
       ruleContext.registerAction(
           new TemplateExpansionAction(
               ruleContext.getActionOwner(),
-              stubOutput,
+              executable,
               STUB_TEMPLATE,
               ImmutableList.of(
                   Substitution.of("%main%", main),
@@ -155,8 +156,8 @@ public class BazelPythonSemantics implements PythonSemantics {
                   Substitution.of("%imports%", Joiner.on(":").join(imports)),
                   Substitution.of("%workspace_name%", ruleContext.getWorkspaceName()),
                   Substitution.of("%is_zipfile%", "False"),
-                  Substitution.of(
-                      "%import_all%", config.getImportAllRepositories() ? "True" : "False")),
+                  Substitution.of("%import_all%",
+                      config.getImportAllRepositories() ? "True" : "False")),
               true));
     } else {
       Artifact zipFile = common.getPythonZipArtifact(executable);
@@ -193,7 +194,18 @@ public class BazelPythonSemantics implements PythonSemantics {
                 .setMnemonic("BuildBinary")
                 .build(ruleContext));
       } else {
-        return createWindowsExeLauncher(ruleContext, pythonBinary, executable, true);
+        if (ruleContext.getConfiguration().enableWindowsExeLauncher()) {
+          return createWindowsExeLauncher(ruleContext, pythonBinary, executable);
+        }
+
+        ruleContext.registerAction(
+            new TemplateExpansionAction(
+                ruleContext.getActionOwner(),
+                executable,
+                STUB_TEMPLATE_WINDOWS,
+                ImmutableList.of(Substitution.of("%python_path%", pythonBinary)),
+                true));
+        return executable;
       }
     }
 
@@ -201,17 +213,13 @@ public class BazelPythonSemantics implements PythonSemantics {
   }
 
   private static Artifact createWindowsExeLauncher(
-      RuleContext ruleContext, String pythonBinary, Artifact pythonLauncher, boolean useZipFile)
+      RuleContext ruleContext, String pythonBinary, Artifact pythonLauncher)
       throws InterruptedException {
     LaunchInfo launchInfo =
         LaunchInfo.builder()
             .addKeyValuePair("binary_type", "Python")
             .addKeyValuePair("workspace_name", ruleContext.getWorkspaceName())
-            .addKeyValuePair(
-                "symlink_runfiles_enabled",
-                ruleContext.getConfiguration().runfilesEnabled() ? "1" : "0")
             .addKeyValuePair("python_bin_path", pythonBinary)
-            .addKeyValuePair("use_zip_file", useZipFile ? "1" : "0")
             .build();
     LauncherFileWriteAction.createAndRegister(ruleContext, pythonLauncher, launchInfo);
     return pythonLauncher;
@@ -355,17 +363,20 @@ public class BazelPythonSemantics implements PythonSemantics {
   }
 
   @Override
-  public CcInfo buildCcInfoProvider(Iterable<? extends TransitiveInfoCollection> deps) {
-    ImmutableList<CcInfo> ccInfos =
-        ImmutableList.<CcInfo>builder()
-            .addAll(AnalysisUtils.getProviders(deps, CcInfo.PROVIDER))
-            .addAll(
-                Streams.stream(AnalysisUtils.getProviders(deps, PyCcLinkParamsProvider.PROVIDER))
-                    .map(PyCcLinkParamsProvider::getCcInfo)
-                    .collect(ImmutableList.toImmutableList()))
-            .build();
-
+  public CcLinkingInfo buildCcLinkingInfoProvider(
+      Iterable<? extends TransitiveInfoCollection> deps) {
+    CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
+    AbstractCcLinkParamsStore ccLinkParamsStore =
+        new AbstractCcLinkParamsStore() {
+          @Override
+          protected void collect(
+              CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
+            builder.addTransitiveTargets(
+                deps, CcLinkParamsStore.TO_LINK_PARAMS, PyCcLinkParamsProvider.TO_LINK_PARAMS);
+          }
+        };
     // TODO(plf): return empty CcLinkingInfo.
-    return CcInfo.merge(ccInfos);
+    ccLinkingInfoBuilder.setCcLinkParamsStore(new CcLinkParamsStore(ccLinkParamsStore));
+    return ccLinkingInfoBuilder.build();
   }
 }

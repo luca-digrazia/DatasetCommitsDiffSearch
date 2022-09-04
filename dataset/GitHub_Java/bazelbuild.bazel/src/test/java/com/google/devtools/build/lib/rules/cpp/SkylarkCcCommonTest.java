@@ -45,9 +45,8 @@ import org.junit.runners.JUnit4;
 public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   @Before
-  public void setSkylarkSemanticsOptions() throws Exception {
-    setSkylarkSemanticsOptions(SkylarkCcCommonTestHelper.CC_SKYLARK_WHITELIST_FLAG);
-    invalidatePackages();
+  public void setConfiguration() throws Exception {
+    useConfiguration("--experimental_enable_cc_skylark_api");
   }
 
   @Test
@@ -86,7 +85,11 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         CcCommon.configureFeaturesOrThrowEvalException(
             ImmutableSet.of(), ImmutableSet.of(), toolchain);
     assertThat(actionToolPath)
-        .isEqualTo(featureConfiguration.getToolPathForAction(CppActionNames.CPP_COMPILE));
+        .isEqualTo(
+            featureConfiguration
+                .getToolForAction(CppActionNames.CPP_COMPILE)
+                .getToolPathFragment()
+                .getPathString());
   }
 
   @Test
@@ -131,7 +134,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(mockToolsConfig, "feature { name: 'foo_feature' }");
-    useConfiguration("--features=foo_feature");
+    useConfiguration("--features=foo_feature", "--experimental_enable_cc_skylark_api");
     scratch.file(
         "a/BUILD",
         "load(':rule.bzl', 'crule')",
@@ -730,7 +733,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testIsLinkingDynamicLibraryLinkVariables() throws Exception {
-    useConfiguration("--linkopt=-pie");
+    useConfiguration("--linkopt=-pie", "--experimental_enable_cc_skylark_api");
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_LINK_EXECUTABLE,
@@ -755,7 +758,9 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testIsUsingLinkerLinkVariables() throws Exception {
-    useConfiguration("--linkopt=-i_dont_want_to_see_this_on_archiver_command_line");
+    useConfiguration(
+        "--linkopt=-i_dont_want_to_see_this_on_archiver_command_line",
+        "--experimental_enable_cc_skylark_api");
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_LINK_EXECUTABLE,
@@ -1052,22 +1057,22 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "  fragments = ['cpp'],",
         ");");
     reporter.removeHandler(failFastHandler);
-    assertThat(getConfiguredTarget("//a:r")).isNull();
+    getConfiguredTarget("//a:r");
     assertContainsEvent(
         "Possible values for artifact_category: static_library, "
             + "alwayslink_static_library, dynamic_library, interface_library");
   }
 
   @Test
-  public void testFlagWhitelist() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_cc_skylark_api_enabled_packages=\"\"");
-    SkylarkCcCommonTestHelper.createFiles(scratch, "foo/bar");
+  public void testCcLinkingProviderParamsWithoutFlag() throws Exception {
+    useConfiguration("--noexperimental_enable_cc_skylark_api");
+    setUpCcLinkingProviderParamsTest();
     reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//foo:bin");
+    getConfiguredTarget("//a:r");
     assertContainsEvent(
-        "You can try it out by passing "
-            + "--experimental_cc_skylark_api_enabled_packages=<list of packages>. Beware that we "
-            + "will be making breaking changes to this API without prior warning.");
+        "Pass --experimental_enable_cc_skylark_api in order to "
+            + "use the C++ API. Beware that we will be making breaking changes to this API "
+            + "without prior warning.");
   }
 
   @Test
@@ -1077,7 +1082,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         .setupCrosstool(
             mockToolsConfig,
             "supports_interface_shared_objects: false");
-    useConfiguration();
+    useConfiguration("--experimental_enable_cc_skylark_api");
     setUpCcLinkingProviderParamsTest();
     ConfiguredTarget r = getConfiguredTarget("//a:r");
 
@@ -1246,6 +1251,14 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testWhitelist() throws Exception {
+    SkylarkCcCommonTestHelper.createFiles(scratch, "foo/bar");
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//foo:bin");
+    assertContainsEvent("C++ Skylark API is for the time being");
+  }
+
+  @Test
   public void testCopts() throws Exception {
     SkylarkCcCommonTestHelper.createFilesForTestingCompilation(
         scratch, "tools/build_defs/foo", "copts=depset(['-COMPILATION_OPTION'])");
@@ -1330,22 +1343,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   @Test
   public void testNeverlinkFalse() throws Exception {
     assertThat(setUpNeverlinkTest("False").getArguments()).contains("-NEVERLINK_OPTION");
-  }
-
-  @Test
-  public void testEmptyCcLinkingInfoError() throws Exception {
-    scratch.file("a/BUILD", "load('//tools/build_defs/cc:rule.bzl', 'crule')", "crule(name='r')");
-    scratch.file("tools/build_defs/cc/BUILD", "");
-    scratch.file(
-        "tools/build_defs/cc/rule.bzl",
-        "def _impl(ctx):",
-        "  return [CcLinkingInfo()]",
-        "crule = rule(",
-        "  _impl,",
-        ");");
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//a:r");
-    assertContainsEvent("Every CcLinkParams parameter must be passed to CcLinkingInfo.");
   }
 
   private CppLinkAction setUpNeverlinkTest(String value) throws Exception {
