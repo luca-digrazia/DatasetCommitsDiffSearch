@@ -3,6 +3,7 @@ package com.codahale.dropwizard.testing;
 import com.codahale.dropwizard.jackson.Jackson;
 import com.codahale.dropwizard.jersey.DropwizardResourceConfig;
 import com.codahale.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import com.codahale.dropwizard.logging.LoggingFactory;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
@@ -13,7 +14,6 @@ import com.sun.jersey.test.framework.JerseyTest;
 import com.sun.jersey.test.framework.LowLevelAppDescriptor;
 import org.junit.After;
 import org.junit.Before;
-import org.slf4j.bridge.SLF4JBridgeHandler;
 
 import javax.validation.Validation;
 import javax.validation.Validator;
@@ -25,8 +25,7 @@ import java.util.Set;
  */
 public abstract class ResourceTest {
     static {
-        SLF4JBridgeHandler.removeHandlersForRootLogger();
-        SLF4JBridgeHandler.install();
+        LoggingFactory.bootstrap();
     }
 
     private final Set<Object> singletons = Sets.newHashSet();
@@ -86,7 +85,7 @@ public abstract class ResourceTest {
         this.test = new JerseyTest() {
             @Override
             protected AppDescriptor configure() {
-                final DropwizardResourceConfig config = new DropwizardResourceConfig(true, new MetricRegistry());
+                final DropwizardResourceConfig config = DropwizardResourceConfig.forTesting(new MetricRegistry());
                 for (Class<?> provider : providers) {
                     config.getClasses().add(provider);
                 }
