@@ -328,7 +328,6 @@ public final class SkyframeBuildView {
     }
     hostConfigurationCache.clear();
     this.topLevelHostConfiguration = topLevelHostConfiguration;
-    skyframeExecutor.updateTopLevelHostConfiguration(topLevelHostConfiguration);
   }
 
   /**

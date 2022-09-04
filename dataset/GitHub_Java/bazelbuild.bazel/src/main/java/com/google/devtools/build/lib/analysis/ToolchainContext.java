@@ -1,4 +1,4 @@
-// Copyright 2017 The Bazel Authors. All rights reserved.
+// Copyright 2019 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,28 +11,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
-import java.util.Map;
-import javax.annotation.Nullable;
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
+import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
+import com.google.devtools.build.lib.cmdline.Label;
 
-/** Contains toolchain-related information needed for a {@link RuleContext}. */
-public class ToolchainContext {
-  private final ImmutableMap<ClassObjectConstructor.Key, ToolchainInfo> toolchains;
+/** Represents the data needed for a specific target's use of toolchains and platforms. */
+public interface ToolchainContext {
 
-  public ToolchainContext(@Nullable Map<ClassObjectConstructor.Key, ToolchainInfo> toolchains) {
-    this.toolchains =
-        toolchains == null
-            ? ImmutableMap.<ClassObjectConstructor.Key, ToolchainInfo>of()
-            : ImmutableMap.copyOf(toolchains);
-  }
+  /** Returns the selected execution platform that these toolchains use. */
+  PlatformInfo executionPlatform();
 
-  public SkylarkDict<ClassObjectConstructor.Key, ToolchainInfo> collectToolchains() {
-    return SkylarkDict.<ClassObjectConstructor.Key, ToolchainInfo>copyOf(null, toolchains);
-  }
+  /** Returns the target platform that these toolchains generate output for. */
+  PlatformInfo targetPlatform();
+
+  /** Returns the toolchain types that were requested. */
+  ImmutableSet<ToolchainTypeInfo> requiredToolchainTypes();
+
+  /** Returns the labels of the specific toolchains being used. */
+  ImmutableSet<Label> resolvedToolchainLabels();
 }
