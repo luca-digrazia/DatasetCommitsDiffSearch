@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.bazel.rules;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShRuleClasses;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
@@ -43,9 +44,9 @@ import com.google.devtools.common.options.OptionsBase;
 import java.io.IOException;
 
 /** Module implementing the rule set of Bazel. */
-public final class BazelRulesModule extends BlazeModule {
+public class BazelRulesModule extends BlazeModule {
   /** This is where deprecated options go to die. */
-  public static final class GraveyardOptions extends OptionsBase {
+  public static class GraveyardOptions extends OptionsBase {
     @Option(
         name = "incompatible_load_python_rules_from_bzl",
         defaultValue = "false",
@@ -471,50 +472,11 @@ public final class BazelRulesModule extends BlazeModule {
         },
         help = "No-op.")
     public boolean enableProfileByDefault;
-
-    @Option(
-        name = "experimental_skyframe_eval_with_ordered_list",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        metadataTags = OptionMetadataTag.EXPERIMENTAL,
-        effectTags = {OptionEffectTag.NO_OP},
-        help = "No-op")
-    public boolean skyframeEvalWithOrderedList;
-
-    @Option(
-        name = "legacy_spawn_scheduler",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        defaultValue = "false",
-        deprecationWarning =
-            "The --legacy_spawn_scheduler flag is a no-op and will be removed soon.",
-        help = "Was used to enable the old spawn scheduler. Now a no-op.")
-    public boolean legacySpawnScheduler;
-
-    @Option(
-        name = "incompatible_dont_use_javasourceinfoprovider",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-        },
-        help = "No-op")
-    public boolean dontUseJavaSourceInfoProvider;
-
-    @Option(
-        name = "experimental_shadowed_action",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.NO_OP},
-        metadataTags = {OptionMetadataTag.DEPRECATED, OptionMetadataTag.EXPERIMENTAL},
-        help = "No-op")
-    public boolean shadowedAction;
   }
 
   @Override
   public void initializeRuleClasses(ConfiguredRuleClassProvider.Builder builder) {
+    builder.setToolsRepository(BazelRuleClassProvider.TOOLS_REPOSITORY);
     BazelRuleClassProvider.setup(builder);
 
     try {
@@ -541,6 +503,12 @@ public final class BazelRulesModule extends BlazeModule {
       BlazeRuntime runtime, BlazeDirectories directories, WorkspaceBuilder builder) {
     builder.addSkyFunction(
         CcSkyframeFdoSupportValue.SKYFUNCTION, new CcSkyframeFdoSupportFunction(directories));
+  }
+
+  @Override
+  public BuildOptions getDefaultBuildOptions(BlazeRuntime blazeRuntime) {
+    return BuildOptions.getDefaultBuildOptionsForFragments(
+        blazeRuntime.getRuleClassProvider().getConfigurationOptions());
   }
 
   @Override
