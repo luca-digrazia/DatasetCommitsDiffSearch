@@ -54,7 +54,7 @@ class PackageFactoryBuilderFactoryForBazelUnitTests implements BuilderFactoryFor
           ruleClassProvider,
           PackageFactory.makeDefaultSizedForkJoinPoolForGlobbing(),
           environmentExtensions,
-          VERSION,
+          version,
           DefaultPackageSettings.INSTANCE,
           packageValidator,
           packageOverheadEstimator,

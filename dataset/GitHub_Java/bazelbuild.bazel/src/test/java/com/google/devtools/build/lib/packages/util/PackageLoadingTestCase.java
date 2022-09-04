@@ -169,7 +169,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
             outputBase,
             packageOptions.packagePath,
             reporter,
-            rootDirectory.asFragment(),
+            rootDirectory,
             rootDirectory,
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     packageOptions.showLoadingProgress = true;
