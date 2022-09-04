@@ -514,23 +514,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
     )
     public String outputDirectoryName;
 
-    /**
-     * This option is used by skylark transitions to add a disginguishing element to the output
-     * directory name, in order to avoid name clashing.
-     */
-    @Option(
-      name = "transition directory name fragment",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {
-          OptionEffectTag.LOSES_INCREMENTAL_STATE,
-          OptionEffectTag.AFFECTS_OUTPUTS,
-          OptionEffectTag.LOADING_AND_ANALYSIS
-      },
-      metadataTags = { OptionMetadataTag.INTERNAL }
-    )
-    public String transitionDirectoryNameFragment;
-
     @Option(
       name = "platform_suffix",
       defaultValue = "null",
@@ -786,19 +769,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
     )
     public boolean isHost;
 
-    // TODO(cparsons): Make this flag non-experimental when it is fully implemented.
-    @Option(
-        name = "experimental_allow_analysis_failures",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.TESTING,
-        effectTags = { OptionEffectTag.LOADING_AND_ANALYSIS },
-        metadataTags = { OptionMetadataTag.EXPERIMENTAL },
-        help = "If true, an analysis failure of a rule target results in the target's propagation "
-            + "of an instance of AnalysisFailureInfo containing the error description, instead of "
-            + "resulting in a build failure."
-    )
-    public boolean allowAnalysisFailures;
-
     @Option(
         name = "features",
         allowMultiple = true,
@@ -882,7 +852,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
 
     @Option(
         name = "incompatible_disable_late_bound_option_defaults",
-        defaultValue = "true",
+        defaultValue = "false",
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
         metadataTags = {
@@ -1426,9 +1396,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
       nameParts.add(fragment.getOutputDirectoryName());
     }
     nameParts.add(getCompilationMode() + platformSuffix);
-    if (options.transitionDirectoryNameFragment != null) {
-      nameParts.add(options.transitionDirectoryNameFragment);
-    }
     return Joiner.on('-').skipNulls().join(nameParts);
   }
 
@@ -1790,10 +1757,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
 
   public boolean enforceConstraints() {
     return options.enforceConstraints;
-  }
-
-  public boolean allowAnalysisFailures() {
-    return options.allowAnalysisFailures;
   }
 
   public List<Label> getActionListeners() {
