@@ -29,13 +29,12 @@ import java.util.TimerTask;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.logging.Handler;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.jboss.logmanager.Logger;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
@@ -73,11 +72,10 @@ public class QuarkusProdModeTest
     private static final String QUARKUS_HTTP_PORT_PROPERTY = "quarkus.http.port";
 
     private static final Logger rootLogger;
-    private Handler[] originalHandlers;
 
     static {
         System.setProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager");
-        rootLogger = (Logger) LogManager.getLogManager().getLogger("");
+        rootLogger = LogManager.getLogManager().getLogger("");
     }
 
     private Path outputDir;
@@ -110,7 +108,6 @@ public class QuarkusProdModeTest
     private String startupConsoleOutput;
     private int exitCode;
     private Consumer<Throwable> assertBuildException;
-    private String[] commandLineParameters = new String[0];
 
     public QuarkusProdModeTest() {
         InputStream appPropsIs = Thread.currentThread().getContextClassLoader().getResourceAsStream("application.properties");
@@ -291,7 +288,6 @@ public class QuarkusProdModeTest
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
-        originalHandlers = rootLogger.getHandlers();
         rootLogger.addHandler(inMemoryLogHandler);
 
         timeoutTask = new TimerTask() {
@@ -381,8 +377,6 @@ public class QuarkusProdModeTest
                 } else {
                     throw e;
                 }
-            } finally {
-                curatedApplication.close();
             }
 
             Path builtResultArtifact = setupProdModeResults(testClass, buildDir, result);
@@ -460,8 +454,6 @@ public class QuarkusProdModeTest
             command.addAll(systemProperties);
         }
 
-        command.addAll(Arrays.asList(commandLineParameters));
-
         process = new ProcessBuilder(command)
                 .redirectErrorStream(true)
                 .directory(builtResultArtifactParentDir.toFile())
@@ -536,8 +528,6 @@ public class QuarkusProdModeTest
 
     @Override
     public void afterAll(ExtensionContext extensionContext) throws Exception {
-        rootLogger.setHandlers(originalHandlers);
-
         if (run) {
             RestAssuredURLManager.clearURL();
         }
@@ -603,11 +593,6 @@ public class QuarkusProdModeTest
             customApplicationProperties = new Properties();
         }
         customApplicationProperties.put(propertyKey, propertyValue);
-        return this;
-    }
-
-    public QuarkusProdModeTest setCommandLineParameters(String... commandLineParameters) {
-        this.commandLineParameters = commandLineParameters;
         return this;
     }
 

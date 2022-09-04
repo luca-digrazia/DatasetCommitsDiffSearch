@@ -385,11 +385,6 @@ public class QuarkusUnitTest
                         .setProjectRoot(testLocation)
                         .setForcedDependencies(forcedDependencies.stream().map(d -> new AppDependency(d, "compile"))
                                 .collect(Collectors.toList()));
-                if (!forcedDependencies.isEmpty()) {
-                    //if we have forced dependencies we can't use the cache
-                    //as it can screw everything up
-                    builder.setDisableClasspathCache(true);
-                }
                 if (!allowTestClassOutsideDeployment) {
                     builder
                             .setBaseClassLoader(
