@@ -26,7 +26,6 @@ import io.quarkus.gizmo.ResultHandle;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -130,12 +129,6 @@ public class BeanDeployment {
         customContexts = new HashMap<>();
         registerCustomContexts(contextRegistrars, beanDefiningAnnotations, buildContext);
 
-        if (buildContext != null) {
-            List<ScopeInfo> allScopes = Arrays.stream(BuiltinScope.values()).map(i -> i.getInfo()).collect(Collectors.toList());
-            allScopes.addAll(customContexts.keySet());
-            buildContext.putInternal(Key.SCOPES.asString(), Collections.unmodifiableList(allScopes));
-        }
-
         this.qualifiers = findQualifiers(index);
         this.interceptorBindings = findInterceptorBindings(index);
         this.transitiveInterceptorBindings = findTransitiveInterceptorBindigs(interceptorBindings.keySet(), index,
@@ -153,9 +146,6 @@ public class BeanDeployment {
             buildContext.putInternal(Key.INJECTION_POINTS.asString(), Collections.unmodifiableList(injectionPoints));
             buildContext.putInternal(Key.OBSERVERS.asString(), Collections.unmodifiableList(observers));
             buildContext.putInternal(Key.BEANS.asString(), Collections.unmodifiableList(beans));
-            buildContext.putInternal(Key.QUALIFIERS.asString(), Collections.unmodifiableMap(qualifiers));
-            buildContext.putInternal(Key.INTERCEPTOR_BINDINGS.asString(), Collections.unmodifiableMap(interceptorBindings));
-            buildContext.putInternal(Key.STEREOTYPES.asString(), Collections.unmodifiableMap(stereotypes));
         }
 
         registerSyntheticBeans(beanRegistrars, buildContext);
@@ -208,10 +198,6 @@ public class BeanDeployment {
 
     Set<AnnotationInstance> getTransitiveInterceptorBindings(DotName name) {
         return transitiveInterceptorBindings.get(name);
-    }
-
-    Map<DotName, Set<AnnotationInstance>> getTransitiveInterceptorBindings() {
-        return transitiveInterceptorBindings;
     }
 
     StereotypeInfo getStereotype(DotName name) {
@@ -434,7 +420,6 @@ public class BeanDeployment {
             if (stereotypeClass != null) {
 
                 boolean isAlternative = false;
-                Integer alternativePriority = null;
                 List<ScopeInfo> scopes = new ArrayList<>();
                 List<AnnotationInstance> bindings = new ArrayList<>();
                 boolean isNamed = false;
@@ -452,8 +437,6 @@ public class BeanDeployment {
                                     "Stereotype must not declare @Named with a non-empty value: " + stereotypeClass);
                         }
                         isNamed = true;
-                    } else if (DotNames.PRIORITY.equals(annotation.name())) {
-                        alternativePriority = annotation.value().asInt();
                     } else {
                         final ScopeInfo scope = getScope(annotation.name(), customContexts);
                         if (scope != null) {
@@ -462,8 +445,7 @@ public class BeanDeployment {
                     }
                 }
                 final ScopeInfo scope = getValidScope(scopes, stereotypeClass);
-                stereotypes.put(stereotypeName, new StereotypeInfo(scope, bindings, isAlternative, alternativePriority,
-                        isNamed, stereotypeClass));
+                stereotypes.put(stereotypeName, new StereotypeInfo(scope, bindings, isAlternative, isNamed, stereotypeClass));
             }
         }
         //if an additional bean defining annotation has a default scope we register it as a stereotype
@@ -471,7 +453,7 @@ public class BeanDeployment {
             for (BeanDefiningAnnotation i : additionalBeanDefiningAnnotations) {
                 if (i.getDefaultScope() != null) {
                     ScopeInfo scope = getScope(i.getDefaultScope(), customContexts);
-                    stereotypes.put(i.getAnnotation(), new StereotypeInfo(scope, Collections.emptyList(), false, null, false,
+                    stereotypes.put(i.getAnnotation(), new StereotypeInfo(scope, Collections.emptyList(), false, false,
                             index.getClassByName(i.getAnnotation())));
                 }
             }

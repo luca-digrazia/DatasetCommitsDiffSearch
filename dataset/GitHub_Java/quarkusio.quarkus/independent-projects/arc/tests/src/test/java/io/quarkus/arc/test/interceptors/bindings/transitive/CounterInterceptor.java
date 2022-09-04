@@ -6,17 +6,14 @@ import javax.interceptor.Interceptor;
 import javax.interceptor.InvocationContext;
 
 @Interceptor
-@Priority(2)
+@Priority(1)
 @CounterBinding
-@AnotherAnnotation // this is a transitive binding which brings in CounterBinding + SomeBinding as well
-
-public class TransitiveCounterInterceptor {
+public class CounterInterceptor {
 
     public static Integer timesInvoked = 0;
 
     @AroundInvoke
     public Object aroundInvoke(InvocationContext context) throws Exception {
-        // it should effectively interrupt all that CounterInterceptor does
         timesInvoked++;
         return context.proceed();
     }

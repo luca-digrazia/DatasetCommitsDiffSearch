@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import java.util.HashSet;
@@ -5,11 +21,8 @@ import java.util.Set;
 import javax.enterprise.inject.spi.DefinitionException;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.logging.Logger;
 
 final class Interceptors {
-
-    static final Logger LOGGER = Logger.getLogger(Interceptors.class);
 
     private Interceptors() {
     }
@@ -24,7 +37,6 @@ final class Interceptors {
             InjectionPointModifier transformer, AnnotationStore store) {
         Set<AnnotationInstance> bindings = new HashSet<>();
         Integer priority = 0;
-        boolean priorityDeclared = false;
         for (AnnotationInstance annotation : store.getAnnotations(interceptorClass)) {
             if (beanDeployment.getInterceptorBinding(annotation.name()) != null) {
                 bindings.add(annotation);
@@ -36,15 +48,10 @@ final class Interceptors {
                 }
             } else if (annotation.name().equals(DotNames.PRIORITY)) {
                 priority = annotation.value().asInt();
-                priorityDeclared = true;
             }
         }
         if (bindings.isEmpty()) {
             throw new DefinitionException("Interceptor has no bindings: " + interceptorClass);
-        }
-        if (!priorityDeclared) {
-            LOGGER.info("An interceptor " + interceptorClass + " does not declare any @Priority. " +
-                    "It will be assigned a default priority value of 0.");
         }
         return new InterceptorInfo(interceptorClass, beanDeployment, bindings,
                 Injection.forBean(interceptorClass, null, beanDeployment, transformer), priority);

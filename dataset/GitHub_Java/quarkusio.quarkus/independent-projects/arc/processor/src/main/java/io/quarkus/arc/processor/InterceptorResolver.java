@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import java.util.ArrayList;
@@ -76,12 +92,9 @@ public class InterceptorResolver {
         if (candidate.name().equals(interceptorBinding.name())) {
             // Must have the same annotation member value for each member which is not annotated @Nonbinding
             boolean matches = true;
-            Set<String> nonBindingFields = beanDeployment.getNonBindingFields(interceptorBinding.name());
             for (AnnotationValue value : candidate.valuesWithDefaults(beanDeployment.getIndex())) {
-                String annotationField = value.name();
-                if (!interceptorBindingClass.method(annotationField).hasAnnotation(DotNames.NONBINDING)
-                        && !nonBindingFields.contains(annotationField)
-                        && !value.equals(interceptorBinding.valueWithDefault(beanDeployment.getIndex(), annotationField))) {
+                if (!interceptorBindingClass.method(value.name()).hasAnnotation(DotNames.NONBINDING)
+                        && !value.equals(interceptorBinding.value(value.name()))) {
                     matches = false;
                     break;
                 }
