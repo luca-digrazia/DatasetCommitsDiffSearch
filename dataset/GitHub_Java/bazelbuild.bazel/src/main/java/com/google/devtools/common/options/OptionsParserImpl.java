@@ -28,7 +28,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.devtools.common.options.OptionsParser.OptionDescription;
-import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.OptionsParser.OptionValueDescription;
 import com.google.devtools.common.options.OptionsParser.UnparsedOptionValueDescription;
 import java.lang.reflect.Constructor;
@@ -680,7 +679,8 @@ class OptionsParserImpl {
     Option option = field == null ? null : field.getAnnotation(Option.class);
 
     if (option == null
-        || OptionsParser.documentationLevel(option) == OptionUsageRestrictions.INTERNAL) {
+        || OptionsParser.documentationLevel(option.category())
+            == OptionsParser.DocumentationLevel.INTERNAL) {
       // This also covers internal options, which are treated as if they did not exist.
       throw new OptionsParsingException("Unrecognized option: " + arg, arg);
     }
