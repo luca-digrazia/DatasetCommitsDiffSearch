@@ -21,7 +21,7 @@ import android.view.ViewGroup.MarginLayoutParams;
 
 abstract class ViewHighlightOverlays {
 
-  abstract void highlightView(View view, Rect bounds, int mainColor);
+  abstract void highlightView(View view, int mainColor);
 
   abstract void removeHighlight(View view);
 
@@ -37,7 +37,7 @@ abstract class ViewHighlightOverlays {
   private static class NoOpViewHighlightOverlays extends ViewHighlightOverlays {
 
     @Override
-    void highlightView(View view, Rect bounds, int mainColor) {
+    void highlightView(View view, int mainColor) {
     }
 
     @Override
@@ -66,14 +66,8 @@ abstract class ViewHighlightOverlays {
     }
 
     @Override
-    void highlightView(View view, Rect bounds, int mainColor) {
+    void highlightView(View view, int mainColor) {
       mMainHighlightDrawable.setColor(mainColor);
-
-      if (bounds.isEmpty()) {
-        mMainHighlightDrawable.setBounds(0, 0, view.getWidth(), view.getHeight());
-      } else {
-        mMainHighlightDrawable.setBounds(bounds);
-      }
 
       int total = mHighlightDrawables.length;
       for (int i = 0; i < total; i++) {
@@ -128,6 +122,7 @@ abstract class ViewHighlightOverlays {
       @Override
       void highlightView(View view) {
         super.highlightView(view);
+        setBounds(0, 0, view.getWidth(), view.getHeight());
       }
 
       @Override
