@@ -138,10 +138,12 @@ public final class WriteBuildInfoHeaderAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
-    fp.addBoolean(writeStableInfo);
-    fp.addBoolean(writeVolatileInfo);
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
+    f.addBoolean(writeStableInfo);
+    f.addBoolean(writeVolatileInfo);
+    return f.hexDigestAndReset();
   }
 
   @Override
