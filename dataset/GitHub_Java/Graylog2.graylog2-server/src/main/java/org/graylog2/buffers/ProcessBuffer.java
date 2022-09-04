@@ -31,6 +31,8 @@ import org.graylog2.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.logmessage.LogMessage;
 
 /**
+ * ProcessBuffer.java: 17.04.2012 12:21:29
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ProcessBuffer {
