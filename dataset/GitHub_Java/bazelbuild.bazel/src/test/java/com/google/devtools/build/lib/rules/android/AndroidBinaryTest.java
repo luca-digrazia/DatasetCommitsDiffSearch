@@ -81,7 +81,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   public void testAssetsInExternalRepository() throws Exception {
     FileSystemUtils.appendIsoLatin1(
         scratch.resolve("WORKSPACE"), "local_repository(name='r', path='/r')");
-    scratch.file("/r/WORKSPACE");
     scratch.file("/r/p/BUILD", "filegroup(name='assets', srcs=['a/b'])");
     scratch.file("/r/p/a/b");
     invalidatePackages();
@@ -105,6 +104,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testMainDexProguardSpecs() throws Exception {
+    useConfiguration("--experimental_android_use_singlejar_for_multidex");
     ConfiguredTarget ct = scratchConfiguredTarget("java/a", "a",
         "android_binary(",
         "    name = 'a',",
@@ -971,16 +971,19 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testDexMainListOpts() throws Exception {
+    useConfiguration("--experimental_android_use_singlejar_for_multidex");
     checkDexMainListOpts("[ '--opt1', '--opt2' ]", "--opt1", "--opt2");
   }
 
   @Test
   public void testDexMainListOptsTokenization() throws Exception {
+    useConfiguration("--experimental_android_use_singlejar_for_multidex");
     checkDexMainListOpts("[ '--opt1', '--opt2 tokenized' ]", "--opt1", "--opt2", "tokenized");
   }
 
   @Test
   public void testDexMainListOptsMakeVariableSubstitution() throws Exception {
+    useConfiguration("--experimental_android_use_singlejar_for_multidex");
     checkDexMainListOpts("[ '--opt1', '$(COMPILATION_MODE)' ]", "--opt1", "fastbuild");
   }
 
@@ -1749,6 +1752,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testNoCrunchWithMultidexNative() throws Exception {
+    useConfiguration("--experimental_android_use_singlejar_for_multidex");
     scratch.file("java/r/android/BUILD",
         "android_library(name = 'resources',",
         "                manifest = 'AndroidManifest.xml',",
@@ -2089,7 +2093,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    multidex = 'legacy',",
         "    main_dex_list_opts = ['--hello', '--world'])");
 
-    useConfiguration("--android_sdk=//sdk:sdk");
+    useConfiguration(
+        "--android_sdk=//sdk:sdk", "--experimental_android_use_singlejar_for_multidex");
     ConfiguredTarget a = getConfiguredTarget("//java/a:a");
     Artifact mainDexList = ActionsTestUtil.getFirstArtifactEndingWith(
         actionsTestUtil().artifactClosureOf(getFilesToBuild(a)), "main_dex_list.txt");
@@ -2125,7 +2130,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    manifest = 'AndroidManifest.xml',",
         "    multidex = 'legacy')");
 
-    useConfiguration("--android_sdk=//sdk:sdk");
+    useConfiguration(
+        "--android_sdk=//sdk:sdk", "--experimental_android_use_singlejar_for_multidex");
     ConfiguredTarget a = getConfiguredTarget("//java/a:a");
     Artifact intermediateJar = artifactByPath(ImmutableList.of(getCompressedUnsignedApk(a)),
         ".apk", ".dex.zip", ".dex.zip", "main_dex_list.txt", "_intermediate.jar");
@@ -2139,6 +2145,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testMainDexGenerationWithoutProguardMap() throws Exception {
+    useConfiguration("--experimental_android_use_singlejar_for_multidex");
     scratchConfiguredTarget("java/foo", "abin",
         "android_binary(",
         "    name = 'abin',",
