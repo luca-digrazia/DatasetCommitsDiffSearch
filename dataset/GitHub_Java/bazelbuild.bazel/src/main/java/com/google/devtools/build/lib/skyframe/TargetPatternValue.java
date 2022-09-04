@@ -149,7 +149,8 @@ public final class TargetPatternValue implements SkyValue {
               targetPattern,
               positive ? policy : FilteringPolicies.NO_FILTER,
               /*isNegative=*/ !positive,
-              offset);
+              offset,
+              ImmutableSet.<PathFragment>of());
       builder.add(new TargetPatternSkyKeyValue(targetPatternKey));
     }
     return builder.build();
@@ -283,27 +284,15 @@ public final class TargetPatternValue implements SkyValue {
    */
   @ThreadSafe
   public static class TargetPatternKey implements SkyKey, Serializable {
+
     private final TargetPattern parsedPattern;
     private final FilteringPolicy policy;
     private final boolean isNegative;
 
     private final PathFragment offset;
-    /**
-     * Must be "compatible" with {@link #parsedPattern}: if {@link #parsedPattern} is a {@link
-     * TargetsBelowDirectory} object, then no element of {@code excludedSubdirectories} fully
-     * contains it.
-     */
     private final ImmutableSet<PathFragment> excludedSubdirectories;
 
     public TargetPatternKey(
-        TargetPattern parsedPattern,
-        FilteringPolicy policy,
-        boolean isNegative,
-        PathFragment offset) {
-      this(parsedPattern, policy, isNegative, offset, ImmutableSet.of());
-    }
-
-    private TargetPatternKey(
         TargetPattern parsedPattern,
         FilteringPolicy policy,
         boolean isNegative,

@@ -14,9 +14,6 @@
 
 package com.google.devtools.build.lib.cmdline;
 
-import static com.google.common.util.concurrent.Futures.immediateCancelledFuture;
-import static com.google.common.util.concurrent.Futures.immediateVoidFuture;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -31,7 +28,6 @@ import com.google.devtools.build.lib.cmdline.LabelValidator.BadLabelException;
 import com.google.devtools.build.lib.cmdline.LabelValidator.PackageAndTarget;
 import com.google.devtools.build.lib.concurrent.BatchCallback;
 import com.google.devtools.build.lib.server.FailureDetails.TargetPatterns;
-import com.google.devtools.build.lib.supplier.InterruptibleSupplier;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.errorprone.annotations.CheckReturnValue;
@@ -154,7 +150,7 @@ public abstract class TargetPattern implements Serializable {
    */
   public abstract <T, E extends Exception> void eval(
       TargetPatternResolver<T> resolver,
-      InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredSubdirectories,
+      ImmutableSet<PathFragment> ignoredSubdirectories,
       ImmutableSet<PathFragment> excludedSubdirectories,
       BatchCallback<T, E> callback,
       Class<E> exceptionClass)
@@ -170,7 +166,7 @@ public abstract class TargetPattern implements Serializable {
    */
   public final <T, E extends Exception> ListenableFuture<Void> evalAdaptedForAsync(
       TargetPatternResolver<T> resolver,
-      InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredSubdirectories,
+      ImmutableSet<PathFragment> ignoredSubdirectories,
       ImmutableSet<PathFragment> excludedSubdirectories,
       BatchCallback<T, E> callback,
       Class<E> exceptionClass) {
@@ -180,7 +176,7 @@ public abstract class TargetPattern implements Serializable {
     } catch (TargetParsingException e) {
       return Futures.immediateFailedFuture(e);
     } catch (InterruptedException e) {
-      return immediateCancelledFuture();
+      return Futures.immediateCancelledFuture();
     } catch (Exception e) {
       if (exceptionClass.isInstance(e)) {
         return Futures.immediateFailedFuture(exceptionClass.cast(e));
@@ -199,7 +195,7 @@ public abstract class TargetPattern implements Serializable {
    */
   public <T, E extends Exception> ListenableFuture<Void> evalAsync(
       TargetPatternResolver<T> resolver,
-      InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredSubdirectories,
+      ImmutableSet<PathFragment> ignoredSubdirectories,
       ImmutableSet<PathFragment> excludedSubdirectories,
       BatchCallback<T, E> callback,
       Class<E> exceptionClass,
@@ -224,21 +220,11 @@ public abstract class TargetPattern implements Serializable {
   }
 
   /**
-   * For patterns of type {@link Type#SINGLE_TARGET}, {@link Type#TARGETS_IN_PACKAGE}, and {@link
-   * Type#TARGETS_BELOW_DIRECTORY}, returns the {@link PackageIdentifier} of the pattern.
-   *
-   * <p>Note that we are using the {@link PackageIdentifier} type as a convenience; there may not
-   * actually be a package corresponding to this directory!
-   *
-   * <p>Examples:
-   *
-   * <ul>
-   *   <li>For pattern {@code //foo:bar}, returns package identifier {@code //foo}.
-   *   <li>For pattern {@code //foo:all}, returns package identifier {@code //foo}.
-   *   <li>For pattern {@code //foo/...}, returns package identifier {@code //foo}.
-   * </ul>
+   * For patterns of type {@link Type#SINGLE_TARGET} and {@link Type#TARGETS_IN_PACKAGE}, returns
+   * the {@link PackageIdentifier} corresponding to the package that would contain the target(s)
+   * matched by this {@link TargetPattern}.
    */
-  public PackageIdentifier getDirectory() {
+  public PackageIdentifier getDirectoryForTargetOrTargetsInPackage() {
     throw new IllegalStateException();
   }
 
@@ -270,7 +256,7 @@ public abstract class TargetPattern implements Serializable {
     @Override
     public <T, E extends Exception> void eval(
         TargetPatternResolver<T> resolver,
-        InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredSubdirectories,
+        ImmutableSet<PathFragment> ignoredSubdirectories,
         ImmutableSet<PathFragment> excludedSubdirectories,
         BatchCallback<T, E> callback,
         Class<E> exceptionClass)
@@ -279,7 +265,7 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public PackageIdentifier getDirectory() {
+    public PackageIdentifier getDirectoryForTargetOrTargetsInPackage() {
       return directory;
     }
 
@@ -332,7 +318,7 @@ public abstract class TargetPattern implements Serializable {
     @Override
     public <T, E extends Exception> void eval(
         TargetPatternResolver<T> resolver,
-        InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredSubdirectories,
+        ImmutableSet<PathFragment> ignoredSubdirectories,
         ImmutableSet<PathFragment> excludedSubdirectories,
         BatchCallback<T, E> callback,
         Class<E> exceptionClass)
@@ -431,7 +417,7 @@ public abstract class TargetPattern implements Serializable {
     @Override
     public <T, E extends Exception> void eval(
         TargetPatternResolver<T> resolver,
-        InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredSubdirectories,
+        ImmutableSet<PathFragment> ignoredSubdirectories,
         ImmutableSet<PathFragment> excludedSubdirectories,
         BatchCallback<T, E> callback,
         Class<E> exceptionClass)
@@ -449,7 +435,7 @@ public abstract class TargetPattern implements Serializable {
     }
 
     @Override
-    public PackageIdentifier getDirectory() {
+    public PackageIdentifier getDirectoryForTargetOrTargetsInPackage() {
       return packageIdentifier;
     }
 
@@ -552,27 +538,17 @@ public abstract class TargetPattern implements Serializable {
     @Override
     public <T, E extends Exception> void eval(
         TargetPatternResolver<T> resolver,
-        InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredSubdirectories,
+        ImmutableSet<PathFragment> ignoredSubdirectories,
         ImmutableSet<PathFragment> excludedSubdirectories,
         BatchCallback<T, E> callback,
         Class<E> exceptionClass)
         throws TargetParsingException, E, InterruptedException {
-      Preconditions.checkState(
-          !excludedSubdirectories.contains(directory.getPackageFragment()),
-          "Fully excluded target pattern %s should have already been filtered out (%s)",
-          this,
-          excludedSubdirectories);
-      IgnoredPathFragmentsInScopeOrFilteringIgnorer ignoredIntersection =
-          getAllIgnoredSubdirectoriesToExclude(ignoredSubdirectories);
-      if (warnIfFiltered(ignoredIntersection, resolver)) {
-        return;
-      }
       resolver.findTargetsBeneathDirectory(
           directory.getRepository(),
           getOriginalPattern(),
           directory.getPackageFragment().getPathString(),
           rulesOnly,
-          ignoredIntersection.ignoredPathFragments(),
+          ignoredSubdirectories,
           excludedSubdirectories,
           callback,
           exceptionClass);
@@ -581,146 +557,21 @@ public abstract class TargetPattern implements Serializable {
     @Override
     public <T, E extends Exception> ListenableFuture<Void> evalAsync(
         TargetPatternResolver<T> resolver,
-        InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredSubdirectories,
+        ImmutableSet<PathFragment> ignoredSubdirectories,
         ImmutableSet<PathFragment> excludedSubdirectories,
         BatchCallback<T, E> callback,
         Class<E> exceptionClass,
         ListeningExecutorService executor) {
-      Preconditions.checkState(
-          !excludedSubdirectories.contains(directory.getPackageFragment()),
-          "Fully excluded target pattern %s should have already been filtered out (%s)",
-          this,
-          excludedSubdirectories);
-      IgnoredPathFragmentsInScopeOrFilteringIgnorer ignoredIntersection;
-      try {
-        ignoredIntersection = getAllIgnoredSubdirectoriesToExclude(ignoredSubdirectories);
-      } catch (InterruptedException e) {
-        return immediateCancelledFuture();
-      }
-      if (warnIfFiltered(ignoredIntersection, resolver)) {
-        return immediateVoidFuture();
-      }
       return resolver.findTargetsBeneathDirectoryAsync(
           directory.getRepository(),
           getOriginalPattern(),
           directory.getPackageFragment().getPathString(),
           rulesOnly,
-          ignoredIntersection.ignoredPathFragments(),
+          ignoredSubdirectories,
           excludedSubdirectories,
           callback,
           exceptionClass,
           executor);
-    }
-
-    private boolean warnIfFiltered(
-        IgnoredPathFragmentsInScopeOrFilteringIgnorer ignoredIntersection,
-        TargetPatternResolver<?> resolver) {
-      if (ignoredIntersection.wasFiltered()) {
-        resolver.warn(
-            "Pattern '"
-                + getOriginalPattern()
-                + "' was filtered out by ignored directory '"
-                + ignoredIntersection.filteringIgnorer().getPathString()
-                + "'");
-        return true;
-      }
-      return false;
-    }
-
-    public IgnoredPathFragmentsInScopeOrFilteringIgnorer getAllIgnoredSubdirectoriesToExclude(
-        InterruptibleSupplier<ImmutableSet<PathFragment>> ignoredPackagePrefixes)
-        throws InterruptedException {
-      ImmutableSet.Builder<PathFragment> ignoredPathsBuilder =
-          ImmutableSet.builderWithExpectedSize(0);
-      for (PathFragment ignoredPackagePrefix : ignoredPackagePrefixes.get()) {
-        if (this.containedIn(ignoredPackagePrefix)) {
-          return new IgnoredPathFragmentsInScopeOrFilteringIgnorer.FilteringIgnorer(
-              ignoredPackagePrefix);
-        }
-        PackageIdentifier pkgIdForIgnoredDirectorPrefix =
-            PackageIdentifier.create(this.getDirectory().getRepository(), ignoredPackagePrefix);
-        if (this.containsAllTransitiveSubdirectories(pkgIdForIgnoredDirectorPrefix)) {
-          ignoredPathsBuilder.add(ignoredPackagePrefix);
-        }
-      }
-      return IgnoredPathFragmentsInScopeOrFilteringIgnorer.IgnoredPathFragments.of(
-          ignoredPathsBuilder.build());
-    }
-
-    /**
-     * Morally an {@code Either<ImmutableSet<PathFragment>, PathFragment>}, saying whether the given
-     * set of ignored directories intersected a directory (in which case the directories that were
-     * in the intersection are returned) or completely contained it (in which case a containing
-     * directory is returned).
-     */
-    public abstract static class IgnoredPathFragmentsInScopeOrFilteringIgnorer {
-      public abstract boolean wasFiltered();
-
-      public abstract ImmutableSet<PathFragment> ignoredPathFragments();
-
-      public abstract PathFragment filteringIgnorer();
-
-      private static class IgnoredPathFragments
-          extends IgnoredPathFragmentsInScopeOrFilteringIgnorer {
-        private static final IgnoredPathFragments EMPTYSET_IGNORED =
-            new IgnoredPathFragments(ImmutableSet.of());
-
-        private final ImmutableSet<PathFragment> ignoredPathFragments;
-
-        private IgnoredPathFragments(ImmutableSet<PathFragment> ignoredPathFragments) {
-          this.ignoredPathFragments = ignoredPathFragments;
-        }
-
-        static IgnoredPathFragments of(ImmutableSet<PathFragment> ignoredPathFragments) {
-          if (ignoredPathFragments.isEmpty()) {
-            return EMPTYSET_IGNORED;
-          }
-          return new IgnoredPathFragments(ignoredPathFragments);
-        }
-
-        @Override
-        public boolean wasFiltered() {
-          return false;
-        }
-
-        @Override
-        public ImmutableSet<PathFragment> ignoredPathFragments() {
-          return ignoredPathFragments;
-        }
-
-        @Override
-        public PathFragment filteringIgnorer() {
-          throw new UnsupportedOperationException("No filter: " + ignoredPathFragments);
-        }
-      }
-
-      private static class FilteringIgnorer extends IgnoredPathFragmentsInScopeOrFilteringIgnorer {
-        private final PathFragment filteringIgnorer;
-
-        FilteringIgnorer(PathFragment filteringIgnorer) {
-          this.filteringIgnorer = filteringIgnorer;
-        }
-
-        @Override
-        public boolean wasFiltered() {
-          return true;
-        }
-
-        @Override
-        public ImmutableSet<PathFragment> ignoredPathFragments() {
-          throw new UnsupportedOperationException("was filtered: " + filteringIgnorer);
-        }
-
-        @Override
-        public PathFragment filteringIgnorer() {
-          return filteringIgnorer;
-        }
-      }
-    }
-
-    /** Is {@code containingDirectory} an ancestor of or equal to this {@link #directory}? */
-    public boolean containedIn(PathFragment containingDirectory) {
-      return directory.getPackageFragment().startsWith(containingDirectory);
     }
 
     /**
@@ -772,7 +623,16 @@ public abstract class TargetPattern implements Serializable {
       NOT_CONTAINED,
     }
 
-    @Override
+    /**
+     * Returns a {@link PackageIdentifier} identifying the most specific containing directory of the
+     * patterns that could be matched by this pattern.
+     *
+     * <p>Note that we are using the {@link PackageIdentifier} type as a convenience; there may not
+     * actually be a package corresponding to this directory!
+     *
+     * <p>This returns a {@link PackageIdentifier} that identifies the referred-to directory. For
+     * example, for "//foo/bar/...", this method returns a {@link PackageIdentifier} for "foo/bar".
+     */
     public PackageIdentifier getDirectory() {
       return directory;
     }
