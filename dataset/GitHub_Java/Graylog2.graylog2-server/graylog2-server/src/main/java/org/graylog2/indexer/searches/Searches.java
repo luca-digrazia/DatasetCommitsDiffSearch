@@ -23,11 +23,13 @@ package org.graylog2.indexer.searches;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.facet.FacetBuilders;
+import org.elasticsearch.search.facet.FacetPhaseExecutionException;
 import org.elasticsearch.search.facet.datehistogram.DateHistogramFacet;
 import org.elasticsearch.search.facet.datehistogram.DateHistogramFacetBuilder;
 import org.elasticsearch.search.facet.statistical.StatisticalFacet;
@@ -40,6 +42,9 @@ import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.*;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
+import org.graylog2.plugin.Tools;
+
+import javax.ws.rs.WebApplicationException;
 
 import java.util.Set;
 
@@ -51,7 +56,7 @@ import static org.elasticsearch.index.query.QueryBuilders.queryString;
  */
 public class Searches {
 
-    private final Core server;
+	private final Core server;
 	private final Client c;
 
     private final static int LIMIT = 150;
@@ -63,32 +68,16 @@ public class Searches {
 		this.server = server;
 		this.c = client;
 	}
-
-    public CountResult count(String query, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
-        Set<String> indices = IndexHelper.determineAffectedIndices(server, range);
-
-        SearchRequestBuilder srb = standardSearchRequest(query, indices, range);
-        srb.setSearchType(SearchType.COUNT);
-
-        SearchResponse r = c.search(srb.request()).actionGet();
-        return new CountResult(r.getHits().getTotalHits(), r.getTookInMillis());
-    }
-
-    public SearchResult search(String query, TimeRange range, int limit, int offset) throws IndexHelper.InvalidRangeFormatException {
+	
+	public SearchResult search(String query, TimeRange range, int limit, int offset) throws IndexHelper.InvalidRangeFormatException {
         if(limit <= 0) {
             limit = LIMIT;
         }
 
         Set<String> indices = IndexHelper.determineAffectedIndices(server, range);
 
-        final SearchRequest request = standardSearchRequest(query,
-                                                            indices,
-                                                            limit,
-                                                            offset,
-                                                            range,
-                                                            SortOrder.DESC).request();
-        SearchResponse r = c.search(request).actionGet();
-		return new SearchResult(r.getHits(), indices, query, request.source(), r.getTook());
+        SearchResponse r = c.search(standardSearchRequest(query, indices, limit, offset, range, SortOrder.DESC).request()).actionGet();
+		return new SearchResult(r.getHits(), indices, query, r.getTook());
 	}
 
     public TermsResult terms(String field, int size, String query, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
@@ -106,13 +95,11 @@ public class Searches {
 
         srb.addFacet(terms);
 
-        final SearchRequest request = srb.request();
-        SearchResponse r = c.search(request).actionGet();
+        SearchResponse r = c.search(srb.request()).actionGet();
 
         return new TermsResult(
                 (TermsFacet) r.getFacets().facet(TERMS_FACET_NAME),
                 query,
-                request.source(),
                 r.getTook()
         );
     }
@@ -128,10 +115,8 @@ public class Searches {
         srb.addFacet(stats);
 
         SearchResponse r;
-        final SearchRequest request;
         try {
-            request = srb.request();
-            r = c.search(request).actionGet();
+            r = c.search(srb.request()).actionGet();
         }  catch (org.elasticsearch.action.search.SearchPhaseExecutionException e) {
             throw new FieldTypeException();
         }
@@ -139,7 +124,6 @@ public class Searches {
         return new FieldStatsResult(
                 (StatisticalFacet) r.getFacets().facet(STATS_FACET_NAME),
                 query,
-                request.source(),
                 r.getTook()
         );
     }
@@ -154,12 +138,9 @@ public class Searches {
 		srb.setIndices(IndexHelper.determineAffectedIndices(server, range).toArray(new String[]{}));
 		srb.setQuery(queryString(query));
 		srb.addFacet(fb);
-
-        final SearchRequest request = srb.request();
-        SearchResponse r = c.search(request).actionGet();
-		return new DateHistogramResult((DateHistogramFacet) r.getFacets().facet("histogram"), query,
-                                       request.source(),
-                                       interval, r.getTook());
+		
+		SearchResponse r = c.search(srb.request()).actionGet();
+		return new DateHistogramResult((DateHistogramFacet) r.getFacets().facet("histogram"), query, interval, r.getTook());
 	}
 
     public HistogramResult fieldHistogram(String query, String field, Indexer.DateHistogramInterval interval, TimeRange range) throws FieldTypeException, IndexHelper.InvalidRangeFormatException {
@@ -175,15 +156,13 @@ public class Searches {
         srb.addFacet(fb);
 
         SearchResponse r;
-        final SearchRequest request = srb.request();
         try {
-            r = c.search(request).actionGet();
+            r = c.search(srb.request()).actionGet();
         }  catch (org.elasticsearch.action.search.SearchPhaseExecutionException e) {
             throw new FieldTypeException();
         }
 
-        return new FieldHistogramResult((DateHistogramFacet) r.getFacets().facet("histogram"), query, request.source(),
-                                        interval, r.getTook());
+        return new FieldHistogramResult((DateHistogramFacet) r.getFacets().facet("histogram"), query, interval, r.getTook());
     }
 
     public SearchHit firstOfIndex(String index) {
@@ -196,10 +175,6 @@ public class Searches {
 
     private SearchRequestBuilder standardSearchRequest(String query, Set<String> indices) throws IndexHelper.InvalidRangeFormatException {
         return standardSearchRequest(query, indices, 0, 0, null, null);
-    }
-
-    private SearchRequestBuilder standardSearchRequest(String query, Set<String> indices, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
-        return standardSearchRequest(query, indices, 0, 0, range, null);
     }
 
     private SearchRequestBuilder standardSearchRequest(String query, Set<String> indices, int limit, int offset, TimeRange range, SortOrder sort) throws IndexHelper.InvalidRangeFormatException {

@@ -22,9 +22,6 @@ package org.graylog2.indexer.searches.timeranges;
 import org.graylog2.utilities.date.NaturalDateParser;
 import org.joda.time.DateTime;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
@@ -52,14 +49,6 @@ public class KeywordRange implements TimeRange, FromToRange {
         }
 
         this.keyword = keyword;
-    }
-
-    @Override
-    public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("type", getType().toString().toLowerCase());
-            put("keyword", getKeyword());
-        }};
     }
 
     public String getKeyword() {

@@ -20,38 +20,38 @@
 
 package org.graylog2.indexer.results;
 
-import com.beust.jcommander.internal.Lists;
-import com.beust.jcommander.internal.Sets;
-import org.elasticsearch.common.bytes.BytesReference;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.graylog2.plugin.Message;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import com.beust.jcommander.internal.Lists;
+import com.beust.jcommander.internal.Sets;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class SearchResult extends IndexQueryResult {
 
-	private final long totalResults;
+	private final int totalResults;
 	private final List<ResultMessage> results;
 	private final Set<String> fields;
     private final Set<String> usedIndices;
 
-	public SearchResult(SearchHits searchHits, Set<String> usedIndices, String originalQuery, BytesReference builtQuery, TimeValue took) {
-        super(originalQuery, builtQuery, took);
+	public SearchResult(SearchHits searchHits, Set<String> usedIndices, String originalQuery, TimeValue took) {
+        super(originalQuery, took);
 
 		this.results = buildResults(searchHits);
 		this.fields = extractFields(searchHits);
-		this.totalResults = searchHits.getTotalHits();
+		this.totalResults = (int) searchHits.getTotalHits();
         this.usedIndices = usedIndices;
 	}
 	
-	public long getTotalResults() {
+	public int getTotalResults() {
 		return totalResults;
 	}
 	
@@ -65,7 +65,7 @@ public class SearchResult extends IndexQueryResult {
 	
 	private List<ResultMessage> buildResults(SearchHits hits) {
 		List<ResultMessage> r = Lists.newArrayList();
-
+		
 		Iterator<SearchHit> i = hits.iterator();
 		while(i.hasNext()) {
 			r.add(ResultMessage.parseFromSource(i.next()));
@@ -76,7 +76,7 @@ public class SearchResult extends IndexQueryResult {
 	
 	private Set<String> extractFields(SearchHits hits) {
 		Set<String> fields = Sets.newHashSet();
-
+		
 		Iterator<SearchHit> i = hits.iterator();
 		while(i.hasNext()) {
 			for (String field : i.next().sourceAsMap().keySet()) {

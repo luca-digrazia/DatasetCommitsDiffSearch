@@ -45,14 +45,6 @@ public class RelativeRange implements TimeRange {
         return Type.RELATIVE;
     }
 
-    @Override
-    public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("type", getType().toString().toLowerCase());
-            put("range", getRange());
-        }};
-    }
-
     public int getRange() {
         return range;
     }

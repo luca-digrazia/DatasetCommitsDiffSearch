@@ -20,20 +20,23 @@
 
 package org.graylog2.rest.resources.search;
 
+import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.Indexer;
-import org.graylog2.indexer.results.FieldStatsResult;
-import org.graylog2.indexer.results.HistogramResult;
-import org.graylog2.indexer.results.SearchResult;
-import org.graylog2.indexer.results.TermsResult;
+import org.graylog2.indexer.results.*;
 import org.graylog2.indexer.searches.Searches;
+import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
+import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
+import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
+import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
 import java.util.Map;
 
 /**
@@ -116,7 +119,6 @@ public class SearchResource extends RestResource {
         result.put("missing", tr.getMissing()); // The number of docs missing a value.
         result.put("other", tr.getOther()); // The count of terms other than the one provided by the entries.
         result.put("total", tr.getTotal()); // The total count of terms.
-        result.put("built_query", tr.getBuiltQuery());
 
         return result;
     }
@@ -124,7 +126,6 @@ public class SearchResource extends RestResource {
     protected Map<String, Object> buildSearchResult(SearchResult sr) {
         Map<String, Object> result = Maps.newHashMap();
         result.put("query", sr.getOriginalQuery());
-        result.put("built_query", sr.getBuiltQuery());
         result.put("used_indices", sr.getUsedIndices());
         result.put("messages", sr.getResults());
         result.put("fields", sr.getFields());
@@ -145,7 +146,6 @@ public class SearchResource extends RestResource {
         result.put("max", sr.getMax());
         result.put("variance", sr.getVariance());
         result.put("std_deviation", sr.getStdDeviation());
-        result.put("built_query", sr.getBuiltQuery());
 
         return result;
     }
@@ -155,7 +155,6 @@ public class SearchResource extends RestResource {
         result.put("interval", histogram.getInterval().toString().toLowerCase());
         result.put("results", histogram.getResults());
         result.put("time", histogram.took().millis());
-        result.put("built_query", histogram.getBuiltQuery());
 
         return result;
     }

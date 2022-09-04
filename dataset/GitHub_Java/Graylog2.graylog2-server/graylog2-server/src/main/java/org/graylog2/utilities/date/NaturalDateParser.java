@@ -1,4 +1,6 @@
 /**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.utilities.date;
 
@@ -21,23 +24,22 @@ import com.joestelmach.natty.DateGroup;
 import com.joestelmach.natty.Parser;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
 
-import java.util.*;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class NaturalDateParser {
 
-    public static final TimeZone UTC = TimeZone.getTimeZone("UTC");
-
     public Result parse(String string) throws DateNotParsableException {
         Date from = null;
         Date to = null;
 
-        Parser parser = new Parser(UTC);
+        Parser parser = new Parser();
         List<DateGroup> groups = parser.parse(string);
         if (!groups.isEmpty()) {
             List<Date> dates = groups.get(0).getDates();
@@ -63,15 +65,15 @@ public class NaturalDateParser {
 
         public Result(Date from, Date to) {
             if (from != null) {
-                this.from = new DateTime(from, DateTimeZone.UTC);
+                this.from = new DateTime(from);
             } else {
-                this.from = Tools.iso8601();
+                this.from = new DateTime();
             }
 
             if (to != null) {
-                this.to = new DateTime(to, DateTimeZone.UTC);
+                this.to = new DateTime(to);
             } else {
-                this.to = Tools.iso8601();
+                this.to = new DateTime();
             }
         }
 
@@ -93,7 +95,7 @@ public class NaturalDateParser {
         }
 
         private String dateFormat(DateTime x) {
-            return x.toString(DateTimeFormat.forPattern(Tools.ES_DATE_FORMAT_NO_MS).withZoneUTC());
+            return x.toString(DateTimeFormat.forPattern(Tools.ES_DATE_FORMAT_NO_MS));
         }
 
     }
