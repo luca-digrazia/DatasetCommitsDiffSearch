@@ -533,7 +533,6 @@ public final class CcCommon {
   }
 
   private static final String DEFINES_ATTRIBUTE = "defines";
-  private static final String LOCAL_DEFINES_ATTRIBUTE = "local_defines";
 
   /**
    * Returns a list of define tokens from "defines" attribute.
@@ -544,40 +543,22 @@ public final class CcCommon {
    * <p>But we require that the "defines" attribute consists of a single token.
    */
   public List<String> getDefines() {
-    return getDefinesFromAttribute(DEFINES_ATTRIBUTE);
-  }
-
-  /**
-   * Returns a list of define tokens from "local_defines" attribute.
-   *
-   * <p>We tokenize the "local_defines" attribute, to ensure that the handling of quotes and
-   * backslash escapes is consistent Bazel's treatment of the "copts" attribute.
-   *
-   * <p>But we require that the "local_defines" attribute consists of a single token.
-   */
-  public List<String> getNonTransitiveDefines() {
-    return getDefinesFromAttribute(LOCAL_DEFINES_ATTRIBUTE);
-  }
-
-  private List<String> getDefinesFromAttribute(String attr) {
     List<String> defines = new ArrayList<>();
-    for (String define : ruleContext.getExpander().list(attr)) {
+    for (String define : ruleContext.getExpander().list(DEFINES_ATTRIBUTE)) {
       List<String> tokens = new ArrayList<>();
       try {
         ShellUtils.tokenize(tokens, define);
         if (tokens.size() == 1) {
           defines.add(tokens.get(0));
         } else if (tokens.isEmpty()) {
-          ruleContext.attributeError(attr, "empty definition not allowed");
+          ruleContext.attributeError(DEFINES_ATTRIBUTE, "empty definition not allowed");
         } else {
-          ruleContext.attributeError(
-              attr,
-              String.format(
-                  "definition contains too many tokens (found %d, expecting exactly one)",
-                  tokens.size()));
+          ruleContext.attributeError(DEFINES_ATTRIBUTE,
+              "definition contains too many tokens (found " + tokens.size()
+              + ", expecting exactly one)");
         }
       } catch (ShellUtils.TokenizationException e) {
-        ruleContext.attributeError(attr, e.getMessage());
+        ruleContext.attributeError(DEFINES_ATTRIBUTE, e.getMessage());
       }
     }
     return defines;

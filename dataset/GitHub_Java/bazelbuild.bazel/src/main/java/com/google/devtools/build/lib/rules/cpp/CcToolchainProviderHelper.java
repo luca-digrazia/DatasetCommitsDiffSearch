@@ -229,7 +229,7 @@ public class CcToolchainProviderHelper {
         sysroot,
         targetSysroot,
         fdoContext,
-        configuration.isToolConfiguration(),
+        configuration.isHostConfiguration() || configuration.isExecConfiguration(),
         attributes.getLicensesProvider(),
         toolPaths,
         toolchainConfigInfo.getToolchainIdentifier(),
