@@ -277,6 +277,10 @@ public class ActionExecutionContext implements Closeable {
     return fileOutErr;
   }
 
+  public boolean hasActionFileSystem() {
+    return actionFileSystem != null;
+  }
+
   /**
    * Provides a mechanism for the action to request values from Skyframe while it discovers inputs.
    */

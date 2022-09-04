@@ -60,6 +60,7 @@ import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -163,7 +164,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -180,7 +180,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected AnalysisMock analysisMock;
   protected ConfiguredRuleClassProvider ruleClassProvider;
-  protected BuildViewForTesting view;
+  protected BuildView view;
 
   protected SequencedSkyframeExecutor skyframeExecutor;
 
@@ -234,14 +234,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     mutableActionGraph = new MapBasedActionGraph(actionKeyContext);
     ruleClassProvider = getRuleClassProvider();
 
-    ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues =
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
-                ImmutableMap.<RepositoryName, PathFragment>of()),
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-                RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY));
+    ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues = ImmutableList.of(
+        PrecomputedValue.injected(
+            RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
+            ImmutableMap.<RepositoryName, PathFragment>of()));
     PackageFactory.BuilderForTesting pkgFactoryBuilder =
         analysisMock
             .getPackageFactoryBuilderForTesting(directories)
@@ -516,7 +512,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     skyframeExecutor.setupDefaultPackage(defaultsPackageContent);
     skyframeExecutor.handleConfiguredTargetChange();
 
-    view = new BuildViewForTesting(directories, ruleClassProvider, skyframeExecutor, null);
+    view = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
     view.setConfigurationsForTesting(event -> {}, masterConfig);
 
     view.setArtifactRoots(new PackageRootsNoSymlinkCreation(Root.fromPath(rootDirectory)));
@@ -530,7 +526,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         /*isSystemEnv=*/ true, /*extendedSanityChecks*/
         false,
         reporter,
-        /* env= */ null);
+        /* env= */ null,
+        /* allowRegisteringActions= */ true);
   }
 
   /**
@@ -1646,6 +1643,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return Iterables.getOnlyElement(masterConfig.getTargetConfigurations());
   }
 
+  protected BuildConfiguration getDataConfiguration() throws InterruptedException {
+    return getConfiguration(getTargetConfiguration(),
+        getRuleClassProvider().getLipoDataTransition());
+  }
+
   protected BuildConfiguration getHostConfiguration() {
     return masterConfig.getHostConfiguration();
   }
@@ -1897,7 +1899,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public ImmutableList<ActionAnalysisMetadata> getRegisteredActions() {
+    public List<ActionAnalysisMetadata> getRegisteredActions() {
       throw new UnsupportedOperationException();
     }
 
@@ -2094,37 +2096,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   public Path getExecRoot() {
     return directories.getExecRoot(ruleClassProvider.getRunfilesPrefix());
-  }
-
-  /** Returns true iff commandLine contains the option --flagName followed by arg. */
-  protected static boolean containsFlag(String flagName, String arg, Iterable<String> commandLine) {
-    Iterator<String> iterator = commandLine.iterator();
-    while (iterator.hasNext()) {
-      if (flagName.equals(iterator.next()) && iterator.hasNext() && arg.equals(iterator.next())) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Returns the list of arguments in commandLine that follow after --flagName. */
-  protected static ImmutableList<String> flagValue(String flagName, Iterable<String> commandLine) {
-    ImmutableList.Builder<String> resultBuilder = ImmutableList.builder();
-    Iterator<String> iterator = commandLine.iterator();
-    boolean found = false;
-    while (iterator.hasNext()) {
-      String val = iterator.next();
-      if (found) {
-        if (val.startsWith("--")) {
-          break;
-        }
-        resultBuilder.add(val);
-      } else if (flagName.equals(val)) {
-        found = true;
-      }
-    }
-    Preconditions.checkArgument(found);
-    return resultBuilder.build();
   }
 
   /** Creates instances of {@link ActionExecutionContext} consistent with test case. */
