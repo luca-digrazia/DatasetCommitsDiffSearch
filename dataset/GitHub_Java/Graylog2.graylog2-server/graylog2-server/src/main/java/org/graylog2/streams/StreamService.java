@@ -56,5 +56,4 @@ public interface StreamService extends PersistedService {
 
     void addOutput(Stream stream, Output output);
     void removeOutput(Stream stream, Output output);
-    void removeOutputFromAllStreams(Output output);
 }

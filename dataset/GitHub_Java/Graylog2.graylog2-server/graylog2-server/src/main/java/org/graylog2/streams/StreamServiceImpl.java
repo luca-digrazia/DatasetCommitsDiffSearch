@@ -289,11 +289,4 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
                 new BasicDBObject("$pull", new BasicDBObject("outputs", new ObjectId(output.getId())))
         );
     }
-
-    public void removeOutputFromAllStreams(Output output) {
-        collection(StreamImpl.class).update(
-                new BasicDBObject(),
-                new BasicDBObject("$pull", new BasicDBObject("outputs", new ObjectId(output.getId())))
-        );
-    }
 }
