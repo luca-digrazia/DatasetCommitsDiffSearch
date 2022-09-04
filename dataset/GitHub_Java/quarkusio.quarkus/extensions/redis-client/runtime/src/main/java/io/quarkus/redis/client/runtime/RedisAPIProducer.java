@@ -6,6 +6,7 @@ import java.util.Set;
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
+import javax.inject.Singleton;
 
 import io.quarkus.redis.client.RedisClient;
 import io.quarkus.redis.client.reactive.ReactiveRedisClient;
@@ -16,6 +17,7 @@ import io.vertx.redis.client.RedisAPI;
 import io.vertx.redis.client.RedisClientType;
 import io.vertx.redis.client.RedisOptions;
 
+@ApplicationScoped
 class RedisAPIProducer {
     private static final char AT = '@';
     private static final char COLON = ':';
@@ -27,29 +29,17 @@ class RedisAPIProducer {
 
     private final RedisConfig config;
 
-    @Produces
-    @ApplicationScoped
     private final Redis vertxRedisClient;
 
-    @Produces
-    @ApplicationScoped
     private final RedisAPI redisAPI;
 
-    @Produces
-    @ApplicationScoped
     private final RedisClient redisClient;
 
-    @Produces
-    @ApplicationScoped
     private final ReactiveRedisClient reactiveClient;
 
-    @Produces
-    @ApplicationScoped
-    private final MutinyRedisClient mutinyRedisClient;
+    private final io.vertx.mutiny.redis.client.Redis mutinyRedisClient;
 
-    @Produces
-    @ApplicationScoped
-    private final MutinyRedisClientAPI mutinyRedisClientAPI;
+    private final io.vertx.mutiny.redis.client.RedisAPI mutinyRedisAPI;
 
     public RedisAPIProducer(RedisConfig config, Vertx vertx) {
         this.config = config;
@@ -87,15 +77,51 @@ class RedisAPIProducer {
 
         vertxRedisClient = Redis.createClient(vertx, options);
         redisAPI = RedisAPI.api(vertxRedisClient);
-        mutinyRedisClient = new MutinyRedisClient(vertxRedisClient);
-        mutinyRedisClientAPI = new MutinyRedisClientAPI(redisAPI);
-        redisClient = new RedisClientImpl(mutinyRedisClientAPI, timeout);
-        reactiveClient = new ReactiveRedisClientImpl(mutinyRedisClientAPI);
+        mutinyRedisClient = io.vertx.mutiny.redis.client.Redis.newInstance(vertxRedisClient);
+        mutinyRedisAPI = io.vertx.mutiny.redis.client.RedisAPI.api(mutinyRedisClient);
+        redisClient = new RedisClientImpl(mutinyRedisAPI, timeout);
+        reactiveClient = new ReactiveRedisClientImpl(mutinyRedisAPI);
+    }
+
+    @Produces
+    @Singleton
+    Redis redis() {
+        return vertxRedisClient;
+    }
+
+    @Produces
+    @Singleton
+    RedisAPI redisAPI() {
+        return redisAPI;
+    }
+
+    @Produces
+    @Singleton
+    RedisClient redisClient() {
+        return redisClient;
+    }
+
+    @Produces
+    @Singleton
+    ReactiveRedisClient reactiveRedisClient() {
+        return reactiveClient;
+    }
+
+    @Produces
+    @Singleton
+    io.vertx.mutiny.redis.client.Redis mutinyRedisClient() {
+        return mutinyRedisClient;
+    }
+
+    @Produces
+    @Singleton
+    io.vertx.mutiny.redis.client.RedisAPI mutinyRedisAPI() {
+        return mutinyRedisAPI;
     }
 
     @PreDestroy
     public void close() {
-        this.redisAPI.close();
+        this.redis().close();
     }
 
     private String buildConnectionString(InetSocketAddress address) {
@@ -113,25 +139,5 @@ class RedisAPIProducer {
         builder.append(config.database);
 
         return builder.toString();
-    }
-
-    static class MutinyRedisClient extends io.vertx.mutiny.redis.client.Redis {
-        MutinyRedisClient(Redis delegate) {
-            super(delegate);
-        }
-
-        MutinyRedisClient() {
-            super(null);
-        }
-    }
-
-    static class MutinyRedisClientAPI extends io.vertx.mutiny.redis.client.RedisAPI {
-        MutinyRedisClientAPI(RedisAPI delegate) {
-            super(delegate);
-        }
-
-        MutinyRedisClientAPI() {
-            super(null);
-        }
     }
 }
