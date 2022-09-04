@@ -200,6 +200,20 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
     }
 
     @Override
+    public void clear() {
+        if (db.isClosed()) {
+            return;
+        }
+        LOG.debug("Clearing cache");
+        synchronized (modificationLock) {
+            queue.clear();
+            counter.set(0);
+            db.commit();
+            db.compact();
+        }
+    }
+
+    @Override
     public boolean isEmpty() {
         return db.isClosed() || queue.isEmpty();
     }
