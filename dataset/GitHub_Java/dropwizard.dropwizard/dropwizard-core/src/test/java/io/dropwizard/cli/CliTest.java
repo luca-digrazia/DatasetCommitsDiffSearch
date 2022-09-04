@@ -1,5 +1,6 @@
 package io.dropwizard.cli;
 
+import com.google.common.base.Optional;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
 import io.dropwizard.setup.Bootstrap;
@@ -12,14 +13,11 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.io.PrintWriter;
 import java.util.Locale;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -36,21 +34,6 @@ public class CliTest {
         public void run(Configuration configuration, Environment environment) throws Exception {
         }
     };
-
-    private static final class BadAppException extends Exception {
-        private static final long serialVersionUID = 1L;
-
-        public static final String BAD_APP_EXCEPTION_STACK_TRACE = "BadAppException stack trace";
-
-        public BadAppException() {
-        }
-
-        @Override
-        public void printStackTrace(PrintWriter writer) {
-            writer.println(BAD_APP_EXCEPTION_STACK_TRACE);
-        }
-    }
-
     private final Bootstrap<Configuration> bootstrap = new Bootstrap<>(app);
     private final ByteArrayOutputStream stdOut = new ByteArrayOutputStream();
     private final ByteArrayOutputStream stdErr = new ByteArrayOutputStream();
@@ -106,7 +89,7 @@ public class CliTest {
 
     @Test
     public void handlesMissingVersions() throws Exception {
-        when(location.getVersion()).thenReturn(Optional.empty());
+        when(location.getVersion()).thenReturn(Optional.<String>absent());
         final Cli newCli = new Cli(location, bootstrap, stdOut, stdErr);
 
         assertThat(newCli.run("--version"))
@@ -311,20 +294,5 @@ public class CliTest {
                 .isEmpty();
 
         verify(command).run(eq(bootstrap), any(Namespace.class), any(Configuration.class));
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void unhandledExceptionsAreLoggedAppropriately() throws Exception {
-        doThrow(new BadAppException()).when(command).run(any(Bootstrap.class), any(Namespace.class), any(Configuration.class));
-
-        assertThat(cli.run("check"))
-                .isFalse();
-
-        assertThat(stdOut.toString())
-                .isEmpty();
-
-        assertThat(stdErr.toString())
-                .isEqualTo(String.format("%s%n", BadAppException.BAD_APP_EXCEPTION_STACK_TRACE));
     }
 }
