@@ -47,15 +47,15 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
 
     public static String TAG = "GSYVideoBaseManager";
 
-    protected static final int HANDLER_PREPARE = 0;
+    private static final int HANDLER_PREPARE = 0;
 
-    protected static final int HANDLER_SETDISPLAY = 1;
+    private static final int HANDLER_SETDISPLAY = 1;
 
-    protected static final int HANDLER_RELEASE = 2;
+    private static final int HANDLER_RELEASE = 2;
 
-    protected static final int HANDLER_RELEASE_SURFACE = 3;
+    private static final int HANDLER_RELEASE_SURFACE = 3;
 
-    protected static final int BUFFER_TIME_OUT_ERROR = -192;//外部超时错误码
+    private static final int BUFFER_TIME_OUT_ERROR = -192;//外部超时错误码
 
     //单例模式实在不好给instance()加参数，还是直接设为静态变量吧
     //自定义so包加载类
@@ -160,6 +160,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
      * @param libLoader 是否使用外部动态加载so
      * */
     protected void init(IjkLibLoader libLoader) {
+        playerManager = getPlayManager(GSYVideoType.IJKPLAYER);
         IJKPlayerManager.setIjkLibLoader(libLoader);
         HandlerThread mediaHandlerThread = new HandlerThread(TAG);
         mediaHandlerThread.start();
@@ -250,7 +251,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
         mMapHeadData = mapHeadData;
         GSYModel fb = new GSYModel(url, mapHeadData, loop, speed);
         msg.obj = fb;
-        sendMessage(msg);
+        mMediaHandler.sendMessage(msg);
         if (needTimeOutOther) {
             startTimeOutBuffer();
         }
@@ -260,7 +261,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     public void releaseMediaPlayer() {
         Message msg = new Message();
         msg.what = HANDLER_RELEASE;
-        sendMessage(msg);
+        mMediaHandler.sendMessage(msg);
         playTag = "";
         playPosition = -22;
     }
@@ -278,7 +279,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
         Message msg = new Message();
         msg.what = HANDLER_RELEASE_SURFACE;
         msg.obj = holder;
-        sendMessage(msg);
+        mMediaHandler.sendMessage(msg);
     }
 
     @Override
@@ -454,10 +455,6 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     }
 
 
-    protected void sendMessage(Message message) {
-        mMediaHandler.sendMessage(message);
-    }
-
     private class MediaHandler extends Handler {
 
         MediaHandler(Looper looper) {
@@ -525,7 +522,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     /**
      * 启动十秒的定时器进行 缓存操作
      */
-    protected void startTimeOutBuffer() {
+    private void startTimeOutBuffer() {
         // 启动定时
         Debuger.printfError("startTimeOutBuffer");
         mainThreadHandler.postDelayed(mTimeOutRunnable, timeOut);
@@ -535,7 +532,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     /**
      * 取消 十秒的定时器进行 缓存操作
      */
-    protected void cancelTimeOutBuffer() {
+    private void cancelTimeOutBuffer() {
         Debuger.printfError("cancelTimeOutBuffer");
         // 取消定时
         if (needTimeOutOther)
@@ -594,10 +591,6 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     public void setVideoType(Context context, int videoType) {
         this.context = context.getApplicationContext();
         this.videoType = videoType;
-    }
-
-    public void initContext(Context context) {
-        this.context = context.getApplicationContext();
     }
 
     /**

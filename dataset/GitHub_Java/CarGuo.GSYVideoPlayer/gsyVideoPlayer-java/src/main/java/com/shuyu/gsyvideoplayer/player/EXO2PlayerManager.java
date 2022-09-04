@@ -7,7 +7,6 @@ import android.os.Message;
 import android.view.Surface;
 
 import com.google.android.exoplayer2.video.DummySurface;
-import com.shuyu.gsyvideoplayer.cache.ICacheManager;
 import com.shuyu.gsyvideoplayer.model.GSYModel;
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 
@@ -35,23 +34,17 @@ public class EXO2PlayerManager implements IPlayerManager {
     }
 
     @Override
-    public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList, ICacheManager cacheManager) {
+    public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList) {
         mediaPlayer = new IjkExo2MediaPlayer(context);
         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
         if (dummySurface == null) {
             dummySurface = DummySurface.newInstanceV17(context, false);
         }
-        GSYModel gsyModel = (GSYModel) msg.obj;
         try {
-            mediaPlayer.setLooping(gsyModel.isLooping());
-            if (gsyModel.isCache() && cacheManager != null) {
-                cacheManager.doCacheLogic(context, mediaPlayer, gsyModel.getUrl(), gsyModel.getMapHeadData(), gsyModel.getCachePath());
-            } else {
-                mediaPlayer.setDataSource(context, Uri.parse(gsyModel.getUrl()), gsyModel.getMapHeadData());
-            }
+            mediaPlayer.setDataSource(context, Uri.parse(((GSYModel) msg.obj).getUrl()), ((GSYModel) msg.obj).getMapHeadData());
             //很遗憾，EXO2的setSpeed只能在播放前生效
-            if (gsyModel.getSpeed() != 1 && gsyModel.getSpeed() > 0) {
-                 mediaPlayer.setSpeed(gsyModel.getSpeed(), 1);
+            if (((GSYModel) msg.obj).getSpeed() != 1 && ((GSYModel) msg.obj).getSpeed() > 0) {
+                 mediaPlayer.setSpeed(((GSYModel) msg.obj).getSpeed(), 1);
             }
         } catch (Exception e) {
             e.printStackTrace();
