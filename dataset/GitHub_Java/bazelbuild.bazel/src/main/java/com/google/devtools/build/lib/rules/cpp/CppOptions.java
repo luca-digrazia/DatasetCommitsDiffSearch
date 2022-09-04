@@ -892,12 +892,11 @@ public class CppOptions extends FragmentOptions {
 
     host.useStartEndLib = useStartEndLib;
     host.stripBinaries = StripMode.ALWAYS;
-    host.fdoOptimizeForBuild = fdoOptimizeForBuild;
-    host.fdoProfileLabel = fdoProfileLabel;
-    host.xfdoProfileLabel = xfdoProfileLabel;
+    host.fdoOptimizeForBuild = null;
+    host.fdoProfileLabel = null;
+    host.xfdoProfileLabel = null;
     host.inmemoryDotdFiles = inmemoryDotdFiles;
 
-    host.enableFdoProfileAbsolutePath = enableFdoProfileAbsolutePath;
     host.doNotUseCpuTransformer = doNotUseCpuTransformer;
     host.disableGenruleCcToolchainDependency = disableGenruleCcToolchainDependency;
     host.disableExpandIfAllAvailableInFlagSet = disableExpandIfAllAvailableInFlagSet;

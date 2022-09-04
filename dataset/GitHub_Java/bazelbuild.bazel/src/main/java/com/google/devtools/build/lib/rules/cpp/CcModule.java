@@ -257,8 +257,6 @@ public class CcModule
         /* thinltoMergedObjectFile= */ null,
         mustKeepDebug,
         ccToolchainProvider,
-        // TODO(b/117917928): We cannot use cpp configuration from cc toolchain. Fix.
-        ccToolchainProvider.getCppConfiguration(),
         featureConfiguration,
         useTestOnlyFlags,
         /* isLtoIndexing= */ false,

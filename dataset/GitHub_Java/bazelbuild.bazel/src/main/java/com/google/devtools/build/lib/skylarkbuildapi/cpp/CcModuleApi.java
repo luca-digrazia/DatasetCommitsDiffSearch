@@ -323,7 +323,9 @@ public interface CcModuleApi<
         // TODO(b/65151735): Remove once we migrate crosstools to features
         @Param(
             name = "add_legacy_cxx_options",
-            doc = "Unused.",
+            doc =
+                "When true the flags will contain options coming from legacy cxx_flag crosstool "
+                    + "fields.",
             named = true,
             positional = false,
             defaultValue = "False")
@@ -434,6 +436,7 @@ public interface CcModuleApi<
             named = true,
             positional = false,
             defaultValue = "False"),
+        // TODO(b/65151735): Remove once we migrate crosstools to features
         @Param(
             name = "must_keep_debug",
             doc =
@@ -442,16 +445,26 @@ public interface CcModuleApi<
             named = true,
             positional = false,
             defaultValue = "True"),
+        // TODO(b/65151735): Remove once we migrate crosstools to features
         @Param(
             name = "use_test_only_flags",
-            doc = "When set to true, 'is_cc_test' variable will be set.",
+            doc =
+                "When set to True flags coming from test_only_linker_flag crosstool fields will"
+                    + " be included."
+                    + ""
+                    + "This field will be removed once b/65151735 is fixed.",
             named = true,
             positional = false,
             defaultValue = "False"),
         // TODO(b/65151735): Remove once we migrate crosstools to features
         @Param(
             name = "is_static_linking_mode",
-            doc = "Unused.",
+            doc =
+                "True when using static_linking_mode, False when using dynamic_linking_mode. "
+                    + "Caller is responsible for keeping this in sync with 'static_linking_mode' "
+                    + "and 'dynamic_linking_mode' features enabled on the feature configuration. "
+                    + ""
+                    + "This field will be removed once b/65151735 is fixed.",
             named = true,
             positional = false,
             defaultValue = "True"),
