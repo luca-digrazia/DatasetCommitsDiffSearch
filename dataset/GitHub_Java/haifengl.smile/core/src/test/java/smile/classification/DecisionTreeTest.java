@@ -64,7 +64,7 @@ public class DecisionTreeTest {
         ArffParser arffParser = new ArffParser();
         arffParser.setResponseIndex(4);
         try {
-            AttributeDataset weather = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/weather.nominal.arff"));
+            AttributeDataset weather = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/weather.nominal.arff"));
             double[][] x = weather.toArray(new double[weather.size()][]);
             int[] y = weather.toArray(new int[weather.size()]);
 
@@ -96,7 +96,7 @@ public class DecisionTreeTest {
         ArffParser arffParser = new ArffParser();
         arffParser.setResponseIndex(4);
         try {
-            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/iris.arff"));
             double[][] x = iris.toArray(new double[iris.size()][]);
             int[] y = iris.toArray(new int[iris.size()]);
 
@@ -128,8 +128,8 @@ public class DecisionTreeTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
-            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getDataFile("usps/zip.test"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
@@ -145,7 +145,7 @@ public class DecisionTreeTest {
                 }
             }
 
-            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+            System.out.format("USPS error rate = %.2f%%\n", 100.0 * error / testx.length);
             assertEquals(328, error);
         } catch (Exception ex) {
             System.err.println(ex);
@@ -161,8 +161,8 @@ public class DecisionTreeTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
-            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getDataFile("usps/zip.test"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
@@ -191,7 +191,7 @@ public class DecisionTreeTest {
                 attributes[i] = new NominalAttribute("V"+i, values);
             }
             
-            DecisionTree tree = new DecisionTree(attributes, x, y, 350, 2, DecisionTree.SplitRule.ENTROPY);
+            DecisionTree tree = new DecisionTree(attributes, x, y, 350, DecisionTree.SplitRule.ENTROPY);
             
             int error = 0;
             for (int i = 0; i < testx.length; i++) {
@@ -200,15 +200,15 @@ public class DecisionTreeTest {
                 }
             }
 
-            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+            System.out.format("USPS error rate = %.2f%%\n", 100.0 * error / testx.length);
             
             double[] importance = tree.importance();
             int[] index = QuickSort.sort(importance);
             for (int i = importance.length; i-- > 0; ) {
-                System.out.format("%s importance is %.4f%n", train.attributes()[index[i]], importance[i]);
+                System.out.format("%s importance is %.4f\n", train.attributes()[index[i]], importance[i]);
             }
             
-            assertEquals(324, error);
+            assertEquals(337, error);
         } catch (Exception ex) {
             System.err.println(ex);
         }

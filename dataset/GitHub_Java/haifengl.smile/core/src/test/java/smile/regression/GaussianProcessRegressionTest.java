@@ -84,7 +84,7 @@ public class GaussianProcessRegressionTest {
             104.6, 108.4, 110.8, 112.6, 114.2, 115.7, 116.9
         };
 
-        Math.standardize(longley);
+        Math.normalize(longley);
 
         int n = longley.length;
         LOOCV loocv = new LOOCV(n);
@@ -110,10 +110,10 @@ public class GaussianProcessRegressionTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(6);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/cpu.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/cpu.arff"));
             double[] datay = data.toArray(new double[data.size()]);
             double[][] datax = data.toArray(new double[data.size()][]);
-            Math.standardize(datax);
+            Math.normalize(datax);
             
             int n = datax.length;
             int k = 10;
@@ -172,7 +172,7 @@ public class GaussianProcessRegressionTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(10);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/regression/2dplanes.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/regression/2dplanes.arff"));
             double[][] x = data.toArray(new double[data.size()][]);
             double[] y = data.toArray(new double[data.size()]);
 
@@ -235,9 +235,9 @@ public class GaussianProcessRegressionTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(40);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/regression/ailerons.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/regression/ailerons.arff"));
             double[][] x = data.toArray(new double[data.size()][]);
-            Math.standardize(x);
+            Math.normalize(x);
 
             double[] y = data.toArray(new double[data.size()]);
             for (int i = 0; i < y.length; i++) {
@@ -303,10 +303,10 @@ public class GaussianProcessRegressionTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(32);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/regression/bank32nh.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/regression/bank32nh.arff"));
             double[] y = data.toArray(new double[data.size()]);
             double[][] x = data.toArray(new double[data.size()][]);
-            Math.standardize(x);
+            Math.normalize(x);
 
             int[] perm = Math.permutate(x.length);
             double[][] datax = new double[4000][];
@@ -367,7 +367,7 @@ public class GaussianProcessRegressionTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(8);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/regression/puma8nh.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/regression/puma8nh.arff"));
             double[] y = data.toArray(new double[data.size()]);
             double[][] x = data.toArray(new double[data.size()][]);
 
@@ -430,7 +430,7 @@ public class GaussianProcessRegressionTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(8);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/regression/kin8nm.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/regression/kin8nm.arff"));
             double[] y = data.toArray(new double[data.size()]);
             double[][] x = data.toArray(new double[data.size()][]);
 

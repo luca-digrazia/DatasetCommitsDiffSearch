@@ -59,17 +59,17 @@ public class FeatureSetTest {
         System.out.println("attributes");
         try {
             ArffParser parser = new ArffParser();
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/regression/abalone.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/regression/abalone.arff"));
             double[][] x = data.toArray(new double[data.size()][]);
             
-            FeatureSet<double[]> features = new FeatureSet<>();
+            FeatureSet<double[]> features = new FeatureSet<double[]>();
             features.add(new Nominal2Binary(data.attributes()));
             features.add(new NumericAttributeFeature(data.attributes(), 0.05, 0.95, x));
             Attribute[] attributes = features.attributes();
             assertEquals(11, attributes.length);
             for (int i = 0; i < attributes.length; i++) {
                 System.out.println(attributes[i]);
-                assertEquals(Attribute.Type.NUMERIC, attributes[i].getType());
+                assertEquals(Attribute.Type.NUMERIC, attributes[i].type);
             }
         } catch (Exception ex) {
             System.err.println(ex);
@@ -84,10 +84,10 @@ public class FeatureSetTest {
         System.out.println("f");
         try {
             ArffParser parser = new ArffParser();
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/regression/abalone.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/regression/abalone.arff"));
             double[][] x = data.toArray(new double[data.size()][]);
             
-            FeatureSet<double[]> features = new FeatureSet<>();
+            FeatureSet<double[]> features = new FeatureSet<double[]>();
             features.add(new Nominal2Binary(data.attributes()));
             features.add(new NumericAttributeFeature(data.attributes(), 0.05, 0.95, x));
             
@@ -98,8 +98,8 @@ public class FeatureSetTest {
             
             Attribute[] attributes = features.attributes();
             for (int i = 0; i < attributes.length; i++) {
-                assertEquals(attributes[i].getName(), dataset.attributes()[i].getName());
-                assertEquals(attributes[i].getType(), dataset.attributes()[i].getType());
+                assertEquals(attributes[i].name, dataset.attributes()[i].name);
+                assertEquals(attributes[i].type, dataset.attributes()[i].type);
             }
         } catch (Exception ex) {
             System.err.println(ex);

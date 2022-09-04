@@ -62,9 +62,9 @@ public class ArffParserTest {
             double[][] x = weather.toArray(new double[weather.size()][]);
             int[] y = weather.toArray(new int[weather.size()]);
             
-            assertEquals(Attribute.Type.NOMINAL, weather.response().getType());
+            assertEquals(Attribute.Type.NOMINAL, weather.response().type);
             for (Attribute attribute : weather.attributes()) {
-                assertEquals(Attribute.Type.NOMINAL, attribute.getType());
+                assertEquals(Attribute.Type.NOMINAL, attribute.type);
             }
             
             assertEquals(14, weather.size());
@@ -100,9 +100,9 @@ public class ArffParserTest {
             double[][] x = iris.toArray(new double[iris.size()][]);
             int[] y = iris.toArray(new int[iris.size()]);
             
-            assertEquals(Attribute.Type.NOMINAL, iris.response().getType());
+            assertEquals(Attribute.Type.NOMINAL, iris.response().type);
             for (Attribute attribute : iris.attributes()) {
-                assertEquals(Attribute.Type.NUMERIC, attribute.getType());
+                assertEquals(Attribute.Type.NUMERIC, attribute.type);
             }
             
             assertEquals(150, iris.size());
@@ -137,7 +137,7 @@ public class ArffParserTest {
             double[][] x = string.toArray(new double[string.size()][]);
             
             for (Attribute attribute : string.attributes()) {
-                assertEquals(Attribute.Type.STRING, attribute.getType());
+                assertEquals(Attribute.Type.STRING, attribute.type);
             }
             
             Attribute[] attributes = string.attributes();

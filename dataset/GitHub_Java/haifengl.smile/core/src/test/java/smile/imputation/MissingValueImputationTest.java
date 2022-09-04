@@ -24,7 +24,7 @@ import org.junit.Test;
 import smile.data.AttributeDataset;
 import smile.data.parser.ArffParser;
 import smile.data.parser.DelimitedTextParser;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  *
@@ -55,19 +55,19 @@ public class MissingValueImputationTest {
     public void setUp() {
         try {
             arffParser.setResponseIndex(4);
-            iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            iris = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/iris.arff"));
 
             arffParser.setResponseIndex(35);
-            soybean = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/soybean.arff"));
+            soybean = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/soybean.arff"));
 
             arffParser.setResponseIndex(19);
-            segment = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/segment-challenge.arff"));
+            segment = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/segment-challenge.arff"));
 
             csvParser.setDelimiter(",");
-            movement = csvParser.parse("Movement", smile.data.parser.IOUtils.getTestDataFile("uci/movement_libras.data"));
+            movement = csvParser.parse("Movement", smile.data.parser.IOUtils.getDataFile("uci/movement_libras.data"));
 
             csvParser.setDelimiter(" +");
-            control = csvParser.parse("Control", smile.data.parser.IOUtils.getTestDataFile("uci/synthetic_control.data"));
+            control = csvParser.parse("Control", smile.data.parser.IOUtils.getDataFile("uci/synthetic_control.data"));
         } catch (Exception e) {
             System.err.println(e);
         }
@@ -84,7 +84,7 @@ public class MissingValueImputationTest {
         double[][] dat = new double[data.length][data[0].length];
         for (int i = 0; i < dat.length; i++) {
             for (int j = 0; j < dat[i].length; j++) {
-                if (MathEx.random() < rate) {
+                if (Math.random() < rate) {
                     n++;
                     dat[i][j] = Double.NaN;
                 } else {

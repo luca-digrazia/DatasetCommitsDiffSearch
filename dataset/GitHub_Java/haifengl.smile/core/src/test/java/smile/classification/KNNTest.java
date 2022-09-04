@@ -63,7 +63,7 @@ public class KNNTest {
         ArffParser arffParser = new ArffParser();
         arffParser.setResponseIndex(4);
         try {
-            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/iris.arff"));
             double[][] x = iris.toArray(new double[0][]);
             int[] y = iris.toArray(new int[0]);
 
@@ -160,8 +160,8 @@ public class KNNTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(19);
         try {
-            AttributeDataset train = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/segment-challenge.arff"));
-            AttributeDataset test = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/segment-test.arff"));
+            AttributeDataset train = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/segment-challenge.arff"));
+            AttributeDataset test = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/segment-test.arff"));
 
             double[][] x = train.toArray(new double[0][]);
             int[] y = train.toArray(new int[0]);
@@ -177,7 +177,7 @@ public class KNNTest {
                 }
             }
 
-            System.out.format("Segment error rate = %.2f%%%n", 100.0 * error / testx.length);
+            System.out.format("Segment error rate = %.2f%%\n", 100.0 * error / testx.length);
             assertEquals(39, error);
         } catch (IOException ex) {
             System.err.println(ex);
@@ -193,8 +193,8 @@ public class KNNTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
-            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getDataFile("usps/zip.test"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
@@ -210,7 +210,7 @@ public class KNNTest {
                 }
             }
 
-            System.out.format("USPS error rate = %.2f%%%n", 100.0 * error / testx.length);
+            System.out.format("USPS error rate = %.2f%%\n", 100.0 * error / testx.length);
             assertEquals(113, error);
         } catch (Exception ex) {
             System.err.println(ex);

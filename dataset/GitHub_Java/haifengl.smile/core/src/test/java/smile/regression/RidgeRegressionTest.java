@@ -144,7 +144,7 @@ public class RidgeRegressionTest {
                 rss += r * r;
             }
 
-            System.out.format("LOOCV MSE with lambda %.2f = %.3f%n", 0.01*lambda, rss/n);
+            System.out.format("LOOCV MSE with lambda %.2f = %.3f\n", 0.01*lambda, rss/n);
         }
     }
 
@@ -157,7 +157,7 @@ public class RidgeRegressionTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(6);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/cpu.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/cpu.arff"));
             double[][] datax = data.toArray(new double[data.size()][]);
             double[] datay = data.toArray(new double[data.size()]);
 

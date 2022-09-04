@@ -66,8 +66,8 @@ public class MPLSHSpeedTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
-            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getDataFile("usps/zip.test"));
 
             x = train.toArray(new double[train.size()][]);
             testx = test.toArray(new double[test.size()][]);
@@ -76,7 +76,7 @@ public class MPLSHSpeedTest {
         }
 
         double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Loading USPS: %.2fs%n", time);
+        System.out.format("Loading USPS: %.2fs\n", time);
 
         start = System.currentTimeMillis();
         MPLSH<double[]> lsh = new MPLSH<double[]>(256, 100, 3, 4.0);
@@ -93,21 +93,21 @@ public class MPLSHSpeedTest {
         LinearSearch<double[]> naive = new LinearSearch<double[]>(x, new EuclideanDistance());
         lsh.learn(naive, train, 8.0);
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Building LSH: %.2fs%n", time);
+        System.out.format("Building LSH: %.2fs\n", time);
 
         start = System.currentTimeMillis();
         for (int i = 0; i < testx.length; i++) {
             lsh.nearest(testx[i]);
         }
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("NN: %.2fs%n", time);
+        System.out.format("NN: %.2fs\n", time);
 
         start = System.currentTimeMillis();
         for (int i = 0; i < testx.length; i++) {
             lsh.knn(testx[i], 10);
         }
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("10-NN: %.2fs%n", time);
+        System.out.format("10-NN: %.2fs\n", time);
 
         start = System.currentTimeMillis();
         List<Neighbor<double[], double[]>> n = new ArrayList<Neighbor<double[], double[]>>();
@@ -116,6 +116,6 @@ public class MPLSHSpeedTest {
             n.clear();
         }
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Range: %.2fs%n", time);
+        System.out.format("Range: %.2fs\n", time);
     }
 }

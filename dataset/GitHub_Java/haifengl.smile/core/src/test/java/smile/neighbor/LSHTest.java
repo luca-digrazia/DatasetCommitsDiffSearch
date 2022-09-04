@@ -43,8 +43,8 @@ public class LSHTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
-            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getDataFile("usps/zip.test"));
 
             x = train.toArray(new double[train.size()][]);
             testx = test.toArray(new double[test.size()][]);
@@ -161,7 +161,7 @@ public class LSHTest {
                     }
                 }
             }
-            if (!n2.isEmpty()) {
+            if (n2.size() > 0) {
                 recall += 1.0 * hit / n2.size();
             }
         }

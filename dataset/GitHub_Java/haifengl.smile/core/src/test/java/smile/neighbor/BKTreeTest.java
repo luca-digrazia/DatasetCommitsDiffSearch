@@ -34,13 +34,13 @@ import static org.junit.Assert.*;
  */
 public class BKTreeTest {
 
-    List<String> words = new ArrayList<>();
+    List<String> words = new ArrayList<String>();
     BKTree<String> bktree;
     LinearSearch<String> naive;
 
     public BKTreeTest() {
         try {
-            BufferedReader input = smile.data.parser.IOUtils.getTestDataReader("neighbor/index.noun");
+            BufferedReader input = smile.data.parser.IOUtils.getDataReader("neighbor/index.noun");
             String line = input.readLine();
             while (line != null) {
                 if (!line.startsWith(" ")) {
@@ -54,9 +54,9 @@ public class BKTreeTest {
         }
 
         String[] data = words.toArray(new String[1]);
-        bktree = new BKTree<>(new EditDistance(50, true));
+        bktree = new BKTree<String>(new EditDistance(50, true));
         bktree.add(data);
-        naive = new LinearSearch<>(data, new EditDistance(50, true));
+        naive = new LinearSearch<String>(data, new EditDistance(50, true));
     }
 
     @BeforeClass
@@ -81,8 +81,8 @@ public class BKTreeTest {
     @Test
     public void testRange() {
         System.out.println("range");
-        List<Neighbor<String, String>> n1 = new ArrayList<>();
-        List<Neighbor<String, String>> n2 = new ArrayList<>();
+        List<Neighbor<String, String>> n1 = new ArrayList<Neighbor<String, String>>();
+        List<Neighbor<String, String>> n2 = new ArrayList<Neighbor<String, String>>();
         for (int i = 1000; i < 1100; i++) {
             bktree.range(words.get(i), 1, n1);
             naive.range(words.get(i), 1, n2);

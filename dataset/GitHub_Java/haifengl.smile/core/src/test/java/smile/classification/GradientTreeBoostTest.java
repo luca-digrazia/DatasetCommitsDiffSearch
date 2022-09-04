@@ -62,7 +62,7 @@ public class GradientTreeBoostTest {
         ArffParser arffParser = new ArffParser();
         arffParser.setResponseIndex(4);
         try {
-            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/iris.arff"));
             double[][] x = iris.toArray(new double[iris.size()][]);
             int[] y = iris.toArray(new int[iris.size()]);
 
@@ -101,7 +101,7 @@ public class GradientTreeBoostTest {
         ArffParser arffParser = new ArffParser();
         arffParser.setResponseIndex(4);
         try {
-            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/iris.arff"));
             double[][] x = iris.toArray(new double[iris.size()][]);
             int[] y = iris.toArray(new int[iris.size()]);
 
@@ -133,8 +133,8 @@ public class GradientTreeBoostTest {
         ArffParser arffParser = new ArffParser();
         arffParser.setResponseIndex(19);
         try {
-            AttributeDataset train = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/segment-challenge.arff"));
-            AttributeDataset test = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/segment-test.arff"));
+            AttributeDataset train = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/segment-challenge.arff"));
+            AttributeDataset test = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/segment-test.arff"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
@@ -150,7 +150,7 @@ public class GradientTreeBoostTest {
                 }
             }
 
-            System.out.format("Gradient Tree Boost error rate = %.2f%%%n", 100.0 * error / testx.length);
+            System.out.format("Gradient Tree Boost error rate = %.2f%%\n", 100.0 * error / testx.length);
             //assertEquals(28, error);
         } catch (Exception ex) {
             System.err.println(ex);
@@ -166,8 +166,8 @@ public class GradientTreeBoostTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
-            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getDataFile("usps/zip.test"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
@@ -183,17 +183,17 @@ public class GradientTreeBoostTest {
                 }
             }
 
-            System.out.format("Gradient Tree Boost error rate = %.2f%%%n", 100.0 * error / testx.length);
+            System.out.format("Gradient Tree Boost error rate = %.2f%%\n", 100.0 * error / testx.length);
 
             double[] accuracy = boost.test(testx, testy);
             for (int i = 1; i <= accuracy.length; i++) {
-                System.out.format("%d trees accuracy = %.2f%%%n", i, 100.0 * accuracy[i-1]);
+                System.out.format("%d trees accuracy = %.2f%%\n", i, 100.0 * accuracy[i-1]);
             }
             
             double[] importance = boost.importance();
             int[] index = QuickSort.sort(importance);
             for (int i = importance.length; i-- > 0; ) {
-                System.out.format("%s importance is %.4f%n", train.attributes()[index[i]], importance[i]);
+                System.out.format("%s importance is %.4f\n", train.attributes()[index[i]], importance[i]);
             }
         } catch (Exception ex) {
             System.err.println(ex);
@@ -209,8 +209,8 @@ public class GradientTreeBoostTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
-            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getDataFile("usps/zip.test"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
@@ -237,17 +237,17 @@ public class GradientTreeBoostTest {
                 }
             }
 
-            System.out.format("Gradient Tree Boost error rate = %.2f%%%n", 100.0 * error / testx.length);
+            System.out.format("Gradient Tree Boost error rate = %.2f%%\n", 100.0 * error / testx.length);
             
             double[] accuracy = boost.test(testx, testy);
             for (int i = 1; i <= accuracy.length; i++) {
-                System.out.format("%d trees accuracy = %.2f%%%n", i, 100.0 * accuracy[i-1]);
+                System.out.format("%d trees accuracy = %.2f%%\n", i, 100.0 * accuracy[i-1]);
             }
             
             double[] importance = boost.importance();
             int[] index = QuickSort.sort(importance);
             for (int i = importance.length; i-- > 0; ) {
-                System.out.format("%s importance is %.4f%n", train.attributes()[index[i]], importance[i]);
+                System.out.format("%s importance is %.4f\n", train.attributes()[index[i]], importance[i]);
             }
         } catch (Exception ex) {
             System.err.println(ex);

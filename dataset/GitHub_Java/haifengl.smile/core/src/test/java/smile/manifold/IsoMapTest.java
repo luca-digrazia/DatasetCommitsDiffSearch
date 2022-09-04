@@ -38,7 +38,7 @@ public class IsoMapTest {
         parser.setDelimiter("\t");
 
         try {
-            swissroll = parser.parse("Swissroll", smile.data.parser.IOUtils.getTestDataFile("manifold/swissroll.txt"));
+            swissroll = parser.parse("Swissroll", smile.data.parser.IOUtils.getDataFile("manifold/swissroll.txt"));
         } catch (Exception e) {
             System.err.println(e);
         }
@@ -1076,11 +1076,17 @@ public class IsoMapTest {
         
         IsoMap isomap = new IsoMap(data, 2, 7, false);
 
-        double[][] coords = isomap.getCoordinates();
+        double sign = Math.signum(points[0][0] / isomap.getCoordinates()[0][0]);
         for (int i = 0; i < points.length; i++) {
-            for (int j = 0; j < points[0].length; j++) {
-                assertEquals(Math.abs(points[i][j]), Math.abs(coords[i][j]), 1E-4);
-            }
+            points[i][0] *= sign;
         }
+
+        sign = Math.signum(points[0][1] / isomap.getCoordinates()[0][1]);
+        for (int i = 0; i < points.length; i++) {
+            points[i][1] *= sign;
+        }
+
+        // This is the results of standard Isomap.
+        assertTrue(Math.equals(points, isomap.getCoordinates(), 1E-6));
     }
 }

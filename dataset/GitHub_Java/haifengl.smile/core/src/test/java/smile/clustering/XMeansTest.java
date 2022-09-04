@@ -62,8 +62,8 @@ public class XMeansTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
-            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getDataFile("usps/zip.test"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
@@ -76,7 +76,7 @@ public class XMeansTest {
             
             double r = rand.measure(y, xmeans.getClusterLabel());
             double r2 = ari.measure(y, xmeans.getClusterLabel());
-            System.out.format("Training rand index = %.2f%%\tadjusted rand index = %.2f%%%n", 100.0 * r, 100.0 * r2);
+            System.out.format("Training rand index = %.2f%%\tadjusted rand index = %.2f%%\n", 100.0 * r, 100.0 * r2);
             assertTrue(r > 0.85);
             assertTrue(r2 > 0.4);
             
@@ -87,7 +87,7 @@ public class XMeansTest {
             
             r = rand.measure(testy, p);
             r2 = ari.measure(testy, p);
-            System.out.format("Testing rand index = %.2f%%\tadjusted rand index = %.2f%%%n", 100.0 * r, 100.0 * r2);
+            System.out.format("Testing rand index = %.2f%%\tadjusted rand index = %.2f%%\n", 100.0 * r, 100.0 * r2);
             assertTrue(r > 0.85);
             assertTrue(r2 > 0.4);
         } catch (Exception ex) {

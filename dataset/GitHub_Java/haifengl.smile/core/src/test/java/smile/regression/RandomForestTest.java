@@ -92,7 +92,7 @@ public class RandomForestTest {
             double[] trainy = Math.slice(y, loocv.train[i]);
             
             try {
-                RandomForest forest = new RandomForest(trainx, trainy, 300, n, 3, 2);
+                RandomForest forest = new RandomForest(trainx, trainy, 300, 2, 3);
 
                 double r = y[loocv.test[i]] - forest.predict(longley[loocv.test[i]]);
                 rss += r * r;
@@ -110,7 +110,7 @@ public class RandomForestTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(response);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile(url));
+            AttributeDataset data = parser.parse(this.getClass().getResourceAsStream(url));
             double[] datay = data.toArray(new double[data.size()]);
             double[][] datax = data.toArray(new double[data.size()][]);
             
@@ -126,8 +126,8 @@ public class RandomForestTest {
                 double[][] testx = Math.slice(datax, cv.test[i]);
                 double[] testy = Math.slice(datay, cv.test[i]);
 
-                RandomForest forest = new RandomForest(data.attributes(), trainx, trainy, 200, n, 5, trainx[0].length/3);
-                System.out.format("OOB error rate = %.4f%n", forest.error());
+                RandomForest forest = new RandomForest(data.attributes(), trainx, trainy, 200, trainx[0].length/3, 5);
+                System.out.format("OOB error rate = %.4f\n", forest.error());
 
                 for (int j = 0; j < testx.length; j++) {
                     double r = testy[j] - forest.predict(testx[j]);
@@ -136,7 +136,7 @@ public class RandomForestTest {
                 }
             }
 
-            System.out.format("10-CV RMSE = %.4f \t AbsoluteDeviation = %.4f%n", Math.sqrt(rss/n), ad/n);
+            System.out.format("10-CV RMSE = %.4f \t AbsoluteDeviation = %.4f\n", Math.sqrt(rss/n), ad/n);
          } catch (Exception ex) {
              System.err.println(ex);
          }
@@ -147,15 +147,15 @@ public class RandomForestTest {
      */
     @Test
     public void testAll() {
-        test("CPU", "weka/cpu.arff", 6);
-        //test("2dplanes", "weka/regression/2dplanes.arff", 6);
-        //test("abalone", "weka/regression/abalone.arff", 8);
-        //test("ailerons", "weka/regression/ailerons.arff", 40);
-        //test("bank32nh", "weka/regression/bank32nh.arff", 32);
-        test("autoMPG", "weka/regression/autoMpg.arff", 7);
-        //test("cal_housing", "weka/regression/cal_housing.arff", 8);
-        //test("puma8nh", "weka/regression/puma8nh.arff", 8);
-        //test("kin8nm", "weka/regression/kin8nm.arff", 8);
+        test("CPU", "/smile/data/weka/cpu.arff", 6);
+        //test("2dplanes", "/smile/data/weka/regression/2dplanes.arff", 6);
+        //test("abalone", "/smile/data/weka/regression/abalone.arff", 8);
+        //test("ailerons", "/smile/data/weka/regression/ailerons.arff", 40);
+        //test("bank32nh", "/smile/data/weka/regression/bank32nh.arff", 32);
+        test("autoMPG", "/smile/data/weka/regression/autoMpg.arff", 7);
+        //test("cal_housing", "/smile/data/weka/regression/cal_housing.arff", 8);
+        //test("puma8nh", "/smile/data/weka/regression/puma8nh.arff", 8);
+        //test("kin8nm", "/smile/data/weka/regression/kin8nm.arff", 8);
     }
     
     /**
@@ -167,7 +167,7 @@ public class RandomForestTest {
         ArffParser parser = new ArffParser();
         parser.setResponseIndex(6);
         try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/cpu.arff"));
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getDataFile("weka/cpu.arff"));
             double[] datay = data.toArray(new double[data.size()]);
             double[][] datax = data.toArray(new double[data.size()][]);
 
@@ -189,18 +189,18 @@ public class RandomForestTest {
                 testy[i-m] = datay[index[i]];                
             }
 
-            RandomForest forest = new RandomForest(data.attributes(), trainx, trainy, 100, n, 5, trainx[0].length / 3);
-            System.out.format("RMSE = %.4f%n", Validation.test(forest, testx, testy));
+            RandomForest forest = new RandomForest(data.attributes(), trainx, trainy, 100, trainx[0].length / 3, 5);
+            System.out.format("RMSE = %.4f\n", Validation.test(forest, testx, testy));
             
             double[] rmse = forest.test(testx, testy);
             for (int i = 1; i <= rmse.length; i++) {
-                System.out.format("%d trees RMSE = %.4f%n", i, rmse[i-1]);
+                System.out.format("%d trees RMSE = %.4f\n", i, rmse[i-1]);
             }
             
             double[] importance = forest.importance();
             index = QuickSort.sort(importance);
             for (int i = importance.length; i-- > 0; ) {
-                System.out.format("%s importance is %.4f%n", data.attributes()[index[i]], importance[i]);
+                System.out.format("%s importance is %.4f\n", data.attributes()[index[i]], importance[i]);
             }
         } catch (Exception ex) {
             System.err.println(ex);

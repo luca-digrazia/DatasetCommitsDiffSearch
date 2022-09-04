@@ -38,7 +38,7 @@ public class BKTreeSpeedTest {
     public BKTreeSpeedTest() {
         long start = System.currentTimeMillis();
         try {
-            BufferedReader input = smile.data.parser.IOUtils.getTestDataReader("neighbor/index.noun");
+            BufferedReader input = smile.data.parser.IOUtils.getDataReader("neighbor/index.noun");
             String line = input.readLine();
             while (line != null) {
                 if (!line.startsWith(" ")) {
@@ -52,7 +52,7 @@ public class BKTreeSpeedTest {
         }
 
         double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Loading data: %.2fs%n", time);
+        System.out.format("Loading data: %.2fs\n", time);
 
         String[] data = words.toArray(new String[words.size()]);
 
@@ -60,7 +60,7 @@ public class BKTreeSpeedTest {
         bktree = new BKTree<String>(new EditDistance(50, true));
         bktree.add(data);
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Building BK-tree: %.2fs%n", time);
+        System.out.format("Building BK-tree: %.2fs\n", time);
     }
 
     @BeforeClass
@@ -92,7 +92,7 @@ public class BKTreeSpeedTest {
             neighbors.clear();
         }
         double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("BK-tree range 1 search: %.2fs%n", time);
+        System.out.format("BK-tree range 1 search: %.2fs\n", time);
 
         start = System.currentTimeMillis();
         for (int i = 1000; i < 1100; i++) {
@@ -100,7 +100,7 @@ public class BKTreeSpeedTest {
             neighbors.clear();
         }
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("BK-tree range 2 search: %.2fs%n", time);
+        System.out.format("BK-tree range 2 search: %.2fs\n", time);
 
         start = System.currentTimeMillis();
         for (int i = 1000; i < 1100; i++) {
@@ -108,7 +108,7 @@ public class BKTreeSpeedTest {
             neighbors.clear();
         }
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("BK-tree range 3 search: %.2fs%n", time);
+        System.out.format("BK-tree range 3 search: %.2fs\n", time);
 
         start = System.currentTimeMillis();
         for (int i = 1000; i < 1100; i++) {
@@ -116,6 +116,6 @@ public class BKTreeSpeedTest {
             neighbors.clear();
         }
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("BK-tree range 4 search: %.2fs%n", time);
+        System.out.format("BK-tree range 4 search: %.2fs\n", time);
     }
 }

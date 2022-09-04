@@ -61,7 +61,7 @@ public class SpectralClusteringTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
@@ -89,12 +89,12 @@ public class SpectralClusteringTest {
         DelimitedTextParser parser = new DelimitedTextParser();
         parser.setResponseIndex(new NominalAttribute("class"), 0);
         try {
-            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
 
             double[][] x = train.toArray(new double[train.size()][]);
             int[] y = train.toArray(new int[train.size()]);
             
-            SpectralClustering spectral = new SpectralClustering(x, 10, 100, 8.0);
+            SpectralClustering spectral = new SpectralClustering(x, 100, 10, 8.0);
             
             AdjustedRandIndex ari = new AdjustedRandIndex();
             RandIndex rand = new RandIndex();

@@ -65,7 +65,7 @@ public class AprioriPhraseExtractorTest {
     @Test
     public void testExtract() throws FileNotFoundException {
         System.out.println("extract");
-        Scanner scanner = new Scanner(smile.data.parser.IOUtils.getTestDataReader("text/turing.txt"));
+        Scanner scanner = new Scanner(smile.data.parser.IOUtils.getDataReader("text/turing.txt"));
         String text = scanner.useDelimiter("\\Z").next();
         scanner.close();
         
@@ -76,6 +76,9 @@ public class AprioriPhraseExtractorTest {
             for (String s : SimpleSentenceSplitter.getInstance().split(paragraph)) {
                 String[] sentence = tokenizer.split(s);
                 for (int i = 0; i < sentence.length; i++) {
+                    if (stemmer.stripPluralParticiple(sentence[i]).toLowerCase().equals("")) {
+                        System.out.println(Arrays.toString(sentence));
+                    }
                     sentence[i] = stemmer.stripPluralParticiple(sentence[i]).toLowerCase();
                 }
                 sentences.add(sentence);

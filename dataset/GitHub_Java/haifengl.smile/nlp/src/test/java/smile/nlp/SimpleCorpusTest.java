@@ -37,7 +37,7 @@ public class SimpleCorpusTest {
     SimpleCorpus corpus = new SimpleCorpus();
 
     public SimpleCorpusTest() {
-        try (BufferedReader input = smile.data.parser.IOUtils.getTestDataReader("text/quote.tok.gt9.5000")) {
+        try (BufferedReader input = smile.data.parser.IOUtils.getDataReader("text/quote.tok.gt9.5000")) {
             String line = null;
             int id = 0;
             while ((line = input.readLine()) != null) {
@@ -173,9 +173,9 @@ public class SimpleCorpusTest {
      */
     @Test
     public void testSearch2WithNoHits() {
-        System.out.println("search 'no hits'");
-        String[] terms = {"thisisnotaword"};
+        System.out.println("search 'romantic comedy'");
+        String[] terms = {"find", "words"};
         Iterator<Relevance> hits = corpus.search(new BM25(), terms);
-        assertEquals(false, hits.hasNext());
+        assertEquals(Collections.emptyIterator(),hits);
     }
 }

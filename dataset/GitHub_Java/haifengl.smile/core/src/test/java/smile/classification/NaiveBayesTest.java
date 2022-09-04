@@ -53,7 +53,7 @@ public class NaiveBayesTest {
         String[][] x = new String[2000][];
         int[] y = new int[2000];
 
-        try(BufferedReader input = smile.data.parser.IOUtils.getTestDataReader("text/movie.txt")) {
+        try(BufferedReader input = smile.data.parser.IOUtils.getDataReader("text/movie.txt")) {
             for (int i = 0; i < x.length; i++) {
                 String[] words = input.readLine().trim().split(" ");
 
@@ -105,7 +105,7 @@ public class NaiveBayesTest {
         ArffParser arffParser = new ArffParser();
         arffParser.setResponseIndex(4);
         try {
-            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/iris.arff"));
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/iris.arff"));
             double[][] x = iris.toArray(new double[iris.size()][]);
             int[] y = iris.toArray(new int[iris.size()]);
 
@@ -146,7 +146,7 @@ public class NaiveBayesTest {
                     error++;
             }
 
-            System.out.format("Iris error rate = %.2f%%%n", 100.0 * error / x.length);
+            System.out.format("Iris error rate = %.2f%%\n", 100.0 * error / x.length);
             assertEquals(5, error);
         } catch (Exception ex) {
             System.err.println(ex);
@@ -187,7 +187,7 @@ public class NaiveBayesTest {
             }
         }
 
-        System.out.format("Multinomial error = %d of %d%n", error, total);
+        System.out.format("Multinomial error = %d of %d\n", error, total);
         assertTrue(error < 265);
     }
 
@@ -227,7 +227,7 @@ public class NaiveBayesTest {
             }
         }
 
-        System.out.format("Multinomial error = %d of %d%n", error, total);
+        System.out.format("Multinomial error = %d of %d\n", error, total);
         assertTrue(error < 265);
     }
 
@@ -266,7 +266,7 @@ public class NaiveBayesTest {
             }
         }
 
-        System.out.format("Bernoulli error = %d of %d%n", error, total);
+        System.out.format("Bernoulli error = %d of %d\n", error, total);
         assertTrue(error < 270);
     }
 
@@ -307,7 +307,7 @@ public class NaiveBayesTest {
             }
         }
 
-        System.out.format("Bernoulli error = %d of %d%n", error, total);
+        System.out.format("Bernoulli error = %d of %d\n", error, total);
         assertTrue(error < 270);
     }
 }
