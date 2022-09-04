@@ -21,24 +21,24 @@ import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import org.graylog2.plugin.GlobalMetricNames;
+import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.journal.RawMessage;
 import org.graylog2.shared.buffers.processors.DecodingProcessor;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
-import org.graylog2.shared.metrics.MetricUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import javax.inject.Named;
-import javax.inject.Provider;
 import javax.inject.Singleton;
 import java.util.concurrent.ThreadFactory;
 
@@ -51,11 +51,12 @@ public class ProcessBuffer extends Buffer {
     private static final Logger LOG = LoggerFactory.getLogger(ProcessBuffer.class);
 
     private final Meter incomingMessages;
+    private final ProcessBufferProcessor[] processors;
 
     @Inject
     public ProcessBuffer(MetricRegistry metricRegistry,
                          DecodingProcessor.Factory decodingProcessorFactory,
-                         Provider<ProcessBufferProcessor> bufferProcessorFactory,
+                         ProcessBufferProcessor.Factory bufferProcessorFactory,
                          @Named("processbuffer_processors") int processorCount,
                          @Named("ring_size") int ringSize,
                          @Named("processor_wait_strategy") String waitStrategyName) {
@@ -64,7 +65,12 @@ public class ProcessBuffer extends Buffer {
 
         final Timer parseTime = metricRegistry.timer(name(ProcessBuffer.class, "parseTime"));
         final Timer decodeTime = metricRegistry.timer(name(ProcessBuffer.class, "decodeTime"));
-        MetricUtils.safelyRegister(metricRegistry, GlobalMetricNames.PROCESS_BUFFER_USAGE, (Gauge<Long>) this::getUsage);
+        safelyRegister(metricRegistry, GlobalMetricNames.PROCESS_BUFFER_USAGE, new Gauge<Long>() {
+            @Override
+            public Long getValue() {
+                return ProcessBuffer.this.getUsage();
+            }
+        });
         safelyRegister(metricRegistry, GlobalMetricNames.PROCESS_BUFFER_SIZE, constantGauge(ringBufferSize));
 
         final WaitStrategy waitStrategy = getWaitStrategy(waitStrategyName, "processor_wait_strategy");
@@ -80,11 +86,9 @@ public class ProcessBuffer extends Buffer {
         LOG.info("Initialized ProcessBuffer with ring size <{}> and wait strategy <{}>.",
                 ringBufferSize, waitStrategy.getClass().getSimpleName());
 
-        final ProcessBufferProcessor[] processors = new ProcessBufferProcessor[processorCount];
+        processors = new ProcessBufferProcessor[processorCount];
         for (int i = 0; i < processorCount; i++) {
-            // TODO The provider should be converted to a factory so we can pass the DecodingProcessor instead of using a setter after object creation.
-            processors[i] = bufferProcessorFactory.get();
-            processors[i].setDecodingProcessor(decodingProcessorFactory.create(decodeTime, parseTime));
+            processors[i] = bufferProcessorFactory.create(decodingProcessorFactory.create(decodeTime, parseTime));
         }
         disruptor.handleEventsWithWorkerPool(processors);
 
@@ -110,5 +114,14 @@ public class ProcessBuffer extends Buffer {
     @Override
     protected void afterInsert(int n) {
         incomingMessages.mark(n);
+    }
+
+    public ImmutableMap<String,String> getDump() {
+        final ImmutableMap.Builder<String, String> processBufferDump = ImmutableMap.builder();
+        for (int i = 0, processorsLength = processors.length; i < processorsLength; i++) {
+            final ProcessBufferProcessor proc = processors[i];
+            processBufferDump.put("ProcessBufferProcessor #" + i, proc.getCurrentMessage().map(Message::toDumpString).orElse("idle"));
+        }
+        return processBufferDump.build();
     }
 }
