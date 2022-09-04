@@ -24,7 +24,7 @@ import io.quarkus.rest.data.panache.RestDataResource;
 import io.quarkus.rest.data.panache.deployment.ResourceMetadata;
 import io.quarkus.rest.data.panache.deployment.properties.ResourceProperties;
 import io.quarkus.rest.data.panache.deployment.utils.ResponseImplementor;
-import io.quarkus.rest.data.panache.runtime.UpdateExecutor;
+import io.quarkus.rest.data.panache.runtime.jta.TransactionalExecutor;
 
 public final class UpdateMethodImplementor extends StandardMethodImplementor {
 
@@ -59,7 +59,7 @@ public final class UpdateMethodImplementor extends StandardMethodImplementor {
      *     )
      *     public Response update(@PathParam("id") ID id, Entity entityToSave) {
      *         try {
-     *             Object newEntity = updateExecutor.execute(() -> {
+     *             Object newEntity = transactionalExecutor.execute(() -> {
      *                 if (resource.get(id) == null) {
      *                     return resource.update(id, entityToSave);
      *                 } else {
@@ -110,16 +110,15 @@ public final class UpdateMethodImplementor extends StandardMethodImplementor {
         ResultHandle id = methodCreator.getMethodParam(0);
         ResultHandle entityToSave = methodCreator.getMethodParam(1);
 
-        // Invoke resource methods inside a supplier function which will be given to an update executor.
-        // For ORM, this update executor will have the @Transactional annotation to make
+        // Invoke resource methods inside a supplier function which will be given to a transactional executor to make
         // sure that all database operations are executed in a single transaction.
         TryBlock tryBlock = implementTryBlock(methodCreator, "Failed to update an entity");
-        ResultHandle updateExecutor = getUpdateExecutor(tryBlock);
+        ResultHandle transactionalExecutor = getTransactionalExecutor(tryBlock);
         ResultHandle updateFunction = getUpdateFunction(tryBlock, resourceMetadata.getResourceClass(), resource, id,
                 entityToSave);
-        ResultHandle newEntity = tryBlock.invokeInterfaceMethod(
-                ofMethod(UpdateExecutor.class, "execute", Object.class, Supplier.class),
-                updateExecutor, updateFunction);
+        ResultHandle newEntity = tryBlock.invokeVirtualMethod(
+                ofMethod(TransactionalExecutor.class, "execute", Object.class, Supplier.class),
+                transactionalExecutor, updateFunction);
 
         BranchResult createdNewEntity = tryBlock.ifNotNull(newEntity);
         createdNewEntity.trueBranch()
@@ -173,18 +172,18 @@ public final class UpdateMethodImplementor extends StandardMethodImplementor {
         creator.returnValue(creator.loadNull());
     }
 
-    private ResultHandle getUpdateExecutor(BytecodeCreator creator) {
+    private ResultHandle getTransactionalExecutor(BytecodeCreator creator) {
         ResultHandle arcContainer = creator.invokeStaticMethod(ofMethod(Arc.class, "container", ArcContainer.class));
         ResultHandle instanceHandle = creator.invokeInterfaceMethod(
                 ofMethod(ArcContainer.class, "instance", InstanceHandle.class, Class.class, Annotation[].class),
-                arcContainer, creator.loadClass(UpdateExecutor.class), creator.newArray(Annotation.class, 0));
+                arcContainer, creator.loadClass(TransactionalExecutor.class), creator.newArray(Annotation.class, 0));
         ResultHandle instance = creator.invokeInterfaceMethod(
                 ofMethod(InstanceHandle.class, "get", Object.class), instanceHandle);
 
         creator.ifNull(instance)
                 .trueBranch()
                 .throwException(RuntimeException.class,
-                        UpdateExecutor.class.getSimpleName() + " instance was not found");
+                        TransactionalExecutor.class.getSimpleName() + " instance was not found");
 
         return instance;
     }
