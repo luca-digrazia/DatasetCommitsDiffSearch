@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -28,46 +28,41 @@ public class AwaitingResultActivityTest {
 		AwaitingResultActivity_ activity = new AwaitingResultActivity_();
 
 		activity.onActivityResult(AwaitingResultActivity.FIRST_REQUEST, 0, null);
-
+		
 		assertThat(activity.onResultCalled).isTrue();
 		assertThat(activity.onResultWithDataCalled).isFalse();
-		assertThat(activity.onActivityResultWithResultCodeAndDataCalled)
-				.isFalse();
-		assertThat(activity.onActivityResultWithDataAndResultCodeCalled)
-				.isFalse();
+		assertThat(activity.onActivityResultWithResultCodeAndDataCalled).isFalse();
+		assertThat(activity.onActivityResultWithDataAndResultCodeCalled).isFalse();
 		assertThat(activity.onResultWithIntResultCodeCalled).isFalse();
 		assertThat(activity.onResultWithIntegerResultCodeCalled).isFalse();
 	}
+
 
 	@Test
 	public void onlySecondRequestAnnotatedMethodAreCalled() {
 		AwaitingResultActivity_ activity = new AwaitingResultActivity_();
 
-		activity.onActivityResult(AwaitingResultActivity.SECOND_REQUEST, 0,
-				null);
-
+		activity.onActivityResult(AwaitingResultActivity.SECOND_REQUEST, 0, null);
+		
 		assertThat(activity.onResultCalled).isFalse();
 		assertThat(activity.onResultWithDataCalled).isTrue();
-		assertThat(activity.onActivityResultWithResultCodeAndDataCalled)
-				.isTrue();
-		assertThat(activity.onActivityResultWithDataAndResultCodeCalled)
-				.isTrue();
+		assertThat(activity.onActivityResultWithResultCodeAndDataCalled).isTrue();
+		assertThat(activity.onActivityResultWithDataAndResultCodeCalled).isTrue();
 		assertThat(activity.onResultWithIntResultCodeCalled).isFalse();
 		assertThat(activity.onResultWithIntegerResultCodeCalled).isFalse();
 	}
+
 
 	@Test
 	public void onlyThirdRequestAnnotatedMethodAreCalled() {
 		AwaitingResultActivity_ activity = new AwaitingResultActivity_();
 
 		activity.onActivityResult(AwaitingResultActivity.THIRD_REQUEST, 0, null);
-
+		
 		assertThat(activity.onResultCalled).isFalse();
 		assertThat(activity.onResultWithDataCalled).isFalse();
-		assertThat(activity.onActivityResultWithResultCodeAndDataCalled)
-				.isFalse();
-		assertThat(activity.onActivityResultWithDataAndResultCodeCalled)
-				.isFalse();
+		assertThat(activity.onActivityResultWithResultCodeAndDataCalled).isFalse();
+		assertThat(activity.onActivityResultWithDataAndResultCodeCalled).isFalse();
 		assertThat(activity.onResultWithIntResultCodeCalled).isTrue();
 		assertThat(activity.onResultWithIntegerResultCodeCalled).isTrue();
 	}

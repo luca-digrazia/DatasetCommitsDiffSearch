@@ -43,6 +43,7 @@ import com.sun.codemodel.JSwitch;
 import com.sun.codemodel.JVar;
 
 /**
+ * @author Mathieu Boniface
  */
 public class OnActivityResultProcessor implements DecoratingElementProcessor {
 
