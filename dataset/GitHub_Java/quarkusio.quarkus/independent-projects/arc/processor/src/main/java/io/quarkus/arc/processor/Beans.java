@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
@@ -104,13 +120,10 @@ final class Beans {
         if (name == null) {
             name = initStereotypeName(stereotypes, beanClass);
         }
-        if (isAlternative && alternativePriority == null) {
-            alternativePriority = initStereotypeAlternativePriority(stereotypes);
-        }
 
         BeanInfo bean = new BeanInfo(beanClass, beanDeployment, scope, types, qualifiers,
                 Injection.forBean(beanClass, null, beanDeployment, transformer), null, null,
-                isAlternative ? alternativePriority : null, stereotypes, name, false);
+                isAlternative ? alternativePriority : null, stereotypes, name);
         return bean;
     }
 
@@ -152,7 +165,6 @@ final class Beans {
         Set<Type> types = Types.getProducerMethodTypeClosure(producerMethod, beanDeployment);
         Integer alternativePriority = null;
         boolean isAlternative = false;
-        boolean isDefaultBean = false;
         List<StereotypeInfo> stereotypes = new ArrayList<>();
         String name = null;
 
@@ -176,10 +188,6 @@ final class Beans {
             }
             if (DotNames.ALTERNATIVE.equals(annotation.name())) {
                 isAlternative = true;
-                continue;
-            }
-            if (DotNames.DEFAULT_BEAN.equals(annotation.name())) {
-                isDefaultBean = true;
                 continue;
             }
             ScopeInfo scopeAnnotation = beanDeployment.getScope(annotation.name());
@@ -217,14 +225,11 @@ final class Beans {
                         .filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
                         .map(a -> a.value().asInt()).orElse(null);
             }
-            if (alternativePriority == null) {
-                alternativePriority = initStereotypeAlternativePriority(stereotypes);
-            }
         }
 
         BeanInfo bean = new BeanInfo(producerMethod, beanDeployment, scope, types, qualifiers,
                 Injection.forBean(producerMethod, declaringBean, beanDeployment, transformer), declaringBean,
-                disposer, alternativePriority, stereotypes, name, isDefaultBean);
+                disposer, alternativePriority, stereotypes, name);
         return bean;
     }
 
@@ -294,14 +299,11 @@ final class Beans {
                         .filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
                         .map(a -> a.value().asInt()).orElse(null);
             }
-            if (alternativePriority == null) {
-                alternativePriority = initStereotypeAlternativePriority(stereotypes);
-            }
         }
 
         BeanInfo bean = new BeanInfo(producerField, beanDeployment, scope, types, qualifiers, Collections.emptyList(),
                 declaringBean, disposer,
-                alternativePriority, stereotypes, name, false);
+                alternativePriority, stereotypes, name);
         return bean;
     }
 
@@ -331,18 +333,6 @@ final class Beans {
             }
         }
         return false;
-    }
-
-    private static Integer initStereotypeAlternativePriority(List<StereotypeInfo> stereotypes) {
-        if (stereotypes.isEmpty()) {
-            return null;
-        }
-        for (StereotypeInfo stereotype : stereotypes) {
-            if (stereotype.getAlternativePriority() != null) {
-                return stereotype.getAlternativePriority();
-            }
-        }
-        return null;
     }
 
     private static String initStereotypeName(List<StereotypeInfo> stereotypes, AnnotationTarget target) {
@@ -442,18 +432,8 @@ final class Beans {
     }
 
     static BeanInfo resolveAmbiguity(List<BeanInfo> resolved) {
-        List<BeanInfo> resolvedAmbiguity = new ArrayList<>(resolved);
-        for (Iterator<BeanInfo> iterator = resolvedAmbiguity.iterator(); iterator.hasNext();) {
-            BeanInfo beanInfo = iterator.next();
-            if (beanInfo.isDefaultBean()) {
-                iterator.remove();
-            }
-        }
-        if (resolvedAmbiguity.size() == 1) {
-            return resolvedAmbiguity.get(0);
-        }
-
         BeanInfo selected = null;
+        List<BeanInfo> resolvedAmbiguity = new ArrayList<>(resolved);
         for (Iterator<BeanInfo> iterator = resolvedAmbiguity.iterator(); iterator.hasNext();) {
             BeanInfo beanInfo = iterator.next();
             if (!beanInfo.isAlternative() && (beanInfo.getDeclaringBean() == null || !beanInfo.getDeclaringBean()
@@ -472,7 +452,7 @@ final class Beans {
                     iterator.remove();
                 }
             }
-            if (resolvedAmbiguity.size() == 1) {
+            if (resolved.size() == 1) {
                 selected = resolvedAmbiguity.get(0);
             }
         }
