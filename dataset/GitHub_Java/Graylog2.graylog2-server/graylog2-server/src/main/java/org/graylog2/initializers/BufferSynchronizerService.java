@@ -16,21 +16,15 @@
  */
 package org.graylog2.initializers;
 
-import com.codahale.metrics.InstrumentedExecutorService;
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.AbstractIdleService;
-import org.graylog2.Configuration;
 import org.graylog2.buffers.Buffers;
 import org.graylog2.caches.Caches;
-import org.graylog2.indexer.cluster.Cluster;
+import org.graylog2.indexer.Indexer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 @Singleton
 public class BufferSynchronizerService extends AbstractIdleService {
@@ -38,23 +32,17 @@ public class BufferSynchronizerService extends AbstractIdleService {
 
     private final Buffers bufferSynchronizer;
     private final Caches cacheSynchronizer;
-    private final Cluster cluster;
-    private final Configuration configuration;
-    private final MetricRegistry metricRegistry;
+    private final Indexer indexer;
 
     private volatile boolean indexerAvailable = true;
 
     @Inject
     public BufferSynchronizerService(final Buffers bufferSynchronizer,
                                      final Caches cacheSynchronizer,
-                                     final Cluster cluster,
-                                     final Configuration configuration,
-                                     final MetricRegistry metricRegistry) {
+                                     final Indexer indexer) {
         this.bufferSynchronizer = bufferSynchronizer;
         this.cacheSynchronizer = cacheSynchronizer;
-        this.cluster = cluster;
-        this.configuration = configuration;
-        this.metricRegistry = metricRegistry;
+        this.indexer = indexer;
     }
 
     @Override
@@ -64,25 +52,9 @@ public class BufferSynchronizerService extends AbstractIdleService {
     @Override
     protected void shutDown() throws Exception {
         LOG.debug("Stopping BufferSynchronizerService");
-        if (indexerAvailable && cluster.isConnectedAndHealthy()) {
-            final ExecutorService executorService = new InstrumentedExecutorService(Executors.newFixedThreadPool(2), metricRegistry);
-
-            executorService.submit(new Runnable() {
-                @Override
-                public void run() {
-                    bufferSynchronizer.waitForEmptyBuffers(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
-                }
-            });
-
-            executorService.submit(new Runnable() {
-                @Override
-                public void run() {
-                    cacheSynchronizer.waitForEmptyCaches(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
-                }
-            });
-
-            executorService.shutdown();
-            executorService.awaitTermination(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
+        if (indexerAvailable && indexer.isConnectedAndHealthy()) {
+            bufferSynchronizer.waitForEmptyBuffers();
+            cacheSynchronizer.waitForEmptyCaches();
         } else {
             LOG.warn("Elasticsearch is unavailable. Not waiting to clear buffers and caches, as we have no healthy cluster.");
         }
