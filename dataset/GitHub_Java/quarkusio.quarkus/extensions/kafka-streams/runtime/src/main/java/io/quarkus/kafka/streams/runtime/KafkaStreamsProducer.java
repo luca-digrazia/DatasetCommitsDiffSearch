@@ -17,7 +17,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import javax.annotation.PostConstruct;
 import javax.enterprise.event.Observes;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
@@ -38,7 +37,6 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.jboss.logging.Logger;
 
-import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.Startup;
@@ -65,7 +63,6 @@ public class KafkaStreamsProducer {
     public KafkaStreamsProducer(KafkaStreamsSupport kafkaStreamsSupport, KafkaStreamsRuntimeConfig runtimeConfig,
             Instance<Topology> topology, Instance<KafkaClientSupplier> kafkaClientSupplier,
             Instance<StateListener> stateListener, Instance<StateRestoreListener> globalStateRestoreListener) {
-        shutdown = false;
         // No producer for Topology -> nothing to do
         if (topology.isUnsatisfied()) {
             LOGGER.debug("No Topology producer; Kafka Streams will not be started");
@@ -87,13 +84,6 @@ public class KafkaStreamsProducer {
         this.kafkaStreams = initializeKafkaStreams(kafkaStreamsProperties, runtimeConfig, kafkaAdminClient, topology.get(),
                 kafkaClientSupplier, stateListener, globalStateRestoreListener, executorService);
         this.kafkaStreamsTopologyManager = new KafkaStreamsTopologyManager(kafkaAdminClient);
-    }
-
-    @PostConstruct
-    public void postConstruct() {
-        if (kafkaStreams != null) {
-            Arc.container().beanManager().getEvent().select(KafkaStreams.class).fire(kafkaStreams);
-        }
     }
 
     @Produces
@@ -122,7 +112,7 @@ public class KafkaStreamsProducer {
             kafkaStreams.close();
         }
         if (kafkaAdminClient != null) {
-            kafkaAdminClient.close(Duration.ZERO);
+            kafkaAdminClient.close();
         }
     }
 
