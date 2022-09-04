@@ -1,18 +1,34 @@
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant 
+ * of patent rights can be found in the PATENTS file in the same directory.
+*/
+
 package com.facebook.stetho.okhttp;
 
 import com.facebook.stetho.inspector.network.DefaultResponseHandler;
 import com.facebook.stetho.inspector.network.NetworkEventReporter;
 import com.facebook.stetho.inspector.network.NetworkEventReporterImpl;
-import com.squareup.okhttp.*;
+import com.facebook.stetho.inspector.network.RequestBodyHelper;
+import com.squareup.okhttp.Connection;
+import com.squareup.okhttp.Interceptor;
+import com.squareup.okhttp.MediaType;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.RequestBody;
+import com.squareup.okhttp.Response;
+import com.squareup.okhttp.ResponseBody;
 import okio.BufferedSink;
 import okio.BufferedSource;
 import okio.Okio;
 
 import javax.annotation.Nullable;
-import java.io.ByteArrayOutputStream;
+
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.io.OutputStream;
 
 /**
  * Provides easy integration with <a href="http://square.github.io/okhttp/">OkHttp</a> 2.2.0+
@@ -22,26 +38,25 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   OkHttpClient client = new OkHttpClient();
  *   client.networkInterceptors().add(new StethoInterceptor());
  * </pre>
+ *
+ * @deprecated replaced with {@code com.facebook.stetho.okhttp3.StethoInterceptor}.
  */
+@Deprecated
 public class StethoInterceptor implements Interceptor {
   private final NetworkEventReporter mEventReporter = NetworkEventReporterImpl.get();
 
-  private final AtomicInteger mNextRequestId = new AtomicInteger(0);
-
   @Override
   public Response intercept(Chain chain) throws IOException {
-    String requestId = String.valueOf(mNextRequestId.getAndIncrement());
+    String requestId = mEventReporter.nextRequestId();
 
     Request request = chain.request();
 
-    int requestSize = 0;
+    RequestBodyHelper requestBodyHelper = null;
     if (mEventReporter.isEnabled()) {
-      OkHttpInspectorRequest inspectorRequest = new OkHttpInspectorRequest(requestId, request);
+      requestBodyHelper = new RequestBodyHelper(mEventReporter, requestId);
+      OkHttpInspectorRequest inspectorRequest =
+          new OkHttpInspectorRequest(requestId, request, requestBodyHelper);
       mEventReporter.requestWillBeSent(inspectorRequest);
-      byte[] requestBody = inspectorRequest.body();
-      if (requestBody != null) {
-        requestSize += requestBody.length;
-      }
     }
 
     Response response;
@@ -55,11 +70,16 @@ public class StethoInterceptor implements Interceptor {
     }
 
     if (mEventReporter.isEnabled()) {
-      if (requestSize > 0) {
-        mEventReporter.dataSent(requestId, requestSize, requestSize);
+      if (requestBodyHelper != null && requestBodyHelper.hasBody()) {
+        requestBodyHelper.reportDataSent();
       }
 
       Connection connection = chain.connection();
+      if (connection == null) {
+        throw new IllegalStateException(
+            "No connection associated with this request; " +
+                "did you use addInterceptor instead of addNetworkInterceptor?");
+      }
       mEventReporter.responseHeadersReceived(
           new OkHttpInspectorResponse(
               requestId,
@@ -94,12 +114,15 @@ public class StethoInterceptor implements Interceptor {
   private static class OkHttpInspectorRequest implements NetworkEventReporter.InspectorRequest {
     private final String mRequestId;
     private final Request mRequest;
-    private byte[] mBody;
-    private boolean mBodyGenerated;
+    private RequestBodyHelper mRequestBodyHelper;
 
-    public OkHttpInspectorRequest(String requestId, Request request) {
+    public OkHttpInspectorRequest(
+        String requestId,
+        Request request,
+        RequestBodyHelper requestBodyHelper) {
       mRequestId = requestId;
       mRequest = request;
+      mRequestBodyHelper = requestBodyHelper;
     }
 
     @Override
@@ -132,24 +155,18 @@ public class StethoInterceptor implements Interceptor {
     @Nullable
     @Override
     public byte[] body() throws IOException {
-      if (!mBodyGenerated) {
-        mBodyGenerated = true;
-        mBody = generateBody();
-      }
-      return mBody;
-    }
-
-    private byte[] generateBody() throws IOException {
       RequestBody body = mRequest.body();
-      if (body != null) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        BufferedSink sink = Okio.buffer(Okio.sink(out));
-        body.writeTo(sink);
-        sink.flush();
-        return out.toByteArray();
-      } else {
+      if (body == null) {
         return null;
       }
+      OutputStream out = mRequestBodyHelper.createBodySink(firstHeaderValue("Content-Encoding"));
+      BufferedSink bufferedSink = Okio.buffer(Okio.sink(out));
+      try {
+        body.writeTo(bufferedSink);
+      } finally {
+        bufferedSink.close();
+      }
+      return mRequestBodyHelper.getDisplayBody();
     }
 
     @Override
@@ -264,7 +281,7 @@ public class StethoInterceptor implements Interceptor {
     }
 
     @Override
-    public long contentLength() {
+    public long contentLength() throws IOException {
       return mBody.contentLength();
     }
 

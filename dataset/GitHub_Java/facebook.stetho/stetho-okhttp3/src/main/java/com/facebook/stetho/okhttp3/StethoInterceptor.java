@@ -23,7 +23,6 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Provides easy integration with <a href="http://square.github.io/okhttp/">OkHttp</a> 3.x by way of
@@ -38,11 +37,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class StethoInterceptor implements Interceptor {
   private final NetworkEventReporter mEventReporter = NetworkEventReporterImpl.get();
 
-  private final AtomicInteger mNextRequestId = new AtomicInteger(0);
-
   @Override
   public Response intercept(Chain chain) throws IOException {
-    String requestId = String.valueOf(mNextRequestId.getAndIncrement());
+    String requestId = mEventReporter.nextRequestId();
 
     Request request = chain.request();
 
@@ -70,6 +67,11 @@ public class StethoInterceptor implements Interceptor {
       }
 
       Connection connection = chain.connection();
+      if (connection == null) {
+        throw new IllegalStateException(
+            "No connection associated with this request; " +
+                "did you use addInterceptor instead of addNetworkInterceptor?");
+      }
       mEventReporter.responseHeadersReceived(
           new OkHttpInspectorResponse(
               requestId,
@@ -185,13 +187,13 @@ public class StethoInterceptor implements Interceptor {
     private final String mRequestId;
     private final Request mRequest;
     private final Response mResponse;
-    private final Connection mConnection;
+    private @Nullable final Connection mConnection;
 
     public OkHttpInspectorResponse(
         String requestId,
         Request request,
         Response response,
-        Connection connection) {
+        @Nullable Connection connection) {
       mRequestId = requestId;
       mRequest = request;
       mResponse = response;
@@ -226,7 +228,7 @@ public class StethoInterceptor implements Interceptor {
 
     @Override
     public int connectionId() {
-      return mConnection.hashCode();
+      return mConnection == null ? 0 : mConnection.hashCode();
     }
 
     @Override
