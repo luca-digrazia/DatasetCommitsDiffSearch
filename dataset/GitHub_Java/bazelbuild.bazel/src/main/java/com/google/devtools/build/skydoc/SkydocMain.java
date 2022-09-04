@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.skydoc;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Functions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -202,18 +201,13 @@ public class SkydocMain {
     ImmutableMap.Builder<String, ProviderInfo> providerInfoMap = ImmutableMap.builder();
     ImmutableMap.Builder<String, UserDefinedFunction> userDefinedFunctions = ImmutableMap.builder();
 
-    try {
-      new SkydocMain(new FilesystemFileAccessor(), skydocOptions.workspaceName, depRoots)
-          .eval(
-              semanticsOptions.toSkylarkSemantics(),
-              targetFileLabel,
-              ruleInfoMap,
-              providerInfoMap,
-              userDefinedFunctions);
-    } catch (StarlarkEvaluationException exception) {
-      System.err.println("Stardoc documentation generation failed: " + exception.getMessage());
-      System.exit(1);
-    }
+    new SkydocMain(new FilesystemFileAccessor(), skydocOptions.workspaceName, depRoots)
+        .eval(
+            semanticsOptions.toSkylarkSemantics(),
+            targetFileLabel,
+            ruleInfoMap,
+            providerInfoMap,
+            userDefinedFunctions);
 
     MarkdownRenderer renderer = new MarkdownRenderer();
 
@@ -230,7 +224,6 @@ public class SkydocMain {
             .filter(entry -> validSymbolName(symbolNames, entry.getKey()))
             .collect(ImmutableMap.toImmutableMap(Entry::getKey, Entry::getValue));
     try (PrintWriter printWriter = new PrintWriter(outputPath, "UTF-8")) {
-      printWriter.println(renderer.renderMarkdownHeader());
       printRuleInfos(printWriter, renderer, filteredRuleInfos);
       printProviderInfos(printWriter, renderer, filteredProviderInfos);
       printUserDefinedFunctions(printWriter, renderer, filteredUserDefinedFunctions);
@@ -337,8 +330,7 @@ public class SkydocMain {
       ImmutableMap.Builder<String, RuleInfo> ruleInfoMap,
       ImmutableMap.Builder<String, ProviderInfo> providerInfoMap,
       ImmutableMap.Builder<String, UserDefinedFunction> userDefinedFunctionMap)
-      throws InterruptedException, IOException, LabelSyntaxException, EvalException,
-          StarlarkEvaluationException {
+      throws InterruptedException, IOException, LabelSyntaxException, EvalException {
 
     List<RuleInfo> ruleInfoList = new ArrayList<>();
     List<ProviderInfo> providerInfoList = new ArrayList<>();
@@ -398,11 +390,11 @@ public class SkydocMain {
       Label label,
       List<RuleInfo> ruleInfoList,
       List<ProviderInfo> providerInfoList)
-      throws InterruptedException, IOException, LabelSyntaxException, StarlarkEvaluationException {
+      throws InterruptedException, IOException, LabelSyntaxException {
     Path path = pathOfLabel(label);
 
     if (pending.contains(path)) {
-      throw new StarlarkEvaluationException("cycle with " + path);
+      throw new IllegalStateException("cycle with " + path);
     } else if (loaded.containsKey(path)) {
       return loaded.get(path);
     }
@@ -423,10 +415,11 @@ public class SkydocMain {
             recursiveEval(semantics, relativeLabel, ruleInfoList, providerInfoList);
         imports.put(anImport.getImportString(), new Extension(importEnv));
       } catch (NoSuchFileException noSuchFileException) {
-        throw new StarlarkEvaluationException(
+        throw new IllegalStateException(
             String.format(
                 "File %s imported '%s', yet %s was not found, even at roots %s.",
-                path, anImport.getImportString(), pathOfLabel(relativeLabel), depRoots));
+                path, anImport.getImportString(), pathOfLabel(relativeLabel), depRoots),
+            noSuchFileException);
       }
     }
 
@@ -466,14 +459,14 @@ public class SkydocMain {
       Map<String, Extension> imports,
       List<RuleInfo> ruleInfoList,
       List<ProviderInfo> providerInfoList)
-      throws InterruptedException, StarlarkEvaluationException {
+      throws InterruptedException {
 
     Environment env =
         createEnvironment(
             semantics, eventHandler, globalFrame(ruleInfoList, providerInfoList), imports);
 
     if (!buildFileAST.exec(env, eventHandler)) {
-      throw new StarlarkEvaluationException("Starlark evaluation error");
+      throw new RuntimeException("Error loading file");
     }
 
     env.mutability().freeze();
@@ -597,13 +590,5 @@ public class SkydocMain {
         .setImportedExtensions(imports)
         .setEventHandler(eventHandler)
         .build();
-  }
-
-  /** Exception thrown when Starlark evaluation fails (due to malformed Starlark). */
-  @VisibleForTesting
-  static class StarlarkEvaluationException extends Exception {
-    public StarlarkEvaluationException(String message) {
-      super(message);
-    }
   }
 }

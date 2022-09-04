@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.skydoc.SkydocMain.StarlarkEvaluationException;
 import com.google.devtools.build.skydoc.rendering.AttributeInfo;
 import com.google.devtools.build.skydoc.rendering.RuleInfo;
 import com.google.devtools.build.skydoc.rendering.UserDefinedFunctionInfo;
@@ -69,31 +68,6 @@ public final class SkydocTest extends SkylarkTestCase {
             },
             "io_bazel",
             ImmutableList.of("/other_root", "."));
-  }
-
-  @Test
-  public void testStarlarkEvaluationException() throws Exception {
-    scratch.file(
-        "/test/test.bzl",
-        "def rule_impl(ctx):",
-        "  return []",
-        "",
-        "my_rule = rule(",
-        "    invalid_param = 3,",
-        ")");
-
-    StarlarkEvaluationException expected =
-        assertThrows(
-            StarlarkEvaluationException.class,
-            () ->
-                skydocMain.eval(
-                    StarlarkSemantics.DEFAULT_SEMANTICS,
-                    Label.parseAbsoluteUnchecked("//test:test.bzl"),
-                    ImmutableMap.builder(),
-                    ImmutableMap.builder(),
-                    ImmutableMap.builder()));
-
-    assertThat(expected).hasMessageThat().contains("Starlark evaluation error");
   }
 
   @Test
@@ -334,14 +308,16 @@ public final class SkydocTest extends SkylarkTestCase {
         "    implementation = rule_impl,",
         ")");
 
-    StarlarkEvaluationException expected =
+    ImmutableMap.Builder<String, RuleInfo> ruleInfoMapBuilder = ImmutableMap.builder();
+
+    IllegalStateException expected =
         assertThrows(
-            StarlarkEvaluationException.class,
+            IllegalStateException.class,
             () ->
                 skydocMain.eval(
                     StarlarkSemantics.DEFAULT_SEMANTICS,
                     Label.parseAbsoluteUnchecked("//test:main.bzl"),
-                    ImmutableMap.builder(),
+                    ruleInfoMapBuilder,
                     ImmutableMap.builder(),
                     ImmutableMap.builder()));
 
