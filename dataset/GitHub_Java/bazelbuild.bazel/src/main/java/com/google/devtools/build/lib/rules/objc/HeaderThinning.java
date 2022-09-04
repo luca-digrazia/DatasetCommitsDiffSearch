@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScannerSupplier;
-import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -77,8 +76,7 @@ public class HeaderThinning implements IncludeProcessing {
   public Iterable<Artifact> determineAdditionalInputs(
       @Nullable IncludeScannerSupplier includeScannerSupplier,
       CppCompileAction action,
-      ActionExecutionContext actionExecutionContext,
-      IncludeScanningHeaderData includeScanningHeaderData)
+      ActionExecutionContext actionExecutionContext)
       throws ExecException {
     Artifact headersListFile = findHeadersListFile(action.getMandatoryInputs());
     if (headersListFile == null) {
