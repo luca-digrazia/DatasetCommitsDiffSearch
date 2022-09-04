@@ -5,14 +5,18 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import javax.xml.bind.JAXBException;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.Route;
 import org.apache.camel.RoutesBuilder;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.ShutdownableService;
 import org.apache.camel.component.properties.PropertiesComponent;
+import org.apache.camel.impl.DefaultModelJAXBContextFactory;
 import org.apache.camel.model.ModelCamelContext;
 import org.apache.camel.model.RouteDefinition;
+import org.apache.camel.spi.ModelJAXBContextFactory;
 import org.apache.camel.spi.Registry;
 import org.apache.camel.support.ResourceHelper;
 import org.apache.camel.util.ObjectHelper;
@@ -43,10 +47,30 @@ public class FastCamelRuntime implements CamelRuntime {
     protected List<RoutesBuilder> builders;
     protected BuildTime buildTimeConfig;
     protected Runtime runtimeConfig;
+    protected ModelJAXBContextFactory jaxbContextFactory;
 
     @Override
     public void init(BuildTime buildTimeConfig) {
         this.buildTimeConfig = buildTimeConfig;
+
+        if (buildTimeConfig.disableJaxb) {
+            jaxbContextFactory = () -> {
+                throw new UnsupportedOperationException();
+            };
+        } else {
+            jaxbContextFactory = new DefaultModelJAXBContextFactory();
+            // The creation of the JAXB context is very time consuming, so always prepare it
+            // when running in native mode, but lazy create it in java mode so that we don't
+            // waste time if using java routes
+            if (ImageInfo.inImageBuildtimeCode()) {
+                try {
+                    jaxbContextFactory.newJAXBContext();
+                } catch (JAXBException e) {
+                    throw RuntimeCamelException.wrapRuntimeCamelException(e);
+                }
+            }
+        }
+
         if (!buildTimeConfig.deferInitPhase) {
             doInit();
         }
@@ -55,6 +79,9 @@ public class FastCamelRuntime implements CamelRuntime {
     @Override
     public void start(Runtime runtimeConfig) throws Exception {
         this.runtimeConfig = runtimeConfig;
+        if (buildTimeConfig.deferInitPhase) {
+            doInit();
+        }
         doStart();
     }
 
@@ -74,25 +101,14 @@ public class FastCamelRuntime implements CamelRuntime {
             RuntimeSupport.bindProperties(properties, context, PFX_CAMEL_CONTEXT);
 
             context.setLoadTypeConverters(false);
+            context.setModelJAXBContextFactory(jaxbContextFactory);
 
             PropertiesComponent pc = createPropertiesComponent(properties);
             RuntimeSupport.bindProperties(pc.getInitialProperties(), pc, PFX_CAMEL_PROPERTIES);
             context.addComponent("properties", pc);
 
-            fireEvent(InitializingEvent.class, new InitializingEvent());
             this.context.getTypeConverterRegistry().setInjector(this.context.getInjector());
-            if (buildTimeConfig.disableJaxb) {
-                this.context.setModelJAXBContextFactory(() -> {
-                    throw new UnsupportedOperationException();
-                });
-            } else {
-                // The creation of the JAXB context is very time consuming, so always prepare it
-                // when running in native mode, but lazy create it in java mode so that we don't
-                // waste time if using java routes
-                if (ImageInfo.inImageBuildtimeCode()) {
-                    context.adapt(ModelCamelContext.class).getModelJAXBContextFactory().newJAXBContext();
-                }
-            }
+            fireEvent(InitializingEvent.class, new InitializingEvent());
             this.context.init();
             fireEvent(InitializedEvent.class, new InitializedEvent());
 
@@ -103,8 +119,6 @@ public class FastCamelRuntime implements CamelRuntime {
     }
 
     public void doStart() throws Exception {
-        log.info("Apache Camel {} (CamelContext: {}) is starting", context.getVersion(), context.getName());
-
         fireEvent(StartingEvent.class, new StartingEvent());
         context.start();
         fireEvent(StartedEvent.class, new StartedEvent());
@@ -132,7 +146,7 @@ public class FastCamelRuntime implements CamelRuntime {
                 .filter(ObjectHelper::isNotEmpty)
                 .collect(Collectors.toList());
         if (ObjectHelper.isNotEmpty(routesUris)) {
-            log.info("Loading xml routes from {}", routesUris);
+            log.debug("Loading xml routes from {}", routesUris);
             ModelCamelContext mcc = context.adapt(ModelCamelContext.class);
             for (String routesUri : routesUris) {
                 // TODO: if pointing to a directory, we should load all xmls in it
@@ -142,7 +156,7 @@ public class FastCamelRuntime implements CamelRuntime {
                 }
             }
         } else {
-            log.info("No xml routes configured");
+            log.debug("No xml routes configured");
         }
 
         context.adapt(FastCamelContext.class).reifyRoutes();
@@ -168,6 +182,16 @@ public class FastCamelRuntime implements CamelRuntime {
 
     public void setProperties(Properties properties) {
         this.properties = properties;
+    }
+
+    @Override
+    public void addProperties(Properties properties) {
+        this.properties.putAll(properties);
+    }
+
+    @Override
+    public void addProperty(String key, Object value) {
+        this.properties.put(key, value);
     }
 
     public void setBuilders(List<RoutesBuilder> builders) {
