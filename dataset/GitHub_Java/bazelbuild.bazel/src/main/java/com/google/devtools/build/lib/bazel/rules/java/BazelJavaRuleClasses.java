@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleClass.PackageNameConstraint;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.rules.cpp.CcBinary.CcLauncherInfo;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleClasses.IjarBaseRule;
@@ -430,8 +429,7 @@ public class BazelJavaRuleClasses {
           .add(
               attr("launcher", LABEL)
                   .allowedFileTypes(FileTypeSet.NO_FILE)
-                  .mandatoryProviders(
-                      SkylarkProviderIdentifier.forKey(CcLauncherInfo.PROVIDER.getKey())))
+                  .allowedRuleClasses("cc_binary"))
           .add(attr(":java_launcher", LABEL).value(JavaSemantics.JAVA_LAUNCHER)) // blaze flag
           .add(
               attr("$launcher", LABEL)
