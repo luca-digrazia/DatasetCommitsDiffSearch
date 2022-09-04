@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.events.Location;
 import javax.annotation.Nullable;
 
 /** A StarlarkFunction is the function value created by a Starlark {@code def} statement. */
@@ -32,7 +33,9 @@ public final class StarlarkFunction extends BaseFunction {
   // TODO(adonovan): remove this hack when identifier resolution is accurate.
   boolean isToplevel;
 
-  StarlarkFunction(
+  // TODO(adonovan): make this private. The CodecTests should go through interpreter to instantiate
+  // such things.
+  public StarlarkFunction(
       String name,
       Location location,
       FunctionSignature signature,
