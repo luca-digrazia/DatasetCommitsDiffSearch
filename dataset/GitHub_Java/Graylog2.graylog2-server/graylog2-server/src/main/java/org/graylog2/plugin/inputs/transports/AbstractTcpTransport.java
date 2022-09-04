@@ -1,24 +1,23 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.plugin.inputs.transports;
 
 import com.codahale.metrics.Gauge;
 import com.google.common.base.Strings;
-import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBufAllocator;
@@ -34,14 +33,11 @@ import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.socket.ServerSocketChannelConfig;
 import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.OpenSsl;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.util.concurrent.GlobalEventExecutor;
-import org.bouncycastle.operator.OperatorCreationException;
-import org.bouncycastle.pkcs.PKCSException;
 import org.graylog2.inputs.transports.NettyTransportConfiguration;
 import org.graylog2.inputs.transports.netty.ByteBufMessageAggregationHandler;
 import org.graylog2.inputs.transports.netty.ChannelRegistrationHandler;
@@ -75,20 +71,15 @@ import java.net.SocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.GeneralSecurityException;
-import java.security.PrivateKey;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkState;
 
@@ -110,8 +101,6 @@ public abstract class AbstractTcpTransport extends NettyTransport {
             TLS_CLIENT_AUTH_DISABLED, TLS_CLIENT_AUTH_DISABLED,
             TLS_CLIENT_AUTH_OPTIONAL, TLS_CLIENT_AUTH_OPTIONAL,
             TLS_CLIENT_AUTH_REQUIRED, TLS_CLIENT_AUTH_REQUIRED);
-
-    private static final Supplier<Set<String>> secureDefaultCiphers = Suppliers.memoize(AbstractTcpTransport::getSecureCipherSuites);
 
     private final ConnectionCounter connectionCounter;
     private final AtomicInteger connections;
@@ -280,15 +269,8 @@ public abstract class AbstractTcpTransport extends NettyTransport {
             try {
                 final SelfSignedCertificate ssc = new SelfSignedCertificate(configuration.getString(CK_BIND_ADDRESS) + ":" + configuration.getString(CK_PORT));
                 certFile = ssc.certificate();
-
-                if (!Strings.isNullOrEmpty(tlsKeyPassword)) {
-                    keyFile = KeyUtil.generatePKCS8FromPrivateKey(tmpPath, tlsKeyPassword.toCharArray(), ssc.key());
-                    ssc.privateKey().delete();
-                }
-                else {
-                    keyFile = ssc.privateKey();
-                }
-            } catch (GeneralSecurityException e) {
+                keyFile = ssc.privateKey();
+            } catch (CertificateException e) {
                 final String msg = String.format(Locale.ENGLISH, "Problem creating a self-signed certificate for input [%s/%s].", input.getName(), input.getId());
                 throw new IllegalStateException(msg, e);
             }
@@ -327,11 +309,14 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                 }
             }
 
-            private SSLEngine createSslEngine(MessageInput input) throws IOException, CertificateException, OperatorCreationException, PKCSException {
+            private SSLEngine createSslEngine(MessageInput input) throws IOException, CertificateException {
                 final X509Certificate[] clientAuthCerts;
                 if (EnumSet.of(ClientAuth.OPTIONAL, ClientAuth.REQUIRE).contains(clientAuth)) {
                     if (clientAuthCertFile.exists()) {
-                        clientAuthCerts = KeyUtil.loadX509Certificates(clientAuthCertFile.toPath());
+                        clientAuthCerts = KeyUtil.loadCertificates(clientAuthCertFile.toPath()).stream()
+                                .filter(certificate -> certificate instanceof X509Certificate)
+                                .map(certificate -> (X509Certificate) certificate)
+                                .toArray(X509Certificate[]::new);
                     } else {
                         LOG.warn("Client auth configured, but no authorized certificates / certificate authorities configured for input [{}/{}]",
                                 input.getName(), input.getId());
@@ -341,32 +326,18 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                     clientAuthCerts = null;
                 }
 
-                // Netty's SSLContextBuilder chokes on some PKCS8 key file formats. So we need to pass a
-                // private key and keyCertChain instead of the corresponding files.
-                PrivateKey privateKey = KeyUtil.privateKeyFromFile(password, keyFile);
-                X509Certificate[] keyCertChain = KeyUtil.loadX509Certificates(certFile.toPath());
-                final SslContextBuilder sslContext = SslContextBuilder.forServer(privateKey, keyCertChain)
+                final SslContextBuilder sslContext = SslContextBuilder.forServer(certFile, keyFile, Strings.emptyToNull(password))
                         .sslProvider(tlsProvider)
                         .clientAuth(clientAuth)
                         .trustManager(clientAuthCerts);
                 if (!graylogConfiguration.getEnabledTlsProtocols().isEmpty()) {
                     sslContext.protocols(graylogConfiguration.getEnabledTlsProtocols());
                 }
-                if (tlsProvider.equals(SslProvider.OPENSSL)) {
-                    // Netty tcnative does not adhere jdk.tls.disabledAlgorithms: https://github.com/netty/netty-tcnative/issues/530
-                    // We need to build our own cipher list
-                    sslContext.ciphers(secureDefaultCiphers.get());
-                }
 
                 // TODO: Use byte buffer allocator of channel
                 return sslContext.build().newEngine(ByteBufAllocator.DEFAULT);
             }
         };
-    }
-
-    private static Set<String> getSecureCipherSuites() {
-        final Set<String> openSslCipherSuites = OpenSsl.availableOpenSslCipherSuites();
-        return openSslCipherSuites.stream().filter(s -> !(s.contains("CBC") || s.contains("AES128-SHA") || s.contains("AES256-SHA") )).collect(Collectors.toSet());
     }
 
     @ConfigClass
