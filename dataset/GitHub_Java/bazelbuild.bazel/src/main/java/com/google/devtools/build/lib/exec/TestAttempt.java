@@ -15,14 +15,16 @@
 package com.google.devtools.build.lib.exec;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
+import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
+import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.TestStatus;
+import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.runtime.BuildEventStreamerUtils;
@@ -34,10 +36,14 @@ import java.util.Collection;
 import java.util.List;
 
 /** This event is raised whenever an individual test attempt is completed. */
-public class TestAttempt implements BuildEvent {
+// TODO(ulfjack): This class should be in the same package as the TestResult class, and TestSummary
+// should live there, too. It's depended upon by TestRunnerAction / TestActionContext, which
+// suggests that it should live in the analysis.test package.
+public class TestAttempt implements BuildEventWithOrderConstraint {
 
   private final TestRunnerAction testAction;
-  private final BlazeTestStatus status;
+  private final TestStatus status;
+  private final String statusDetails;
   private final boolean cachedLocally;
   private final int attempt;
   private final boolean lastAttempt;
@@ -54,83 +60,75 @@ public class TestAttempt implements BuildEvent {
    * @param testAction The test that was run.
    * @param attempt The number of the attempt for this action.
    */
-  public TestAttempt(
+  private TestAttempt(
       boolean cachedLocally,
       TestRunnerAction testAction,
       BuildEventStreamProtos.TestResult.ExecutionInfo executionInfo,
-      Integer attempt,
+      int attempt,
       BlazeTestStatus status,
+      String statusDetails,
       long startTimeMillis,
       long durationMillis,
       Collection<Pair<String, Path>> files,
       List<String> testWarnings,
       boolean lastAttempt) {
     this.testAction = testAction;
-    this.executionInfo = executionInfo;
+    this.executionInfo = Preconditions.checkNotNull(executionInfo);
     this.attempt = attempt;
-    this.status = status;
+    this.status = BuildEventStreamerUtils.bepStatus(Preconditions.checkNotNull(status));
+    this.statusDetails = statusDetails;
     this.cachedLocally = cachedLocally;
     this.startTimeMillis = startTimeMillis;
     this.durationMillis = durationMillis;
-    this.files = files;
-    this.testWarnings = testWarnings;
+    this.files = Preconditions.checkNotNull(files);
+    this.testWarnings = Preconditions.checkNotNull(testWarnings);
     this.lastAttempt = lastAttempt;
   }
 
-  public TestAttempt(
-      boolean cachedLocally,
+  /**
+   * Creates a test attempt result instance for a test that was not locally cached; it may have been
+   * locally executed, remotely executed, or remotely cached.
+   */
+  public static TestAttempt forExecutedTestResult(
       TestRunnerAction testAction,
-      Integer attempt,
-      BlazeTestStatus status,
-      long startTimeMillis,
-      long durationMillis,
+      TestResultData attemptData,
+      int attempt,
       Collection<Pair<String, Path>> files,
-      List<String> testWarnings,
-      boolean lastAttempt) {
-    this(cachedLocally, testAction,
-        BuildEventStreamProtos.TestResult.ExecutionInfo.getDefaultInstance(), attempt, status,
-        startTimeMillis, durationMillis, files, testWarnings, lastAttempt);
-  }
-
-  public TestAttempt(
-      TestRunnerAction testAction,
       BuildEventStreamProtos.TestResult.ExecutionInfo executionInfo,
-      Integer attempt,
-      BlazeTestStatus status,
-      long startTimeMillis,
-      long durationMillis,
-      Collection<Pair<String, Path>> files,
-      List<String> testWarnings,
       boolean lastAttempt) {
-    this(false, testAction, executionInfo, attempt, status, startTimeMillis, durationMillis, files,
-        testWarnings, lastAttempt);
+    return new TestAttempt(
+        false,
+        testAction,
+        executionInfo,
+        attempt,
+        attemptData.getStatus(),
+        attemptData.getStatusDetails(),
+        attemptData.getStartTimeMillisEpoch(),
+        attemptData.getRunDurationMillis(),
+        files,
+        attemptData.getWarningList(),
+        lastAttempt);
   }
 
-  public TestAttempt(
+  public static TestAttempt fromCachedTestResult(
       TestRunnerAction testAction,
-      Integer attempt,
-      BlazeTestStatus status,
-      long startTimeMillis,
-      long durationMillis,
+      TestResultData attemptData,
+      int attempt,
       Collection<Pair<String, Path>> files,
-      List<String> testWarnings,
+      BuildEventStreamProtos.TestResult.ExecutionInfo executionInfo,
       boolean lastAttempt) {
-    this(testAction,  BuildEventStreamProtos.TestResult.ExecutionInfo.getDefaultInstance(), attempt,
-        status, startTimeMillis, durationMillis, files, testWarnings, lastAttempt);
-  }
-
-  public static TestAttempt fromCachedTestResult(TestResult result) {
-    TestResultData data = result.getData();
     return new TestAttempt(
         true,
-        result.getTestAction(),
-        1,
-        data.getStatus(),
-        data.getStartTimeMillisEpoch(),
-        data.getRunDurationMillis(),
-        result.getFiles(),
-        result.getData().getWarningList(),
-        true);
+        testAction,
+        executionInfo,
+        attempt,
+        attemptData.getStatus(),
+        attemptData.getStatusDetails(),
+        attemptData.getStartTimeMillisEpoch(),
+        attemptData.getRunDurationMillis(),
+        files,
+        attemptData.getWarningList(),
+        lastAttempt);
   }
 
   @VisibleForTesting
@@ -143,6 +141,26 @@ public class TestAttempt implements BuildEvent {
     return files;
   }
 
+  @VisibleForTesting
+  public BuildEventStreamProtos.TestResult.ExecutionInfo getExecutionInfo() {
+    return executionInfo;
+  }
+
+  @VisibleForTesting
+  public TestStatus getStatus() {
+    return status;
+  }
+
+  @VisibleForTesting
+  public boolean isCachedLocally() {
+    return cachedLocally;
+  }
+
+  @VisibleForTesting
+  public int getAttempt() {
+    return attempt;
+  }
+
   @Override
   public BuildEventId getEventId() {
     return BuildEventId.testResult(
@@ -151,6 +169,13 @@ public class TestAttempt implements BuildEvent {
         testAction.getShardNum(),
         attempt,
         testAction.getConfiguration().getEventId());
+  }
+
+  @Override
+  public Collection<BuildEventId> postedAfter() {
+    return ImmutableList.of(
+        BuildEventId.targetCompleted(
+            testAction.getOwner().getLabel(), testAction.getConfiguration().getEventId()));
   }
 
   @Override
@@ -169,23 +194,44 @@ public class TestAttempt implements BuildEvent {
   }
 
   @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
+  public ImmutableList<LocalFile> referencedLocalFiles() {
+    LocalFileType localFileType =
+        status == TestStatus.PASSED
+            ? LocalFileType.SUCCESSFUL_TEST_OUTPUT
+            : LocalFileType.FAILED_TEST_OUTPUT;
+    ImmutableList.Builder<LocalFile> localFiles = ImmutableList.builder();
+    for (Pair<String, Path> file : files) {
+      if (file.getSecond() != null) {
+        localFiles.add(new LocalFile(file.getSecond(), localFileType));
+      }
+    }
+    return localFiles.build();
+  }
+
+  @Override
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+    return GenericBuildEvent.protoChaining(this).setTestResult(asTestResult(converters)).build();
+  }
+
+  @VisibleForTesting
+  public BuildEventStreamProtos.TestResult asTestResult(BuildEventContext converters) {
     PathConverter pathConverter = converters.pathConverter();
     BuildEventStreamProtos.TestResult.Builder builder =
         BuildEventStreamProtos.TestResult.newBuilder();
-    builder.setStatus(BuildEventStreamerUtils.bepStatus(status));
+    builder.setStatus(status);
+    builder.setStatusDetails(statusDetails);
     builder.setExecutionInfo(executionInfo);
     builder.setCachedLocally(cachedLocally);
     builder.setTestAttemptStartMillisEpoch(startTimeMillis);
     builder.setTestAttemptDurationMillis(durationMillis);
     builder.addAllWarning(testWarnings);
     for (Pair<String, Path> file : files) {
-      builder.addTestActionOutput(
-          BuildEventStreamProtos.File.newBuilder()
-              .setName(file.getFirst())
-              .setUri(pathConverter.apply(file.getSecond()))
-              .build());
+      String uri = pathConverter.apply(file.getSecond());
+      if (uri != null) {
+        builder.addTestActionOutput(
+            BuildEventStreamProtos.File.newBuilder().setName(file.getFirst()).setUri(uri).build());
+      }
     }
-    return GenericBuildEvent.protoChaining(this).setTestResult(builder.build()).build();
+    return builder.build();
   }
 }
