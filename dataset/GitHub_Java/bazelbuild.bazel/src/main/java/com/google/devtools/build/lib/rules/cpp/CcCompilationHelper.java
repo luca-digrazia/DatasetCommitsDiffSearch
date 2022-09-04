@@ -463,9 +463,7 @@ public final class CcCompilationHelper {
   }
 
   private CcCompilationHelper addPrivateHeader(Artifact privateHeader, Label label) {
-    boolean isHeader =
-        CppFileTypes.CPP_HEADER.matches(privateHeader.getExecPath())
-            || privateHeader.isTreeArtifact();
+    boolean isHeader = CppFileTypes.CPP_HEADER.matches(privateHeader.getExecPath());
     boolean isTextualInclude =
         CppFileTypes.CPP_TEXTUAL_INCLUDE.matches(privateHeader.getExecPath());
     Preconditions.checkState(isHeader || isTextualInclude);
