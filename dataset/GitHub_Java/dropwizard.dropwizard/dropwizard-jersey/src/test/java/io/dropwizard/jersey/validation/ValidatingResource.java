@@ -1,13 +1,7 @@
 package io.dropwizard.jersey.validation;
 
-import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 
-import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.PartialExample;
-import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.Partial1;
-import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.Partial2;
-import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.Example;
-import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.ListExample;
 import io.dropwizard.jersey.params.IntParam;
 import io.dropwizard.jersey.params.NonEmptyStringParam;
 import io.dropwizard.validation.Validated;
@@ -15,17 +9,12 @@ import org.hibernate.validator.constraints.Email;
 import org.hibernate.validator.constraints.Length;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.hibernate.validator.valuehandling.UnwrapValidatedValue;
-
 import javax.servlet.ServletContext;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 @Path("/valid/")
 @Produces(MediaType.APPLICATION_JSON)
@@ -33,23 +22,8 @@ import java.util.Set;
 public class ValidatingResource {
     @POST
     @Path("foo")
-    @Valid
-    public ValidRepresentation blah(@NotNull @Valid ValidRepresentation representation, @QueryParam("somethingelse") String xer) {
-        return new ValidRepresentation();
-    }
-
-    @POST
-    @Path("fooValidated")
-    @Validated
-    @Valid
-    public ValidRepresentation blahValidated(@Validated @Valid ValidRepresentation representation) {
-        return new ValidRepresentation();
-    }
-
-    @POST
-    @Path("simpleEntity")
-    public String simpleEntity(@Length(min = 3, max = 5) String name) {
-        return name;
+    public String blah(@Validated ValidRepresentation representation) {
+        return representation.getName();
     }
 
     @GET
@@ -64,63 +38,7 @@ public class ValidatingResource {
     public String isnt(@QueryParam("name") @Length(min = 3) @UnwrapValidatedValue NonEmptyStringParam name) {
         return name.get().orNull();
     }
-
-    @POST
-    @Path("validatedPartialExampleBoth")
-    public PartialExample validatedPartialExampleBoth(
-            @Validated({Partial1.class, Partial2.class}) @Valid PartialExample obj) {
-        return obj;
-    }
-
-    @POST
-    @Path("validExample")
-    public Example validExample(@NotNull @Valid Example obj) {
-        return obj;
-    }
-
-    @POST
-    @Path("validExampleArray")
-    public Example[] validExample(@Valid Example[] obj) {
-        return obj;
-    }
-
-    @POST
-    @Path("validExampleCollection")
-    public Collection<Example> validExample(@Valid Collection<Example> obj) {
-        return obj;
-    }
-
-    @POST
-    @Path("validExampleMap")
-    public Map<String, Example> validExample(@Valid Map<String, Example> obj) {
-        return obj;
-    }
-
-    @POST
-    @Path("validExampleSet")
-    public Set<Example> validExample(@Valid Set<Example> obj) {
-        return obj;
-    }
-
-    @POST
-    @Path("validExampleList")
-    public List<Example> validExample(@Valid List<Example> obj) {
-        return obj;
-    }
-
-    @POST
-    @Path("validatedPartialExample")
-    public PartialExample validatedPartialExample(
-            @Validated({Partial1.class}) @Valid PartialExample obj) {
-        return obj;
-    }
-
-    @POST
-    @Path("validExampleEmbeddedList")
-    public List<ListExample> validExampleEmbedded(@Valid List<ListExample> obj) {
-        return obj;
-    }
-
+    
     @GET
     @Path("fhqwhgads")
     public String everybody(@QueryParam("num") @Min(3L) @NotNull Long param) {
@@ -140,12 +58,6 @@ public class ValidatingResource {
     }
 
     @GET
-    @Path("zoo2")
-    public String blazerValidated(@Validated @Valid @BeanParam BeanParameter params) {
-        return params.getName();
-    }
-
-    @GET
     @Path("head")
     public String heads(@HeaderParam("cheese") @NotEmpty String secretSauce) {
         return secretSauce;
@@ -153,14 +65,8 @@ public class ValidatingResource {
 
     @GET
     @Path("headCopy")
-    public String heads(@QueryParam("cheese") @NotNull @UnwrapValidatedValue(false) IntParam secretSauce) {
+    public String heads(@QueryParam("cheese") @NotNull IntParam secretSauce) {
         return secretSauce.get().toString();
-    }
-
-    @GET
-    @Path("nullable-int-param")
-    public String nullableIntParam(@QueryParam("num") @Max(3) IntParam secretSauce) {
-        return secretSauce == null ? "I was null" : secretSauce.get().toString();
     }
 
     @GET
