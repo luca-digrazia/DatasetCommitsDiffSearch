@@ -28,7 +28,6 @@ public class DatabaseFactory {
         final DataSource dataSource = buildDataSource(connectionConfig, pool);
         final Database database = new Database(dataSource, pool);
         environment.manage(database);
-        environment.addHealthCheck(new DatabaseHealthCheck(database, name));
         return database;
     }
 
