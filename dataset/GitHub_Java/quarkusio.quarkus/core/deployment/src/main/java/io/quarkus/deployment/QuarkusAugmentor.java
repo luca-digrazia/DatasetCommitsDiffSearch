@@ -24,8 +24,8 @@ import io.quarkus.builder.BuildExecutionBuilder;
 import io.quarkus.builder.BuildResult;
 import io.quarkus.builder.item.BuildItem;
 import io.quarkus.deployment.builditem.AdditionalApplicationArchiveBuildItem;
-import io.quarkus.deployment.builditem.AppModelProviderBuildItem;
 import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
+import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
@@ -34,6 +34,7 @@ import io.quarkus.deployment.builditem.QuarkusBuildCloseablesBuildItem;
 import io.quarkus.deployment.builditem.RawCommandLineArgumentsBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
+import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
 import io.quarkus.deployment.pkg.builditem.DeploymentResultBuildItem;
 import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.runtime.LaunchMode;
@@ -59,8 +60,6 @@ public class QuarkusAugmentor {
     private final String baseName;
     private final Consumer<ConfigBuilder> configCustomizer;
     private final boolean rebuild;
-    private final boolean auxiliaryApplication;
-    private final Optional<DevModeType> auxiliaryDevModeType;
 
     QuarkusAugmentor(Builder builder) {
         this.classLoader = builder.classLoader;
@@ -79,8 +78,6 @@ public class QuarkusAugmentor {
         this.deploymentClassLoader = builder.deploymentClassLoader;
         this.rebuild = builder.rebuild;
         this.devModeType = builder.devModeType;
-        this.auxiliaryApplication = builder.auxiliaryApplication;
-        this.auxiliaryDevModeType = Optional.ofNullable(builder.auxiliaryDevModeType);
     }
 
     public BuildResult run() throws Exception {
@@ -97,14 +94,12 @@ public class QuarkusAugmentor {
             final BuildChainBuilder chainBuilder = BuildChain.builder();
             chainBuilder.setClassLoader(deploymentClassLoader);
 
-            //provideCapabilities(chainBuilder);
-
             //TODO: we load everything from the deployment class loader
             //this allows the deployment config (application.properties) to be loaded, but in theory could result
             //in additional stuff from the deployment leaking in, this is unlikely but has a bit of a smell.
             ExtensionLoader.loadStepsFrom(deploymentClassLoader,
                     buildSystemProperties == null ? new Properties() : buildSystemProperties,
-                    effectiveModel, launchMode, devModeType, configCustomizer)
+                    effectiveModel.getPlatformProperties(), launchMode, devModeType, configCustomizer)
                     .accept(chainBuilder);
 
             Thread.currentThread().setContextClassLoader(classLoader);
@@ -112,6 +107,7 @@ public class QuarkusAugmentor {
 
             chainBuilder
                     .addInitial(QuarkusBuildCloseablesBuildItem.class)
+                    .addInitial(DeploymentClassLoaderBuildItem.class)
                     .addInitial(ArchiveRootBuildItem.class)
                     .addInitial(ShutdownContextBuildItem.class)
                     .addInitial(RawCommandLineArgumentsBuildItem.class)
@@ -119,7 +115,7 @@ public class QuarkusAugmentor {
                     .addInitial(LiveReloadBuildItem.class)
                     .addInitial(AdditionalApplicationArchiveBuildItem.class)
                     .addInitial(BuildSystemTargetBuildItem.class)
-                    .addInitial(AppModelProviderBuildItem.class);
+                    .addInitial(CurateOutcomeBuildItem.class);
             for (Class<? extends BuildItem> i : finalResults) {
                 chainBuilder.addFinal(i);
             }
@@ -145,11 +141,11 @@ public class QuarkusAugmentor {
                     .produce(new ShutdownContextBuildItem())
                     .produce(new RawCommandLineArgumentsBuildItem())
                     .produce(new LaunchModeBuildItem(launchMode,
-                            devModeType == null ? Optional.empty() : Optional.of(devModeType), auxiliaryApplication,
-                            auxiliaryDevModeType))
+                            devModeType == null ? Optional.empty() : Optional.of(devModeType)))
                     .produce(new BuildSystemTargetBuildItem(targetDir, baseName, rebuild,
                             buildSystemProperties == null ? new Properties() : buildSystemProperties))
-                    .produce(new AppModelProviderBuildItem(effectiveModel));
+                    .produce(new DeploymentClassLoaderBuildItem(deploymentClassLoader))
+                    .produce(new CurateOutcomeBuildItem(effectiveModel));
             for (PathsCollection i : additionalApplicationArchives) {
                 execBuilder.produce(new AdditionalApplicationArchiveBuildItem(i));
             }
@@ -183,7 +179,6 @@ public class QuarkusAugmentor {
 
     public static final class Builder {
 
-        public DevModeType auxiliaryDevModeType;
         boolean rebuild;
         List<PathsCollection> additionalApplicationArchives = new ArrayList<>();
         Collection<Path> excludedFromIndexing = Collections.emptySet();
@@ -201,7 +196,6 @@ public class QuarkusAugmentor {
         Consumer<ConfigBuilder> configCustomizer;
         ClassLoader deploymentClassLoader;
         DevModeType devModeType;
-        boolean auxiliaryApplication;
 
         public Builder addBuildChainCustomizer(Consumer<BuildChainBuilder> customizer) {
             this.buildChainCustomizers.add(customizer);
@@ -219,16 +213,6 @@ public class QuarkusAugmentor {
 
         public Builder excludeFromIndexing(Collection<Path> excludedFromIndexing) {
             this.excludedFromIndexing = excludedFromIndexing;
-            return this;
-        }
-
-        public Builder setAuxiliaryApplication(boolean auxiliaryApplication) {
-            this.auxiliaryApplication = auxiliaryApplication;
-            return this;
-        }
-
-        public Builder setAuxiliaryDevModeType(DevModeType auxiliaryDevModeType) {
-            this.auxiliaryDevModeType = auxiliaryDevModeType;
             return this;
         }
 
