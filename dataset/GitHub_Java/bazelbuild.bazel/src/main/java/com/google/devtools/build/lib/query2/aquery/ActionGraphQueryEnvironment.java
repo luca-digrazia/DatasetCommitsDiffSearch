@@ -44,11 +44,11 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.ThreadSafeMutableKeyExtractorBackedSetImpl;
+import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.StreamedOutputHandler;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import java.io.OutputStream;
@@ -167,7 +167,7 @@ public class ActionGraphQueryEnvironment
                 out,
                 skyframeExecutor,
                 accessor,
-                StreamedOutputHandler.OutputType.BINARY,
+                ActionGraphProtoV2OutputFormatterCallback.OutputType.BINARY,
                 actionFilters),
             new ActionGraphProtoV2OutputFormatterCallback(
                 eventHandler,
@@ -175,15 +175,7 @@ public class ActionGraphQueryEnvironment
                 out,
                 skyframeExecutor,
                 accessor,
-                StreamedOutputHandler.OutputType.TEXT,
-                actionFilters),
-            new ActionGraphProtoV2OutputFormatterCallback(
-                eventHandler,
-                aqueryOptions,
-                out,
-                skyframeExecutor,
-                accessor,
-                StreamedOutputHandler.OutputType.JSON,
+                ActionGraphProtoV2OutputFormatterCallback.OutputType.TEXT,
                 actionFilters),
             new ActionGraphTextOutputFormatterCallback(
                 eventHandler, aqueryOptions, out, skyframeExecutor, accessor, actionFilters))
@@ -204,14 +196,6 @@ public class ActionGraphQueryEnvironment
                 accessor,
                 OutputType.TEXT,
                 actionFilters),
-            new ActionGraphProtoOutputFormatterCallback(
-                eventHandler,
-                aqueryOptions,
-                out,
-                skyframeExecutor,
-                accessor,
-                OutputType.JSON,
-                actionFilters),
             new ActionGraphTextOutputFormatterCallback(
                 eventHandler, aqueryOptions, out, skyframeExecutor, accessor, actionFilters));
   }
@@ -230,8 +214,10 @@ public class ActionGraphQueryEnvironment
   @Override
   public Label getCorrectLabel(ConfiguredTargetValue configuredTargetValue) {
     ConfiguredTarget target = configuredTargetValue.getConfiguredTarget();
-    // Dereference any aliases that might be present.
-    return target.getOriginalLabel();
+    if (target instanceof AliasConfiguredTarget) {
+      return ((AliasConfiguredTarget) target).getOriginalLabel();
+    }
+    return target.getLabel();
   }
 
   @Nullable

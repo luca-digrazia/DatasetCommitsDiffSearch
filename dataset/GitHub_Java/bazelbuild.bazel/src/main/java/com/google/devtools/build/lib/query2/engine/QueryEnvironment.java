@@ -17,7 +17,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -163,25 +162,12 @@ public interface QueryEnvironment<T> {
    * whatever exception is internally thrown.
    */
   final class TargetNotFoundException extends Exception {
-    @Nullable private final FailureDetail failureDetail;
-
     public TargetNotFoundException(String msg) {
       super(msg);
-      this.failureDetail = null;
     }
 
     public TargetNotFoundException(Throwable cause) {
-      this(cause, null);
-    }
-
-    public TargetNotFoundException(Throwable cause, FailureDetail failureDetail) {
       super(cause.getMessage(), cause);
-      this.failureDetail = failureDetail;
-    }
-
-    @Nullable
-    public FailureDetail getFailureDetail() {
-      return failureDetail;
     }
   }
 
@@ -223,7 +209,7 @@ public interface QueryEnvironment<T> {
   }
 
   /** Returns all of the targets in <code>target</code>'s package, in some stable order. */
-  Collection<T> getSiblingTargetsInPackage(T target) throws QueryException;
+  Collection<T> getSiblingTargetsInPackage(T target);
 
   /**
    * Invokes {@code callback} with the set of target nodes in the graph for the specified target
@@ -485,7 +471,7 @@ public interface QueryEnvironment<T> {
   void reportBuildFileError(QueryExpression expression, String msg) throws QueryException;
 
   /**
-   * Returns the set of BUILD, and optionally Starlark files that define the given set of targets.
+   * Returns the set of BUILD, and optionally Skylark files that define the given set of targets.
    * Each such file is itself represented as a target in the result.
    */
   ThreadSafeMutableSet<T> getBuildFiles(

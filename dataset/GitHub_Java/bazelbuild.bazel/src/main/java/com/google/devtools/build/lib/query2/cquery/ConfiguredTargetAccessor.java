@@ -23,7 +23,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
-import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfig
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
-import com.google.devtools.build.lib.packages.ExecGroup;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
@@ -40,13 +38,13 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment.TargetAccess
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryVisibility;
+import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -169,8 +167,10 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
       ConfiguredTarget configuredTarget, WalkableGraph walkableGraph) {
     Target target = null;
     try {
-      // Dereference any aliases that might be present.
-      Label label = configuredTarget.getOriginalLabel();
+      Label label =
+          configuredTarget instanceof AliasConfiguredTarget
+              ? ((AliasConfiguredTarget) configuredTarget).getOriginalLabel()
+              : configuredTarget.getLabel();
       target =
           ((PackageValue) walkableGraph.getValue(PackageValue.key(label.getPackageIdentifier())))
               .getPackage()
@@ -196,13 +196,12 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
   }
 
   @Nullable
-  ToolchainCollection<ToolchainContext> getToolchainContexts(
-      Target target, BuildConfiguration config) {
-    return getToolchainContexts(target, config, walkableGraph);
+  public ToolchainContext getToolchainContext(Target target, BuildConfiguration config) {
+    return getToolchainContext(target, config, walkableGraph);
   }
 
   @Nullable
-  private static ToolchainCollection<ToolchainContext> getToolchainContexts(
+  public static ToolchainContext getToolchainContext(
       Target target, BuildConfiguration config, WalkableGraph walkableGraph) {
     if (!(target instanceof Rule)) {
       return null;
@@ -214,42 +213,18 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
     }
 
     ImmutableSet<Label> requiredToolchains = rule.getRuleClassObject().getRequiredToolchains();
+
     // Collect local (target, rule) constraints for filtering out execution platforms.
     ImmutableSet<Label> execConstraintLabels =
         getExecutionPlatformConstraints(rule, config.getFragment(PlatformConfiguration.class));
-    ImmutableMap<String, ExecGroup> execGroups = rule.getRuleClassObject().getExecGroups();
-
-    ToolchainCollection.Builder<UnloadedToolchainContext> toolchainContexts =
-        new ToolchainCollection.Builder<>();
     try {
-      for (Map.Entry<String, ExecGroup> group : execGroups.entrySet()) {
-        ExecGroup execGroup = group.getValue();
-        UnloadedToolchainContext context =
-            (UnloadedToolchainContext)
-                walkableGraph.getValue(
-                    UnloadedToolchainContext.key()
-                        .configurationKey(BuildConfigurationValue.key(config))
-                        .requiredToolchainTypeLabels(execGroup.getRequiredToolchains())
-                        .execConstraintLabels(execGroup.getExecutionPlatformConstraints())
-                        .build());
-        if (context == null) {
-          return null;
-        }
-        toolchainContexts.addContext(group.getKey(), context);
-      }
-      UnloadedToolchainContext defaultContext =
-          (UnloadedToolchainContext)
-              walkableGraph.getValue(
-                  UnloadedToolchainContext.key()
-                      .configurationKey(BuildConfigurationValue.key(config))
-                      .requiredToolchainTypeLabels(requiredToolchains)
-                      .execConstraintLabels(execConstraintLabels)
-                      .build());
-      if (defaultContext == null) {
-        return null;
-      }
-      toolchainContexts.addDefaultContext(defaultContext);
-      return toolchainContexts.build().asToolchainContexts();
+      return (UnloadedToolchainContext)
+          walkableGraph.getValue(
+              UnloadedToolchainContext.key()
+                  .configurationKey(BuildConfigurationValue.key(config))
+                  .requiredToolchainTypeLabels(requiredToolchains)
+                  .execConstraintLabels(execConstraintLabels)
+                  .build());
     } catch (InterruptedException e) {
       throw new IllegalStateException(
           "Thread interrupted in the middle of getting a ToolchainContext.", e);

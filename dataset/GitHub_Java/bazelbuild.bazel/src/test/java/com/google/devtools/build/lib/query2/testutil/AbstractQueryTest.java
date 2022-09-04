@@ -1380,6 +1380,7 @@ public abstract class AbstractQueryTest<T> {
 
   public void simpleVisibilityTest(String visibility, boolean expectVisible) throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//a,//b");
     writeFile("WORKSPACE");
     writeFile("a/BUILD", "filegroup(name = 'a', srcs = ['//b:b'])");
     writeFile(
@@ -1420,6 +1421,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_private_same_package() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//a:a,//a:b");
     writeFile("WORKSPACE");
     writeFile(
         "a/BUILD",
@@ -1431,6 +1433,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_package_group() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//a,//b");
     writeFile("WORKSPACE");
     writeFile("a/BUILD", "filegroup(name = 'a', srcs = ['//b:b'])");
     writeFile(
@@ -1443,6 +1446,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_package_group_invisible() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//a,//b");
     writeFile("WORKSPACE");
     writeFile("a/BUILD", "filegroup(name = 'a', srcs = ['//b:b'])");
     writeFile(
@@ -1456,6 +1460,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_package_group_include() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//a,//b");
     writeFile("WORKSPACE");
     writeFile("a/BUILD", "filegroup(name = 'a', srcs = ['//b:b'])");
     writeFile(
@@ -1470,6 +1475,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_java_javatests() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//java/com/google/a,//javatests/com/google/a");
     writeFile("WORKSPACE");
     writeFile(
         "java/com/google/a/BUILD",
@@ -1488,6 +1494,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_java_javatests_different_package() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//java/com/google/a,//javatests/com/google/b");
     writeFile("WORKSPACE");
     writeFile(
         "java/com/google/a/BUILD",
@@ -1507,6 +1514,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_javatests_java() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//java/com/google/a,//javatests/com/google/a");
     writeFile("WORKSPACE");
     writeFile(
         "javatests/com/google/a/BUILD",
@@ -1525,6 +1533,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_default_private() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//a,//b");
     writeFile("WORKSPACE");
     writeFile("a/BUILD", "filegroup(name = 'a', srcs = ['//b'])");
     writeFile(
@@ -1537,6 +1546,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testVisible_default_public() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//a,//b");
     writeFile("WORKSPACE");
     writeFile("a/BUILD", "filegroup(name = 'a', srcs = ['//b'])");
     writeFile(
@@ -1549,6 +1559,7 @@ public abstract class AbstractQueryTest<T> {
   @Test
   public void testPackageGroupAllBeneath() throws Exception {
     helper.clearAllFiles();
+    helper.setUniverseScope("//a,//b");
     writeFile("WORKSPACE");
     writeFile("a/BUILD", "filegroup(name = 'a', srcs = ['//b:b'])");
     writeFile(
@@ -1808,7 +1819,6 @@ public abstract class AbstractQueryTest<T> {
    */
   public interface QueryHelper<T> {
 
-    @Before
     /** Basic set-up; this is called once at the beginning of a test, before anything else. */
     void setUp() throws Exception;
 

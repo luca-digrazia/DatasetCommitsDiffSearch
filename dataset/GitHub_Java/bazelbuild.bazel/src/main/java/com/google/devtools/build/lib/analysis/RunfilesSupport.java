@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.TargetUtils;
@@ -287,7 +286,7 @@ public final class RunfilesSupport {
    * PruningManifest. This means the returned set may be an overapproximation of the actual set of
    * runfiles (see {@link Runfiles.PruningManifest}).
    */
-  public NestedSet<Artifact> getRunfilesArtifacts() {
+  public Iterable<Artifact> getRunfilesArtifacts() {
     return runfiles.getArtifacts();
   }
 
@@ -315,7 +314,7 @@ public final class RunfilesSupport {
     if (runfilesManifest != null) {
       deps.add(runfilesManifest);
     } else {
-      deps.addTransitive(SourceManifestAction.getDependencies(runfiles));
+      deps.addAll(SourceManifestAction.getDependencies(runfiles));
     }
     return context
         .getAnalysisEnvironment()
@@ -346,11 +345,7 @@ public final class RunfilesSupport {
         .getAnalysisEnvironment()
         .registerAction(
             new SourceManifestAction(
-                ManifestType.SOURCE_SYMLINKS,
-                context.getActionOwner(),
-                inputManifest,
-                runfiles,
-                context.getConfiguration().remotableSourceManifestActions()));
+                ManifestType.SOURCE_SYMLINKS, context.getActionOwner(), inputManifest, runfiles));
 
     if (!createSymlinks) {
       // Just return the manifest if that's all the build calls for.

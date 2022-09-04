@@ -14,10 +14,11 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
@@ -49,24 +50,21 @@ import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
-import com.google.devtools.build.lib.skyframe.DetailedTargetParsingException;
 import com.google.devtools.build.lib.skyframe.PatternExpandingError;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
-import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
-import com.google.devtools.build.lib.util.DetailedExitCode;
-import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
@@ -76,7 +74,6 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -1139,14 +1136,10 @@ public class LoadingPhaseRunnerTest {
       assertThat(value.hasError()).isTrue();
       tester.assertContainsWarning("Target pattern parsing failed");
     } else {
-      DetailedTargetParsingException exn =
-          assertThrows(DetailedTargetParsingException.class, () -> tester.load(patterns));
+      TargetParsingException exn =
+          assertThrows(TargetParsingException.class, () -> tester.load(patterns));
       assertThat(exn).hasCauseThat().isInstanceOf(BuildFileContainsErrorsException.class);
       assertThat(exn).hasCauseThat().hasMessageThat().contains("Extension 'bad/f1.bzl' has errors");
-      DetailedExitCode detailedExitCode = exn.getDetailedExitCode();
-      assertThat(detailedExitCode.getExitCode()).isEqualTo(ExitCode.BUILD_FAILURE);
-      assertThat(detailedExitCode.getFailureDetail().getPackageLoading().getCode())
-          .isEqualTo(PackageLoading.Code.IMPORT_STARLARK_FILE_ERROR);
     }
     tester.assertContainsError("/workspace/bad/f1.bzl:1:1: name 'nope' is not defined");
   }
@@ -1234,7 +1227,7 @@ public class LoadingPhaseRunnerTest {
       ConfiguredRuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
       PackageFactory pkgFactory =
           analysisMock.getPackageFactoryBuilderForTesting(directories).build(ruleClassProvider, fs);
-      PackageOptions options = Options.getDefaults(PackageOptions.class);
+      PackageCacheOptions options = Options.getDefaults(PackageCacheOptions.class);
       storedErrors = new StoredEventHandler();
       BuildOptions defaultBuildOptions;
       try {
@@ -1251,7 +1244,7 @@ public class LoadingPhaseRunnerTest {
               .setDefaultBuildOptions(defaultBuildOptions)
               .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
               .build();
-      SkyframeExecutorTestHelper.process(skyframeExecutor);
+      TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
       PathPackageLocator pkgLocator =
           PathPackageLocator.create(
               null,
@@ -1260,18 +1253,18 @@ public class LoadingPhaseRunnerTest {
               workspace,
               workspace,
               BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
-      PackageOptions packageOptions = Options.getDefaults(PackageOptions.class);
-      packageOptions.defaultVisibility = ConstantRuleVisibility.PRIVATE;
-      packageOptions.showLoadingProgress = true;
-      packageOptions.globbingThreads = 7;
+      PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
+      packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PRIVATE;
+      packageCacheOptions.showLoadingProgress = true;
+      packageCacheOptions.globbingThreads = 7;
       skyframeExecutor.injectExtraPrecomputedValues(
           ImmutableList.of(
               PrecomputedValue.injected(
                   RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-                  Optional.empty())));
+                  Optional.<RootedPath>absent())));
       skyframeExecutor.preparePackageLoading(
           pkgLocator,
-          packageOptions,
+          packageCacheOptions,
           Options.getDefaults(StarlarkSemanticsOptions.class),
           UUID.randomUUID(),
           ImmutableMap.<String, String>of(),

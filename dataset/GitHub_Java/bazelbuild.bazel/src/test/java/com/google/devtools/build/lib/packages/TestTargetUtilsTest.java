@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.skyframe.TestsForTargetPatternValue;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -114,8 +115,7 @@ public class TestTargetUtilsTest extends PackageLoadingTestCase {
             pkg,
             null,
             ruleClass,
-            Location.fromFile(""),
-            CallStack.EMPTY,
+            Location.fromPathFragment(PathFragment.EMPTY_FRAGMENT),
             new AttributeContainer(ruleClass));
     Mockito.when(ruleClass.getName()).thenReturn("existent_library");
     assertThat(filter.apply(mockRule)).isTrue();
