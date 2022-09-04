@@ -1,43 +1,41 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.math.random;
 
-/**
- * 32-bit Mersenne Twister. This implements the MT19937 (Mersenne Twister)
- * pseudo random number generator algorithm based upon the original C code
- * by Makoto Matsumoto and Takuji Nishimura (<a href="http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html">
- * http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html</a>).
+/*
+ * Mersenne Twister 32-bit.
  * <p>
- * As a subclass of java.util.Random this class provides a single canonical method
+ * This implements the MT19937 (Mersenne Twister) pseudo random number generator
+ * algorithm based upon the original C code by Makoto Matsumoto and Takuji
+ * Nishimura (<a
+ * href="http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html">
+ * http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html</a>). <p> As a
+ * subclass of java.util.Random this class provides a single canonical method
  * next() for generating bits in the pseudo random number sequence. Anyone using
  * this class should invoke the public inherited methods (nextInt(), nextFloat
  * etc.) to obtain values as normal. This class should provide a drop-in
  * replacement for the standard implementation of java.util.Random with the
  * additional advantage of having a far longer period and the ability to use a
  * far larger seed value.
- *
- * <h2>References</h2>
- * <uol>
- * <li> Makato Matsumoto and Takuji Nishimura,
+ * <ul>
+ * <li>  Makato Matsumoto and Takuji Nishimura,
  * <a href="http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/ARTICLES/mt.pdf">"Mersenne Twister: A 623-Dimensionally Equidistributed Uniform Pseudo-Random Number Generator"</a>,
  * <i>ACM Transactions on Modeling and Computer Simulation, </i> Vol. 8, No. 1,
  * January 1998, pp 3--30.</li>
- * </ol>
+ * </ul>
  *
  * @author Haifeng Li
  */
