@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.nativedeps.NativeDepsHelper;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import java.util.HashMap;
@@ -140,17 +141,7 @@ public final class NativeLibs {
     return result.build();
   }
 
-  static class ManifestAndRunfiles {
-    @Nullable public final Artifact manifest;
-    public final Runfiles runfiles;
-
-    private ManifestAndRunfiles(@Nullable Artifact manifest, Runfiles runfiles) {
-      this.manifest = manifest;
-      this.runfiles = runfiles;
-    }
-  }
-
-  ManifestAndRunfiles createApkBuilderSymlinks(RuleContext ruleContext) {
+  Pair<Artifact, Runfiles> createApkBuilderSymlinks(RuleContext ruleContext) {
     Map<PathFragment, Artifact> symlinks = new LinkedHashMap<>();
     for (Map.Entry<String, NestedSet<Artifact>> entry : nativeLibs.entrySet()) {
       String arch = entry.getKey();
@@ -163,19 +154,15 @@ public final class NativeLibs {
       return null;
     }
 
-    Runfiles.Builder runfiles =
-        new Runfiles.Builder(
-            ruleContext.getWorkspaceName(),
-            ruleContext.getConfiguration().legacyExternalRunfiles());
-    runfiles.addRootSymlinks(symlinks);
-    if (!ruleContext.getConfiguration().buildRunfilesManifests()) {
-      return new ManifestAndRunfiles(/*manifest=*/ null, runfiles.build());
-    }
-
     Artifact inputManifest = AndroidBinary.getDxArtifact(ruleContext, "native_symlinks.manifest");
     SourceManifestAction sourceManifestAction =
         new SourceManifestAction.Builder(
-                ManifestType.SOURCE_SYMLINKS, ruleContext.getActionOwner(), inputManifest, runfiles)
+                ruleContext.getWorkspaceName(),
+                ManifestType.SOURCE_SYMLINKS,
+                ruleContext.getActionOwner(),
+                inputManifest,
+                ruleContext.getConfiguration().legacyExternalRunfiles())
+            .addRootSymlinks(symlinks)
             .build();
     ruleContext.registerAction(sourceManifestAction);
     Artifact outputManifest = AndroidBinary.getDxArtifact(ruleContext, "native_symlinks/MANIFEST");
@@ -188,7 +175,7 @@ public final class NativeLibs {
             false,
             ruleContext.getConfiguration().getLocalShellEnvironment(),
             ruleContext.getConfiguration().runfilesEnabled()));
-    return new ManifestAndRunfiles(outputManifest, sourceManifestAction.getGeneratedRunfiles());
+    return Pair.of(outputManifest, sourceManifestAction.getGeneratedRunfiles());
   }
 
   /**
