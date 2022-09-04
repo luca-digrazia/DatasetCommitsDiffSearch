@@ -9,7 +9,6 @@ import com.yammer.dropwizard.db.DatabaseConfiguration;
 import com.yammer.dropwizard.db.ManagedDataSource;
 import com.yammer.dropwizard.jdbi.DBIFactory;
 import com.yammer.dropwizard.lifecycle.Managed;
-import com.yammer.dropwizard.setup.LifecycleEnvironment;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -26,7 +25,6 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class JDBITest {
     private final DatabaseConfiguration hsqlConfig = new DatabaseConfiguration();
@@ -39,25 +37,22 @@ public class JDBITest {
         hsqlConfig.setValidationQuery("SELECT 1 FROM INFORMATION_SCHEMA.SYSTEM_USERS");
     }
 
-    private final LifecycleEnvironment lifecycleEnvironment = mock(LifecycleEnvironment.class);
     private final Environment environment = mock(Environment.class);
-    private final DBIFactory factory = new DBIFactory();
+    private final DBIFactory factory = new DBIFactory(environment);
     private final List<Managed> managed = Lists.newArrayList();
-    private DBI dbi;
+    private DBI jdbi;
 
     @Before
     public void setUp() throws Exception {
-        when(environment.getLifecycleEnvironment()).thenReturn(lifecycleEnvironment);
-
-        this.dbi = factory.build(environment, hsqlConfig, "hsql");
+        this.jdbi = factory.build(hsqlConfig, "hsql");
         final ArgumentCaptor<Managed> managedCaptor = ArgumentCaptor.forClass(Managed.class);
-        verify(lifecycleEnvironment).manage(managedCaptor.capture());
+        verify(environment).manage(managedCaptor.capture());
         managed.addAll(managedCaptor.getAllValues());
         for (Managed obj : managed) {
             obj.start();
         }
 
-        final Handle handle = dbi.open();
+        final Handle handle = jdbi.open();
         try {
             handle.createCall("DROP TABLE people IF EXISTS").invoke();
             handle.createCall(
@@ -88,62 +83,77 @@ public class JDBITest {
         for (Managed obj : managed) {
             obj.stop();
         }
-        this.dbi = null;
+        this.jdbi = null;
     }
 
     @Test
     public void createsAValidDBI() throws Exception {
-        final Handle handle = dbi.open();
-
-        final Query<String> names = handle.createQuery("SELECT name FROM people WHERE age < ?")
-                                          .bind(0, 50)
-                                          .map(StringMapper.FIRST);
-        assertThat(ImmutableList.copyOf(names))
-                .containsOnly("Coda Hale", "Kris Gale");
+        final Handle handle = jdbi.open();
+        try {
+            final Query<String> names = handle.createQuery("SELECT name FROM people WHERE age < ?")
+                                              .bind(0, 50)
+                                              .map(StringMapper.FIRST);
+            assertThat(ImmutableList.copyOf(names))
+                    .containsOnly("Coda Hale", "Kris Gale");
+        } finally {
+            handle.close();
+        }
     }
 
     @Test
     public void managesTheDatabaseWithTheEnvironment() throws Exception {
-        verify(lifecycleEnvironment).manage(any(ManagedDataSource.class));
+        verify(environment).manage(any(ManagedDataSource.class));
     }
 
     @Test
     public void sqlObjectsCanAcceptOptionalParams() throws Exception {
-        final PersonDAO dao = dbi.open(PersonDAO.class);
-
-        assertThat(dao.findByName(Optional.of("Coda Hale")))
-                .isEqualTo("Coda Hale");
+        final PersonDAO dao = jdbi.open(PersonDAO.class);
+        try {
+            assertThat(dao.findByName(Optional.of("Coda Hale")))
+                    .isEqualTo("Coda Hale");
+        } finally {
+            jdbi.close(dao);
+        }
     }
 
     @Test
     public void sqlObjectsCanReturnImmutableLists() throws Exception {
-        final PersonDAO dao = dbi.open(PersonDAO.class);
-
-        assertThat(dao.findAllNames())
-                .containsOnly("Coda Hale", "Kris Gale", "Old Guy");
+        final PersonDAO dao = jdbi.open(PersonDAO.class);
+        try {
+            assertThat(dao.findAllNames())
+                    .containsOnly("Coda Hale", "Kris Gale", "Old Guy");
+        } finally {
+            jdbi.close(dao);
+        }
     }
 
     @Test
     public void sqlObjectsCanReturnImmutableSets() throws Exception {
-        final PersonDAO dao = dbi.open(PersonDAO.class);
-
-        assertThat(dao.findAllUniqueNames())
-                .containsOnly("Coda Hale", "Kris Gale", "Old Guy");
+        final PersonDAO dao = jdbi.open(PersonDAO.class);
+        try {
+            assertThat(dao.findAllUniqueNames())
+                    .containsOnly("Coda Hale", "Kris Gale", "Old Guy");
+        } finally {
+            jdbi.close(dao);
+        }
     }
 
     @Test
     public void sqlObjectsCanReturnOptional() throws Exception {
-        final PersonDAO dao = dbi.open(PersonDAO.class);
+        final PersonDAO dao = jdbi.open(PersonDAO.class);
+        try {
+            Optional<String> byEmail = dao.findByEmail("chale@yammer-inc.com");
+            assertThat(byEmail).isNotNull();
+            assertThat(byEmail.get()).isEqualTo("Coda Hale");
 
-        final Optional<String> found = dao.findByEmail("chale@yammer-inc.com");
-        assertThat(found).isNotNull();
-        assertThat(found.isPresent()).isTrue();
-        assertThat(found.get()).isEqualTo("Coda Hale");
 
+            byEmail = dao.findByEmail("cemalettin.koc@gmail.com");
+            assertThat(byEmail).isNotNull();
+            assertThat(byEmail).isEqualTo(Optional.<String>absent());
+            assertThat(byEmail.orNull()).isNull();
 
-        final Optional<String> missing = dao.findByEmail("cemalettin.koc@gmail.com");
-        assertThat(missing).isNotNull();
-        assertThat(missing.isPresent()).isFalse();
-        assertThat(missing.orNull()).isNull();
+        } finally {
+            jdbi.close(dao);
+        }
     }
 }
