@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.scheduler;
 
@@ -22,7 +22,6 @@ import org.graylog.scheduler.clock.JobSchedulerClock;
 import org.graylog.scheduler.clock.JobSchedulerSystemClock;
 import org.graylog.scheduler.eventbus.JobSchedulerEventBus;
 import org.graylog.scheduler.eventbus.JobSchedulerEventBusProvider;
-import org.graylog.scheduler.rest.JobSchedulerResource;
 import org.graylog2.plugin.PluginModule;
 
 /**
@@ -38,7 +37,8 @@ public class JobSchedulerModule extends PluginModule {
         OptionalBinder.newOptionalBinder(binder(), JobSchedulerConfig.class)
                 .setDefault().to(DefaultJobSchedulerConfig.class);
 
-        addSystemRestResource(JobSchedulerResource.class);
+        // Add all rest resources in this package
+        registerRestControllerPackage(getClass().getPackage().getName());
 
         addInitializer(JobSchedulerService.class);
         addAuditEventTypes(JobSchedulerAuditEventTypes.class);

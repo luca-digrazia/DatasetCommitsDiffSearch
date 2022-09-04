@@ -77,16 +77,13 @@ public class JobSchedulerService extends AbstractExecutionThreadService {
         LOG.debug("Waiting for server to enter RUNNING status before starting the scheduler loop");
         serverStatus.awaitRunning(() -> LOG.debug("Server entered RUNNING state, starting scheduler loop"));
 
-
         if (schedulerConfig.canStart()) {
-            boolean executionEnabled = true;
             while (isRunning()) {
                 if (!schedulerConfig.canExecute()) {
-                    executionEnabled = logExecutionConfigState(executionEnabled, false);
+                    LOG.info("Couldn't execute next scheduler loop iteration. Waiting and trying again.");
                     clock.sleepUninterruptibly(1, TimeUnit.SECONDS);
                     continue;
                 }
-                executionEnabled = logExecutionConfigState(executionEnabled, true);
 
                 LOG.debug("Starting scheduler loop iteration");
                 try {
@@ -170,18 +167,5 @@ public class JobSchedulerService extends AbstractExecutionThreadService {
             // Attention: this will increase available permits every time it's called.
             semaphore.release();
         }
-    }
-
-    /**
-     * {@link JobSchedulerConfig#canExecute()} may return false for a lot of consecutive calls. We don't want to log
-     * this on every scheduler loop iteration but only when there is a change in state .
-     */
-    private boolean logExecutionConfigState(boolean previouslyEnabled, boolean nowEnabled) {
-        if (previouslyEnabled && !nowEnabled) {
-            LOG.info("Job scheduler execution is disabled. Waiting and trying again until enabled.");
-        } else if (!previouslyEnabled && nowEnabled) {
-            LOG.info("Job scheduler execution is now enabled. Proceeding.");
-        }
-        return nowEnabled;
     }
 }
