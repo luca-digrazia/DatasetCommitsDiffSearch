@@ -145,11 +145,4 @@ public class BadOperationCheckerTest {
     Truth.assertThat(findIssues("foo + bar")).isEmpty();
     Truth.assertThat(findIssues("foo += bar")).isEmpty();
   }
-
-  @Test
-  public void divisionOperator() {
-    Truth.assertThat(findIssues("5 / 2").toString())
-        .contains("1:1-1:5: '/' operator is deprecated");
-    Truth.assertThat(findIssues("5 // 2")).isEmpty();
-  }
 }
