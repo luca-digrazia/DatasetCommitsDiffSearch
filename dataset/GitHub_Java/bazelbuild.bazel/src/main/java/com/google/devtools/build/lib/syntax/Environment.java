@@ -240,10 +240,10 @@ public final class Environment implements Freezable, Debuggable {
   }
 
   /**
-   * A {@link Frame} that represents the top-level definitions of a file. It contains the
-   * module-scope variables and has a reference to the universe.
+   * A {@link Frame} that can have a parent {@link GlobalFrame} from which it inherits bindings.
    *
-   * <p>Bindings in a {@link GlobalFrame} may shadow those inherited from its universe.
+   * <p>Bindings in a {@link GlobalFrame} may shadow those inherited from its parents. A chain of
+   * {@link GlobalFrame}s can represent different builtin scopes with a linear precedence ordering.
    *
    * <p>A {@link GlobalFrame} can also be constructed in a two-phase process. To do this, call the
    * nullary constructor to create an uninitialized {@link GlobalFrame}, then call {@link
@@ -258,7 +258,7 @@ public final class Environment implements Freezable, Debuggable {
     @Nullable private Mutability mutability;
 
     /** Final, except that it may be initialized after instantiation. */
-    @Nullable private Frame universe;
+    @Nullable private GlobalFrame parent;
 
     /**
      * If this frame is a global frame, the label for the corresponding target, e.g. {@code
@@ -274,26 +274,20 @@ public final class Environment implements Freezable, Debuggable {
     /** Constructs an uninitialized instance; caller must call {@link #initialize} before use. */
     public GlobalFrame() {
       this.mutability = null;
-      this.universe = null;
+      this.parent = null;
       this.label = null;
       this.bindings = new LinkedHashMap<>();
     }
 
     public GlobalFrame(
         Mutability mutability,
-        @Nullable GlobalFrame universe,
+        @Nullable GlobalFrame parent,
         @Nullable Label label,
         @Nullable Map<String, Object> bindings) {
-      Preconditions.checkState(universe == null || universe.universe == null);
+      Preconditions.checkState(parent == null || parent.parent == null); // no more than 1 parent
       this.mutability = Preconditions.checkNotNull(mutability);
-      this.universe = universe;
-      if (label != null) {
-        this.label = label;
-      } else if (universe != null) {
-        this.label = universe.label;
-      } else {
-        this.label = null;
-      }
+      this.parent = parent;
+      this.label = label;
       this.bindings = new LinkedHashMap<>();
       if (bindings != null) {
         this.bindings.putAll(bindings);
@@ -304,13 +298,12 @@ public final class Environment implements Freezable, Debuggable {
       this(mutability, null, null, null);
     }
 
-    public GlobalFrame(Mutability mutability, @Nullable GlobalFrame universe) {
-      this(mutability, universe, null, null);
+    public GlobalFrame(Mutability mutability, @Nullable GlobalFrame parent) {
+      this(mutability, parent, null, null);
     }
 
-    public GlobalFrame(
-        Mutability mutability, @Nullable GlobalFrame universe, @Nullable Label label) {
-      this(mutability, universe, label, null);
+    public GlobalFrame(Mutability mutability, @Nullable GlobalFrame parent, @Nullable Label label) {
+      this(mutability, parent, label, null);
     }
 
     /** Constructs a global frame for the given builtin bindings. */
@@ -325,22 +318,14 @@ public final class Environment implements Freezable, Debuggable {
 
     public void initialize(
         Mutability mutability,
-        @Nullable GlobalFrame universe,
+        @Nullable GlobalFrame parent,
         @Nullable Label label,
         Map<String, Object> bindings) {
       Preconditions.checkState(
-          universe == null || universe.universe == null); // no more than 1 universe
-      Preconditions.checkState(
           this.mutability == null, "Attempted to initialize an already initialized Frame");
       this.mutability = Preconditions.checkNotNull(mutability);
-      this.universe = universe;
-      if (label != null) {
-        this.label = label;
-      } else if (universe != null) {
-        this.label = universe.label;
-      } else {
-        this.label = null;
-      }
+      this.parent = parent;
+      this.label = label;
       this.bindings.putAll(bindings);
     }
 
@@ -350,43 +335,56 @@ public final class Environment implements Freezable, Debuggable {
      */
     public GlobalFrame withLabel(Label label) {
       checkInitialized();
-      return new GlobalFrame(mutability, /*universe*/ null, label, bindings);
+      return new GlobalFrame(mutability, /*parent*/ null, label, bindings);
     }
 
-    /** Returns the {@link Mutability} of this {@link GlobalFrame}. */
+    /**
+     * Returns the {@link Mutability} of this {@link GlobalFrame}, which may be different from its
+     * parent's.
+     */
     @Override
     public Mutability mutability() {
       checkInitialized();
       return mutability;
     }
 
-    /**
-     * Returns the parent {@link GlobalFrame}, if it exists.
-     *
-     * <p>TODO(laurentlb): Should be called getUniverse.
-     */
+    /** Returns the parent {@link GlobalFrame}, if it exists. */
     @Nullable
-    public Frame getParent() {
+    public GlobalFrame getParent() {
       checkInitialized();
-      return universe;
+      return parent;
     }
 
-    /** Returns the label of this {@code Frame}, which may be null. */
+    /**
+     * Returns the label of this {@code Frame}, which may be null. Parent labels are not consulted.
+     *
+     * <p>Usually you want to use {@link #getTransitiveLabel}; this is just an accessor for
+     * completeness.
+     */
     @Nullable
     public Label getLabel() {
       checkInitialized();
       return label;
     }
 
-    /** Same as getLabel. */
+    /**
+     * Walks from this {@link GlobalFrame} up through transitive parents, and returns the first
+     * non-null label found, or null if all labels are null.
+     */
     @Nullable
     public Label getTransitiveLabel() {
       checkInitialized();
-      return label;
+      if (label != null) {
+        return label;
+      } else if (parent != null) {
+        return parent.getTransitiveLabel();
+      } else {
+        return null;
+      }
     }
 
     /**
-     * Returns a map of direct bindings of this {@link GlobalFrame}, ignoring universe.
+     * Returns a map of direct bindings of this {@link GlobalFrame}, ignoring parents.
      *
      * <p>The bindings are returned in a deterministic order (for a given sequence of initial values
      * and updates).
@@ -404,16 +402,17 @@ public final class Environment implements Freezable, Debuggable {
       checkInitialized();
       // Can't use ImmutableMap.Builder because it doesn't allow duplicates.
       LinkedHashMap<String, Object> collectedBindings = new LinkedHashMap<>();
-      if (universe != null) {
-        collectedBindings.putAll(universe.getTransitiveBindings());
-      }
-      collectedBindings.putAll(getBindings());
+      accumulateTransitiveBindings(collectedBindings);
       return collectedBindings;
     }
 
-    public Object getDirectBindings(String varname) {
+    private void accumulateTransitiveBindings(LinkedHashMap<String, Object> accumulator) {
       checkInitialized();
-      return bindings.get(varname);
+      // Put parents first, so child bindings take precedence.
+      if (parent != null) {
+        parent.accumulateTransitiveBindings(accumulator);
+      }
+      accumulator.putAll(bindings);
     }
 
     @Override
@@ -423,8 +422,8 @@ public final class Environment implements Freezable, Debuggable {
       if (val != null) {
         return val;
       }
-      if (universe != null) {
-        return universe.get(varname);
+      if (parent != null) {
+        return parent.get(varname);
       }
       return null;
     }
@@ -856,13 +855,11 @@ public final class Environment implements Freezable, Debuggable {
       this.mutability = mutability;
     }
 
-    /**
-     * Inherits global bindings from the given parent Frame.
-     *
-     * <p>TODO(laurentlb): this should be called setUniverse.
-     */
+    /** Inherits global bindings from the given parent Frame. */
     public Builder setGlobals(GlobalFrame parent) {
       Preconditions.checkState(this.parent == null);
+      // Make sure that the global frame does at most two lookups: one for the module definitions
+      // and one for the builtins.
       this.parent = parent;
       return this;
     }
@@ -902,7 +899,7 @@ public final class Environment implements Freezable, Debuggable {
       Preconditions.checkArgument(!mutability.isFrozen());
       if (parent != null) {
         Preconditions.checkArgument(parent.mutability().isFrozen(), "parent frame must be frozen");
-        if (parent.universe != null) { // This code path doesn't happen in Bazel.
+        if (parent.parent != null) { // This code path doesn't happen in Bazel.
 
           // Flatten the frame, ensure all builtins are in the same frame.
           parent =
@@ -1056,14 +1053,16 @@ public final class Environment implements Freezable, Debuggable {
 
   /**
    * Returns the value of a variable defined in the Module scope (e.g. global variables, functions).
+   *
+   * <p>TODO(laurentlb): This method may also return values from the universe. We should fix that.
    */
   public Object moduleLookup(String varname) {
-    return globalFrame.getDirectBindings(varname);
+    return globalFrame.get(varname);
   }
 
   /** Returns the value of a variable defined in the Universe scope (builtins). */
   public Object universeLookup(String varname) {
-    // TODO(laurentlb): look only at globalFrame.universe.
+    // TODO(laurentlb): look only at globalFrame.parent.
     Object result = globalFrame.get(varname);
 
     if (result == null) {

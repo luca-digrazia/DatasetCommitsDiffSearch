@@ -1229,7 +1229,8 @@ public final class PackageFactory {
    * <p>Executes {@code globber.onCompletion()} on completion and executes {@code
    * globber.onInterrupt()} on an {@link InterruptedException}.
    */
-  private Package.Builder createPackage(
+  // Used outside of bazel!
+  public Package.Builder createPackage(
       String workspaceName,
       PackageIdentifier packageId,
       Path buildFile,

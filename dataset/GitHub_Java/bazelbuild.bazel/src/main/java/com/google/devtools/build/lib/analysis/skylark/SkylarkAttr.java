@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
-import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -36,7 +35,6 @@ import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkAttrApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -256,17 +254,6 @@ public final class SkylarkAttr implements SkylarkAttrApi {
         builder.cfg((SplitTransition) trans);
       } else if (trans instanceof SplitTransitionProvider) {
         builder.cfg((SplitTransitionProvider) trans);
-      } else if (trans instanceof StarlarkDefinedConfigTransition) {
-        StarlarkDefinedConfigTransition starlarkDefinedTransition =
-            (StarlarkDefinedConfigTransition) trans;
-        BaseFunction transImpl = starlarkDefinedTransition.getImplementation();
-        if (starlarkDefinedTransition.isForAnalysisTesting()) {
-          builder.hasAnalysisTestTransition();
-        } else {
-          builder.hasStarlarkDefinedTransition();
-        }
-        builder.cfg(new FunctionSplitTransitionProvider(
-            transImpl, env.getSemantics(), env.getEventHandler()));
       } else if (!trans.equals("target")) {
         throw new EvalException(ast.getLocation(),
             "cfg must be either 'data', 'host', or 'target'.");
@@ -691,13 +678,6 @@ public final class SkylarkAttr implements SkylarkAttrApi {
       Object defaultO, String doc, Boolean mandatory, FuncallExpression ast, Environment env)
       throws EvalException {
     SkylarkUtils.checkLoadingOrWorkspacePhase(env, "attr.output", ast.getLocation());
-
-    if (env.getSemantics().incompatibleNoOutputAttrDefault() && defaultO != Runtime.NONE) {
-      throw new EvalException(ast.getLocation(),
-          "'default' is no longer a supported parameter for attr.output. Use Starlark macros "
-              + "to set the default of output or output_list parameters instead. You can use "
-              + "--incompatible_no_output_attr_default=false to temporarily disable this check.");
-    }
     return createNonconfigurableAttrDescriptor(
         "output",
         EvalUtils.<String, Object>optionMap(env, DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory),
@@ -709,7 +689,7 @@ public final class SkylarkAttr implements SkylarkAttrApi {
   @Override
   public Descriptor outputListAttribute(
       Boolean allowEmpty,
-      Object defaultList,
+      SkylarkList defaultList,
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
@@ -717,14 +697,6 @@ public final class SkylarkAttr implements SkylarkAttrApi {
       Environment env)
       throws EvalException {
     SkylarkUtils.checkLoadingOrWorkspacePhase(env, "attr.output_list", ast.getLocation());
-
-    if (env.getSemantics().incompatibleNoOutputAttrDefault() && defaultList != Runtime.NONE) {
-      throw new EvalException(ast.getLocation(),
-          "'default' is no longer a supported parameter for attr.output_list. Use Starlark macros "
-              + "to set the default of output or output_list parameters instead. You can use "
-              + "--incompatible_no_output_attr_default=false to temporarily disable this check.");
-    }
-
     return createAttrDescriptor(
         "output_list",
         EvalUtils.<String, Object>optionMap(

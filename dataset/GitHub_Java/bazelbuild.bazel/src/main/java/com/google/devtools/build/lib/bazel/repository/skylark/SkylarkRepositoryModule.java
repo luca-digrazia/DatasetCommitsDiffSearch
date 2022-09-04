@@ -83,7 +83,8 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     }
     builder.setConfiguredTargetFunction(implementation);
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
-        funcallEnv.getGlobals().getLabel(), funcallEnv.getTransitiveContentHashCode());
+        funcallEnv.getGlobals().getTransitiveLabel(),
+        funcallEnv.getTransitiveContentHashCode());
     builder.setWorkspaceOnly();
     return new RepositoryRuleFunction(builder);
   }
@@ -113,9 +114,9 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     @Override
     public void repr(SkylarkPrinter printer) {
       if (exportedName == null) {
-        printer.append("<anonymous starlark repository rule>");
+        printer.append("<anonymous skylark repository rule>");
       } else {
-        printer.append("<starlark repository rule " + extensionLabel + "%" + exportedName + ">");
+        printer.append("<skylark repository rule " + extensionLabel + "%" + exportedName + ">");
       }
     }
 
