@@ -35,8 +35,6 @@ public class FixDeflectorByDeleteJob extends SystemJob {
 
     private static final Logger LOG = LoggerFactory.getLogger(FixDeflectorByDeleteJob.class);
 
-    public static final int MAX_CONCURRENCY = 1;
-
     private int progress = 0;
 
     public FixDeflectorByDeleteJob(Core core) {
@@ -89,11 +87,6 @@ public class FixDeflectorByDeleteJob extends SystemJob {
     @Override
     public int getProgress() {
         return progress;
-    }
-
-    @Override
-    public int maxConcurrency() {
-        return MAX_CONCURRENCY;
     }
 
     @Override

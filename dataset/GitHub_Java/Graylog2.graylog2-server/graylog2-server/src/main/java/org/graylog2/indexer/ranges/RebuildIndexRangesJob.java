@@ -42,8 +42,6 @@ public class RebuildIndexRangesJob extends SystemJob {
 
     private static final Logger LOG = LoggerFactory.getLogger(RebuildIndexRangesJob.class);
 
-    public static final int MAX_CONCURRENCY = 1;
-
     private boolean cancelRequested = false;
     private int indicesToCalculate = 0;
     private int indicesCalculated = 0;
@@ -153,10 +151,5 @@ public class RebuildIndexRangesJob extends SystemJob {
     @Override
     public boolean isCancelable() {
         return true;
-    }
-
-    @Override
-    public int maxConcurrency() {
-        return MAX_CONCURRENCY;
     }
 }

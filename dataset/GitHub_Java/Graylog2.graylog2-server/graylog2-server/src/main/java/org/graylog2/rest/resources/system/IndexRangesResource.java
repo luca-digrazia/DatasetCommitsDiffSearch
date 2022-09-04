@@ -19,14 +19,12 @@
  */
 package org.graylog2.rest.resources.system;
 
-import com.codahale.metrics.annotation.Timed;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.jersey.api.core.ResourceConfig;
 import org.graylog2.Core;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.systemjobs.SystemJob;
-import org.graylog2.systemjobs.SystemJobConcurrencyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,19 +46,14 @@ public class IndexRangesResource extends RestResource {
     @Context
     ResourceConfig rc;
 
-    @POST @Timed
+    @POST
     @Path("/rebuild")
     @Produces(MediaType.APPLICATION_JSON)
     public Response rebuild() {
         Core core = (Core) rc.getProperty("core");
 
         SystemJob rebuildJob = new RebuildIndexRangesJob(core);
-        try {
-            core.getSystemJobManager().submit(rebuildJob);
-        } catch (SystemJobConcurrencyException e) {
-            LOG.error("Concurrency level of this job reached: " + e.getMessage());
-            throw new WebApplicationException(400);
-        }
+        core.getSystemJobManager().submit(rebuildJob);
 
         return Response.status(Response.Status.ACCEPTED).build();
     }
