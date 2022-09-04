@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.test;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -68,7 +67,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
   private final NestedSet<Artifact> runtime;
   private final BuildConfiguration configuration;
-  private final TestConfiguration testConfiguration;
   private final Artifact testLog;
   private final Artifact cacheStatus;
   private final PathFragment testWarningsPath;
@@ -148,8 +146,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
         list(testLog, cacheStatus, coverageArtifact));
     this.runtime = runtime;
     this.configuration = Preconditions.checkNotNull(configuration);
-    this.testConfiguration =
-        Preconditions.checkNotNull(configuration.getFragment(TestConfiguration.class));
     this.testLog = testLog;
     this.cacheStatus = cacheStatus;
     this.coverageData = coverageArtifact;
@@ -245,7 +241,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     f.addInt(shardNum);
     f.addInt(executionSettings.getTotalShards());
     f.addInt(runNumber);
-    f.addInt(testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()));
+    f.addInt(configuration.getRunsPerTestForLabel(getOwner().getLabel()));
     f.addInt(configuration.isCodeCoverageEnabled() ? 1 : 0);
     return f.hexDigestAndReset();
   }
@@ -275,46 +271,41 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   }
 
   /**
-   * Returns the cache from disk, or null if the file doesn't exist or if there is an error.
+   * Returns the cache from disk, or null if there is an error.
    */
   @Nullable
   private TestResultData readCacheStatus() {
     try (InputStream in = cacheStatus.getPath().getInputStream()) {
       return TestResultData.parseFrom(in);
     } catch (IOException expected) {
-      return null;
+
     }
+    return null;
   }
 
   private boolean computeExecuteUnconditionallyFromTestStatus() {
-    return !canBeCached(
-        testConfiguration.cacheTestResults(),
-        readCacheStatus(),
-        testProperties.isExternal(),
-        testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()));
-  }
+    if (configuration.cacheTestResults() == TriState.NO || testProperties.isExternal()
+        || (configuration.cacheTestResults() == TriState.AUTO
+            && configuration.getRunsPerTestForLabel(getOwner().getLabel()) > 1)) {
+      return true;
+    }
 
-  @VisibleForTesting
-  static boolean canBeCached(
-      TriState cacheTestResults, TestResultData prevStatus, boolean isExternal, int runsPerTest) {
-    if (cacheTestResults == TriState.NO) {
-      return false;
-    }
-    if (isExternal) {
-      return false;
-    }
-    if (cacheTestResults == TriState.AUTO && (runsPerTest > 1)) {
-      return false;
-    }
     // Test will not be executed unconditionally - check whether test result exists and is
     // valid. If it is, method will return false and we will rely on the dependency checker
     // to make a decision about test execution.
-    if (cacheTestResults == TriState.AUTO && prevStatus != null && !prevStatus.getTestPassed()) {
-      return false;
+    TestResultData status = readCacheStatus();
+    if (status != null) {
+      if (!status.getCachable()) {
+        return true;
+      }
+
+      return (configuration.cacheTestResults() == TriState.AUTO
+          && !status.getTestPassed());
     }
-    // Rely on the dependency checker to determine if the test can be cached. Note that the status
-    // is a declared output, so its non-existence also triggers a re-run.
-    return true;
+
+    // CacheStatus is an artifact, so if it does not exist, the dependency checker will rebuild
+    // it. We can't return "true" here, as it also signals to not accept cached remote results.
+    return false;
   }
 
   /**
@@ -411,7 +402,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
     // When we run test multiple times, set different TEST_RANDOM_SEED values for each run.
     // Don't override any previous setting.
-    if (testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()) > 1
+    if (getConfiguration().getRunsPerTestForLabel(getOwner().getLabel()) > 1
         && !env.containsKey("TEST_RANDOM_SEED")) {
       env.put("TEST_RANDOM_SEED", Integer.toString(getRunNumber() + 1));
     }
@@ -479,7 +470,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   public String getTestSuffix() {
     int totalShards = executionSettings.getTotalShards();
     // Use a 1-based index for user friendliness.
-    int runsPerTest = testConfiguration.getRunsPerTestForLabel(getOwner().getLabel());
+    int runsPerTest = configuration.getRunsPerTestForLabel(getOwner().getLabel());
     if (totalShards > 1 && runsPerTest > 1) {
       return String.format("(shard %d of %d, run %d of %d)", shardNum + 1, totalShards,
           runNumber + 1, runsPerTest);
