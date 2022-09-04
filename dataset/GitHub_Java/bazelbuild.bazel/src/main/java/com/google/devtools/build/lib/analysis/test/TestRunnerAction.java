@@ -334,9 +334,8 @@ public class TestRunnerAction extends AbstractAction
   @Override
   protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
       throws CommandLineExpansionException {
-    // TODO(b/150305897): use addUUID?
     fp.addString(GUID);
-    fp.addIterableStrings(executionSettings.getArgs().arguments());
+    fp.addStrings(executionSettings.getArgs().arguments());
     fp.addString(Strings.nullToEmpty(executionSettings.getTestFilter()));
     fp.addBoolean(executionSettings.getTestRunnerFailFast());
     RunUnder runUnder = executionSettings.getRunUnder();
@@ -350,12 +349,12 @@ public class TestRunnerAction extends AbstractAction
     fp.addString(testProperties.getSize().toString());
     fp.addString(testProperties.getTimeout().toString());
     fp.addStrings(testProperties.getTags());
-    fp.addBoolean(testProperties.isRemotable());
+    fp.addInt(testProperties.isRemotable() ? 1 : 0);
     fp.addInt(shardNum);
     fp.addInt(executionSettings.getTotalShards());
     fp.addInt(runNumber);
     fp.addInt(executionSettings.getTotalRuns());
-    fp.addBoolean(configuration.isCodeCoverageEnabled());
+    fp.addInt(configuration.isCodeCoverageEnabled() ? 1 : 0);
     fp.addStringMap(getExecutionInfo());
   }
 
