@@ -4,6 +4,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 import com.yammer.dropwizard.tasks.Task;
 import com.yammer.dropwizard.tasks.TaskServlet;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -29,7 +31,7 @@ public class TaskServletTest {
 
     @Before
     public void setUp() throws Exception {
-//        Logger.getRootLogger().setLevel(Level.OFF);
+        Logger.getRootLogger().setLevel(Level.OFF);
     }
 
     @Test
@@ -43,12 +45,12 @@ public class TaskServletTest {
     }
 
     @Test
-    public void runsATaskWhenFound() throws Exception {
+    public void runsATestWhenFound() throws Exception {
         final PrintWriter output = mock(PrintWriter.class);
 
         when(request.getMethod()).thenReturn("POST");
         when(request.getRequestURI()).thenReturn("/tasks/gc");
-        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.<String>of()));
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of()));
         when(response.getWriter()).thenReturn(output);
 
         servlet.service(request, response);
@@ -76,7 +78,7 @@ public class TaskServletTest {
     public void returnsA500OnExceptions() throws Exception {
         when(request.getMethod()).thenReturn("POST");
         when(request.getRequestURI()).thenReturn("/tasks/gc");
-        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.<String>of()));
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of()));
 
         final RuntimeException ex = new RuntimeException("whoops");
         
