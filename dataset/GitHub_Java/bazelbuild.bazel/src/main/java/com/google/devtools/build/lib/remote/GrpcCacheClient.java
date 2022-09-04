@@ -122,6 +122,7 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
   private ContentAddressableStorageFutureStub casFutureStub() {
     return ContentAddressableStorageGrpc.newFutureStub(channel)
         .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
+        .withInterceptors(TracingMetadataUtils.newCacheHeadersInterceptor(options))
         .withCallCredentials(credentials)
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
@@ -129,6 +130,7 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
   private ByteStreamStub bsAsyncStub() {
     return ByteStreamGrpc.newStub(channel)
         .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
+        .withInterceptors(TracingMetadataUtils.newCacheHeadersInterceptor(options))
         .withCallCredentials(credentials)
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
@@ -136,6 +138,7 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
   private ActionCacheBlockingStub acBlockingStub() {
     return ActionCacheGrpc.newBlockingStub(channel)
         .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
+        .withInterceptors(TracingMetadataUtils.newCacheHeadersInterceptor(options))
         .withCallCredentials(credentials)
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
@@ -143,6 +146,7 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
   private ActionCacheFutureStub acFutureStub() {
     return ActionCacheGrpc.newFutureStub(channel)
         .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
+        .withInterceptors(TracingMetadataUtils.newCacheHeadersInterceptor(options))
         .withCallCredentials(credentials)
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
@@ -232,14 +236,11 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
   }
 
   @Override
-  public ListenableFuture<ActionResult> downloadActionResult(
-      ActionKey actionKey, boolean inlineOutErr) {
+  public ListenableFuture<ActionResult> downloadActionResult(ActionKey actionKey) {
     GetActionResultRequest request =
         GetActionResultRequest.newBuilder()
             .setInstanceName(options.remoteInstanceName)
             .setActionDigest(actionKey.getDigest())
-            .setInlineStderr(inlineOutErr)
-            .setInlineStdout(inlineOutErr)
             .build();
     Context ctx = Context.current();
     return retrier.executeAsync(
