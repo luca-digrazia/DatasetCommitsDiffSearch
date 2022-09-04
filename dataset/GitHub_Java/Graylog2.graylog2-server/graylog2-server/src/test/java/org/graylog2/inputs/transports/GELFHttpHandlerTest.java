@@ -16,8 +16,6 @@
  */
 package org.graylog2.inputs.transports;
 
-import com.codahale.metrics.MetricRegistry;
-import org.graylog2.plugin.inputs.MessageInput;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.Channel;
@@ -32,30 +30,28 @@ import org.jboss.netty.handler.codec.http.HttpResponse;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.jboss.netty.handler.codec.http.HttpVersion;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class GELFHttpHandlerTest {
-    @Mock
-    private MessageInput messageInput;
-    @Mock
-    private MetricRegistry metricRegistry;
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
     @Mock
     private ChannelHandlerContext ctx;
     @Mock
@@ -69,7 +65,7 @@ public class GELFHttpHandlerTest {
 
     @Before
     public void setUp() throws Exception {
-        ChannelBuffer channelBuffer = ChannelBuffers.copiedBuffer("{}", Charset.defaultCharset());
+        ChannelBuffer channelBuffer = ChannelBuffers.copiedBuffer("{}", StandardCharsets.UTF_8);
 
         when(headers.get(HttpHeaders.Names.CONNECTION)).thenReturn(HttpHeaders.Values.CLOSE);
 
@@ -190,7 +186,7 @@ public class GELFHttpHandlerTest {
         HttpResponse response = argument.getValue();
         assertEquals(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_ORIGIN), origin);
         assertEquals(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_CREDENTIALS), "true");
-        assertEquals(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_HEADERS), "Authorization");
+        assertEquals(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_HEADERS), "Authorization, Content-Type");
     }
 
     @Test
@@ -208,7 +204,7 @@ public class GELFHttpHandlerTest {
         HttpResponse response = argument.getValue();
         assertEquals(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_ORIGIN), origin);
         assertEquals(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_CREDENTIALS), "true");
-        assertEquals(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_HEADERS), "Authorization");
+        assertEquals(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_HEADERS), "Authorization, Content-Type");
     }
 
     @Test
@@ -227,5 +223,38 @@ public class GELFHttpHandlerTest {
         assertNull(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_ORIGIN));
         assertNull(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_CREDENTIALS));
         assertNull(response.headers().get(HttpHeaders.Names.ACCESS_CONTROL_ALLOW_HEADERS));
+    }
+
+
+    @Test
+    public void testWithJavascriptContentType() throws Exception {
+        when(headers.get(HttpHeaders.Names.CONTENT_TYPE)).thenReturn("application/json");
+        HttpTransport.Handler handler = new HttpTransport.Handler(true);
+
+        handler.messageReceived(ctx, evt);
+
+        ArgumentCaptor<HttpResponse> argument = ArgumentCaptor.forClass(HttpResponse.class);
+        verify(channel).write(argument.capture());
+        verify(ctx, atMost(1)).sendUpstream(any(ChannelEvent.class));
+
+        HttpResponse response = argument.getValue();
+        assertEquals(HttpResponseStatus.ACCEPTED, response.getStatus());
+        assertEquals(response.headers().get(HttpHeaders.Names.CONNECTION), HttpHeaders.Values.CLOSE);
+    }
+
+    @Test
+    public void testWithArbitraryContentType() throws Exception {
+        when(headers.get(HttpHeaders.Names.CONTENT_TYPE)).thenReturn("foo/bar");
+        HttpTransport.Handler handler = new HttpTransport.Handler(true);
+
+        handler.messageReceived(ctx, evt);
+
+        ArgumentCaptor<HttpResponse> argument = ArgumentCaptor.forClass(HttpResponse.class);
+        verify(channel).write(argument.capture());
+        verify(ctx, atMost(1)).sendUpstream(any(ChannelEvent.class));
+
+        HttpResponse response = argument.getValue();
+        assertEquals(HttpResponseStatus.ACCEPTED, response.getStatus());
+        assertEquals(response.headers().get(HttpHeaders.Names.CONNECTION), HttpHeaders.Values.CLOSE);
     }
 }
