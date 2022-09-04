@@ -23,11 +23,11 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
@@ -53,7 +53,6 @@ import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -120,8 +119,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public Artifact.DerivedArtifact getDerivedArtifact(
-        PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
       return original.getDerivedArtifact(rootRelativePath, root);
     }
 
@@ -182,7 +180,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ActionLookupValue.ActionLookupKey getOwner() {
+    public ArtifactOwner getOwner() {
       return original.getOwner();
     }
 
@@ -302,14 +300,6 @@ public final class AnalysisTestUtil {
 
   /** An AnalysisEnvironment with stubbed-out methods. */
   public static class StubAnalysisEnvironment implements AnalysisEnvironment {
-    private static final ActionLookupValue.ActionLookupKey DUMMY_KEY =
-        new ActionLookupValue.ActionLookupKey() {
-          @Override
-          public SkyFunctionName functionName() {
-            return null;
-          }
-        };
-
     @Override
     public void registerAction(ActionAnalysisMetadata... action) {
     }
@@ -365,8 +355,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public Artifact.DerivedArtifact getDerivedArtifact(
-        PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
       return null;
     }
 
@@ -387,8 +376,8 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public ActionLookupValue.ActionLookupKey getOwner() {
-      return DUMMY_KEY;
+    public ArtifactOwner getOwner() {
+      return ArtifactOwner.NullArtifactOwner.INSTANCE;
     }
 
     @Override
@@ -414,13 +403,14 @@ public final class AnalysisTestUtil {
       Pattern.compile("(?<=" + TestConstants.PRODUCT_NAME + "-out/)gcc[^/]*-grte-\\w+-");
 
   /**
-   * Given a collection of Artifacts, returns a corresponding set of strings of the form "{root}
-   * {relpath}", such as "bin x/libx.a". Such strings make assertions easier to write.
+   * Given a collection of Artifacts, returns a corresponding set of strings of
+   * the form "{root} {relpath}", such as "bin x/libx.a".  Such strings make
+   * assertions easier to write.
    *
    * <p>The returned set preserves the order of the input.
    */
-  public static Set<String> artifactsToStrings(
-      BuildConfigurationCollection configurations, Iterable<? extends Artifact> artifacts) {
+  public static Set<String> artifactsToStrings(BuildConfigurationCollection configurations,
+      Iterable<Artifact> artifacts) {
     Map<String, String> rootMap = new HashMap<>();
     BuildConfiguration targetConfiguration =
         Iterables.getOnlyElement(configurations.getTargetConfigurations());

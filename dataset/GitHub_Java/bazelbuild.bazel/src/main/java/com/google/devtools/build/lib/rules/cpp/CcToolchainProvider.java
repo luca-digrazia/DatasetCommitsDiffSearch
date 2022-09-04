@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -36,7 +35,6 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
@@ -363,22 +361,6 @@ public final class CcToolchainProvider extends ToolchainInfo
     return SkylarkNestedSet.of(Artifact.class, getAllFiles());
   }
 
-  @Override
-  public SkylarkNestedSet getStaticRuntimeLibForStarlark(
-      FeatureConfigurationForStarlark featureConfigurationForStarlark) throws EvalException {
-    return SkylarkNestedSet.of(
-        (Artifact.class),
-        getStaticRuntimeLinkInputs(featureConfigurationForStarlark.getFeatureConfiguration()));
-  }
-
-  @Override
-  public SkylarkNestedSet getDynamicRuntimeLibForStarlark(
-      FeatureConfigurationForStarlark featureConfigurationForStarlark) throws EvalException {
-    return SkylarkNestedSet.of(
-        (Artifact.class),
-        getDynamicRuntimeLinkInputs(featureConfigurationForStarlark.getFeatureConfiguration()));
-  }
-
   public ImmutableList<PathFragment> getBuiltInIncludeDirectories() {
     return builtInIncludeDirectories;
   }
@@ -473,12 +455,12 @@ public final class CcToolchainProvider extends ToolchainInfo
   }
 
   /** Returns the static runtime libraries. */
-  public NestedSet<Artifact> getStaticRuntimeLinkInputs(FeatureConfiguration featureConfiguration)
-      throws EvalException {
+  public NestedSet<Artifact> getStaticRuntimeLinkInputs(
+      RuleErrorConsumer ruleErrorConsumer, FeatureConfiguration featureConfiguration)
+      throws RuleErrorException {
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
       if (staticRuntimeLinkInputs == null) {
-        throw new EvalException(
-            Location.BUILTIN,
+        throw ruleErrorConsumer.throwWithRuleError(
             "Toolchain supports embedded runtimes, but didn't "
                 + "provide static_runtime_lib attribute.");
       }
@@ -506,12 +488,12 @@ public final class CcToolchainProvider extends ToolchainInfo
   }
 
   /** Returns the dynamic runtime libraries. */
-  public NestedSet<Artifact> getDynamicRuntimeLinkInputs(FeatureConfiguration featureConfiguration)
-      throws EvalException {
+  public NestedSet<Artifact> getDynamicRuntimeLinkInputs(
+      RuleErrorConsumer ruleContext, FeatureConfiguration featureConfiguration)
+      throws RuleErrorException {
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
       if (dynamicRuntimeLinkInputs == null) {
-        throw new EvalException(
-            Location.BUILTIN,
+        throw ruleContext.throwWithRuleError(
             "Toolchain supports embedded runtimes, but didn't "
                 + "provide dynamic_runtime_lib attribute.");
       }
@@ -629,11 +611,6 @@ public final class CcToolchainProvider extends ToolchainInfo
    */
   CppConfiguration getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas() {
     return cppConfiguration;
-  }
-
-  /** Return context-sensitive fdo instrumentation path. */
-  public String getCSFdoInstrument() {
-    return cppConfiguration.getCSFdoInstrument();
   }
 
   /** Returns build variables to be templated into the crosstool. */
@@ -885,16 +862,6 @@ public final class CcToolchainProvider extends ToolchainInfo
   public boolean disableGenruleCcToolchainDependency() {
     return getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas()
         .disableGenruleCcToolchainDependency();
-  }
-
-  @VisibleForTesting
-  NestedSet<Artifact> getStaticRuntimeLibForTesting() {
-    return staticRuntimeLinkInputs;
-  }
-
-  @VisibleForTesting
-  NestedSet<Artifact> getDynamicRuntimeLibForTesting() {
-    return dynamicRuntimeLinkInputs;
   }
 }
 

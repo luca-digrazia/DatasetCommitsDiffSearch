@@ -997,8 +997,7 @@ public class CppLinkActionBuilder {
     }
 
     ImmutableMap<String, String> toolchainEnv =
-        CppHelper.getEnvironmentVariables(
-            ruleErrorConsumer, featureConfiguration, buildVariables, getActionName());
+        featureConfiguration.getEnvironmentVariables(getActionName(), buildVariables);
 
     // If the crosstool uses action_configs to configure cc compilation, collect execution info
     // from there, otherwise, use no execution info.

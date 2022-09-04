@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory;
@@ -828,6 +829,8 @@ public final class CcLinkingHelper {
    * @throws RuleErrorException
    */
   private Artifact getLinkedArtifact(LinkTargetType linkTargetType) throws RuleErrorException {
+    Artifact result = null;
+    try {
       String maybePicName = label.getName() + linkedArtifactNameSuffix;
       if (linkTargetType.picness() == Picness.PIC) {
         maybePicName =
@@ -840,10 +843,13 @@ public final class CcLinkingHelper {
       PathFragment artifactFragment =
           PathFragment.create(label.getName()).getParentDirectory().getRelative(linkedName);
 
-    Artifact result =
-        actionConstructionContext.getPackageRelativeArtifact(
-            artifactFragment,
-            configuration.getBinDirectory(label.getPackageIdentifier().getRepository()));
+      result =
+          actionConstructionContext.getPackageRelativeArtifact(
+              artifactFragment,
+              configuration.getBinDirectory(label.getPackageIdentifier().getRepository()));
+    } catch (ExpansionException e) {
+      ruleErrorConsumer.throwWithRuleError(e.getMessage());
+    }
 
     // If the linked artifact is not the linux default, then a FailAction is generated for the
     // linux default to satisfy the requirement of the implicit output.

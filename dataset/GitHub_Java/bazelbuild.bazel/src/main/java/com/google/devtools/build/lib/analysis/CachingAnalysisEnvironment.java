@@ -20,10 +20,10 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
@@ -60,7 +60,7 @@ import javax.annotation.Nullable;
 public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   private final ArtifactFactory artifactFactory;
 
-  private final ActionLookupValue.ActionLookupKey owner;
+  private final ArtifactOwner owner;
   /**
    * If this is the system analysis environment, then errors and warnings are directly reported
    * to the global reporter, rather than stored, i.e., we don't track here whether there are any
@@ -87,7 +87,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   public CachingAnalysisEnvironment(
       ArtifactFactory artifactFactory,
       ActionKeyContext actionKeyContext,
-      ActionLookupValue.ActionLookupKey owner,
+      ArtifactOwner owner,
       boolean isSystemEnv,
       boolean extendedSanityChecks,
       boolean allowAnalysisFailures,
@@ -240,8 +240,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
    * sealed (disable()). For performance reasons we only track the originating stacktrace when
    * running with --experimental_extended_sanity_checks.
    */
-  private Artifact.DerivedArtifact trackArtifactAndOrigin(
-      Artifact.DerivedArtifact a, @Nullable Throwable e) {
+  private Artifact trackArtifactAndOrigin(Artifact a, @Nullable Throwable e) {
     if ((e != null) && !artifacts.containsKey(a)) {
       StringWriter sw = new StringWriter();
       e.printStackTrace(new PrintWriter(sw));
@@ -253,8 +252,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public Artifact.DerivedArtifact getDerivedArtifact(
-      PathFragment rootRelativePath, ArtifactRoot root) {
+  public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
     Preconditions.checkState(enabled);
     return trackArtifactAndOrigin(
         artifactFactory.getDerivedArtifact(rootRelativePath, root, getOwner()),
@@ -271,8 +269,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public Artifact.DerivedArtifact getFilesetArtifact(
-      PathFragment rootRelativePath, ArtifactRoot root) {
+  public Artifact getFilesetArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
     Preconditions.checkState(enabled);
     return trackArtifactAndOrigin(
         artifactFactory.getFilesetArtifact(rootRelativePath, root, getOwner()),
@@ -354,7 +351,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public ActionLookupValue.ActionLookupKey getOwner() {
+  public ArtifactOwner getOwner() {
     return owner;
   }
 }

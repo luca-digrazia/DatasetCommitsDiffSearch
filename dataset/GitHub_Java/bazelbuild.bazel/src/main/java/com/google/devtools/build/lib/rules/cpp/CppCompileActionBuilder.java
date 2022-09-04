@@ -160,7 +160,7 @@ public class CppCompileActionBuilder {
     return mandatoryInputsBuilder.build();
   }
 
-  public String getActionName() {
+  private String getActionName() {
     if (actionName != null) {
       return actionName;
     }

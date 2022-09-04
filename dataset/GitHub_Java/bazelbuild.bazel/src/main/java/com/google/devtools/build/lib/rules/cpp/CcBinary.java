@@ -64,14 +64,12 @@ import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext.LinkOptions;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * A ConfiguredTarget for <code>cc_binary</code> rules.
@@ -193,11 +191,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     builder.add(ruleContext, runfilesMapping);
     // Add the C++ runtime libraries if linking them dynamically.
     if (linkingMode == Link.LinkingMode.DYNAMIC) {
-      try {
-        builder.addTransitiveArtifacts(toolchain.getDynamicRuntimeLinkInputs(featureConfiguration));
-      } catch (EvalException e) {
-        throw ruleContext.throwWithRuleError(e.getMessage());
-      }
+      builder.addTransitiveArtifacts(
+          toolchain.getDynamicRuntimeLinkInputs(ruleContext, featureConfiguration));
     }
     if (linkCompileOutputSeparately) {
       if (!ccLibraryLinkingOutputs.isEmpty()
@@ -1084,15 +1079,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> headerTokens =
         CcCompilationHelper.collectHeaderTokens(
             ruleContext, cppConfiguration, ccCompilationOutputs);
-
-    Map<String, NestedSet<Artifact>> outputGroups =
-        CcCompilationHelper.buildOutputGroupsForEmittingCompileProviders(
-            ccCompilationOutputs,
-            ccCompilationContext,
-            cppConfiguration,
-            toolchain,
-            featureConfiguration,
-            ruleContext);
+    NestedSet<Artifact> filesToCompile =
+        ccCompilationOutputs.getFilesToCompile(
+            cppConfiguration.processHeadersInDependencies(),
+            toolchain.usePicForDynamicLibraries(cppConfiguration, featureConfiguration));
 
     builder
         .setFilesToBuild(filesToBuild)
@@ -1106,11 +1096,15 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             CppDebugFileProvider.class,
             new CppDebugFileProvider(
                 dwoArtifacts.getDwoArtifacts(), dwoArtifacts.getPicDwoArtifacts()))
+        .addOutputGroup(OutputGroupInfo.TEMP_FILES, ccCompilationOutputs.getTemps())
+        .addOutputGroup(OutputGroupInfo.FILES_TO_COMPILE, filesToCompile)
         // For CcBinary targets, we only want to ensure that we process headers in dependencies and
         // thus only add header tokens to HIDDEN_TOP_LEVEL. If we add all HIDDEN_TOP_LEVEL artifacts
         // from dependent CcLibrary targets, we'd be building .pic.o files in nopic builds.
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, headerTokens)
-        .addOutputGroups(outputGroups);
+        .addOutputGroup(
+            OutputGroupInfo.COMPILATION_PREREQUISITES,
+            CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContext));
 
     CppHelper.maybeAddStaticLinkMarkerProvider(builder, ruleContext);
   }
