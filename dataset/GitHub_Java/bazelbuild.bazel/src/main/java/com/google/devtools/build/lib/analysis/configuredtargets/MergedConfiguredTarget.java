@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.configuredtargets;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -25,11 +24,9 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.Provider.Key;
-import com.google.devtools.build.lib.skylarkbuildapi.ActionApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +38,6 @@ import java.util.function.Consumer;
  * <p>This is an ephemeral object created only for the analysis of a single configured target. After
  * that configured target is analyzed, this is thrown away.
  */
-@Immutable // (and Starlark-hashable)
 public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   private final ConfiguredTarget base;
   private final ImmutableList<ConfiguredAspect> aspects;
@@ -96,7 +92,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
 
   @Override
   protected InfoInterface rawGetSkylarkProvider(Provider.Key providerKey) {
-    InfoInterface provider = providers.get(providerKey);
+    InfoInterface provider = providers.getProvider(providerKey);
     if (provider == null) {
       provider = base.get(providerKey);
     }
@@ -107,20 +103,15 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   protected Object rawGetSkylarkProvider(String providerKey) {
     if (providerKey.equals(RuleConfiguredTarget.ACTIONS_FIELD_NAME)) {
       ImmutableList.Builder<ActionAnalysisMetadata> actions = ImmutableList.builder();
-      // Only expose actions which are SkylarkValues.
-      // TODO(cparsons): Expose all actions to Starlark.
       for (ConfiguredAspect aspect : aspects) {
-        actions.addAll(
-            aspect.getActions().stream().filter(action -> action instanceof ActionApi).iterator());
+        actions.addAll(aspect.getActions());
       }
       if (base instanceof RuleConfiguredTarget) {
-        actions.addAll(
-            ((RuleConfiguredTarget) base)
-                .getActions().stream().filter(action -> action instanceof ActionApi).iterator());
+        actions.addAll(((RuleConfiguredTarget) base).getActions());
       }
       return actions.build();
     }
-    Object provider = providers.get(providerKey);
+    Object provider = providers.getProvider(providerKey);
     if (provider == null) {
       provider = base.get(providerKey);
     }
@@ -227,10 +218,5 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   @Override
   public void repr(SkylarkPrinter printer) {
     printer.append("<merged target " + getLabel() + ">");
-  }
-
-  @VisibleForTesting
-  public ConfiguredTarget getBaseConfiguredTargetForTesting() {
-    return base;
   }
 }

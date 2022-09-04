@@ -26,9 +26,8 @@ import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.syntax.Dict;
-import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.junit.Test;
@@ -67,8 +66,8 @@ public class SkylarkActionProviderTest extends AnalysisTestCase {
     StructImpl fooProvider = (StructImpl) configuredAspect.get(fooKey);
     assertThat(fooProvider.getValue("actions")).isNotNull();
     @SuppressWarnings("unchecked")
-    Sequence<ActionAnalysisMetadata> actions =
-        (Sequence<ActionAnalysisMetadata>) fooProvider.getValue("actions");
+    SkylarkList<ActionAnalysisMetadata> actions =
+        (SkylarkList<ActionAnalysisMetadata>) fooProvider.getValue("actions");
     assertThat(actions).isNotEmpty();
 
     ActionAnalysisMetadata action = actions.get(0);
@@ -99,9 +98,9 @@ public class SkylarkActionProviderTest extends AnalysisTestCase {
     scratch.file(
         "test/rule.bzl",
         "def impl(ctx):",
-        "  output_file0 = ctx.actions.declare_file('myfile0')",
-        "  output_file1 = ctx.actions.declare_file('myfile1')",
-        "  executable = ctx.actions.declare_file('executable')",
+        "  output_file0 = ctx.new_file('myfile0')",
+        "  output_file1 = ctx.new_file('myfile1')",
+        "  executable = ctx.new_file('executable')",
         "  ctx.actions.run(outputs=[output_file0], executable=executable,",
         "      mnemonic='MyAction0', env={'foo':'bar', 'pet':'puppy'})",
         "  ctx.actions.run_shell(outputs=[executable, output_file1],",
@@ -122,35 +121,37 @@ public class SkylarkActionProviderTest extends AnalysisTestCase {
     StructImpl fooProvider = (StructImpl) configuredAspect.get(fooKey);
     assertThat(fooProvider.getValue("actions")).isNotNull();
 
-    Sequence<ActionAnalysisMetadata> actions =
-        (Sequence<ActionAnalysisMetadata>) fooProvider.getValue("actions");
+    SkylarkList<ActionAnalysisMetadata> actions =
+        (SkylarkList<ActionAnalysisMetadata>) fooProvider.getValue("actions");
     assertThat(actions).hasSize(2);
 
-    Sequence<String> mnemonics = (Sequence<String>) fooProvider.getValue("mnemonics");
+    SkylarkList<String> mnemonics =
+        (SkylarkList<String>) fooProvider.getValue("mnemonics");
     assertThat(mnemonics).containsExactly("MyAction0", "MyAction1");
 
-    Sequence<Dict<String, String>> envs =
-        (Sequence<Dict<String, String>>) fooProvider.getValue("envs");
-    assertThat(envs)
-        .containsExactly(
-            Dict.of((Mutability) null, "foo", "bar", "pet", "puppy"),
-            Dict.of((Mutability) null, "pet", "bunny"));
+    SkylarkList<SkylarkDict<String, String>> envs =
+        (SkylarkList<SkylarkDict<String, String>>) fooProvider.getValue("envs");
+    assertThat(envs).containsExactly(
+        SkylarkDict.of(null, "foo", "bar", "pet", "puppy"),
+        SkylarkDict.of(null, "pet", "bunny"));
 
-    Sequence<Sequence<Artifact>> inputs =
-        (Sequence<Sequence<Artifact>>) fooProvider.getValue("inputs");
+    SkylarkList<SkylarkList<Artifact>> inputs =
+        (SkylarkList<SkylarkList<Artifact>>) fooProvider.getValue("inputs");
     assertThat(flattenArtifactNames(inputs)).containsExactly("executable");
 
-    Sequence<Sequence<Artifact>> outputs =
-        (Sequence<Sequence<Artifact>>) fooProvider.getValue("outputs");
+    SkylarkList<SkylarkList<Artifact>> outputs =
+        (SkylarkList<SkylarkList<Artifact>>) fooProvider.getValue("outputs");
     assertThat(flattenArtifactNames(outputs)).containsExactly("myfile0", "executable", "myfile1");
 
-    Sequence<Sequence<String>> argv = (Sequence<Sequence<String>>) fooProvider.getValue("argv");
+    SkylarkList<SkylarkList<String>> argv =
+        (SkylarkList<SkylarkList<String>>) fooProvider.getValue("argv");
     assertThat(argv.get(0)).hasSize(1);
     assertThat(argv.get(0).get(0)).endsWith("executable");
     assertThat(argv.get(1)).contains("fakecmd");
   }
 
-  private static List<String> flattenArtifactNames(Sequence<Sequence<Artifact>> artifactLists) {
+  private static List<String> flattenArtifactNames(
+      SkylarkList<SkylarkList<Artifact>> artifactLists) {
     return artifactLists.stream()
         .flatMap(artifacts -> artifacts.stream())
         .map(artifact -> artifact.getFilename())

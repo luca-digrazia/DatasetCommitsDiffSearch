@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Instantiator;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkbuildapi.ActionApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.Printer;
 import java.util.function.Consumer;
@@ -95,8 +94,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
   private final String ruleClassString;
   private final ImmutableList<ActionAnalysisMetadata> actions;
-  // TODO(b/133160730): can we only populate this map for outputs that have labels?
-  private final ImmutableMap<Label, Artifact> artifactsByOutputLabel;
+  private final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
   @Instantiator
   @VisibleForSerialization
@@ -109,9 +107,8 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
       ImmutableSet<ConfiguredTargetKey> implicitDeps,
       String ruleClassString,
       ImmutableList<ActionAnalysisMetadata> actions,
-      ImmutableMap<Label, Artifact> artifactsByOutputLabel) {
+      ImmutableMap<Artifact, Integer> generatingActionIndex) {
     super(label, configurationKey, visibility);
-    this.artifactsByOutputLabel = artifactsByOutputLabel;
 
     // We don't use ImmutableMap.Builder here to allow augmenting the initial list of 'default'
     // providers by passing them in.
@@ -134,13 +131,14 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     this.implicitDeps = IMPLICIT_DEPS_INTERNER.intern(implicitDeps);
     this.ruleClassString = ruleClassString;
     this.actions = actions;
+    this.generatingActionIndex = generatingActionIndex;
   }
 
   public RuleConfiguredTarget(
       RuleContext ruleContext,
       TransitiveInfoProviderMap providers,
       ImmutableList<ActionAnalysisMetadata> actions,
-      ImmutableMap<Label, Artifact> artifactsByOutputLabel) {
+      ImmutableMap<Artifact, Integer> generatingActionIndex) {
     this(
         ruleContext.getLabel(),
         ruleContext.getConfigurationKey(),
@@ -150,7 +148,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
         Util.findImplicitDeps(ruleContext),
         ruleContext.getRule().getRuleClass(),
         actions,
-        artifactsByOutputLabel);
+        generatingActionIndex);
 
     // If this rule is the run_under target, then check that we have an executable; note that
     // run_under is only set in the target configuration, and the target must also be analyzed for
@@ -214,20 +212,15 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
 
   @Override
   protected InfoInterface rawGetSkylarkProvider(Provider.Key providerKey) {
-    return providers.get(providerKey);
+    return providers.getProvider(providerKey);
   }
 
   @Override
   protected Object rawGetSkylarkProvider(String providerKey) {
     if (providerKey.equals(ACTIONS_FIELD_NAME)) {
-      // Only expose actions which are legitimate Starlark values, otherwise they will later
-      // cause a Bazel crash.
-      // TODO(cparsons): Expose all actions to Starlark.
-      return actions.stream()
-          .filter(action -> action instanceof ActionApi)
-          .collect(ImmutableList.toImmutableList());
+      return actions;
     }
-    return providers.get(providerKey);
+    return providers.getProvider(providerKey);
   }
 
   @Override
@@ -258,15 +251,10 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   /**
-   * Provide an artifact by its corresponding output label, for use by output file configured
-   * targets.
+   * Returns a map where keys are artifacts that are action outputs of this rule, and values are the
+   * index of the action that generates that artifact.
    */
-  public Artifact getArtifactByOutputLabel(Label outputLabel) {
-    return Preconditions.checkNotNull(
-        artifactsByOutputLabel.get(outputLabel),
-        "%s %s %s",
-        outputLabel,
-        this,
-        this.artifactsByOutputLabel);
+  public ImmutableMap<Artifact, Integer> getGeneratingActionIndex() {
+    return generatingActionIndex;
   }
 }

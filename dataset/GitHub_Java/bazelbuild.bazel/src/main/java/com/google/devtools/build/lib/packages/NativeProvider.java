@@ -78,7 +78,7 @@ public abstract class NativeProvider<V extends InfoInterface> extends ProviderFr
       Class<V> valueClass,
       String name,
       FunctionSignature.WithValues<Object, SkylarkType> signature) {
-    super(name, signature, Location.BUILTIN, /* equalityByLocation */ false);
+    super(name, signature, Location.BUILTIN);
     Class<? extends NativeProvider<?>> clazz = (Class<? extends NativeProvider<?>>) getClass();
     key = new NativeKey(name, clazz);
     this.valueClass = valueClass;
@@ -131,7 +131,7 @@ public abstract class NativeProvider<V extends InfoInterface> extends ProviderFr
   protected InfoInterface createInstanceFromSkylark(Object[] args, Environment env, Location loc)
       throws EvalException {
     throw new EvalException(
-        loc, String.format("'%s' cannot be constructed from Starlark", getPrintableName()));
+        loc, String.format("'%s' cannot be constructed from Skylark", getPrintableName()));
   }
 
   public static Pair<String, String> getSerializedRepresentationForNativeKey(NativeKey key) {

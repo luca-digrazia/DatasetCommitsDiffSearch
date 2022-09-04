@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
@@ -50,7 +49,6 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
   private final ConfiguredTarget actual;
   private final ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>
       overrides;
-  private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
 
   public AliasConfiguredTarget(
       RuleContext ruleContext,
@@ -60,8 +58,7 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
         ruleContext.getLabel(),
         Preconditions.checkNotNull(ruleContext.getConfigurationKey()),
         Preconditions.checkNotNull(actual),
-        Preconditions.checkNotNull(overrides),
-        ruleContext.getConfigConditions());
+        Preconditions.checkNotNull(overrides));
   }
 
   @AutoCodec.Instantiator
@@ -70,17 +67,11 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
       Label label,
       BuildConfigurationValue.Key configurationKey,
       ConfiguredTarget actual,
-      ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> overrides,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
+      ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> overrides) {
     this.label = label;
     this.configurationKey = configurationKey;
     this.actual = actual;
     this.overrides = overrides;
-    this.configConditions = configConditions;
-  }
-
-  public ImmutableMap<Label, ConfigMatchingProvider> getConfigConditions() {
-    return configConditions;
   }
 
   @Override

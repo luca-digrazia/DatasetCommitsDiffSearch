@@ -43,20 +43,17 @@ public enum ApplePlatform implements ApplePlatformApi {
   private static final ImmutableSet<String> IOS_SIMULATOR_TARGET_CPUS =
       ImmutableSet.of("ios_x86_64", "ios_i386");
   private static final ImmutableSet<String> IOS_DEVICE_TARGET_CPUS =
-      ImmutableSet.of("ios_armv6", "ios_arm64", "ios_armv7", "ios_armv7s", "ios_arm64e");
+      ImmutableSet.of("ios_armv6", "ios_arm64", "ios_armv7", "ios_armv7s");
   private static final ImmutableSet<String> WATCHOS_SIMULATOR_TARGET_CPUS =
-      ImmutableSet.of("watchos_i386", "watchos_x86_64");
+      ImmutableSet.of("watchos_i386");
   private static final ImmutableSet<String> WATCHOS_DEVICE_TARGET_CPUS =
-      ImmutableSet.of("watchos_armv7k", "watchos_arm64_32");
+      ImmutableSet.of("watchos_armv7k");
   private static final ImmutableSet<String> TVOS_SIMULATOR_TARGET_CPUS =
       ImmutableSet.of("tvos_x86_64");
   private static final ImmutableSet<String> TVOS_DEVICE_TARGET_CPUS =
       ImmutableSet.of("tvos_arm64");
-  // "darwin" is included because that's currently the default when on macOS, and
-  // migrating it would be a breaking change more details:
-  // https://github.com/bazelbuild/bazel/pull/7062
   private static final ImmutableSet<String> MACOS_TARGET_CPUS =
-      ImmutableSet.of("darwin_x86_64", "darwin");
+      ImmutableSet.of("darwin_x86_64");
 
   private static final ImmutableSet<String> BIT_32_TARGET_CPUS =
       ImmutableSet.of("ios_i386", "ios_armv7", "ios_armv7s", "watchos_i386", "watchos_armv7k");

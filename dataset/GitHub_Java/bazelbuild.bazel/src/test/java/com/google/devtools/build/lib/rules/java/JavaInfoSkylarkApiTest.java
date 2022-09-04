@@ -86,7 +86,9 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
   @Test
   public void buildHelperCreateJavaInfoWithOutputJarAndUseIJar() throws Exception {
 
-    ruleBuilder().withIJar().build();
+    ruleBuilder()
+        .withIJar()
+        .build();
 
     scratch.file(
         "foo/BUILD",
@@ -115,7 +117,9 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
   @Test
   public void buildHelperCreateJavaInfoJavaRuleOutputJarsProviderSourceJarOutputJarAndUseIJar()
       throws Exception {
-    ruleBuilder().withIJar().build();
+    ruleBuilder()
+        .withIJar()
+        .build();
 
     scratch.file(
         "foo/BUILD",
@@ -136,10 +140,12 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
     assertThat(prettyArtifactNames(javaRuleOutputJarsProvider.getAllClassOutputJars()))
         .containsExactly("foo/my_skylark_rule_lib.jar");
 
-    assertThat(javaRuleOutputJarsProvider.getOutputJars()).hasSize(1);
+    assertThat(javaRuleOutputJarsProvider.getOutputJars())
+        .hasSize(1);
     OutputJar outputJar = javaRuleOutputJarsProvider.getOutputJars().get(0);
 
-    assertThat(outputJar.getIJar().prettyPrint()).isEqualTo("foo/my_skylark_rule_lib-ijar.jar");
+    assertThat(outputJar.getIJar().prettyPrint())
+        .isEqualTo("foo/my_skylark_rule_lib-ijar.jar");
   }
 
   @Test
@@ -198,7 +204,9 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
 
   @Test
   public void buildHelperCreateJavaInfoWithDepsAndNeverLink() throws Exception {
-    ruleBuilder().withNeverLink().build();
+    ruleBuilder()
+        .withNeverLink()
+        .build();
 
     scratch.file(
         "foo/BUILD",
@@ -415,7 +423,9 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
             "foo/libmy_java_lib_transitive-src.jar");
   }
 
-  /** Tests that JavaExportsProvider is empty by default. */
+  /**
+   * Tests that JavaExportsProvider is empty by default.
+   */
   @Test
   public void buildHelperCreateJavaInfoExportIsEmpty() throws Exception {
     ruleBuilder().build();
@@ -472,8 +482,8 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
   }
 
   /**
-   * Test exports adds itself and recursive dependencies to JavaCompilationArgsProvider and
-   * JavaExportsProvider populated.
+   * Test exports adds itself and recursive dependencies to JavaCompilationArgsProvider
+   * and JavaExportsProvider populated.
    */
   @Test
   public void buildHelperCreateJavaInfoExportProvider() throws Exception {
@@ -528,10 +538,16 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
             "foo/libmy_java_lib_c-hjar.jar");
   }
 
+
   /**
-   * Tests case: my_lib // \ a c // \\ b d
+   * Tests case:
+   *  my_lib
+   *  //   \
+   *  a    c
+   * //    \\
+   * b      d
    *
-   * <p>where single line is normal dependency and double is exports dependency.
+   * where single line is normal dependency and double is exports dependency.
    */
   @Test
   public void buildHelperCreateJavaInfoExportProvider001() throws Exception {
@@ -549,6 +565,7 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
         "             deps = [':my_java_lib_d'],",
         "             exports = [':my_java_lib_d']",
         "            )",
+
         "my_rule(name = 'my_skylark_rule',",
         "        output_jar = 'my_skylark_rule_lib.jar',",
         "        dep = [':my_java_lib_a', ':my_java_lib_c'],",
@@ -591,41 +608,6 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
             "foo/libmy_java_lib_b-hjar.jar",
             "foo/libmy_java_lib_c-hjar.jar",
             "foo/libmy_java_lib_d-hjar.jar");
-  }
-
-  @Test
-  public void buildHelperCreateJavaInfoPlugins() throws Exception {
-    ruleBuilder().build();
-    scratch.file("java/test/lib.jar");
-    scratch.file(
-        "java/test/BUILD",
-        "load(':custom_rule.bzl', 'java_custom_library')",
-        "java_custom_library(",
-        "  name = 'custom',",
-        "  export = ':export',",
-        ")");
-    scratch.file(
-        "foo/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "java_library(name = 'plugin_dep',",
-        "    srcs = [ 'ProcessorDep.java'])",
-        "java_plugin(name = 'plugin',",
-        "    srcs = ['AnnotationProcessor.java'],",
-        "    processor_class = 'com.google.process.stuff',",
-        "    deps = [ ':plugin_dep' ])",
-        "java_library(",
-        "  name = 'export',",
-        "  exported_plugins = [ ':plugin'],",
-        ")",
-        "my_rule(name = 'my_skylark_rule',",
-        "        output_jar = 'my_skylark_rule_lib.jar',",
-        "        dep_exports = [':export']",
-        ")");
-    assertNoEvents();
-
-    assertThat(
-            fetchJavaInfo().getProvider(JavaPluginInfoProvider.class).plugins().processorClasses())
-        .containsExactly("com.google.process.stuff");
   }
 
   @Test
@@ -680,13 +662,17 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
 
     assertThat(
             prettyArtifactNames(
-                ruleOutputs.getOutputJars().stream()
+                ruleOutputs
+                    .getOutputJars()
+                    .stream()
                     .map(o -> o.getClassJar())
                     .collect(ImmutableList.toImmutableList())))
         .containsExactly("foo/my_skylark_rule_lib.jar");
     assertThat(
             prettyArtifactNames(
-                ruleOutputs.getOutputJars().stream()
+                ruleOutputs
+                    .getOutputJars()
+                    .stream()
                     .flatMap(o -> Streams.stream(o.getSrcJars()))
                     .collect(ImmutableList.toImmutableList())))
         .containsExactly("foo/my_skylark_rule_src.jar");
@@ -892,10 +878,9 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
   private JavaInfo fetchJavaInfo() throws Exception {
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:my_skylark_rule");
     StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
+        (StructImpl) myRuleTarget.get(
+            new SkylarkKey(
+                Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
     @SuppressWarnings("unchecked")
     JavaInfo javaInfo = (JavaInfo) info.getValue("property");

@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkApiProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -34,7 +33,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -64,24 +63,19 @@ import javax.annotation.Nullable;
 public final class ConfiguredAspect {
   private final AspectDescriptor descriptor;
   private final ImmutableList<ActionAnalysisMetadata> actions;
+  private final ImmutableMap<Artifact, Integer> generatingActionIndex;
   private final TransitiveInfoProviderMap providers;
 
   @AutoCodec.VisibleForSerialization
   ConfiguredAspect(
       AspectDescriptor descriptor,
       ImmutableList<ActionAnalysisMetadata> actions,
+      ImmutableMap<Artifact, Integer> generatingActionIndex,
       TransitiveInfoProviderMap providers) {
     this.descriptor = descriptor;
     this.actions = actions;
+    this.generatingActionIndex = generatingActionIndex;
     this.providers = providers;
-
-    // Initialize every SkylarkApiProvider
-    for (int i = 0; i < providers.getProviderCount(); i++) {
-      Object obj = providers.getProviderInstanceAt(i);
-      if (obj instanceof SkylarkApiProvider) {
-        ((SkylarkApiProvider) obj).init(providers);
-      }
-    }
   }
 
   /**
@@ -100,6 +94,14 @@ public final class ConfiguredAspect {
 
   public ImmutableList<ActionAnalysisMetadata> getActions() {
     return actions;
+  }
+
+  /**
+   * Returns a map where keys are artifacts that are action outputs of this rule, and values are the
+   * index of the action that generates that artifact.
+   */
+  public ImmutableMap<Artifact, Integer> getGeneratingActionIndex() {
+    return generatingActionIndex;
   }
 
   /** Returns the providers created by the aspect. */
@@ -122,25 +124,27 @@ public final class ConfiguredAspect {
     }
   }
 
-  public Info get(Provider.Key key) {
-    return providers.get(key);
+  public InfoInterface get(Provider.Key key) {
+    return providers.getProvider(key);
   }
 
   public Object get(String legacyKey) {
     if (OutputGroupInfo.SKYLARK_NAME.equals(legacyKey)) {
       return get(OutputGroupInfo.SKYLARK_CONSTRUCTOR.getKey());
     }
-    return providers.get(legacyKey);
+    return providers.getProvider(legacyKey);
   }
 
   public static ConfiguredAspect forAlias(ConfiguredAspect real) {
-    return new ConfiguredAspect(real.descriptor, real.getActions(), real.getProviders());
+    return new ConfiguredAspect(
+        real.descriptor, real.getActions(), real.getGeneratingActionIndex(), real.getProviders());
   }
 
   public static ConfiguredAspect forNonapplicableTarget(AspectDescriptor descriptor) {
     return new ConfiguredAspect(
         descriptor,
         ImmutableList.of(),
+        ImmutableMap.of(),
         new TransitiveInfoProviderMapBuilder().add().build());
   }
 
@@ -233,7 +237,8 @@ public final class ConfiguredAspect {
       return this;
     }
 
-    public Builder addSkylarkDeclaredProvider(Info declaredProvider) throws EvalException {
+    public Builder addSkylarkDeclaredProvider(InfoInterface declaredProvider)
+        throws EvalException {
       Provider constructor = declaredProvider.getProvider();
       if (!constructor.isExported()) {
         throw new EvalException(
@@ -243,11 +248,11 @@ public final class ConfiguredAspect {
       return this;
     }
 
-    private void addDeclaredProvider(Info declaredProvider) {
+    private void addDeclaredProvider(InfoInterface declaredProvider) {
       providers.put(declaredProvider);
     }
 
-    public Builder addNativeDeclaredProvider(Info declaredProvider) {
+    public Builder addNativeDeclaredProvider(InfoInterface declaredProvider) {
       Provider constructor = declaredProvider.getProvider();
       Preconditions.checkState(constructor.isExported());
       addDeclaredProvider(declaredProvider);
@@ -275,15 +280,14 @@ public final class ConfiguredAspect {
 
       AnalysisEnvironment analysisEnvironment = ruleContext.getAnalysisEnvironment();
       GeneratingActions generatingActions =
-          Actions.assignOwnersAndFilterSharedActionsAndThrowActionConflict(
+          Actions.filterSharedActionsAndThrowActionConflict(
               analysisEnvironment.getActionKeyContext(),
-              analysisEnvironment.getRegisteredActions(),
-              ruleContext.getOwner(),
-              /*outputFiles=*/ null);
+              analysisEnvironment.getRegisteredActions());
 
       return new ConfiguredAspect(
           descriptor,
           generatingActions.getActions(),
+          generatingActions.getGeneratingActionIndex(),
           providers.build());
     }
   }

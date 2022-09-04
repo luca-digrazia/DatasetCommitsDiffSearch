@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.test.AnalysisTestResultInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -1538,7 +1537,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testSymbolPropagateThroughImports() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_transitive_loads=false");
     scratch.file("test/skylark/implementation.bzl", "def custom_rule_impl(ctx):", "  return None");
 
     scratch.file(
@@ -1549,7 +1547,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "test/skylark/extension1.bzl",
         "load('//test/skylark:extension2.bzl', 'custom_rule_impl')",
         "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
+        "custom_rule = rule(implementation = custom_rule_impl,",
+        "     attrs = {'dep': attr.label_list()})");
 
     scratch.file(
         "test/skylark/BUILD",
@@ -1557,31 +1556,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "custom_rule(name = 'cr')");
 
     getConfiguredTarget("//test/skylark:cr");
-  }
-
-  @Test
-  public void testSymbolDoNotPropagateThroughImports() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_transitive_loads=true");
-    scratch.file("test/skylark/implementation.bzl", "def custom_rule_impl(ctx):", "  return None");
-
-    scratch.file(
-        "test/skylark/extension2.bzl",
-        "load('//test/skylark:implementation.bzl', 'custom_rule_impl')");
-
-    scratch.file(
-        "test/skylark/extension1.bzl",
-        "load('//test/skylark:extension2.bzl', 'custom_rule_impl')",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
-
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:extension1.bzl', 'custom_rule')",
-        "custom_rule(name = 'cr')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test/skylark:cr");
-    assertContainsEvent("does not contain symbol 'custom_rule_impl'");
   }
 
   @Test
@@ -1915,72 +1889,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     assertThat(getConfiguredTarget("//test/skylark:my")).isNull();
     assertContainsEvent(
         "//test/skylark:dep doesn't support expected environment: //buildenv/foo:default");
-  }
-
-  @Test
-  public void testNoTargetOutputGroup() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_target_output_group=true");
-    scratch.file(
-        "test/skylark/extension.bzl",
-        "def _impl(ctx):",
-        "  f = ctx.attr.dep.output_group()",
-        "  return struct()",
-        "my_rule = rule(implementation = _impl,",
-        "    attrs = { 'dep' : attr.label() })");
-
-    checkError(
-        "test/skylark",
-        "r",
-        "struct has no method 'output_group'",
-        "load('//test/skylark:extension.bzl',  'my_rule')",
-        "cc_binary(name = 'lib', data = ['a.txt'])",
-        "my_rule(name='r', dep = ':lib')");
-  }
-
-  @Test
-  public void testTestResultInfo() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return [AnalysisTestResultInfo(success = True, message = 'message contents')]",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'r')");
-
-    ConfiguredTarget target = getConfiguredTarget("//test:r");
-    AnalysisTestResultInfo info =
-        (AnalysisTestResultInfo) target.get(AnalysisTestResultInfo.SKYLARK_CONSTRUCTOR.getKey());
-    assertThat(info.getSuccess()).isTrue();
-    assertThat(info.getMessage()).isEqualTo("message contents");
-  }
-
-  @Test
-  public void testTestResultInfoWithoutFlag() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=false");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return [AnalysisTestResultInfo(success = True, message = 'message contents')]",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'r')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:r");
-    assertContainsEvent("'Provider' object is not callable");
   }
 
   /**

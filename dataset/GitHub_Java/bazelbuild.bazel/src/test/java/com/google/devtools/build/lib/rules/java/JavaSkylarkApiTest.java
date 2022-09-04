@@ -212,8 +212,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         .containsExactly("libdep.jar");
     assertThat(artifactFilesNames(transitiveCompileTimeJars.toCollection(Artifact.class)))
         .containsExactly("libdep-hjar.jar");
-    assertThat(transitiveCompileTimeJars.toCollection())
-        .containsExactlyElementsIn(compileJars.toCollection());
+    assertThat(transitiveCompileTimeJars.toCollection()).isEqualTo(compileJars.toCollection());
     assertThat(artifactFilesNames(fullCompileJars.toCollection(Artifact.class)))
         .containsExactly("libdep.jar");
     assertThat(artifactFilesNames(sourceJars)).containsExactly("libdep-src.jar");
@@ -265,6 +264,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    source_files = ctx.files.srcs,",
         "    output = output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    deps = [],",
         "    sourcepath = ctx.files.sourcepath,",
         "    strict_deps = 'ERROR',",
@@ -378,6 +379,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    source_files = ctx.files.srcs,",
         "    output = output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain,",
         "    host_javabase = ctx.attr._host_javabase",
@@ -436,6 +439,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    source_files = ctx.files.srcs,",
         "    output = output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain,",
         "    host_javabase = ctx.attr._host_javabase",
@@ -496,6 +501,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    source_files = ctx.files.srcs,",
         "    output = output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain,",
         "    host_javabase = ctx.attr._host_javabase",
@@ -504,6 +511,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    source_files = ctx.files.srcs,",
         "    output = other_output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain,",
         "    host_javabase = ctx.attr._host_javabase",
@@ -557,6 +566,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    source_jars = ctx.files.srcs,",
         "    output = output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    java_toolchain = ctx.attr._java_toolchain,",
         "    host_javabase = ctx.attr._host_javabase",
         "  )",
@@ -610,6 +621,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    source_jars = ctx.files.srcs,",
         "    output = output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    java_toolchain = ctx.attr._java_toolchain,",
         "    host_javabase = ctx.attr._host_javabase",
         "  )",
@@ -660,6 +673,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "  compilation_provider = java_common.compile(",
         "    ctx,",
         "    output = output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    java_toolchain = ctx.attr._java_toolchain,",
         "    host_javabase = ctx.attr._host_javabase",
         "  )",
@@ -1586,6 +1601,8 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    source_files = ctx.files.srcs,",
         "    output = output_jar,",
+        "    javac_opts = java_common.default_javac_opts(",
+        "        ctx, java_toolchain_attr = '_java_toolchain'),",
         "    neverlink = ctx.attr.neverlink,",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain,",

@@ -48,9 +48,6 @@ class SkylarkAttributesCollection implements SkylarkAttributesCollectionApi {
   private final ImmutableMap<Artifact, FilesToRunProvider> executableRunfilesMap;
   private final String ruleClassName;
 
-  static final String ERROR_MESSAGE_FOR_NO_ATTR =
-      "No attribute '%s' in attr. Make sure you declared a rule attribute with this name.";
-
   private SkylarkAttributesCollection(
       SkylarkRuleContext skylarkRuleContext,
       String ruleClassName,
@@ -61,7 +58,10 @@ class SkylarkAttributesCollection implements SkylarkAttributesCollectionApi {
       ImmutableMap<Artifact, FilesToRunProvider> executableRunfilesMap) {
     this.skylarkRuleContext = skylarkRuleContext;
     this.ruleClassName = ruleClassName;
-    attrObject = StructProvider.STRUCT.create(attrs, ERROR_MESSAGE_FOR_NO_ATTR);
+    attrObject =
+        StructProvider.STRUCT.create(
+            attrs,
+            "No attribute '%s' in attr. Make sure you declared a rule attribute with this name.");
     executableObject =
         StructProvider.STRUCT.create(
             executables,
@@ -238,7 +238,7 @@ class SkylarkAttributesCollection implements SkylarkAttributesCollectionApi {
                 + a.getName()
                 + " of type "
                 + type
-                + " to a Starlark object");
+                + " to a Skylark object");
       }
     }
 

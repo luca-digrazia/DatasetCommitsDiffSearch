@@ -1109,7 +1109,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testStructAccessingUnknownFieldWithArgs() throws Exception {
     checkErrorContains(
-        "type 'struct' has no method c()", "x = struct(a = 1, b = 2)", "y = x.c()");
+        "struct has no method 'c'", "x = struct(a = 1, b = 2)", "y = x.c()");
   }
 
   @Test

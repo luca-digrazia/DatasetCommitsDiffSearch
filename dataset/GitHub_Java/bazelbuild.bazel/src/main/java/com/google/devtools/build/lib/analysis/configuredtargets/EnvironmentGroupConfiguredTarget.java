@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.analysis.configuredtargets;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.TargetContext;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -27,7 +26,6 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
  * groups are not really first-class Targets.
  */
 @AutoCodec
-@Immutable // (and Starlark-hashable)
 public final class EnvironmentGroupConfiguredTarget extends AbstractConfiguredTarget {
   @AutoCodec.Instantiator
   @AutoCodec.VisibleForSerialization

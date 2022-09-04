@@ -209,7 +209,7 @@ public class AppleSkylarkCommon
 
   @Override
   public AppleDynamicFrameworkInfo newDynamicFrameworkProvider(
-      Object dylibBinary,
+      Artifact dylibBinary,
       ObjcProvider depsObjcProvider,
       Object dynamicFrameworkDirs,
       Object dynamicFrameworkFiles) {
@@ -228,10 +228,8 @@ public class AppleSkylarkCommon
         dynamicFrameworkFiles != Runtime.NONE
             ? ((SkylarkNestedSet) dynamicFrameworkFiles).getSet(Artifact.class)
             : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
-    Artifact binary = (dylibBinary != Runtime.NONE) ? (Artifact) dylibBinary : null;
-
     return new AppleDynamicFrameworkInfo(
-        binary, depsObjcProvider, frameworkDirs, frameworkFiles);
+        dylibBinary, depsObjcProvider, frameworkDirs, frameworkFiles);
   }
 
   @Override
