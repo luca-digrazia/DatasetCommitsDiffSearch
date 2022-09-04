@@ -477,8 +477,8 @@ public class ArffParser {
                 }
             }
         }
-
-        if (Double.isNaN(y)) data.add(x); else data.add(x, y);
+        
+        data.add(x, y);
     }
 
     /**
@@ -528,6 +528,6 @@ public class ArffParser {
             
         } while (tokenizer.ttype == StreamTokenizer.TT_WORD);
         
-        if (Double.isNaN(y)) data.add(x); else data.add(x, y);
+        data.add(x, y);
     }
 }
