@@ -16,11 +16,8 @@ import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.hibernate.envers.HibernateEnversBuildTimeConfig;
 import io.quarkus.hibernate.envers.HibernateEnversRecorder;
 import io.quarkus.hibernate.orm.deployment.AdditionalJpaModelBuildItem;
-import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationStaticConfiguredBuildItem;
 
 public final class HibernateEnversProcessor {
-
-    private static final String HIBERNATE_ENVERS = "Hibernate Envers";
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -52,11 +49,9 @@ public final class HibernateEnversProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    public void applyConfig(HibernateEnversRecorder recorder, HibernateEnversBuildTimeConfig buildTimeConfig,
-            BuildProducer<HibernateOrmIntegrationStaticConfiguredBuildItem> integrationProducer) {
-        integrationProducer.produce(
-                new HibernateOrmIntegrationStaticConfiguredBuildItem(HIBERNATE_ENVERS,
-                        recorder.createStaticInitListener(buildTimeConfig)));
+    public void applyConfig(HibernateEnversRecorder recorder,
+            HibernateEnversBuildTimeConfig buildTimeConfig) {
+        recorder.registerHibernateEnversIntegration(buildTimeConfig);
     }
 
     @BuildStep

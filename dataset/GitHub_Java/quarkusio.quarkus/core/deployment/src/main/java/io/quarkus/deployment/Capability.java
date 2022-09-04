@@ -28,7 +28,7 @@ public enum Capability {
     RESTEASY,
     RESTEASY_JSON,
     RESTEASY_MUTINY,
-    RESTEASY_REACTIVE,
+    QUARKUS_REST,
     JWT,
     TIKA,
     MONGODB_PANACHE,
@@ -41,7 +41,6 @@ public enum Capability {
     SECURITY_ELYTRON_LDAP,
     SECURITY_JPA,
     QUARTZ,
-    KUBERNETES_SERVICE_BINDING,
     /**
      * @deprecated
      * @see io.quarkus.deployment.metrics.MetricsCapabilityBuildItem
