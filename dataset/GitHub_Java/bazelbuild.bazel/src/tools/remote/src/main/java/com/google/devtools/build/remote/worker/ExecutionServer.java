@@ -37,7 +37,9 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.remote.ExecutionStatusException;
 import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
+import com.google.devtools.build.lib.remote.common.NetworkTime;
 import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
+import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContextImpl;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
@@ -50,10 +52,10 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.longrunning.Operation;
 import com.google.protobuf.Any;
-import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.util.Durations;
 import com.google.rpc.Code;
 import com.google.rpc.Status;
+import io.grpc.Context;
 import io.grpc.StatusException;
 import io.grpc.protobuf.StatusProto;
 import io.grpc.stub.StreamObserver;
@@ -199,12 +201,9 @@ final class ExecutionServer extends ExecutionImplBase {
 
   @Override
   public void execute(ExecuteRequest request, StreamObserver<Operation> responseObserver) {
-    RequestMetadata metadata = TracingMetadataUtils.fromCurrentContext();
-    RemoteActionExecutionContext context = RemoteActionExecutionContext.create(metadata);
-
     final String opName = UUID.randomUUID().toString();
     ListenableFuture<ActionResult> future =
-        executorService.submit(() -> execute(context, request, opName));
+        executorService.submit(Context.current().wrap(() -> execute(request, opName)));
     operationsCache.put(opName, future);
     // Send the first operation.
     responseObserver.onNext(Operation.newBuilder().setName(opName).build());
@@ -213,19 +212,20 @@ final class ExecutionServer extends ExecutionImplBase {
   }
 
   @SuppressWarnings("LogAndThrow")
-  private ActionResult execute(
-      RemoteActionExecutionContext context, ExecuteRequest request, String id)
+  private ActionResult execute(ExecuteRequest request, String id)
       throws IOException, InterruptedException, StatusException {
     Path tempRoot = workPath.getRelative("build-" + id);
     String workDetails = "";
     try {
       tempRoot.createDirectory();
-      RequestMetadata meta = context.getRequestMetadata();
+      RequestMetadata meta = TracingMetadataUtils.fromCurrentContext();
       workDetails =
           String.format(
               "build-request-id: %s command-id: %s action-id: %s",
               meta.getCorrelatedInvocationsId(), meta.getToolInvocationId(), meta.getActionId());
       logger.atFine().log("Received work for: %s", workDetails);
+      RemoteActionExecutionContext context =
+          new RemoteActionExecutionContextImpl(meta, new NetworkTime());
       ActionResult result = execute(context, request.getActionDigest(), tempRoot);
       logger.atFine().log("Completed %s", workDetails);
       return result;
@@ -252,15 +252,9 @@ final class ExecutionServer extends ExecutionImplBase {
     Action action;
     ActionKey actionKey = digestUtil.asActionKey(actionDigest);
     try {
-      action =
-          Action.parseFrom(
-              getFromFuture(cache.downloadBlob(context, actionDigest)),
-              ExtensionRegistry.getEmptyRegistry());
-      command =
-          Command.parseFrom(
-              getFromFuture(cache.downloadBlob(context, action.getCommandDigest())),
-              ExtensionRegistry.getEmptyRegistry());
-      cache.downloadTree(context, action.getInputRootDigest(), execRoot);
+      action = Action.parseFrom(getFromFuture(cache.downloadBlob(actionDigest)));
+      command = Command.parseFrom(getFromFuture(cache.downloadBlob(action.getCommandDigest())));
+      cache.downloadTree(action.getInputRootDigest(), execRoot);
     } catch (CacheNotFoundException e) {
       throw StatusUtils.notFoundError(e.getMissingDigest());
     }
@@ -283,13 +277,9 @@ final class ExecutionServer extends ExecutionImplBase {
       outputs.add(file);
     }
 
-    Path workingDirectory = execRoot.getRelative(command.getWorkingDirectory());
-    FileSystemUtils.createDirectoryAndParents(workingDirectory);
-
     // TODO(ulfjack): This is basically a copy of LocalSpawnRunner. Ideally, we'd use that
     // implementation instead of copying it.
-    com.google.devtools.build.lib.shell.Command cmd =
-        getCommand(command, workingDirectory.getPathString());
+    com.google.devtools.build.lib.shell.Command cmd = getCommand(command, execRoot.getPathString());
     long startTime = System.currentTimeMillis();
     CommandResult cmdResult = null;
 

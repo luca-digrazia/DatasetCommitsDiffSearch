@@ -63,6 +63,7 @@ import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.options.RemoteOutputsMode;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
@@ -96,9 +97,6 @@ import org.mockito.stubbing.Answer;
 public class RemoteSpawnCacheTest {
   private static final ArtifactExpander SIMPLE_ARTIFACT_EXPANDER =
       (artifact, output) -> output.add(artifact);
-
-  private static final String BUILD_REQUEST_ID = "build-req-id";
-  private static final String COMMAND_ID = "command-id";
 
   private FileSystem fs;
   private DigestUtil digestUtil;
@@ -155,10 +153,9 @@ public class RemoteSpawnCacheTest {
         }
 
         @Override
-        public SortedMap<PathFragment, ActionInput> getInputMapping(PathFragment baseDirectory)
-            throws IOException {
+        public SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException {
           return new SpawnInputExpander(execRoot, /*strict*/ false)
-              .getInputMapping(simpleSpawn, SIMPLE_ARTIFACT_EXPANDER, baseDirectory, fakeFileCache);
+              .getInputMapping(simpleSpawn, SIMPLE_ARTIFACT_EXPANDER, fakeFileCache);
         }
 
         @Override
@@ -204,8 +201,8 @@ public class RemoteSpawnCacheTest {
         options,
         /* verboseFailures=*/ true,
         remoteCache,
-        BUILD_REQUEST_ID,
-        COMMAND_ID,
+        "build-req-id",
+        "command-id",
         reporter,
         digestUtil,
         /* filesToDownload= */ ImmutableSet.of());
@@ -247,10 +244,9 @@ public class RemoteSpawnCacheTest {
             new Answer<ActionResult>() {
               @Override
               public ActionResult answer(InvocationOnMock invocation) {
-                RemoteActionExecutionContext context = invocation.getArgument(0);
-                RequestMetadata meta = context.getRequestMetadata();
-                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo(BUILD_REQUEST_ID);
-                assertThat(meta.getToolInvocationId()).isEqualTo(COMMAND_ID);
+                RequestMetadata meta = TracingMetadataUtils.fromCurrentContext();
+                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo("build-req-id");
+                assertThat(meta.getToolInvocationId()).isEqualTo("command-id");
                 return actionResult;
               }
             });
@@ -258,21 +254,20 @@ public class RemoteSpawnCacheTest {
             new Answer<Void>() {
               @Override
               public Void answer(InvocationOnMock invocation) {
-                RemoteActionExecutionContext context = invocation.getArgument(0);
-                RequestMetadata meta = context.getRequestMetadata();
-                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo(BUILD_REQUEST_ID);
-                assertThat(meta.getToolInvocationId()).isEqualTo(COMMAND_ID);
+                RequestMetadata meta = TracingMetadataUtils.fromCurrentContext();
+                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo("build-req-id");
+                assertThat(meta.getToolInvocationId()).isEqualTo("command-id");
                 return null;
               }
             })
         .when(remoteCache)
-        .download(any(), eq(actionResult), eq(execRoot), eq(outErr), any());
+        .download(eq(actionResult), eq(execRoot), eq(outErr), any());
 
     CacheHandle entry = cache.lookup(simpleSpawn, simplePolicy);
     assertThat(entry.hasResult()).isTrue();
     SpawnResult result = entry.getResult();
     // All other methods on RemoteActionCache have side effects, so we verify all of them.
-    verify(remoteCache).download(any(), eq(actionResult), eq(execRoot), eq(outErr), any());
+    verify(remoteCache).download(eq(actionResult), eq(execRoot), eq(outErr), any());
     verify(remoteCache, never())
         .upload(
             any(RemoteActionExecutionContext.class),
@@ -307,10 +302,9 @@ public class RemoteSpawnCacheTest {
             new Answer<Void>() {
               @Override
               public Void answer(InvocationOnMock invocation) {
-                RemoteActionExecutionContext context = invocation.getArgument(0);
-                RequestMetadata meta = context.getRequestMetadata();
-                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo(BUILD_REQUEST_ID);
-                assertThat(meta.getToolInvocationId()).isEqualTo(COMMAND_ID);
+                RequestMetadata meta = TracingMetadataUtils.fromCurrentContext();
+                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo("build-req-id");
+                assertThat(meta.getToolInvocationId()).isEqualTo("command-id");
                 return null;
               }
             })
@@ -570,10 +564,9 @@ public class RemoteSpawnCacheTest {
             new Answer<Void>() {
               @Override
               public Void answer(InvocationOnMock invocation) {
-                RemoteActionExecutionContext context = invocation.getArgument(0);
-                RequestMetadata meta = context.getRequestMetadata();
-                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo(BUILD_REQUEST_ID);
-                assertThat(meta.getToolInvocationId()).isEqualTo(COMMAND_ID);
+                RequestMetadata meta = TracingMetadataUtils.fromCurrentContext();
+                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo("build-req-id");
+                assertThat(meta.getToolInvocationId()).isEqualTo("command-id");
                 return null;
               }
             })
@@ -620,16 +613,15 @@ public class RemoteSpawnCacheTest {
             new Answer<ActionResult>() {
               @Override
               public ActionResult answer(InvocationOnMock invocation) {
-                RemoteActionExecutionContext context = invocation.getArgument(0);
-                RequestMetadata meta = context.getRequestMetadata();
-                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo(BUILD_REQUEST_ID);
-                assertThat(meta.getToolInvocationId()).isEqualTo(COMMAND_ID);
+                RequestMetadata meta = TracingMetadataUtils.fromCurrentContext();
+                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo("build-req-id");
+                assertThat(meta.getToolInvocationId()).isEqualTo("command-id");
                 return actionResult;
               }
             });
     doThrow(new CacheNotFoundException(digest))
         .when(remoteCache)
-        .download(any(), eq(actionResult), eq(execRoot), eq(outErr), any());
+        .download(eq(actionResult), eq(execRoot), eq(outErr), any());
 
     CacheHandle entry = cache.lookup(simpleSpawn, simplePolicy);
     assertThat(entry.hasResult()).isFalse();
@@ -645,10 +637,9 @@ public class RemoteSpawnCacheTest {
             new Answer<Void>() {
               @Override
               public Void answer(InvocationOnMock invocation) {
-                RemoteActionExecutionContext context = invocation.getArgument(0);
-                RequestMetadata meta = context.getRequestMetadata();
-                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo(BUILD_REQUEST_ID);
-                assertThat(meta.getToolInvocationId()).isEqualTo(COMMAND_ID);
+                RequestMetadata meta = TracingMetadataUtils.fromCurrentContext();
+                assertThat(meta.getCorrelatedInvocationsId()).isEqualTo("build-req-id");
+                assertThat(meta.getToolInvocationId()).isEqualTo("command-id");
                 return null;
               }
             })
@@ -709,7 +700,7 @@ public class RemoteSpawnCacheTest {
     assertThat(cacheHandle.hasResult()).isTrue();
     assertThat(cacheHandle.getResult().exitCode()).isEqualTo(0);
     verify(remoteCache)
-        .downloadMinimal(any(), any(), any(), anyCollection(), any(), any(), any(), any(), any());
+        .downloadMinimal(any(), any(), anyCollection(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -726,7 +717,7 @@ public class RemoteSpawnCacheTest {
             any(RemoteActionExecutionContext.class), any(), /* inlineOutErr= */ eq(false)))
         .thenReturn(success);
     when(remoteCache.downloadMinimal(
-            any(), any(), any(), anyCollection(), any(), any(), any(), any(), any()))
+            any(), any(), anyCollection(), any(), any(), any(), any(), any()))
         .thenThrow(downloadFailure);
 
     // act
@@ -735,7 +726,7 @@ public class RemoteSpawnCacheTest {
     // assert
     assertThat(cacheHandle.hasResult()).isFalse();
     verify(remoteCache)
-        .downloadMinimal(any(), any(), any(), anyCollection(), any(), any(), any(), any(), any());
+        .downloadMinimal(any(), any(), anyCollection(), any(), any(), any(), any(), any());
     assertThat(eventHandler.getEvents().size()).isEqualTo(1);
     Event evt = eventHandler.getEvents().get(0);
     assertThat(evt.getKind()).isEqualTo(EventKind.WARNING);

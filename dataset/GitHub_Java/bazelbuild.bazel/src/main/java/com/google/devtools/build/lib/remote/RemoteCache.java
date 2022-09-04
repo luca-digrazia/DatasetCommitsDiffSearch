@@ -139,7 +139,7 @@ public class RemoteCache implements AutoCloseable {
       int exitCode)
       throws ExecException, IOException, InterruptedException {
     ActionResult.Builder resultBuilder = ActionResult.newBuilder();
-    uploadOutputs(context, execRoot, actionKey, action, command, outputs, outErr, resultBuilder);
+    uploadOutputs(execRoot, actionKey, action, command, outputs, outErr, resultBuilder);
     resultBuilder.setExitCode(exitCode);
     ActionResult result = resultBuilder.build();
     if (exitCode == 0 && !action.getDoNotCache()) {
@@ -162,7 +162,6 @@ public class RemoteCache implements AutoCloseable {
   }
 
   private void uploadOutputs(
-      RemoteActionExecutionContext context,
       Path execRoot,
       ActionKey actionKey,
       Action action,
@@ -188,20 +187,19 @@ public class RemoteCache implements AutoCloseable {
     digests.addAll(digestToFile.keySet());
     digests.addAll(digestToBlobs.keySet());
 
-    ImmutableSet<Digest> digestsToUpload =
-        getFromFuture(cacheProtocol.findMissingDigests(context, digests));
+    ImmutableSet<Digest> digestsToUpload = getFromFuture(cacheProtocol.findMissingDigests(digests));
     ImmutableList.Builder<ListenableFuture<Void>> uploads = ImmutableList.builder();
     for (Digest digest : digestsToUpload) {
       Path file = digestToFile.get(digest);
       if (file != null) {
-        uploads.add(cacheProtocol.uploadFile(context, digest, file));
+        uploads.add(cacheProtocol.uploadFile(digest, file));
       } else {
         ByteString blob = digestToBlobs.get(digest);
         if (blob == null) {
           String message = "FindMissingBlobs call returned an unknown digest: " + digest;
           throw new IOException(message);
         }
-        uploads.add(cacheProtocol.uploadBlob(context, digest, blob));
+        uploads.add(cacheProtocol.uploadBlob(digest, blob));
       }
     }
 
@@ -263,15 +261,14 @@ public class RemoteCache implements AutoCloseable {
    * @return a future that completes after the download completes (succeeds / fails). If successful,
    *     the content is stored in the future's {@code byte[]}.
    */
-  public ListenableFuture<byte[]> downloadBlob(
-      RemoteActionExecutionContext context, Digest digest) {
+  public ListenableFuture<byte[]> downloadBlob(Digest digest) {
     if (digest.getSizeBytes() == 0) {
       return EMPTY_BYTES;
     }
     ByteArrayOutputStream bOut = new ByteArrayOutputStream((int) digest.getSizeBytes());
     SettableFuture<byte[]> outerF = SettableFuture.create();
     Futures.addCallback(
-        cacheProtocol.downloadBlob(context, digest, bOut),
+        cacheProtocol.downloadBlob(digest, bOut),
         new FutureCallback<Void>() {
           @Override
           public void onSuccess(Void aVoid) {
@@ -308,13 +305,12 @@ public class RemoteCache implements AutoCloseable {
    * @throws ExecException in case clean up after a failed download failed.
    */
   public void download(
-      RemoteActionExecutionContext context,
       ActionResult result,
       Path execRoot,
       FileOutErr origOutErr,
       OutputFilesLocker outputFilesLocker)
       throws ExecException, IOException, InterruptedException {
-    ActionResultMetadata metadata = parseActionResultMetadata(context, result, execRoot);
+    ActionResultMetadata metadata = parseActionResultMetadata(result, execRoot);
 
     List<ListenableFuture<FileMetadata>> downloads =
         Stream.concat(
@@ -325,7 +321,7 @@ public class RemoteCache implements AutoCloseable {
                 (file) -> {
                   try {
                     ListenableFuture<Void> download =
-                        downloadFile(context, toTmpDownloadPath(file.path()), file.digest());
+                        downloadFile(toTmpDownloadPath(file.path()), file.digest());
                     return Futures.transform(download, (d) -> file, directExecutor());
                   } catch (IOException e) {
                     return Futures.<FileMetadata>immediateFailedFuture(e);
@@ -341,7 +337,7 @@ public class RemoteCache implements AutoCloseable {
     if (origOutErr != null) {
       tmpOutErr = origOutErr.childOutErr();
     }
-    downloads.addAll(downloadOutErr(context, result, tmpOutErr));
+    downloads.addAll(downloadOutErr(result, tmpOutErr));
 
     try {
       waitForBulkTransfer(downloads, /* cancelRemainingOnInterrupt=*/ true);
@@ -453,8 +449,7 @@ public class RemoteCache implements AutoCloseable {
   }
 
   /** Downloads a file (that is not a directory). The content is fetched from the digest. */
-  public ListenableFuture<Void> downloadFile(
-      RemoteActionExecutionContext context, Path path, Digest digest) throws IOException {
+  public ListenableFuture<Void> downloadFile(Path path, Digest digest) throws IOException {
     Preconditions.checkNotNull(path.getParentDirectory()).createDirectoryAndParents();
     if (digest.getSizeBytes() == 0) {
       // Handle empty file locally.
@@ -477,7 +472,7 @@ public class RemoteCache implements AutoCloseable {
 
     OutputStream out = new LazyFileOutputStream(path);
     SettableFuture<Void> outerF = SettableFuture.create();
-    ListenableFuture<Void> f = cacheProtocol.downloadBlob(context, digest, out);
+    ListenableFuture<Void> f = cacheProtocol.downloadBlob(digest, out);
     Futures.addCallback(
         f,
         new FutureCallback<Void>() {
@@ -514,8 +509,7 @@ public class RemoteCache implements AutoCloseable {
     return outerF;
   }
 
-  private List<ListenableFuture<FileMetadata>> downloadOutErr(
-      RemoteActionExecutionContext context, ActionResult result, OutErr outErr) {
+  private List<ListenableFuture<FileMetadata>> downloadOutErr(ActionResult result, OutErr outErr) {
     List<ListenableFuture<FileMetadata>> downloads = new ArrayList<>();
     if (!result.getStdoutRaw().isEmpty()) {
       try {
@@ -527,8 +521,7 @@ public class RemoteCache implements AutoCloseable {
     } else if (result.hasStdoutDigest()) {
       downloads.add(
           Futures.transform(
-              cacheProtocol.downloadBlob(
-                  context, result.getStdoutDigest(), outErr.getOutputStream()),
+              cacheProtocol.downloadBlob(result.getStdoutDigest(), outErr.getOutputStream()),
               (d) -> null,
               directExecutor()));
     }
@@ -542,8 +535,7 @@ public class RemoteCache implements AutoCloseable {
     } else if (result.hasStderrDigest()) {
       downloads.add(
           Futures.transform(
-              cacheProtocol.downloadBlob(
-                  context, result.getStderrDigest(), outErr.getErrorStream()),
+              cacheProtocol.downloadBlob(result.getStderrDigest(), outErr.getErrorStream()),
               (d) -> null,
               directExecutor()));
     }
@@ -557,7 +549,6 @@ public class RemoteCache implements AutoCloseable {
    * <p>This method only downloads output directory metadata, stdout and stderr as well as the
    * contents of {@code inMemoryOutputPath} if specified.
    *
-   * @param context the context this action running with
    * @param result the action result metadata of a successfully executed action (exit code = 0).
    * @param outputs the action's declared output files
    * @param inMemoryOutputPath the path of an output file whose contents should be returned in
@@ -573,7 +564,6 @@ public class RemoteCache implements AutoCloseable {
    */
   @Nullable
   public InMemoryOutput downloadMinimal(
-      RemoteActionExecutionContext context,
       String actionId,
       ActionResult result,
       Collection<? extends ActionInput> outputs,
@@ -589,7 +579,7 @@ public class RemoteCache implements AutoCloseable {
 
     ActionResultMetadata metadata;
     try (SilentCloseable c = Profiler.instance().profile("Remote.parseActionResultMetadata")) {
-      metadata = parseActionResultMetadata(context, result, execRoot);
+      metadata = parseActionResultMetadata(result, execRoot);
     }
 
     if (!metadata.symlinks().isEmpty()) {
@@ -624,10 +614,9 @@ public class RemoteCache implements AutoCloseable {
     try (SilentCloseable c = Profiler.instance().profile("Remote.download")) {
       ListenableFuture<byte[]> inMemoryOutputDownload = null;
       if (inMemoryOutput != null) {
-        inMemoryOutputDownload = downloadBlob(context, inMemoryOutputDigest);
+        inMemoryOutputDownload = downloadBlob(inMemoryOutputDigest);
       }
-      waitForBulkTransfer(
-          downloadOutErr(context, result, outErr), /* cancelRemainingOnInterrupt=*/ true);
+      waitForBulkTransfer(downloadOutErr(result, outErr), /* cancelRemainingOnInterrupt=*/ true);
       if (inMemoryOutputDownload != null) {
         waitForBulkTransfer(
             ImmutableList.of(inMemoryOutputDownload), /* cancelRemainingOnInterrupt=*/ true);
@@ -719,8 +708,7 @@ public class RemoteCache implements AutoCloseable {
     return new DirectoryMetadata(filesBuilder.build(), symlinksBuilder.build());
   }
 
-  private ActionResultMetadata parseActionResultMetadata(
-      RemoteActionExecutionContext context, ActionResult actionResult, Path execRoot)
+  private ActionResultMetadata parseActionResultMetadata(ActionResult actionResult, Path execRoot)
       throws IOException, InterruptedException {
     Preconditions.checkNotNull(actionResult, "actionResult");
     Map<Path, ListenableFuture<Tree>> dirMetadataDownloads =
@@ -729,7 +717,7 @@ public class RemoteCache implements AutoCloseable {
       dirMetadataDownloads.put(
           execRoot.getRelative(dir.getPath()),
           Futures.transform(
-              downloadBlob(context, dir.getTreeDigest()),
+              downloadBlob(dir.getTreeDigest()),
               (treeBytes) -> {
                 try {
                   return Tree.parseFrom(treeBytes);

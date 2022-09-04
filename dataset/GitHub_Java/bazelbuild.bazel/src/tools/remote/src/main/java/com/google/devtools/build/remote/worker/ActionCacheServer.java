@@ -14,20 +14,24 @@
 
 package com.google.devtools.build.remote.worker;
 
-import static java.util.logging.Level.WARNING;
 
 import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheImplBase;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
+import build.bazel.remote.execution.v2.RequestMetadata;
 import build.bazel.remote.execution.v2.UpdateActionResultRequest;
+import com.google.common.flogger.GoogleLogger;
+import com.google.devtools.build.lib.remote.common.NetworkTime;
+import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
+import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContextImpl;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import io.grpc.stub.StreamObserver;
-import java.util.logging.Logger;
 
 /** A basic implementation of an {@link ActionCacheImplBase} service. */
 final class ActionCacheServer extends ActionCacheImplBase {
-  private static final Logger logger = Logger.getLogger(ActionCacheImplBase.class.getName());
+  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   private final OnDiskBlobStoreCache cache;
   private final DigestUtil digestUtil;
@@ -41,8 +45,13 @@ final class ActionCacheServer extends ActionCacheImplBase {
   public void getActionResult(
       GetActionResultRequest request, StreamObserver<ActionResult> responseObserver) {
     try {
+      RequestMetadata requestMetadata = TracingMetadataUtils.fromCurrentContext();
+      RemoteActionExecutionContext context =
+          new RemoteActionExecutionContextImpl(requestMetadata, new NetworkTime());
+
       ActionKey actionKey = digestUtil.asActionKey(request.getActionDigest());
-      ActionResult result = cache.downloadActionResult(actionKey);
+      ActionResult result =
+          cache.downloadActionResult(context, actionKey, /* inlineOutErr= */ false);
 
       if (result == null) {
         responseObserver.onError(StatusUtils.notFoundError(request.getActionDigest()));
@@ -52,7 +61,7 @@ final class ActionCacheServer extends ActionCacheImplBase {
       responseObserver.onNext(result);
       responseObserver.onCompleted();
     } catch (Exception e) {
-      logger.log(WARNING, "getActionResult request failed.", e);
+      logger.atWarning().withCause(e).log("getActionResult request failed");
       responseObserver.onError(StatusUtils.internalError(e));
     }
   }
@@ -61,12 +70,16 @@ final class ActionCacheServer extends ActionCacheImplBase {
   public void updateActionResult(
       UpdateActionResultRequest request, StreamObserver<ActionResult> responseObserver) {
     try {
+      RequestMetadata requestMetadata = TracingMetadataUtils.fromCurrentContext();
+      RemoteActionExecutionContext context =
+          new RemoteActionExecutionContextImpl(requestMetadata, new NetworkTime());
+
       ActionKey actionKey = digestUtil.asActionKey(request.getActionDigest());
-      cache.uploadActionResult(actionKey, request.getActionResult());
+      cache.uploadActionResult(context, actionKey, request.getActionResult());
       responseObserver.onNext(request.getActionResult());
       responseObserver.onCompleted();
     } catch (Exception e) {
-      logger.log(WARNING, "updateActionResult request failed.", e);
+      logger.atWarning().withCause(e).log("updateActionResult request failed");
       responseObserver.onError(StatusUtils.internalError(e));
     }
   }
