@@ -188,13 +188,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     return generateDsym;
   }
 
-  /**
-   * Returns whether linkmap generation is enabled.
-   */
-  @SkylarkCallable(
-      name = "generate_linkmap",
-      doc = "Whether to generate linkmap artifacts.",
-      structField = true)
   public boolean generateLinkmap() {
     return generateLinkmap;
   }
