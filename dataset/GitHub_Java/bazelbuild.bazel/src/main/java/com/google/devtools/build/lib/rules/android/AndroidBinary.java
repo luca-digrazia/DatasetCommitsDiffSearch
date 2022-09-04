@@ -67,13 +67,13 @@ import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.AndroidBinaryMobileInstall.MobileInstallResourceApks;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
-import com.google.devtools.build.lib.rules.android.ProguardHelper.ProguardOutput;
 import com.google.devtools.build.lib.rules.android.ZipFilterBuilder.CheckHashMismatchMode;
 import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaOptimizationMode;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -81,6 +81,8 @@ import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.OneVersionCheckActionBuilder;
+import com.google.devtools.build.lib.rules.java.ProguardHelper;
+import com.google.devtools.build.lib.rules.java.ProguardHelper.ProguardOutput;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -421,6 +423,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     // which this -printmapping command line flag will override.
     Artifact proguardOutputMap = null;
     if (ProguardHelper.genProguardMapping(ruleContext.attributes())
+        || ProguardHelper.getJavaOptimizationMode(ruleContext).alwaysGenerateOutputMapping()
         || shrinkResources) {
       proguardOutputMap = androidSemantics.getProguardOutputMap(ruleContext);
     }
@@ -445,13 +448,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               proguardSpecs,
               proguardOutput,
               filesBuilder);
-    }
-
-    if (!dataContext.useDebug()) {
-      // If we're using -c opt, build the resource path shortening map.
-      filesBuilder.add(
-          ruleContext.getImplicitOutputArtifact(
-              AndroidRuleClasses.ANDROID_RESOURCE_PATH_SHORTENING_MAP));
     }
 
     Artifact jarToDex = proguardOutput.getOutputJar();
@@ -822,11 +818,16 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             semantics,
             proguardOutputMap);
     outputs.addAllToSet(failures);
+    JavaOptimizationMode optMode = ProguardHelper.getJavaOptimizationMode(ruleContext);
     ruleContext.registerAction(
         new FailAction(
             ruleContext.getActionOwner(),
             failures.build(),
-            String.format("Can't run Proguard without proguard_specs")));
+            String.format(
+                "Can't run Proguard %s",
+                optMode == JavaOptimizationMode.LEGACY
+                    ? "without proguard_specs"
+                    : "in optimization mode " + optMode)));
     return new ProguardOutput(deployJarArtifact, null, null, null, null, null, null);
   }
 
