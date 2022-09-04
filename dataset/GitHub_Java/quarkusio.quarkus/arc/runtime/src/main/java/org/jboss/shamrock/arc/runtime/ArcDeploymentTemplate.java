@@ -28,17 +28,12 @@ public class ArcDeploymentTemplate {
         return new BeanContainer() {
 
             @Override
-            public <T> Factory<T> instanceFactory(Class<T> type, Annotation... qualifiers) {
+            public <T> T instance(Class<T> type, Annotation... qualifiers) {
                 InstanceHandle<T> handle = container.instance(type, qualifiers);
                 if (!handle.isAvailable()) {
-                    return null;
+                    throw new IllegalStateException(type + " instance not available in container: " + container);
                 }
-                return new Factory<T>() {
-                    @Override
-                    public T get() {
-                        return handle.get();
-                    }
-                };
+                return handle.get();
             }
         };
     }
