@@ -41,7 +41,6 @@ import java.util.zip.ZipOutputStream;
 
 import org.jboss.logging.Logger;
 
-import io.quarkus.bootstrap.BootstrapDependencyProcessingException;
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
@@ -50,19 +49,18 @@ import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.bootstrap.util.ZipUtils;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
-import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedFileSystemResourceBuildItem;
-import io.quarkus.deployment.builditem.GeneratedNativeImageClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
+import io.quarkus.deployment.builditem.GeneratedSubstrateClassBuildItem;
 import io.quarkus.deployment.builditem.TransformedClassesBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
-import io.quarkus.deployment.pkg.builditem.JarBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageSourceJarBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
-import io.quarkus.deployment.pkg.builditem.UberJarRequiredBuildItem;
+import io.quarkus.deployment.pkg.builditem.ThinJarBuildItem;
+import io.quarkus.deployment.pkg.builditem.UberJarBuildItem;
 
 /**
  * This build step builds both the thin jars and uber jars.
@@ -112,42 +110,24 @@ public class JarResultBuildStep {
     // makes a subsequent uberJar creation fail in java 8 (but works fine in Java 11)
     private static final OpenOption[] DEFAULT_OPEN_OPTIONS = { TRUNCATE_EXISTING, WRITE, CREATE };
 
-    @BuildStep(onlyIf = JarRequired.class)
-    ArtifactResultBuildItem jarOutput(JarBuildItem jarBuildItem) {
-        if (jarBuildItem.getLibraryDir() != null) {
-            return new ArtifactResultBuildItem(jarBuildItem.getPath(), PackageConfig.JAR,
-                    Collections.singletonMap("library-dir", jarBuildItem.getLibraryDir()));
-        } else {
-            return new ArtifactResultBuildItem(jarBuildItem.getPath(), PackageConfig.JAR, Collections.emptyMap());
-        }
+    @BuildStep(onlyIf = ThinJarRequired.class)
+    ArtifactResultBuildItem thinJarOutput(ThinJarBuildItem thinJarBuildItem) {
+        return new ArtifactResultBuildItem(thinJarBuildItem.getPath(), PackageConfig.THIN_JAR,
+                Collections.singletonMap("library-dir", thinJarBuildItem.getLibraryDir()));
+    }
+
+    @BuildStep(onlyIf = UberJarRequired.class)
+    ArtifactResultBuildItem uberJar(UberJarBuildItem uberJarBuildItem) {
+        return new ArtifactResultBuildItem(uberJarBuildItem.getPath(), PackageConfig.UBER_JAR,
+                Collections.emptyMap());
     }
 
     @BuildStep
-    public JarBuildItem buildRunnerJar(CurateOutcomeBuildItem curateOutcomeBuildItem,
-            OutputTargetBuildItem outputTargetBuildItem,
-            TransformedClassesBuildItem transformedClasses,
-            ApplicationArchivesBuildItem applicationArchivesBuildItem,
-            ApplicationInfoBuildItem applicationInfo,
-            PackageConfig packageConfig,
-            List<GeneratedClassBuildItem> generatedClasses,
-            List<GeneratedResourceBuildItem> generatedResources,
-            List<UberJarRequiredBuildItem> uberJarRequired,
-            List<GeneratedFileSystemResourceBuildItem> generatedFileSystemResources) throws Exception {
-        if (!uberJarRequired.isEmpty() || packageConfig.uberJar) {
-            return buildUberJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses, applicationArchivesBuildItem,
-                    packageConfig, applicationInfo, generatedClasses, generatedResources, generatedFileSystemResources);
-        } else {
-            return buildThinJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses, applicationArchivesBuildItem,
-                    packageConfig, applicationInfo, generatedClasses, generatedResources, generatedFileSystemResources);
-        }
-    }
-
-    private JarBuildItem buildUberJar(CurateOutcomeBuildItem curateOutcomeBuildItem,
+    public UberJarBuildItem buildUberJar(CurateOutcomeBuildItem curateOutcomeBuildItem,
             OutputTargetBuildItem outputTargetBuildItem,
             TransformedClassesBuildItem transformedClasses,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             PackageConfig packageConfig,
-            ApplicationInfoBuildItem applicationInfo,
             List<GeneratedClassBuildItem> generatedClasses,
             List<GeneratedResourceBuildItem> generatedResources,
             List<GeneratedFileSystemResourceBuildItem> generatedFileSystemResources) throws Exception {
@@ -165,7 +145,6 @@ public class JarResultBuildStep {
         //we use the -runner jar name, unless we are building both types
         Path runnerJar = outputTargetBuildItem.getOutputDirectory()
                 .resolve(outputTargetBuildItem.getBaseName() + packageConfig.runnerSuffix + ".jar");
-        Files.deleteIfExists(runnerJar);
 
         try (FileSystem runnerZipFs = ZipUtils.newZip(runnerJar)) {
 
@@ -263,8 +242,7 @@ public class JarResultBuildStep {
 
             copyCommonContent(runnerZipFs, services, applicationArchivesBuildItem, transformedClasses, generatedClasses,
                     generatedResources, seen);
-            AppArtifact appArtifact = curateOutcomeBuildItem.getEffectiveModel().getAppArtifact();
-            generateManifest(runnerZipFs, classPath.toString(), packageConfig, appArtifact, applicationInfo);
+            generateManifest(runnerZipFs, classPath.toString(), packageConfig);
 
         }
 
@@ -272,15 +250,15 @@ public class JarResultBuildStep {
 
         generateFileSystemResources(outputTargetBuildItem, generatedFileSystemResources);
 
-        return new JarBuildItem(runnerJar, originalJar, null);
+        return new UberJarBuildItem(runnerJar, originalJar);
     }
 
-    private JarBuildItem buildThinJar(CurateOutcomeBuildItem curateOutcomeBuildItem,
+    @BuildStep
+    public ThinJarBuildItem buildThinJar(CurateOutcomeBuildItem curateOutcomeBuildItem,
             OutputTargetBuildItem outputTargetBuildItem,
             TransformedClassesBuildItem transformedClasses,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             PackageConfig packageConfig,
-            ApplicationInfoBuildItem applicationInfo,
             List<GeneratedClassBuildItem> generatedClasses,
             List<GeneratedResourceBuildItem> generatedResources,
             List<GeneratedFileSystemResourceBuildItem> generatedFileSystemResources) throws Exception {
@@ -296,14 +274,24 @@ public class JarResultBuildStep {
 
             log.info("Building thin jar: " + runnerJar);
 
-            doThinJarGeneration(curateOutcomeBuildItem, transformedClasses, applicationArchivesBuildItem, applicationInfo,
-                    packageConfig, generatedResources, libDir, generatedClasses, runnerZipFs);
+            final AppModelResolver depResolver = curateOutcomeBuildItem.getResolver();
+            final Map<String, String> seen = new HashMap<>();
+            final StringBuilder classPath = new StringBuilder();
+            final Map<String, List<byte[]>> services = new HashMap<>();
+
+            final List<AppDependency> appDeps = curateOutcomeBuildItem.getEffectiveModel().getUserDependencies();
+
+            copyLibraryJars(transformedClasses, libDir, depResolver, classPath, appDeps);
+            copyCommonContent(runnerZipFs, services, applicationArchivesBuildItem, transformedClasses, generatedClasses,
+                    generatedResources, seen);
+            generateManifest(runnerZipFs, classPath.toString(), packageConfig);
+
         }
         runnerJar.toFile().setReadable(true, false);
 
         generateFileSystemResources(outputTargetBuildItem, generatedFileSystemResources);
 
-        return new JarBuildItem(runnerJar, null, libDir);
+        return new ThinJarBuildItem(runnerJar, libDir);
     }
 
     private void generateFileSystemResources(OutputTargetBuildItem outputTargetBuildItem,
@@ -326,10 +314,9 @@ public class JarResultBuildStep {
             OutputTargetBuildItem outputTargetBuildItem,
             TransformedClassesBuildItem transformedClasses,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
-            ApplicationInfoBuildItem applicationInfo,
             PackageConfig packageConfig,
             List<GeneratedClassBuildItem> generatedClasses,
-            List<GeneratedNativeImageClassBuildItem> nativeImageResources,
+            List<GeneratedSubstrateClassBuildItem> substrateResources,
             List<GeneratedResourceBuildItem> generatedResources) throws Exception {
         Path thinJarDirectory = outputTargetBuildItem.getOutputDirectory()
                 .resolve(outputTargetBuildItem.getBaseName() + "-native-image-source-jar");
@@ -341,43 +328,29 @@ public class JarResultBuildStep {
         Path libDir = thinJarDirectory.resolve("lib");
         Files.createDirectories(libDir);
 
-        List<GeneratedClassBuildItem> allClasses = new ArrayList<>(generatedClasses);
-        allClasses.addAll(nativeImageResources.stream()
-                .map((s) -> new GeneratedClassBuildItem(true, s.getName(), s.getClassData())).collect(Collectors.toList()));
-
         try (FileSystem runnerZipFs = ZipUtils.newZip(runnerJar)) {
 
             log.info("Building native image source jar: " + runnerJar);
 
-            doThinJarGeneration(curateOutcomeBuildItem, transformedClasses, applicationArchivesBuildItem, applicationInfo,
-                    packageConfig, generatedResources, libDir, allClasses, runnerZipFs);
+            final AppModelResolver depResolver = curateOutcomeBuildItem.getResolver();
+            final Map<String, String> seen = new HashMap<>();
+            final StringBuilder classPath = new StringBuilder();
+            final Map<String, List<byte[]>> services = new HashMap<>();
+
+            final List<AppDependency> appDeps = curateOutcomeBuildItem.getEffectiveModel().getUserDependencies();
+
+            List<GeneratedClassBuildItem> allClasses = new ArrayList<>(generatedClasses);
+            allClasses.addAll(substrateResources.stream()
+                    .map((s) -> new GeneratedClassBuildItem(true, s.getName(), s.getClassData())).collect(Collectors.toList()));
+
+            copyLibraryJars(transformedClasses, libDir, depResolver, classPath, appDeps);
+            copyCommonContent(runnerZipFs, services, applicationArchivesBuildItem, transformedClasses, allClasses,
+                    generatedResources, seen);
+            generateManifest(runnerZipFs, classPath.toString(), packageConfig);
+
         }
         runnerJar.toFile().setReadable(true, false);
         return new NativeImageSourceJarBuildItem(runnerJar, libDir);
-    }
-
-    private void doThinJarGeneration(CurateOutcomeBuildItem curateOutcomeBuildItem,
-            TransformedClassesBuildItem transformedClasses,
-            ApplicationArchivesBuildItem applicationArchivesBuildItem,
-            ApplicationInfoBuildItem applicationInfo,
-            PackageConfig packageConfig,
-            List<GeneratedResourceBuildItem> generatedResources,
-            Path libDir,
-            List<GeneratedClassBuildItem> allClasses,
-            FileSystem runnerZipFs)
-            throws BootstrapDependencyProcessingException, AppModelResolverException, IOException {
-        final AppModelResolver depResolver = curateOutcomeBuildItem.getResolver();
-        final Map<String, String> seen = new HashMap<>();
-        final StringBuilder classPath = new StringBuilder();
-        final Map<String, List<byte[]>> services = new HashMap<>();
-
-        final List<AppDependency> appDeps = curateOutcomeBuildItem.getEffectiveModel().getUserDependencies();
-
-        copyLibraryJars(transformedClasses, libDir, depResolver, classPath, appDeps);
-        copyCommonContent(runnerZipFs, services, applicationArchivesBuildItem, transformedClasses, allClasses,
-                generatedResources, seen);
-        AppArtifact appArtifact = curateOutcomeBuildItem.getEffectiveModel().getAppArtifact();
-        generateManifest(runnerZipFs, classPath.toString(), packageConfig, appArtifact, applicationInfo);
     }
 
     private void copyLibraryJars(TransformedClassesBuildItem transformedClasses, Path libDir, AppModelResolver depResolver,
@@ -517,9 +490,7 @@ public class JarResultBuildStep {
      * <b>BEWARE</b> this method should be invoked after file copy from target/classes and so on.
      * Otherwise this manifest manipulation will be useless.
      */
-    private void generateManifest(FileSystem runnerZipFs, final String classPath, PackageConfig config, AppArtifact appArtifact,
-            ApplicationInfoBuildItem applicationInfo)
-            throws IOException {
+    private void generateManifest(FileSystem runnerZipFs, final String classPath, PackageConfig config) throws IOException {
         final Path manifestPath = runnerZipFs.getPath("META-INF", "MANIFEST.MF");
         final Manifest manifest = new Manifest();
         if (Files.exists(manifestPath)) {
@@ -542,17 +513,6 @@ public class JarResultBuildStep {
             }
         }
         attributes.put(Attributes.Name.MAIN_CLASS, config.mainClass);
-        if (config.manifest.addImplementationEntries && !attributes.containsKey(Attributes.Name.IMPLEMENTATION_TITLE)) {
-            String name = ApplicationInfoBuildItem.UNSET_VALUE.equals(applicationInfo.getName()) ? appArtifact.getArtifactId()
-                    : applicationInfo.getName();
-            attributes.put(Attributes.Name.IMPLEMENTATION_TITLE, name);
-        }
-        if (config.manifest.addImplementationEntries && !attributes.containsKey(Attributes.Name.IMPLEMENTATION_VERSION)) {
-            String version = ApplicationInfoBuildItem.UNSET_VALUE.equals(applicationInfo.getVersion())
-                    ? appArtifact.getVersion()
-                    : applicationInfo.getVersion();
-            attributes.put(Attributes.Name.IMPLEMENTATION_VERSION, version);
-        }
         try (final OutputStream os = wrapForJDK8232879(Files.newOutputStream(manifestPath, DEFAULT_OPEN_OPTIONS))) {
             manifest.write(os);
         }
@@ -652,17 +612,31 @@ public class JarResultBuildStep {
         return b;
     }
 
-    static class JarRequired implements BooleanSupplier {
+    static class UberJarRequired implements BooleanSupplier {
 
         private final PackageConfig packageConfig;
 
-        JarRequired(PackageConfig packageConfig) {
+        UberJarRequired(PackageConfig packageConfig) {
             this.packageConfig = packageConfig;
         }
 
         @Override
         public boolean getAsBoolean() {
-            return packageConfig.type.equalsIgnoreCase(PackageConfig.JAR);
+            return packageConfig.types.contains(PackageConfig.UBER_JAR);
+        }
+    }
+
+    static class ThinJarRequired implements BooleanSupplier {
+
+        private final PackageConfig packageConfig;
+
+        ThinJarRequired(PackageConfig packageConfig) {
+            this.packageConfig = packageConfig;
+        }
+
+        @Override
+        public boolean getAsBoolean() {
+            return packageConfig.types.contains(PackageConfig.THIN_JAR);
         }
     }
 
