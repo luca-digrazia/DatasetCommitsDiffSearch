@@ -100,12 +100,14 @@ public class ServletResourceProcessor implements ResourceProcessor {
         processorContext.addRuntimeInitializedClasses("io.undertow.server.protocol.ajp.AjpServerResponseConduit");
         processorContext.addRuntimeInitializedClasses("io.undertow.server.protocol.ajp.AjpServerRequestConduit");
 
+        //TODO: this should be somewhere else, as SSL is not specific to Undertow
+        processorContext.addRuntimeInitializedClasses("org.wildfly.openssl.OpenSSLEngine");
+
         handleResources(archiveContext, processorContext);
 
         try (BytecodeRecorder context = processorContext.addStaticInitTask(RuntimePriority.UNDERTOW_CREATE_DEPLOYMENT)) {
             UndertowDeploymentTemplate template = context.getRecordingProxy(UndertowDeploymentTemplate.class);
             template.createDeployment("test");
-            template.initHandlerWrappers();
         }
         final IndexView index = archiveContext.getCombinedIndex();
         WebMetaData result = processAnnotations(index);
@@ -206,7 +208,7 @@ public class ServletResourceProcessor implements ResourceProcessor {
 
         try (BytecodeRecorder context = processorContext.addDeploymentTask(RuntimePriority.UNDERTOW_START)) {
             UndertowDeploymentTemplate template = context.getRecordingProxy(UndertowDeploymentTemplate.class);
-            template.startUndertow(null, null, new ConfiguredValue("http.port", "8080"), new ConfiguredValue("http.host", "localhost"), null);
+            template.startUndertow(null, new ConfiguredValue("http.port", "8080"));
         }
     }
 
