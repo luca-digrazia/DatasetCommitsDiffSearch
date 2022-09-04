@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.inspector.database;
@@ -10,8 +12,7 @@ package com.facebook.stetho.inspector.database;
 import android.annotation.TargetApi;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
-
-import androidx.annotation.IntDef;
+import android.support.annotation.IntDef;
 
 /**
  * Compatibility layer which supports opening databases with WAL and foreign key support
@@ -32,8 +33,10 @@ public abstract class SQLiteDatabaseCompat {
   static {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       sInstance = new JellyBeanAndBeyondImpl();
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+      sInstance = new HoneycombImpl();
     } else {
-      sInstance = new IceCreamSandwichImpl();
+      sInstance = new NoopImpl();
     }
   }
 
@@ -63,8 +66,8 @@ public abstract class SQLiteDatabaseCompat {
     }
   }
 
-  @TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
-  private static class IceCreamSandwichImpl extends SQLiteDatabaseCompat {
+  @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+  private static class HoneycombImpl extends SQLiteDatabaseCompat {
     @Override
     public int provideOpenFlags(@SQLiteOpenOptions int openOptions) {
       return 0;
@@ -82,4 +85,14 @@ public abstract class SQLiteDatabaseCompat {
     }
   }
 
+  private static class NoopImpl extends SQLiteDatabaseCompat {
+    @Override
+    public int provideOpenFlags(@SQLiteOpenOptions int openOptions) {
+      return 0;
+    }
+
+    @Override
+    public void enableFeatures(@SQLiteOpenOptions int openOptions, SQLiteDatabase db) {
+    }
+  }
 }
