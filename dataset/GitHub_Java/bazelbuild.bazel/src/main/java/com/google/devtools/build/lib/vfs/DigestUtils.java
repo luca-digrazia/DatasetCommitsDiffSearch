@@ -285,4 +285,14 @@ public class DigestUtils {
     }
     return xor(rhs, lhs);
   }
+
+  /**
+   * Run any pending maintenance operations on the global cache.
+   *
+   * <p>Used in tests to force caffeine to run any pending evictions.
+   */
+  @VisibleForTesting
+  static void cleanupCacheForTest() {
+    globalCache.cleanUp();
+  }
 }
