@@ -38,7 +38,6 @@ public class Skylint {
     issues.addAll(NamingConventionsChecker.check(ast));
     issues.addAll(ControlFlowChecker.check(ast));
     issues.addAll(StatementWithoutEffectChecker.check(ast));
-    issues.addAll(UsageChecker.check(ast));
     issues.sort(Issue::compare);
     if (!issues.isEmpty()) {
       System.out.println(path);
