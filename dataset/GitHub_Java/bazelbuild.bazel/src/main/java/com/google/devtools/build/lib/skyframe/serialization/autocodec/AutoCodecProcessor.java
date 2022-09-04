@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.PolymorphicHelper;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.Marshaller;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeName;
@@ -33,7 +32,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
@@ -41,7 +39,6 @@ import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
@@ -99,8 +96,8 @@ public class AutoCodecProcessor extends AbstractProcessor {
       @Nullable TypeElement dependencyType = getDependencyType(annotation);
       TypeSpec.Builder codecClassBuilder = null;
       switch (annotation.strategy()) {
-        case INSTANTIATOR:
-          codecClassBuilder = buildClassWithInstantiatorStrategy(encodedType, dependencyType);
+        case CONSTRUCTOR:
+          codecClassBuilder = buildClassWithConstructorStrategy(encodedType, dependencyType);
           break;
         case PUBLIC_FIELDS:
           codecClassBuilder = buildClassWithPublicFieldsStrategy(encodedType, dependencyType);
@@ -147,9 +144,9 @@ public class AutoCodecProcessor extends AbstractProcessor {
     }
   }
 
-  private TypeSpec.Builder buildClassWithInstantiatorStrategy(
+  private TypeSpec.Builder buildClassWithConstructorStrategy(
       TypeElement encodedType, @Nullable TypeElement dependency) {
-    ExecutableElement constructor = selectInstantiator(encodedType);
+    ExecutableElement constructor = selectConstructorForConstructorStrategy(encodedType);
     PartitionedParameters parameters = isolateDependency(constructor);
     if (dependency != null) {
       if (parameters.dependency != null) {
@@ -167,7 +164,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
 
     initializeUnsafeOffsets(codecClassBuilder, encodedType, parameters.fields);
 
-    codecClassBuilder.addMethod(buildSerializeMethodWithInstantiator(encodedType, parameters));
+    codecClassBuilder.addMethod(buildSerializeMethodWithConstructor(encodedType, parameters));
 
     MethodSpec.Builder deserializeBuilder =
         AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, parameters.dependency);
@@ -208,52 +205,33 @@ public class AutoCodecProcessor extends AbstractProcessor {
     return result;
   }
 
-  private ExecutableElement selectInstantiator(TypeElement encodedType) {
+  private static ExecutableElement selectConstructorForConstructorStrategy(
+      TypeElement encodedType) {
     List<ExecutableElement> constructors =
         ElementFilter.constructorsIn(encodedType.getEnclosedElements());
-    Stream<ExecutableElement> factoryMethods =
-        ElementFilter.methodsIn(encodedType.getEnclosedElements())
+    ImmutableList<ExecutableElement> markedConstructors =
+        constructors
             .stream()
-            .filter(AutoCodecProcessor::hasInstantiatorAnnotation)
-            .peek(m -> verifyFactoryMethod(encodedType, m));
-    ImmutableList<ExecutableElement> markedInstantiators =
-        Stream.concat(
-                constructors.stream().filter(AutoCodecProcessor::hasInstantiatorAnnotation),
-                factoryMethods)
+            .filter(c -> c.getAnnotation(AutoCodec.Constructor.class) != null)
             .collect(toImmutableList());
-    if (markedInstantiators.isEmpty()) {
+    if (markedConstructors.isEmpty()) {
       // If nothing is marked, see if there is a unique constructor.
       if (constructors.size() > 1) {
         throw new IllegalArgumentException(
             encodedType.getQualifiedName()
-                + " has multiple constructors but no Instantiator annotation.");
+                + " has multiple constructors but no Constructor annotation.");
       }
       // In Java, every class has at least one constructor, so this never fails.
       return constructors.get(0);
     }
-    if (markedInstantiators.size() == 1) {
-      return markedInstantiators.get(0);
+    if (markedConstructors.size() == 1) {
+      return markedConstructors.get(0);
     }
     throw new IllegalArgumentException(
-        encodedType.getQualifiedName() + " has multiple Instantiator annotations.");
+        encodedType.getQualifiedName() + " has multiple Constructor annotations.");
   }
 
-  private static boolean hasInstantiatorAnnotation(Element elt) {
-    return elt.getAnnotation(AutoCodec.Instantiator.class) != null;
-  }
-
-  private void verifyFactoryMethod(TypeElement encodedType, ExecutableElement elt) {
-    if (!elt.getModifiers().contains(Modifier.STATIC)
-        || !env.getTypeUtils().isSubtype(elt.getReturnType(), encodedType.asType())) {
-      throw new IllegalArgumentException(
-          encodedType.getQualifiedName()
-              + " tags "
-              + elt.getSimpleName()
-              + " as an Instantiator, but it's not a valid factory method.");
-    }
-  }
-
-  private MethodSpec buildSerializeMethodWithInstantiator(
+  private MethodSpec buildSerializeMethodWithConstructor(
       TypeElement encodedType, PartitionedParameters parameters) {
     MethodSpec.Builder serializeBuilder =
         AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, parameters.dependency);
@@ -273,18 +251,6 @@ public class AutoCodecProcessor extends AbstractProcessor {
               "codedOut.writeInt32NoTag($T.getInstance().getInt(input, $L_offset))",
               UnsafeProvider.class,
               parameter.getSimpleName());
-          break;
-        case ARRAY:
-          serializeBuilder.addStatement(
-              "$T unsafe_$L = ($T)$T.getInstance().getObject(input, $L_offset)",
-              field.asType(),
-              parameter.getSimpleName(),
-              field.asType(),
-              UnsafeProvider.class,
-              parameter.getSimpleName());
-          marshallers.writeSerializationCode(
-              new Marshaller.Context(
-                  serializeBuilder, parameter.asType(), "unsafe_" + parameter.getSimpleName()));
           break;
         case DECLARED:
           serializeBuilder.addStatement(
@@ -350,10 +316,6 @@ public class AutoCodecProcessor extends AbstractProcessor {
         case INT:
           serializeBuilder.addStatement("codedOut.writeInt32NoTag($L)", paramAccessor);
           break;
-        case ARRAY:
-          marshallers.writeSerializationCode(
-              new Marshaller.Context(serializeBuilder, parameter.asType(), paramAccessor));
-          break;
         case DECLARED:
           marshallers.writeSerializationCode(
               new Marshaller.Context(
@@ -385,10 +347,6 @@ public class AutoCodecProcessor extends AbstractProcessor {
         case INT:
           builder.addStatement("int $L = codedIn.readInt32()", paramName);
           break;
-        case ARRAY:
-          marshallers.writeDeserializationCode(
-              new Marshaller.Context(builder, parameter.asType(), paramName));
-          break;
         case DECLARED:
           marshallers.writeDeserializationCode(
               new Marshaller.Context(builder, (DeclaredType) parameter.asType(), paramName));
@@ -400,36 +358,28 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   /**
-   * Invokes the instantiator and returns the value.
+   * Invokes the constructor and returns the value.
    *
-   * <p>Used by the {@link AutoCodec.Strategy.INSTANTIATOR} strategy.
+   * <p>Used by the {@link AutoCodec.Strategy.CONSTRUCTOR} strategy.
    */
   private static void addReturnNew(
-      MethodSpec.Builder builder, TypeElement type, ExecutableElement instantiator) {
-    List<? extends TypeMirror> allThrown = instantiator.getThrownTypes();
+      MethodSpec.Builder builder, TypeElement type, ExecutableElement constructor) {
+    List<? extends TypeMirror> allThrown = constructor.getThrownTypes();
     if (!allThrown.isEmpty()) {
       builder.beginControlFlow("try");
     }
     String parameters =
-        instantiator
+        constructor
             .getParameters()
             .stream()
             .map(AutoCodecProcessor::handleFromParameter)
             .collect(Collectors.joining(", "));
-    if (instantiator.getKind().equals(ElementKind.CONSTRUCTOR)) {
-      builder.addStatement("return new $T($L)", TypeName.get(type.asType()), parameters);
-    } else { // Otherwise, it's a factory method.
-      builder.addStatement(
-          "return $T.$L($L)",
-          TypeName.get(type.asType()),
-          instantiator.getSimpleName(),
-          parameters);
-    }
+    builder.addStatement("return new $T($L)", TypeName.get(type.asType()), parameters);
     if (!allThrown.isEmpty()) {
       for (TypeMirror thrown : allThrown) {
         builder.nextControlFlow("catch ($T e)", TypeName.get(thrown));
         builder.addStatement(
-            "throw new $T(\"$L instantiator threw an exception\", e)",
+            "throw new $T(\"$L constructor threw an exception\", e)",
             SerializationException.class,
             type.getQualifiedName());
       }
