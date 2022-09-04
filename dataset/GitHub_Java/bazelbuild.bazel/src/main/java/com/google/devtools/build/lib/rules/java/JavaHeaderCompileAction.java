@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -112,7 +113,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
         transitiveCommandLine,
         false,
         // TODO(#3320): This is missing the config's action environment.
-        JavaCompileAction.UTF8_ACTION_ENVIRONMENT,
+        new ActionEnvironment(JavaCompileAction.UTF8_ENVIRONMENT),
         progressMessage,
         "Turbine");
     this.directInputs = checkNotNull(directInputs);
@@ -386,7 +387,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
             .addOutputs(outputs)
             .setCommandLine(commandLine.build())
             .setJarExecutable(
-                JavaCommon.getHostJavaExecutable(ruleContext),
+                ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
                 javaToolchain.getHeaderCompiler(),
                 ImmutableList.<String>builder()
                     .add("-Xbootclasspath/p:" + javacJar.getExecPath())
@@ -435,7 +436,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
               transitiveCommandLine,
               false,
               // TODO(b/63280599): This is missing the config's action environment.
-              JavaCompileAction.UTF8_ACTION_ENVIRONMENT,
+              new ActionEnvironment(JavaCompileAction.UTF8_ENVIRONMENT),
               getProgressMessageWithAnnotationProcessors(),
               "JavacTurbine")
         };
@@ -485,7 +486,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
 
     private CustomCommandLine.Builder getBaseArgs(JavaToolchainProvider javaToolchain) {
       return CustomCommandLine.builder()
-          .addPath(JavaCommon.getHostJavaExecutable(ruleContext))
+          .addPath(ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable())
           .add("-Xverify:none")
           .add(javaToolchain.getJvmOptions())
           .addPaths("-Xbootclasspath/p:%s", javacJar.getExecPath())

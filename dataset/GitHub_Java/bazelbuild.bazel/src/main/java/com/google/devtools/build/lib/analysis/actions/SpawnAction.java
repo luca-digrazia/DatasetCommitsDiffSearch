@@ -648,7 +648,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       if (useDefaultShellEnvironment) {
         env = Preconditions.checkNotNull(configEnv);
       } else {
-        env = ActionEnvironment.create(this.environment);
+        env = new ActionEnvironment(this.environment);
       }
 
       if (disableSandboxing) {

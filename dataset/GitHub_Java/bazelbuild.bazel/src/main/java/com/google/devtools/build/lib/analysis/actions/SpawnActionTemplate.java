@@ -128,7 +128,6 @@ public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
     // explicitly via builder method #setExecutable and #setEnvironment.
     return actionBuilder.buildSpawnAction(
         getOwner(),
-        commandLine,
         /*configEnv=*/ null,
         /*defaultShellExecutable=*/ null,
         /*paramsFile=*/ null);
@@ -206,7 +205,7 @@ public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
   @Override
   public Iterable<String> getClientEnvironmentVariables() {
     return spawnActionBuilder
-        .buildSpawnAction(getOwner(), CommandLine.of(ImmutableList.of()), null, null, null)
+        .buildSpawnAction(getOwner(), null, null, null)
         .getClientEnvironmentVariables();
   }
 

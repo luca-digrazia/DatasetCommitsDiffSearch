@@ -361,6 +361,11 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   }
 
   @Override
+  public boolean isImmutable() {
+    return false;
+  }
+
+  @Override
   public void repr(SkylarkPrinter printer) {
     printer.append(prettyPrint()); // TODO(bazel-team): implement a readable representation
   }
