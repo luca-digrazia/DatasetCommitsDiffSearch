@@ -24,22 +24,38 @@ import java.util.Comparator;
 import java.util.Map;
 
 /**
- * Encodes an {@link ImmutableMap}, which may be an ImmutableSortedMap. We handle both here because
- * we cannot handle ImmutableSortedMap with any ordering other than the default, and so we degrade
- * to ImmutableMap in that case, hoping that the caller does not notice.
+ * Encodes an {@link ImmutableMap}, which may be an {@link ImmutableSortedMap}. The iteration order
+ * of the deserialized map is the same as the original map's.
+ *
+ * <p>We handle both {@link ImmutableMap} and {@link ImmutableSortedMap} here because we cannot
+ * handle {@link ImmutableSortedMap} with any ordering other than the default, and so we degrade to
+ * ImmutableMap in that case, hoping that the caller does not notice. Since the ordering is
+ * preserved, the caller should not be sensitive to this change unless the caller's field is
+ * declared to be an {@link ImmutableSortedMap}, in which case we will crash at runtime.
+ *
+ * <p>Any {@link SerializationException} or {@link IOException} that arises while serializing or
+ * deserializing a map entry's value (not its key) will be wrapped in a new {@link
+ * SerializationException} using {@link SerializationException#propagate}. (Note that this preserves
+ * the type of {@link SerializationException.NoCodecException} exceptions.) The message will include
+ * the {@code toString()} of the entry's key. For errors that occur while serializing, it will also
+ * include the class name of the entry's value. Errors that occur while serializing an entry key are
+ * not affected.
+ *
+ * <p>Because of the ambiguity around the key type (Comparable in the case of {@link
+ * ImmutableSortedMap}, arbitrary otherwise, we avoid specifying the key type as a parameter.
  */
-class ImmutableMapCodec implements ObjectCodec<ImmutableMap<?, ?>> {
+class ImmutableMapCodec<V> implements ObjectCodec<ImmutableMap<?, V>> {
   @SuppressWarnings("unchecked")
   @Override
-  public Class<ImmutableMap<?, ?>> getEncodedClass() {
+  public Class<ImmutableMap<?, V>> getEncodedClass() {
     // Because Java disallows converting from Class<ImmutableMap> to Class<ImmutableMap<?, ?>>
     // directly.
-    return (Class<ImmutableMap<?, ?>>) ((Class<?>) ImmutableMap.class);
+    return (Class<ImmutableMap<?, V>>) ((Class<?>) ImmutableMap.class);
   }
 
   @Override
   public void serialize(
-      SerializationContext context, ImmutableMap<?, ?> map, CodedOutputStream codedOut)
+      SerializationContext context, ImmutableMap<?, V> map, CodedOutputStream codedOut)
       throws SerializationException, IOException {
     codedOut.writeInt32NoTag(map.size());
     boolean serializeAsSortedMap = false;
@@ -50,36 +66,42 @@ class ImmutableMapCodec implements ObjectCodec<ImmutableMap<?, ?>> {
           comparator.equals(Ordering.natural()) || comparator.equals(Comparator.naturalOrder());
     }
     codedOut.writeBoolNoTag(serializeAsSortedMap);
-    for (Map.Entry<?, ?> entry : map.entrySet()) {
+    serializeEntries(context, map.entrySet(), codedOut);
+  }
+
+  static <K, V> void serializeEntries(
+      SerializationContext context,
+      Iterable<? extends Map.Entry<K, V>> entrySet,
+      CodedOutputStream codedOut)
+      throws IOException, SerializationException {
+    for (Map.Entry<?, ?> entry : entrySet) {
       context.serialize(entry.getKey(), codedOut);
-      context.serialize(entry.getValue(), codedOut);
+      try {
+        context.serialize(entry.getValue(), codedOut);
+      } catch (SerializationException | IOException e) {
+        throw SerializationException.propagate(
+            String.format(
+                "Exception while serializing value of type %s for key '%s'",
+                entry.getValue().getClass().getName(), entry.getKey()),
+            e);
+      }
     }
   }
 
   @Override
-  public ImmutableMap<?, ?> deserialize(DeserializationContext context, CodedInputStream codedIn)
+  public ImmutableMap<?, V> deserialize(DeserializationContext context, CodedInputStream codedIn)
       throws SerializationException, IOException {
     int length = codedIn.readInt32();
     if (length < 0) {
       throw new SerializationException("Expected non-negative length: " + length);
     }
+    ImmutableMap.Builder<?, V> builder;
     if (codedIn.readBool()) {
-      return buildMap(ImmutableSortedMap.naturalOrder(), length, context, codedIn);
+      builder = deserializeEntries(ImmutableSortedMap.naturalOrder(), length, context, codedIn);
     } else {
-      return buildMap(ImmutableMap.builderWithExpectedSize(length), length, context, codedIn);
-    }
-  }
-
-  private static <T> ImmutableMap<T, Object> buildMap(
-      ImmutableMap.Builder<T, Object> builder,
-      int length,
-      DeserializationContext context,
-      CodedInputStream codedIn)
-      throws IOException, SerializationException {
-    for (int i = 0; i < length; i++) {
-      T key = context.deserialize(codedIn);
-      Object value = context.deserialize(codedIn);
-      builder.put(key, value);
+      builder =
+          deserializeEntries(
+              ImmutableMap.builderWithExpectedSize(length), length, context, codedIn);
     }
     try {
       return builder.build();
@@ -87,5 +109,22 @@ class ImmutableMapCodec implements ObjectCodec<ImmutableMap<?, ?>> {
       throw new SerializationException(
           "Duplicate keys during ImmutableMapCodec deserialization", e);
     }
+  }
+
+  static <K, V, M extends ImmutableMap.Builder<K, V>> M deserializeEntries(
+      M builder, int length, DeserializationContext context, CodedInputStream codedIn)
+      throws IOException, SerializationException {
+    for (int i = 0; i < length; i++) {
+      K key = context.deserialize(codedIn);
+      V value;
+      try {
+        value = context.deserialize(codedIn);
+      } catch (SerializationException | IOException e) {
+        throw SerializationException.propagate(
+            String.format("Exception while deserializing value for key '%s'", key), e);
+      }
+      builder.put(key, value);
+    }
+    return builder;
   }
 }
