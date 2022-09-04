@@ -14,10 +14,9 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.protobuf.ByteString;
-import java.io.Serializable;
 
 /** A marker interface for objects which can return a byte[] digest. */
-public interface HasDigest extends Serializable {
+public interface HasDigest {
   byte[] getDigest();
 
   public static final HasDigest EMPTY = new ByteStringDigest(new byte[] {});

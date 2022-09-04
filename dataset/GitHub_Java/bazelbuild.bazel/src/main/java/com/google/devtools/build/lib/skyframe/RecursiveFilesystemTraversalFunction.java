@@ -362,10 +362,8 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
       return new HasDigest.ByteStringDigest(
           ((FileStateValue) fsVal).getValueFingerprint().toByteArray());
     } else if (fsVal instanceof FileArtifactValue) {
-      FileArtifactValue artifactValue = (FileArtifactValue) fsVal;
-      // Transforming the FileArtifactValue to fingerprint the digests and retain other values
-      return FileArtifactValue.createForVirtualActionInput(
-          artifactValue.getValueFingerprint().toByteArray(), artifactValue.getSize());
+      return new HasDigest.ByteStringDigest(
+          ((FileArtifactValue) fsVal).getValueFingerprint().toByteArray());
     }
     return fsVal;
   }

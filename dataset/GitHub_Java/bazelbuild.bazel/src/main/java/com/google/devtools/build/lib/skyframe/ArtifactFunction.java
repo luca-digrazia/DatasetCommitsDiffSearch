@@ -266,10 +266,10 @@ class ArtifactFunction implements SkyFunction {
         fp.addString(file.getNameInSymlinkTree().getPathString());
         fp.addBytes(file.getMetadata().getDigest());
       }
-      return FileArtifactValue.createForDirectoryWithHash(fp.digestAndReset());
+      return FileArtifactValue.createDirectoryWithHash(fp.digestAndReset());
     }
     try {
-      return FileArtifactValue.createForSourceArtifact(artifact, fileValue);
+      return FileArtifactValue.create(artifact, fileValue);
     } catch (IOException e) {
       return makeMissingInputFileValue(artifact, e);
     }
@@ -301,7 +301,7 @@ class ArtifactFunction implements SkyFunction {
     // Directories are special-cased because their mtimes are used, so should have been constructed
     // during execution of the action (in ActionMetadataHandler#maybeStoreAdditionalData).
     Preconditions.checkState(data.isFile(), "Unexpected not file %s (%s)", artifact, data);
-    return FileArtifactValue.createFromMetadata(data, !artifact.isConstantMetadata());
+    return FileArtifactValue.createNormalFile(data, !artifact.isConstantMetadata());
   }
 
   @Nullable
