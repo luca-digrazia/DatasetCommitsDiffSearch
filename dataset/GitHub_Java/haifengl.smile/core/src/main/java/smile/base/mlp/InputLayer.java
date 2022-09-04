@@ -17,7 +17,7 @@
 
 package smile.base.mlp;
 
-import smile.feature.FeatureTransform;
+import java.io.IOException;
 
 /**
  * An input layer in the neural network.
@@ -27,47 +27,50 @@ import smile.feature.FeatureTransform;
 public class InputLayer extends Layer {
     private static final long serialVersionUID = 2L;
 
-    /** The feature transformation such as standardization. */
-    private final FeatureTransform transformer;
-
     /**
      * Constructor.
      * @param p the number of input variables (not including bias value).
      */
     public InputLayer(int p) {
-        this(p, 0.0, null);
+        this(p, 0.0);
     }
 
     /**
      * Constructor.
      * @param p the number of input variables (not including bias value).
      * @param dropout the dropout rate.
-     * @param transformer the optional input feature transformation.
      */
-    public InputLayer(int p, double dropout, FeatureTransform transformer) {
-        super(p, p, dropout);
-        this.transformer = transformer;
+    public InputLayer(int p, double dropout) {
+        super(p, dropout);
+    }
+
+    /**
+     * Initializes the workspace when deserializing the object.
+     * @param in the input stream.
+     * @throws IOException when fails to read the stream.
+     * @throws ClassNotFoundException when fails to load the class.
+     */
+    private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        output = ThreadLocal.withInitial(() -> new double[n]);
+
+        if (dropout > 0.0) {
+            mask = ThreadLocal.withInitial(() -> new byte[n]);
+        }
     }
 
     @Override
     public String toString() {
-        String s = String.format("Input(%d", p);
-        if (dropoutRate > 0.0) {
-            s = String.format("%s, %.2f", s, dropoutRate);
+        if (dropout > 0.0) {
+            return String.format("Input(%d, %.2f)", n, dropout);
+        } else {
+            return String.format("Input(%d)", n);
         }
-        if (transformer != null) {
-            s = String.format("%s, %s", s, transformer.getClass().getSimpleName());
-        }
-        return s + ")";
     }
 
     @Override
     public void propagate(double[] x) {
-        if (transformer == null) {
-            System.arraycopy(x, 0, output.get(), 0, p);
-        } else {
-            transformer.transform(x, output.get());
-        }
+        System.arraycopy(x, 0, output.get(), 0, p);
     }
 
     @Override

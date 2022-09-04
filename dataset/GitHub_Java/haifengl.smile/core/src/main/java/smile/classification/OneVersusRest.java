@@ -19,8 +19,6 @@ package smile.classification;
 
 import java.util.Arrays;
 import java.util.function.BiFunction;
-import java.util.stream.IntStream;
-
 import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.data.formula.Formula;
@@ -120,26 +118,33 @@ public class OneVersusRest<T> extends AbstractClassifier<T> {
         }
 
         int n = x.length;
-        int[] labels = codec.y;
+        y = codec.y;
 
         Classifier<T>[] classifiers = new Classifier[k];
-        PlattScaling[] platts = new PlattScaling[k];
-        IntStream.range(0, k).parallel().forEach(i -> {
+        PlattScaling[] platts = null;
+        for (int i = 0; i < k; i++) {
             int[] yi = new int[n];
             for (int j = 0; j < n; j++) {
-                yi[j] = labels[j] == i ? pos : neg;
+                yi[j] = y[j] == i ? pos : neg;
             }
 
             classifiers[i] = trainer.apply(x, yi);
 
-            try {
-                platts[i] = PlattScaling.fit(classifiers[i], x, yi);
-            } catch (UnsupportedOperationException ex) {
-                logger.info("The classifier doesn't support score function. Don't fit Platt scaling.");
+            if (i == 0) {
+                try {
+                    classifiers[0].score(x[0]);
+                    platts = new PlattScaling[k];
+                } catch (UnsupportedOperationException ex) {
+                    logger.info("The classifier doesn't support score function. Don't fit Platt scaling.");
+                }
             }
-        });
 
-        return new OneVersusRest<>(classifiers, platts[0] == null ? null : platts);
+            if (platts != null) {
+                platts[i] = PlattScaling.fit(classifiers[i], x, yi);
+            }
+        }
+
+        return new OneVersusRest<>(classifiers, platts);
     }
 
     /**

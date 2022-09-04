@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.base.cart;
 
@@ -21,6 +21,8 @@ import smile.data.Tuple;
 
 /**
  * A leaf node in decision tree.
+ *
+ * @author Haifeng Li
  */
 public abstract class LeafNode implements Node {
     /** The number of samples in the node. */
@@ -40,7 +42,7 @@ public abstract class LeafNode implements Node {
     }
 
     @Override
-    public int leafs() {
+    public int leaves() {
         return 1;
     }
 

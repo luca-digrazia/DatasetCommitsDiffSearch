@@ -240,7 +240,7 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
     }
 
     /**
-     * Constructor. Fits a classification tree for AdaBoost and Random Forest.
+     * Constructor. Learns a classification tree for AdaBoost and Random Forest.
      * @param x the data frame of the explanatory variable.
      * @param y the response variables.
      * @param response the metadata of response variable.
@@ -294,7 +294,7 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
     }
 
     /**
-     * Fits a classification tree.
+     * Learns a classification tree.
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
      * @return the model.
@@ -304,7 +304,7 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
     }
 
     /**
-     * Fits a classification tree.
+     * Learns a classification tree.
      * The hyper-parameters in <code>prop</code> include
      * <ul>
      * <li><code>smile.cart.split.rule</code>
@@ -313,19 +313,19 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
      * </ul>
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @return the model.
      */
-    public static DecisionTree fit(Formula formula, DataFrame data, Properties params) {
-        SplitRule rule = SplitRule.valueOf(params.getProperty("smile.cart.split_rule", "GINI"));
-        int maxDepth = Integer.parseInt(params.getProperty("smile.cart.max_depth", "20"));
-        int maxNodes = Integer.parseInt(params.getProperty("smile.cart.max_nodes", String.valueOf(data.size() / 5)));
-        int nodeSize = Integer.parseInt(params.getProperty("smile.cart.node_size", "5"));
+    public static DecisionTree fit(Formula formula, DataFrame data, Properties prop) {
+        SplitRule rule = SplitRule.valueOf(prop.getProperty("smile.cart.split.rule", "GINI"));
+        int maxDepth = Integer.parseInt(prop.getProperty("smile.cart.max.depth", "20"));
+        int maxNodes = Integer.parseInt(prop.getProperty("smile.cart.max.nodes", String.valueOf(data.size() / 5)));
+        int nodeSize = Integer.parseInt(prop.getProperty("smile.cart.node.size", "5"));
         return fit(formula, data, rule, maxDepth, maxNodes, nodeSize);
     }
 
     /**
-     * Fits a classification tree.
+     * Learns a classification tree.
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
      * @param rule the splitting rule.

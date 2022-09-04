@@ -19,8 +19,6 @@ package smile.classification;
 
 import java.util.Arrays;
 import java.util.function.BiFunction;
-import java.util.stream.IntStream;
-
 import static java.lang.Math.abs;
 import static java.lang.Math.max;
 
@@ -116,47 +114,52 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
             throw new IllegalArgumentException(String.format("Only %d classes", k));
         }
 
-        int[] ni = codec.ni; // sample size per class.
-        int[] labels = codec.y;
+        // sample size per class.
+        int[] ni = codec.ni;
+        y = codec.y;
 
         Classifier<T>[][] classifiers = new Classifier[k][];
-        PlattScaling[][] platts = new PlattScaling[k][];
+        PlattScaling[][] platts = null;
         for (int i = 1; i < k; i++) {
             classifiers[i] = new Classifier[i];
-            platts[i] = new PlattScaling[i];
-        }
+            for (int j = 0; j < i; j++) {
+                int n = ni[i] + ni[j];
 
-        IntStream.range(0, k * (k - 1) / 2).parallel().forEach(index -> {
-            int j = k - 2 - (int) Math.floor(Math.sqrt(-8*index + 4*k*(k-1)-7)/2.0 - 0.5);
-            int i = index + j + 1 - k*(k-1)/2 + (k-j)*((k-j)-1)/2;
-            int n = ni[i] + ni[j];
+                @SuppressWarnings("unchecked")
+                T[] xij = (T[]) java.lang.reflect.Array.newInstance(x.getClass().getComponentType(), n);
+                int[] yij = new int[n];
 
-            @SuppressWarnings("unchecked")
-            T[] xij = (T[]) java.lang.reflect.Array.newInstance(x.getClass().getComponentType(), n);
-            int[] yij = new int[n];
+                for (int l = 0, q = 0; l < y.length; l++) {
+                    if (y[l] == i) {
+                        xij[q] = x[l];
+                        yij[q] = pos;
+                        q++;
+                    } else if (y[l] == j) {
+                        xij[q] = x[l];
+                        yij[q] = neg;
+                        q++;
+                    }
+                }
 
-            for (int l = 0, q = 0; l < labels.length; l++) {
-                if (labels[l] == i) {
-                    xij[q] = x[l];
-                    yij[q] = pos;
-                    q++;
-                } else if (labels[l] == j) {
-                    xij[q] = x[l];
-                    yij[q] = neg;
-                    q++;
+                classifiers[i][j] = trainer.apply(xij, yij);
+
+                if (j == 0 && i == 1) {
+                    try {
+                        classifiers[i][j].score(xij[0]);
+                        platts = new PlattScaling[k][];
+                    } catch (UnsupportedOperationException ex) {
+                        logger.info("The classifier doesn't support score function. Don't fit Platt scaling.");
+                    }
+                }
+
+                if (platts != null) {
+                    if (platts[i] == null) platts[i] = new PlattScaling[i];
+                    platts[i][j] = PlattScaling.fit(classifiers[i][j], xij, yij);
                 }
             }
+        }
 
-            classifiers[i][j] = trainer.apply(xij, yij);
-
-            try {
-                platts[i][j] = PlattScaling.fit(classifiers[i][j], xij, yij);
-            } catch (UnsupportedOperationException ex) {
-                logger.info("The classifier doesn't support score function. Don't fit Platt scaling.");
-            }
-        });
-
-        return new OneVersusOne<>(classifiers, platts[1][0] == null ? null : platts);
+        return new OneVersusOne<>(classifiers, platts);
     }
 
     /**
