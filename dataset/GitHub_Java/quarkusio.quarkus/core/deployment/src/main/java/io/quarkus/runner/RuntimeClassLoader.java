@@ -61,7 +61,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
 
     private volatile Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> bytecodeTransformers = null;
 
-    private final List<Path> applicationClasses;
+    private final Path applicationClasses;
     private final Path frameworkClassesPath;
     private final Path transformerCache;
 
@@ -73,8 +73,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         registerAsParallelCapable();
     }
 
-    public RuntimeClassLoader(ClassLoader parent, List<Path> applicationClasses, Path frameworkClassesPath,
-            Path transformerCache) {
+    public RuntimeClassLoader(ClassLoader parent, Path applicationClasses, Path frameworkClassesPath, Path transformerCache) {
         super(parent);
         this.applicationClasses = applicationClasses;
         this.frameworkClassesPath = frameworkClassesPath;
@@ -166,14 +165,8 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         }
 
         final String fileName = name.replace('.', '/') + ".class";
-        Path classLoc = null;
-        for (Path i : applicationClasses) {
-            classLoc = i.resolve(fileName);
-            if (Files.exists(classLoc)) {
-                break;
-            }
-        }
-        if (classLoc != null && Files.exists(classLoc)) {
+        Path classLoc = applicationClasses.resolve(fileName);
+        if (Files.exists(classLoc)) {
             CompletableFuture<Class<?>> res = new CompletableFuture<>();
             Future<Class<?>> existing = loadingClasses.putIfAbsent(name, res);
             if (existing != null) {
@@ -339,7 +332,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
         }
     }
 
-    @Override
     public void setTransformers(Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> functions) {
         this.bytecodeTransformers = functions;
     }
@@ -370,16 +362,9 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
     }
 
     private URL findApplicationResource(String name) {
-        Path resourcePath = null;
-
-        for (Path i : applicationClasses) {
-            resourcePath = i.resolve(name);
-            if (Files.exists(resourcePath)) {
-                break;
-            }
-        }
+        Path resourcePath = applicationClasses.resolve(name);
         try {
-            return resourcePath != null && Files.exists(resourcePath) ? resourcePath.toUri()
+            return Files.exists(resourcePath) ? resourcePath.toUri()
                     .toURL() : null;
         } catch (MalformedURLException e) {
             throw new RuntimeException(e);
