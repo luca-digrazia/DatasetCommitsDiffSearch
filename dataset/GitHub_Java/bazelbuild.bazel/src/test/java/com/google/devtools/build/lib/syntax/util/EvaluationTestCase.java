@@ -550,25 +550,21 @@ public class EvaluationTestCase {
    * A class that executes each separate test in both modes (Build and Skylark)
    */
   protected class BothModesTest extends ModalTestCase {
-    private final String[] skylarkOptions;
-
-    public BothModesTest(String... skylarkOptions) {
-      this.skylarkOptions = skylarkOptions;
-    }
+    public BothModesTest() {}
 
     /**
      * Executes the given Testable in both Build and Skylark mode
      */
     @Override
     protected void run(Testable testable) throws Exception {
-      enableSkylarkMode(skylarkOptions);
+      enableSkylarkMode();
       try {
         testable.run();
       } catch (Exception e) {
         throw new Exception("While in Skylark mode", e);
       }
 
-      enableBuildMode(skylarkOptions);
+      enableBuildMode();
       try {
         testable.run();
       } catch (Exception e) {

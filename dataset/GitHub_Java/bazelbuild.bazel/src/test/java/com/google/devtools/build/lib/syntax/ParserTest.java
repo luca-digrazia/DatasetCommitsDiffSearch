@@ -971,7 +971,12 @@ public class ParserTest extends EvaluationTestCase {
       assertThat(bodyNoExpr).hasSize(1);
 
       ReturnStatement returnNoExpr = (ReturnStatement) bodyNoExpr.get(0);
-      assertThat(returnNoExpr.getReturnExpression()).isNull();
+      Identifier none = (Identifier) returnNoExpr.getReturnExpression();
+      assertThat(none.getName()).isEqualTo("None");
+      assertLocation(
+          returnNoExpr.getLocation().getStartOffset(),
+          returnNoExpr.getLocation().getEndOffset(),
+          none.getLocation());
     }
   }
 
