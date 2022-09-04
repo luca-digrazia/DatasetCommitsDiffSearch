@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.configuredtargets.AbstractConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -38,7 +37,6 @@ import java.lang.reflect.Field;
 import java.util.Map;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Module;
 import net.starlark.java.eval.Mutability;
@@ -88,16 +86,9 @@ public class StarlarkOutputFormatterCallback extends CqueryThreadsafeCallback {
             Object optionValue = field.get(options);
 
             try {
-              // fromJava is not a deep validity check.
-              // It is not guaranteed to catch all errors,
-              // nor does it specify how it reports the errors it does find.
-              // Passing arbitrary Java values into the Starlark interpreter
-              // is not safe.
-              // TODO(cparsons,twigg): fix it: convert value by explicit cases.
               result.put(optionKey, Starlark.fromJava(optionValue, null));
-            } catch (IllegalArgumentException | NullPointerException ex) {
+            } catch (IllegalArgumentException exception) {
               // optionValue is not a valid Starlark value, so skip this option.
-              // (e.g. tristate; a map with null values)
             }
           } catch (IllegalAccessException e) {
             throw new IllegalStateException(e);
@@ -110,23 +101,6 @@ public class StarlarkOutputFormatterCallback extends CqueryThreadsafeCallback {
         result.put(e.getKey().toString(), e.getValue());
       }
       return result.build();
-    }
-
-    @StarlarkMethod(
-        name = "providers",
-        documented = false,
-        parameters = {
-          @Param(name = "target"),
-        })
-    public Object providers(ConfiguredTarget target) {
-      if (!(target instanceof AbstractConfiguredTarget)) {
-        return Starlark.NONE;
-      }
-      Dict<String, Object> ret = ((AbstractConfiguredTarget) target).getProvidersDict();
-      if (ret == null) {
-        return Starlark.NONE;
-      }
-      return ret;
     }
   }
 
@@ -172,9 +146,8 @@ public class StarlarkOutputFormatterCallback extends CqueryThreadsafeCallback {
         throw new QueryException(
             exceptionMessagePrefix + ex.getMessage(), ConfigurableQuery.Code.STARLARK_SYNTAX_ERROR);
       }
-
       // Create a synthetic file that defines a function with single parameter "target",
-      // whose body is provided by the user's expression. Dynamic errors will have the wrong column.
+      // whose body is provided by the user's expression. Dynamic error will have the wrong column.
       String fileBody = "def format(target): return (" + expr + ")";
       input = ParserInput.fromString(fileBody, "--starlark:expr");
     }
