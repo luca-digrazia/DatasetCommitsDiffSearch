@@ -23,7 +23,6 @@ import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest;
@@ -398,18 +397,16 @@ public class Indices implements IndexManagement {
         c.admin().indices().optimize(or).actionGet();
     }
 
-    public ClusterHealthStatus waitForRecovery(String index) {
-        return waitForStatus(index, ClusterHealthStatus.YELLOW);
+    public void waitForRecovery(String index) {
+        waitForStatus(index, ClusterHealthStatus.YELLOW);
     }
 
-    public ClusterHealthStatus waitForStatus(String index, ClusterHealthStatus clusterHealthStatus) {
+    public void waitForStatus(String index, ClusterHealthStatus clusterHealthStatus) {
         final ClusterHealthRequest request = c.admin().cluster().prepareHealth(index)
                 .setWaitForStatus(clusterHealthStatus)
                 .request();
 
         LOG.debug("Waiting until index health status of index {} is {}", index, clusterHealthStatus);
-
-        final ClusterHealthResponse response = c.admin().cluster().health(request).actionGet();
-        return response.getStatus();
+        c.admin().cluster().health(request).actionGet();
     }
 }
