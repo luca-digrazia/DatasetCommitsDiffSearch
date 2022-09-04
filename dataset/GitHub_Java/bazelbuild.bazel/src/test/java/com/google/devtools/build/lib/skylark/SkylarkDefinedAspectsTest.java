@@ -1790,7 +1790,7 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
         "//test:xxx");
     assertThat(
             Iterables.transform(
-                analysisResult.getTopLevelArtifactsToOwnerLabels().keySet(), Artifact::getFilename))
+                analysisResult.getAdditionalArtifactsToBuild(), Artifact::getFilename))
         .contains("file.xa");
   }
 
