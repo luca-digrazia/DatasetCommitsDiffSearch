@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.dynamic;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static com.google.devtools.build.lib.actions.DynamicStrategyRegistry.DynamicMode.LOCAL;
-import static com.google.devtools.build.lib.actions.DynamicStrategyRegistry.DynamicMode.REMOTE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
@@ -38,17 +36,14 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.SpawnStrategy;
-import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutionPolicy;
-import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.DynamicExecution;
 import com.google.devtools.build.lib.server.FailureDetails.DynamicExecution.Code;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
@@ -174,16 +169,14 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
               .handle(
                   Event.info(
                       String.format(
-                          "%s action finished %sly and was %s",
-                          spawn.getMnemonic(),
-                          strategyThatCancelled.get(),
-                          cancellingBranch.isCancelled() ? "cancelled" : "not cancelled")));
+                          "%s action finished %sly",
+                          spawn.getMnemonic(), strategyThatCancelled.get())));
         }
 
         if (!branchToCancel.cancel(true)) {
           // This can happen if the other branch is local under local_lockfree and has returned
           // its result but not yet cancelled this branch, or if the other branch was already
-          // cancelled for other reasons. In the latter case, we are good to continue.
+          // cancelled for other reasons.
           if (!branchToCancel.isCancelled()) {
             throw new DynamicInterruptedException(
                 String.format(
@@ -205,8 +198,6 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
    * Waits for a branch (a spawn execution) to complete.
    *
    * @param branch the future running the spawn
-   * @param options the options relevant for dynamic execution
-   * @param context execution context object
    * @return the spawn result if the execution terminated successfully, or null if the branch was
    *     cancelled
    * @throws ExecException the execution error of the spawn if it failed
@@ -214,34 +205,11 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
    */
   @Nullable
   private static ImmutableList<SpawnResult> waitBranch(
-      Future<ImmutableList<SpawnResult>> branch,
-      Spawn spawn,
-      DynamicExecutionOptions options,
-      DynamicMode mode,
-      ActionExecutionContext context)
+      Future<ImmutableList<SpawnResult>> branch, Spawn spawn)
       throws ExecException, InterruptedException {
     try {
-      ImmutableList<SpawnResult> spawnResults = branch.get();
-      if (spawnResults == null && options.debugSpawnScheduler) {
-        context
-            .getEventHandler()
-            .handle(
-                Event.info(
-                    String.format(
-                        "Null results from  %s branch of %s",
-                        mode, spawn.getResourceOwner().getPrimaryOutput().prettyPrint())));
-      }
-      return spawnResults;
+      return branch.get();
     } catch (CancellationException e) {
-      if (options.debugSpawnScheduler) {
-        context
-            .getEventHandler()
-            .handle(
-                Event.info(
-                    String.format(
-                        "CancellationException of %s branch of %s, returning null",
-                        mode, spawn.getResourceOwner().getPrimaryOutput().prettyPrint())));
-      }
       return null;
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
@@ -252,14 +220,9 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
         // for cancellation. Assume the latter here because if this was actually a user interrupt,
         // our own get() would have been interrupted as well. It makes no sense to propagate the
         // interrupt status across threads.
-        context
-            .getEventHandler()
-            .handle(
-                Event.info(
-                    String.format(
-                        "Caught InterruptedException from ExecException for %s branch of %s, which"
-                            + " may cause a crash.",
-                        mode, spawn.getResourceOwner().getPrimaryOutput().prettyPrint())));
+        logger.atInfo().withCause(cause).log(
+            "Caught InterruptedException from ExecException for %s, which may cause a crash.",
+            spawn.getResourceOwner().getPrimaryOutput().prettyPrint());
         return null;
       } else {
         // Even though we cannot enforce this in the future's signature (but we do in Branch#call),
@@ -268,8 +231,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
         Throwables.throwIfUnchecked(cause);
         throw new AssertionError(
             String.format(
-                "Unexpected exception type %s from %s strategy.exec()",
-                cause.getClass().getName(), mode));
+                "Unexpected exception type %s from strategy.exec()", cause.getClass().getName()));
       }
     } catch (InterruptedException e) {
       branch.cancel(true);
@@ -289,8 +251,6 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
    *     such cancellation here.
    * @param remoteBranch the future running the remote side of the spawn. Same restrictions apply as
    *     in {@code localBranch}, but in the symmetric direction.
-   * @param options the options relevant for dynamic execution
-   * @param context execution context object
    * @return the result of the branch that terminates first
    * @throws ExecException the execution error of the spawn that terminated first
    * @throws InterruptedException if we get interrupted while waiting for completion
@@ -299,58 +259,35 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
   static ImmutableList<SpawnResult> waitBranches(
       Future<ImmutableList<SpawnResult>> localBranch,
       Future<ImmutableList<SpawnResult>> remoteBranch,
-      Spawn spawn,
-      DynamicExecutionOptions options,
-      ActionExecutionContext context)
+      Spawn spawn)
       throws ExecException, InterruptedException {
     ImmutableList<SpawnResult> localResult;
     try {
-      localResult = waitBranch(localBranch, spawn, options, LOCAL, context);
+      localResult = waitBranch(localBranch, spawn);
     } catch (ExecException | InterruptedException | RuntimeException e) {
-      if (options.debugSpawnScheduler) {
-        context
-            .getEventHandler()
-            .handle(
-                Event.info(
-                    String.format(
-                        "Cancelling remote branch of %s after local exception %s",
-                        spawn.getResourceOwner().prettyPrint(), e.getMessage())));
-      }
       remoteBranch.cancel(true);
       throw e;
     }
 
-    ImmutableList<SpawnResult> remoteResult =
-        waitBranch(remoteBranch, spawn, options, REMOTE, context);
+    ImmutableList<SpawnResult> remoteResult = waitBranch(remoteBranch, spawn);
 
     if (remoteResult != null && localResult != null) {
       throw new AssertionError(
           String.format(
-              "Neither branch of %s cancelled the other one. Local was %s and remote was %s.",
-              spawn.getResourceOwner().getPrimaryOutput().prettyPrint(),
-              branchState(localBranch),
-              branchState(remoteBranch)));
-    } else if (localResult != null) {
-      return localResult;
+              "Neither branch of %s cancelled the other one.",
+              spawn.getResourceOwner().getPrimaryOutput().prettyPrint()));
     } else if (remoteResult != null) {
       return remoteResult;
+    } else if (localResult != null) {
+      return localResult;
     } else {
-      // TODO(b/173153395): Sometimes gets thrown for currently unknown reasons.
-      // (sometimes happens in relation to the whole dynamic execution being cancelled)
       throw new AssertionError(
           String.format(
-              "Neither branch of %s completed. Local was %s and remote was %s.",
+              "Neither branch of %s completed. Local was %scancelled and remote was %scancelled",
               spawn.getResourceOwner().getPrimaryOutput().prettyPrint(),
-              branchState(localBranch),
-              branchState(remoteBranch)));
+              (localBranch.isCancelled() ? "" : "not "),
+              (remoteBranch.isCancelled() ? "" : "not ")));
     }
-  }
-
-  /** Returns a human-readable description of what we can tell about the state of this Future. */
-  private static String branchState(Future<?> branch) {
-    return (branch.isCancelled() ? "cancelled" : "not cancelled")
-        + " and "
-        + (branch.isDone() ? "done" : "not done");
   }
 
   /**
@@ -394,141 +331,18 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
     }
   }
 
-  private static boolean canExecLocalSpawn(
-      Spawn spawn,
-      ExecutionPolicy executionPolicy,
-      ActionContext.ActionContextRegistry actionContextRegistry,
-      DynamicStrategyRegistry dynamicStrategyRegistry) {
-    if (!executionPolicy.canRunLocally()) {
-      return false;
-    }
-    List<SandboxedSpawnStrategy> localStrategies =
-        dynamicStrategyRegistry.getDynamicSpawnActionContexts(spawn, LOCAL);
-    return localStrategies.stream()
-        .anyMatch(
-            s ->
-                (s.canExec(spawn, actionContextRegistry)
-                    || s.canExecWithLegacyFallback(spawn, actionContextRegistry)));
-  }
-
-  private boolean canExecLocal(
-      Spawn spawn,
-      ExecutionPolicy mainSpawnExecutionPolicy,
-      ActionContext.ActionContextRegistry actionContextRegistry,
-      DynamicStrategyRegistry dynamicStrategyRegistry) {
-    if (!canExecLocalSpawn(
-        spawn, mainSpawnExecutionPolicy, actionContextRegistry, dynamicStrategyRegistry)) {
-      return false;
-    }
-    // Present if there is a extra local spawn. Unset if not.
-    Optional<Boolean> canLocalSpawn =
-        getExtraSpawnForLocalExecution
-            .apply(spawn)
-            .map(
-                extraSpawn ->
-                    canExecLocalSpawn(
-                        extraSpawn,
-                        getExecutionPolicy.apply(extraSpawn),
-                        actionContextRegistry,
-                        dynamicStrategyRegistry));
-    return canLocalSpawn.orElse(true);
-  }
-
-  private static boolean canExecRemote(
-      Spawn spawn,
-      ExecutionPolicy executionPolicy,
-      ActionContext.ActionContextRegistry actionContextRegistry,
-      DynamicStrategyRegistry dynamicStrategyRegistry) {
-    if (!executionPolicy.canRunRemotely()) {
-      return false;
-    }
-    List<SandboxedSpawnStrategy> remoteStrategies =
-        dynamicStrategyRegistry.getDynamicSpawnActionContexts(
-            spawn, DynamicStrategyRegistry.DynamicMode.REMOTE);
-    return remoteStrategies.stream().anyMatch(s -> s.canExec(spawn, actionContextRegistry));
-  }
-
-  @Override
-  public boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
-    ExecutionPolicy executionPolicy = getExecutionPolicy.apply(spawn);
-    DynamicStrategyRegistry dynamicStrategyRegistry =
-        actionContextRegistry.getContext(DynamicStrategyRegistry.class);
-
-    return canExecLocal(spawn, executionPolicy, actionContextRegistry, dynamicStrategyRegistry)
-        || canExecRemote(spawn, executionPolicy, actionContextRegistry, dynamicStrategyRegistry);
-  }
-
-  /**
-   * Returns an error string for being unable to execute locally and/or remotely the given execution
-   * state.
-   *
-   * <p>Usage note, this method is only to be called after an impossible condition is already
-   * detected by the caller, as all this does is give an error string to put in the exception.
-   *
-   * @param spawn The action that needs to be executed
-   * @param localAllowedBySpawnExecutionPolicy whether the execution policy for this spawn allows
-   *     trying local execution.
-   * @param remoteAllowedBySpawnExecutionPolicy whether the execution policy for this spawn allows
-   *     trying remote execution.
-   */
-  private static String getNoCanExecFailureMessage(
-      Spawn spawn,
-      boolean localAllowedBySpawnExecutionPolicy,
-      boolean remoteAllowedBySpawnExecutionPolicy) {
-    // TODO(b/188387840): Can't use Spawn.toString() here because tests report FakeOwner instances
-    // as the resource owner, and those cause toStrings to throw if no primary output.
-    // TODO(b/188402092): Even if the above is fixed, we still don't want to use Spawn.toString()
-    // until the mnemonic is included in the output unconditionally. Too useful for the error
-    // message.
-    if (!localAllowedBySpawnExecutionPolicy && !remoteAllowedBySpawnExecutionPolicy) {
-      return "Neither local nor remote execution allowed for action " + spawn.getMnemonic();
-    } else if (!remoteAllowedBySpawnExecutionPolicy) {
-      return "No usable dynamic_local_strategy found (and remote execution disabled) for action "
-          + spawn.getMnemonic();
-    } else if (!localAllowedBySpawnExecutionPolicy) {
-      return "No usable dynamic_remote_strategy found (and local execution disabled) for action "
-          + spawn.getMnemonic();
-    } else {
-      return "No usable dynamic_local_strategy or dynamic_remote_strategy found for action "
-          + spawn.getMnemonic();
-    }
-  }
-
   @Override
   public ImmutableList<SpawnResult> exec(
       final Spawn spawn, final ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
     DynamicSpawnStrategy.verifyAvailabilityInfo(options, spawn);
     ExecutionPolicy executionPolicy = getExecutionPolicy.apply(spawn);
-
-    DynamicStrategyRegistry dynamicStrategyRegistry =
-        actionExecutionContext.getContext(DynamicStrategyRegistry.class);
-    boolean localCanExec =
-        canExecLocal(spawn, executionPolicy, actionExecutionContext, dynamicStrategyRegistry);
-
-    boolean remoteCanExec =
-        canExecRemote(spawn, executionPolicy, actionExecutionContext, dynamicStrategyRegistry);
-
-    if (!localCanExec && !remoteCanExec) {
-      FailureDetail failure =
-          FailureDetail.newBuilder()
-              .setMessage(
-                  getNoCanExecFailureMessage(
-                      spawn, executionPolicy.canRunLocally(), executionPolicy.canRunRemotely()))
-              .setDynamicExecution(
-                  DynamicExecution.newBuilder().setCode(Code.NO_USABLE_STRATEGY_FOUND).build())
-              .setSpawn(
-                  FailureDetails.Spawn.newBuilder()
-                      .setCode(FailureDetails.Spawn.Code.NO_USABLE_STRATEGY_FOUND)
-                      .build())
-              .build();
-      throw new UserExecException(failure);
-    } else if (!localCanExec && remoteCanExec) {
-      return runRemotely(spawn, actionExecutionContext, null);
-    } else if (localCanExec && !remoteCanExec) {
+    if (executionPolicy.canRunLocallyOnly()) {
       return runLocally(spawn, actionExecutionContext, null);
     }
-    // else both can exec. Fallthrough to below.
+    if (executionPolicy.canRunRemotelyOnly()) {
+      return runRemotely(spawn, actionExecutionContext, null);
+    }
 
     // Semaphores to track termination of each branch. These are necessary to wait for the branch to
     // finish its own cleanup (e.g. terminating subprocesses) once it has been cancelled.
@@ -544,7 +358,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
 
     localBranch.setFuture(
         executorService.submit(
-            new Branch(LOCAL, actionExecutionContext) {
+            new Branch(DynamicMode.LOCAL, actionExecutionContext) {
               @Override
               ImmutableList<SpawnResult> callImpl(ActionExecutionContext context)
                   throws InterruptedException, ExecException {
@@ -566,20 +380,11 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
                               remoteBranch,
                               remoteDone,
                               localBranch,
-                              LOCAL,
+                              DynamicMode.LOCAL,
                               strategyThatCancelled,
                               DynamicSpawnStrategy.this.options,
                               actionExecutionContext,
                               spawn));
-                } catch (
-                    @SuppressWarnings("InterruptedExceptionSwallowed")
-                    Throwable e) {
-                  if (options.debugSpawnScheduler) {
-                    logger.atInfo().log(
-                        "Local branch of %s failed with %s",
-                        spawn.getResourceOwner().prettyPrint(), e.getMessage());
-                  }
-                  throw e;
                 } finally {
                   localDone.release();
                 }
@@ -627,15 +432,6 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
                                   spawn));
                   delayLocalExecution.set(true);
                   return spawnResults;
-                } catch (
-                    @SuppressWarnings("InterruptedExceptionSwallowed")
-                    Throwable e) {
-                  if (options.debugSpawnScheduler) {
-                    logger.atInfo().log(
-                        "Remote branch of %s failed with %s",
-                        spawn.getResourceOwner().prettyPrint(), e.getMessage());
-                  }
-                  throw e;
                 } finally {
                   remoteDone.release();
                 }
@@ -655,11 +451,33 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
         MoreExecutors.directExecutor());
 
     try {
-      return waitBranches(localBranch, remoteBranch, spawn, options, actionExecutionContext);
+      return waitBranches(localBranch, remoteBranch, spawn);
     } finally {
       checkState(localBranch.isDone());
       checkState(remoteBranch.isDone());
     }
+  }
+
+  @Override
+  public boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
+    DynamicStrategyRegistry dynamicStrategyRegistry =
+        actionContextRegistry.getContext(DynamicStrategyRegistry.class);
+    for (SandboxedSpawnStrategy strategy :
+        dynamicStrategyRegistry.getDynamicSpawnActionContexts(
+            spawn, DynamicStrategyRegistry.DynamicMode.LOCAL)) {
+      if (strategy.canExec(spawn, actionContextRegistry)
+          || strategy.canExecWithLegacyFallback(spawn, actionContextRegistry)) {
+        return true;
+      }
+    }
+    for (SandboxedSpawnStrategy strategy :
+        dynamicStrategyRegistry.getDynamicSpawnActionContexts(
+            spawn, DynamicStrategyRegistry.DynamicMode.REMOTE)) {
+      if (strategy.canExec(spawn, actionContextRegistry)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
@@ -678,12 +496,6 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
         outDir.getChild(outBaseName + suffix), errDir.getChild(errBaseName + suffix));
   }
 
-  /**
-   * Try to run the given spawn locally.
-   *
-   * <p>Precondition: At least one {@code dynamic_local_strategy} returns {@code true} from its
-   * {@link SpawnStrategy#canExec canExec} method for the given {@code spawn}.
-   */
   private ImmutableList<SpawnResult> runLocally(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
@@ -720,28 +532,19 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
         actionExecutionContext.getContext(DynamicStrategyRegistry.class);
 
     for (SandboxedSpawnStrategy strategy :
-        dynamicStrategyRegistry.getDynamicSpawnActionContexts(spawn, LOCAL)) {
+        dynamicStrategyRegistry.getDynamicSpawnActionContexts(
+            spawn, DynamicStrategyRegistry.DynamicMode.LOCAL)) {
       if (strategy.canExec(spawn, actionExecutionContext)
           || strategy.canExecWithLegacyFallback(spawn, actionExecutionContext)) {
-        ImmutableList<SpawnResult> results =
-            strategy.exec(spawn, actionExecutionContext, stopConcurrentSpawns);
-        if (results == null) {
-          logger.atWarning().log(
-              "Local stategy %s for %s target %s returned null, which it shouldn't do.",
-              strategy, spawn.getMnemonic(), spawn.getResourceOwner().prettyPrint());
-        }
-        return results;
+        return strategy.exec(spawn, actionExecutionContext, stopConcurrentSpawns);
       }
     }
-    throw new AssertionError("canExec passed but no usable local strategy for action " + spawn);
+    throw new RuntimeException(
+        String.format(
+            "executorCreated not yet called or no default dynamic_local_strategy set for %s",
+            spawn.getMnemonic()));
   }
 
-  /**
-   * Try to run the given spawn locally.
-   *
-   * <p>Precondition: At least one {@code dynamic_remote_strategy} returns {@code true} from its
-   * {@link SpawnStrategy#canExec canExec} method for the given {@code spawn}.
-   */
   private static ImmutableList<SpawnResult> runRemotely(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
@@ -762,14 +565,16 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
               .handle(
                   Event.warn(
                       String.format(
-                          "Remote strategy %s for %s target %s returned null, which it shouldn't"
-                              + " do.",
-                          strategy, spawn.getMnemonic(), spawn.getResourceOwner().prettyPrint())));
+                          "Remote strategy %s for %s returned null, which it shouldn't do.",
+                          strategy, spawn.getResourceOwner().prettyPrint())));
         }
         return results;
       }
     }
-    throw new AssertionError("canExec passed but no usable remote strategy for action " + spawn);
+    throw new RuntimeException(
+        String.format(
+            "executorCreated not yet called or no default dynamic_remote_strategy set for %s",
+            spawn.getMnemonic()));
   }
 
   /**

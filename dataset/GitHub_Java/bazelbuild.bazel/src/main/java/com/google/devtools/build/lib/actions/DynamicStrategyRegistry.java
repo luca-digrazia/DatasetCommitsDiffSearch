@@ -21,14 +21,36 @@ public interface DynamicStrategyRegistry extends ActionContext {
 
   /** Indicator for whether a strategy is meant for remote or local branch of dynamic execution. */
   enum DynamicMode {
-    REMOTE,
-    LOCAL
+    REMOTE("remote"),
+    LOCAL("local");
+
+    private final String name;
+
+    DynamicMode(String name) {
+      this.name = name;
+    }
+
+    @Override
+    public String toString() {
+      return name;
+    }
+
+    public DynamicMode other() {
+      return this == REMOTE ? LOCAL : REMOTE;
+    }
   }
 
   /**
-   * Returns the spawn strategy implementations that {@linkplain SpawnActionContext#canExec can
-   * execute} the given spawn in the order that they were registered for the provided dynamic mode.
+   * Returns the spawn strategy implementations that {@linkplain SpawnStrategy#canExec can execute}
+   * the given spawn in the order that they were registered for the provided dynamic mode.
    */
-  List<SandboxedSpawnActionContext> getDynamicSpawnActionContexts(
-      Spawn spawn, DynamicMode dynamicMode);
+  List<SandboxedSpawnStrategy> getDynamicSpawnActionContexts(Spawn spawn, DynamicMode dynamicMode);
+
+  /**
+   * Notifies all strategies applying to at least one mnemonic (including the empty all-catch one)
+   * in this registry that they are {@link ActionContext#usedContext used}.
+   *
+   * @param actionContextRegistry a complete registry containing all available action contexts
+   */
+  void notifyUsedDynamic(ActionContext.ActionContextRegistry actionContextRegistry);
 }
