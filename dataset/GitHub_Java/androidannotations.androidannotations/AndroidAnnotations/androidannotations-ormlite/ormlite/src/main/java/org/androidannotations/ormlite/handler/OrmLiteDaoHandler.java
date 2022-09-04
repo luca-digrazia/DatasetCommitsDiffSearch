@@ -89,11 +89,11 @@ public class OrmLiteDaoHandler extends BaseAnnotationHandler<EComponentHolder> {
 		JTryBlock tryBlock = initBody._try();
 		tryBlock.body().assign(ref(fieldName), injectExpr);
 
-		JCatchBlock catchBlock = tryBlock._catch(getClasses().SQL_EXCEPTION);
+		JCatchBlock catchBlock = tryBlock._catch(classes().SQL_EXCEPTION);
 		JVar exception = catchBlock.param("e");
 
 		catchBlock.body() //
-				.staticInvoke(getClasses().LOG, "e") //
+				.staticInvoke(classes().LOG, "e") //
 				.arg(holder.getGeneratedClass().name()) //
 				.arg("Could not create DAO " + fieldName) //
 				.arg(exception);
