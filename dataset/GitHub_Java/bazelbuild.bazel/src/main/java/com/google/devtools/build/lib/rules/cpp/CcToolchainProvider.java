@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.LicensesProvider;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
@@ -30,10 +29,9 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
+import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
@@ -47,7 +45,7 @@ import javax.annotation.Nullable;
 @Immutable
 @AutoCodec
 public final class CcToolchainProvider extends ToolchainInfo
-    implements CcToolchainProviderApi<FeatureConfiguration>, HasCcToolchainLabel {
+    implements CcToolchainProviderApi, HasCcToolchainLabel {
   public static final String SKYLARK_NAME = "CcToolchainInfo";
 
   /** An empty toolchain to be returned in the error case (instead of null). */
@@ -84,7 +82,8 @@ public final class CcToolchainProvider extends ToolchainInfo
           /* linkDynamicLibraryTool= */ null,
           /* builtInIncludeDirectories= */ ImmutableList.of(),
           /* sysroot= */ null,
-          /* fdoContext= */ null,
+          FdoMode.OFF,
+          /* fdoProvider= */ null,
           /* useLLVMCoverageMapFormat= */ false,
           /* codeCoverageEnabled= */ false,
           /* isHostConfiguration= */ false,
@@ -106,9 +105,9 @@ public final class CcToolchainProvider extends ToolchainInfo
   private final NestedSet<Artifact> dwpFiles;
   private final NestedSet<Artifact> coverageFiles;
   private final NestedSet<Artifact> libcLink;
-  @Nullable private final NestedSet<Artifact> staticRuntimeLinkInputs;
+  private final NestedSet<Artifact> staticRuntimeLinkInputs;
   @Nullable private final Artifact staticRuntimeLinkMiddleman;
-  @Nullable private final NestedSet<Artifact> dynamicRuntimeLinkInputs;
+  private final NestedSet<Artifact> dynamicRuntimeLinkInputs;
   @Nullable private final Artifact dynamicRuntimeLinkMiddleman;
   private final PathFragment dynamicRuntimeSolibDir;
   private final CcInfo ccInfo;
@@ -120,17 +119,18 @@ public final class CcToolchainProvider extends ToolchainInfo
   @Nullable private final Artifact linkDynamicLibraryTool;
   private final ImmutableList<PathFragment> builtInIncludeDirectories;
   @Nullable private final PathFragment sysroot;
+  private final FdoMode fdoMode;
   private final boolean useLLVMCoverageMapFormat;
   private final boolean codeCoverageEnabled;
   private final boolean isHostConfiguration;
   private final boolean forcePic;
   private final boolean shouldStripBinaries;
   /**
-   * WARNING: We don't like {@link FdoContext}. Its {@link FdoContext#fdoProfilePath} is pure path
-   * and that is horrible as it breaks many Bazel assumptions! Don't do bad stuff with it, don't
-   * take inspiration from it.
+   * WARNING: We don't like {@link FdoProvider}. Its {@link FdoProvider#fdoProfilePath} is pure
+   * path and that is horrible as it breaks many Bazel assumptions! Don't do bad stuff with it,
+   * don't take inspiration from it.
    */
-  private final FdoContext fdoContext;
+  private final FdoProvider fdoProvider;
 
   private final LicensesProvider licensesProvider;
 
@@ -166,7 +166,8 @@ public final class CcToolchainProvider extends ToolchainInfo
       Artifact linkDynamicLibraryTool,
       ImmutableList<PathFragment> builtInIncludeDirectories,
       @Nullable PathFragment sysroot,
-      FdoContext fdoContext,
+      FdoMode fdoMode,
+      FdoProvider fdoProvider,
       boolean useLLVMCoverageMapFormat,
       boolean codeCoverageEnabled,
       boolean isHostConfiguration,
@@ -188,9 +189,9 @@ public final class CcToolchainProvider extends ToolchainInfo
     this.dwpFiles = Preconditions.checkNotNull(dwpFiles);
     this.coverageFiles = Preconditions.checkNotNull(coverageFiles);
     this.libcLink = Preconditions.checkNotNull(libcLink);
-    this.staticRuntimeLinkInputs = staticRuntimeLinkInputs;
+    this.staticRuntimeLinkInputs = Preconditions.checkNotNull(staticRuntimeLinkInputs);
     this.staticRuntimeLinkMiddleman = staticRuntimeLinkMiddleman;
-    this.dynamicRuntimeLinkInputs = dynamicRuntimeLinkInputs;
+    this.dynamicRuntimeLinkInputs = Preconditions.checkNotNull(dynamicRuntimeLinkInputs);
     this.dynamicRuntimeLinkMiddleman = dynamicRuntimeLinkMiddleman;
     this.dynamicRuntimeSolibDir = Preconditions.checkNotNull(dynamicRuntimeSolibDir);
     this.ccInfo =
@@ -206,7 +207,8 @@ public final class CcToolchainProvider extends ToolchainInfo
     this.linkDynamicLibraryTool = linkDynamicLibraryTool;
     this.builtInIncludeDirectories = builtInIncludeDirectories;
     this.sysroot = sysroot;
-    this.fdoContext = fdoContext == null ? FdoContext.getDisabledContext() : fdoContext;
+    this.fdoMode = fdoMode;
+    this.fdoProvider = fdoProvider;
     this.useLLVMCoverageMapFormat = useLLVMCoverageMapFormat;
     this.codeCoverageEnabled = codeCoverageEnabled;
     this.isHostConfiguration = isHostConfiguration;
@@ -284,25 +286,8 @@ public final class CcToolchainProvider extends ToolchainInfo
    * @return true if this rule's compilations should apply -fPIC, false otherwise
    */
   @Override
-  public boolean usePicForDynamicLibraries(FeatureConfiguration featureConfiguration) {
-    return forcePic
-        || toolchainNeedsPic()
-        || featureConfiguration.isEnabled(CppRuleClasses.SUPPORTS_PIC);
-  }
-
-  /**
-   * Deprecated since it uses legacy crosstool fields.
-   *
-   * <p>See {link {@link #usePicForDynamicLibraries(FeatureConfiguration)} for docs}
-   *
-   * @return
-   */
-  @Deprecated
-  @Override
-  public boolean usePicForDynamicLibrariesUsingLegacyFields() {
-    return forcePic
-        || toolchainNeedsPic()
-        || FeatureConfiguration.EMPTY.isEnabled(CppRuleClasses.SUPPORTS_PIC);
+  public boolean usePicForDynamicLibraries() {
+    return forcePic || toolchainNeedsPic();
   }
 
   /**
@@ -452,15 +437,8 @@ public final class CcToolchainProvider extends ToolchainInfo
   }
 
   /** Returns the static runtime libraries. */
-  public NestedSet<Artifact> getStaticRuntimeLinkInputs(
-      RuleContext ruleContext, FeatureConfiguration featureConfiguration)
-      throws RuleErrorException {
+  public NestedSet<Artifact> getStaticRuntimeLinkInputs(FeatureConfiguration featureConfiguration) {
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
-      if (staticRuntimeLinkInputs == null) {
-        throw ruleContext.throwWithRuleError(
-            "Toolchain supports embedded runtimes, but didn't "
-                + "provide static_runtime_lib attribute.");
-      }
       return staticRuntimeLinkInputs;
     } else {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -469,15 +447,8 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   /** Returns an aggregating middleman that represents the static runtime libraries. */
   @Nullable
-  public Artifact getStaticRuntimeLinkMiddleman(
-      RuleContext ruleContext, FeatureConfiguration featureConfiguration)
-      throws RuleErrorException {
+  public Artifact getStaticRuntimeLinkMiddleman(FeatureConfiguration featureConfiguration) {
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
-      if (staticRuntimeLinkInputs == null) {
-        throw ruleContext.throwWithRuleError(
-            "Toolchain supports embedded runtimes, but didn't "
-                + "provide static_runtime_lib attribute.");
-      }
       return staticRuntimeLinkMiddleman;
     } else {
       return null;
@@ -486,14 +457,8 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   /** Returns the dynamic runtime libraries. */
   public NestedSet<Artifact> getDynamicRuntimeLinkInputs(
-      RuleErrorConsumer ruleContext, FeatureConfiguration featureConfiguration)
-      throws RuleErrorException {
+      FeatureConfiguration featureConfiguration) {
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
-      if (dynamicRuntimeLinkInputs == null) {
-        throw ruleContext.throwWithRuleError(
-            "Toolchain supports embedded runtimes, but didn't "
-                + "provide dynamic_runtime_lib attribute.");
-      }
       return dynamicRuntimeLinkInputs;
     } else {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -502,15 +467,8 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   /** Returns an aggregating middleman that represents the dynamic runtime libraries. */
   @Nullable
-  public Artifact getDynamicRuntimeLinkMiddleman(
-      RuleErrorConsumer ruleContext, FeatureConfiguration featureConfiguration)
-      throws RuleErrorException {
+  public Artifact getDynamicRuntimeLinkMiddleman(FeatureConfiguration featureConfiguration) {
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
-      if (dynamicRuntimeLinkInputs == null) {
-        throw ruleContext.throwWithRuleError(
-            "Toolchain supports embedded runtimes, but didn't "
-                + "provide dynamic_runtime_lib attribute.");
-      }
       return dynamicRuntimeLinkMiddleman;
     } else {
       return null;
@@ -588,10 +546,18 @@ public final class CcToolchainProvider extends ToolchainInfo
     return cppConfiguration == null ? null : cppConfiguration.getCompilationMode();
   }
 
-  /** Returns whether the toolchain supports dynamic linking. */
-  public boolean supportsDynamicLinker(FeatureConfiguration featureConfiguration) {
-    return toolchainInfo.supportsDynamicLinker()
-        || featureConfiguration.isEnabled(CppRuleClasses.SUPPORTS_DYNAMIC_LINKER);
+  /**
+   * Returns whether the toolchain supports the gold linker.
+   */
+  public boolean supportsGoldLinker() {
+    return toolchainInfo.supportsGoldLinker();
+  }
+
+  /**
+   * Returns whether the toolchain supports dynamic linking.
+   */
+  public boolean supportsDynamicLinker() {
+    return toolchainInfo.supportsDynamicLinker();
   }
 
   /**
@@ -761,8 +727,8 @@ public final class CcToolchainProvider extends ToolchainInfo
     return toolchainInfo.getLegacyCcFlagsMakeVariable();
   }
 
-  public FdoContext getFdoContext() {
-    return fdoContext;
+  public FdoProvider getFdoProvider() {
+    return fdoProvider;
   }
 
   /**
@@ -926,6 +892,10 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   public final boolean isLLVMCompiler() {
     return toolchainInfo.isLLVMCompiler();
+  }
+
+  public FdoMode getFdoMode() {
+    return fdoMode;
   }
 
   public ImmutableList<String> getLegacyCxxOptions() {
