@@ -16,17 +16,19 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.skyframe.serialization.NotSerializableRuntimeException;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
+import java.util.Collection;
 
 /**
  * A value referring to a computed set of resolved targets. This is used for the results of target
@@ -36,24 +38,25 @@ import java.io.Serializable;
 @ThreadSafe
 @VisibleForTesting
 public final class TestSuiteExpansionValue implements SkyValue {
-  private ResolvedTargets<Target> targets;
+  private ResolvedTargets<Label> labels;
 
-  TestSuiteExpansionValue(ResolvedTargets<Target> targets) {
-    this.targets = Preconditions.checkNotNull(targets);
+  TestSuiteExpansionValue(ResolvedTargets<Label> labels) {
+    this.labels = Preconditions.checkNotNull(labels);
   }
 
-  public ResolvedTargets<Target> getTargets() {
-    return targets;
+  public ResolvedTargets<Label> getLabels() {
+    return labels;
   }
+
 
   @SuppressWarnings("unused")
   private void writeObject(ObjectOutputStream out) {
-    throw new UnsupportedOperationException();
+    throw new NotSerializableRuntimeException();
   }
 
   @SuppressWarnings("unused")
   private void readObject(ObjectInputStream in) {
-    throw new UnsupportedOperationException();
+    throw new NotSerializableRuntimeException();
   }
 
   @SuppressWarnings("unused")
@@ -67,19 +70,23 @@ public final class TestSuiteExpansionValue implements SkyValue {
    * @param targets the set of targets to be expanded
    */
   @ThreadSafe
-  public static SkyKey key(ImmutableSet<Label> targets) {
-    return new SkyKey(SkyFunctions.TEST_SUITE_EXPANSION, new TestSuiteExpansion(targets));
+  public static SkyKey key(Collection<Label> targets) {
+    return new TestSuiteExpansionKey(ImmutableSortedSet.copyOf(targets));
   }
 
-  /**
-   * A list of targets of which all test suites should be expanded.
-   */
+  /** A list of targets of which all test suites should be expanded. */
+  @AutoCodec
   @ThreadSafe
-  static final class TestSuiteExpansion implements Serializable {
-    private final ImmutableSet<Label> targets;
+  static final class TestSuiteExpansionKey implements SkyKey {
+    private final ImmutableSortedSet<Label> targets;
 
-    public TestSuiteExpansion(ImmutableSet<Label> targets) {
+    public TestSuiteExpansionKey(ImmutableSortedSet<Label> targets) {
       this.targets = targets;
+    }
+
+    @Override
+    public SkyFunctionName functionName() {
+      return SkyFunctions.TEST_SUITE_EXPANSION;
     }
 
     public ImmutableSet<Label> getTargets() {
@@ -101,10 +108,10 @@ public final class TestSuiteExpansionValue implements SkyValue {
       if (this == obj) {
         return true;
       }
-      if (!(obj instanceof TestSuiteExpansion)) {
+      if (!(obj instanceof TestSuiteExpansionKey)) {
         return false;
       }
-      TestSuiteExpansion other = (TestSuiteExpansion) obj;
+      TestSuiteExpansionKey other = (TestSuiteExpansionKey) obj;
       return other.targets.equals(targets);
     }
   }

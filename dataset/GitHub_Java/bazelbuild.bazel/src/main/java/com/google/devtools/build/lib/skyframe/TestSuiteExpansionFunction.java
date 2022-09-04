@@ -31,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -61,8 +62,10 @@ final class TestSuiteExpansionFunction implements SkyFunction {
         TestsInSuiteValue value = (TestsInSuiteValue) testsInSuites.get(
             TestsInSuiteValue.key(target, true));
         if (value != null) {
-          result.addAll(value.getLabels().getTargets());
-          hasError |= value.getLabels().hasError();
+          result.addAll(value.getTargets().getTargets().stream()
+              .map(Target::getLabel)
+              .collect(Collectors.toList()));
+          hasError |= value.getTargets().hasError();
         }
       } else {
         result.add(target.getLabel());
