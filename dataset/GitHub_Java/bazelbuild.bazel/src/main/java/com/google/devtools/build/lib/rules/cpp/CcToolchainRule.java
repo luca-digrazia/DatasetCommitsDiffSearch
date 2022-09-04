@@ -229,7 +229,7 @@ public final class CcToolchainRule implements RuleDefinition {
         <p>Collection of all cc_toolchain artifacts required for assembly actions.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("as_files", LABEL).legacyAllowAnyFileType().cfg(HostTransition.createFactory()))
-        /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(ar_files) -->
+        /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(as_files) -->
         Currently unused (<a href="https://github.com/bazelbuild/bazel/issues/6928">#6928</a>).
 
         <p>Collection of all cc_toolchain artifacts required for archiving actions.</p>
@@ -340,6 +340,15 @@ public final class CcToolchainRule implements RuleDefinition {
                 .allowedRuleClasses("fdo_prefetch_hints")
                 .mandatoryProviders(ImmutableList.of(FdoPrefetchHintsProvider.PROVIDER.id()))
                 .value(FDO_PREFETCH_HINTS))
+        /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(proto) -->
+        Deprecated, will be removed as part of
+        <a href="https://github.com/bazelbuild/bazel/issues/5380">
+          CROSSTOOL migration to Starlark
+        </a>.
+        Inline content of the crosstool_config.toolchain. When specified, it will take precedence
+        over the CROSSTOOL file.
+        <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
+        .add(attr("proto", Type.STRING))
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(toolchain_identifier) -->
         The identifier used to match this cc_toolchain with the corresponding
         crosstool_config.toolchain.
