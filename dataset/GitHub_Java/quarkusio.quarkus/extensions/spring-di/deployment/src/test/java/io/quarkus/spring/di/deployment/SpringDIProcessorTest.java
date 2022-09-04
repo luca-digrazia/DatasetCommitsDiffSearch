@@ -1,3 +1,18 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.quarkus.spring.di.deployment;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,17 +42,13 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
-import org.jboss.jandex.MethodInfo;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import io.quarkus.arc.processor.BeanArchives;
-import io.quarkus.arc.processor.DotNames;
 import io.quarkus.deployment.util.IoUtil;
 
 /**
@@ -46,10 +57,9 @@ import io.quarkus.deployment.util.IoUtil;
 class SpringDIProcessorTest {
 
     final SpringDIProcessor processor = new SpringDIProcessor();
-    final IndexView index = getIndex(PrototypeService.class, RequestService.class, UndeclaredService.class,
-            ConflictService.class, ConflictBean.class, RequestBean.class, UndeclaredBean.class,
-            ConflictStereotypeBean.class, NamedBean.class, OverrideConflictStereotypeBean.class,
-            ConflictNamedBean.class);
+    final IndexView index = getIndex(PrototypeService.class, RequestService.class,
+            UndeclaredService.class, ConflictService.class, ConflictBean.class, RequestBean.class, UndeclaredBean.class,
+            ConflictStereotypeBean.class, NamedBean.class, OverrideConflictStereotypeBean.class, ConflictNamedBean.class);
 
     @Test
     public void springStereotypeScopes() {
@@ -63,9 +73,10 @@ class SpringDIProcessorTest {
                 Collections.singleton(DotName.createSimple(Dependent.class.getName())));
         expected.put(DotName.createSimple(RequestService.class.getName()),
                 Collections.singleton(DotName.createSimple(RequestScoped.class.getName())));
-        expected.put(DotName.createSimple(UndeclaredService.class.getName()), Collections.emptySet());
-        expected.put(DotName.createSimple(ConflictService.class.getName()), setOf(
-                DotName.createSimple(Dependent.class.getName()), DotName.createSimple(RequestScoped.class.getName())));
+        expected.put(DotName.createSimple(UndeclaredService.class.getName()),
+                Collections.emptySet());
+        expected.put(DotName.createSimple(ConflictService.class.getName()),
+                setOf(DotName.createSimple(Dependent.class.getName()), DotName.createSimple(RequestScoped.class.getName())));
         assertEquals(expected, scopes);
     }
 
@@ -150,59 +161,6 @@ class SpringDIProcessorTest {
         });
     }
 
-    @Test
-    public void getAnnotationsToAddBeanMethodDefaultsToSingleton() {
-        final Map<DotName, Set<DotName>> scopes = processor.getStereotypeScopes(index);
-        final MethodInfo target = index.getClassByName(DotName.createSimple(BeanConfig.class.getName()))
-                .method("singletonBean");
-
-        final Set<AnnotationInstance> ret = processor.getAnnotationsToAdd(target, scopes, null);
-
-        final Set<AnnotationInstance> expected = setOf(
-                AnnotationInstance.create(DotName.createSimple(Singleton.class.getName()), target,
-                        Collections.emptyList()),
-                AnnotationInstance.create(DotNames.PRODUCES, target, Collections.emptyList()),
-                AnnotationInstance.create(DotName.createSimple(Named.class.getName()), target,
-                        Collections.singletonList(AnnotationValue.createStringValue("value", "singletonBean"))));
-        assertEquals(expected, ret);
-    }
-
-    /**
-     * Do not add javax.inject.Singleton, as it is not spring-specific and Arc processor already handles it.
-     * Otherwise it would cause "declares multiple scope type annotations" error.
-     */
-    @Test
-    public void getAnnotationsToAddBeanMethodExplicitSingleton() {
-        final Map<DotName, Set<DotName>> scopes = processor.getStereotypeScopes(index);
-        final MethodInfo target = index.getClassByName(DotName.createSimple(BeanConfig.class.getName()))
-                .method("explicitSingletonBean");
-
-        final Set<AnnotationInstance> ret = processor.getAnnotationsToAdd(target, scopes, null);
-
-        final Set<AnnotationInstance> expected = setOf(
-                AnnotationInstance.create(DotNames.PRODUCES, target, Collections.emptyList()),
-                AnnotationInstance.create(DotName.createSimple(Named.class.getName()), target,
-                        Collections.singletonList(AnnotationValue.createStringValue("value", "explicitSingletonBean"))));
-        assertEquals(expected, ret);
-    }
-
-    @Test
-    public void getAnnotationsToAddBeanMethodWithScope() {
-        final Map<DotName, Set<DotName>> scopes = processor.getStereotypeScopes(index);
-        final MethodInfo target = index.getClassByName(DotName.createSimple(BeanConfig.class.getName()))
-                .method("requestBean");
-
-        final Set<AnnotationInstance> ret = processor.getAnnotationsToAdd(target, scopes, null);
-
-        final Set<AnnotationInstance> expected = setOf(
-                AnnotationInstance.create(DotName.createSimple(RequestScoped.class.getName()), target,
-                        Collections.emptyList()),
-                AnnotationInstance.create(DotNames.PRODUCES, target, Collections.emptyList()),
-                AnnotationInstance.create(DotName.createSimple(Named.class.getName()), target,
-                        Collections.singletonList(AnnotationValue.createStringValue("value", "requestBean"))));
-        assertEquals(expected, ret);
-    }
-
     private IndexView getIndex(final Class<?>... classes) {
         final Indexer indexer = new Indexer();
         for (final Class<?> clazz : classes) {
@@ -213,8 +171,7 @@ class SpringDIProcessorTest {
                 throw new IllegalStateException("Failed to index: " + className, e);
             }
         }
-        return BeanArchives.buildBeanArchiveIndex(getClass().getClassLoader(), new BeanArchives.PersistentClassIndex(),
-                indexer.complete());
+        return BeanArchives.buildBeanArchiveIndex(indexer.complete());
     }
 
     @SafeVarargs
@@ -280,26 +237,5 @@ class SpringDIProcessorTest {
     @ConflictService
     @Scope("application")
     public class OverrideConflictStereotypeBean {
-    }
-
-    @Configuration
-    public class BeanConfig {
-
-        @Bean
-        public UndeclaredBean singletonBean() {
-            return new UndeclaredBean();
-        }
-
-        @Bean
-        @Scope(value = "request")
-        public UndeclaredBean requestBean() {
-            return new UndeclaredBean();
-        }
-
-        @Bean
-        @Singleton
-        public UndeclaredBean explicitSingletonBean() {
-            return new UndeclaredBean();
-        }
     }
 }

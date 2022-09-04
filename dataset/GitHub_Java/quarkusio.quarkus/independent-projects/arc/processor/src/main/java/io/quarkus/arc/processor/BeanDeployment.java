@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext;
@@ -129,11 +145,6 @@ public class BeanDeployment {
         this.injectionPoints = new ArrayList<>();
         this.interceptors = findInterceptors(injectionPoints);
         this.beanResolver = new BeanResolver(this);
-        if (buildContext != null) {
-            buildContext.putInternal(Key.QUALIFIERS.asString(), Collections.unmodifiableMap(qualifiers));
-            buildContext.putInternal(Key.INTERCEPTOR_BINDINGS.asString(), Collections.unmodifiableMap(interceptorBindings));
-            buildContext.putInternal(Key.STEREOTYPES.asString(), Collections.unmodifiableMap(stereotypes));
-        }
         List<ObserverInfo> observers = new ArrayList<>();
         this.beans = findBeans(initBeanDefiningAnnotations(beanDefiningAnnotations, stereotypes.keySet()), observers,
                 injectionPoints);
@@ -142,6 +153,9 @@ public class BeanDeployment {
             buildContext.putInternal(Key.INJECTION_POINTS.asString(), Collections.unmodifiableList(injectionPoints));
             buildContext.putInternal(Key.OBSERVERS.asString(), Collections.unmodifiableList(observers));
             buildContext.putInternal(Key.BEANS.asString(), Collections.unmodifiableList(beans));
+            buildContext.putInternal(Key.QUALIFIERS.asString(), Collections.unmodifiableMap(qualifiers));
+            buildContext.putInternal(Key.INTERCEPTOR_BINDINGS.asString(), Collections.unmodifiableMap(interceptorBindings));
+            buildContext.putInternal(Key.STEREOTYPES.asString(), Collections.unmodifiableMap(stereotypes));
         }
 
         registerSyntheticBeans(beanRegistrars, buildContext);
@@ -296,41 +310,34 @@ public class BeanDeployment {
             List<BeanInfo> producers = beans.stream().filter(b -> b.isProducerMethod() || b.isProducerField())
                     .collect(Collectors.toList());
             List<InjectionPointInfo> instanceInjectionPoints = injectionPoints.stream()
-                    .filter(BuiltinBean.INSTANCE::matches)
+                    .filter(ip -> BuiltinBean.resolve(ip) == BuiltinBean.INSTANCE)
                     .collect(Collectors.toList());
-            Set<BeanInfo> injected = injectionPoints.stream().map(InjectionPointInfo::getResolvedBean)
-                    .collect(Collectors.toSet());
-            Set<BeanInfo> declaresProducer = producers.stream().map(BeanInfo::getDeclaringBean).collect(Collectors.toSet());
-            Set<BeanInfo> declaresObserver = observers.stream().map(ObserverInfo::getDeclaringBean).collect(Collectors.toSet());
-            test: for (BeanInfo bean : beans) {
+            for (BeanInfo bean : beans) {
                 // Named beans can be used in templates and expressions
                 if (bean.getName() != null) {
-                    continue test;
+                    continue;
                 }
                 // Custom exclusions
-                for (Predicate<BeanInfo> exclusion : unusedExclusions) {
-                    if (exclusion.test(bean)) {
-                        continue test;
-                    }
+                if (unusedExclusions.stream().anyMatch(e -> e.test(bean))) {
+                    continue;
                 }
                 // Is injected
-                if (injected.contains(bean)) {
-                    continue test;
+                if (injectionPoints.stream().anyMatch(ip -> bean.equals(ip.getResolvedBean()))) {
+                    continue;
                 }
                 // Declares an observer method
-                if (declaresObserver.contains(bean)) {
-                    continue test;
+                if (observers.stream().anyMatch((o) -> bean.equals(o.getDeclaringBean()))) {
+                    continue;
                 }
                 // Declares a producer - see also second pass
-                if (declaresProducer.contains(bean)) {
-                    continue test;
+                if (producers.stream().anyMatch(b -> bean.equals(b.getDeclaringBean()))) {
+                    continue;
                 }
                 // Instance<Foo>
-                for (InjectionPointInfo injectionPoint : instanceInjectionPoints) {
-                    if (Beans.hasQualifiers(bean, injectionPoint.getRequiredQualifiers()) && Beans.matchesType(bean,
-                            injectionPoint.getRequiredType().asParameterizedType().arguments().get(0))) {
-                        continue test;
-                    }
+                if (instanceInjectionPoints.stream()
+                        .anyMatch(ip -> Beans.matchesType(bean, ip.getRequiredType().asParameterizedType().arguments().get(0))
+                                && ip.getRequiredQualifiers().stream().allMatch(q -> Beans.hasQualifier(bean, q)))) {
+                    continue;
                 }
                 if (bean.isProducerField() || bean.isProducerMethod()) {
                     // This bean is very likely an unused producer
@@ -352,9 +359,7 @@ public class BeanDeployment {
             if (!removable.isEmpty()) {
                 beans.removeAll(removable);
                 removedBeans.addAll(removable);
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debugf(removedBeans.stream().map(b -> "Removed unused " + b).collect(Collectors.joining("\n")));
-                }
+                removedBeans.forEach(b -> LOGGER.debugf("Removed unused %s", b));
             }
             LOGGER.debugf("Removed %s unused beans in %s ms", removable.size(), System.currentTimeMillis() - removalStart);
         }

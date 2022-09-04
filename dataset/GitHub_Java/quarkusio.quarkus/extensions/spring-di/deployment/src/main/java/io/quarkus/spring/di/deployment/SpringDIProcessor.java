@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.spring.di.deployment;
 
 import static org.jboss.jandex.AnnotationInstance.create;
@@ -28,6 +44,7 @@ import org.jboss.jandex.MethodInfo;
 import io.quarkus.arc.deployment.AdditionalStereotypeBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
+import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.Transformation;
@@ -92,9 +109,9 @@ public class SpringDIProcessor {
             final BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             final BuildProducer<AdditionalStereotypeBuildItem> additionalStereotypeBuildItemBuildProducer) {
         final IndexView index = beanArchiveIndexBuildItem.getIndex();
-        final Map<DotName, Set<DotName>> stereotypeScopes = getStereotypeScopes(index);
+        final Map<DotName, Set<DotName>> scopes = getStereotypeScopes(index);
         final Map<DotName, Collection<AnnotationInstance>> instances = new HashMap<>();
-        for (final DotName name : stereotypeScopes.keySet()) {
+        for (final DotName name : scopes.keySet()) {
             instances.put(name, index.getAnnotations(name)
                     .stream()
                     .filter(it -> isAnnotation(it.target().asClass().flags()))
@@ -107,9 +124,8 @@ public class SpringDIProcessor {
                 return;
             }
             final AnnotationTarget target = context.getTarget();
-            // Note that only built-in scopes are used because annotation transformers can be used before custom contexts are registered
-            final Set<AnnotationInstance> annotationsToAdd = getAnnotationsToAdd(target, stereotypeScopes,
-                    Arrays.stream(BuiltinScope.values()).map(BuiltinScope::getName).collect(Collectors.toList()));
+            final Set<AnnotationInstance> annotationsToAdd = getAnnotationsToAdd(target, scopes, context
+                    .get(BuildExtension.Key.SCOPES).stream().map(item -> item.getDotName()).collect(Collectors.toList()));
             if (!annotationsToAdd.isEmpty()) {
                 final Transformation transform = context.transform();
                 for (AnnotationInstance annotationInstance : annotationsToAdd) {
@@ -162,24 +178,18 @@ public class SpringDIProcessor {
     }
 
     /**
-     * Translate spring built-in scope identifiers to CDI scopes.
+     * Translate spring built in scope identifiers to CDI scopes.
      *
-     * @param target The annotated element declaring the @Scope
+     * @param clazz The class declaring the @Scope
      * @return A CDI built in (or session) scope that mostly matches
      *         the spring one. Websocket scope is currently mapped to @Dependant
      *         and spring custom scopes are not currently handled.
      */
-    private DotName getScope(final AnnotationTarget target) {
-        AnnotationValue value = null;
-        if (target.kind() == AnnotationTarget.Kind.CLASS) {
-            if (target.asClass().classAnnotation(SPRING_SCOPE_ANNOTATION) != null) {
-                value = target.asClass().classAnnotation(SPRING_SCOPE_ANNOTATION).value();
-            }
-        } else if (target.kind() == AnnotationTarget.Kind.METHOD) {
-            if (target.asMethod().hasAnnotation(SPRING_SCOPE_ANNOTATION)) {
-                value = target.asMethod().annotation(SPRING_SCOPE_ANNOTATION).value();
-            }
+    private DotName getScope(final ClassInfo clazz) {
+        if (!clazz.annotations().containsKey(SPRING_SCOPE_ANNOTATION)) {
+            return null;
         }
+        final AnnotationValue value = clazz.classAnnotation(SPRING_SCOPE_ANNOTATION).value();
         if (value != null) {
             switch (value.asString()) {
                 case "singleton":
@@ -297,21 +307,11 @@ public class SpringDIProcessor {
                         target,
                         Collections.emptyList()));
             } else if (!(isAnnotation && scopes.isEmpty()) && !classInfo.annotations().containsKey(CONFIGURATION_ANNOTATION)) { // Annotations without an explicit scope shouldn't default to anything
-                boolean shouldAdd = false;
-                for (final DotName clazzAnnotation : clazzAnnotations) {
-                    if (stereotypes.contains(clazzAnnotation) || scopeStereotypes.contains(clazzAnnotation)) {
-                        shouldAdd = true;
-                        break;
-                    }
-                }
-
-                if (shouldAdd) {
-                    final DotName scope = validateScope(classInfo, scopes, scopeStereotypes);
-                    annotationsToAdd.add(create(
-                            scope,
-                            target,
-                            Collections.emptyList()));
-                }
+                final DotName scope = validateScope(classInfo, scopes, scopeStereotypes);
+                annotationsToAdd.add(create(
+                        scope,
+                        target,
+                        Collections.emptyList()));
             }
             final String name = validateName(classInfo, names);
             if (name != null) {
@@ -388,17 +388,10 @@ public class SpringDIProcessor {
                         CDI_PRODUCES_ANNOTATION,
                         target,
                         Collections.emptyList()));
-                DotName declaredScope = getScope(methodInfo);
-                // Non-spring specific annotations are processed by Arc
-                if (declaredScope == null && !methodInfo.hasAnnotation(CDI_SINGLETON_ANNOTATION)) {
-                    declaredScope = CDI_SINGLETON_ANNOTATION; // implicit default scope in spring
-                }
-                if (declaredScope != null) {
-                    annotationsToAdd.add(create(
-                            declaredScope,
-                            target,
-                            Collections.emptyList()));
-                }
+                annotationsToAdd.add(create(
+                        CDI_DEPENDENT_ANNOTATION,
+                        target,
+                        Collections.emptyList()));
 
                 //check if the spring annotation defines a name for the bean
                 final AnnotationValue beanNameAnnotationValue = methodInfo.annotation(BEAN_ANNOTATION).value("name");
