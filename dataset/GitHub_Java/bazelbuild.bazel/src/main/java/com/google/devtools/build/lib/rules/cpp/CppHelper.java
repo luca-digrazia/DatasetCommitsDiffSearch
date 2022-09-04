@@ -20,6 +20,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -503,14 +504,20 @@ public class CppHelper {
    * CcCompilationContext}s.
    */
   public static void checkLinkstampsUnique(RuleErrorConsumer listener, CcLinkParams linkParams) {
-    Map<Artifact, NestedSet<Artifact>> result = new LinkedHashMap<>();
-    for (Linkstamp pair : linkParams.getLinkstamps()) {
-      Artifact artifact = pair.getArtifact();
-      if (result.containsKey(artifact)) {
-        listener.ruleWarning("rule inherits the '" + artifact.toDetailString()
-            + "' linkstamp file from more than one cc_library rule");
+    LinkedHashMap<Artifact, ArrayList<Label>> dupeMap = new LinkedHashMap<>();
+    for (Linkstamp linkstamp : linkParams.getLinkstamps()) {
+      ArrayList<Label> value =
+          dupeMap.computeIfAbsent(linkstamp.getArtifact(), (Artifact k) -> new ArrayList<>());
+      value.add(linkstamp.actionLookupKey().getLabel());
+    }
+    for (Map.Entry<Artifact, ArrayList<Label>> entry : dupeMap.entrySet()) {
+      if (entry.getValue().size() > 1) {
+        listener.ruleWarning(
+            "rule inherits the '"
+                + entry.getKey().toDetailString()
+                + "' linkstamp file from more than one target: "
+                + Joiner.on(",").join(entry.getValue()));
       }
-      result.put(artifact, pair.getDeclaredIncludeSrcs());
     }
   }
 
@@ -847,7 +854,7 @@ public class CppHelper {
   public static void checkProtoLibrariesInDeps(RuleContext ruleContext,
       Iterable<TransitiveInfoCollection> deps) {
     for (TransitiveInfoCollection dep : deps) {
-      if (dep.get(ProtoInfo.PROVIDER) != null && dep.get(CcInfo.PROVIDER) == null) {
+      if (dep.getProvider(ProtoInfo.class) != null && dep.get(CcInfo.PROVIDER) == null) {
         ruleContext.attributeError("deps",
             String.format("proto_library '%s' does not produce output for C++", dep.getLabel()));
       }
