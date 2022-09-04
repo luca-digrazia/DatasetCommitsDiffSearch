@@ -1,5 +1,6 @@
 package io.quarkus.kubernetes.deployment;
 
+import static io.quarkus.kubernetes.deployment.Constants.*;
 import static io.quarkus.kubernetes.deployment.Constants.DEFAULT_HTTP_PORT;
 import static io.quarkus.kubernetes.deployment.Constants.DEFAULT_S2I_IMAGE_NAME;
 import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT;
@@ -7,11 +8,7 @@ import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_CONFIG;
 import static io.quarkus.kubernetes.deployment.Constants.HTTP_PORT;
 import static io.quarkus.kubernetes.deployment.Constants.KNATIVE;
 import static io.quarkus.kubernetes.deployment.Constants.KUBERNETES;
-import static io.quarkus.kubernetes.deployment.Constants.MAX_NODE_PORT_VALUE;
-import static io.quarkus.kubernetes.deployment.Constants.MAX_PORT_NUMBER;
 import static io.quarkus.kubernetes.deployment.Constants.MINIKUBE;
-import static io.quarkus.kubernetes.deployment.Constants.MIN_NODE_PORT_VALUE;
-import static io.quarkus.kubernetes.deployment.Constants.MIN_PORT_NUMBER;
 import static io.quarkus.kubernetes.deployment.Constants.OPENSHIFT;
 import static io.quarkus.kubernetes.deployment.Constants.OPENSHIFT_APP_RUNTIME;
 import static io.quarkus.kubernetes.deployment.Constants.QUARKUS;
@@ -19,9 +16,7 @@ import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_BUI
 import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_COMMIT_ID;
 import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_VCS_URL;
 import static io.quarkus.kubernetes.deployment.Constants.SERVICE;
-import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.DEFAULT_PRIORITY;
-import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.VANILLA_KUBERNETES_PRIORITY;
-import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.mergeList;
+import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,7 +24,6 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -49,7 +43,6 @@ import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
 
 import io.dekorate.Session;
-import io.dekorate.SessionReader;
 import io.dekorate.SessionWriter;
 import io.dekorate.kubernetes.annotation.ImagePullPolicy;
 import io.dekorate.kubernetes.annotation.ServiceType;
@@ -74,14 +67,13 @@ import io.dekorate.kubernetes.decorator.AddReadinessProbeDecorator;
 import io.dekorate.kubernetes.decorator.AddRoleBindingResourceDecorator;
 import io.dekorate.kubernetes.decorator.AddSecretVolumeDecorator;
 import io.dekorate.kubernetes.decorator.AddServiceAccountResourceDecorator;
+import io.dekorate.kubernetes.decorator.AddSidecarDecorator;
 import io.dekorate.kubernetes.decorator.ApplyArgsDecorator;
 import io.dekorate.kubernetes.decorator.ApplyCommandDecorator;
 import io.dekorate.kubernetes.decorator.ApplyImagePullPolicyDecorator;
 import io.dekorate.kubernetes.decorator.ApplyServiceAccountNamedDecorator;
 import io.dekorate.kubernetes.decorator.ApplyWorkingDirDecorator;
 import io.dekorate.kubernetes.decorator.RemoveAnnotationDecorator;
-import io.dekorate.logger.NoopLogger;
-import io.dekorate.processor.SimpleFileReader;
 import io.dekorate.processor.SimpleFileWriter;
 import io.dekorate.project.BuildInfo;
 import io.dekorate.project.FileProjectFactory;
@@ -97,7 +89,6 @@ import io.quarkus.container.spi.BaseImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageLabelBuildItem;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -107,7 +98,6 @@ import io.quarkus.deployment.builditem.GeneratedFileSystemResourceBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.deployment.util.FileUtil;
-import io.quarkus.kubernetes.deployment.Annotations.Prometheus;
 import io.quarkus.kubernetes.spi.KubernetesAnnotationBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesCommandBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem;
@@ -117,7 +107,6 @@ import io.quarkus.kubernetes.spi.KubernetesHealthReadinessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesLabelBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesRoleBuildItem;
-import io.quarkus.smallrye.metrics.deployment.spi.MetricsConfigurationBuildItem;
 
 class KubernetesProcessor {
 
@@ -132,7 +121,7 @@ class KubernetesProcessor {
 
     @BuildStep
     FeatureBuildItem produceFeature() {
-        return new FeatureBuildItem(Feature.KUBERNETES);
+        return new FeatureBuildItem(FeatureBuildItem.KUBERNETES);
     }
 
     @BuildStep
@@ -180,28 +169,12 @@ class KubernetesProcessor {
 
     @BuildStep
     public List<KubernetesAnnotationBuildItem> createAnnotations(KubernetesConfig kubernetesConfig,
-            OpenshiftConfig openshiftConfig, KnativeConfig knativeConfig,
-            Optional<MetricsConfigurationBuildItem> metricsConfiguration, List<KubernetesPortBuildItem> kubernetesPorts) {
-        List<KubernetesAnnotationBuildItem> result = new ArrayList<KubernetesAnnotationBuildItem>();
-        addAnnotations(kubernetesConfig, KUBERNETES, metricsConfiguration, kubernetesPorts, result);
-        addAnnotations(openshiftConfig, OPENSHIFT, metricsConfiguration, kubernetesPorts, result);
-        addAnnotations(knativeConfig, KNATIVE, metricsConfiguration, kubernetesPorts, result);
-        return result;
-    }
-
-    private void addAnnotations(PlatformConfiguration config, String target,
-            Optional<MetricsConfigurationBuildItem> metricsConfigurationBuildItem,
-            List<KubernetesPortBuildItem> kubernetesPorts,
-            List<KubernetesAnnotationBuildItem> result) {
-        for (Map.Entry<String, String> entry : config.getAnnotations().entrySet()) {
-            result.add(new KubernetesAnnotationBuildItem(entry.getKey(), entry.getValue(), target));
-        }
-        if (metricsConfigurationBuildItem.isPresent() && !kubernetesPorts.isEmpty()) {
-            result.add(new KubernetesAnnotationBuildItem(Prometheus.SCRAPE, "true", target));
-            result.add(new KubernetesAnnotationBuildItem(Prometheus.PATH, metricsConfigurationBuildItem.get().getPath(),
-                    target));
-            result.add(new KubernetesAnnotationBuildItem(Prometheus.PORT, "" + kubernetesPorts.get(0).getPort(), target));
-        }
+            OpenshiftConfig openshiftConfig, KnativeConfig knativeConfig) {
+        List<KubernetesAnnotationBuildItem> items = new ArrayList<KubernetesAnnotationBuildItem>();
+        kubernetesConfig.annotations.forEach((k, v) -> items.add(new KubernetesAnnotationBuildItem(k, v, KUBERNETES)));
+        openshiftConfig.annotations.forEach((k, v) -> items.add(new KubernetesAnnotationBuildItem(k, v, OPENSHIFT)));
+        knativeConfig.annotations.forEach((k, v) -> items.add(new KubernetesAnnotationBuildItem(k, v, KNATIVE)));
+        return items;
     }
 
     @BuildStep
@@ -275,16 +248,11 @@ class KubernetesProcessor {
 
         final Map<String, String> generatedResourcesMap;
         // by passing false to SimpleFileWriter, we ensure that no files are actually written during this phase
+        final SessionWriter sessionWriter = new SimpleFileWriter(root, false);
         Project project = createProject(applicationInfo, artifactPath);
-        final SessionWriter sessionWriter = new SimpleFileWriter(project, false);
-        final SessionReader sessionReader = new SimpleFileReader(
-                project.getRoot().resolve("src").resolve("main").resolve("kubernetes"), kubernetesDeploymentTargets
-                        .getEntriesSortedByPriority().stream()
-                        .map(EnabledKubernetesDeploymentTargetsBuildItem.Entry::getName).collect(Collectors.toSet()));
         sessionWriter.setProject(project);
-        final Session session = Session.getSession(new NoopLogger());
+        final Session session = Session.getSession(new io.dekorate.logger.NoopLogger());
         session.setWriter(sessionWriter);
-        session.setReader(sessionReader);
 
         session.feed(Maps.fromProperties(config));
 
@@ -327,24 +295,21 @@ class KubernetesProcessor {
 
         List<String> generatedFileNames = new ArrayList<>(generatedResourcesMap.size());
         for (Map.Entry<String, String> resourceEntry : generatedResourcesMap.entrySet()) {
-            Path path = Paths.get(resourceEntry.getKey());
-            //We need to ignore the config yml
-            if (!path.toFile().getParentFile().getName().equals("dekorate")) {
-                continue;
-            }
-            String fileName = path.toFile().getName();
-            Path targetPath = outputTarget.getOutputDirectory().resolve(KUBERNETES).resolve(fileName);
-            String relativePath = targetPath.toAbsolutePath().toString().replace(root.toAbsolutePath().toString(), "");
+            String fileName = resourceEntry.getKey().replace(root.toAbsolutePath().toString(), "");
+            String relativePath = resourceEntry.getKey().replace(root.toAbsolutePath().toString(), KUBERNETES);
 
-            resourceEntry.getKey().replace(root.toAbsolutePath().toString(), KUBERNETES);
             if (fileName.endsWith(".yml") || fileName.endsWith(".json")) {
                 String target = fileName.substring(0, fileName.lastIndexOf("."));
+                if (target.startsWith(File.separator)) {
+                    target = target.substring(1);
+                }
+
                 if (!deploymentTargets.contains(target)) {
                     continue;
                 }
             }
 
-            generatedFileNames.add(fileName);
+            generatedFileNames.add(fileName.replace("/", ""));
             generatedResourceProducer.produce(
                     new GeneratedFileSystemResourceBuildItem(
                             // we need to make sure we are only passing the relative path to the build item
@@ -383,7 +348,7 @@ class KubernetesProcessor {
 
     /**
      * Apply changes to the target resource group
-     *
+     * 
      * @param session The session to apply the changes
      * @param target The deployment target (e.g. kubernetes, openshift, knative)
      * @param name The name of the resource to accept the configuration
@@ -398,21 +363,16 @@ class KubernetesProcessor {
         }
 
         ScmInfo scm = project.getScmInfo();
-        String vcsUrl = scm != null ? scm.getUrl() : null;
-        String commitId = scm != null ? scm.getCommit() : null;
+        String vcsUrl = scm != null ? scm.getUrl() : Annotations.UNKNOWN;
+        String commitId = scm != null ? scm.getCommit() : Annotations.UNKNOWN;
 
         //Dekorate uses its own annotations. Let's replace them with the quarkus ones.
         session.resources().decorate(target, new RemoveAnnotationDecorator(Annotations.VCS_URL));
         session.resources().decorate(target, new RemoveAnnotationDecorator(Annotations.COMMIT_ID));
         //Add quarkus vcs annotations
-        if (commitId != null) {
-            session.resources().decorate(target,
-                    new AddAnnotationDecorator(new Annotation(QUARKUS_ANNOTATIONS_COMMIT_ID, commitId)));
-        }
-        if (vcsUrl != null) {
-            session.resources().decorate(target,
-                    new AddAnnotationDecorator(new Annotation(QUARKUS_ANNOTATIONS_VCS_URL, vcsUrl)));
-        }
+        session.resources().decorate(target,
+                new AddAnnotationDecorator(new Annotation(QUARKUS_ANNOTATIONS_COMMIT_ID, commitId)));
+        session.resources().decorate(target, new AddAnnotationDecorator(new Annotation(QUARKUS_ANNOTATIONS_VCS_URL, vcsUrl)));
 
         if (config.isAddBuildTimestamp()) {
             session.resources().decorate(target, new AddAnnotationDecorator(new Annotation(QUARKUS_ANNOTATIONS_BUILD_TIMESTAMP,
@@ -475,16 +435,9 @@ class KubernetesProcessor {
             session.resources().decorate(target, new AddInitContainerDecorator(name, ContainerConverter.convert(e)));
         });
 
-        config.getSidecars().entrySet().forEach(e -> {
+        config.getContainers().entrySet().forEach(e -> {
             session.resources().decorate(target, new AddSidecarDecorator(name, ContainerConverter.convert(e)));
         });
-
-        // The presence of optional is causing issues in OCP 3.11, so we better remove them.
-        // The following 4 decorator will set the optional property to null, so that it won't make it into the file.
-        session.resources().decorate(target, new RemoveOptionalFromSecretEnvSourceDecorator());
-        session.resources().decorate(target, new RemoveOptionalFromConfigMapEnvSourceDecorator());
-        session.resources().decorate(target, new RemoveOptionalFromSecretKeySelectorDecorator());
-        session.resources().decorate(target, new RemoveOptionalFromConfigMapKeySelectorDecorator());
     }
 
     /**
@@ -545,15 +498,8 @@ class KubernetesProcessor {
         configMap.put(KNATIVE, knativeConfig);
 
         //Replicas
-        if (kubernetesConfig.getReplicas() != 1) {
-            session.resources().decorate(new io.dekorate.kubernetes.decorator.ApplyReplicasDecorator(kubernetesName,
-                    kubernetesConfig.getReplicas()));
-        }
-        if (openshiftConfig.getReplicas() != 1) {
-            session.resources()
-                    .decorate(new io.dekorate.openshift.decorator.ApplyReplicasDecorator(openshiftName,
-                            openshiftConfig.getReplicas()));
-        }
+        session.resources().decorate(new KubernetesApplyReplicasDecorator(kubernetesName, kubernetesConfig.getReplicas()));
+        session.resources().decorate(new OpenshiftApplyReplicasDecorator(openshiftConfig.getReplicas()));
 
         kubernetesAnnotations.forEach(a -> {
             session.resources().decorate(a.getTarget(), new AddAnnotationDecorator(new Annotation(a.getKey(), a.getValue())));
@@ -571,13 +517,26 @@ class KubernetesProcessor {
         });
 
         kubernetesEnvs.forEach(e -> {
-            session.resources().decorate(e.getTarget(), new AddEnvVarDecorator(new EnvBuilder()
-                    .withName(EnvConverter.convertName(e.getName()))
-                    .withValue(e.getValue())
-                    .withSecret(e.getSecret())
-                    .withConfigmap(e.getConfigMap())
-                    .withField(e.getField())
-                    .build()));
+            final String value = e.getValue();
+            final EnvBuilder envBuilder = new EnvBuilder()
+                    .withValue(value);
+            switch (e.getType()) {
+                case var:
+                    envBuilder.withName(EnvConverter.convertName(e.getName()));
+                    break;
+                case field:
+                    // env vars from fields need to have their name set in addition to their field field :)
+                    final String name = EnvConverter.convertName(e.getName());
+                    envBuilder.withField(value).withName(name);
+                    break;
+                case secret:
+                    envBuilder.withSecret(value);
+                    break;
+                case configmap:
+                    envBuilder.withConfigmap(value);
+                    break;
+            }
+            session.resources().decorate(e.getTarget(), new AddEnvVarDecorator(envBuilder.build()));
         });
 
         //Handle Command and arguments
@@ -633,8 +592,7 @@ class KubernetesProcessor {
         session.resources().decorate(KUBERNETES,
                 new ApplyServiceTypeDecorator(kubernetesName, kubernetesConfig.getServiceType().name()));
         if ((kubernetesConfig.getServiceType() == ServiceType.NodePort) && kubernetesConfig.nodePort.isPresent()) {
-            session.resources().decorate(KUBERNETES,
-                    new AddNodePortDecorator(openshiftName, kubernetesConfig.nodePort.getAsInt()));
+            session.resources().decorate(KUBERNETES, new AddNodePortDecorator(openshiftName, kubernetesConfig.nodePort.get()));
         }
         session.resources().decorate(MINIKUBE,
                 new ApplyServiceTypeDecorator(kubernetesName, ServiceType.NodePort.name()));
@@ -644,8 +602,7 @@ class KubernetesProcessor {
         session.resources().decorate(OPENSHIFT,
                 new ApplyServiceTypeDecorator(openshiftName, openshiftConfig.getServiceType().name()));
         if ((openshiftConfig.getServiceType() == ServiceType.NodePort) && openshiftConfig.nodePort.isPresent()) {
-            session.resources().decorate(OPENSHIFT,
-                    new AddNodePortDecorator(openshiftName, openshiftConfig.nodePort.getAsInt()));
+            session.resources().decorate(OPENSHIFT, new AddNodePortDecorator(openshiftName, openshiftConfig.nodePort.get()));
         }
 
         session.resources().decorate(KNATIVE,
@@ -766,8 +723,8 @@ class KubernetesProcessor {
         Project project = FileProjectFactory.create(artifactPath.toFile());
         BuildInfo buildInfo = new BuildInfo(app.getName(), app.getVersion(),
                 "jar", project.getBuildInfo().getBuildTool(),
-                artifactPath.toAbsolutePath().toString(),
                 artifactPath,
+                project.getBuildInfo().getClassOutputDir(),
                 project.getBuildInfo().getResourceDir());
 
         return new Project(project.getRoot(), buildInfo, project.getScmInfo());
