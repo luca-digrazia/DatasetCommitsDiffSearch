@@ -16,35 +16,9 @@
  */
 package org.graylog2.plugin.inputs.transports;
 
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.MetricRegistry;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
-import io.netty.bootstrap.ServerBootstrap;
-import io.netty.buffer.ByteBufAllocator;
-import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.FixedRecvByteBufAllocator;
-import io.netty.channel.group.ChannelGroup;
-import io.netty.channel.group.DefaultChannelGroup;
-import io.netty.channel.socket.ServerSocketChannelConfig;
-import io.netty.handler.ssl.ClientAuth;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslHandler;
-import io.netty.handler.ssl.SslProvider;
-import io.netty.handler.ssl.util.SelfSignedCertificate;
-import io.netty.util.concurrent.GlobalEventExecutor;
-import org.graylog2.inputs.transports.NettyTransportConfiguration;
-import org.graylog2.inputs.transports.netty.ChannelRegistrationHandler;
-import org.graylog2.inputs.transports.netty.EventLoopGroupFactory;
-import org.graylog2.inputs.transports.netty.ExceptionLoggingChannelHandler;
-import org.graylog2.inputs.transports.netty.ServerSocketChannelFactory;
+import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.Callables;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -53,35 +27,34 @@ import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.DropdownField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.MisfireException;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
 import org.graylog2.plugin.inputs.transports.util.KeyUtil;
 import org.graylog2.plugin.inputs.util.ConnectionCounter;
 import org.graylog2.plugin.inputs.util.ThroughputCounter;
+import org.jboss.netty.bootstrap.Bootstrap;
+import org.jboss.netty.bootstrap.ServerBootstrap;
+import org.jboss.netty.channel.ChannelHandler;
+import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.jboss.netty.handler.ssl.SslHandler;
+import org.jboss.netty.handler.ssl.util.SelfSignedCertificate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.TrustManager;
 import java.io.File;
 import java.io.IOException;
-import java.net.SocketAddress;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static com.google.common.base.Preconditions.checkState;
+import java.util.concurrent.Executor;
 
 public abstract class AbstractTcpTransport extends NettyTransport {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractTcpTransport.class);
@@ -97,19 +70,15 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     private static final String TLS_CLIENT_AUTH_DISABLED = "disabled";
     private static final String TLS_CLIENT_AUTH_OPTIONAL = "optional";
     private static final String TLS_CLIENT_AUTH_REQUIRED = "required";
-    private static final ImmutableMap<String, String> TLS_CLIENT_AUTH_OPTIONS = ImmutableMap.of(
+    private static final Map<String, String> TLS_CLIENT_AUTH_OPTIONS = ImmutableMap.of(
             TLS_CLIENT_AUTH_DISABLED, TLS_CLIENT_AUTH_DISABLED,
             TLS_CLIENT_AUTH_OPTIONAL, TLS_CLIENT_AUTH_OPTIONAL,
             TLS_CLIENT_AUTH_REQUIRED, TLS_CLIENT_AUTH_REQUIRED);
 
-    private final ConnectionCounter connectionCounter;
-    private final AtomicInteger connections;
-    private final AtomicLong totalConnections;
-
+    protected final Executor bossExecutor;
+    protected final Executor workerExecutor;
+    protected final ConnectionCounter connectionCounter;
     protected final Configuration configuration;
-    protected final EventLoopGroup parentEventLoopGroup;
-    private final NettyTransportConfiguration nettyTransportConfiguration;
-    private final AtomicReference<Channel> channelReference;
 
     private final boolean tlsEnable;
     private final String tlsKeyPassword;
@@ -119,23 +88,18 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     private final String tlsClientAuth;
     private final boolean tcpKeepalive;
 
-    private ChannelGroup childChannels;
-    protected EventLoopGroup childEventLoopGroup;
-    private ServerBootstrap bootstrap;
-
     public AbstractTcpTransport(
             Configuration configuration,
             ThroughputCounter throughputCounter,
             LocalMetricRegistry localRegistry,
-            EventLoopGroup parentEventLoopGroup,
-            EventLoopGroupFactory eventLoopGroupFactory,
-            NettyTransportConfiguration nettyTransportConfiguration) {
-        super(configuration, eventLoopGroupFactory, throughputCounter, localRegistry);
+            Executor bossPool,
+            Executor workerPool,
+            ConnectionCounter connectionCounter) {
+        super(configuration, throughputCounter, localRegistry);
         this.configuration = configuration;
-        this.parentEventLoopGroup = parentEventLoopGroup;
-        this.nettyTransportConfiguration = nettyTransportConfiguration;
-        this.channelReference = new AtomicReference<>();
-        this.childChannels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+        this.bossExecutor = bossPool;
+        this.workerExecutor = workerPool;
+        this.connectionCounter = connectionCounter;
 
         this.tlsEnable = configuration.getBoolean(CK_TLS_ENABLE);
         this.tlsCertFile = getTlsFile(configuration, CK_TLS_CERT_FILE);
@@ -146,148 +110,63 @@ public abstract class AbstractTcpTransport extends NettyTransport {
 
         this.tcpKeepalive = configuration.getBoolean(CK_TCP_KEEPALIVE);
 
-        this.connections = new AtomicInteger();
-        this.totalConnections = new AtomicLong();
-        this.connectionCounter = new ConnectionCounter(connections, totalConnections);
-        this.localRegistry.register("open_connections", new Gauge<Integer>() {
-            @Override
-            public Integer getValue() {
-                return connections.get();
-            }
-        });
-        this.localRegistry.register("total_connections", new Gauge<Long>() {
-            @Override
-            public Long getValue() {
-                return totalConnections.get();
-            }
-        });
+        this.localRegistry.register("open_connections", connectionCounter.gaugeCurrent());
+        this.localRegistry.register("total_connections", connectionCounter.gaugeTotal());
     }
 
     private File getTlsFile(Configuration configuration, String configKey) {
         return new File(configuration.getString(configKey, ""));
     }
 
-    protected ServerBootstrap getBootstrap(MessageInput input) {
-        final LinkedHashMap<String, Callable<? extends ChannelHandler>> parentHandlers = getChannelHandlers(input);
-        final LinkedHashMap<String, Callable<? extends ChannelHandler>> childHandlers = getChildChannelHandlers(input);
+    @Override
+    protected Bootstrap getBootstrap() {
+        final ServerBootstrap bootstrap =
+                new ServerBootstrap(new NioServerSocketChannelFactory(bossExecutor, workerExecutor));
 
-        childEventLoopGroup = eventLoopGroupFactory.create(workerThreads, localRegistry, "workers");
+        bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(8192));
+        bootstrap.setOption("receiveBufferSize", getRecvBufferSize());
+        bootstrap.setOption("child.receiveBufferSize", getRecvBufferSize());
+        bootstrap.setOption("child.keepAlive", tcpKeepalive);
 
-        return new ServerBootstrap()
-                .group(parentEventLoopGroup, childEventLoopGroup)
-                .channelFactory(new ServerSocketChannelFactory(nettyTransportConfiguration.getType()))
-                .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
-                .option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(8192))
-                .option(ChannelOption.SO_RCVBUF, getRecvBufferSize())
-                .childOption(ChannelOption.SO_RCVBUF, getRecvBufferSize())
-                .childOption(ChannelOption.SO_KEEPALIVE, tcpKeepalive)
-                .handler(getChannelInitializer(parentHandlers))
-                .childHandler(getChannelInitializer(childHandlers));
+        return bootstrap;
     }
 
     @Override
-    public void launch(final MessageInput input) throws MisfireException {
-        try {
-            bootstrap = getBootstrap(input);
-            bootstrap.bind(socketAddress)
-                    .addListener(new InputLaunchListener(channelReference, input, getRecvBufferSize()))
-                    .syncUninterruptibly();
-        } catch (Exception e) {
-            throw new MisfireException(e);
-        }
-    }
+    protected LinkedHashMap<String, Callable<? extends ChannelHandler>> getBaseChannelHandlers(
+            MessageInput input) {
+        final LinkedHashMap<String, Callable<? extends ChannelHandler>> baseChannelHandlers = super.getBaseChannelHandlers(input);
+        final LinkedHashMap<String, Callable<? extends ChannelHandler>> handlerList = Maps.newLinkedHashMap();
+        baseChannelHandlers.put("connection-counter", Callables.returning(connectionCounter));
 
-    @Nullable
-    @Override
-    public SocketAddress getLocalAddress() {
-        final Channel channel = channelReference.get();
-        if (channel != null) {
-            return channel.localAddress();
+        if (!tlsEnable) {
+            return baseChannelHandlers;
         }
 
-        return null;
-    }
-
-    @Override
-    public void stop() {
-        final Channel channel = channelReference.get();
-        if (channel != null) {
-            channel.close();
-            channel.closeFuture().syncUninterruptibly();
-        }
-
-        childChannels.close().syncUninterruptibly();
-
-        if (childEventLoopGroup != null) {
-            childEventLoopGroup.shutdownGracefully();
-        }
-        bootstrap = null;
-    }
-
-    @Override
-    protected LinkedHashMap<String, Callable<? extends ChannelHandler>> getChildChannelHandlers(MessageInput input) {
-        final LinkedHashMap<String, Callable<? extends ChannelHandler>> handlers = new LinkedHashMap<>();
-
-        handlers.put("channel-registration", () -> new ChannelRegistrationHandler(childChannels));
-        handlers.put("traffic-counter", () -> throughputCounter);
-        handlers.put("connection-counter", () -> connectionCounter);
-        if (tlsEnable) {
-            LOG.info("Enabled TLS for input [{}/{}]. key-file=\"{}\" cert-file=\"{}\"", input.getName(), input.getId(), tlsKeyFile, tlsCertFile);
-            handlers.put("tls", getSslHandlerCallable(input));
-        }
-        handlers.putAll(super.getChildChannelHandlers(input));
-
-        return handlers;
-    }
-
-    private Callable<ChannelHandler> getSslHandlerCallable(MessageInput input) {
-        final File certFile;
-        final File keyFile;
-        if (tlsCertFile.exists() && tlsKeyFile.exists()) {
-            certFile = tlsCertFile;
-            keyFile = tlsKeyFile;
-        } else {
+        if (!tlsCertFile.exists() || !tlsKeyFile.exists()) {
             LOG.warn("TLS key file or certificate file does not exist, creating a self-signed certificate for input [{}/{}].", input.getName(), input.getId());
-
-            final String tmpDir = System.getProperty("java.io.tmpdir");
-            checkState(tmpDir != null, "The temporary directory must not be null!");
-            final Path tmpPath = Paths.get(tmpDir);
-            if (!Files.isDirectory(tmpPath) || !Files.isWritable(tmpPath)) {
-                throw new IllegalStateException("Couldn't write to temporary directory: " + tmpPath.toAbsolutePath());
-            }
 
             try {
                 final SelfSignedCertificate ssc = new SelfSignedCertificate(configuration.getString(CK_BIND_ADDRESS) + ":" + configuration.getString(CK_PORT));
-                certFile = ssc.certificate();
-                keyFile = ssc.privateKey();
+                tlsCertFile = ssc.certificate();
+                tlsKeyFile = ssc.privateKey();
             } catch (CertificateException e) {
-                final String msg = String.format(Locale.ENGLISH, "Problem creating a self-signed certificate for input [%s/%s].", input.getName(), input.getId());
-                throw new IllegalStateException(msg, e);
+                LOG.error(String.format(Locale.ENGLISH, "Problem creating a self-signed certificate for input [%s/%s].",
+                        input.getName(), input.getId()), e);
+                return baseChannelHandlers;
             }
         }
 
-        final ClientAuth clientAuth;
-        switch (tlsClientAuth) {
-            case TLS_CLIENT_AUTH_DISABLED:
-                LOG.debug("Not using TLS client authentication");
-                clientAuth = ClientAuth.NONE;
-                break;
-            case TLS_CLIENT_AUTH_OPTIONAL:
-                LOG.debug("Using optional TLS client authentication");
-                clientAuth = ClientAuth.OPTIONAL;
-                break;
-            case TLS_CLIENT_AUTH_REQUIRED:
-                LOG.debug("Using mandatory TLS client authentication");
-                clientAuth = ClientAuth.REQUIRE;
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown TLS client authentication mode: " + tlsClientAuth);
+        if (tlsCertFile.exists() && tlsKeyFile.exists()) {
+            handlerList.put("tls", buildSslHandlerCallable());
         }
 
-        return buildSslHandlerCallable(nettyTransportConfiguration.getTlsProvider(), certFile, keyFile, tlsKeyPassword, clientAuth, tlsClientAuthCertFile);
+        LOG.info("Enabled TLS for input [{}/{}]. key-file=\"{}\" cert-file=\"{}\"", input.getName(), input.getId(), tlsKeyFile, tlsCertFile);
+        handlerList.putAll(baseChannelHandlers);
+
+        return handlerList;
     }
 
-    private Callable<ChannelHandler> buildSslHandlerCallable(SslProvider tlsProvider, File certFile, File keyFile, String password, ClientAuth clientAuth, File clientAuthCertFile) {
+    private Callable<ChannelHandler> buildSslHandlerCallable() {
         return new Callable<ChannelHandler>() {
             @Override
             public ChannelHandler call() throws Exception {
@@ -299,30 +178,40 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                 }
             }
 
-            private SSLEngine createSslEngine() throws IOException, CertificateException {
-                final X509Certificate[] clientAuthCerts;
-                if (EnumSet.of(ClientAuth.OPTIONAL, ClientAuth.REQUIRE).contains(clientAuth)) {
-                    if (clientAuthCertFile.exists()) {
-                        clientAuthCerts = KeyUtil.loadCertificates(clientAuthCertFile.toPath()).stream()
-                                .filter(certificate -> certificate instanceof X509Certificate)
-                                .map(certificate -> (X509Certificate) certificate)
-                                .toArray(X509Certificate[]::new);
+            private SSLEngine createSslEngine() throws IOException, GeneralSecurityException {
+                final SSLContext instance = SSLContext.getInstance("TLS");
+                TrustManager[] initTrustStore = new TrustManager[0];
+
+                if (TLS_CLIENT_AUTH_OPTIONAL.equals(tlsClientAuth) || TLS_CLIENT_AUTH_REQUIRED.equals(tlsClientAuth)) {
+                    if (tlsClientAuthCertFile.exists()) {
+                        initTrustStore = KeyUtil.initTrustStore(tlsClientAuthCertFile);
                     } else {
-                        LOG.warn("Client auth configured, but no authorized certificates / certificate authorities configured");
-                        clientAuthCerts = null;
+                        LOG.warn("client auth configured, but no authorized certificates / certificate authorities configured");
                     }
-                } else {
-                    clientAuthCerts = null;
                 }
 
-                final SslContext sslContext = SslContextBuilder.forServer(certFile, keyFile, Strings.emptyToNull(password))
-                        .sslProvider(tlsProvider)
-                        .clientAuth(clientAuth)
-                        .trustManager(clientAuthCerts)
-                        .build();
+                instance.init(KeyUtil.initKeyStore(tlsKeyFile, tlsCertFile, tlsKeyPassword), initTrustStore, new SecureRandom());
+                final SSLEngine engine = instance.createSSLEngine();
 
-                // TODO: Use byte buffer allocator of channel
-                return sslContext.newEngine(ByteBufAllocator.DEFAULT);
+                engine.setUseClientMode(false);
+
+                switch (tlsClientAuth) {
+                    case TLS_CLIENT_AUTH_DISABLED:
+                        LOG.debug("Not using TLS client authentication");
+                        break;
+                    case TLS_CLIENT_AUTH_OPTIONAL:
+                        LOG.debug("Using optional TLS client authentication");
+                        engine.setWantClientAuth(true);
+                        break;
+                    case TLS_CLIENT_AUTH_REQUIRED:
+                        LOG.debug("Using mandatory TLS client authentication");
+                        engine.setNeedClientAuth(true);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown TLS client authentication mode: " + tlsClientAuth);
+                }
+
+                return engine;
             }
         };
     }
@@ -393,40 +282,10 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                             "TCP keepalive",
                             false,
                             "Enable TCP keepalive packets"
-                    )
+                )
             );
 
             return x;
-        }
-    }
-
-    private static class InputLaunchListener implements ChannelFutureListener {
-        private final AtomicReference<Channel> channelReference;
-        private final MessageInput input;
-        private final int expectedRecvBufferSize;
-
-        public InputLaunchListener(AtomicReference<Channel> channelReference, MessageInput input, int expectedRecvBufferSize) {
-            this.channelReference = channelReference;
-            this.input = input;
-            this.expectedRecvBufferSize = expectedRecvBufferSize;
-        }
-
-        @Override
-        public void operationComplete(ChannelFuture future) throws Exception {
-            if (future.isSuccess()) {
-                final Channel channel = future.channel();
-                channelReference.set(channel);
-                LOG.debug("Started channel {}", channel);
-
-                final ServerSocketChannelConfig channelConfig = (ServerSocketChannelConfig) channel.config();
-                final int receiveBufferSize = channelConfig.getReceiveBufferSize();
-                if (receiveBufferSize != expectedRecvBufferSize) {
-                    LOG.warn("receiveBufferSize (SO_RCVBUF) for input {} (channel {}) should be {} but is {}.",
-                            input, channel, expectedRecvBufferSize, receiveBufferSize);
-                }
-            } else {
-                LOG.warn("Failed to start channel for input {}", input, future.cause());
-            }
         }
     }
 }

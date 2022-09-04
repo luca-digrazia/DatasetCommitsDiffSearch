@@ -22,7 +22,6 @@ import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.inputs.transports.netty.LenientDelimiterBasedFrameDecoder;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -100,7 +99,7 @@ public class TcpTransport extends AbstractTcpTransport {
         finalChannelHandlers.put("framer", new Callable<ChannelHandler>() {
             @Override
             public ChannelHandler call() throws Exception {
-                return new LenientDelimiterBasedFrameDecoder(maxFrameLength, delimiter);
+                return new DelimiterBasedFrameDecoder(maxFrameLength, delimiter);
             }
         });
         finalChannelHandlers.putAll(super.getFinalChannelHandlers(input));
@@ -111,7 +110,6 @@ public class TcpTransport extends AbstractTcpTransport {
 
     @FactoryClass
     public interface Factory extends Transport.Factory<TcpTransport> {
-        @Override
         TcpTransport create(Configuration configuration);
 
         @Override
