@@ -57,15 +57,6 @@ public class RepositoryOptions extends OptionsBase {
   public boolean useHardlinks;
 
   @Option(
-      name = "experimental_repository_disable_download",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.BAZEL_CLIENT_OPTIONS,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help = "If set, downloading external repositories is not allowed.")
-  public boolean disableDownload;
-
-  @Option(
       name = "distdir",
       oldName = "experimental_distdir",
       defaultValue = "null",
@@ -163,7 +154,7 @@ public class RepositoryOptions extends OptionsBase {
 
     @Override
     public RepositoryOverride convert(String input) throws OptionsParsingException {
-      String[] pieces = input.split("=", 2);
+      String[] pieces = input.split("=");
       if (pieces.length != 2) {
         throw new OptionsParsingException(
             "Repository overrides must be of the form 'repository-name=path'", input);
