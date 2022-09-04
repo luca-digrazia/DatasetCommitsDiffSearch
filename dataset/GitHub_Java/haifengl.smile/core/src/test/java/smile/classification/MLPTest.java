@@ -291,6 +291,6 @@ public class MLPTest {
             System.out.println("Test Error = " + error);
         }
 
-        assertEquals(177, error);
+        assertEquals(168, error);
     }
 }

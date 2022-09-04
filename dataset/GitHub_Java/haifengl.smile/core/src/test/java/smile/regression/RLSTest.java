@@ -1,30 +1,35 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- * Modifications copyright (C) 2017 Sam Erickson
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.regression;
 
+import java.util.stream.IntStream;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.AttributeDataset;
-import smile.data.parser.ArffParser;
+import smile.data.*;
+import smile.data.formula.Formula;
 import smile.validation.CrossValidation;
+import smile.validation.RegressionValidations;
+import smile.validation.metric.RMSE;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  *
@@ -52,130 +57,78 @@ public class RLSTest {
     public void tearDown() {
         
     }
-    public void testRLS(String name, String fileName, int responseIndex){
-        System.out.println(name+"\t Learn ");
-        ArffParser parser = new ArffParser();
-        parser.setResponseIndex(responseIndex);
-        try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile(fileName));
 
-            double[][] datax = data.toArray(new double[data.size()][]);
-            double[] datay = data.toArray(new double[data.size()]);
+    @Test
+    public void testLongley() throws Exception {
+        System.out.println("longley");
 
-            int n = datax.length;
-            int k = 10;
-            int trainOnlineSplit=5;
+        int n = Longley.data.size();
+        DataFrame batch = Longley.data.of(IntStream.range(0, n/2).toArray());
+        DataFrame online = Longley.data.of(IntStream.range(n/2, n).toArray());
+        LinearModel model = OLS.fit(Longley.formula, batch);
+        double[] prediction = model.predict(online);
+        double rmse = RMSE.of(Longley.formula.y(online).toDoubleArray(), prediction);
+        System.out.println("Batch RMSE = " + rmse);
+        assertEquals(6.229663, rmse, 1E-4);
 
-            CrossValidation cv = new CrossValidation(n, k);
-            double rss = 0.0;
-            for (int i = 0; i < k; i++) {
-                double[][] trainx = smile.math.Math.slice(datax, cv.train[i]);
-                double[] trainy = smile.math.Math.slice(datay, cv.train[i]);
-                double[][] testx = smile.math.Math.slice(datax, cv.test[i]);
-                double[] testy = smile.math.Math.slice(datay, cv.test[i]);
+        model.update(online);
+        prediction = model.predict(online);
+        rmse = RMSE.of(Longley.formula.y(online).toDoubleArray(), prediction);
+        System.out.println("Online RMSE = " + rmse);
+        assertEquals(0.973663, rmse, 1E-4);
 
-                RLS rls = new RLS(trainx[0].length);
-                rls.learn(trainx, trainy);
-
-                for (int j = 0; j < testx.length; j++) {
-                    double r = testy[j] - rls.predict(testx[j]);
-                    rss += r * r;
-                }
-                
-            }
-            System.out.println("MSE = " + rss / n);
-        } catch (Exception ex) {
-             System.err.println(ex);
-        }
+        java.nio.file.Path temp = smile.data.Serialize.write(model);
+        smile.data.Serialize.read(temp);
     }
-    
+
+    /**
+     * Test of learn method, of class LinearRegression.
+     */
+    @Test
+    public void testProstate() {
+        System.out.println("Prostate");
+
+        LinearModel model = OLS.fit(Prostate.formula, Prostate.train);
+        System.out.println(model);
+
+        double[] prediction = model.predict(Prostate.test);
+        double rmse = RMSE.of(Prostate.testy, prediction);
+        System.out.println("RMSE on test data = " + rmse);
+        assertEquals(0.721993, rmse, 1E-4);
+
+        model.update(Prostate.test);
+        prediction = model.predict(Prostate.test);
+        rmse = RMSE.of(Prostate.testy, prediction);
+        System.out.println("RMSE after online = " + rmse);
+        assertEquals(0.643182, rmse, 1E-4);
+    }
+
     /**
      * Test of online learn method of class OLS.
      */
-    public void testOnlineLearn(boolean svd, String name, String fileName, int responseIndex){
-        System.out.println(name+"\t Online Learn "+(svd?" SVD":" QR"));
-        ArffParser parser = new ArffParser();
-        parser.setResponseIndex(responseIndex);
-        try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile(fileName));
+    public void testOnlineLearn(String name, Formula formula, DataFrame data){
+        System.out.println(name);
 
-            double[][] datax = data.toArray(new double[data.size()][]);
-            double[] datay = data.toArray(new double[data.size()]);
+        RegressionValidations<LinearModel> result = CrossValidation.regression(10, formula, data, (f, x) -> {
+            int n = x.size();
+            DataFrame batch = x.of(IntStream.range(0, n/2).toArray());
+            DataFrame online = x.of(IntStream.range(n/2, n).toArray());
+            LinearModel model = OLS.fit(f, batch);
+            model.update(online);
+            return model;
+        });
 
-            int n = datax.length;
-            int k = 10;
-            int trainOnlineSplit=2;
-
-            CrossValidation cv = new CrossValidation(n, k);
-            double rss = 0.0;
-            for (int i = 0; i < k; i++) {
-                double[][] trainx = smile.math.Math.slice(datax, cv.train[i]);
-                double[] trainy = smile.math.Math.slice(datay, cv.train[i]);
-                double[][] testx = smile.math.Math.slice(datax, cv.test[i]);
-                double[] testy = smile.math.Math.slice(datay, cv.test[i]);
-                
-                // Split the training data to instances learned from least square solutions
-                // and instances for online learning
-                CrossValidation splitTrainOnlineLearn = new CrossValidation(trainx.length,trainOnlineSplit);
-                double[][] constructorTrainx = smile.math.Math.slice(trainx, splitTrainOnlineLearn.train[0]);
-                double[] constructorTrainy = smile.math.Math.slice(trainy, splitTrainOnlineLearn.train[0]);
-                double[][] onlineTrainX = smile.math.Math.slice(trainx, splitTrainOnlineLearn.test[0]);
-                double[] onlineTrainY = smile.math.Math.slice(trainy, splitTrainOnlineLearn.test[0]);
-
-                RLS rls = new RLS(constructorTrainx, constructorTrainy, svd, 1);
-                rls.learn(onlineTrainX,onlineTrainY);
-
-                for (int j = 0; j < testx.length; j++) {
-                    double r = testy[j] - rls.predict(testx[j]);
-                    rss += r * r;
-                }
-                
-            }
-            System.out.println("MSE = " + rss / n);
-        } catch (Exception ex) {
-             System.err.println(ex);
-        }
+        System.out.println(result.avg);
     }
     
-    /**
-     * Test learn Method
-     */
     @Test
-    public void testLearn() {
-        testRLS("CPU", "weka/cpu.arff", 6);
-        testRLS("2dplanes", "weka/regression/2dplanes.arff", 10);
-        testRLS("abalone", "weka/regression/abalone.arff", 8);
-        //testRLS("bank32nh", "weka/regression/bank32nh.arff", 32);
-        //testRLS("cal_housing", "weka/regression/cal_housing.arff", 8);
-        //testRLS("puma8nh", "weka/regression/puma8nh.arff", 8);
-        //testRLS("kin8nm", "weka/regression/kin8nm.arff", 8);
-    }
-    
-    /**
-     * Test SVD Online Method
-     */
-    @Test
-    public void testSVDOnlineMethod() {
-        testOnlineLearn(true, "CPU", "weka/cpu.arff", 6);
-        testOnlineLearn(true, "2dplanes", "weka/regression/2dplanes.arff", 10);
-        testOnlineLearn(true, "abalone", "weka/regression/abalone.arff", 8);
-        //testOnlineLearn(true, "bank32nh", "weka/regression/bank32nh.arff", 32);
-        //testOnlineLearn(true, "cal_housing", "weka/regression/cal_housing.arff", 8);
-        //testOnlineLearn(true, "puma8nh", "weka/regression/puma8nh.arff", 8);
-        //testOnlineLearn(true, "kin8nm", "weka/regression/kin8nm.arff", 8);
-    }
-    
-    /**
-     * Test QR Online Method
-     */
-    @Test
-    public void testQROnlineMethod() {
-        testOnlineLearn(false, "CPU", "weka/cpu.arff", 6);
-        testOnlineLearn(false, "2dplanes", "weka/regression/2dplanes.arff", 10);
-        testOnlineLearn(false, "abalone", "weka/regression/abalone.arff", 8);
-        //testOnlineLearn(true, "bank32nh", "weka/regression/bank32nh.arff", 32);
-        //testOnlineLearn(false, "cal_housing", "weka/regression/cal_housing.arff", 8);
-        //testOnlineLearn(false, "puma8nh", "weka/regression/puma8nh.arff", 8);
-        //testOnlineLearn(false, "kin8nm", "weka/regression/kin8nm.arff", 8);
+    public void testOnlineLearn() {
+        testOnlineLearn("CPU", CPU.formula, CPU.data);
+        testOnlineLearn("2dplanes", Planes.formula, Planes.data);
+        testOnlineLearn("abalone", Abalone.formula, Abalone.train);
+        testOnlineLearn("bank32nh", Bank32nh.formula, Bank32nh.data);
+        testOnlineLearn("cal_housing", CalHousing.formula, CalHousing.data);
+        testOnlineLearn("puma8nh", Puma8NH.formula, Puma8NH.data);
+        testOnlineLearn("kin8nm", Kin8nm.formula, Kin8nm.data);
     }
 }

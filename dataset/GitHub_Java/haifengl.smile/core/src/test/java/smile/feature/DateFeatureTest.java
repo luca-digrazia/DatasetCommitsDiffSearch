@@ -69,18 +69,15 @@ public class DateFeatureTest {
                 {2001.0, 5.0, 3.0, 4.0, 12.0, 59.0, 55.0},
         };
 
-        Formula formula = Formula.rhs(date("timestamp",
-                DateFeature.YEAR, DateFeature.MONTH, DateFeature.DAY_OF_MONTH,
-                DateFeature.DAY_OF_WEEK, DateFeature.HOUR, DateFeature.MINUTE,
-                DateFeature.SECOND));
+        Formula formula = Formula.rhs(date("timestamp", DateFeature.YEAR, DateFeature.MONTH, DateFeature.DAY_OF_MONTH, DateFeature.DAY_OF_WEEK, DateFeature.HOURS, DateFeature.MINUTES, DateFeature.SECONDS));
         DataFrame output = formula.frame(Date.data);
-        assertEquals(output.ncol(), 7);
+        assertEquals(output.ncols(), 7);
 
         StructType schema = output.schema();
         System.out.println(schema);
         System.out.println(output);
 
-        for (int i = 0; i < output.ncol(); i++) {
+        for (int i = 0; i < output.ncols(); i++) {
             assertEquals(DataTypes.IntegerType, schema.field(i).type);
             if (i == 1 || i == 3) {
                 assertTrue(schema.field(i).measure instanceof NominalScale);
@@ -89,8 +86,8 @@ public class DateFeatureTest {
             }
         }
 
-        for (int i = 0; i < output.nrow(); i++) {
-            for (int j = 0; j < output.ncol(); j++) {
+        for (int i = 0; i < output.nrows(); i++) {
+            for (int j = 0; j < output.ncols(); j++) {
                 assertEquals(result[i][j], output.getDouble(i, j), 1E-7);
             }
         }

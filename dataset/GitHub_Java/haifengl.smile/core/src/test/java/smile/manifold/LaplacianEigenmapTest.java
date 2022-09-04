@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.manifold;
 
@@ -51,10 +51,7 @@ public class LaplacianEigenmapTest {
     public void tearDown() {
     }
 
-    /**
-     * Test of learn method, of class LaplacianEigenmap.
-     */
-    @Test(expected = Test.None.class)
+    @Test
     public void test() throws Exception {
         System.out.println("Laplacian Eigenmap");
 
@@ -1066,10 +1063,9 @@ public class LaplacianEigenmapTest {
 
         LaplacianEigenmap laplacianEigenmap = LaplacianEigenmap.of(data, 7);
 
-        double[][] coords = laplacianEigenmap.getCoordinates();
         for (int i = 0; i < points.length; i++) {
             for (int j = 0; j < points[0].length; j++) {
-                assertEquals(Math.abs(points[i][j]), Math.abs(coords[i][j]), 1E-4);
+                assertEquals(Math.abs(points[i][j]), Math.abs(laplacianEigenmap.coordinates[i][j]), 1E-4);
             }
         }
     }

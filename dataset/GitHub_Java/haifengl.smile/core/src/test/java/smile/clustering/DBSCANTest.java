@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,16 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.clustering;
 
 import smile.data.GaussianMixture;
-import smile.math.MathEx;
-import smile.neighbor.KDTree;
-import smile.stat.distribution.MultivariateGaussianDistribution;
-import smile.validation.RandIndex;
-import smile.validation.AdjustedRandIndex;
+import smile.validation.metric.*;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -56,37 +52,29 @@ public class DBSCANTest {
     }
 
     @Test
-    public void testGaussianMixture() {
+    public void testGaussianMixture() throws Exception {
         System.out.println("Gaussian Mixture");
 
-        double[][] data = GaussianMixture.data;
-        int[] label = GaussianMixture.label;
+        double[][] x = GaussianMixture.x;
+        int[] y = GaussianMixture.y;
 
-        DBSCAN<double[]> dbscan = DBSCAN.fit(data, new KDTree<>(data, data), 200, 0.8);
-        System.out.println(dbscan);
+        DBSCAN<double[]> model = DBSCAN.fit(x,200, 0.8);
+        System.out.println(model);
         
-        int[] size = dbscan.size;
-        int n = 0;
-        for (int i = 0; i < size.length-1; i++) {
-            n += size[i];
-        }
-        
-        int[] y1 = new int[n];
-        int[] y2 = new int[n];
-        for (int i = 0, j = 0; i < data.length; i++) {
-            if (dbscan.y[i] != Clustering.OUTLIER) {
-                y1[j] = label[i];                
-                y2[j++] = dbscan.y[i];
-            }
-        }
-        
-        AdjustedRandIndex ari = new AdjustedRandIndex();
-        RandIndex rand = new RandIndex();
-        double r = rand.measure(y1, y2);
-        double r2 = ari.measure(y1, y2);
-        System.out.println("The number of clusters: " + dbscan.k);
-        System.out.format("Training rand index = %.2f%%\tadjusted rand index = %.2f%%%n", 100.0 * r, 100.0 * r2);
-        assertTrue(r > 0.40);
-        assertTrue(r2 > 0.15);
+        double r = RandIndex.of(y, model.y);
+        double r2 = AdjustedRandIndex.of(y, model.y);
+        System.out.format("Training rand index = %.2f%%, adjusted rand index = %.2f%%%n", 100.0 * r, 100.0 * r2);
+        assertEquals(0.5424, r, 1E-4);
+        assertEquals(0.1215, r2, 1E-4);
+
+        System.out.format("MI = %.2f%n", MutualInformation.of(y, model.y));
+        System.out.format("NMI.joint = %.2f%%%n", 100 * NormalizedMutualInformation.joint(y, model.y));
+        System.out.format("NMI.max = %.2f%%%n", 100 * NormalizedMutualInformation.max(y, model.y));
+        System.out.format("NMI.min = %.2f%%%n", 100 * NormalizedMutualInformation.min(y, model.y));
+        System.out.format("NMI.sum = %.2f%%%n", 100 * NormalizedMutualInformation.sum(y, model.y));
+        System.out.format("NMI.sqrt = %.2f%%%n", 100 * NormalizedMutualInformation.sqrt(y, model.y));
+
+        java.nio.file.Path temp = smile.data.Serialize.write(model);
+        smile.data.Serialize.read(temp);
     }
 }

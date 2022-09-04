@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.vq;
 
@@ -51,7 +51,7 @@ public class BIRCHTest {
     public void tearDown() {
     }
 
-    @Test(expected = Test.None.class)
+    @Test
     public void testUSPS() throws Exception {
         System.out.println("USPS");
         MathEx.setSeed(19650218); // to get repeatable results.
@@ -60,13 +60,13 @@ public class BIRCHTest {
         double[][] testx = USPS.testx;
 
         BIRCH model = new BIRCH(x[0].length, 5, 5, 6.0);
-        for (int i = 0; i < x.length; i++) {
-            model.update(x[i]);
+        for (double[] xi : x) {
+            model.update(xi);
         }
 
         double error = 0.0;
         for (double[] xi : x) {
-            double[] yi = model.quantize(xi).get();
+            double[] yi = model.quantize(xi);
             error += MathEx.distance(xi, yi);
         }
         error /= x.length;
@@ -75,7 +75,7 @@ public class BIRCHTest {
 
         error = 0.0;
         for (double[] xi : testx) {
-            double[] yi = model.quantize(xi).get();
+            double[] yi = model.quantize(xi);
             error += MathEx.distance(xi, yi);
         }
         error /= testx.length;
