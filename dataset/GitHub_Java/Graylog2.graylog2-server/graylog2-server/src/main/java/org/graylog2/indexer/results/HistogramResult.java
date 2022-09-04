@@ -19,7 +19,6 @@
  */
 package org.graylog2.indexer.results;
 
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.unit.TimeValue;
 import org.graylog2.indexer.Indexer;
 
@@ -30,8 +29,8 @@ import java.util.Map;
  */
 public abstract class HistogramResult extends IndexQueryResult {
 
-    public HistogramResult(String originalQuery, BytesReference builtQuery, TimeValue took) {
-        super(originalQuery, builtQuery, took);
+    public HistogramResult(String originalQuery, TimeValue took) {
+        super(originalQuery, took);
     }
 
     public abstract Indexer.DateHistogramInterval getInterval();

@@ -22,7 +22,6 @@ package org.graylog2.rest.resources.search;
 import com.codahale.metrics.annotation.Timed;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.Indexer;
-import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
@@ -126,8 +125,8 @@ public class RelativeSearchResource extends SearchResource {
             @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
             @ApiParam(title = "interval", description = "Histogram interval / bucket size. (year, quarter, month, week, day, hour or minute)", required = true) @QueryParam("interval") String interval,
             @ApiParam(title = "range", description = "Relative timeframe to search in. See search method description.", required = true) @QueryParam("range") int range) {
-        checkQueryAndInterval(query, interval);
         interval = interval.toUpperCase();
+        checkQueryAndInterval(query, interval);
         validateInterval(interval);
 
         try {
@@ -156,13 +155,20 @@ public class RelativeSearchResource extends SearchResource {
             @ApiParam(title = "field", description = "Field of whose values to get the histogram of", required = true) @QueryParam("field") String field,
             @ApiParam(title = "interval", description = "Histogram interval / bucket size. (year, quarter, month, week, day, hour or minute)", required = true) @QueryParam("interval") String interval,
             @ApiParam(title = "range", description = "Relative timeframe to search in. See search method description.", required = true) @QueryParam("range") int range) {
-        checkQueryAndInterval(query, interval);
         interval = interval.toUpperCase();
+        checkQueryAndInterval(query, interval);
         validateInterval(interval);
         checkStringSet(field);
 
         try {
-            return json(buildHistogramResult(fieldHistogram(field, query, interval, buildRelativeTimeRange(range))));
+            return json(buildHistogramResult(
+                    core.getIndexer().searches().fieldHistogram(
+                            query,
+                            field,
+                            Indexer.DateHistogramInterval.valueOf(interval),
+                            buildRelativeTimeRange(range)
+                    )
+            ));
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
             throw new WebApplicationException(400);

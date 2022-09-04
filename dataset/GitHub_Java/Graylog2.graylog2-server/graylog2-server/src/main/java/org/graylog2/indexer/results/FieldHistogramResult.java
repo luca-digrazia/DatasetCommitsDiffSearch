@@ -20,7 +20,6 @@
 package org.graylog2.indexer.results;
 
 import com.google.common.collect.Maps;
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.search.facet.datehistogram.DateHistogramFacet;
 import org.graylog2.indexer.Indexer;
@@ -35,8 +34,8 @@ public class FieldHistogramResult extends HistogramResult {
     private final DateHistogramFacet result;
     private final Indexer.DateHistogramInterval interval;
 
-    public FieldHistogramResult(DateHistogramFacet result, String originalQuery, BytesReference builtQuery, Indexer.DateHistogramInterval interval, TimeValue took) {
-        super(originalQuery, builtQuery, took);
+    public FieldHistogramResult(DateHistogramFacet result, String originalQuery, Indexer.DateHistogramInterval interval, TimeValue took) {
+        super(originalQuery, took);
 
         this.result = result;
         this.interval = interval;
