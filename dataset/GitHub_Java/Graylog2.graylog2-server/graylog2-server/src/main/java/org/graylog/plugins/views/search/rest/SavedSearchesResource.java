@@ -1,18 +1,18 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog.plugins.views.search.rest;
 
@@ -23,9 +23,7 @@ import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog.plugins.views.search.views.ViewDTO;
 import org.graylog.plugins.views.search.views.ViewService;
-import org.graylog.plugins.views.search.views.sharing.IsViewSharedForUser;
-import org.graylog.plugins.views.search.views.sharing.ViewSharing;
-import org.graylog.plugins.views.search.views.sharing.ViewSharingService;
+import org.graylog.plugins.views.search.views.ViewSummaryDTO;
 import org.graylog2.database.PaginatedList;
 import org.graylog2.rest.models.PaginatedResponse;
 import org.graylog2.search.SearchQuery;
@@ -41,14 +39,13 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
-import java.util.Optional;
 
 import static java.util.Locale.ENGLISH;
 
 @RequiresAuthentication
-@Api(value = "SavedSearches")
+@Api(value = "Search/Saved")
 @Produces(MediaType.APPLICATION_JSON)
-@Path("/views/savedSearches")
+@Path("/search/saved")
 public class SavedSearchesResource extends RestResource {
     private static final ImmutableMap<String, SearchQueryField> SEARCH_FIELD_MAPPING = ImmutableMap.<String, SearchQueryField>builder()
             .put("id", SearchQueryField.create(ViewDTO.FIELD_ID))
@@ -57,27 +54,23 @@ public class SavedSearchesResource extends RestResource {
 
     private final ViewService dbService;
     private final SearchQueryParser searchQueryParser;
-    private final ViewSharingService viewSharingService;
-    private final IsViewSharedForUser isViewSharedForUser;
 
     @Inject
-    public SavedSearchesResource(ViewService dbService, ViewSharingService viewSharingService, IsViewSharedForUser isViewSharedForUser) {
+    public SavedSearchesResource(ViewService dbService) {
         this.dbService = dbService;
         this.searchQueryParser = new SearchQueryParser(ViewDTO.FIELD_TITLE, SEARCH_FIELD_MAPPING);
-        this.viewSharingService = viewSharingService;
-        this.isViewSharedForUser = isViewSharedForUser;
     }
 
     @GET
     @ApiOperation("Get a list of all searches")
-    public PaginatedResponse<ViewDTO> views(@ApiParam(name = "page") @QueryParam("page") @DefaultValue("1") int page,
-                                            @ApiParam(name = "per_page") @QueryParam("per_page") @DefaultValue("50") int perPage,
-                                            @ApiParam(name = "sort",
-                                                    value = "The field to sort the result on",
-                                                    required = true,
-                                                    allowableValues = "id,title,created_at") @DefaultValue(ViewDTO.FIELD_TITLE) @QueryParam("sort") String sortField,
-                                            @ApiParam(name = "order", value = "The sort direction", allowableValues = "asc, desc") @DefaultValue("asc") @QueryParam("order") String order,
-                                            @ApiParam(name = "query") @QueryParam("query") String query) {
+    public PaginatedResponse<ViewSummaryDTO> views(@ApiParam(name = "page") @QueryParam("page") @DefaultValue("1") int page,
+                                                   @ApiParam(name = "per_page") @QueryParam("per_page") @DefaultValue("50") int perPage,
+                                                   @ApiParam(name = "sort",
+                                                      value = "The field to sort the result on",
+                                                      required = true,
+                                                      allowableValues = "id,title,created_at") @DefaultValue(ViewDTO.FIELD_TITLE) @QueryParam("sort") String sortField,
+                                                   @ApiParam(name = "order", value = "The sort direction", allowableValues = "asc, desc") @DefaultValue("asc") @QueryParam("order") String order,
+                                                   @ApiParam(name = "query") @QueryParam("query") String query) {
 
         if (!ViewDTO.SORT_FIELDS.contains(sortField.toLowerCase(ENGLISH))) {
             sortField = ViewDTO.FIELD_TITLE;
@@ -85,15 +78,10 @@ public class SavedSearchesResource extends RestResource {
 
         try {
             final SearchQuery searchQuery = searchQueryParser.parse(query);
-            final PaginatedList<ViewDTO> result = dbService.searchPaginatedByType(
+            final PaginatedList<ViewSummaryDTO> result = dbService.searchSummariesPaginatedByType(
                     ViewDTO.Type.SEARCH,
                     searchQuery,
-                    view -> {
-                        final Optional<ViewSharing> viewSharing = viewSharingService.forView(view.id());
-
-                        return isPermitted(ViewsRestPermissions.VIEW_READ, view.id())
-                                || viewSharing.map(sharing -> isViewSharedForUser.isAllowedToSee(getCurrentUser(), sharing)).orElse(false);
-                    },
+                    view -> isPermitted(ViewsRestPermissions.VIEW_READ, view.id()),
                     order,
                     sortField,
                     page,
