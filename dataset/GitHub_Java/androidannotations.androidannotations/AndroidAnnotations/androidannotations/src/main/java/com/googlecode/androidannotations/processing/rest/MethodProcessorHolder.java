@@ -30,7 +30,7 @@ public class MethodProcessorHolder {
 	private Element element;
 	private String urlSuffix;
 	private JClass expectedClass;
-	private JClass methodReturnClass;
+	private JClass generatedReturnType;
 	private JCodeModel codeModel;
 
 	private JBlock body;
@@ -42,7 +42,7 @@ public class MethodProcessorHolder {
 		this.element = element;
 		this.urlSuffix = urlSuffix;
 		this.expectedClass = expectedClass;
-		this.methodReturnClass = generatedReturnType;
+		this.generatedReturnType = generatedReturnType;
 		this.codeModel = codeModel;
 	}
 
@@ -62,12 +62,12 @@ public class MethodProcessorHolder {
 		this.expectedClass = expectedClass;
 	}
 
-	public JClass getMethodReturnClass() {
-		return methodReturnClass;
+	public JClass getGeneratedReturnType() {
+		return generatedReturnType;
 	}
 
-	public void setMethodReturnClass(JClass methodReturnClass) {
-		this.methodReturnClass = methodReturnClass;
+	public void setGeneratedReturnType(JClass generatedReturnType) {
+		this.generatedReturnType = generatedReturnType;
 	}
 
 	public JCodeModel getCodeModel() {
