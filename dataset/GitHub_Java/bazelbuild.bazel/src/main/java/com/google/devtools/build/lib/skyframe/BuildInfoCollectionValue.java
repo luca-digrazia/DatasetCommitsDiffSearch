@@ -54,19 +54,17 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
 
   public static BuildInfoKeyAndConfig key(
       BuildInfoFactory.BuildInfoKey key, BuildConfiguration config) {
-    return keyInterner.intern(
-        new BuildInfoKeyAndConfig(key, ConfiguredTargetKey.keyFromConfiguration(config).key));
+    return keyInterner.intern(new BuildInfoKeyAndConfig(key, config));
   }
 
   /** Key for BuildInfoCollectionValues. */
   public static class BuildInfoKeyAndConfig extends ActionLookupKey {
     private final BuildInfoFactory.BuildInfoKey infoKey;
-    private final BuildConfigurationValue.Key configKey;
+    private final BuildConfiguration config;
 
-    private BuildInfoKeyAndConfig(
-        BuildInfoFactory.BuildInfoKey key, BuildConfigurationValue.Key configKey) {
-      this.infoKey = Preconditions.checkNotNull(key, configKey);
-      this.configKey = Preconditions.checkNotNull(configKey, key);
+    private BuildInfoKeyAndConfig(BuildInfoFactory.BuildInfoKey key, BuildConfiguration config) {
+      this.infoKey = Preconditions.checkNotNull(key, config);
+      this.config = Preconditions.checkNotNull(config, key);
     }
 
     @Override
@@ -78,8 +76,8 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
       return infoKey;
     }
 
-    BuildConfigurationValue.Key getConfigKey() {
-      return configKey;
+    BuildConfiguration getConfig() {
+      return config;
     }
 
     @Override
@@ -89,7 +87,7 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
 
     @Override
     public int hashCode() {
-      return Objects.hash(infoKey, configKey);
+      return Objects.hash(infoKey, config);
     }
 
     @Override
@@ -104,8 +102,7 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
         return false;
       }
       BuildInfoKeyAndConfig that = (BuildInfoKeyAndConfig) other;
-      return Objects.equals(this.infoKey, that.infoKey)
-          && Objects.equals(this.configKey, that.configKey);
+      return Objects.equals(this.infoKey, that.infoKey) && Objects.equals(this.config, that.config);
     }
   }
 }

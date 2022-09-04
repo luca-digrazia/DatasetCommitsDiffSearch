@@ -41,11 +41,8 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.BuildFileName;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
@@ -69,7 +66,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.BuildDriver;
 import com.google.devtools.build.skyframe.Differencer;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
@@ -316,11 +312,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     }
     TimestampGranularityMonitor tsgm = this.tsgm.get();
     modifiedFiles = 0;
-    Map<Root, DiffAwarenessManager.ProcessableModifiedFileSet> modifiedFilesByPathEntry =
+    Map<Path, DiffAwarenessManager.ProcessableModifiedFileSet> modifiedFilesByPathEntry =
         Maps.newHashMap();
-    Set<Pair<Root, DiffAwarenessManager.ProcessableModifiedFileSet>>
+    Set<Pair<Path, DiffAwarenessManager.ProcessableModifiedFileSet>>
         pathEntriesWithoutDiffInformation = Sets.newHashSet();
-    for (Root pathEntry : pkgLocator.get().getPathEntries()) {
+    for (Path pathEntry : pkgLocator.get().getPathEntries()) {
       DiffAwarenessManager.ProcessableModifiedFileSet modifiedFileSet =
           diffAwarenessManager.getDiff(eventHandler, pathEntry, options);
       if (modifiedFileSet.getModifiedFileSet().treatEverythingAsModified()) {
@@ -363,11 +359,10 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
    * diff. Removes entries from the given map as they are processed. All of the files need to be
    * invalidated, so the map should be empty upon completion of this function.
    */
-  private void handleDiffsWithCompleteDiffInformation(
-      TimestampGranularityMonitor tsgm,
-      Map<Root, DiffAwarenessManager.ProcessableModifiedFileSet> modifiedFilesByPathEntry)
-      throws InterruptedException {
-    for (Root pathEntry : ImmutableSet.copyOf(modifiedFilesByPathEntry.keySet())) {
+  private void handleDiffsWithCompleteDiffInformation(TimestampGranularityMonitor tsgm,
+      Map<Path, DiffAwarenessManager.ProcessableModifiedFileSet> modifiedFilesByPathEntry)
+          throws InterruptedException {
+    for (Path pathEntry : ImmutableSet.copyOf(modifiedFilesByPathEntry.keySet())) {
       DiffAwarenessManager.ProcessableModifiedFileSet processableModifiedFileSet =
           modifiedFilesByPathEntry.get(pathEntry);
       ModifiedFileSet modifiedFileSet = processableModifiedFileSet.getModifiedFileSet();
@@ -385,7 +380,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   private void handleDiffsWithMissingDiffInformation(
       ExtendedEventHandler eventHandler,
       TimestampGranularityMonitor tsgm,
-      Set<Pair<Root, DiffAwarenessManager.ProcessableModifiedFileSet>>
+      Set<Pair<Path, DiffAwarenessManager.ProcessableModifiedFileSet>>
           pathEntriesWithoutDiffInformation,
       boolean checkOutputFiles)
       throws InterruptedException {
@@ -411,8 +406,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     // system values under package roots for which we don't have diff information. If at least
     // one path entry doesn't have diff information, then we're going to have to iterate over
     // the skyframe values at least once no matter what.
-    Set<Root> diffPackageRootsUnderWhichToCheck = new HashSet<>();
-    for (Pair<Root, DiffAwarenessManager.ProcessableModifiedFileSet> pair :
+    Set<Path> diffPackageRootsUnderWhichToCheck = new HashSet<>();
+    for (Pair<Path, DiffAwarenessManager.ProcessableModifiedFileSet> pair :
         pathEntriesWithoutDiffInformation) {
       diffPackageRootsUnderWhichToCheck.add(pair.getFirst());
     }
@@ -443,7 +438,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
                         new MissingDiffDirtinessChecker(diffPackageRootsUnderWhichToCheck)))));
     handleChangedFiles(diffPackageRootsUnderWhichToCheck, diff);
 
-    for (Pair<Root, DiffAwarenessManager.ProcessableModifiedFileSet> pair :
+    for (Pair<Path, DiffAwarenessManager.ProcessableModifiedFileSet> pair :
         pathEntriesWithoutDiffInformation) {
       pair.getSecond().markProcessed();
     }
@@ -455,7 +450,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   }
 
   private void handleChangedFiles(
-      Collection<Root> diffPackageRootsUnderWhichToCheck, Differencer.Diff diff) {
+      Collection<Path> diffPackageRootsUnderWhichToCheck, Differencer.Diff diff) {
     Collection<SkyKey> changedKeysWithoutNewValues = diff.changedKeysWithoutNewValues();
     Map<SkyKey, SkyValue> changedKeysWithNewValues = diff.changedKeysWithNewValues();
 
@@ -472,10 +467,9 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
   private static final int MAX_NUMBER_OF_CHANGED_KEYS_TO_LOG = 10;
 
-  private static void logDiffInfo(
-      Iterable<Root> pathEntries,
-      Collection<SkyKey> changedWithoutNewValue,
-      Map<SkyKey, ? extends SkyValue> changedWithNewValue) {
+  private static void logDiffInfo(Iterable<Path> pathEntries,
+                                  Collection<SkyKey> changedWithoutNewValue,
+                                  Map<SkyKey, ? extends SkyValue> changedWithNewValue) {
     int numModified = changedWithNewValue.size() + changedWithoutNewValue.size();
     StringBuilder result = new StringBuilder("DiffAwareness found ")
         .append(numModified)
@@ -526,7 +520,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     Preconditions.checkState(!active);
     BuildView.Options viewOptions = options.getOptions(BuildView.Options.class);
     BuildRequestOptions requestOptions = options.getOptions(BuildRequestOptions.class);
-    boolean oldValueOfTrackIncrementalState = trackIncrementalState;
+    boolean oldState = trackIncrementalState;
 
     // First check if the incrementality state should be kept around during the build.
     boolean explicitlyRequestedNoIncrementalData =
@@ -535,7 +529,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         batch && viewOptions != null && viewOptions.discardAnalysisCache;
     trackIncrementalState =
         !explicitlyRequestedNoIncrementalData && !implicitlyRequestedNoIncrementalData;
-    boolean keepStateAfterBuild = requestOptions != null && requestOptions.keepStateAfterBuild;
     if (explicitlyRequestedNoIncrementalData != implicitlyRequestedNoIncrementalData) {
       if (requestOptions != null && !explicitlyRequestedNoIncrementalData) {
         eventHandler.handle(
@@ -545,19 +538,17 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
                     + " to specify --notrack_incremental_state in the future if you want to "
                     + "maximize memory savings."));
       }
-      if (!batch && keepStateAfterBuild) {
+      if (!batch) {
         eventHandler.handle(
             Event.warn(
-                "--notrack_incremental_state was specified, but without "
-                    + "--nokeep_state_after_build. Inmemory state from this build will not be "
-                    + "reusable, but it will not get fully wiped until the beginning of the next "
-                    + "build. Use --nokeep_state_after_build to clean up eagerly."));
+                "--batch not specified with --notrack_incremental_state: the server will "
+                    + "remain running, but the next build will not be incremental on this one."));
       }
     }
 
     // Now check if it is necessary to wipe the previous state. We do this if either the previous
     // or current incrementalStateRetentionStrategy requires the build to have been isolated.
-    if (oldValueOfTrackIncrementalState != trackIncrementalState) {
+    if (oldState != trackIncrementalState) {
       logger.info("Set incremental state to " + trackIncrementalState);
       evaluatorNeedsReset = true;
       removeActionsAfterEvaluation.set(!trackIncrementalState);
@@ -573,7 +564,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
   @Override
   public void invalidateFilesUnderPathForTesting(
-      ExtendedEventHandler eventHandler, ModifiedFileSet modifiedFileSet, Root pathEntry)
+      ExtendedEventHandler eventHandler, ModifiedFileSet modifiedFileSet, Path pathEntry)
       throws InterruptedException {
     if (lastAnalysisDiscarded) {
       // Values were cleared last build, but they couldn't be deleted because they were needed for
@@ -695,7 +686,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   }
 
   @Override
-  public List<RuleStat> getRuleStats(ExtendedEventHandler eventHandler) {
+  public List<RuleStat> getRuleStats() {
     Map<String, RuleStat> ruleStats = new HashMap<>();
     for (Map.Entry<SkyKey, ? extends NodeEntry> skyKeyAndNodeEntry :
         memoizingEvaluator.getGraphMap().entrySet()) {
@@ -710,17 +701,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
           ConfiguredTargetValue ctValue = (ConfiguredTargetValue) entry.getValue();
           ConfiguredTarget configuredTarget = ctValue.getConfiguredTarget();
           if (configuredTarget instanceof RuleConfiguredTarget) {
-
-            Rule rule;
-            try {
-              rule =
-                  (Rule) getPackageManager().getTarget(eventHandler, configuredTarget.getLabel());
-            } catch (NoSuchPackageException | NoSuchTargetException | InterruptedException e) {
-              throw new IllegalStateException(
-                  "Failed to get Rule target from package when calculating stats.", e);
-            }
             RuleConfiguredTarget ruleConfiguredTarget = (RuleConfiguredTarget) configuredTarget;
-            RuleClass ruleClass = rule.getRuleClassObject();
+            RuleClass ruleClass = ruleConfiguredTarget.getTarget().getRuleClassObject();
             RuleStat ruleStat =
                 ruleStats.computeIfAbsent(
                     ruleClass.getKey(), k -> new RuleStat(k, ruleClass.getName(), true));

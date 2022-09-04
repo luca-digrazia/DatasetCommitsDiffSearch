@@ -29,8 +29,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
-import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.AspectCompletionValue.AspectCompletionKey;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.TargetCompletionValue.TargetCompletionKey;
@@ -74,11 +72,12 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     ArtifactsToBuild getAllArtifactsToBuild(TValue value, TopLevelArtifactContext context);
 
     /** Creates an event reporting an absent input artifact. */
-    Event getRootCauseError(TValue value, Cause rootCause, Environment env);
+    Event getRootCauseError(TValue value, Cause rootCause);
 
-    /** Creates an error message reporting {@code missingCount} missing input files. */
-    MissingInputFileException getMissingFilesException(
-        TValue value, int missingCount, Environment env);
+    /**
+     * Creates an error message reporting {@code missingCount} missing input files.
+     */
+    MissingInputFileException getMissingFilesException(TValue value, int missingCount);
 
     /**
      * Creates a successful completion value.
@@ -121,45 +120,22 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     }
 
     @Override
-    public Event getRootCauseError(
-        ConfiguredTargetValue ctValue, Cause rootCause, Environment env) {
-      Target target = null;
-      try {
-        target =
-            ((PackageValue)
-                    env.getValue(
-                        PackageValue.key(
-                            ctValue.getConfiguredTarget().getLabel().getPackageIdentifier())))
-                .getPackage()
-                .getTarget(ctValue.getConfiguredTarget().getLabel().getName());
-      } catch (NoSuchTargetException | InterruptedException e) {
-        throw new IllegalStateException("Failed to retrieve target to get a root cause error.");
-      }
+    public Event getRootCauseError(ConfiguredTargetValue ctValue, Cause rootCause) {
       return Event.error(
-          target.getLocation(),
+          ctValue.getConfiguredTarget().getTarget().getLocation(),
           String.format(
               "%s: missing input file '%s'", ctValue.getConfiguredTarget().getLabel(), rootCause));
     }
 
     @Override
     public MissingInputFileException getMissingFilesException(
-        ConfiguredTargetValue value, int missingCount, Environment env) {
-      Target target = null;
-      try {
-        target =
-            ((PackageValue)
-                    env.getValue(
-                        PackageValue.key(
-                            value.getConfiguredTarget().getLabel().getPackageIdentifier())))
-                .getPackage()
-                .getTarget(value.getConfiguredTarget().getLabel().getName());
-      } catch (NoSuchTargetException | InterruptedException e) {
-        throw new IllegalStateException(
-            "Failed to retrieve target to create MissingFilesException.");
-      }
+        ConfiguredTargetValue value, int missingCount) {
       return new MissingInputFileException(
-          target.getLocation() + " " + missingCount + " input file(s) do not exist",
-          target.getLocation());
+          value.getConfiguredTarget().getTarget().getLocation()
+              + " "
+              + missingCount
+              + " input file(s) do not exist",
+          value.getConfiguredTarget().getTarget().getLocation());
     }
 
     @Override
@@ -218,7 +194,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     }
 
     @Override
-    public Event getRootCauseError(AspectValue value, Cause rootCause, Environment env) {
+    public Event getRootCauseError(AspectValue value, Cause rootCause) {
       return Event.error(
           value.getLocation(),
           String.format(
@@ -229,8 +205,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     }
 
     @Override
-    public MissingInputFileException getMissingFilesException(
-        AspectValue value, int missingCount, Environment env) {
+    public MissingInputFileException getMissingFilesException(AspectValue value, int missingCount) {
       return new MissingInputFileException(
           value.getLabel()
               + ", aspect "
@@ -311,7 +286,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
         if (inputOwner != null) {
           Cause cause = new LabelCause(inputOwner);
           rootCausesBuilder.add(cause);
-          env.getListener().handle(completor.getRootCauseError(value, cause, env));
+          env.getListener().handle(completor.getRootCauseError(value, cause));
         }
       } catch (ActionExecutionException e) {
         rootCausesBuilder.addTransitive(e.getRootCauses());
@@ -324,7 +299,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     }
 
     if (missingCount > 0) {
-      missingInputException = completor.getMissingFilesException(value, missingCount, env);
+      missingInputException = completor.getMissingFilesException(value, missingCount);
     }
 
     NestedSet<Cause> rootCauses = rootCausesBuilder.build();

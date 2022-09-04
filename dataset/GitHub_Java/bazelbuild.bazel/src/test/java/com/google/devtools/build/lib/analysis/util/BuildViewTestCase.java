@@ -36,13 +36,13 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.MapBasedActionGraph;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
@@ -76,7 +76,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options.
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
-import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
@@ -971,12 +970,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         .isSameAs(getGeneratingActionForLabel(labelA));
   }
 
-  protected Artifact getSourceArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+  protected Artifact getSourceArtifact(PathFragment rootRelativePath, Root root) {
     return view.getArtifactFactory().getSourceArtifact(rootRelativePath, root);
   }
 
   protected Artifact getSourceArtifact(String name) {
-    return getSourceArtifact(PathFragment.create(name), ArtifactRoot.asSourceRoot(rootDirectory));
+    return getSourceArtifact(PathFragment.create(name), Root.asSourceRoot(rootDirectory));
   }
 
   /**
@@ -986,7 +985,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * #getBinArtifactWithNoOwner} or {@link #getGenfilesArtifactWithNoOwner} should be used instead.
    */
   protected Artifact getDerivedArtifact(
-      PathFragment rootRelativePath, ArtifactRoot root, ArtifactOwner owner) {
+      PathFragment rootRelativePath, Root root, ArtifactOwner owner) {
     return view.getArtifactFactory().getDerivedArtifact(rootRelativePath, root, owner);
   }
 
@@ -994,10 +993,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * Gets a derived Artifact for testing with path of the form
    * root/owner.getPackageFragment()/packageRelativePath.
    *
-   * @see #getDerivedArtifact(PathFragment, ArtifactRoot, ArtifactOwner)
+   * @see #getDerivedArtifact(PathFragment, Root, ArtifactOwner)
    */
-  private Artifact getPackageRelativeDerivedArtifact(
-      String packageRelativePath, ArtifactRoot root, ArtifactOwner owner) {
+  private Artifact getPackageRelativeDerivedArtifact(String packageRelativePath, Root root,
+      ArtifactOwner owner) {
     return getDerivedArtifact(
         owner.getLabel().getPackageFragment().getRelative(packageRelativePath),
         root, owner);
@@ -1508,7 +1507,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       Transition transition) throws InterruptedException {
     if (transition == ConfigurationTransitionProxy.NONE) {
       return fromConfig;
-    } else if (transition == NullTransition.INSTANCE) {
+    } else if (transition == ConfigurationTransitionProxy.NULL) {
       return null;
     } else {
       PatchTransition patchTransition =
@@ -1709,12 +1708,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, Root root) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public Artifact getTreeArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getTreeArtifact(PathFragment rootRelativePath, Root root) {
       throw new UnsupportedOperationException();
     }
 
@@ -1749,12 +1748,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public Artifact getFilesetArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getFilesetArtifact(PathFragment rootRelativePath, Root root) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getDerivedArtifact(PathFragment rootRelativePath, Root root) {
       throw new UnsupportedOperationException();
     }
 
@@ -1926,7 +1925,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     Rule associatedRule = target.getTarget().getAssociatedRule();
     RepositoryName repository = associatedRule.getRepository();
 
-    ArtifactRoot root;
+    Root root;
     if (associatedRule.hasBinaryOutput()) {
       root = configuration.getBinDirectory(repository);
     } else {

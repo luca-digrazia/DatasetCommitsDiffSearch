@@ -16,11 +16,10 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoContext;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.util.Map;
 
 /**
  * Creates a {@link BuildInfoCollectionValue}. Only depends on the unique
@@ -59,32 +57,28 @@ public class BuildInfoCollectionFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
     final BuildInfoKeyAndConfig keyAndConfig = (BuildInfoKeyAndConfig) skyKey.argument();
-    ImmutableSet<SkyKey> keysToRequest =
-        ImmutableSet.of(
-            WorkspaceStatusValue.BUILD_INFO_KEY,
-            WorkspaceNameValue.key(),
-            keyAndConfig.getConfigKey());
-    Map<SkyKey, SkyValue> result = env.getValues(keysToRequest);
-    if (env.valuesMissing()) {
+    WorkspaceStatusValue infoArtifactValue =
+        (WorkspaceStatusValue) env.getValue(WorkspaceStatusValue.BUILD_INFO_KEY);
+    if (infoArtifactValue == null) {
       return null;
     }
-    WorkspaceStatusValue infoArtifactValue =
-        (WorkspaceStatusValue) result.get(WorkspaceStatusValue.BUILD_INFO_KEY);
-    WorkspaceNameValue nameValue = (WorkspaceNameValue) result.get(WorkspaceNameValue.key());
+    WorkspaceNameValue nameValue = (WorkspaceNameValue) env.getValue(WorkspaceNameValue.key());
+    if (nameValue == null) {
+      return null;
+    }
     RepositoryName repositoryName = RepositoryName.createFromValidStrippedName(
         nameValue.getName());
 
     final ArtifactFactory factory = artifactFactory.get();
-    BuildInfoContext context =
-        new BuildInfoContext() {
-          @Override
-          public Artifact getBuildInfoArtifact(
-              PathFragment rootRelativePath, ArtifactRoot root, BuildInfoType type) {
-            return type == BuildInfoType.NO_REBUILD
-                ? factory.getConstantMetadataArtifact(rootRelativePath, root, keyAndConfig)
-                : factory.getDerivedArtifact(rootRelativePath, root, keyAndConfig);
-          }
-        };
+    BuildInfoContext context = new BuildInfoContext() {
+      @Override
+      public Artifact getBuildInfoArtifact(PathFragment rootRelativePath, Root root,
+          BuildInfoType type) {
+        return type == BuildInfoType.NO_REBUILD
+            ? factory.getConstantMetadataArtifact(rootRelativePath, root, keyAndConfig)
+            : factory.getDerivedArtifact(rootRelativePath, root, keyAndConfig);
+      }
+    };
 
     return new BuildInfoCollectionValue(
         actionKeyContext,
@@ -92,8 +86,7 @@ public class BuildInfoCollectionFunction implements SkyFunction {
             .get(keyAndConfig.getInfoKey())
             .create(
                 context,
-                ((BuildConfigurationValue) result.get(keyAndConfig.getConfigKey()))
-                    .getConfiguration(),
+                keyAndConfig.getConfig(),
                 infoArtifactValue.getStableArtifact(),
                 infoArtifactValue.getVolatileArtifact(),
                 repositoryName),

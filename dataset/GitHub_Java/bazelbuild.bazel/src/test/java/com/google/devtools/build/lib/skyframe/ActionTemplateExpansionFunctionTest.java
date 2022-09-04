@@ -30,8 +30,8 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.skyframe.ArtifactSkyKey.OwnedArtifact;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
@@ -76,7 +75,7 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
         new AtomicReference<>(
             new PathPackageLocator(
                 rootDirectory.getFileSystem().getPath("/outputbase"),
-                ImmutableList.of(Root.fromPath(rootDirectory)),
+                ImmutableList.of(rootDirectory),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
     RecordingDifferencer differencer = new SequencedRecordingDifferencer();
     MemoizingEvaluator evaluator =
@@ -96,9 +95,9 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
 
   @Test
   public void testActionTemplateExpansionFunction() throws Exception {
-    SpecialArtifact inputTreeArtifact =
-        createAndPopulateTreeArtifact("inputTreeArtifact", "child0", "child1", "child2");
-    SpecialArtifact outputTreeArtifact = createTreeArtifact("outputTreeArtifact");
+    Artifact inputTreeArtifact = createAndPopulateTreeArtifact(
+        "inputTreeArtifact", "child0", "child1", "child2");
+    Artifact outputTreeArtifact = createTreeArtifact("outputTreeArtifact");
 
     SpawnActionTemplate spawnActionTemplate = ActionsTestUtil.createDummySpawnActionTemplate(
         inputTreeArtifact, outputTreeArtifact);
@@ -120,9 +119,10 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
 
   @Test
   public void testThrowsOnActionConflict() throws Exception {
-    SpecialArtifact inputTreeArtifact =
-        createAndPopulateTreeArtifact("inputTreeArtifact", "child0", "child1", "child2");
-    SpecialArtifact outputTreeArtifact = createTreeArtifact("outputTreeArtifact");
+    Artifact inputTreeArtifact = createAndPopulateTreeArtifact(
+        "inputTreeArtifact", "child0", "child1", "child2");
+    Artifact outputTreeArtifact = createTreeArtifact("outputTreeArtifact");
+
 
     OutputPathMapper mapper = new OutputPathMapper() {
       @Override
@@ -147,9 +147,9 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
 
   @Test
   public void testThrowsOnArtifactPrefixConflict() throws Exception {
-    SpecialArtifact inputTreeArtifact =
-        createAndPopulateTreeArtifact("inputTreeArtifact", "child0", "child1", "child2");
-    SpecialArtifact outputTreeArtifact = createTreeArtifact("outputTreeArtifact");
+    Artifact inputTreeArtifact = createAndPopulateTreeArtifact(
+        "inputTreeArtifact", "child0", "child1", "child2");
+    Artifact outputTreeArtifact = createTreeArtifact("outputTreeArtifact");
 
     OutputPathMapper mapper = new OutputPathMapper() {
       private int i = 0;
@@ -204,20 +204,20 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
     return actionList.build();
   }
 
-  private SpecialArtifact createTreeArtifact(String path) {
+  private Artifact createTreeArtifact(String path) {
     PathFragment execPath = PathFragment.create("out").getRelative(path);
     Path fullPath = rootDirectory.getRelative(execPath);
     return new SpecialArtifact(
         fullPath,
-        ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
+        Root.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
         execPath,
-        ArtifactOwner.NullArtifactOwner.INSTANCE,
+        ArtifactOwner.NULL_OWNER,
         SpecialArtifactType.TREE);
   }
 
-  private SpecialArtifact createAndPopulateTreeArtifact(String path, String... childRelativePaths)
+  private Artifact createAndPopulateTreeArtifact(String path, String... childRelativePaths)
       throws Exception {
-    SpecialArtifact treeArtifact = createTreeArtifact(path);
+    Artifact treeArtifact = createTreeArtifact(path);
     Map<TreeFileArtifact, FileArtifactValue> treeFileArtifactMap = new LinkedHashMap<>();
 
     for (String childRelativePath : childRelativePaths) {

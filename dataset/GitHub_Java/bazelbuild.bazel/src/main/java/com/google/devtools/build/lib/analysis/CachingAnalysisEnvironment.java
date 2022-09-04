@@ -21,11 +21,10 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
@@ -234,7 +233,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+  public Artifact getDerivedArtifact(PathFragment rootRelativePath, Root root) {
     Preconditions.checkState(enabled);
     return trackArtifactAndOrigin(
         artifactFactory.getDerivedArtifact(rootRelativePath, root, getOwner()),
@@ -242,16 +241,15 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public SpecialArtifact getTreeArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+  public Artifact getTreeArtifact(PathFragment rootRelativePath, Root root) {
     Preconditions.checkState(enabled);
-    return (SpecialArtifact)
-        trackArtifactAndOrigin(
-            artifactFactory.getTreeArtifact(rootRelativePath, root, getOwner()),
-            extendedSanityChecks ? new Throwable() : null);
+    return trackArtifactAndOrigin(
+        artifactFactory.getTreeArtifact(rootRelativePath, root, getOwner()),
+        extendedSanityChecks ? new Throwable() : null);
   }
 
   @Override
-  public Artifact getFilesetArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+  public Artifact getFilesetArtifact(PathFragment rootRelativePath, Root root) {
     Preconditions.checkState(enabled);
     return trackArtifactAndOrigin(
         artifactFactory.getFilesetArtifact(rootRelativePath, root, getOwner()),
@@ -259,7 +257,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+  public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, Root root) {
     return artifactFactory.getConstantMetadataArtifact(rootRelativePath, root, getOwner());
   }
 

@@ -31,8 +31,8 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.TestAction.DummyAction;
 import com.google.devtools.build.lib.events.NullEventHandler;
@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -246,7 +245,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
   }
 
   private Artifact createSourceArtifact(String path) {
-    return new Artifact(PathFragment.create(path), ArtifactRoot.asSourceRoot(Root.fromPath(root)));
+    return new Artifact(PathFragment.create(path), Root.asSourceRoot(root));
   }
 
   private Artifact createDerivedArtifact(String path) {
@@ -254,20 +253,16 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     Path fullPath = root.getRelative(execPath);
     Artifact output =
         new Artifact(
-            fullPath,
-            ArtifactRoot.asDerivedRoot(root, root.getRelative("out")),
-            execPath,
-            ALL_OWNER);
+            fullPath, Root.asDerivedRoot(root, root.getRelative("out")), execPath, ALL_OWNER);
     actions.add(new DummyAction(ImmutableList.<Artifact>of(), output));
     return output;
   }
 
   private Artifact createMiddlemanArtifact(String path) {
-    ArtifactRoot middlemanRoot =
-        ArtifactRoot.middlemanRoot(middlemanPath, middlemanPath.getRelative("out"));
-    Path fullPath = middlemanRoot.getRoot().getRelative(path);
+    Root middlemanRoot = Root.middlemanRoot(middlemanPath, middlemanPath.getRelative("out"));
+    Path fullPath = middlemanRoot.getPath().getRelative(path);
     return new Artifact(
-        fullPath, middlemanRoot, middlemanRoot.getExecPath().getRelative(path), ALL_OWNER);
+        fullPath, middlemanRoot, fullPath.relativeTo(middlemanRoot.getExecRoot()), ALL_OWNER);
   }
 
   private Artifact createDerivedTreeArtifactWithAction(String path) {
@@ -281,7 +276,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     Path fullPath = root.getRelative(execPath);
     return new SpecialArtifact(
         fullPath,
-        ArtifactRoot.asDerivedRoot(root, root.getRelative("out")),
+        Root.asDerivedRoot(root, root.getRelative("out")),
         execPath,
         ALL_OWNER,
         SpecialArtifactType.TREE);

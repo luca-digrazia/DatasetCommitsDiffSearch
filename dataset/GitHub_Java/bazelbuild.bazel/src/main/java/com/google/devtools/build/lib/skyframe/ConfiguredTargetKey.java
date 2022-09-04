@@ -23,23 +23,25 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.skyframe.SkyFunctionName;
-import com.google.devtools.build.skyframe.SkyKey;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * A (Label, Configuration key) pair. Note that this pair may be used to look up the generating
- * action of an artifact.
+ * A (Label, Configuration) pair. Note that this pair may be used to look up the generating action
+ * of an artifact. Callers may want to ensure that they have the correct configuration for this
+ * purpose by passing in {@link BuildConfiguration#getArtifactOwnerTransition} in preference to
+ * the raw configuration.
  */
 public class ConfiguredTargetKey extends ActionLookupKey {
   private final Label label;
-  @Nullable private final SkyKey configurationKey;
+  @Nullable
+  private final BuildConfiguration configuration;
 
   private transient int hashCode;
 
-  private ConfiguredTargetKey(Label label, @Nullable SkyKey configurationKey) {
+  private ConfiguredTargetKey(Label label, @Nullable BuildConfiguration configuration) {
     this.label = Preconditions.checkNotNull(label);
-    this.configurationKey = configurationKey;
+    this.configuration = configuration;
   }
 
   public static ConfiguredTargetKey of(ConfiguredTarget configuredTarget) {
@@ -50,32 +52,13 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   }
 
   /**
-   * Caches so that the number of ConfiguredTargetKey instances is {@code O(configured targets)} and
+   * Cache so that the number of ConfiguredTargetKey instances is {@code O(configured targets)} and
    * not {@code O(edges between configured targets)}.
    */
   private static final Interner<ConfiguredTargetKey> interner = BlazeInterners.newWeakInterner();
-  private static final Interner<HostConfiguredTargetKey> hostInterner =
-      BlazeInterners.newWeakInterner();
 
   public static ConfiguredTargetKey of(Label label, @Nullable BuildConfiguration configuration) {
-    SkyKey configurationKey =
-        configuration == null
-            ? null
-            : BuildConfigurationValue.key(
-            configuration.fragmentClasses(), configuration.getOptions());
-    return of(
-        label,
-        configurationKey,
-        configuration != null && configuration.isHostConfiguration());
-  }
-
-  static ConfiguredTargetKey of(
-      Label label, @Nullable SkyKey configurationKey, boolean isHostConfiguration) {
-    if (isHostConfiguration) {
-      return hostInterner.intern(new HostConfiguredTargetKey(label, configurationKey));
-    } else {
-      return interner.intern(new ConfiguredTargetKey(label, configurationKey));
-    }
+    return interner.intern(new ConfiguredTargetKey(label, configuration));
   }
 
   @Override
@@ -89,8 +72,8 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   }
 
   @Nullable
-  SkyKey getConfigurationKey() {
-    return configurationKey;
+  public BuildConfiguration getConfiguration() {
+    return configuration;
   }
 
   @Override
@@ -120,8 +103,8 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   }
 
   private int computeHashCode() {
-    int configVal = configurationKey == null ? 79 : configurationKey.hashCode();
-    return 31 * label.hashCode() + configVal + (isHostConfiguration() ? 41 : 0);
+    int configVal = configuration == null ? 79 : configuration.hashCode();
+    return 31 * label.hashCode() + configVal;
   }
 
   @Override
@@ -136,40 +119,22 @@ public class ConfiguredTargetKey extends ActionLookupKey {
       return false;
     }
     ConfiguredTargetKey other = (ConfiguredTargetKey) obj;
-    return this.isHostConfiguration() == other.isHostConfiguration()
-        && Objects.equals(label, other.label)
-        && Objects.equals(configurationKey, other.configurationKey);
-  }
-
-  public boolean isHostConfiguration() {
-    return false;
+    return Objects.equals(label, other.label) && Objects.equals(configuration, other.configuration);
   }
 
   public String prettyPrint() {
     if (label == null) {
       return "null";
     }
-    return isHostConfiguration() ? (label + " (host)") : label.toString();
+    return (configuration != null && configuration.isHostConfiguration())
+        ? (label + " (host)") : label.toString();
   }
 
   @Override
   public String toString() {
     return String.format(
-        "%s %s %s (%s)",
-        label,
-        configurationKey,
-        isHostConfiguration(),
-        System.identityHashCode(this));
-  }
-
-  private static class HostConfiguredTargetKey extends ConfiguredTargetKey {
-    private HostConfiguredTargetKey(Label label, @Nullable SkyKey configurationKey) {
-      super(label, configurationKey);
-    }
-
-    @Override
-    public boolean isHostConfiguration() {
-      return true;
-    }
+        "%s %s (%s %s)", label, (configuration == null ? "null" : configuration),
+        System.identityHashCode(this),
+        (configuration == null ? "null" : System.identityHashCode(configuration)));
   }
 }
