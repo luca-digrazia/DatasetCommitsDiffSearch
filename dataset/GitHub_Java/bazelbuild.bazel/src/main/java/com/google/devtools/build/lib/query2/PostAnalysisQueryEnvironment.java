@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.query2.common.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.KeyExtractor;
 import com.google.devtools.build.lib.query2.engine.MinDepthUniquifier;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -176,7 +175,7 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
         || settings.contains(Setting.TESTS_EXPRESSION_STRICT)) {
       settings =
           Sets.difference(
-              settings, ImmutableSet.of(Setting.ONLY_TARGET_DEPS, Setting.NO_IMPLICIT_DEPS));
+              settings, ImmutableSet.of(Setting.NO_HOST_DEPS, Setting.NO_IMPLICIT_DEPS));
       throw new QueryException(
           String.format(
               "The following filter(s) are not currently supported by configured query: %s",
@@ -326,15 +325,15 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
     // cases if --nohost_deps is turned on, we only allow reachable targets that are ALSO in the
     // host config. This is somewhat counterintuitive and subject to change in the future but seems
     // like the best option right now.
-    if (settings.contains(Setting.ONLY_TARGET_DEPS)) {
+    if (settings.contains(Setting.NO_HOST_DEPS)) {
       BuildConfiguration currentConfig = getConfiguration(target);
-      if (currentConfig != null && currentConfig.isToolConfiguration()) {
+      if (currentConfig != null && currentConfig.isHostConfiguration()) {
         deps =
             deps.stream()
                 .filter(
                     dep ->
                         getConfiguration(dep) != null
-                            && getConfiguration(dep).isToolConfiguration())
+                            && getConfiguration(dep).isHostConfiguration())
                 .collect(Collectors.toList());
       } else {
         deps =
@@ -342,7 +341,7 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
                 .filter(
                     dep ->
                         getConfiguration(dep) != null
-                            && !getConfiguration(dep).isToolConfiguration())
+                            && !getConfiguration(dep).isHostConfiguration())
                 .collect(Collectors.toList());
       }
     }
