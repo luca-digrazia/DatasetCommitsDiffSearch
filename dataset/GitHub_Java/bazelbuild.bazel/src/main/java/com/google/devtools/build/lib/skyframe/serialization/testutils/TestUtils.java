@@ -19,10 +19,11 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.devtools.build.lib.skyframe.serialization.CodecRegisterer;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecRegistry;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
-import com.google.devtools.build.lib.syntax.Environment.GlobalFrame;
+import com.google.devtools.build.lib.syntax.Environment.Frame;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -50,10 +51,10 @@ public class TestUtils {
   }
 
   /**
-   * Asserts that two {@link GlobalFrame}s have the same structure. Needed because
-   * {@link GlobalFrame} doesn't override {@link Object#equals}.
+   * Asserts that two {@link Frame}s have the same structure. Needed because {@link Frame} doesn't
+   * override {@link Object#equals}.
    */
-  public static void assertGlobalFramesEqual(GlobalFrame frame1, GlobalFrame frame2) {
+  public static void assertFramesEqual(Frame frame1, Frame frame2) {
     assertThat(frame1.mutability().getAnnotation())
         .isEqualTo(frame2.mutability().getAnnotation());
     assertThat(frame1.getLabel()).isEqualTo(frame2.getLabel());
@@ -63,7 +64,7 @@ public class TestUtils {
       assertThat(frame1.getParent()).isNull();
       assertThat(frame2.getParent()).isNull();
     } else {
-      assertGlobalFramesEqual(frame1.getParent(), frame2.getParent());
+      assertFramesEqual(frame1.getParent(), frame2.getParent());
     }
   }
 
@@ -93,7 +94,9 @@ public class TestUtils {
     }
 
     /** Disables auto-registration of ConstantStringCodec. */
-    private static class ConstantStringCodecRegisterer
-        implements CodecRegisterer<ConstantStringCodec> {}
+    static class ConstantStringCodecRegisterer implements CodecRegisterer<ConstantStringCodec> {
+      @Override
+      public void register(ObjectCodecRegistry.Builder unusedBuilder) {}
+    }
   }
 }

@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
-import java.util.Collections;
-
 /**
  * Custom registration behavior for a codec.
  *
@@ -33,6 +31,8 @@ import java.util.Collections;
  *
  * <p>Implementations must have a default constructor.
  *
+ * <p>Multiple {@link CodecRegisterer} implementations for the same {@link ObjectCodec} is illegal.
+ *
  * <p>Inheriting {@link CodecRegisterer} through a superclass is illegal. It must be directly
  * implemented. Also, the generic parameter of {@link CodecRegisterer} must be reified.
  *
@@ -40,7 +40,5 @@ import java.util.Collections;
  */
 public interface CodecRegisterer<T extends ObjectCodec<?>> {
 
-  default Iterable<? extends ObjectCodec<?>> getCodecsToRegister() {
-    return Collections.emptyList();
-  }
+  void register(ObjectCodecRegistry.Builder builder);
 }
