@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,19 +13,29 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.base.Preconditions;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
+import com.google.common.base.Predicates;
 import com.google.common.base.Verify;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AbstractAttributeMapper;
+import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
+import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.BuildType.Selector;
+import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Label;
-
+import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,14 +62,11 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
   private final Map<Label, ConfigMatchingProvider> configConditions;
   private Rule rule;
 
-  private ConfiguredAttributeMapper(Rule rule, Set<ConfigMatchingProvider> configConditions) {
+  private ConfiguredAttributeMapper(Rule rule,
+      ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
     super(Preconditions.checkNotNull(rule).getPackage(), rule.getRuleClassObject(), rule.getLabel(),
         rule.getAttributeContainer());
-    ImmutableMap.Builder<Label, ConfigMatchingProvider> builder = ImmutableMap.builder();
-    for (ConfigMatchingProvider configCondition : configConditions) {
-      builder.put(configCondition.label(), configCondition);
-    }
-    this.configConditions = builder.build();
+    this.configConditions = configConditions;
     this.rule = rule;
   }
 
@@ -77,7 +84,9 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
    * <p>If you don't know how to do this, you really want to use one of the "do-it-all"
    * constructors.
    */
-  static ConfiguredAttributeMapper of(Rule rule, Set<ConfigMatchingProvider> configConditions) {
+  @VisibleForTesting
+  public static ConfiguredAttributeMapper of(
+      Rule rule, ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
     return new ConfiguredAttributeMapper(rule, configConditions);
   }
 
@@ -99,62 +108,116 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
    * can't be resolved due to intrinsic contradictions in the configuration.
    */
   private <T> T getAndValidate(String attributeName, Type<T> type) throws EvalException  {
-    Type.SelectorList<T> selectorList = getSelectorList(attributeName, type);
+    SelectorList<T> selectorList = getSelectorList(attributeName, type);
     if (selectorList == null) {
       // This is a normal attribute.
       return super.get(attributeName, type);
     }
 
     List<T> resolvedList = new ArrayList<>();
-    for (Type.Selector<T> selector : selectorList.getSelectors()) {
-      resolvedList.add(resolveSelector(attributeName, selector));
+    for (Selector<T> selector : selectorList.getSelectors()) {
+      ConfigKeyAndValue<T> resolvedPath = resolveSelector(attributeName, selector);
+      if (!selector.isValueSet(resolvedPath.configKey)) {
+        // Use the default. We don't have access to the rule here, so pass null to
+        // Attribute.getValue(). This has the result of making attributes with condition
+        // predicates ineligible for "None" values. But no user-facing attributes should
+        // do that anyway, so that isn't a loss.
+        Attribute attr = getAttributeDefinition(attributeName);
+        Verify.verify(attr.getCondition() == Predicates.<AttributeMap>alwaysTrue());
+        resolvedList.add((T) attr.getDefaultValue(null));
+      } else {
+        resolvedList.add(resolvedPath.value);
+      }
     }
     return resolvedList.size() == 1 ? resolvedList.get(0) : type.concat(resolvedList);
   }
 
-  private <T> T resolveSelector(String attributeName, Type.Selector<T> selector)
+  private static class ConfigKeyAndValue<T> {
+    Label configKey;
+    T value;
+    ConfigKeyAndValue(Label key, T value) {
+      this.configKey = key;
+      this.value = value;
+    }
+  }
+
+  private <T> ConfigKeyAndValue<T> resolveSelector(String attributeName, Selector<T> selector)
       throws EvalException {
-    ConfigMatchingProvider matchingCondition = null;
-    T matchingValue = null;
+    Map<ConfigMatchingProvider, ConfigKeyAndValue<T>> matchingConditions = new LinkedHashMap<>();
+    Set<Label> conditionLabels = new LinkedHashSet<>();
+    ConfigKeyAndValue<T> matchingResult = null;
 
     // Find the matching condition and record its value (checking for duplicates).
     for (Map.Entry<Label, T> entry : selector.getEntries().entrySet()) {
       Label selectorKey = entry.getKey();
-      if (Type.Selector.isReservedLabel(selectorKey)) {
+      if (BuildType.Selector.isReservedLabel(selectorKey)) {
         continue;
       }
 
-      ConfigMatchingProvider curCondition = Verify.verifyNotNull(configConditions.get(selectorKey));
+      ConfigMatchingProvider curCondition = configConditions.get(
+          rule.getLabel().resolveRepositoryRelative(selectorKey));
+      if (curCondition == null) {
+        // This can happen if the rule is in error
+        continue;
+      }
+      conditionLabels.add(curCondition.label());
 
       if (curCondition.matches()) {
-        if (matchingCondition == null || curCondition.refines(matchingCondition)) {
-          // A match is valid if either this is the *only* condition that matches or this is a
-          // more "precise" specification of another matching condition (in which case we choose
-          // the most precise one).
-          matchingCondition = curCondition;
-          matchingValue = entry.getValue();
-        } else if (matchingCondition.refines(curCondition)) {
-          // The originally matching conditions is more precise, so keep that one.
-        } else {
-          throw new EvalException(rule.getAttributeLocation(attributeName),
-              "Both " + matchingCondition.label() + " and " + curCondition.label()
-              + " match configurable attribute \"" + attributeName + "\" in " + getLabel()
-              + ". Multiple matches are not allowed unless one is a specialization of the other");
+        // We keep track of all matches which are more precise than any we have found so far.
+        // Therefore, we remove any previous matches which are strictly less precise than this
+        // one, and only add this one if none of the previous matches are more precise.
+        // It is an error if we do not end up with only one most-precise match.
+        boolean suppressed = false;
+        Iterator<ConfigMatchingProvider> it = matchingConditions.keySet().iterator();
+        while (it.hasNext()) {
+          ConfigMatchingProvider existingMatch = it.next();
+          if (curCondition.refines(existingMatch)) {
+            it.remove();
+          } else if (existingMatch.refines(curCondition)) {
+            suppressed = true;
+            break;
+          }
+        }
+        if (!suppressed) {
+          matchingConditions.put(
+              curCondition, new ConfigKeyAndValue<>(selectorKey, entry.getValue()));
         }
       }
     }
 
-    // If nothing matched, choose the default condition.
-    if (matchingCondition == null) {
-      if (!selector.hasDefault()) {
-        throw new EvalException(rule.getAttributeLocation(attributeName),
-            "Configurable attribute \"" + attributeName + "\" doesn't match this "
-            + "configuration (would a default condition help?)");
-      }
-      matchingValue = selector.getDefault();
+    if (matchingConditions.size() > 1) {
+      throw new EvalException(
+          rule.getAttributeLocation(attributeName),
+          "Illegal ambiguous match on configurable attribute \""
+              + attributeName
+              + "\" in "
+              + getLabel()
+              + ":\n"
+              + Joiner.on("\n").join(matchingConditions.keySet())
+              + "\nMultiple matches are not allowed unless one is unambiguously more specialized.");
+    } else if (matchingConditions.size() == 1) {
+      matchingResult = Iterables.getOnlyElement(matchingConditions.values());
     }
 
-    return matchingValue;
+    // If nothing matched, choose the default condition.
+    if (matchingResult == null) {
+      if (!selector.hasDefault()) {
+        String noMatchMessage =
+            "Configurable attribute \"" + attributeName + "\" doesn't match this configuration";
+        if (!selector.getNoMatchError().isEmpty()) {
+          noMatchMessage += ": " + selector.getNoMatchError();
+        } else {
+          noMatchMessage += " (would a default condition help?).\nConditions checked:\n "
+              + Joiner.on("\n ").join(conditionLabels);
+        }
+        throw new EvalException(rule.getAttributeLocation(attributeName), noMatchMessage);
+      }
+      matchingResult = selector.hasDefault()
+          ? new ConfigKeyAndValue<>(Selector.DEFAULT_CONDITION_LABEL, selector.getDefault())
+          : null;
+    }
+
+    return matchingResult;
   }
 
   @Override
@@ -171,8 +234,23 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
   }
 
   @Override
-  protected <T> Iterable<T> visitAttribute(String attributeName, Type<T> type) {
-    T value = get(attributeName, type);
-    return value == null ? ImmutableList.<T>of() : ImmutableList.of(value);
+  public boolean isAttributeValueExplicitlySpecified(String attributeName) {
+    SelectorList<?> selectorList = getSelectorList(attributeName, getAttributeType(attributeName));
+    if (selectorList == null) {
+      // This is a normal attribute.
+      return super.isAttributeValueExplicitlySpecified(attributeName);
+    }
+    for (Selector<?> selector : selectorList.getSelectors()) {
+      try {
+        ConfigKeyAndValue<?> resolvedPath = resolveSelector(attributeName, selector);
+        if (selector.isValueSet(resolvedPath.configKey)) {
+          return true;
+        }
+      } catch (EvalException e) {
+        // This will trigger an error via any other call, so the actual return doesn't matter much.
+        return true;
+      }
+    }
+    return false; // Every select() in this list chooses a path with value "None".
   }
 }

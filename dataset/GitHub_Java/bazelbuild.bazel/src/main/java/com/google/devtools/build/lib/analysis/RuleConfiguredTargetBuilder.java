@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.devtools.build.lib.analysis.ExtraActionUtils.createExtraActionProvider;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -44,6 +43,7 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -88,21 +88,16 @@ public final class RuleConfiguredTargetBuilder {
       return null;
     }
 
-    NestedSetBuilder<Artifact> runfilesMiddlemenBuilder = NestedSetBuilder.stableOrder();
-    if (runfilesSupport != null) {
-      runfilesMiddlemenBuilder.add(runfilesSupport.getRunfilesMiddleman());
-      runfilesMiddlemenBuilder.addTransitive(runfilesSupport.getRunfiles().getExtraMiddlemen());
-    }
-    NestedSet<Artifact> runfilesMiddlemen = runfilesMiddlemenBuilder.build();
     FilesToRunProvider filesToRunProvider =
         new FilesToRunProvider(
-            buildFilesToRun(runfilesMiddlemen, filesToBuild), runfilesSupport, executable);
+            buildFilesToRun(runfilesSupport, filesToBuild), runfilesSupport, executable);
     addProvider(new FileProvider(filesToBuild));
     addProvider(filesToRunProvider);
 
     if (runfilesSupport != null) {
       // If a binary is built, build its runfiles, too
-      addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, runfilesMiddlemen);
+      addOutputGroup(
+          OutputGroupProvider.HIDDEN_TOP_LEVEL, runfilesSupport.getRunfilesMiddleman());
     } else if (providersBuilder.contains(RunfilesProvider.class)) {
       // If we don't have a RunfilesSupport (probably because this is not a binary rule), we still
       // want to build the files this rule contributes to runfiles of dependent rules so that we
@@ -112,7 +107,7 @@ public final class RuleConfiguredTargetBuilder {
       // specific *RunfilesProvider classes, which we don't add here for reasons that are lost in
       // the mists of time.
       addOutputGroup(
-          OutputGroupInfo.HIDDEN_TOP_LEVEL,
+          OutputGroupProvider.HIDDEN_TOP_LEVEL,
           providersBuilder
               .getProvider(RunfilesProvider.class)
               .getDefaultRunfiles()
@@ -136,8 +131,8 @@ public final class RuleConfiguredTargetBuilder {
         outputGroups.put(entry.getKey(), entry.getValue().build());
       }
 
-      OutputGroupInfo outputGroupInfo = new OutputGroupInfo(outputGroups.build());
-      addNativeDeclaredProvider(outputGroupInfo);
+      OutputGroupProvider outputGroupProvider = new OutputGroupProvider(outputGroups.build());
+      addNativeDeclaredProvider(outputGroupProvider);
     }
 
     TransitiveInfoProviderMap providers = providersBuilder.build();
@@ -147,13 +142,15 @@ public final class RuleConfiguredTargetBuilder {
 
   /**
    * Compute the artifacts to put into the {@link FilesToRunProvider} for this target. These are the
-   * filesToBuild, any artifacts added by the rule with {@link #addFilesToRun}, and the runfiles'
-   * middlemen if they exists.
+   * filesToBuild, any artifacts added by the rule with {@link #addFilesToRun}, and the runfiles
+   * middleman if it exists.
    */
   private NestedSet<Artifact> buildFilesToRun(
-      NestedSet<Artifact> runfilesMiddlemen, NestedSet<Artifact> filesToBuild) {
+      RunfilesSupport runfilesSupport, NestedSet<Artifact> filesToBuild) {
     filesToRunBuilder.addTransitive(filesToBuild);
-    filesToRunBuilder.addTransitive(runfilesMiddlemen);
+    if (runfilesSupport != null) {
+      filesToRunBuilder.add(runfilesSupport.getRunfilesMiddleman());
+    }
     return filesToRunBuilder.build();
   }
 
@@ -286,22 +283,22 @@ public final class RuleConfiguredTargetBuilder {
    * Adds a "declared provider" defined in Skylark to the rule. Use this method for declared
    * providers defined in Skyark.
    *
-   * <p>Has special handling for {@link OutputGroupInfo}: that provider is not added from
+   * <p>Has special handling for {@link OutputGroupProvider}: that provider is not added from
    * Skylark directly, instead its outpuyt groups are added.
    *
    * <p>Use {@link #addNativeDeclaredProvider(Info)} in definitions of native rules.
    */
-  public RuleConfiguredTargetBuilder addSkylarkDeclaredProvider(Info provider)
+  public RuleConfiguredTargetBuilder addSkylarkDeclaredProvider(Info provider, Location loc)
       throws EvalException {
     Provider constructor = provider.getProvider();
     if (!constructor.isExported()) {
       throw new EvalException(constructor.getLocation(),
           "All providers must be top level values");
     }
-    if (OutputGroupInfo.SKYLARK_CONSTRUCTOR.getKey().equals(constructor.getKey())) {
-      OutputGroupInfo outputGroupInfo = (OutputGroupInfo) provider;
-      for (String outputGroup : outputGroupInfo) {
-        addOutputGroup(outputGroup, outputGroupInfo.getOutputGroup(outputGroup));
+    if (OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey().equals(constructor.getKey())) {
+      OutputGroupProvider outputGroupProvider = (OutputGroupProvider) provider;
+      for (String outputGroup : outputGroupProvider) {
+        addOutputGroup(outputGroup, outputGroupProvider.getOutputGroup(outputGroup));
       }
     } else {
       providersBuilder.put(provider);
@@ -313,7 +310,7 @@ public final class RuleConfiguredTargetBuilder {
    * Adds "declared providers" defined in native code to the rule. Use this method for declared
    * providers in definitions of native rules.
    *
-   * <p>Use {@link #addSkylarkDeclaredProvider(Info)} for Skylark rule implementations.
+   * <p>Use {@link #addSkylarkDeclaredProvider(Info, Location)} for Skylark rule implementations.
    */
   public RuleConfiguredTargetBuilder addNativeDeclaredProviders(Iterable<Info> providers) {
     for (Info provider : providers) {
@@ -326,7 +323,7 @@ public final class RuleConfiguredTargetBuilder {
    * Adds a "declared provider" defined in native code to the rule. Use this method for declared
    * providers in definitions of native rules.
    *
-   * <p>Use {@link #addSkylarkDeclaredProvider(Info)} for Skylark rule implementations.
+   * <p>Use {@link #addSkylarkDeclaredProvider(Info, Location)} for Skylark rule implementations.
    */
   public RuleConfiguredTargetBuilder addNativeDeclaredProvider(Info provider) {
     Provider constructor = provider.getProvider();
