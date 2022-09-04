@@ -51,14 +51,14 @@ public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 	}
 
 	private JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
-		JClass databaseHelperClass = getJClass(databaseHelperTypeMirror.toString());
+		JClass databaseHelperClass = refClass(databaseHelperTypeMirror.toString());
 		String fieldName = CaseHelper.lowerCaseFirst(databaseHelperClass.name()) + ModelConstants.generationSuffix();
 		JFieldVar databaseHelperRef = getGeneratedClass().field(PRIVATE, databaseHelperClass, fieldName);
 		databaseHelperRefs.put(databaseHelperTypeMirror, databaseHelperRef);
 
 		JExpression dbHelperClass = databaseHelperClass.dotclass();
 		holder().getInitBody().assign(databaseHelperRef, //
-				getJClass(OrmLiteClasses.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(holder().getContextRef()).arg(dbHelperClass));
+				refClass(OrmLiteClasses.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(holder().getContextRef()).arg(dbHelperClass));
 
 		return databaseHelperRef;
 	}
@@ -67,7 +67,7 @@ public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 		if (holder() instanceof HasLifecycleMethods) {
 			JBlock destroyBody = ((HasLifecycleMethods) holder()).getOnDestroyBeforeSuperBlock();
 
-			destroyBody.staticInvoke(getJClass(OrmLiteClasses.OPEN_HELPER_MANAGER), "releaseHelper");
+			destroyBody.staticInvoke(refClass(OrmLiteClasses.OPEN_HELPER_MANAGER), "releaseHelper");
 			destroyBody.assign(databaseHelperRef, _null());
 		}
 	}
