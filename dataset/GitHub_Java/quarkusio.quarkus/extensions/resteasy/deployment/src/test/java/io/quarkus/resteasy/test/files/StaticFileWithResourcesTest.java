@@ -47,10 +47,6 @@ public class StaticFileWithResourcesTest {
                 .statusCode(200)
                 .body(containsString("<h1>Hello</h1>"));
 
-        RestAssured.get("/web/").then()
-                .statusCode(200)
-                .body(containsString("<h1>Hello</h1>"));
-
         RestAssured.get("/lorem.txt").then()
                 .statusCode(200)
                 .body(containsString("Lorem"));
