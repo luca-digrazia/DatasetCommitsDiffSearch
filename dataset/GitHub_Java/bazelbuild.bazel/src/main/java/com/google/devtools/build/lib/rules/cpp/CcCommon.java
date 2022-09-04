@@ -209,7 +209,8 @@ public final class CcCommon {
       throws EvalException {
     RuleContext context = skylarkRuleContext.getRuleContext();
     Rule rule = context.getRule();
-    if (!context.getFragment(CppConfiguration.class).getEnableCcSkylarkApi()) {
+    if (!context.getConfiguration().isHostConfiguration()
+        && !context.getFragment(CppConfiguration.class).getEnableCcSkylarkApi()) {
       throw new EvalException(
           rule.getLocation(),
           "Pass --experimental_enable_cc_skylark_api in "
@@ -583,7 +584,7 @@ public final class CcCommon {
 
   /**
    * Determines a list of loose include directories that are only allowed to be referenced when
-   * headers checking is {@link HeadersCheckingMode#LOOSE}.
+   * headers checking is {@link HeadersCheckingMode#LOOSE} or {@link HeadersCheckingMode#WARN}.
    */
   Set<PathFragment> getLooseIncludeDirs() {
     ImmutableSet.Builder<PathFragment> result = ImmutableSet.builder();
