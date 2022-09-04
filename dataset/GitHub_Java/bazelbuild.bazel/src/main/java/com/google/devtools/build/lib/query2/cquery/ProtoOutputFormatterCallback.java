@@ -63,7 +63,6 @@ class ProtoOutputFormatterCallback extends CqueryThreadsafeCallback {
 
   private final OutputType outputType;
   private final AspectResolver resolver;
-  private final SkyframeExecutor skyframeExecutor;
   private final JsonFormat.Printer jsonPrinter = JsonFormat.printer();
 
   private AnalysisProtos.CqueryResult.Builder protoResult;
@@ -80,7 +79,6 @@ class ProtoOutputFormatterCallback extends CqueryThreadsafeCallback {
       OutputType outputType) {
     super(eventHandler, options, out, skyframeExecutor, accessor);
     this.outputType = outputType;
-    this.skyframeExecutor = skyframeExecutor;
     this.resolver = resolver;
   }
 
