@@ -59,9 +59,6 @@ public class FuzzyEnumModule extends Module {
             throw ctxt.weirdStringException(jp.getText(), handledType(), jp.getText() + " was not one of " + acceptedValues);
         }
 
-        /**
-         * @since 2.0
-         */
         @Override
         public boolean isCachable() {
             // Should cache enum deserializers similar to com.fasterxml.jackson.databind.deser.std.EnumDeserializer
