@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.query.aspectresolvers.AspectResolver;
+import com.google.devtools.build.lib.query2.query.output.OutputFormatter.StreamedFormatter;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions.OrderOutput;
 import java.io.IOException;
 import java.io.OutputStream;
