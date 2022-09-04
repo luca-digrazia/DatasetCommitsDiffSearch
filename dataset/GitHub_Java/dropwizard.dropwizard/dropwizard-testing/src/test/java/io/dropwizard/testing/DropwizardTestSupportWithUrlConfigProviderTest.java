@@ -1,18 +1,20 @@
 package io.dropwizard.testing;
 
-import io.dropwizard.configuration.ResourceConfigurationSourceProvider;
+import io.dropwizard.configuration.UrlConfigurationSourceProvider;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.testing.app.TestApplication;
 import io.dropwizard.testing.app.TestConfiguration;
+import io.dropwizard.util.Resources;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class DropwizardTestSupportWithResourceConfigProviderTest {
+class DropwizardTestSupportWithUrlConfigProviderTest {
+    private static final String CONFIG_PATH = Resources.getResource("test-config.yaml").toString();
     private static final DropwizardTestSupport<TestConfiguration> TEST_SUPPORT = new DropwizardTestSupport<>(
-            TestApplication.class, "test-config.yaml", new ResourceConfigurationSourceProvider());
+            TestApplication.class, CONFIG_PATH, new UrlConfigurationSourceProvider());
 
     @BeforeAll
     static void setUp() throws Exception {

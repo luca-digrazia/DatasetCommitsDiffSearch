@@ -94,9 +94,6 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
         this(applicationClass, configPath, (String) null, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass,
                              @Nullable String configPath,
                              ConfigurationSourceProvider configSourceProvider,
@@ -115,9 +112,6 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
         this(applicationClass, configPath, customPropertyPrefix.orElse(null), configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass,
                              @Nullable String configPath,
                              @Nullable String customPropertyPrefix,
@@ -125,9 +119,6 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
         this(applicationClass, configPath, customPropertyPrefix, ServerCommand::new, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass,
                              @Nullable String configPath,
                              ConfigurationSourceProvider configSourceProvider,
@@ -148,9 +139,6 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
         this(applicationClass, configPath, customPropertyPrefix.orElse(null), commandInstantiator, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass,
                              @Nullable String configPath,
                              @Nullable String customPropertyPrefix,
@@ -160,9 +148,6 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
         this(new DropwizardTestSupport<>(applicationClass, configPath, customPropertyPrefix, commandInstantiator, configOverrides));
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass,
                              @Nullable String configPath,
                              ConfigurationSourceProvider configSourceProvider,
