@@ -14,11 +14,12 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.android;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidNativeLibsInfoApi;
-import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /**
  * Fake implementation of {@link AndroidNativeLibsInfoApi}.
@@ -26,22 +27,22 @@ import com.google.devtools.build.lib.syntax.Printer;
 public class FakeAndroidNativeLibsInfo implements AndroidNativeLibsInfoApi<FileApi> {
 
   @Override
-  public Depset /*<FileApi>*/ getNativeLibsForStarlark() {
+  public SkylarkNestedSet /*<FileApi>*/ getNativeLibsForStarlark() {
     return null;
   }
 
   @Override
-  public String toProto() throws EvalException {
+  public String toProto(Location loc) throws EvalException {
     return "";
   }
 
   @Override
-  public String toJson() throws EvalException {
+  public String toJson(Location loc) throws EvalException {
     return "";
   }
 
   @Override
-  public void repr(Printer printer) {}
+  public void repr(SkylarkPrinter printer) {}
 
   /**
    * Fake implementation of {@link AndroidNativeLibsInfoApiProvider}.
@@ -50,11 +51,12 @@ public class FakeAndroidNativeLibsInfo implements AndroidNativeLibsInfoApi<FileA
       implements AndroidNativeLibsInfoApiProvider {
 
     @Override
-    public AndroidNativeLibsInfoApi<?> createInfo(Depset nativeLibs) throws EvalException {
+    public AndroidNativeLibsInfoApi<?> createInfo(SkylarkNestedSet nativeLibs)
+        throws EvalException {
       return new FakeAndroidNativeLibsInfo();
     }
 
     @Override
-    public void repr(Printer printer) {}
+    public void repr(SkylarkPrinter printer) {}
   }
 }

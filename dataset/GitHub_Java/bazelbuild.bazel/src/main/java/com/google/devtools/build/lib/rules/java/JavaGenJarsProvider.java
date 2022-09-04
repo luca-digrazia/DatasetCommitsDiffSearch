@@ -22,8 +22,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaAnnotationProcessingApi;
-import com.google.devtools.build.lib.syntax.Depset;
-import java.util.List;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import javax.annotation.Nullable;
 
 /** The collection of gen jars from the transitive closure. */
@@ -47,7 +46,7 @@ public final class JavaGenJarsProvider
       @Nullable Artifact genClassJar,
       @Nullable Artifact genSourceJar,
       JavaPluginInfoProvider plugins,
-      List<JavaGenJarsProvider> transitiveJavaGenJars) {
+      Iterable<JavaGenJarsProvider> transitiveJavaGenJars) {
     NestedSetBuilder<Artifact> classJarsBuilder = NestedSetBuilder.stableOrder();
     NestedSetBuilder<Artifact> sourceJarsBuilder = NestedSetBuilder.stableOrder();
 
@@ -107,8 +106,8 @@ public final class JavaGenJarsProvider
   }
 
   @Override
-  public Depset /*<Artifact>*/ getTransitiveGenClassJarsForStarlark() {
-    return Depset.of(Artifact.TYPE, transitiveGenClassJars);
+  public SkylarkNestedSet /*<Artifact>*/ getTransitiveGenClassJarsForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, transitiveGenClassJars);
   }
 
   NestedSet<Artifact> getTransitiveGenClassJars() {
@@ -116,8 +115,8 @@ public final class JavaGenJarsProvider
   }
 
   @Override
-  public Depset /*<Artifact>*/ getTransitiveGenSourceJarsForStarlark() {
-    return Depset.of(Artifact.TYPE, transitiveGenSourceJars);
+  public SkylarkNestedSet /*<Artifact>*/ getTransitiveGenSourceJarsForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, transitiveGenSourceJars);
   }
 
   NestedSet<Artifact> getTransitiveGenSourceJars() {
@@ -125,8 +124,8 @@ public final class JavaGenJarsProvider
   }
 
   @Override
-  public Depset /*<Artifact>*/ getProcessorClasspathForStarlark() {
-    return Depset.of(Artifact.TYPE, processorClasspath);
+  public SkylarkNestedSet /*<Artifact>*/ getProcessorClasspathForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, processorClasspath);
   }
 
   NestedSet<Artifact> getProcessorClasspath() {

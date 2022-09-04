@@ -14,15 +14,15 @@
 package com.google.devtools.build.lib.skylarkbuildapi.java;
 
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /** Provides information about proguard specs for Android binaries. */
 @SkylarkModule(
@@ -31,14 +31,14 @@ import com.google.devtools.build.lib.syntax.EvalException;
     category = SkylarkModuleCategory.PROVIDER)
 public interface ProguardSpecProviderApi<FileT extends FileApi> extends StructApi {
 
-  String NAME = "ProguardSpecProvider";
+  public static final String NAME = "ProguardSpecProvider";
 
   @SkylarkCallable(name = "specs", structField = true, doc = "", documented = false)
-  Depset /*<FileT>*/ getTransitiveProguardSpecsForStarlark();
+  SkylarkNestedSet /*<FileT>*/ getTransitiveProguardSpecsForStarlark();
 
   /** The provider implementing this can construct the ProguardSpecProvider. */
   @SkylarkModule(name = "Provider", doc = "", documented = false)
-  interface Provider<FileT extends FileApi> extends ProviderApi {
+  public interface Provider<FileT extends FileApi> extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
@@ -49,11 +49,11 @@ public interface ProguardSpecProviderApi<FileT extends FileApi> extends StructAp
               doc = "Transitive proguard specs.",
               positional = true,
               named = false,
-              type = Depset.class,
+              type = SkylarkNestedSet.class,
               generic1 = FileApi.class),
         },
         selfCall = true)
     @SkylarkConstructor(objectType = ProguardSpecProviderApi.class, receiverNameForDoc = NAME)
-    ProguardSpecProviderApi<FileT> create(Depset specs) throws EvalException;
+    ProguardSpecProviderApi<FileT> create(SkylarkNestedSet specs) throws EvalException;
   }
 }

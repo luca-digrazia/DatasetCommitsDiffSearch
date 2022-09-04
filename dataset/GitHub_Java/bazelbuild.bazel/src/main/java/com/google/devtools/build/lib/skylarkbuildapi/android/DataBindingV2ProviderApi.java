@@ -21,11 +21,10 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import javax.annotation.Nullable;
 
 /**
@@ -51,9 +50,7 @@ public interface DataBindingV2ProviderApi<T extends FileApi> extends StructApi {
           "Do not use this module. It is intended for migration purposes only. If you depend on "
               + "it, you will be broken when it is removed.",
       documented = false)
-  public final class LabelJavaPackagePair implements StarlarkValue {
-
-    public static final SkylarkType TYPE = SkylarkType.of(LabelJavaPackagePair.class);
+  public class LabelJavaPackagePair implements SkylarkValue {
 
     private final String label;
     private final String javaPackage;
@@ -95,7 +92,7 @@ public interface DataBindingV2ProviderApi<T extends FileApi> extends StructApi {
 
   /** Returns the BR files from this rule and its dependencies. */
   @SkylarkCallable(name = "transitive_br_files", structField = true, doc = "", documented = false)
-  Depset /*<T>*/ getTransitiveBRFilesForStarlark();
+  SkylarkNestedSet /*<T>*/ getTransitiveBRFilesForStarlark();
 
   /**
    * Returns a NestedSet containing the label and java package for this rule and its transitive
@@ -106,7 +103,7 @@ public interface DataBindingV2ProviderApi<T extends FileApi> extends StructApi {
       structField = true,
       doc = "",
       documented = false)
-  Depset /*<LabelJavaPackagePair>*/ getTransitiveLabelAndJavaPackagesForStarlark();
+  SkylarkNestedSet /*<LabelJavaPackagePair>*/ getTransitiveLabelAndJavaPackagesForStarlark();
 
   /**
    * Returns the label and java package for this rule and any rules that this rule exports.

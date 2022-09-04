@@ -30,7 +30,9 @@ import java.util.Arrays;
  * <p>The annotation metadata is duplicated in this class to avoid usage of Java dynamic proxies
  * which are ~7X slower.
  */
-final class MethodDescriptor {
+// TODO(adonovan): make this private. All external uses either want parameter types, or want to
+// "invoke" a struct field, both of which need better abstractions.
+public final class MethodDescriptor {
   private final Method method;
   private final SkylarkCallable annotation;
 
@@ -82,12 +84,12 @@ final class MethodDescriptor {
   }
 
   /** Returns the SkylarkCallable annotation corresponding to this method. */
-  SkylarkCallable getAnnotation() {
+  public SkylarkCallable getAnnotation() {
     return annotation;
   }
 
   /** @return Skylark method descriptor for provided Java method and signature annotation. */
-  static MethodDescriptor of(
+  public static MethodDescriptor of(
       Method method, SkylarkCallable annotation, StarlarkSemantics semantics) {
     // This happens when the interface is public but the implementation classes
     // have reduced visibility.
@@ -118,7 +120,7 @@ final class MethodDescriptor {
    * <p>{@code obj} may be {@code null} in case this method is static. Methods with {@code void}
    * return type return {@code None} following Python convention.
    */
-  Object call(Object obj, Object[] args, Location loc, StarlarkThread thread)
+  public Object call(Object obj, Object[] args, Location loc, StarlarkThread thread)
       throws EvalException, InterruptedException {
     Preconditions.checkNotNull(obj);
     Object result;
@@ -164,7 +166,7 @@ final class MethodDescriptor {
   }
 
   /** @see SkylarkCallable#name() */
-  String getName() {
+  public String getName() {
     return name;
   }
 
@@ -173,12 +175,12 @@ final class MethodDescriptor {
   }
 
   /** @see SkylarkCallable#structField() */
-  boolean isStructField() {
+  public boolean isStructField() {
     return structField;
   }
 
   /** @see SkylarkCallable#useStarlarkThread() */
-  boolean isUseStarlarkThread() {
+  public boolean isUseStarlarkThread() {
     return useStarlarkThread;
   }
 
@@ -188,26 +190,26 @@ final class MethodDescriptor {
   }
 
   /** @see SkylarkCallable#useLocation() */
-  boolean isUseLocation() {
+  public boolean isUseLocation() {
     return useLocation;
   }
 
   /** @see SkylarkCallable#allowReturnNones() */
-  boolean isAllowReturnNones() {
+  public boolean isAllowReturnNones() {
     return allowReturnNones;
   }
 
   /** @see SkylarkCallable#useAst() */
-  boolean isUseAst() {
+  public boolean isUseAst() {
     return useAst;
   }
 
   /** @see SkylarkCallable#extraPositionals() */
-  ParamDescriptor getExtraPositionals() {
+  public ParamDescriptor getExtraPositionals() {
     return extraPositionals;
   }
 
-  ParamDescriptor getExtraKeywords() {
+  public ParamDescriptor getExtraKeywords() {
     return extraKeywords;
   }
 
@@ -222,22 +224,22 @@ final class MethodDescriptor {
   }
 
   /** @see SkylarkCallable#parameters() */
-  ImmutableList<ParamDescriptor> getParameters() {
+  public ImmutableList<ParamDescriptor> getParameters() {
     return parameters;
   }
 
   /** @see SkylarkCallable#documented() */
-  boolean isDocumented() {
+  public boolean isDocumented() {
     return documented;
   }
 
   /** @see SkylarkCallable#doc() */
-  String getDoc() {
+  public String getDoc() {
     return doc;
   }
 
   /** @see SkylarkCallable#selfCall() */
-  boolean isSelfCall() {
+  public boolean isSelfCall() {
     return selfCall;
   }
 }

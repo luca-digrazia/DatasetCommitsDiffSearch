@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.java.proto;
 
 import com.google.common.base.Verify;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -23,14 +24,14 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skylarkbuildapi.java.GeneratedExtensionRegistryProviderApi;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /**
- * A {@link com.google.devtools.build.lib.analysis.TransitiveInfoProvider} for {@link Artifact}s
- * created and used to generate the proto extension registry. This provider is used to ensure that
- * if multiple registries are generated from a target, that the top most target produces a registry
- * that is a superset of any child registries.
+ * A {@link TransitiveInfoProvider} for {@link Artifact}s created and used to generate the proto
+ * extension registry. This provider is used to ensure that if multiple registries are generated
+ * from a target, that the top most target produces a registry that is a superset of any child
+ * registries.
  */
 @Immutable
 public final class GeneratedExtensionRegistryProvider extends NativeInfo
@@ -70,8 +71,8 @@ public final class GeneratedExtensionRegistryProvider extends NativeInfo
 
   /** @return the proto jars used to generate the registry. */
   @Override
-  public Depset /*<Artifact>*/ getInputsForStarlark() {
-    return Depset.of(Artifact.TYPE, inputs);
+  public SkylarkNestedSet /*<Artifact>*/ getInputsForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, inputs);
   }
 
   public NestedSet<Artifact> getInputs() {
@@ -158,7 +159,7 @@ public final class GeneratedExtensionRegistryProvider extends NativeInfo
         boolean isLite,
         Artifact classJar,
         Artifact srcJar,
-        Depset inputs)
+        SkylarkNestedSet inputs)
         throws EvalException {
       return new GeneratedExtensionRegistryProvider(
           generatingRuleLabel,

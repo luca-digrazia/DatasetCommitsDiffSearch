@@ -17,20 +17,19 @@ package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.RunfilesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.core.TransitiveInfoCollectionApi;
+import com.google.devtools.build.lib.skylarkbuildapi.TransitiveInfoCollectionApi;
 import com.google.devtools.build.lib.skylarkbuildapi.go.GoConfigurationApi;
 import com.google.devtools.build.lib.skylarkbuildapi.go.GoContextInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.go.GoPackageInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.Tuple;
 
 /**
@@ -45,21 +44,19 @@ import com.google.devtools.build.lib.syntax.Tuple;
     category = SkylarkModuleCategory.TOP_LEVEL_TYPE)
 public interface GoWrapCcHelperApi<
         FileT extends FileApi,
-        ConstraintValueT extends ConstraintValueInfoApi,
-        SkylarkRuleContextT extends SkylarkRuleContextApi<ConstraintValueT>,
-        CcInfoT extends CcInfoApi<FileT>,
+        SkylarkRuleContextT extends SkylarkRuleContextApi,
+        CcInfoT extends CcInfoApi,
         FeatureConfigurationT extends FeatureConfigurationApi,
         CcToolchainProviderT extends CcToolchainProviderApi<FeatureConfigurationT>,
         CcLinkingContextT extends CcLinkingContextApi<FileT>,
         GoConfigurationT extends GoConfigurationApi,
         GoContextInfoT extends GoContextInfoApi,
         TransitiveInfoCollectionT extends TransitiveInfoCollectionApi,
-        CompilationInfoT extends CompilationInfoApi<FileT>,
-        CcCompilationContextT extends CcCompilationContextApi<FileT>,
+        CompilationInfoT extends CompilationInfoApi,
+        CcCompilationContextT extends CcCompilationContextApi,
         WrapCcIncludeProviderT extends WrapCcIncludeProviderApi>
     extends WrapCcHelperApi<
         FeatureConfigurationT,
-        ConstraintValueT,
         SkylarkRuleContextT,
         CcToolchainProviderT,
         CompilationInfoT,
@@ -126,8 +123,7 @@ public interface GoWrapCcHelperApi<
         @Param(name = "cc_info", positional = false, named = true, type = CcInfoApi.class),
       })
   // TODO(b/113797843): GoWrapCcInfo is not written in Skylark because several native rules use it.
-  public GoWrapCcInfoApi<FileT> getGoWrapCcInfo(
-      SkylarkRuleContextT skylarkRuleContext, CcInfoT ccInfo)
+  public GoWrapCcInfoApi getGoWrapCcInfo(SkylarkRuleContextT skylarkRuleContext, CcInfoT ccInfo)
       throws EvalException, InterruptedException;
 
   @SkylarkCallable(
@@ -194,7 +190,11 @@ public interface GoWrapCcHelperApi<
       documented = false,
       parameters = {
         @Param(name = "ctx", positional = false, named = true, type = SkylarkRuleContextApi.class),
-        @Param(name = "gopkg", positional = false, named = true, type = FileApi.class),
+        @Param(
+            name = "gopkg",
+            positional = false,
+            named = true,
+            allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = FileApi.class)}),
         @Param(name = "export", positional = false, named = true, type = FileApi.class),
         @Param(name = "swig_out_go", positional = false, named = true, type = FileApi.class),
       })
@@ -207,8 +207,12 @@ public interface GoWrapCcHelperApi<
       documented = false,
       parameters = {
         @Param(name = "ctx", positional = false, named = true, type = SkylarkRuleContextApi.class),
-        @Param(name = "gopkg", positional = false, named = true, type = FileApi.class),
+        @Param(
+            name = "gopkg",
+            positional = false,
+            named = true,
+            allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = FileApi.class)}),
       })
-  public Depset /*<FileT>*/ getGopackageFilesForStarlark(
+  public SkylarkNestedSet /*<FileT>*/ getGopackageFilesForStarlark(
       SkylarkRuleContextT skylarkRuleContext, FileT skylarkGopkg);
 }

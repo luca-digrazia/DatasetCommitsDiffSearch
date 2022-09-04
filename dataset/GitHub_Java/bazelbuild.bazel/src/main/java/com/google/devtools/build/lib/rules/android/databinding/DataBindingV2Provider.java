@@ -22,9 +22,9 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skylarkbuildapi.android.DataBindingV2ProviderApi;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import javax.annotation.Nullable;
 
 /**
@@ -76,8 +76,8 @@ public final class DataBindingV2Provider extends NativeInfo
   }
 
   @Override
-  public Depset /*<Artifact>*/ getTransitiveBRFilesForStarlark() {
-    return Depset.of(Artifact.TYPE, transitiveBRFiles);
+  public SkylarkNestedSet /*<Artifact>*/ getTransitiveBRFilesForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, transitiveBRFiles);
   }
 
   public NestedSet<Artifact> getTransitiveBRFiles() {
@@ -91,8 +91,9 @@ public final class DataBindingV2Provider extends NativeInfo
   }
 
   @Override
-  public Depset /*<LabelJavaPackagePair>*/ getTransitiveLabelAndJavaPackagesForStarlark() {
-    return Depset.of(LabelJavaPackagePair.TYPE, transitiveLabelAndJavaPackages);
+  public SkylarkNestedSet /*<LabelJavaPackagePair>*/
+      getTransitiveLabelAndJavaPackagesForStarlark() {
+    return SkylarkNestedSet.of(LabelJavaPackagePair.class, transitiveLabelAndJavaPackages);
   }
 
   public NestedSet<LabelJavaPackagePair> getTransitiveLabelAndJavaPackages() {

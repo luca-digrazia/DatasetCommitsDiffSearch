@@ -38,8 +38,8 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.RunfilesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SymlinkEntryApi;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -119,9 +119,6 @@ public final class Runfiles implements RunfilesApi {
   @AutoCodec
   @VisibleForSerialization
   static final class SymlinkEntry implements SymlinkEntryApi {
-
-    static final SkylarkType TYPE = SkylarkType.of(SymlinkEntry.class);
-
     private final PathFragment path;
     private final Artifact artifact;
 
@@ -151,7 +148,7 @@ public final class Runfiles implements RunfilesApi {
     }
 
     @Override
-    public void repr(Printer printer) {
+    public void repr(SkylarkPrinter printer) {
       printer.append("SymlinkEntry(path = ");
       printer.repr(getPathString());
       printer.append(", target_file = ");
@@ -341,8 +338,8 @@ public final class Runfiles implements RunfilesApi {
    * pruning manifest candidates.
    */
   @Override
-  public Depset /*<Artifact>*/ getArtifactsForStarlark() {
-    return Depset.of(Artifact.TYPE, getArtifacts());
+  public SkylarkNestedSet /*<Artifact>*/ getArtifactsForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, getArtifacts());
   }
 
   public NestedSet<Artifact> getArtifacts() {
@@ -356,8 +353,8 @@ public final class Runfiles implements RunfilesApi {
 
   /** Returns the symlinks. */
   @Override
-  public Depset /*<SymlinkEntry>*/ getSymlinksForStarlark() {
-    return Depset.of(SymlinkEntry.TYPE, symlinks);
+  public SkylarkNestedSet /*<SymlinkEntry>*/ getSymlinksForStarlark() {
+    return SkylarkNestedSet.of(SymlinkEntry.class, symlinks);
   }
 
   public NestedSet<SymlinkEntry> getSymlinks() {
@@ -365,8 +362,8 @@ public final class Runfiles implements RunfilesApi {
   }
 
   @Override
-  public Depset /*<String>*/ getEmptyFilenamesForStarlark() {
-    return Depset.of(SkylarkType.STRING, getEmptyFilenames());
+  public SkylarkNestedSet /*<String>*/ getEmptyFilenamesForStarlark() {
+    return SkylarkNestedSet.of(SkylarkType.STRING, getEmptyFilenames());
   }
 
   public NestedSet<String> getEmptyFilenames() {
@@ -591,8 +588,8 @@ public final class Runfiles implements RunfilesApi {
 
   /** Returns the root symlinks. */
   @Override
-  public Depset /*<SymlinkEntry>*/ getRootSymlinksForStarlark() {
-    return Depset.of(SymlinkEntry.TYPE, rootSymlinks);
+  public SkylarkNestedSet /*<SymlinkEntry>*/ getRootSymlinksForStarlark() {
+    return SkylarkNestedSet.of(SymlinkEntry.class, rootSymlinks);
   }
 
   public NestedSet<SymlinkEntry> getRootSymlinks() {

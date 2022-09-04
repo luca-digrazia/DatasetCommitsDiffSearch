@@ -19,8 +19,8 @@ import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import javax.annotation.Nullable;
 
 /**
@@ -31,29 +31,32 @@ import javax.annotation.Nullable;
     name = "java_annotation_processing",
     category = SkylarkModuleCategory.BUILTIN,
     doc = "Information about jars that are a result of annotation processing for a Java rule.")
-public interface JavaAnnotationProcessingApi<FileTypeT extends FileApi> extends StarlarkValue {
+public interface JavaAnnotationProcessingApi<FileTypeT extends FileApi> extends SkylarkValue {
 
   @SkylarkCallable(
-      name = "enabled",
-      structField = true,
-      doc = "Returns true if the Java rule uses annotation processing.")
-  boolean usesAnnotationProcessing();
+    name = "enabled",
+    structField = true,
+    doc = "Returns true if the Java rule uses annotation processing."
+  )
+  public boolean usesAnnotationProcessing();
 
   @SkylarkCallable(
-      name = "class_jar",
-      structField = true,
-      allowReturnNones = true,
-      doc = "Returns a jar File that is a result of annotation processing for this rule.")
+    name = "class_jar",
+    structField = true,
+    allowReturnNones = true,
+    doc = "Returns a jar File that is a result of annotation processing for this rule."
+  )
   @Nullable
-  FileTypeT getGenClassJar();
+  public FileTypeT getGenClassJar();
 
   @SkylarkCallable(
-      name = "source_jar",
-      structField = true,
-      allowReturnNones = true,
-      doc = "Returns a source archive resulting from annotation processing of this rule.")
+    name = "source_jar",
+    structField = true,
+    allowReturnNones = true,
+    doc = "Returns a source archive resulting from annotation processing of this rule."
+  )
   @Nullable
-  FileTypeT getGenSourceJar();
+  public FileTypeT getGenSourceJar();
 
   @SkylarkCallable(
       name = "transitive_class_jars",
@@ -61,7 +64,7 @@ public interface JavaAnnotationProcessingApi<FileTypeT extends FileApi> extends 
       doc =
           "Returns a transitive set of class file jars resulting from annotation "
               + "processing of this rule and its dependencies.")
-  Depset /*<FileTypeT>*/ getTransitiveGenClassJarsForStarlark();
+  public SkylarkNestedSet /*<FileTypeT>*/ getTransitiveGenClassJarsForStarlark();
 
   @SkylarkCallable(
       name = "transitive_source_jars",
@@ -69,17 +72,19 @@ public interface JavaAnnotationProcessingApi<FileTypeT extends FileApi> extends 
       doc =
           "Returns a transitive set of source archives resulting from annotation processing "
               + "of this rule and its dependencies.")
-  Depset /*<FileTypeT>*/ getTransitiveGenSourceJarsForStarlark();
+  public SkylarkNestedSet /*<FileTypeT>*/ getTransitiveGenSourceJarsForStarlark();
 
   @SkylarkCallable(
       name = "processor_classpath",
       structField = true,
       doc = "Returns a classpath of annotation processors applied to this rule.")
-  Depset /*<FileTypeT>*/ getProcessorClasspathForStarlark();
+  public SkylarkNestedSet /*<FileTypeT>*/ getProcessorClasspathForStarlark();
 
   @SkylarkCallable(
-      name = "processor_classnames",
-      structField = true,
-      doc = "Returns class names of annotation processors applied to this rule.")
-  ImmutableList<String> getProcessorClassNames();
+    name = "processor_classnames",
+    structField = true,
+    doc =
+      "Returns class names of annotation processors applied to this rule."
+  )
+  public ImmutableList<String> getProcessorClassNames();
 }
