@@ -554,7 +554,7 @@ public class Matrix extends DMatrix {
      * @param rows the row indices.
      * @return the submatrix.
      */
-    public Matrix rows(int... rows) {
+    public Matrix row(int... rows) {
         Matrix x = new Matrix(rows.length, n);
 
         for (int i = 0; i < rows.length; i++) {
@@ -572,7 +572,7 @@ public class Matrix extends DMatrix {
      * @param cols the column indices.
      * @return the submatrix.
      */
-    public Matrix cols(int... cols) {
+    public Matrix col(int... cols) {
         Matrix x = new Matrix(m, cols.length);
 
         for (int j = 0; j < cols.length; j++) {
@@ -581,24 +581,6 @@ public class Matrix extends DMatrix {
         }
 
         return x;
-    }
-
-    /**
-     * Returns the submatrix.
-     *
-     * @param rows the row indices.
-     * @param cols the column indices.
-     * @return the submatrix.
-     */
-    public Matrix submatrix(int[] rows, int[] cols) {
-        Matrix sub = new Matrix(rows.length, cols.length);
-        for (int j = 0; j < cols.length; j++) {
-            for (int i = 0; i < rows.length; i++) {
-                sub.set(i, j, get(rows[i], cols[j]));
-            }
-        }
-
-        return sub;
     }
 
     /**
@@ -742,8 +724,9 @@ public class Matrix extends DMatrix {
     }
 
     @Override
-    public void set(int i, int j, double x) {
+    public Matrix set(int i, int j, double x) {
         A[index(i, j)] = x;
+        return this;
     }
 
     /**
