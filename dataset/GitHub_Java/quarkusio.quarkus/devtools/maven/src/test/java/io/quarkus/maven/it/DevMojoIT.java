@@ -43,10 +43,6 @@ public class DevMojoIT extends MojoTestBase {
     public void testThatClassAppCanRun() throws MavenInvocationException, FileNotFoundException {
         testDir = initProject("projects/classic", "projects/project-classic-run");
         runAndCheck();
-
-        //make sure that the Class.getPackage() works for app classes
-        String pkg = getHttpResponse("/app/hello/package");
-        assertThat(pkg).isEqualTo("org.acme");
     }
 
     @Test
@@ -166,7 +162,7 @@ public class DevMojoIT extends MojoTestBase {
         String greeting = getHttpResponse("/app/hello/greeting");
         assertThat(greeting).containsIgnoringCase("bonjour");
 
-        File source = new File(testDir, "src/main/resources/application.properties");
+        File source = new File(testDir, "src/main/resources/META-INF/microprofile-config.properties");
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
