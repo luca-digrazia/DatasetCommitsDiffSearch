@@ -77,7 +77,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
@@ -533,8 +533,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * This method exists only to allow a module to make a top-level Skyframe call during the
    * transition to making it fully Skyframe-compatible. Do not add additional callers!
    */
-  public SkyValue evaluateSkyKeyForExecutionSetup(
-      final ExtendedEventHandler eventHandler, final SkyKey key)
+  public SkyValue evaluateSkyKeyForExecutionSetup(final EventHandler eventHandler, final SkyKey key)
       throws EnvironmentalExecException, InterruptedException {
     synchronized (valueLookupLock) {
       // We evaluate in keepGoing mode because in the case that the graph does not store its
@@ -735,7 +734,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /** Returns the build-info.txt and build-changelist.txt artifacts. */
-  public Collection<Artifact> getWorkspaceStatusArtifacts(ExtendedEventHandler eventHandler)
+  public Collection<Artifact> getWorkspaceStatusArtifacts(EventHandler eventHandler)
       throws InterruptedException {
     // Should already be present, unless the user didn't request any targets for analysis.
     EvaluationResult<WorkspaceStatusValue> result = buildDriver.evaluate(
@@ -747,19 +746,19 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   public Map<PathFragment, Root> getArtifactRootsForFiles(
-      final ExtendedEventHandler eventHandler, Iterable<PathFragment> execPaths)
+      final EventHandler eventHandler, Iterable<PathFragment> execPaths)
       throws PackageRootResolutionException, InterruptedException {
     return getArtifactRoots(eventHandler, execPaths, true);
   }
 
   public Map<PathFragment, Root> getArtifactRoots(
-      final ExtendedEventHandler eventHandler, Iterable<PathFragment> execPaths)
+      final EventHandler eventHandler, Iterable<PathFragment> execPaths)
       throws PackageRootResolutionException, InterruptedException {
     return getArtifactRoots(eventHandler, execPaths, false);
   }
 
   private Map<PathFragment, Root> getArtifactRoots(
-      final ExtendedEventHandler eventHandler, Iterable<PathFragment> execPaths, boolean forFiles)
+      final EventHandler eventHandler, Iterable<PathFragment> execPaths, boolean forFiles)
       throws PackageRootResolutionException, InterruptedException {
     final Map<PathFragment, SkyKey> packageKeys = new HashMap<>();
     for (PathFragment execPath : execPaths) {
@@ -1039,12 +1038,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * result. Also invalidates {@link PrecomputedValue#BLAZE_DIRECTORIES} if it has changed.
    */
   public BuildConfigurationCollection createConfigurations(
-      ExtendedEventHandler eventHandler,
-      ConfigurationFactory configurationFactory,
-      BuildOptions buildOptions,
-      Set<String> multiCpu,
+      EventHandler eventHandler, ConfigurationFactory configurationFactory,
+      BuildOptions buildOptions, Set<String> multiCpu,
       boolean keepGoing)
-      throws InvalidConfigurationException, InterruptedException {
+          throws InvalidConfigurationException, InterruptedException {
     this.configurationFactory.set(configurationFactory);
     this.configurationFragments.set(ImmutableList.copyOf(configurationFactory.getFactories()));
 
@@ -1154,12 +1151,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         outputService);
   }
 
-  EvaluationResult<TargetPatternValue> targetPatterns(
-      Iterable<SkyKey> patternSkyKeys,
-      int numThreads,
-      boolean keepGoing,
-      ExtendedEventHandler eventHandler)
-      throws InterruptedException {
+  EvaluationResult<TargetPatternValue> targetPatterns(Iterable<SkyKey> patternSkyKeys,
+      int numThreads, boolean keepGoing, EventHandler eventHandler) throws InterruptedException {
     checkActive();
     return buildDriver.evaluate(patternSkyKeys, keepGoing, numThreads, eventHandler);
   }
@@ -1175,17 +1168,15 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @ThreadSafety.ThreadSafe
   // TODO(bazel-team): rename this and below methods to something that discourages general use
   public ImmutableList<ConfiguredTarget> getConfiguredTargets(
-      ExtendedEventHandler eventHandler,
-      BuildConfiguration originalConfig,
-      Iterable<Dependency> keys,
+      EventHandler eventHandler, BuildConfiguration originalConfig, Iterable<Dependency> keys,
       boolean useOriginalConfig) {
     return getConfiguredTargetMap(
         eventHandler, originalConfig, keys, useOriginalConfig).values().asList();
   }
 
   /**
-   * Returns a map from {@link Dependency} inputs to the {@link ConfiguredTarget}s corresponding to
-   * those dependencies.
+   * Returns a map from {@link Dependency} inputs to the {@link ConfiguredTarget}s corresponding
+   * to those dependencies.
    *
    * <p>For use for legacy support and tests calling through {@code BuildView} only.
    *
@@ -1194,9 +1185,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   @ThreadSafety.ThreadSafe
   public ImmutableMultimap<Dependency, ConfiguredTarget> getConfiguredTargetMap(
-      ExtendedEventHandler eventHandler,
-      BuildConfiguration originalConfig,
-      Iterable<Dependency> keys,
+      EventHandler eventHandler, BuildConfiguration originalConfig, Iterable<Dependency> keys,
       boolean useOriginalConfig) {
     checkActive();
 
@@ -1291,14 +1280,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
-   * Retrieves the configurations needed for the given deps. If {@link
-   * BuildConfiguration.Options#trimConfigurations()} is true, trims their fragments to only those
-   * needed by their transitive closures. Else unconditionally includes all fragments.
+   * Retrieves the configurations needed for the given deps. If
+   * {@link BuildConfiguration.Options#trimConfigurations()} is true, trims their fragments to only
+   * those needed by their transitive closures. Else unconditionally includes all fragments.
    *
    * <p>Skips targets with loading phase errors.
    */
-  public Multimap<Dependency, BuildConfiguration> getConfigurations(
-      ExtendedEventHandler eventHandler, BuildOptions fromOptions, Iterable<Dependency> keys) {
+  public Multimap<Dependency, BuildConfiguration> getConfigurations(EventHandler eventHandler,
+      BuildOptions fromOptions, Iterable<Dependency> keys) {
     Multimap<Dependency, BuildConfiguration> builder =
         ArrayListMultimap.<Dependency, BuildConfiguration>create();
     Set<Dependency> depsToEvaluate = new HashSet<>();
@@ -1388,11 +1377,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
-   * Evaluates the given sky keys, blocks, and returns their evaluation results. Fails fast on the
-   * first evaluation error.
+   * Evaluates the given sky keys, blocks, and returns their evaluation results. Fails fast
+   * on the first evaluation error.
    */
   private EvaluationResult<SkyValue> evaluateSkyKeys(
-      final ExtendedEventHandler eventHandler, final Iterable<SkyKey> skyKeys) {
+      final EventHandler eventHandler, final Iterable<SkyKey> skyKeys) {
     return evaluateSkyKeys(eventHandler, skyKeys, false);
   }
 
@@ -1401,9 +1390,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * "keep going" on evaluation errors as specified.
    */
   private EvaluationResult<SkyValue> evaluateSkyKeys(
-      final ExtendedEventHandler eventHandler,
-      final Iterable<SkyKey> skyKeys,
-      final boolean keepGoing) {
+      final EventHandler eventHandler, final Iterable<SkyKey> skyKeys, final boolean keepGoing) {
     EvaluationResult<SkyValue> result;
     try {
       result = callUninterruptibly(new Callable<EvaluationResult<SkyValue>>() {
@@ -1431,10 +1418,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   @VisibleForTesting
   public BuildConfiguration getConfigurationForTesting(
-      ExtendedEventHandler eventHandler,
-      Set<Class<? extends BuildConfiguration.Fragment>> fragments,
+      EventHandler eventHandler,  Set<Class<? extends BuildConfiguration.Fragment>> fragments,
       BuildOptions options)
-      throws InterruptedException {
+          throws InterruptedException {
     SkyKey key = BuildConfigurationValue.key(fragments, options);
     BuildConfigurationValue result = (BuildConfigurationValue) buildDriver
         .evaluate(ImmutableList.of(key), false, DEFAULT_THREAD_COUNT, eventHandler).get(key);
@@ -1449,7 +1435,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @VisibleForTesting
   @Nullable
   public ConfiguredTarget getConfiguredTargetForTesting(
-      ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration) {
+      EventHandler eventHandler, Label label, BuildConfiguration configuration) {
     if (memoizingEvaluator.getExistingValueForTesting(
         PrecomputedValue.WORKSPACE_STATUS_KEY.getKeyForTesting()) == null) {
       injectWorkspaceStatusData(label.getWorkspaceRoot());
@@ -1477,9 +1463,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * <p>May throw an {@link InterruptedException}, which means that no values have been invalidated.
    */
   @VisibleForTesting
-  public abstract void invalidateFilesUnderPathForTesting(
-      ExtendedEventHandler eventHandler, ModifiedFileSet modifiedFileSet, Path pathEntry)
-      throws InterruptedException;
+  public abstract void invalidateFilesUnderPathForTesting(EventHandler eventHandler,
+      ModifiedFileSet modifiedFileSet, Path pathEntry) throws InterruptedException;
 
   /**
    * Invalidates SkyFrame values that may have failed for transient reasons.
@@ -1488,7 +1473,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   /** Configures a given set of configured targets. */
   EvaluationResult<ActionLookupValue> configureTargets(
-      ExtendedEventHandler eventHandler,
+      EventHandler eventHandler,
       List<ConfiguredTargetKey> values,
       List<AspectValueKey> aspectKeys,
       boolean keepGoing,
@@ -1512,11 +1497,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * error-free from action conflicts.
    */
   public EvaluationResult<PostConfiguredTargetValue> postConfigureTargets(
-      ExtendedEventHandler eventHandler,
-      List<ConfiguredTargetKey> values,
-      boolean keepGoing,
+      EventHandler eventHandler, List<ConfiguredTargetKey> values, boolean keepGoing,
       ImmutableMap<ActionAnalysisMetadata, SkyframeActionExecutor.ConflictException> badActions)
-      throws InterruptedException {
+          throws InterruptedException {
     checkActive();
     PrecomputedValue.BAD_ACTIONS.set(injectable(), badActions);
     // Make sure to not run too many analysis threads. This can cause memory thrashing.
@@ -1541,11 +1524,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   class SkyframeTransitivePackageLoader {
-    /** Loads the specified {@link TransitiveTargetValue}s. */
+    /**
+     * Loads the specified {@link TransitiveTargetValue}s.
+     */
     EvaluationResult<TransitiveTargetValue> loadTransitiveTargets(
-        ExtendedEventHandler eventHandler,
-        Iterable<Label> labelsToVisit,
-        boolean keepGoing,
+        EventHandler eventHandler, Iterable<Label> labelsToVisit, boolean keepGoing,
         int parallelThreads)
         throws InterruptedException {
       List<SkyKey> valueNames = new ArrayList<>();
@@ -1566,8 +1549,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   @Override
   public EvaluationResult<SkyValue> prepareAndGet(
-      SkyKey universeKey, int numThreads, ExtendedEventHandler eventHandler)
-      throws InterruptedException {
+      SkyKey universeKey, int numThreads, EventHandler eventHandler) throws InterruptedException {
     EvaluationResult<SkyValue> evaluationResult =
         buildDriver.evaluate(ImmutableList.of(universeKey), true, numThreads, eventHandler);
     Preconditions.checkNotNull(evaluationResult.getWalkableGraph(), universeKey);
@@ -1593,9 +1575,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return PrepareDepsOfPatternsValue.key(ImmutableList.copyOf(patterns), offset);
   }
 
-  /** Returns the generating action of a given artifact ({@code null} if it's a source artifact). */
-  private ActionAnalysisMetadata getGeneratingAction(
-      ExtendedEventHandler eventHandler, Artifact artifact) throws InterruptedException {
+  /**
+   * Returns the generating action of a given artifact ({@code null} if it's a source artifact).
+   */
+  private ActionAnalysisMetadata getGeneratingAction(EventHandler eventHandler, Artifact artifact)
+      throws InterruptedException {
     if (artifact.isSourceArtifact()) {
       return null;
     }
@@ -1625,7 +1609,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    *
    * <p>For legacy compatibility only.
    */
-  public ActionGraph getActionGraph(final ExtendedEventHandler eventHandler) {
+  public ActionGraph getActionGraph(final EventHandler eventHandler) {
     return new ActionGraph() {
       @Override
       public ActionAnalysisMetadata getGeneratingAction(final Artifact artifact) {
@@ -1658,7 +1642,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
      * <p>Note that this method needs to be synchronized since InMemoryMemoizingEvaluator.evaluate()
      * method does not support concurrent calls.
      */
-    Package getPackage(ExtendedEventHandler eventHandler, PackageIdentifier pkgName)
+    Package getPackage(EventHandler eventHandler, PackageIdentifier pkgName)
         throws InterruptedException, NoSuchPackageException {
       synchronized (valueLookupLock) {
         SkyKey key = PackageValue.key(pkgName);
@@ -1705,7 +1689,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   public void sync(
-      ExtendedEventHandler eventHandler,
+      EventHandler eventHandler,
       PackageCacheOptions packageCacheOptions,
       Path outputBase,
       Path workingDirectory,
@@ -1742,13 +1726,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     invalidateTransientErrors();
   }
 
-  protected PathPackageLocator createPackageLocator(
-      ExtendedEventHandler eventHandler,
-      PackageCacheOptions packageCacheOptions,
-      Path outputBase,
-      Path workspace,
-      Path workingDirectory)
-      throws AbruptExitException {
+  protected PathPackageLocator createPackageLocator(EventHandler eventHandler,
+      PackageCacheOptions packageCacheOptions, Path outputBase, Path workspace,
+      Path workingDirectory) throws AbruptExitException {
     return PathPackageLocator.create(
         outputBase, packageCacheOptions.packagePath, eventHandler, workspace, workingDirectory);
   }
@@ -1768,8 +1748,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /** Convenience method with same semantics as {@link CyclesReporter#reportCycles}. */
-  public void reportCycles(
-      ExtendedEventHandler eventHandler, Iterable<CycleInfo> cycles, SkyKey topLevelKey) {
+  public void reportCycles(EventHandler eventHandler, Iterable<CycleInfo> cycles,
+      SkyKey topLevelKey) {
     getCyclesReporter().reportCycles(cycles, topLevelKey, eventHandler);
   }
 
@@ -1858,7 +1838,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
     @Override
     public LoadingResult execute(
-        ExtendedEventHandler eventHandler,
+        EventHandler eventHandler,
         EventBus eventBus,
         List<String> targetPatterns,
         PathFragment relativeWorkingDirectory,

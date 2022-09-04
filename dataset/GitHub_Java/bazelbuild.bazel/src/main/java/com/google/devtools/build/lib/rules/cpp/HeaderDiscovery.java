@@ -26,17 +26,16 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
+import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
+import com.google.devtools.build.lib.rules.cpp.CppCompileAction.SpecialInputsHandler;
+import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Manages the process of obtaining inputs used in a compilation from a dependency set parsed from
- * either .d files or /showIncludes output.
- */
+/** Manages the process of obtaining inputs used in a compilation from .d files. */
 public class HeaderDiscovery {
 
   /** Indicates if a compile should perform dotd pruning. */
@@ -47,10 +46,12 @@ public class HeaderDiscovery {
   
   private final Action action;
   private final Artifact sourceFile;
+  private final DotdFile dotdFile;
 
+  private final SpecialInputsHandler specialInputsHandler;
   private final boolean shouldValidateInclusions;
 
-  private final Collection<Path> dependencies;
+  private final DependencySet depSet;
   private final List<Path> permittedSystemIncludePrefixes;
   private final Map<PathFragment, Artifact> allowedDerivedInputsMap;
   
@@ -59,27 +60,32 @@ public class HeaderDiscovery {
    *
    * @param action the action instance requiring header discovery
    * @param sourceFile the source file for the compile
+   * @param dotdFile the .d file used for header discovery
+   * @param specialInputsHandler the SpecialInputsHandler for the build
    * @param shouldValidateInclusions true if include validation should be performed
    */
   public HeaderDiscovery(
       Action action,
       Artifact sourceFile,
+      DotdFile dotdFile,
+      SpecialInputsHandler specialInputsHandler,
       boolean shouldValidateInclusions,
-      Collection<Path> dependencies,
+      DependencySet depSet,
       List<Path> permittedSystemIncludePrefixes,
       Map<PathFragment, Artifact> allowedDerivedInputsMap) {
     this.action = Preconditions.checkNotNull(action);
     this.sourceFile = Preconditions.checkNotNull(sourceFile);
+    this.dotdFile = Preconditions.checkNotNull(dotdFile);
+    this.specialInputsHandler = specialInputsHandler;
     this.shouldValidateInclusions = shouldValidateInclusions;
-    this.dependencies = dependencies;
+    this.depSet = depSet;
     this.permittedSystemIncludePrefixes = permittedSystemIncludePrefixes;
     this.allowedDerivedInputsMap = allowedDerivedInputsMap;
   }
 
   /**
    * Returns a collection with additional input artifacts relevant to the action by reading the
-   * dynamically-discovered dependency information from the parsed dependency set after the action
-   * has run.
+   * dynamically-discovered dependency information from the .d file after the action has run.
    *
    * <p>Artifacts are considered inputs but not "mandatory" inputs.
    *
@@ -88,17 +94,17 @@ public class HeaderDiscovery {
    */
   @VisibleForTesting
   @ThreadCompatible
-  public NestedSet<Artifact> discoverInputsFromDependencies(
+  public NestedSet<Artifact> discoverInputsFromDotdFiles(
       Path execRoot, ArtifactResolver artifactResolver) throws ActionExecutionException {
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
-    if (dependencies == null) {
+    if (dotdFile == null) {
       return inputs.build();
     }
     List<Path> systemIncludePrefixes = permittedSystemIncludePrefixes;
 
     // Check inclusions.
     IncludeProblems problems = new IncludeProblems();
-    for (Path execPath : dependencies) {
+    for (Path execPath : depSet.getDependencies()) {
       PathFragment execPathFragment = execPath.asFragment();
       if (execPathFragment.isAbsolute()) {
         // Absolute includes from system paths are ignored.
@@ -130,6 +136,11 @@ public class HeaderDiscovery {
       }
       if (artifact != null) {
         inputs.add(artifact);
+        // In some cases, execution backends need extra files for each included file. Add them
+        // to the set of actual inputs.
+        if (specialInputsHandler != null) {
+          inputs.addAll(specialInputsHandler.getInputsForIncludedFile(artifact, artifactResolver));
+        }
       } else {
         // Abort if we see files that we can't resolve, likely caused by
         // undeclared includes or illegal include constructs.
@@ -146,9 +157,11 @@ public class HeaderDiscovery {
   public static class Builder {
     private Action action;
     private Artifact sourceFile;
+    private DotdFile dotdFile;
+    private SpecialInputsHandler specialInputsHandler;
     private boolean shouldValidateInclusions = false;
 
-    private Collection<Path> dependencies;
+    private DependencySet depSet;
     private List<Path> permittedSystemIncludePrefixes;
     private Map<PathFragment, Artifact> allowedDerivedInputsMap;
 
@@ -164,15 +177,27 @@ public class HeaderDiscovery {
       return this;
     }
 
+    /** Sets the dotd file to be used to discover inputs. */
+    public Builder setDotdFile(DotdFile dotdFile) {
+      this.dotdFile = dotdFile;
+      return this;
+    }
+
+    /** Sets the SpecialInputsHandler for inputs to this build. */
+    public Builder setSpecialInputsHandler(SpecialInputsHandler specialInputsHandler) {
+      this.specialInputsHandler = specialInputsHandler;
+      return this;
+    }
+
     /** Sets that this compile should validate inclusions against the dotd file. */
     public Builder shouldValidateInclusions() {
       this.shouldValidateInclusions = true;
       return this;
     }
 
-    /** Sets the dependencies capturing used headers by this compile. */
-    public Builder setDependencies(Collection<Path> dependencies) {
-      this.dependencies = dependencies;
+    /** Sets the DependencySet capturing used headers by this compile. */
+    public Builder setDependencySet(DependencySet depSet) {
+      this.depSet = depSet;
       return this;
     }
 
@@ -193,8 +218,10 @@ public class HeaderDiscovery {
       return new HeaderDiscovery(
           action,
           sourceFile,
+          dotdFile,
+          specialInputsHandler,
           shouldValidateInclusions,
-          dependencies,
+          depSet,
           permittedSystemIncludePrefixes,
           allowedDerivedInputsMap);
     }

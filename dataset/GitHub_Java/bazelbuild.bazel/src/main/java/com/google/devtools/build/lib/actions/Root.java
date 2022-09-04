@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -47,7 +46,6 @@ import javax.annotation.Nullable;
     category = SkylarkModuleCategory.BUILTIN,
     doc = "A root for files. The roots are the directories containing files, and they are mapped "
         + "together into a single directory tree to form the execution environment.")
-@Immutable
 public final class Root implements Comparable<Root>, Serializable {
 
   /**
