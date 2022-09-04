@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.classification;
 
@@ -49,12 +49,12 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
     int predict(T x);
 
     /**
-     * The classification score function.
+     * Returns the real-valued decision function value.
      *
      * @param x the instance to be classified.
      * @return the prediction score.
      */
-    default double score(T x) {
+    default double f(T x) {
         throw new UnsupportedOperationException();
     }
 
@@ -80,6 +80,6 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
 
     @Override
     default double applyAsDouble(T x) {
-        return score(x);
+        return f(x);
     }
 }
