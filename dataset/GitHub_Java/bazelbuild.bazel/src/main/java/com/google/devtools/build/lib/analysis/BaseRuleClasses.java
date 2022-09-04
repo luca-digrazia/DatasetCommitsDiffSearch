@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.packages.Attribute.LabelListLateBoundDefaul
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault.Resolver;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TestSize;
@@ -55,8 +54,6 @@ import com.google.devtools.build.lib.util.FileTypeSet;
  * Rule class definitions used by (almost) every rule.
  */
 public class BaseRuleClasses {
-
-  private BaseRuleClasses() {}
 
   @AutoCodec @AutoCodec.VisibleForSerialization
   static final Attribute.ComputedDefault testonlyDefault =
@@ -154,9 +151,6 @@ public class BaseRuleClasses {
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .requiresConfigurationFragments(TestConfiguration.class)
-          // TestConfiguration only needed to create TestAction and TestProvider
-          // Only necessary at top-level and can be skipped if trimmed.
-          .setMissingFragmentPolicy(TestConfiguration.class, MissingFragmentPolicy.IGNORE)
           .add(
               attr("size", STRING)
                   .value("medium")
