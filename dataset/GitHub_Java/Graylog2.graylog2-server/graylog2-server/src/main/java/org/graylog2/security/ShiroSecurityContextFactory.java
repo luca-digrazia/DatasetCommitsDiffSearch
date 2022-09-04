@@ -31,7 +31,6 @@ import org.apache.shiro.subject.Subject;
 import org.graylog2.Configuration;
 import org.graylog2.Core;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
-import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.realm.GraylogSimpleAccountRealm;
 import org.graylog2.security.realm.LdapRealm;
 import org.graylog2.security.realm.MongoDbRealm;
@@ -60,10 +59,9 @@ public class ShiroSecurityContextFactory implements SecurityContextFactory {
         mongoDbRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA-1"));
         mongoDbRealm.setCachingEnabled(false);
 
-        final LdapRealm ldapRealm = new LdapRealm(core, new LdapConnector());
+        final LdapRealm ldapRealm = new LdapRealm(core);
         // the incoming password is always SHA-256 hashed, so we will re-hash whatever comes from LDAP, too.
         ldapRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA-256"));
-        ldapRealm.setCachingEnabled(false);
 
         sm = new DefaultSecurityManager(Lists.<Realm>newArrayList(ldapRealm, mongoDbRealm, inMemoryRealm));
         final DefaultSubjectDAO subjectDAO = new DefaultSubjectDAO();

@@ -29,10 +29,7 @@ import org.graylog2.database.Persisted;
 import org.graylog2.database.ValidationException;
 import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.database.validators.ListValidator;
-import org.graylog2.database.validators.OptionalStringValidator;
 import org.graylog2.database.validators.Validator;
-import org.graylog2.security.ldap.LdapEntry;
-import org.graylog2.security.ldap.LdapSettings;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,8 +37,6 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static com.google.common.base.Objects.firstNonNull;
 
 
 /**
@@ -69,10 +64,8 @@ public class User extends Persisted {
     }
 
     public static User load(String username, Core core) {
-        LOG.debug("Loading user {}", username);
         // special case for the locally defined user, we don't store that in MongoDB.
         if (core.getConfiguration().getRootUsername().equals(username)) {
-            LOG.debug("User {} is the built-in admin user", username);
             return new LocalAdminUser(core);
         }
 
@@ -90,7 +83,6 @@ public class User extends Persisted {
         final DBObject userObject = result.get(0);
 
         final Object userId = userObject.get("_id");
-        LOG.debug("Loaded user {}/{}from MongoDB", username, userId);
         return new User((ObjectId) userId, userObject.toMap(), core);
     }
 
@@ -137,8 +129,8 @@ public class User extends Persisted {
     protected Map<String, Validator> getValidations() {
         return new HashMap<String, Validator>() {{
             put(USERNAME, new FilledStringValidator());
-            put(PASSWORD, new OptionalStringValidator());
-            put(EMAIL, new OptionalStringValidator());
+            put(PASSWORD, new FilledStringValidator());
+            put(EMAIL, new FilledStringValidator());
             put(FULL_NAME, new FilledStringValidator());
             put(PERMISSIONS, new ListValidator());
         }};
@@ -184,7 +176,7 @@ public class User extends Persisted {
     }
 
     public String getHashedPassword() {
-        return firstNonNull(fields.get(PASSWORD), "").toString();
+        return fields.get(PASSWORD).toString();
     }
 
     public void setHashedPassword(String hashedPassword) {
@@ -213,34 +205,6 @@ public class User extends Persisted {
 
     public void setExternal(boolean external) {
         fields.put(EXTERNAL_USER, external);
-    }
-
-    public static User syncFromLdapEntry(Core core, LdapEntry userEntry, LdapSettings ldapSettings, String username) {
-        User user = load(userEntry.getDn(), core);
-        // create new user object if necessary
-        if (user == null) {
-            Map<String, Object> fields = Maps.newHashMap();
-            user = new User(fields, core);
-        }
-        // update user attributes from ldap entry
-        user.updateFromLdap(userEntry, ldapSettings, username);
-        try {
-            user.save();
-        } catch (ValidationException e) {
-            LOG.error("Cannot save user.", e);
-            return null;
-        }
-        return user;
-    }
-
-    public void updateFromLdap(LdapEntry userEntry, LdapSettings ldapSettings, String username) {
-        final String displayNameAttribute = ldapSettings.getDisplayNameAttribute();
-        final String fullname = userEntry.get(displayNameAttribute);
-        setFullName(fullname);
-        setName(username);
-        setExternal(true);
-        setEmail(userEntry.getEmail());
-        setPermissions(Lists.<String>newArrayList("*")); // TODO use group mapper to find actual groups
     }
 
     public static class LocalAdminUser extends User {
