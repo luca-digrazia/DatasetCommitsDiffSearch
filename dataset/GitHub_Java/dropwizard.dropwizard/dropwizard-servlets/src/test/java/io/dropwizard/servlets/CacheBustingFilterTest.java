@@ -21,7 +21,7 @@ public class CacheBustingFilterTest {
     private final CacheBustingFilter filter = new CacheBustingFilter();
 
     @Test
-    void passesThroughNonHttpRequests() throws Exception {
+    public void passesThroughNonHttpRequests() throws Exception {
         final ServletRequest req = mock(ServletRequest.class);
         final ServletResponse res = mock(ServletResponse.class);
 
@@ -32,7 +32,7 @@ public class CacheBustingFilterTest {
     }
 
     @Test
-    void setsACacheHeaderOnTheResponse() throws Exception {
+    public void setsACacheHeaderOnTheResponse() throws Exception {
         filter.doFilter(request, response, chain);
 
         final InOrder inOrder = inOrder(response, chain);

@@ -20,7 +20,7 @@ public class ExecutorServiceManagerTest {
     private final ExecutorService exec = mock(ExecutorService.class);
 
     @Test
-    void testAccessors() {
+    public void testAccessors() {
         // This test verifies the accessors behave as advertised for other unit
         // tests.
         final String poolName = this.getClass().getSimpleName();
@@ -33,7 +33,7 @@ public class ExecutorServiceManagerTest {
     }
 
     @Test
-    void testManaged() throws Exception {
+    public void testManaged() throws Exception {
         final String poolName = this.getClass().getSimpleName();
         when(this.exec.awaitTermination(anyLong(), any())).thenReturn(true);
 
@@ -50,7 +50,7 @@ public class ExecutorServiceManagerTest {
     }
 
     @Test
-    void testManagedTimeout() throws Exception {
+    public void testManagedTimeout() throws Exception {
         final String poolName = this.getClass().getSimpleName();
         when(this.exec.awaitTermination(anyLong(), any())).thenReturn(false);
 

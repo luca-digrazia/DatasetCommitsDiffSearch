@@ -17,7 +17,7 @@ import org.mockito.InOrder;
 import java.lang.reflect.Method;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hibernate.resource.transaction.spi.TransactionStatus.ACTIVE;
 import static org.hibernate.resource.transaction.spi.TransactionStatus.NOT_ACTIVE;
 import static org.mockito.Mockito.doAnswer;
@@ -235,9 +235,9 @@ public class UnitOfWorkApplicationListenerTest {
     @Test
     public void throwsExceptionOnNotRegisteredDatabase() throws Exception {
         prepareResourceMethod("methodWithUnitOfWorkOnNotRegisteredDatabase");
-        assertThatExceptionOfType(IllegalArgumentException.class)
-            .isThrownBy(this::execute)
-            .withMessage("Unregistered Hibernate bundle: 'warehouse'");
+        assertThatThrownBy(this::execute)
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unregistered Hibernate bundle: 'warehouse'");
     }
 
     private void prepareResourceMethod(String resourceMethodName) throws NoSuchMethodException {
@@ -326,7 +326,7 @@ public class UnitOfWorkApplicationListenerTest {
         }
     }
 
-    public interface MockResourceInterface {
+    public static interface MockResourceInterface {
 
         void handlingMethodAnnotated();
 
