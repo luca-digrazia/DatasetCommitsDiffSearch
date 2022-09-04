@@ -34,7 +34,7 @@ import com.google.devtools.build.v1.PublishLifecycleEventRequest;
 import com.google.devtools.build.v1.StreamId;
 import com.google.devtools.build.v1.StreamId.BuildComponent;
 import com.google.protobuf.Any;
-import com.google.protobuf.Timestamp;
+import com.google.protobuf.util.Timestamps;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
@@ -47,6 +47,7 @@ public final class BuildEventServiceProtoUtil {
   private final String projectId;
   private final AtomicInteger streamSequenceNumber;
   private final String commandName;
+  private final Clock clock;
   private final Set<String> additionalKeywords;
 
   public BuildEventServiceProtoUtil(
@@ -60,49 +61,42 @@ public final class BuildEventServiceProtoUtil {
     this.buildInvocationId = buildInvocationId;
     this.projectId = projectId;
     this.commandName = commandName;
+    this.clock = clock;
     this.additionalKeywords = additionalKeywords;
     this.streamSequenceNumber = new AtomicInteger(1);
   }
 
-  public PublishLifecycleEventRequest buildEnqueued(Timestamp timestamp) {
-    return lifecycleEvent(
-            projectId,
-            1,
+  public PublishLifecycleEventRequest buildEnqueued() {
+    return lifecycleEvent(projectId, 1,
             com.google.devtools.build.v1.BuildEvent.newBuilder()
-                .setEventTime(timestamp)
+                .setEventTime(Timestamps.fromMillis(clock.currentTimeMillis()))
                 .setBuildEnqueued(BuildEnqueued.newBuilder()))
         .build();
   }
 
-  public PublishLifecycleEventRequest buildFinished(Timestamp timestamp, Result result) {
-    return lifecycleEvent(
-            projectId,
-            2,
+  public PublishLifecycleEventRequest buildFinished(Result result) {
+    return lifecycleEvent(projectId, 2,
             com.google.devtools.build.v1.BuildEvent.newBuilder()
-                .setEventTime(timestamp)
+                .setEventTime(Timestamps.fromMillis(clock.currentTimeMillis()))
                 .setBuildFinished(
                     BuildFinished.newBuilder()
                         .setStatus(BuildStatus.newBuilder().setResult(result))))
         .build();
   }
 
-  public PublishLifecycleEventRequest invocationStarted(Timestamp timestamp) {
-    return lifecycleEvent(
-            projectId,
-            1,
+  public PublishLifecycleEventRequest invocationStarted() {
+    return lifecycleEvent(projectId, 1,
             com.google.devtools.build.v1.BuildEvent.newBuilder()
-                .setEventTime(timestamp)
+                .setEventTime(Timestamps.fromMillis(clock.currentTimeMillis()))
                 .setInvocationAttemptStarted(
                     InvocationAttemptStarted.newBuilder().setAttemptNumber(1)))
         .build();
   }
 
-  public PublishLifecycleEventRequest invocationFinished(Timestamp timestamp, Result result) {
-    return lifecycleEvent(
-            projectId,
-            2,
+  public PublishLifecycleEventRequest invocationFinished(Result result) {
+    return lifecycleEvent(projectId, 2,
             com.google.devtools.build.v1.BuildEvent.newBuilder()
-                .setEventTime(timestamp)
+                .setEventTime(Timestamps.fromMillis(clock.currentTimeMillis()))
                 .setInvocationAttemptFinished(
                     InvocationAttemptFinished.newBuilder()
                         .setInvocationStatus(BuildStatus.newBuilder().setResult(result))))
@@ -113,20 +107,17 @@ public final class BuildEventServiceProtoUtil {
     return streamSequenceNumber.getAndIncrement();
   }
 
-  /** Creates a PublishBuildToolEventStreamRequest from a packed bazel event. */
-  public PublishBuildToolEventStreamRequest bazelEvent(
-      int sequenceNumber, Timestamp timestamp, Any packedEvent) {
+  @VisibleForTesting
+  public PublishBuildToolEventStreamRequest bazelEvent(int sequenceNumber, Any packedEvent) {
     return publishBuildToolEventStreamRequest(
         sequenceNumber,
-        timestamp,
         com.google.devtools.build.v1.BuildEvent.newBuilder().setBazelEvent(packedEvent));
   }
 
-  public PublishBuildToolEventStreamRequest streamFinished(
-      int sequenceNumber, Timestamp timestamp) {
+  @VisibleForTesting
+  public PublishBuildToolEventStreamRequest streamFinished(int sequenceNumber) {
     return publishBuildToolEventStreamRequest(
         sequenceNumber,
-        timestamp,
         BuildEvent.newBuilder()
             .setComponentStreamFinished(
                 BuildComponentStreamFinished.newBuilder().setType(FINISHED)));
@@ -134,13 +125,14 @@ public final class BuildEventServiceProtoUtil {
 
   @VisibleForTesting
   public PublishBuildToolEventStreamRequest publishBuildToolEventStreamRequest(
-      int sequenceNumber, Timestamp timestamp, BuildEvent.Builder besEvent) {
+      int sequenceNumber, BuildEvent.Builder besEvent) {
     PublishBuildToolEventStreamRequest.Builder builder =
         PublishBuildToolEventStreamRequest.newBuilder()
             .setOrderedBuildEvent(
                 OrderedBuildEvent.newBuilder()
                     .setSequenceNumber(sequenceNumber)
-                    .setEvent(besEvent.setEventTime(timestamp))
+                    .setEvent(
+                        besEvent.setEventTime(Timestamps.fromMillis(clock.currentTimeMillis())))
                     .setStreamId(streamId(besEvent.getEventCase())));
     if (sequenceNumber == 1) {
       builder.addAllNotificationKeywords(getKeywords());
