@@ -18,7 +18,6 @@ import com.google.common.base.Supplier;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -77,7 +76,7 @@ public class IncludeScannerSupplierImpl implements IncludeScannerSupplier {
    * Cache of include scan results mapping source paths to sets of scanned inclusions. Shared by all
    * scanner instances.
    */
-  private final ConcurrentMap<Artifact, ListenableFuture<Collection<Inclusion>>> includeParseCache =
+  private final ConcurrentMap<Artifact, Collection<Inclusion>> includeParseCache =
       new ConcurrentHashMap<>();
 
   /** Map of grepped include files from input (.cc or .h) to a header-grepped file. */
@@ -85,7 +84,6 @@ public class IncludeScannerSupplierImpl implements IncludeScannerSupplier {
 
   private final Supplier<SpawnIncludeScanner> spawnIncludeScannerSupplier;
   private final Path execRoot;
-  private final boolean useAsyncIncludeScanner;
 
   /** Cache of include scanner instances mapped by include-path hashes. */
   private final LoadingCache<IncludeScannerParams, IncludeScanner> scanners =
@@ -104,8 +102,7 @@ public class IncludeScannerSupplierImpl implements IncludeScannerSupplier {
                       directories.getOutputPath(execRoot.getBaseName()),
                       execRoot,
                       artifactFactory,
-                      spawnIncludeScannerSupplier,
-                      useAsyncIncludeScanner);
+                      spawnIncludeScannerSupplier);
                 }
               });
 
@@ -114,15 +111,13 @@ public class IncludeScannerSupplierImpl implements IncludeScannerSupplier {
       ExecutorService includePool,
       ArtifactFactory artifactFactory,
       Supplier<SpawnIncludeScanner> spawnIncludeScannerSupplier,
-      Path execRoot,
-      boolean useAsyncIncludeScanner) {
+      Path execRoot) {
     this.directories = directories;
     this.includePool = includePool;
     this.artifactFactory = artifactFactory;
     this.spawnIncludeScannerSupplier = spawnIncludeScannerSupplier;
     this.execRoot = execRoot;
     this.pathCache = new PathExistenceCache(execRoot, artifactFactory);
-    this.useAsyncIncludeScanner = useAsyncIncludeScanner;
   }
 
   @Override
