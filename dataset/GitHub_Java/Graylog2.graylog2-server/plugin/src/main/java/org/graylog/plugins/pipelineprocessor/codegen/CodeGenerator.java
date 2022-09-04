@@ -3,13 +3,10 @@ package org.graylog.plugins.pipelineprocessor.codegen;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.primitives.Ints;
-import com.google.common.primitives.Primitives;
 
 import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
@@ -21,34 +18,25 @@ import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
-import net.openhft.compiler.CompilerUtils;
-
 import org.apache.commons.beanutils.PropertyUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.graylog.plugins.pipelineprocessor.EvaluationContext;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
 import org.graylog.plugins.pipelineprocessor.ast.RuleAstBaseListener;
 import org.graylog.plugins.pipelineprocessor.ast.RuleAstWalker;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.AdditionExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.AndExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.ArrayLiteralExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.BooleanValuedFunctionWrapper;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.ComparisonExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.ConstantExpression;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.DoubleExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.EqualityExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.Expression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.FieldAccessExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.FieldRefExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.FunctionExpression;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.IndexedAccessExpression;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.LongExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.MapLiteralExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.MessageRefExpression;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.MultiplicationExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.NotExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.OrExpression;
-import org.graylog.plugins.pipelineprocessor.ast.expressions.SignedExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.StringExpression;
 import org.graylog.plugins.pipelineprocessor.ast.expressions.VarRefExpression;
 import org.graylog.plugins.pipelineprocessor.ast.functions.FunctionArgs;
@@ -72,40 +60,21 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 import javax.annotation.Nonnull;
-import javax.inject.Inject;
 import javax.lang.model.element.Modifier;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 
 public class CodeGenerator {
     private static final Logger log = LoggerFactory.getLogger(CodeGenerator.class);
+    private static AtomicLong ruleNameCounter = new AtomicLong();
 
-    public static String sourceCodeForRule(Rule rule) {
+    public static String codeForRule(Rule rule) {
         final JavaPoetListener javaPoetListener = new JavaPoetListener();
         new RuleAstWalker().walk(javaPoetListener, rule);
         return javaPoetListener.getSource();
     }
 
-    @SuppressWarnings("unchecked")
-    public Class<? extends GeneratedRule> generateCompiledRule(Rule rule) {
-        if (rule.id() == null) {
-            throw new IllegalArgumentException("Rules must have an id to generate code for them");
-        }
-        final String sourceCode = sourceCodeForRule(rule);
-        ClassLoader ruleClassloader = new ClassLoader() {
-        };
-        try {
-            log.info("Sourcecode:\n{}", sourceCode);
-            return (Class<GeneratedRule>) CompilerUtils.CACHED_COMPILER.loadFromJava(ruleClassloader, "org.graylog.plugins.pipelineprocessor.$dynamic.rules.rule$" + rule.id() , sourceCode);
-        } catch (ClassNotFoundException e) {
-            log.error("Unable to compile code\n{}", sourceCode);
-            throw new RuntimeException(e);
-        }
-
-    }
-
     private static class JavaPoetListener extends RuleAstBaseListener {
-        public static final Set<Class<?>> OPERATOR_SAFE_TYPES = Sets.union(Primitives.allPrimitiveTypes(), Primitives.allWrapperTypes());
         private long counter = 0;
         private IdentityHashMap<Expression, CodeBlock> codeSnippet = new IdentityHashMap<>();
 
@@ -121,11 +90,9 @@ public class CodeGenerator {
          * the unique set of function references in this rule
          */
         private Set<FieldSpec> functionMembers = Sets.newHashSet();
-        private Set<FieldSpec> hoistedExpressionMembers = Sets.newHashSet();
         private Set<TypeSpec> functionArgsHolderTypes = Sets.newHashSet();
         private MethodSpec.Builder constructorBuilder;
         private CodeBlock.Builder lateConstructorBlock;
-        private CodeBlock.Builder hoistedConstantExpressions;
         private Set<CodeBlock> functionReferences = Sets.newHashSet();
 
         public String getSource() {
@@ -135,7 +102,7 @@ public class CodeGenerator {
         @Override
         public void enterRule(Rule rule) {
             // generates a new ephemeral unique class name for each generated rule. Only valid for the runtime of the jvm
-            classFile = TypeSpec.classBuilder("rule$" + rule.id())
+            classFile = TypeSpec.classBuilder("rule$" + ruleNameCounter.incrementAndGet())
                     .addSuperinterface(GeneratedRule.class)
                     .addModifiers(Modifier.FINAL, Modifier.PUBLIC)
                     .addAnnotation(AnnotationSpec.builder(SuppressWarnings.class)
@@ -153,27 +120,19 @@ public class CodeGenerator {
                     .addModifiers(Modifier.PUBLIC)
                     .addParameter(FunctionRegistry.class, "functionRegistry");
             lateConstructorBlock = CodeBlock.builder();
-            hoistedConstantExpressions = CodeBlock.builder();
         }
 
         @Override
         public void exitRule(Rule rule) {
             // create fields for each used function
             classFile.addFields(functionMembers);
-            // create fields for hoisted constant expressions
-            classFile.addFields(hoistedExpressionMembers);
             // TODO these can be shared and should potentially created by an AnnotationProcessor for each defined function instead of every rule
             classFile.addTypes(functionArgsHolderTypes);
 
             // resolve functions (but only do so once for each function)
-            constructorBuilder.addStatement("// resolve used functions");
             functionReferences.forEach(block -> constructorBuilder.addStatement("$L", block));
             // add initializers for fields that depend on the functions being set
-            constructorBuilder.addStatement("// function parameters");
             constructorBuilder.addCode(lateConstructorBlock.build());
-            // all the expressions/statements that are constant at compile time
-            constructorBuilder.addStatement("// constant expressions");
-            constructorBuilder.addCode(hoistedConstantExpressions.build());
 
 
             classFile.addMethod(constructorBuilder.build());
@@ -289,9 +248,8 @@ public class CodeGenerator {
             final CodeBlock.Builder argAssignment = CodeBlock.builder();
             args.getArgs().forEach((name, argExpr) -> {
                 final Object varRef = blockOrMissing(codeSnippet.get(argExpr), argExpr);
-                // hoist constant argument evaluation
-                CodeBlock.Builder target = argExpr.isConstant() ? hoistedConstantExpressions : argAssignment;
-                target.addStatement("$L.setAndTransform$$$L($L)",
+
+                argAssignment.addStatement("$L.setAndTransform$$$L($L)",
                         mangledFuncArgsHolder,
                         name,
                         varRef);
@@ -406,40 +364,18 @@ public class CodeGenerator {
             final CodeBlock rightBlock = codeSnippet.get(expr.right());
 
             // TODO optimize operator selection, Objects.equals isn't the ideal candidate because of auto-boxing
-            final Class leftType = expr.left().getType();
-            final Class rightType = expr.right().getType();
-            boolean useOperator = false;
-            if (OPERATOR_SAFE_TYPES.contains(leftType) && OPERATOR_SAFE_TYPES.contains(rightType)) {
-                useOperator = true;
-            }
-            String statement = "boolean $L = ";
-            final boolean checkEquality = expr.isCheckEquality();
-            if (useOperator) {
-                statement += "$L " + (checkEquality ? "==" : "!=") + " $L";
-                currentMethod.addStatement(statement,
-                        intermediateName,
-                        blockOrMissing(leftBlock, expr.left()),
-                        blockOrMissing(rightBlock, expr.right()));
+            final String statement;
+            if (expr.isCheckEquality()) {
+                statement = "boolean $L = $T.equals($L, $L)";
             } else {
-                statement += (checkEquality ? "" : "!") + "$T.equals($L, $L)";
-                currentMethod.addStatement(statement,
-                        intermediateName,
-                        ClassName.get(Objects.class),
-                        blockOrMissing(leftBlock, expr.left()),
-                        blockOrMissing(rightBlock, expr.right()));
+                statement = "boolean $L = !$T.equals($L, $L)";
             }
-
+            currentMethod.addStatement(statement,
+                    intermediateName,
+                    ClassName.get(Objects.class),
+                    blockOrMissing(leftBlock, expr.left()),
+                    blockOrMissing(rightBlock, expr.right()));
             codeSnippet.put(expr, CodeBlock.of("$L", intermediateName));
-        }
-
-        @Override
-        public void exitComparison(ComparisonExpression expr) {
-            final CodeBlock left = codeSnippet.get(expr.left());
-            final CodeBlock right = codeSnippet.get(expr.right());
-            // TODO dates
-            codeSnippet.putIfAbsent(expr, CodeBlock.of("($L " + expr.getOperator() + " $L)",
-                    blockOrMissing(left, expr.left()),
-                    blockOrMissing(right, expr.right())));
         }
 
         @Override
@@ -462,18 +398,6 @@ public class CodeGenerator {
         }
 
         @Override
-        public void exitLong(LongExpression expr) {
-            // long needs a suffix
-            codeSnippet.putIfAbsent(expr, CodeBlock.of("$LL", expr.evaluateUnsafe()));
-        }
-
-        @Override
-        public void exitDouble(DoubleExpression expr) {
-            // double should have a suffix
-            codeSnippet.putIfAbsent(expr, CodeBlock.of("$Ld", expr.evaluateUnsafe()));
-        }
-
-        @Override
         public void exitMessageRef(MessageRefExpression expr) {
             final Object field = blockOrMissing(codeSnippet.get(expr.getFieldExpr()), expr.getFieldExpr());
 
@@ -485,14 +409,20 @@ public class CodeGenerator {
             final Object value = blockOrMissing(codeSnippet.get(assign.getValueExpression()), assign.getValueExpression());
             final Class type = assign.getValueExpression().getType();
 
-            // always hoist declaration
-            hoistedExpressionMembers.add(FieldSpec.builder(type, "var$" + assign.getName(), Modifier.PRIVATE).build());
-            if (assign.getValueExpression().isConstant()) {
-                // also hoist the assignment
-                hoistedConstantExpressions.addStatement("var$$$L = $L", assign.getName(), value);
-            } else {
-                currentMethod.addStatement("var$$$L = $L", assign.getName(), value);
+            // potentially annotate the value with the type width, if we assign a constant
+            String suffix = "";
+            final boolean constantValue = assign.getValueExpression().isConstant();
+            if (constantValue) {
+                if (type.equals(Long.class)) {
+                    suffix = "L";
+                } else if (type.equals(Double.class)) {
+                    suffix = "D";
+                }
             }
+            currentMethod.addStatement("$T var$$$L = $L" + suffix,
+                    type,
+                    assign.getName(),
+                    value);
         }
 
         @Override
@@ -504,25 +434,13 @@ public class CodeGenerator {
         public void exitMapLiteral(MapLiteralExpression expr) {
             // we need an intermediate value for creating the map
             final String mapName = "mapLiteral$" + subExpressionName();
-            final boolean constantMap = expr.isConstant();
-            if (constantMap) {
-                // we can hoist both the declaration, as well as the definition of the map
-                hoistedExpressionMembers.add(FieldSpec.builder(Map.class, mapName, Modifier.PRIVATE, Modifier.FINAL).build());
-                hoistedConstantExpressions.addStatement("$L = $T.newHashMap()", mapName, Maps.class);
-            } else {
-                currentMethod.addStatement("$T $L = $T.newHashMap()", Map.class, mapName, Maps.class);
-            }
+            currentMethod.addStatement("$T $L = $T.newHashMap()", Map.class, mapName, Maps.class);
 
             expr.entries().forEach(entry -> {
-                final String code = "$L.put($S, $L)";
-                final Object[] args = {mapName, entry.getKey(), blockOrMissing(codeSnippet.get(entry.getValue()), entry.getValue())};
-                // TODO convert to code block
-                // hoist only completely constant maps (otherwise we would need to regenerate the non-constant ones per evaluation)
-                if (constantMap) {
-                    hoistedConstantExpressions.addStatement(code, args);
-                } else {
-                    currentMethod.addStatement(code, args);
-                }
+                currentMethod.addStatement("$L.put($S, $L)",
+                        mapName,
+                        entry.getKey(),
+                        blockOrMissing(codeSnippet.get(entry.getValue()), entry.getValue()));
             });
             // add the reference to the map we created
             codeSnippet.putIfAbsent(expr, CodeBlock.of("$L", mapName));
@@ -531,87 +449,18 @@ public class CodeGenerator {
         @Override
         public void exitArrayLiteral(ArrayLiteralExpression expr) {
             final String listName = "arrayLiteral$" + subExpressionName();
-            final boolean constantList = expr.isConstant();
 
             final ImmutableList.Builder<Object> elementsBuilder = ImmutableList.builder();
             expr.children().forEach(expression -> elementsBuilder.add(blockOrMissing(codeSnippet.get(expression), expression)));
             final ImmutableList<Object> elements = elementsBuilder.build();
 
-            // if possible hoist decl to constructor
-            if (constantList) {
-                hoistedExpressionMembers.add(FieldSpec.builder(List.class, listName, Modifier.PRIVATE, Modifier.FINAL).build());
-            }
-            final String assignmentFormat = "$L = $T.newArrayList("
-                    + Stream.generate(() -> "$L").limit(elements.size()).reduce(Joiner.on(", ")::join).orElseGet(() -> "$")
-                    + ")";
+            final String format = "$T $L = $T.newArrayList(" + Stream.generate(() -> "$L").limit(elements.size()).reduce(Joiner.on(", ")::join).orElseGet(() -> "$") + ")";
             // sigh java varargs
             List<Object> args = Lists.newArrayList(ArrayList.class, listName, Lists.class);
             args.addAll(elements);
-            // if constant, initialize completely in constructor
-            if (constantList) {
-                hoistedConstantExpressions.addStatement(assignmentFormat, args.subList(1, args.size()).toArray());
-            } else {
-                currentMethod.addStatement("$T " + assignmentFormat, args.toArray());
-            }
+            currentMethod.addStatement(format,
+                    args.toArray());
             codeSnippet.putIfAbsent(expr, CodeBlock.of("$L", listName));
-        }
-
-        @Override
-        public void exitAddition(AdditionExpression expr) {
-            final Object leftBlock = blockOrMissing(codeSnippet.get(expr.left()), expr.left());
-            final Object rightBlock = blockOrMissing(codeSnippet.get(expr.right()), expr.right());
-
-            codeSnippet.putIfAbsent(expr,
-                    CodeBlock.of("$L " + (expr.isPlus() ? "+" : "-") + " $L", leftBlock, rightBlock));
-        }
-
-        @Override
-        public void exitMultiplication(MultiplicationExpression expr) {
-            final Object leftBlock = blockOrMissing(codeSnippet.get(expr.left()), expr.left());
-            final Object rightBlock = blockOrMissing(codeSnippet.get(expr.right()), expr.right());
-
-            codeSnippet.putIfAbsent(expr,
-                    CodeBlock.of("$L " + expr.getOperator() + " $L", leftBlock, rightBlock));
-        }
-
-        @Override
-        public void exitSigned(SignedExpression expr) {
-            final Object rightBlock = blockOrMissing(codeSnippet.get(expr.right()), expr.right());
-            codeSnippet.putIfAbsent(expr, CodeBlock.of((expr.isPlus() ? "+" : "-") + "$L", rightBlock));
-        }
-
-        @Override
-        public void exitIndexedAccess(IndexedAccessExpression expr) {
-            final Expression indexableObject = expr.getIndexableObject();
-            final Expression index = expr.getIndex();
-
-            final Object objectBlock = blockOrMissing(codeSnippet.get(indexableObject), indexableObject);
-            final Object indexBlock = blockOrMissing(codeSnippet.get(index), index);
-
-            final Class indexType = index.getType();
-            final Class indexableObjectType = indexableObject.getType();
-            CodeBlock block;
-            if (Long.class.equals(indexType)) {
-                // array indexing
-                if (indexableObjectType.isArray()) {
-                    block = CodeBlock.of("Arrays.get($L, $L)", objectBlock, indexBlock);
-                } else if (List.class.isAssignableFrom(indexableObjectType)) {
-                    block = CodeBlock.of("$L.get($T.saturatedCast($L))", objectBlock, ClassName.get(Ints.class), indexBlock);
-                } else if (Iterable.class.isAssignableFrom(indexableObjectType)) {
-                    block = CodeBlock.of("$T.get($L, $L)", ClassName.get(Iterables.class), objectBlock, indexBlock);
-                } else {
-                    log.error("Unhandled indexable object type: {}", indexableObject);
-                    block = null;
-                }
-            } else if (String.class.equals(indexType) && Map.class.isAssignableFrom(indexableObjectType)) {
-                // map indexing
-                block = CodeBlock.of("$L.get($L)", objectBlock, indexBlock);
-            } else {
-                // illegal
-                log.error("Invalid index type: {}", index);
-                block = null;
-            }
-            codeSnippet.putIfAbsent(expr, block);
         }
 
         @Nonnull
