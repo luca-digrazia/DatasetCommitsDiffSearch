@@ -128,7 +128,6 @@ public class JavaSkylarkCommon {
         named = true,
         type = SkylarkList.class,
         generic1 = String.class,
-        defaultValue =  "[]",
         doc = "A list of the desired javac options. Optional."
       ),
       @Param(
@@ -137,12 +136,11 @@ public class JavaSkylarkCommon {
         named = true,
         type = SkylarkList.class,
         generic1 = JavaProvider.class,
-        defaultValue = "[]",
         doc = "A list of dependencies. Optional."
       ),
       @Param(
         name = "strict_deps",
-        defaultValue = "'ERROR'",
+        defaultValue = "OFF",
         positional = false,
         named = true,
         type = String.class,
