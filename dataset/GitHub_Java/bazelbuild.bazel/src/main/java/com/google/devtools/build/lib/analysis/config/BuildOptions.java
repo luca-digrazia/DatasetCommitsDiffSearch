@@ -616,15 +616,6 @@ public final class BuildOptions implements Cloneable, Serializable {
     }
 
     @Override
-    public String toString() {
-      StringBuilder sb = new StringBuilder();
-      sb.append(differingOptions).append(System.lineSeparator());
-      sb.append(extraFirstFragmentClasses).append(System.lineSeparator());
-      sb.append(extraSecondFragments);
-      return sb.toString();
-    }
-
-    @Override
     public int hashCode() {
       return Objects.hash(differingOptions, extraFirstFragmentClasses, extraSecondFragments);
     }
