@@ -143,14 +143,14 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
                   .allowedFileTypes(FileTypeSet.NO_FILE)
                   .mandatoryProviders(ImmutableList.of(TemplateVariableInfo.PROVIDER.id()))
                   .dontCheckConstraints())
-          .add(attr(RuleClass.EXEC_PROPERTIES_ATTR, Type.STRING_DICT).value(ImmutableMap.of()))
+          .add(attr(RuleClass.EXEC_PROPERTIES, Type.STRING_DICT).value(ImmutableMap.of()))
           .add(
               attr(RuleClass.EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST)
                   .allowedFileTypes()
                   .nonconfigurable("Used in toolchain resolution")
                   .value(ImmutableList.of()))
           .add(
-              attr(RuleClass.TARGET_COMPATIBLE_WITH_ATTR, LABEL_LIST)
+              attr(RuleClass.TARGET_RESTRICTED_TO_ATTR, LABEL_LIST)
                   .mandatoryProviders(ConstraintValueInfo.PROVIDER.id())
                   // This should be configurable to allow for complex types of restrictions.
                   .allowedFileTypes(FileTypeSet.NO_FILE))
@@ -518,7 +518,6 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
       StarlarkFunction implementation,
       Sequence<?> attributeAspects,
       Object attrs,
-      Sequence<?> requiredProvidersArg,
       Sequence<?> requiredAspectProvidersArg,
       Sequence<?> providesArg,
       Sequence<?> fragments,
@@ -608,7 +607,6 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
         implementation,
         attrAspects.build(),
         attributes.build(),
-        StarlarkAttrModule.buildProviderPredicate(requiredProvidersArg, "required_providers"),
         StarlarkAttrModule.buildProviderPredicate(
             requiredAspectProvidersArg, "required_aspect_providers"),
         StarlarkAttrModule.getStarlarkProviderIdentifiers(providesArg),
@@ -947,7 +945,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
         throw Starlark.errorf(
             "An exec group cannot set copy_from_rule=True and declare toolchains or constraints.");
       }
-      return ExecGroup.copyFromDefault();
+      return ExecGroup.COPY_FROM_RULE_EXEC_GROUP;
     }
 
     ImmutableSet<Label> toolchainTypes = ImmutableSet.copyOf(parseToolchains(toolchains, thread));
