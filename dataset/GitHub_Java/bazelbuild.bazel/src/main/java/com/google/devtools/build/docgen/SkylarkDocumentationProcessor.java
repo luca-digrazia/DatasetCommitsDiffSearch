@@ -30,9 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * A class to assemble documentation for Skylark.
- */
+/** A class to assemble documentation for Skylark. */
 public final class SkylarkDocumentationProcessor {
 
   private static final ImmutableList<SkylarkModuleCategory> GLOBAL_CATEGORIES =
@@ -41,14 +39,10 @@ public final class SkylarkDocumentationProcessor {
 
   private SkylarkDocumentationProcessor() {}
 
-  /**
-   * Generates the Skylark documentation to the given output directory.
-   */
-  public static void generateDocumentation(String outputDir, String... args)
+  /** Generates the Skylark documentation to the given output directory. */
+  public static void generateDocumentation(String outputDir, String... clazz)
       throws IOException, ClassPathException {
-    parseOptions(args);
-
-    Map<String, SkylarkModuleDoc> modules = SkylarkDocumentationCollector.collectModules();
+    Map<String, SkylarkModuleDoc> modules = SkylarkDocumentationCollector.collectModules(clazz);
 
     // Generate the top level module first in the doc
     SkylarkModuleDoc topLevelModule = modules.remove(
@@ -194,7 +188,7 @@ public final class SkylarkDocumentationProcessor {
       } else {
         return getFunctionDoc(module.getAnnotation().name(), params[1], module);
       }
-    } else if (toplevelModuleDoc.getBuiltinMethods().containsKey(params[0])) {
+    } else if (toplevelModuleDoc.getBuiltinMethods().containsKey(params[0])){
       // Top level object / function
       return getFunctionDoc(null, params[0], toplevelModuleDoc);
     }
@@ -238,16 +232,5 @@ public final class SkylarkDocumentationProcessor {
   private static void printJavaFunctionDoc(SkylarkJavaMethodDoc method, StringBuilder sb) {
     sb.append(method.getSignature())
       .append("\t").append(method.getDocumentation()).append("\n");
-  }
-
-  private static void parseOptions(String... args) {
-    for (String arg : args) {
-      if (arg.startsWith("--be_root=")) {
-        DocgenConsts.BeDocsRoot = arg.split("--be_root=", 2)[1];
-      }
-      if (arg.startsWith("--doc_extension=")) {
-        DocgenConsts.documentationExtension = arg.split("--doc_extension=", 2)[1];
-      }
-    }
   }
 }

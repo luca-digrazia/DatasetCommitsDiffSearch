@@ -59,7 +59,7 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
 
   @Override
   public String getDocumentation() {
-    return SkylarkDocUtils.substituteVariables(module.doc());
+    return module.doc();
   }
 
   public String getTitle() {
