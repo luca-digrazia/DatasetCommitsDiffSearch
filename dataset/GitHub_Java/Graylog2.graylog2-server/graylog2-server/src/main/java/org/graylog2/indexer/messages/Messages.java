@@ -33,11 +33,15 @@ import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.get.GetRequest;
+import org.elasticsearch.action.get.GetRequestBuilder;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.indices.IndexMissingException;
 import org.graylog2.configuration.ElasticsearchConfiguration;
+import org.graylog2.indexer.DeadLetter;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.results.ResultMessage;
@@ -51,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -71,57 +76,60 @@ public class Messages {
 
     private final Client c;
     private final String deflectorName;
+    private LinkedBlockingQueue<List<DeadLetter>> deadLetterQueue;
 
     @Inject
     public Messages(Client client, ElasticsearchConfiguration configuration) {
         this.c = client;
+        this.deadLetterQueue = new LinkedBlockingQueue<>(1000);
         this.deflectorName = Deflector.buildName(configuration.getIndexPrefix());
     }
 
-    public ResultMessage get(String messageId, String index) throws DocumentNotFoundException {
-        final GetRequest request = c.prepareGet(index, IndexMapping.TYPE_MESSAGE, messageId).request();
-        final GetResponse r = c.get(request).actionGet();
+    public LinkedBlockingQueue<List<DeadLetter>> getDeadLetterQueue() {
+        return deadLetterQueue;
+    }
+
+    public ResultMessage get(String messageId, String index) throws IndexMissingException, DocumentNotFoundException {
+        GetRequestBuilder grb = new GetRequestBuilder(c, index);
+        grb.setId(messageId);
+
+        GetResponse r = c.get(grb.request()).actionGet();
 
         if (!r.isExists()) {
-            throw new DocumentNotFoundException(index, messageId);
+            throw new DocumentNotFoundException();
         }
 
         return ResultMessage.parseFromSource(r);
     }
 
-    public List<String> analyze(String string, String index) {
-        final AnalyzeRequestBuilder builder = c.admin().indices().prepareAnalyze(index, string);
-        final AnalyzeResponse response = c.admin().indices().analyze(builder.request()).actionGet();
+    public List<String> analyze(String string, String index) throws IndexMissingException {
+        List<String> tokens = Lists.newArrayList();
+        AnalyzeRequestBuilder arb = new AnalyzeRequestBuilder(c.admin().indices(), index, string);
+        AnalyzeResponse r = c.admin().indices().analyze(arb.request()).actionGet();
 
-        final List<AnalyzeToken> tokens = response.getTokens();
-        final List<String> terms = Lists.newArrayListWithCapacity(tokens.size());
-        for (AnalyzeToken token : tokens) {
-            terms.add(token.getTerm());
+        for (AnalyzeToken token : r.getTokens()) {
+            tokens.add(token.getTerm());
         }
 
-        return terms;
+        return tokens;
     }
 
     public boolean bulkIndex(final List<Message> messages) {
-        return bulkIndex(deflectorName, messages);
-    }
-
-    public boolean bulkIndex(final String indexName, final List<Message> messages) {
         if (messages.isEmpty()) {
             return true;
         }
 
         final BulkRequestBuilder requestBuilder = c.prepareBulk().setConsistencyLevel(WriteConsistencyLevel.ONE);
         for (Message msg : messages) {
-            requestBuilder.add(buildIndexRequest(indexName, msg.toElasticSearchObject(), msg.getId()));
+            requestBuilder.add(buildIndexRequest(deflectorName, msg.toElasticSearchObject(), msg.getId()));
         }
 
         final BulkResponse response = runBulkRequest(requestBuilder.request());
 
-        LOG.debug("Index {}: Bulk indexed {} messages, took {} ms, failures: {}", indexName,
+        LOG.debug("Deflector index: Bulk indexed {} messages, took {} ms, failures: {}",
                 response.getItems().length, response.getTookInMillis(), response.hasFailures());
         if (response.hasFailures()) {
-            propagateFailure(response.getItems(), response.buildFailureMessage());
+            propagateFailure(response.getItems(), messages, response.buildFailureMessage());
         }
 
         return !response.hasFailures();
@@ -141,27 +149,32 @@ public class Messages {
         }
     }
 
-    private void propagateFailure(BulkItemResponse[] items, String errorMessage) {
+    private void propagateFailure(BulkItemResponse[] items, List<Message> messages, String errorMessage) {
         // Get all failed messages.
-        long failedMessages = 0L;
+        final List<DeadLetter> deadLetters = Lists.newArrayList();
         for (BulkItemResponse item : items) {
             if (item.isFailed()) {
-                LOG.trace("Failed to index message: {}", item.getFailureMessage());
-                failedMessages++;
+                deadLetters.add(new DeadLetter(item, messages.get(item.getItemId())));
             }
         }
 
         LOG.error("Failed to index [{}] messages. Please check the index error log in your web interface for the reason. Error: {}",
-                failedMessages, errorMessage);
+                deadLetters.size(), errorMessage);
+
+        if (!deadLetterQueue.offer(deadLetters)) {
+            LOG.debug("Could not propagate failure to failure queue. Queue is full.");
+        }
     }
 
-    public IndexRequest buildIndexRequest(String index, Map<String, Object> source, String id) {
-        source.remove(Message.FIELD_ID);
-
-        return c.prepareIndex(index, IndexMapping.TYPE_MESSAGE, id)
+    private IndexRequestBuilder buildIndexRequest(String index, Map<String, Object> source, String id) {
+        return new IndexRequestBuilder(c)
+                .setId(id)
                 .setSource(source)
-                .setConsistencyLevel(WriteConsistencyLevel.ONE)
-                .request();
+                .setIndex(index)
+                .setContentType(XContentType.JSON)
+                .setOpType(IndexRequest.OpType.INDEX)
+                .setType(IndexMapping.TYPE_MESSAGE)
+                .setConsistencyLevel(WriteConsistencyLevel.ONE);
     }
 
     private static class BulkRequestCallable implements Callable<BulkResponse> {
