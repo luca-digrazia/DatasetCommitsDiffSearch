@@ -31,7 +31,6 @@ import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
@@ -164,9 +163,7 @@ class RestClientProcessor {
     }
 
     @BuildStep
-    void processInterfaces(
-            CombinedIndexBuildItem combinedIndexBuildItem,
-            BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
+    void processInterfaces(BeanArchiveIndexBuildItem combinedIndexBuildItem,
             Capabilities capabilities,
             PackageConfig packageConfig,
             BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition,
@@ -181,7 +178,7 @@ class RestClientProcessor {
         Map<DotName, ClassInfo> interfaces = new HashMap<>();
         Set<Type> returnTypes = new HashSet<>();
 
-        IndexView index = CompositeIndex.create(beanArchiveIndexBuildItem.getIndex(), combinedIndexBuildItem.getIndex());
+        IndexView index = combinedIndexBuildItem.getIndex();
 
         findInterfaces(index, interfaces, returnTypes, REGISTER_REST_CLIENT);
         findInterfaces(index, interfaces, returnTypes, PATH);
