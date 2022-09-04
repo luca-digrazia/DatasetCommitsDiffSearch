@@ -17,6 +17,7 @@
 package org.graylog.plugins.pipelineprocessor;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.assistedinject.Assisted;
@@ -121,8 +122,6 @@ public class PipelineProcessorMessageDecorator implements SearchResponseDecorato
                 ));
             });
         });
-
-        pipelineInterpreter.stop();
 
         return searchResponse.toBuilder().messages(results).build();
     }
