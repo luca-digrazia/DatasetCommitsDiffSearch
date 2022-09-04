@@ -27,7 +27,7 @@ import com.google.devtools.build.skyframe.SkyValue;
 import javax.annotation.Nullable;
 
 // TODO(brandjon): Determine places where we need to teach Skyframe about this Skyfunction. Look for
-// special treatment of BzlLoadFunction or ASTFileLookupFunction in existing code.
+// special treatment of StarlarkImportLookupFunction or ASTFileLookupFunction in existing code.
 
 // TODO(brandjon): Add support to StarlarkModuleCycleReporter to pretty-print cycles involving
 // @builtins. Blocked on us actually loading files from @builtins.
@@ -37,7 +37,8 @@ import javax.annotation.Nullable;
  * exported by {@code @builtins//:exports.bzl}.
  *
  * <p>This function has a trivial key, so there can only be one value in the build at a time. It has
- * a single dependency, on the result of evaluating the exports.bzl file to a {@link BzlLoadValue}.
+ * a single dependency, on the result of evaluating the exports.bzl file to a {@link
+ * StarlarkImportLookupValue}.
  *
  * <p>See also the design doc:
  * https://docs.google.com/document/d/1GW7UVo1s9X0cti9OMgT3ga5ozKYUWLPk9k8c4-34rC4/edit
@@ -63,12 +64,12 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
       throws StarlarkBuiltinsFunctionException, InterruptedException {
     // skyKey is a singleton, unused.
 
-    // TODO(brandjon): Replace by @builtins//:exports once BzlLoadFunction can resolve the @builtins
-    // namespace.
+    // TODO(brandjon): Replace by @builtins//:exports once StarlarkImportLookupFunction can resolve
+    // the @builtins namespace.
     SkyKey exportsKey =
-        BzlLoadValue.keyForBuild(
+        StarlarkImportLookupValue.packageBzlKey(
             Label.parseAbsoluteUnchecked("//tools/builtins_staging:exports.bzl"));
-    BzlLoadValue exportsValue = (BzlLoadValue) env.getValue(exportsKey);
+    StarlarkImportLookupValue exportsValue = (StarlarkImportLookupValue) env.getValue(exportsKey);
     if (exportsValue == null) {
       return null;
     }

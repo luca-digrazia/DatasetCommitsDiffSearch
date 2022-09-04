@@ -25,20 +25,26 @@ import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
-import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
+import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.skyframe.StarlarkImportLookupFunction.SkylarkImportFailedException;
+import com.google.devtools.build.lib.skyframe.StarlarkImportLookupFunction.StarlarkImportFailedException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
+import com.google.devtools.build.lib.vfs.FileStatus;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
+import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.Options;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.UUID;
+import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -47,21 +53,25 @@ import org.junit.runners.JUnit4;
 /** Tests for StarlarkImportLookupFunction. */
 @RunWith(JUnit4.class)
 public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
+  @Override
+  protected FileSystem createFileSystem() {
+    return new CustomInMemoryFs();
+  }
 
   @Before
   public final void preparePackageLoading() throws Exception {
     Path alternativeRoot = scratch.dir("/root_2");
-    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
-    packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
-    packageCacheOptions.showLoadingProgress = true;
-    packageCacheOptions.globbingThreads = 7;
+    PackageOptions packageOptions = Options.getDefaults(PackageOptions.class);
+    packageOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
+    packageOptions.showLoadingProgress = true;
+    packageOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
             new PathPackageLocator(
                 outputBase,
                 ImmutableList.of(Root.fromPath(rootDirectory), Root.fromPath(alternativeRoot)),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
-            packageCacheOptions,
+            packageOptions,
             Options.getDefaults(StarlarkSemanticsOptions.class),
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
@@ -85,7 +95,7 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testSkylarkImportLabelsAlternativeRoot() throws Exception {
+  public void testStarlarkImportLabelsAlternativeRoot() throws Exception {
     scratch.file("/root_2/pkg4/BUILD");
     scratch.file("/root_2/pkg4/ext.bzl");
     checkSuccessfulLookup("//pkg4:ext.bzl");
@@ -156,9 +166,9 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
     checkSuccessfulLookup("//pkg:subdir/ext2.bzl");
   }
 
-  private EvaluationResult<SkylarkImportLookupValue> get(SkyKey starlarkImportLookupKey)
+  private EvaluationResult<StarlarkImportLookupValue> get(SkyKey starlarkImportLookupKey)
       throws Exception {
-    EvaluationResult<SkylarkImportLookupValue> result =
+    EvaluationResult<StarlarkImportLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), starlarkImportLookupKey, /*keepGoing=*/ false, reporter);
     if (result.hasError()) {
@@ -168,14 +178,14 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
   }
 
   private static SkyKey key(String label) {
-    return SkylarkImportLookupValue.key(Label.parseAbsoluteUnchecked(label));
+    return StarlarkImportLookupValue.packageBzlKey(Label.parseAbsoluteUnchecked(label));
   }
 
   // Ensures that a Starlark file has been successfully processed by checking that the
   // the label in its dependency set corresponds to the requested label.
   private void checkSuccessfulLookup(String label) throws Exception {
     SkyKey starlarkImportLookupKey = key(label);
-    EvaluationResult<SkylarkImportLookupValue> result = get(starlarkImportLookupKey);
+    EvaluationResult<StarlarkImportLookupValue> result = get(starlarkImportLookupKey);
     assertThat(label)
         .isEqualTo(result.get(starlarkImportLookupKey).getDependency().getLabel().toString());
   }
@@ -184,7 +194,7 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
   public void testStarlarkImportLookupNoBuildFile() throws Exception {
     scratch.file("pkg/ext.bzl", "");
     SkyKey starlarkImportLookupKey = key("//pkg:ext.bzl");
-    EvaluationResult<SkylarkImportLookupValue> result =
+    EvaluationResult<StarlarkImportLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), starlarkImportLookupKey, /*keepGoing=*/ false, reporter);
     assertThat(result.hasError()).isTrue();
@@ -201,7 +211,7 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
     scratch.file("pkg1/ext.bzl", "a = 1");
     scratch.file("pkg2/ext.bzl", "load('//pkg1:ext.bzl', 'a')");
     SkyKey starlarkImportLookupKey = key("//pkg:ext.bzl");
-    EvaluationResult<SkylarkImportLookupValue> result =
+    EvaluationResult<StarlarkImportLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), starlarkImportLookupKey, /*keepGoing=*/ false, reporter);
     assertThat(result.hasError()).isTrue();
@@ -247,12 +257,12 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
             Root.fromPath(p.getParentDirectory()), PathFragment.create("WORKSPACE"));
 
     SkyKey starlarkImportLookupKey =
-        SkylarkImportLookupValue.keyInWorkspace(
+        StarlarkImportLookupValue.workspaceBzlKey(
             Label.parseAbsoluteUnchecked("@a_remote_repo//remote_pkg:ext.bzl"),
             /* inWorkspace= */
             /* workspaceChunk= */ 0,
             rootedPath);
-    EvaluationResult<SkylarkImportLookupValue> result =
+    EvaluationResult<StarlarkImportLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), starlarkImportLookupKey, /*keepGoing=*/ false, reporter);
 
@@ -324,14 +334,14 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
   // the label of its load statement strays into a subpackage.
   private void checkStrayLabel(String target, String expectedMessage) throws InterruptedException {
     SkyKey starlarkImportLookupKey = key(target);
-    EvaluationResult<SkylarkImportLookupValue> result =
+    EvaluationResult<StarlarkImportLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), starlarkImportLookupKey, /*keepGoing=*/ false, reporter);
     assertThat(result.hasError()).isTrue();
     assertThatEvaluationResult(result)
         .hasErrorEntryForKeyThat(starlarkImportLookupKey)
         .hasExceptionThat()
-        .isInstanceOf(SkylarkImportFailedException.class);
+        .isInstanceOf(StarlarkImportFailedException.class);
     assertThatEvaluationResult(result)
         .hasErrorEntryForKeyThat(starlarkImportLookupKey)
         .hasExceptionThat()
@@ -345,14 +355,14 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
     scratch.file("BUILD", "load(\"@repository//dir:file.bzl\", \"foo\")");
 
     SkyKey starlarkImportLookupKey = key("@repository//dir:file.bzl");
-    EvaluationResult<com.google.devtools.build.lib.skyframe.SkylarkImportLookupValue> result =
+    EvaluationResult<StarlarkImportLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), starlarkImportLookupKey, /*keepGoing=*/ false, reporter);
     assertThat(result.hasError()).isTrue();
     assertThatEvaluationResult(result)
         .hasErrorEntryForKeyThat(starlarkImportLookupKey)
         .hasExceptionThat()
-        .isInstanceOf(SkylarkImportFailedException.class);
+        .isInstanceOf(StarlarkImportFailedException.class);
     assertThatEvaluationResult(result)
         .hasErrorEntryForKeyThat(starlarkImportLookupKey)
         .hasExceptionThat()
@@ -390,14 +400,75 @@ public class StarlarkImportLookupFunctionTest extends BuildViewTestCase {
     RootedPath rootedPath = RootedPath.toRootedPath(root, PathFragment.create("WORKSPACE"));
 
     SkyKey starlarkImportLookupKey =
-        SkylarkImportLookupValue.keyInWorkspace(
+        StarlarkImportLookupValue.workspaceBzlKey(
             Label.parseAbsoluteUnchecked("@a//:a.bzl"), 1, rootedPath);
 
-    EvaluationResult<SkylarkImportLookupValue> result =
+    EvaluationResult<StarlarkImportLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), starlarkImportLookupKey, /*keepGoing=*/ false, reporter);
 
-    assertThat(result.get(starlarkImportLookupKey).getEnvironmentExtension().getBindings())
+    assertThat(result.get(starlarkImportLookupKey).getModule().getGlobals())
         .containsEntry("a_symbol", 5);
+  }
+
+  @Test
+  public void testErrorReadingBzlFileInlineIsTransient() throws Exception {
+    CustomInMemoryFs fs = (CustomInMemoryFs) fileSystem;
+    scratch.file("a/BUILD");
+    fs.badPathForRead = scratch.file("a/a1.bzl", "doesntmatter");
+
+    SkyKey key = key("//a:a1.bzl");
+    EvaluationResult<StarlarkImportLookupValue> result =
+        SkyframeExecutorTestUtils.evaluate(
+            getSkyframeExecutor(), key, /*keepGoing=*/ false, reporter);
+    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(key).isTransient();
+  }
+
+  @Test
+  public void testErrorReadingOtherBzlFileIsPersistentFromPerspectiveOfParent() throws Exception {
+    CustomInMemoryFs fs = (CustomInMemoryFs) fileSystem;
+    scratch.file("a/BUILD");
+    scratch.file("a/a1.bzl", "load('//a:a2.bzl', 'a2')");
+    fs.badPathForRead = scratch.file("a/a2.bzl", "doesntmatter");
+
+    SkyKey key = key("//a:a1.bzl");
+    EvaluationResult<StarlarkImportLookupValue> result =
+        SkyframeExecutorTestUtils.evaluate(
+            getSkyframeExecutor(), key, /*keepGoing=*/ false, reporter);
+    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(key).isNotTransient();
+  }
+
+  @Test
+  public void testErrorStatingBzlFileInFileStateFunctionIsPersistent() throws Exception {
+    CustomInMemoryFs fs = (CustomInMemoryFs) fileSystem;
+    scratch.file("a/BUILD");
+    fs.badPathForStat = scratch.file("a/a1.bzl", "doesntmatter");
+
+    SkyKey key = key("//a:a1.bzl");
+    EvaluationResult<StarlarkImportLookupValue> result =
+        SkyframeExecutorTestUtils.evaluate(
+            getSkyframeExecutor(), key, /*keepGoing=*/ false, reporter);
+    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(key).isNotTransient();
+  }
+
+  private static class CustomInMemoryFs extends InMemoryFileSystem {
+    @Nullable private Path badPathForStat;
+    @Nullable private Path badPathForRead;
+
+    @Override
+    public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
+      if (path.equals(badPathForStat)) {
+        throw new IOException("bad");
+      }
+      return super.statIfFound(path, followSymlinks);
+    }
+
+    @Override
+    protected InputStream getInputStream(Path path) throws IOException {
+      if (path.equals(badPathForRead)) {
+        throw new IOException("bad");
+      }
+      return super.getInputStream(path);
+    }
   }
 }
