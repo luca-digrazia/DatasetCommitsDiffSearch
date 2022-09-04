@@ -193,7 +193,7 @@ public final class NinjaTarget {
    */
   private final ImmutableSortedMap<NinjaRuleVariable, NinjaVariableValue> ruleVariables;
 
-  private NinjaTarget(
+  public NinjaTarget(
       String ruleName,
       ImmutableSortedKeyListMultimap<InputKind, PathFragment> inputs,
       ImmutableSortedKeyListMultimap<OutputKind, PathFragment> outputs,
@@ -224,10 +224,6 @@ public final class NinjaTarget {
 
   public Collection<PathFragment> getAllInputs() {
     return inputs.values();
-  }
-
-  public Collection<Map.Entry<InputKind, PathFragment>> getAllInputsAndKind() {
-    return inputs.entries();
   }
 
   public Collection<PathFragment> getExplicitInputs() {

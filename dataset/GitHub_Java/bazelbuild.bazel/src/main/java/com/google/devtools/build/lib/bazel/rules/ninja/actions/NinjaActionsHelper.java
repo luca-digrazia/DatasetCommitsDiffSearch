@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaRuleVariable;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget;
-import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget.InputKind;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
@@ -41,7 +40,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
@@ -159,10 +157,8 @@ public class NinjaActionsHelper {
 
   private void createNinjaAction(NinjaTarget target) throws GenericParsingException {
     NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
-    NestedSetBuilder<Artifact> orderOnlyInputsBuilder = NestedSetBuilder.stableOrder();
     ImmutableList.Builder<Artifact> outputsBuilder = ImmutableList.builder();
-    boolean isAlwaysDirty =
-        fillArtifacts(target, inputsBuilder, orderOnlyInputsBuilder, outputsBuilder);
+    boolean isAlwaysDirty = fillArtifacts(target, inputsBuilder, outputsBuilder);
 
     ImmutableSortedMap<NinjaRuleVariable, String> resolvedMap = target.computeRuleVariables();
     String command = resolvedMap.get(NinjaRuleVariable.COMMAND);
@@ -186,7 +182,6 @@ public class NinjaActionsHelper {
             artifactsHelper.getSourceRoot(),
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             inputsBuilder.build(),
-            orderOnlyInputsBuilder.build(),
             outputs,
             commandLines,
             Preconditions.checkNotNull(ruleContext.getConfiguration()).getActionEnvironment(),
@@ -233,25 +228,17 @@ public class NinjaActionsHelper {
   private boolean fillArtifacts(
       NinjaTarget target,
       NestedSetBuilder<Artifact> inputsBuilder,
-      NestedSetBuilder<Artifact> orderOnlyInputsBuilder,
       ImmutableList.Builder<Artifact> outputsBuilder)
       throws GenericParsingException {
-
     boolean isAlwaysDirty = false;
-    for (Map.Entry<InputKind, PathFragment> entry : target.getAllInputsAndKind()) {
-
-      InputKind kind = entry.getKey();
-      boolean isOrderOnly = (kind == InputKind.ORDER_ONLY);
-      NestedSetBuilder<Artifact> builder = isOrderOnly ? orderOnlyInputsBuilder : inputsBuilder;
-
-      PathFragment input = entry.getValue();
+    for (PathFragment input : target.getAllInputs()) {
       PhonyTarget phonyTarget = this.phonyTargets.get(input);
       if (phonyTarget != null) {
-        builder.addTransitive(phonyTargetArtifacts.getPhonyTargetArtifacts(input));
-        isAlwaysDirty |= (phonyTarget.isAlwaysDirty() && !isOrderOnly);
+        inputsBuilder.addTransitive(phonyTargetArtifacts.getPhonyTargetArtifacts(input));
+        isAlwaysDirty |= phonyTarget.isAlwaysDirty();
       } else {
         Artifact artifact = artifactsHelper.getInputArtifact(input);
-        builder.add(artifact);
+        inputsBuilder.add(artifact);
       }
     }
 
