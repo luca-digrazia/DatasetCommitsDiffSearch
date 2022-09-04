@@ -662,7 +662,7 @@ public final class SkyframeActionExecutor {
       Action action,
       MetadataHandler metadataHandler,
       long actionStartTime,
-      List<Artifact> resolvedCacheArtifacts,
+      Iterable<Artifact> resolvedCacheArtifacts,
       Map<String, String> clientEnv)
       throws ActionExecutionException {
     Token token;
@@ -759,7 +759,7 @@ public final class SkyframeActionExecutor {
   }
 
   @Nullable
-  List<Artifact> getActionCachedInputs(Action action, PackageRootResolver resolver)
+  Iterable<Artifact> getActionCachedInputs(Action action, PackageRootResolver resolver)
       throws InterruptedException {
     return actionCacheChecker.getCachedInputs(action, resolver);
   }
