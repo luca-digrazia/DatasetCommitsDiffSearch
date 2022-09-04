@@ -61,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
                 JumpUtils.goToDetailListPlayer(this);
                 break;
             case R.id.web_detail:
-                //正常播放，带preview
+                //播放一个连续列表
                 JumpUtils.gotoWebDetail(this);
                 break;
             case R.id.danmaku_video:
