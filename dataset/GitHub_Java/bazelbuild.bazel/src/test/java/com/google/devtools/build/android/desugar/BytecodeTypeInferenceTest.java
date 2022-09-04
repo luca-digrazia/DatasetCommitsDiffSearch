@@ -65,7 +65,7 @@ public class BytecodeTypeInferenceTest {
         (descriptor, expected) -> {
           InferredType type = InferredType.create(descriptor);
           assertThat(type.descriptor()).isEqualTo(descriptor);
-          assertThat(type).isSameInstanceAs(expected);
+          assertThat(type).isSameAs(expected);
         });
   }
 }
