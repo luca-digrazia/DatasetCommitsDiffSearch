@@ -31,11 +31,9 @@ import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.desugar.CoreLibraryRewriter.UnprefixingClassWriter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
-import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import com.google.errorprone.annotations.MustBeClosed;
 import java.io.IOError;
 import java.io.IOException;
@@ -72,8 +70,6 @@ class Desugar {
       allowMultiple = true,
       defaultValue = "",
       category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       converter = ExistingPathConverter.class,
       abbrev = 'i',
       help =
@@ -87,8 +83,6 @@ class Desugar {
       allowMultiple = true,
       defaultValue = "",
       category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       converter = ExistingPathConverter.class,
       help =
           "Ordered classpath (Jar or directory) to resolve symbols in the --input Jar, like "
@@ -101,8 +95,6 @@ class Desugar {
       allowMultiple = true,
       defaultValue = "",
       category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       converter = ExistingPathConverter.class,
       help =
           "Bootclasspath that was used to compile the --input Jar with, like javac's "
@@ -113,8 +105,6 @@ class Desugar {
     @Option(
       name = "allow_empty_bootclasspath",
       defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
     )
     public boolean allowEmptyBootclasspath;
@@ -122,8 +112,6 @@ class Desugar {
     @Option(
       name = "only_desugar_javac9_for_lint",
       defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "A temporary flag specifically for android lint, subject to removal anytime (DO NOT USE)",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
@@ -132,23 +120,17 @@ class Desugar {
 
     @Option(
       name = "rewrite_calls_to_long_compare",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Rewrite calls to Long.compare(long, long) to the JVM instruction lcmp "
-              + "regardless of --min_sdk_version.",
+      defaultValue = "true",
+      help = "rewrite calls to Long.compare(long, long) to the JVM instruction lcmp",
       category = "misc"
     )
-    public boolean alwaysRewriteLongCompare;
+    public boolean enableRewritingOfLongCompare;
 
     @Option(
       name = "output",
       allowMultiple = true,
       defaultValue = "",
       category = "output",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       converter = PathConverter.class,
       abbrev = 'o',
       help =
@@ -161,8 +143,6 @@ class Desugar {
       name = "verbose",
       defaultValue = "false",
       category = "misc",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       abbrev = 'v',
       help = "Enables verbose debugging output."
     )
@@ -172,8 +152,6 @@ class Desugar {
       name = "min_sdk_version",
       defaultValue = "1",
       category = "misc",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Minimum targeted sdk version.  If >= 24, enables default methods in interfaces."
     )
     public int minSdkVersion;
@@ -182,8 +160,6 @@ class Desugar {
       name = "desugar_interface_method_bodies_if_needed",
       defaultValue = "true",
       category = "misc",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Rewrites default and static methods in interfaces if --min_sdk_version < 24. This "
               + "only works correctly if subclasses of rewritten interfaces as well as uses of "
@@ -195,8 +171,6 @@ class Desugar {
       name = "desugar_try_with_resources_if_needed",
       defaultValue = "true",
       category = "misc",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Rewrites try-with-resources statements if --min_sdk_version < 19."
     )
     public boolean desugarTryWithResourcesIfNeeded;
@@ -205,8 +179,6 @@ class Desugar {
       name = "desugar_try_with_resources_omit_runtime_classes",
       defaultValue = "false",
       category = "misc",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Omits the runtime classes necessary to support try-with-resources from the output. "
               + "This property has effect only if --desugar_try_with_resources_if_needed is used."
@@ -217,8 +189,6 @@ class Desugar {
       name = "copy_bridges_from_classpath",
       defaultValue = "false",
       category = "misc",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Copy bridges from classpath to desugared classes."
     )
     public boolean copyBridgesFromClasspath;
@@ -226,8 +196,6 @@ class Desugar {
     @Option(
       name = "core_library",
       defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
       implicitRequirements = "--allow_empty_bootclasspath",
       help = "Enables rewriting to desugar java.* classes."
@@ -246,7 +214,6 @@ class Desugar {
   private final boolean outputJava7;
   private final boolean allowDefaultMethods;
   private final boolean allowCallsToObjectsNonNull;
-  private final boolean allowCallsToLongCompare;
   /** An instance of Desugar is expected to be used ONLY ONCE */
   private boolean used;
 
@@ -259,7 +226,6 @@ class Desugar {
     this.allowDefaultMethods =
         options.desugarInterfaceMethodBodiesIfNeeded || options.minSdkVersion >= 24;
     this.allowCallsToObjectsNonNull = options.minSdkVersion >= 19;
-    this.allowCallsToLongCompare = options.minSdkVersion >= 19 && !options.alwaysRewriteLongCompare;
     this.used = false;
   }
 
@@ -516,7 +482,7 @@ class Desugar {
       // the inliner again
       visitor = new ObjectsRequireNonNullMethodRewriter(visitor);
     }
-    if (!allowCallsToLongCompare) {
+    if (options.enableRewritingOfLongCompare) {
       visitor = new LongCompareMethodRewriter(visitor);
     }
     return visitor;
@@ -557,7 +523,7 @@ class Desugar {
     if (!allowCallsToObjectsNonNull) {
       visitor = new ObjectsRequireNonNullMethodRewriter(visitor);
     }
-    if (!allowCallsToLongCompare) {
+    if (options.enableRewritingOfLongCompare) {
       visitor = new LongCompareMethodRewriter(visitor);
     }
     return visitor;
