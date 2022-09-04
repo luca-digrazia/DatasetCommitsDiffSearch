@@ -247,7 +247,8 @@ public class JavaHeaderCompileActionBuilder {
   }
 
   /** Builds and registers the action for a header compilation. */
-  public void build(JavaToolchainProvider javaToolchain) throws InterruptedException {
+  public void build(JavaToolchainProvider javaToolchain, JavaRuntimeInfo hostJavabase)
+      throws InterruptedException {
     checkNotNull(outputDepsProto, "outputDepsProto must not be null");
     checkNotNull(sourceFiles, "sourceFiles must not be null");
     checkNotNull(sourceJars, "sourceJars must not be null");
@@ -332,11 +333,11 @@ public class JavaHeaderCompileActionBuilder {
           CustomCommandLine.builder().addExecPath(headerCompiler.getExecutable()).build();
     } else {
       mandatoryInputs
-          .addTransitive(javaToolchain.getJavaRuntime().javaBaseInputsMiddleman())
+          .addTransitive(hostJavabase.javaBaseInputsMiddleman())
           .add(headerCompiler.getExecutable());
       executableLine =
           CustomCommandLine.builder()
-              .addPath(javaToolchain.getJavaRuntime().javaBinaryExecPathFragment())
+              .addPath(hostJavabase.javaBinaryExecPathFragment())
               .add("-Xverify:none")
               .addAll(javaToolchain.getTurbineJvmOptions())
               .add("-jar")
