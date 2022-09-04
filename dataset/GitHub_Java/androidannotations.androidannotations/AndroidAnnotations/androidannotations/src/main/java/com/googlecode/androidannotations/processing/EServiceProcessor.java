@@ -26,7 +26,6 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.EService;
-import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.ModelConstants;
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
@@ -36,12 +35,6 @@ import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JMethod;
 
 public class EServiceProcessor implements ElementProcessor {
-
-	private final APTCodeModelHelper aptCodeModelHelper;
-
-	public EServiceProcessor() {
-		aptCodeModelHelper = new APTCodeModelHelper();
-	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
@@ -86,8 +79,6 @@ public class EServiceProcessor implements ElementProcessor {
 			holder.initIfActivityBody = null;
 			holder.initActivityRef = null;
 		}
-
-		aptCodeModelHelper.addServiceIntentBuilder(codeModel, holder);
 
 	}
 

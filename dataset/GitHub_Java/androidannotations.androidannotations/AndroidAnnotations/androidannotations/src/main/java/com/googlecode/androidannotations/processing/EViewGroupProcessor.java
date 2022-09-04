@@ -37,7 +37,6 @@ import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JFieldVar;
@@ -45,7 +44,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 
-public class EViewGroupProcessor implements GeneratingElementProcessor {
+public class EViewGroupProcessor implements ElementProcessor {
 
 	private static final String ALREADY_INFLATED_COMMENT = "" // +
 			+ "The mAlreadyInflated_ hack is needed because of an Android bug\n" // +
@@ -78,7 +77,9 @@ public class EViewGroupProcessor implements GeneratingElementProcessor {
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
 
-		Classes classes = eBeansHolder.classes();
+		EBeanHolder holder = eBeansHolder.create(element, getTarget());
+
+		Classes classes = holder.classes();
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -93,36 +94,33 @@ public class EViewGroupProcessor implements GeneratingElementProcessor {
 			modifiers = JMod.PUBLIC | JMod.FINAL;
 		}
 
-		JDefinedClass generatedClass = codeModel._class(modifiers, generatedBeanQualifiedName, ClassType.CLASS);
-
-		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
-
+		holder.eBean = codeModel._class(modifiers, generatedBeanQualifiedName, ClassType.CLASS);
 		JClass eBeanClass = codeModel.directClass(eBeanQualifiedName);
 
-		holder.generatedClass._extends(eBeanClass);
+		holder.eBean._extends(eBeanClass);
 
-		holder.generatedClass.annotate(SuppressWarnings.class).param("value", "unused");
-		holder.generatedClass.javadoc().append(SUPPRESS_WARNING_COMMENT);
+		holder.eBean.annotate(SuppressWarnings.class).param("value", "unused");
+		holder.eBean.javadoc().append(SUPPRESS_WARNING_COMMENT);
 
 		{
-			holder.contextRef = holder.generatedClass.field(PRIVATE, classes.CONTEXT, "context_");
+			holder.contextRef = holder.eBean.field(PRIVATE, classes.CONTEXT, "context_");
 		}
 
 		{
 			// init
-			holder.init = holder.generatedClass.method(PRIVATE, codeModel.VOID, "init_");
+			holder.init = holder.eBean.method(PRIVATE, codeModel.VOID, "init_");
 			holder.init.body().assign((JFieldVar) holder.contextRef, JExpr.invoke("getContext"));
 		}
 
 		{
 			// afterSetContentView
-			holder.afterSetContentView = holder.generatedClass.method(PRIVATE, codeModel.VOID, "afterSetContentView_");
+			holder.afterSetContentView = holder.eBean.method(PRIVATE, codeModel.VOID, "afterSetContentView_");
 		}
 
-		JFieldVar mAlreadyInflated_ = holder.generatedClass.field(PRIVATE, JType.parse(codeModel, "boolean"), "mAlreadyInflated_", JExpr.FALSE);
+		JFieldVar mAlreadyInflated_ = holder.eBean.field(PRIVATE, JType.parse(codeModel, "boolean"), "mAlreadyInflated_", JExpr.FALSE);
 
 		// onFinishInflate
-		JMethod onFinishInflate = holder.generatedClass.method(PUBLIC, codeModel.VOID, "onFinishInflate");
+		JMethod onFinishInflate = holder.eBean.method(PUBLIC, codeModel.VOID, "onFinishInflate");
 		onFinishInflate.annotate(Override.class);
 		onFinishInflate.javadoc().append(ALREADY_INFLATED_COMMENT);
 

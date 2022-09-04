@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,8 +24,10 @@ import javax.lang.model.element.ExecutableElement;
 import com.googlecode.androidannotations.annotations.OptionsItem;
 import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.helper.IdValidatorHelper;
+import com.googlecode.androidannotations.helper.IdValidatorHelper.FallbackStrategy;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.rclass.IRClass;
+import com.googlecode.androidannotations.rclass.IRClass.Res;
 
 /**
  * @author Pierre-Yves Ricau
@@ -36,6 +38,7 @@ public class OptionsItemValidator implements ElementValidator {
 
 	public OptionsItemValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
 		IdAnnotationHelper annotationHelper = new IdAnnotationHelper(processingEnv, getTarget(), rClass) {
+			@Override
 			public String actionName() {
 				return "Selected";
 			};
@@ -53,7 +56,15 @@ public class OptionsItemValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.idListenerMethod(element, validatedElements, valid);
+		validatorHelper.enclosingElementHasEActivityOrEFragment(element, validatedElements, valid);
+
+		validatorHelper.resIdsExist(element, Res.ID, FallbackStrategy.USE_ELEMENT_NAME, valid);
+
+		validatorHelper.isNotPrivate(element, valid);
+
+		validatorHelper.doesntThrowException(element, valid);
+
+		validatorHelper.uniqueId(element, validatedElements, valid);
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 

@@ -209,7 +209,7 @@ public class ValidatorHelper {
 		for (Class<? extends Annotation> validAnnotation : validAnnotations) {
 			if (element.getAnnotation(validAnnotation) != null) {
 
-				Set<? extends Element> layoutAnnotatedElements = validatedElements.getRootAnnotatedElements(validAnnotation.getName());
+				Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(validAnnotation);
 
 				/*
 				 * This is for the case where the element has the right
@@ -280,7 +280,7 @@ public class ValidatorHelper {
 
 	public void elementHasAnnotation(Class<? extends Annotation> annotation, Element element, AnnotationElements validatedElements, IsValid valid, String error) {
 
-		Set<? extends Element> layoutAnnotatedElements = validatedElements.getRootAnnotatedElements(annotation.getName());
+		Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(annotation);
 
 		if (!layoutAnnotatedElements.contains(element)) {
 			valid.invalidate();
@@ -306,7 +306,7 @@ public class ValidatorHelper {
 	}
 
 	public boolean elementHasAnnotation(Class<? extends Annotation> annotation, Element element, AnnotationElements validatedElements) {
-		Set<? extends Element> layoutAnnotatedElements = validatedElements.getRootAnnotatedElements(annotation.getName());
+		Set<? extends Element> layoutAnnotatedElements = validatedElements.getAnnotatedElements(annotation);
 		return layoutAnnotatedElements.contains(element);
 	}
 
@@ -610,7 +610,7 @@ public class ValidatorHelper {
 			if (elementTypeName.endsWith(GENERATION_SUFFIX)) {
 				String prefTypeName = elementTypeName.substring(0, elementTypeName.length() - GENERATION_SUFFIX.length());
 
-				Set<? extends Element> sharedPrefElements = validatedElements.getRootAnnotatedElements(SharedPref.class.getName());
+				Set<? extends Element> sharedPrefElements = validatedElements.getAnnotatedElements(SharedPref.class);
 
 				for (Element sharedPrefElement : sharedPrefElements) {
 					TypeElement sharedPrefTypeElement = (TypeElement) sharedPrefElement;

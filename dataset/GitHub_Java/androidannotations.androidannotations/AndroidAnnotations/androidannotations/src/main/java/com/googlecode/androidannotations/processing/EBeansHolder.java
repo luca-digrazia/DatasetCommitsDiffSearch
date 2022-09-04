@@ -53,8 +53,6 @@ public class EBeansHolder {
 		public final JClass ACTIVITY = refClass(CanonicalNameConstants.ACTIVITY);
 		public final JClass EDITABLE = refClass(CanonicalNameConstants.EDITABLE);
 		public final JClass TEXT_WATCHER = refClass(CanonicalNameConstants.TEXT_WATCHER);
-		public final JClass SEEKBAR = refClass(CanonicalNameConstants.SEEKBAR);
-		public final JClass ON_SEEKBAR_CHANGE_LISTENER = refClass(CanonicalNameConstants.ON_SEEKBAR_CHANGE_LISTENER);
 		public final JClass TEXT_VIEW = refClass(CanonicalNameConstants.TEXT_VIEW);
 		public final JClass VIEW = refClass(CanonicalNameConstants.VIEW);
 		public final JClass VIEW_ON_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_CLICK_LISTENER);
@@ -126,7 +124,7 @@ public class EBeansHolder {
 
 	}
 
-	private final Map<Element, EBeanHolder> eBeanHolders = new HashMap<Element, EBeanHolder>();
+	private final Map<Element, EBeanHolder> EBeanHolders = new HashMap<Element, EBeanHolder>();
 
 	private final JCodeModel codeModel;
 
@@ -139,14 +137,19 @@ public class EBeansHolder {
 		classes = new Classes();
 	}
 
-	public EBeanHolder create(Element element, Class<? extends Annotation> eBeanAnnotation) {
+	public EBeanHolder create(Element activityElement, Class<? extends Annotation> eBeanAnnotation) {
 		EBeanHolder activityHolder = new EBeanHolder(this, eBeanAnnotation);
-		eBeanHolders.put(element, activityHolder);
+		EBeanHolders.put(activityElement, activityHolder);
 		return activityHolder;
 	}
 
-	public EBeanHolder getEBeanHolder(Element element) {
-		return eBeanHolders.get(element);
+	public EBeanHolder getEnclosingEBeanHolder(Element enclosedElement) {
+		Element activityElement = enclosedElement.getEnclosingElement();
+		return EBeanHolders.get(activityElement);
+	}
+
+	public EBeanHolder getRelativeEBeanHolder(Element element) {
+		return EBeanHolders.get(element);
 	}
 
 	public JClass refClass(String fullyQualifiedClassName) {
