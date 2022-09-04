@@ -78,7 +78,7 @@ final class JavaInfoBuildHelper {
    */
   JavaInfo createJavaInfo(
       Artifact outputJar,
-      @Nullable Artifact compileJar,
+      Artifact compileJar,
       @Nullable Artifact sourceJar,
       Boolean neverlink,
       Sequence<JavaInfo> compileTimeDeps,
@@ -86,6 +86,7 @@ final class JavaInfoBuildHelper {
       Sequence<JavaInfo> exports,
       @Nullable Artifact jdeps,
       Location location) {
+    compileJar = compileJar != null ? compileJar : outputJar;
     ImmutableList<Artifact> sourceJars =
         sourceJar != null ? ImmutableList.of(sourceJar) : ImmutableList.of();
     JavaInfo.Builder javaInfoBuilder = JavaInfo.Builder.create();
@@ -97,10 +98,8 @@ final class JavaInfoBuildHelper {
     if (!neverlink) {
       javaCompilationArgsBuilder.addRuntimeJar(outputJar);
     }
-    if (compileJar != null) {
-      javaCompilationArgsBuilder.addDirectCompileTimeJar(
-          /* interfaceJar= */ compileJar, /* fullJar= */ outputJar);
-    }
+    javaCompilationArgsBuilder.addDirectCompileTimeJar(
+        /* interfaceJar= */ compileJar, /* fullJar= */ outputJar);
 
     JavaRuleOutputJarsProvider javaRuleOutputJarsProvider =
         JavaRuleOutputJarsProvider.builder()
