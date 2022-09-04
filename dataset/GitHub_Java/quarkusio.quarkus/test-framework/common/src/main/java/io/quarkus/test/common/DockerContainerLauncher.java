@@ -3,7 +3,6 @@ package io.quarkus.test.common;
 import static io.quarkus.test.common.LauncherUtil.installAndGetSomeConfig;
 import static io.quarkus.test.common.LauncherUtil.updateConfigForPort;
 import static io.quarkus.test.common.LauncherUtil.waitForCapturedListeningData;
-import static java.lang.ProcessBuilder.Redirect.DISCARD;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -34,48 +33,31 @@ public class DockerContainerLauncher implements ArtifactLauncher {
     private int httpsPort;
     private final long jarWaitTime;
     private final Map<String, String> systemProps = new HashMap<>();
-    private final boolean pullRequired;
 
     private boolean isSsl;
 
-    private DockerContainerLauncher(String containerImage, Config config, boolean pullRequired) {
+    private DockerContainerLauncher(String containerImage, Config config) {
         this(containerImage,
                 config.getValue("quarkus.http.test-port", OptionalInt.class).orElse(DEFAULT_PORT),
                 config.getValue("quarkus.http.test-ssl-port", OptionalInt.class).orElse(DEFAULT_HTTPS_PORT),
                 config.getValue("quarkus.test.jar-wait-time", OptionalLong.class).orElse(DEFAULT_WAIT_TIME),
                 config.getOptionalValue("quarkus.test.native-image-profile", String.class)
-                        .orElse(null),
-                pullRequired);
+                        .orElse(null));
     }
 
-    public DockerContainerLauncher(String containerImage, boolean pullRequired) {
-        this(containerImage, installAndGetSomeConfig(), pullRequired);
+    public DockerContainerLauncher(String containerImage) {
+        this(containerImage, installAndGetSomeConfig());
     }
 
-    private DockerContainerLauncher(String containerImage, int httpPort, int httpsPort, long jarWaitTime, String profile,
-            boolean pullRequired) {
+    public DockerContainerLauncher(String containerImage, int httpPort, int httpsPort, long jarWaitTime, String profile) {
         this.containerImage = containerImage;
         this.httpPort = httpPort;
         this.httpsPort = httpsPort;
         this.jarWaitTime = jarWaitTime;
         this.profile = profile;
-        this.pullRequired = pullRequired;
     }
 
     public void start() throws IOException {
-
-        if (pullRequired) {
-            System.out.println("Pulling container image '" + containerImage + "'");
-            try {
-                int pullResult = new ProcessBuilder().redirectError(DISCARD).redirectOutput(DISCARD)
-                        .command(List.of("docker", "pull", containerImage).toArray(new String[0])).start().waitFor();
-                if (pullResult > 0) {
-                    throw new RuntimeException("Pulling container image '" + containerImage + "' completed unsuccessfully");
-                }
-            } catch (InterruptedException e) {
-                throw new RuntimeException("Unable to pull container image '" + containerImage + "'", e);
-            }
-        }
 
         System.setProperty("test.url", TestHTTPResourceManager.getUri());
 
