@@ -391,7 +391,7 @@ public abstract class FunctionSignature implements Serializable {
     public StringBuilder toStringBuilder(
         final StringBuilder sb,
         final boolean showDefaults,
-        final boolean showTypes,
+        final boolean skipMissingTypeNames,
         final boolean skipFirstMandatory) {
       FunctionSignature signature = getSignature();
       Shape shape = signature.getShape();
@@ -431,9 +431,9 @@ public abstract class FunctionSignature implements Serializable {
           // a) there is no type defined (such as in user-defined functions) or
           // b) the type is java.lang.Object.
           boolean typeDefined = types != null && types.get(i) != null;
-          if (typeDefined && showTypes) {
+          if (typeDefined || !skipMissingTypeNames) {
             printer.append(": ");
-            printer.append(types.get(i).toString());
+            printer.append(typeDefined ? types.get(i).toString() : "object");
           }
         }
         public void mandatory(int i) {
@@ -588,10 +588,6 @@ public abstract class FunctionSignature implements Serializable {
       return parameter;
     }
   }
-
-  /** A ready-made signature to allow only positional arguments and put them in a star parameter */
-  public static final FunctionSignature POSITIONALS =
-      FunctionSignature.of(0, 0, 0, true, false, "star");
 
   /** A ready-made signature to allow only keyword arguments and put them in a kwarg parameter */
   public static final FunctionSignature KWARGS =
