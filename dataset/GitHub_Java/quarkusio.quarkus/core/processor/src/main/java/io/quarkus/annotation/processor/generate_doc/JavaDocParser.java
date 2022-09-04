@@ -3,8 +3,6 @@ package io.quarkus.annotation.processor.generate_doc;
 import static io.quarkus.annotation.processor.generate_doc.DocGeneratorUtil.hyphenate;
 
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Node;
@@ -25,7 +23,6 @@ final class JavaDocParser {
     private static final Pattern REPLACE_WINDOWS_EOL = Pattern.compile("\r\n");
     private static final Pattern REPLACE_MACOS_EOL = Pattern.compile("\r");
 
-    private static final String BACKTICK = "`";
     private static final String HASH = "#";
     private static final String STAR = "*";
     private static final String S_NODE = "s";
@@ -34,7 +31,6 @@ final class JavaDocParser {
     private static final String LINK_NODE = "a";
     private static final String BOLD_NODE = "b";
     private static final String BIG_NODE = "big";
-    private static final String CODE_NODE = "code";
     private static final String DEL_NODE = "del";
     private static final String ITALICS_NODE = "i";
     private static final String TEXT_NODE = "#text";
@@ -63,7 +59,7 @@ final class JavaDocParser {
     private static final String UNDERLINE_ASCIDOC_STYLE = "[.underline]";
     private static final String LINE_THROUGH_ASCIDOC_STYLE = "[.line-through]";
 
-    public String parseConfigDescription(String javadocComment) {
+    public String parse(String javadocComment) {
         if (javadocComment == null || javadocComment.trim().isEmpty()) {
             return Constants.EMPTY;
         }
@@ -71,65 +67,19 @@ final class JavaDocParser {
         // the parser expects all the lines to start with "* "
         // we add it as it has been previously removed
         javadocComment = START_OF_LINE.matcher(javadocComment).replaceAll("* ");
+
         Javadoc javadoc = StaticJavaParser.parseJavadoc(javadocComment);
 
         if (isAsciidoc(javadoc)) {
-            return handleEolInAsciidoc(javadoc);
+            // it's Asciidoc so we just pass through
+            // it also uses platform specific EOL so we need to convert them back to \n
+            String asciidoc = javadoc.getDescription().toText();
+            asciidoc = REPLACE_WINDOWS_EOL.matcher(asciidoc).replaceAll("\n");
+            asciidoc = REPLACE_MACOS_EOL.matcher(asciidoc).replaceAll("\n");
+            return asciidoc;
         }
 
         return htmlJavadocToAsciidoc(javadoc.getDescription());
-    }
-
-    public SectionHolder parseConfigSection(String javadocComment, int sectionLevel) {
-        if (javadocComment == null || javadocComment.trim().isEmpty()) {
-            return new SectionHolder(Constants.EMPTY, Constants.EMPTY);
-        }
-
-        // the parser expects all the lines to start with "* "
-        // we add it as it has been previously removed
-        javadocComment = START_OF_LINE.matcher(javadocComment).replaceAll("* ");
-        Javadoc javadoc = StaticJavaParser.parseJavadoc(javadocComment);
-
-        if (isAsciidoc(javadoc)) {
-            final String details = handleEolInAsciidoc(javadoc);
-            final int endOfTitleIndex = details.indexOf(Constants.DOT);
-            final String title = details.substring(0, endOfTitleIndex).replaceAll("^([^\\w])+", Constants.EMPTY).trim();
-            return new SectionHolder(title, details);
-        }
-
-        return generateConfigSection(javadoc, sectionLevel);
-    }
-
-    private SectionHolder generateConfigSection(Javadoc javadoc, int sectionLevel) {
-        final String generatedAsciiDoc = htmlJavadocToAsciidoc(javadoc.getDescription());
-        if (generatedAsciiDoc.isEmpty()) {
-            return new SectionHolder(Constants.EMPTY, Constants.EMPTY);
-        }
-
-        final String beginSectionDetails = IntStream
-                .rangeClosed(0, Math.max(0, sectionLevel))
-                .mapToObj(x -> "=").collect(Collectors.joining())
-                + " ";
-
-        final int endOfTitleIndex = generatedAsciiDoc.indexOf(Constants.DOT);
-        if (endOfTitleIndex == -1) {
-            return new SectionHolder(generatedAsciiDoc.trim(), beginSectionDetails + generatedAsciiDoc);
-        } else {
-            final String title = generatedAsciiDoc.substring(0, endOfTitleIndex).trim();
-            final String introduction = generatedAsciiDoc.substring(endOfTitleIndex + 1).trim();
-            final String details = beginSectionDetails + title + "\n\n" + introduction;
-
-            return new SectionHolder(title, details.trim());
-        }
-    }
-
-    private String handleEolInAsciidoc(Javadoc javadoc) {
-        // it's Asciidoc so we just pass through
-        // it also uses platform specific EOL so we need to convert them back to \n
-        String asciidoc = javadoc.getDescription().toText();
-        asciidoc = REPLACE_WINDOWS_EOL.matcher(asciidoc).replaceAll("\n");
-        asciidoc = REPLACE_MACOS_EOL.matcher(asciidoc).replaceAll("\n");
-        return asciidoc;
     }
 
     private boolean isAsciidoc(Javadoc javadoc) {
@@ -195,16 +145,10 @@ final class JavaDocParser {
                     break;
                 case LINK_NODE:
                     final String link = childNode.attr(HREF_ATTRIBUTE);
-                    sb.append("link:");
                     sb.append(link);
                     final StringBuilder caption = new StringBuilder();
                     appendHtml(caption, childNode);
                     sb.append(String.format(LINK_ATTRIBUTE_FORMAT, caption.toString().trim()));
-                    break;
-                case CODE_NODE:
-                    sb.append(BACKTICK);
-                    appendHtml(sb, childNode);
-                    sb.append(BACKTICK);
                     break;
                 case BOLD_NODE:
                 case EMPHASIS_NODE:
@@ -267,13 +211,4 @@ final class JavaDocParser {
         }
     }
 
-    static class SectionHolder {
-        final String title;
-        final String details;
-
-        public SectionHolder(String title, String details) {
-            this.title = title;
-            this.details = details;
-        }
-    }
 }
