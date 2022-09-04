@@ -73,14 +73,6 @@ class CoreLibrarySupport {
         : internalName;
   }
 
-  /**
-   * Returns {@code true} for java.* classes or interfaces that are subtypes of emulated interfaces.
-   * Note that implies that this method always returns {@code false} for user-written classes.
-   */
-  public boolean isEmulatedCoreClassOrInterface(String internalName) {
-    return getEmulatedCoreClassOrInterface(internalName) != null;
-  }
-
   public boolean isEmulatedCoreLibraryInvocation(
       int opcode, String owner, String name, String desc, boolean itf) {
     return getEmulatedCoreLibraryInvocationTarget(opcode, owner, name, desc, itf) != null;
@@ -89,6 +81,9 @@ class CoreLibrarySupport {
   @Nullable
   public Class<?> getEmulatedCoreLibraryInvocationTarget(
       int opcode, String owner, String name, String desc, boolean itf) {
+    if (owner.contains("$$Lambda$") || owner.endsWith("$$CC")) {
+      return null;  // regular desugaring handles invocations on generated classes, no emulation
+    }
     Class<?> clazz = getEmulatedCoreClassOrInterface(owner);
     if (clazz == null) {
       return null;
@@ -106,10 +101,6 @@ class CoreLibrarySupport {
   }
 
   private Class<?> getEmulatedCoreClassOrInterface(String internalName) {
-    if (internalName.contains("$$Lambda$") || internalName.endsWith("$$CC")) {
-      // Regular desugaring handles generated classes, no emulation is needed
-      return null;
-    }
     {
       String unprefixedOwner = rewriter.unprefix(internalName);
       if (!unprefixedOwner.startsWith("java/util/") || isRenamedCoreLibrary(unprefixedOwner)) {
