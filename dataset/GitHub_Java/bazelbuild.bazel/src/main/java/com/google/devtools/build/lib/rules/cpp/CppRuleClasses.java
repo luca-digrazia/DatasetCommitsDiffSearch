@@ -117,9 +117,6 @@ public class CppRuleClasses {
   public static final SafeImplicitOutputsFunction CC_BINARY_DEBUG_PACKAGE =
       fromTemplates("%{name}.dwp");
 
-  /** A string constant for the Objective-C language feature. */
-  public static final String LANG_OBJC = "lang_objc";
-
   /** Name of the feature that will be exempt from flag filtering when nocopts are used */
   public static final String UNFILTERED_COMPILE_FLAGS_FEATURE_NAME = "unfiltered_compile_flags";
 
@@ -366,9 +363,6 @@ public class CppRuleClasses {
 
   /** A string constant for the cache prefetch hints feature. */
   public static final String FDO_PREFETCH_HINTS = "fdo_prefetch_hints";
-
-  /** A string constant for the propeller optimize feature. */
-  public static final String PROPELLER_OPTIMIZE = "propeller_optimize";
 
   /** A string constant for the autofdo feature. */
   public static final String AUTOFDO = "autofdo";

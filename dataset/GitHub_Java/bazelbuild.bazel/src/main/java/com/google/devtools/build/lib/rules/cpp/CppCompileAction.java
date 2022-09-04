@@ -57,6 +57,7 @@ import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.starlark.Args;
 import com.google.devtools.build.lib.bugreport.BugReport;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -437,9 +438,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         throw new IllegalStateException(e.getCause());
       }
     } catch (ExecException e) {
+      Label label = getOwner().getLabel();
       throw e.toActionExecutionException(
-          "Include scanning of rule '" + getOwner().getLabel() + "'",
-          actionExecutionContext.getVerboseFailures(),
+          "Include scanning of rule '" + label + "'",
+          actionExecutionContext.showVerboseFailures(label),
           this);
     }
   }
@@ -978,27 +980,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     return executionInfo;
   }
 
-  private boolean validateInclude(
-      ActionExecutionContext actionExecutionContext,
-      Set<Artifact> allowedIncludes,
-      Set<PathFragment> looseHdrsDirs,
-      Iterable<PathFragment> ignoreDirs,
-      Artifact include) {
-    // Only declared modules are added to an action and so they are always valid.
-    return include.isFileType(CppFileTypes.CPP_MODULE)
-        ||
-        // TODO(b/145253507): Exclude objc module maps from check, due to bad interaction with
-        // local_objc_modules feature.
-        include.isFileType(CppFileTypes.OBJC_MODULE_MAP)
-        ||
-        // It's a declared include/
-        allowedIncludes.contains(include)
-        ||
-        // Ignore headers from built-in include directories.
-        FileSystemUtils.startsWithAny(include.getExecPath(), ignoreDirs)
-        || isDeclaredIn(cppConfiguration, actionExecutionContext, include, looseHdrsDirs);
-  }
-
   /**
    * Enforce that the includes actually visited during the compile were properly declared in the
    * rules.
@@ -1041,10 +1022,28 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
     // Copy the nested sets to hash sets for fast contains checking, but do so lazily.
     // Avoid immutable sets here to limit memory churn.
-    Set<PathFragment> looseHdrsDirs = ccCompilationContext.getLooseHdrsDirs().toSet();
+    Set<PathFragment> looseHdrsDirs = null;
     for (Artifact input : inputsForValidation.toList()) {
-      if (!validateInclude(
-          actionExecutionContext, allowedIncludes, looseHdrsDirs, ignoreDirs, input)) {
+      // Only declared modules are added to an action and so they are always valid.
+      if (input.isFileType(CppFileTypes.CPP_MODULE)) {
+        continue;
+      }
+      // TODO(b/145253507): Exclude objc module maps from check, due to bad interaction with
+      // local_objc_modules feature.
+      if (input.isFileType(CppFileTypes.OBJC_MODULE_MAP)) {
+        continue;
+      }
+      if (allowedIncludes.contains(input)) {
+        continue;
+      }
+      // Ignore headers from built-in include directories.
+      if (FileSystemUtils.startsWithAny(input.getExecPath(), ignoreDirs)) {
+        continue;
+      }
+      if (looseHdrsDirs == null) {
+        looseHdrsDirs = Sets.newHashSet(ccCompilationContext.getLooseHdrsDirs().toList());
+      }
+      if (!isDeclaredIn(cppConfiguration, actionExecutionContext, input, looseHdrsDirs)) {
         errors.add(input.getExecPath().toString());
       }
     }
@@ -1309,10 +1308,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   /** For actions that discover inputs, the key must include input names. */
   @Override
-  public void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp)
+  public void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
       throws CommandLineExpansionException {
     computeKey(
         actionKeyContext,
@@ -1832,9 +1828,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         dotDContents = getDotDContents(spawnResults.get(0));
       } catch (ExecException e) {
         copyTempOutErrToActionOutErr();
+        Label label = getOwner().getLabel();
         throw e.toActionExecutionException(
-            "C++ compilation of rule '" + getOwner().getLabel() + "'",
-            actionExecutionContext.getVerboseFailures(),
+            "C++ compilation of rule '" + label + "'",
+            actionExecutionContext.showVerboseFailures(label),
             CppCompileAction.this);
       } catch (InterruptedException e) {
         copyTempOutErrToActionOutErr();
@@ -1926,7 +1923,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
                   e, createFailureDetail("OutErr copy failure", Code.COPY_OUT_ERR_FAILURE))
               .toActionExecutionException(
                   getRawProgressMessage(),
-                  actionExecutionContext.getVerboseFailures(),
+                  actionExecutionContext.showVerboseFailures(getOwner().getLabel()),
                   CppCompileAction.this);
         }
       }

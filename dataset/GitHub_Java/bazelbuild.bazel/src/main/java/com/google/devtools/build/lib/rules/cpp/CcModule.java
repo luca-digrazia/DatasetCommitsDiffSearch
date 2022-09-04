@@ -59,11 +59,12 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringValueP
 import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcModuleApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -295,7 +296,7 @@ public abstract class CcModule
       boolean isStaticLinkingMode)
       throws EvalException {
     if (featureConfiguration.getFeatureConfiguration().isEnabled(CppRuleClasses.FDO_INSTRUMENT)) {
-      throw Starlark.errorf("FDO instrumentation not supported");
+      throw new EvalException("FDO instrumentation not supported");
     }
     return LinkBuildVariables.setupVariables(
         isUsingLinkerNotArchiver,
@@ -379,20 +380,6 @@ public abstract class CcModule
     }
   }
 
-  @SuppressWarnings("unchecked")
-  @Nullable
-  protected ImmutableList<Artifact> asArtifactImmutableList(Object o) {
-    if (o == Starlark.UNBOUND) {
-      return null;
-    } else {
-      ImmutableList<Artifact> list = ((Sequence<Artifact>) o).getImmutableList();
-      if (list.isEmpty()) {
-        return null;
-      }
-      return list;
-    }
-  }
-
   /**
    * This method returns a {@link LibraryToLink} object that will be used to contain linking
    * artifacts and information for a single library that will later be used by a linking action.
@@ -406,8 +393,6 @@ public abstract class CcModule
    * @param alwayslink boolean
    * @param dynamicLibraryPath String
    * @param interfaceLibraryPath String
-   * @param picObjectFiles {@code Sequence<Artifact>}
-   * @param objectFiles {@code Sequence<Artifact>}
    * @return
    * @throws EvalException
    * @throws InterruptedException
@@ -421,8 +406,6 @@ public abstract class CcModule
       Object picStaticLibraryObject,
       Object dynamicLibraryObject,
       Object interfaceLibraryObject,
-      Object picObjectFiles, // Sequence<Artifact> expected
-      Object objectFiles, // Sequence<Artifact> expected
       boolean alwayslink,
       String dynamicLibraryPath,
       String interfaceLibraryPath,
@@ -438,18 +421,6 @@ public abstract class CcModule
     Artifact picStaticLibrary = nullIfNone(picStaticLibraryObject, Artifact.class);
     Artifact dynamicLibrary = nullIfNone(dynamicLibraryObject, Artifact.class);
     Artifact interfaceLibrary = nullIfNone(interfaceLibraryObject, Artifact.class);
-
-    if (!starlarkActionFactory
-            .getActionConstructionContext()
-            .getConfiguration()
-            .getFragment(CppConfiguration.class)
-            .experimentalStarlarkCcImport()
-        && (picObjectFiles != Starlark.UNBOUND || objectFiles != Starlark.UNBOUND)) {
-      throw Starlark.errorf(
-          "Cannot use objects/pic_objects without --experimental_starlark_cc_import");
-    }
-    ImmutableList<Artifact> picObjects = asArtifactImmutableList(picObjectFiles);
-    ImmutableList<Artifact> nopicObjects = asArtifactImmutableList(objectFiles);
 
     StringBuilder extensionErrorsBuilder = new StringBuilder();
     String extensionErrorMessage = "does not have any of the allowed extensions";
@@ -523,12 +494,6 @@ public abstract class CcModule
         extensionErrorsBuilder.append(LINE_SEPARATOR.value());
       }
       notNullArtifactForIdentifier = interfaceLibrary;
-    }
-    if (nopicObjects != null && staticLibrary == null) {
-      throw Starlark.errorf("If you pass 'objects' you must also pass a 'static_library'");
-    }
-    if (picObjects != null && picStaticLibrary == null) {
-      throw Starlark.errorf("If you pass 'pic_objects' you must also pass a 'pic_static_library'");
     }
     if (notNullArtifactForIdentifier == null) {
       throw Starlark.errorf("Must pass at least one artifact");
@@ -614,8 +579,6 @@ public abstract class CcModule
         .setResolvedSymlinkDynamicLibrary(resolvedSymlinkDynamicLibrary)
         .setInterfaceLibrary(interfaceLibrary)
         .setResolvedSymlinkInterfaceLibrary(resolvedSymlinkInterfaceLibrary)
-        .setObjectFiles(nopicObjects)
-        .setPicObjectFiles(picObjects)
         .setAlwayslink(alwayslink)
         .build();
   }
@@ -742,7 +705,7 @@ public abstract class CcModule
         .getConfiguration()
         .getFragment(CppConfiguration.class)
         .experimentalStarlarkCcImport()) {
-      throw Starlark.errorf("Pass --experimental_starlark_cc_import to use cc_import.bzl");
+      throw Starlark.errorf("Pass --experimental_starlark_cc_import to use cc_shared_library");
     }
   }
 
@@ -1317,7 +1280,8 @@ public abstract class CcModule
     // action to its flag_set.action_names
     if (actionName != null) {
       if (!actions.isEmpty()) {
-        throw new EvalException(String.format(ActionConfig.FLAG_SET_WITH_ACTION_ERROR, actionName));
+        throw new EvalException(
+            Location.BUILTIN, String.format(ActionConfig.FLAG_SET_WITH_ACTION_ERROR, actionName));
       }
       actions = ImmutableSet.of(actionName);
     }
@@ -1816,12 +1780,10 @@ public abstract class CcModule
             .setHeadersCheckingMode(
                 getSemantics()
                     .determineStarlarkHeadersCheckingMode(
-                        actions.getRuleContext(),
                         actions
                             .getActionConstructionContext()
                             .getConfiguration()
-                            .getFragment(CppConfiguration.class),
-                        ccToolchainProvider));
+                            .getFragment(CppConfiguration.class)));
     if (disallowNopicOutputs) {
       helper.setGenerateNoPicAction(false);
     }
