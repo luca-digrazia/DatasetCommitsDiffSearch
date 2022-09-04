@@ -41,12 +41,12 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -264,11 +264,16 @@ public class MobileInstallCommand implements BlazeCommand {
       // actual output of the command being run even if --color=no is specified.
       env.getReporter().switchToAnsiAllowingHandler();
 
-      // The command API is a little strange in that the following statement will return normally
-      // only if the program exits with exit code 0. If it ends with any other code, we have to
-      // catch BadExitStatusException.
+      // The command API is a little strange in that the following statement
+      // will return normally only if the program exits with exit code 0.
+      // If it ends with any other code, we have to catch BadExitStatusException.
       command
-          .execute(outErr.getOutputStream(), outErr.getErrorStream())
+          .execute(
+              com.google.devtools.build.lib.shell.Command.NO_INPUT,
+              com.google.devtools.build.lib.shell.Command.NO_OBSERVER,
+              outErr.getOutputStream(),
+              outErr.getErrorStream(),
+              true /* interruptible */)
           .getTerminationStatus()
           .getExitCode();
       return ExitCode.SUCCESS;
