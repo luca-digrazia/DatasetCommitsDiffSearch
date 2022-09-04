@@ -122,7 +122,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
     }
 
     @Override
-    public InMemoryContentInfo inodeOrThrow(PathFragment path) throws IOException {
+    public InMemoryContentInfo inodeOrThrow(Path path) throws IOException {
       throw exception(path);
     }
 
@@ -136,7 +136,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
      * and is consistent with the messages returned by {@link
      * com.google.devtools.build.lib.vfs.FileSystemUtils}.
      */
-    public IOException exception(PathFragment path) throws IOException {
+    public IOException exception(Path path) throws IOException {
       String m = path + " (" + message + ")";
       switch (this) {
         case EACCES:
@@ -155,8 +155,8 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    * <p>If <code>/proc/mounts</code> does not exist return {@code "inmemoryfs"}.
    */
   @Override
-  public String getFileSystemType(PathFragment path) {
-    return exists(path.getRelative("/proc/mounts")) ? super.getFileSystemType(path) : "inmemoryfs";
+  public String getFileSystemType(Path path) {
+    return path.getRelative("/proc/mounts").exists() ? super.getFileSystemType(path) : "inmemoryfs";
   }
 
   /*
@@ -169,7 +169,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    * succeeds even if 'child' names a non-empty directory; we need that for renameTo. 'child' must
    * be a member of its parent directory, however. Fails if the directory was read-only.
    */
-  private static void unlink(InMemoryDirectoryInfo dir, String child, PathFragment errorPath)
+  private static void unlink(InMemoryDirectoryInfo dir, String child, Path errorPath)
       throws IOException {
     if (!dir.isWritable()) {
       throw Errno.EACCES.exception(errorPath);
@@ -192,10 +192,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   private static void insert(
-      InMemoryDirectoryInfo dir,
-      String child,
-      InMemoryContentInfo childInode,
-      PathFragment errorPath)
+      InMemoryDirectoryInfo dir, String child, InMemoryContentInfo childInode, Path errorPath)
       throws IOException {
     Errno error = insert(dir, child, childInode);
     if (error != null) {
@@ -217,7 +214,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
     return firstNonNull(dir.asDirectory().getChild(name), Errno.ENOENT);
   }
 
-  protected FileInfo newFile(Clock clock, PathFragment path) {
+  protected FileInfo newFile(Clock clock, Path path) {
     return new InMemoryFileInfo(clock);
   }
 
@@ -243,8 +240,8 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    *
    * <p>May fail with ENOTDIR, ENOENT, EACCES, ELOOP.
    */
-  private synchronized InodeOrErrno pathWalkErrno(PathFragment path, OnEnoent behavior) {
-    Iterator<String> it = path.segments().iterator();
+  private synchronized InodeOrErrno pathWalkErrno(Path path, OnEnoent behavior) {
+    Iterator<String> it = path.segmentIterator();
 
     // Prepend the Windows drive if there is one.
     if (path.getDriveStrLength() > 1) {
@@ -322,7 +319,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    *
    * <p>May fail with ENOTDIR, or any exception from pathWalk.
    */
-  private InodeOrErrno getDirectoryErrno(PathFragment path) {
+  private InodeOrErrno getDirectoryErrno(Path path) {
     InodeOrErrno dirInfoOrError = pathWalkErrno(path, OnEnoent.HALT);
     if (dirInfoOrError.isError()) {
       return dirInfoOrError;
@@ -335,12 +332,12 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    *
    * <p>May fail with ENOTDIR, or any exception from pathWalk.
    */
-  private InMemoryDirectoryInfo getDirectory(PathFragment path) throws IOException {
+  private InMemoryDirectoryInfo getDirectory(Path path) throws IOException {
     return getDirectoryErrno(path).inodeOrThrow(path).asDirectory();
   }
 
   /** Helper method for stat and inodeStat: return the path's (no symlink-followed) stat. */
-  private synchronized InodeOrErrno noFollowStatErrno(PathFragment path) {
+  private synchronized InodeOrErrno noFollowStatErrno(Path path) {
     InodeOrErrno dirInfoOrError = getDirectoryErrno(path.getParentDirectory());
     if (dirInfoOrError.isError()) {
       return dirInfoOrError;
@@ -354,13 +351,13 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    * directly.
    */
   @Override
-  public FileStatus stat(PathFragment path, boolean followSymlinks) throws IOException {
+  public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
     return inodeStatErrno(path, followSymlinks).inodeOrThrow(path);
   }
 
   @Override
   @Nullable
-  public FileStatus statIfFound(PathFragment path, boolean followSymlinks) throws IOException {
+  public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
     InodeOrErrno inodeOrErrno = inodeStatErrno(path, followSymlinks);
     if (!inodeOrErrno.isError()) {
       return inodeOrErrno.inode();
@@ -374,21 +371,20 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
 
   @Override
   @Nullable
-  protected FileStatus statNullable(PathFragment path, boolean followSymlinks) {
+  protected FileStatus statNullable(Path path, boolean followSymlinks) {
     return inodeStatErrno(path, followSymlinks).inode();
   }
 
   /** Version of stat that returns an InodeOrErrno of the input path. */
   @CheckReturnValue
-  protected InodeOrErrno inodeStatErrno(PathFragment path, boolean followSymlinks) {
+  protected InodeOrErrno inodeStatErrno(Path path, boolean followSymlinks) {
     if (followSymlinks) {
       return pathWalkErrno(path, OnEnoent.HALT);
     }
     return isRootDirectory(path) ? rootInode : noFollowStatErrno(path);
   }
 
-  private InMemoryContentInfo inodeStat(PathFragment path, boolean followSymlinks)
-      throws IOException {
+  private InMemoryContentInfo inodeStat(Path path, boolean followSymlinks) throws IOException {
     return inodeStatErrno(path, followSymlinks).inodeOrThrow(path);
   }
 
@@ -398,15 +394,15 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    */
 
   /**
-   * This is a helper routing for {@link #resolveSymbolicLinks(PathFragment)}, i.e. the "user-mode"
-   * routing for canonicalizing paths. It is analogous to the code in glibc's realpath(3).
+   * This is a helper routing for {@link #resolveSymbolicLinks(Path)}, i.e. the "user-mode" routing
+   * for canonicalizing paths. It is analogous to the code in glibc's realpath(3).
    *
    * <p>Just like realpath, resolveSymbolicLinks requires a quadratic number of directory lookups: n
    * path segments are statted, and each stat requires a linear amount of work in the "kernel"
    * routine.
    */
   @Override
-  protected PathFragment resolveOneLink(PathFragment path) throws IOException {
+  protected PathFragment resolveOneLink(Path path) throws IOException {
     // Beware, this seemingly simple code belies the complex specification of
     // FileSystem.resolveOneLink().
     InMemoryContentInfo status = inodeStat(path, false);
@@ -414,59 +410,58 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected boolean exists(PathFragment path, boolean followSymlinks) {
+  protected boolean exists(Path path, boolean followSymlinks) {
     return statNullable(path, followSymlinks) != null;
   }
 
   @Override
-  protected boolean isReadable(PathFragment path) throws IOException {
+  protected boolean isReadable(Path path) throws IOException {
     InMemoryContentInfo status = inodeStat(path, true);
     return status.isReadable();
   }
 
   @Override
-  protected synchronized void setReadable(PathFragment path, boolean readable) throws IOException {
+  protected synchronized void setReadable(Path path, boolean readable) throws IOException {
     InMemoryContentInfo status = inodeStat(path, true);
     status.setReadable(readable);
   }
 
   @Override
-  protected boolean isWritable(PathFragment path) throws IOException {
+  protected boolean isWritable(Path path) throws IOException {
     InMemoryContentInfo status = inodeStat(path, true);
     return status.isWritable();
   }
 
   @Override
-  public synchronized void setWritable(PathFragment path, boolean writable) throws IOException {
+  public synchronized void setWritable(Path path, boolean writable) throws IOException {
     InMemoryContentInfo status = inodeStat(path, true);
     status.setWritable(writable);
   }
 
   @Override
-  protected boolean isExecutable(PathFragment path) throws IOException {
+  protected boolean isExecutable(Path path) throws IOException {
     InMemoryContentInfo status = inodeStat(path, true);
     return status.isExecutable();
   }
 
   @Override
-  protected synchronized void setExecutable(PathFragment path, boolean executable)
-      throws IOException {
+  protected synchronized void setExecutable(Path path, boolean executable) throws IOException {
     InMemoryContentInfo status = inodeStat(path, true);
     status.setExecutable(executable);
   }
 
   @Override
-  public boolean supportsModifications(PathFragment path) {
+  public boolean supportsModifications(Path path) {
     return true;
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively(PathFragment path) {
+  public boolean supportsSymbolicLinksNatively(Path path) {
     return true;
   }
 
   @Override
-  public boolean supportsHardLinksNatively(PathFragment path) {
+  public boolean supportsHardLinksNatively(Path path) {
     return true;
   }
 
@@ -476,12 +471,12 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public boolean createDirectory(PathFragment path) throws IOException {
+  public boolean createDirectory(Path path) throws IOException {
     if (isRootDirectory(path)) {
       throw Errno.EACCES.exception(path);
     }
 
-    PathFragment parentDir = path.getParentDirectory();
+    Path parentDir = path.getParentDirectory();
     String name = baseNameOrWindowsDrive(path);
     Errno error;
     synchronized (this) {
@@ -510,7 +505,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public void createDirectoryAndParents(PathFragment path) throws IOException {
+  public void createDirectoryAndParents(Path path) throws IOException {
     InMemoryContentInfo result =
         pathWalkErrno(path, OnEnoent.CREATE_DIRECTORY_AND_PARENTS).inodeOrThrow(path);
     if (!result.isDirectory()) {
@@ -519,8 +514,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected void createSymbolicLink(PathFragment path, PathFragment targetFragment)
-      throws IOException {
+  protected void createSymbolicLink(Path path, PathFragment targetFragment) throws IOException {
     if (isRootDirectory(path)) {
       throw Errno.EACCES.exception(path);
     }
@@ -536,7 +530,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected PathFragment readSymbolicLink(PathFragment path) throws IOException {
+  protected PathFragment readSymbolicLink(Path path) throws IOException {
     InMemoryContentInfo status = inodeStat(path, false);
     if (status.isSymbolicLink()) {
       Preconditions.checkState(status instanceof InMemoryLinkInfo, status);
@@ -546,13 +540,12 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected long getFileSize(PathFragment path, boolean followSymlinks) throws IOException {
+  protected long getFileSize(Path path, boolean followSymlinks) throws IOException {
     return stat(path, followSymlinks).getSize();
   }
 
   @Override
-  protected synchronized Collection<String> getDirectoryEntries(PathFragment path)
-      throws IOException {
+  protected synchronized Collection<String> getDirectoryEntries(Path path) throws IOException {
     InMemoryDirectoryInfo dirInfo = getDirectory(path);
     if (!dirInfo.isReadable()) {
       throw Errno.EACCES.exception(path);
@@ -569,7 +562,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected boolean delete(PathFragment path) throws IOException {
+  public boolean delete(Path path) throws IOException {
     if (isRootDirectory(path)) {
       throw Errno.EBUSY.exception(path);
     }
@@ -589,33 +582,33 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected long getLastModifiedTime(PathFragment path, boolean followSymlinks) throws IOException {
+  protected long getLastModifiedTime(Path path, boolean followSymlinks) throws IOException {
     return stat(path, followSymlinks).getLastModifiedTime();
   }
 
   @Override
-  public synchronized void setLastModifiedTime(PathFragment path, long newTime) throws IOException {
+  public synchronized void setLastModifiedTime(Path path, long newTime) throws IOException {
     InMemoryContentInfo status = inodeStat(path, true);
     status.setLastModifiedTime(newTime == -1L ? clock.currentTimeMillis() : newTime);
   }
 
   @Override
-  protected synchronized InputStream getInputStream(PathFragment path) throws IOException {
+  protected synchronized InputStream getInputStream(Path path) throws IOException {
     return statFile(path).getInputStream();
   }
 
   @Override
-  protected synchronized ReadableByteChannel createReadableByteChannel(PathFragment path)
+  protected synchronized ReadableByteChannel createReadableByteChannel(Path path)
       throws IOException {
     return statFile(path).createReadableByteChannel();
   }
 
   @Override
-  protected synchronized byte[] getFastDigest(PathFragment path) throws IOException {
+  protected synchronized byte[] getFastDigest(Path path) throws IOException {
     return statFile(path).getFastDigest();
   }
 
-  private FileInfo statFile(PathFragment path) throws IOException {
+  private FileInfo statFile(Path path) throws IOException {
     InMemoryContentInfo status = inodeStat(path, /*followSymlinks=*/ true);
     if (status.isDirectory()) {
       throw Errno.EISDIR.exception(path);
@@ -629,13 +622,13 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
 
   @Override
   @Nullable
-  public synchronized byte[] getxattr(PathFragment path, String name, boolean followSymlinks)
+  public synchronized byte[] getxattr(Path path, String name, boolean followSymlinks)
       throws IOException {
     InMemoryContentInfo status = inodeStat(path, followSymlinks);
     if (status.isDirectory()) {
       throw Errno.EISDIR.exception(path);
     }
-    if (!isReadable(path)) {
+    if (!path.isReadable()) {
       throw Errno.EACCES.exception(path);
     }
     if (!followSymlinks && status.isSymbolicLink()) {
@@ -646,7 +639,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   /** Creates a new file at the given path and returns its inode. */
-  protected InMemoryContentInfo getOrCreateWritableInode(PathFragment path) throws IOException {
+  protected InMemoryContentInfo getOrCreateWritableInode(Path path) throws IOException {
     // open(WR_ONLY) of a dangling link writes through the link.  That means
     // that the usual path lookup operations have to behave differently when
     // resolving a path with the intent to create it: instead of failing with
@@ -663,14 +656,14 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected synchronized OutputStream getOutputStream(PathFragment path, boolean append)
+  protected synchronized OutputStream getOutputStream(Path path, boolean append)
       throws IOException {
     InMemoryContentInfo status = getOrCreateWritableInode(path);
     return ((FileInfo) status).getOutputStream(append);
   }
 
   @Override
-  public void renameTo(PathFragment sourcePath, PathFragment targetPath) throws IOException {
+  public void renameTo(Path sourcePath, Path targetPath) throws IOException {
     if (isRootDirectory(sourcePath)) {
       throw Errno.EACCES.exception(sourcePath);
     }
@@ -718,8 +711,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected void createFSDependentHardLink(PathFragment linkPath, PathFragment originalPath)
-      throws IOException {
+  protected void createFSDependentHardLink(Path linkPath, Path originalPath) throws IOException {
 
     // Same check used when creating a symbolic link
     if (isRootDirectory(originalPath)) {
@@ -745,7 +737,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    * On Unix the root directory is "/". On Windows there isn't one, so we reach null from
    * getParentDirectory.
    */
-  private static boolean isRootDirectory(@Nullable PathFragment path) {
+  private static boolean isRootDirectory(@Nullable Path path) {
     return path == null || path.getPathString().equals("/");
   }
 
@@ -754,7 +746,7 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
    *
    * <p>This allows the file system to treat windows drives much like directories.
    */
-  private static String baseNameOrWindowsDrive(PathFragment path) {
+  private static String baseNameOrWindowsDrive(Path path) {
     String name = path.getBaseName();
     return !name.isEmpty() ? name : path.getDriveStr();
   }
@@ -774,6 +766,6 @@ public class InMemoryFileSystem extends AbstractFileSystemWithCustomStat {
      * Returns the underlying {@link InMemoryContentInfo} unless this {@link #isError}, in which
      * case {@link IOException} is thrown, using the given path to construct an error message.
      */
-    InMemoryContentInfo inodeOrThrow(PathFragment path) throws IOException;
+    InMemoryContentInfo inodeOrThrow(Path path) throws IOException;
   }
 }

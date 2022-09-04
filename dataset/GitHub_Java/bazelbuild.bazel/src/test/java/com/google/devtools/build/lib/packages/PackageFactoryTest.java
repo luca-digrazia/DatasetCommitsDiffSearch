@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -68,9 +67,8 @@ public final class PackageFactoryTest extends PackageLoadingTestCase {
   protected FileSystem createFileSystem() {
     return new InMemoryFileSystem(DigestHashFunction.SHA256) {
       @Override
-      public Collection<Dirent> readdir(PathFragment path, boolean followSymlinks)
-          throws IOException {
-        if (throwOnReaddir != null && throwOnReaddir.asFragment().equals(path)) {
+      public Collection<Dirent> readdir(Path path, boolean followSymlinks) throws IOException {
+        if (path.equals(throwOnReaddir)) {
           throw new FileNotFoundException(path.getPathString());
         }
         return super.readdir(path, followSymlinks);
@@ -474,7 +472,7 @@ public final class PackageFactoryTest extends PackageLoadingTestCase {
 
     // Install a validator.
     this.validator =
-        (pkg2, packageOverhead, eventHandler) -> {
+        (pkg2, eventHandler) -> {
           if (pkg2.getName().equals("x")) {
             eventHandler.handle(Event.warn("warning event"));
             throw new InvalidPackageException(pkg2.getPackageIdentifier(), "nope");
