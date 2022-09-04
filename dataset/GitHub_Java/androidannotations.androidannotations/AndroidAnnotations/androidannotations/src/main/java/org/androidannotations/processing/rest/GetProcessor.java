@@ -50,10 +50,11 @@ public class GetProcessor extends GetPostProcessor {
 	}
 
 	@Override
-	protected JExpression generateHttpEntityVar(MethodProcessorHolder methodHolder) {
+	protected JVar generateHttpEntityVar(MethodProcessorHolder methodHolder) {
 		ExecutableElement executableElement = (ExecutableElement) methodHolder.getElement();
 		EBeanHolder holder = methodHolder.getHolder();
 		JClass httpEntity = holder.refClass(CanonicalNameConstants.HTTP_ENTITY);
+		JExpression httpEntityValue;
 
 		JBlock body = methodHolder.getBody();
 		JVar httpHeadersVar = generateHttpHeadersVar(holder, body, executableElement);
@@ -63,12 +64,15 @@ public class GetProcessor extends GetPostProcessor {
 		if (hasHeaders) {
 			JInvocation newHttpEntityVarCall = JExpr._new(httpEntity.narrow(Object.class));
 			newHttpEntityVarCall.arg(httpHeadersVar);
-
-			String httpEntityVarName = "requestEntity";
-
-			return body.decl(httpEntity.narrow(Object.class), httpEntityVarName, newHttpEntityVarCall);
+			httpEntityValue = newHttpEntityVarCall;
 		} else {
-			return JExpr._null();
+			httpEntityValue = httpEntity.staticRef("EMPTY");
 		}
+
+		JVar httpEntityVar;
+		String httpEntityVarName = "requestEntity";
+		httpEntityVar = body.decl(httpEntity.narrow(Object.class), httpEntityVarName, httpEntityValue);
+
+		return httpEntityVar;
 	}
 }
