@@ -31,7 +31,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkApiProvider;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkApiProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
@@ -59,9 +59,20 @@ import javax.annotation.Nullable;
  * works, see {@link com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory}.
  */
 @AutoCodec(checkClassExplicitlyAllowed = true)
-@Immutable
+@Immutable // (and Starlark-hashable)
 public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
 
+  /**
+   * The configuration transition for an attribute through which a prerequisite
+   * is requested.
+   */
+  public enum Mode {
+    TARGET,
+    HOST,
+    DATA,
+    SPLIT,
+    DONT_CHECK
+  }
   /** A set of this target's implicitDeps. */
   private final ImmutableSet<ConfiguredTargetKey> implicitDeps;
 
@@ -106,8 +117,8 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     // Initialize every SkylarkApiProvider
     for (int i = 0; i < providers.getProviderCount(); i++) {
       Object obj = providers.getProviderInstanceAt(i);
-      if (obj instanceof StarlarkApiProvider) {
-        ((StarlarkApiProvider) obj).init(this);
+      if (obj instanceof SkylarkApiProvider) {
+        ((SkylarkApiProvider) obj).init(this);
       }
     }
 
@@ -195,12 +206,12 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   @Override
-  protected Info rawGetStarlarkProvider(Provider.Key providerKey) {
+  protected Info rawGetSkylarkProvider(Provider.Key providerKey) {
     return providers.get(providerKey);
   }
 
   @Override
-  protected Object rawGetStarlarkProvider(String providerKey) {
+  protected Object rawGetSkylarkProvider(String providerKey) {
     if (providerKey.equals(ACTIONS_FIELD_NAME)) {
       // Only expose actions which are legitimate Starlark values, otherwise they will later
       // cause a Bazel crash.

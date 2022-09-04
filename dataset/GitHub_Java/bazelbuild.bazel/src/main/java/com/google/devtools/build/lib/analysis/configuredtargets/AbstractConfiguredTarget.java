@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import java.util.concurrent.atomic.AtomicReference;
@@ -46,7 +47,8 @@ import javax.annotation.Nullable;
  * An abstract implementation of ConfiguredTarget in which all properties are assigned trivial
  * default values.
  */
-public abstract class AbstractConfiguredTarget implements ConfiguredTarget, VisibilityProvider {
+public abstract class AbstractConfiguredTarget
+    implements ConfiguredTarget, VisibilityProvider, SkylarkClassObject {
   private final Label label;
   private final BuildConfigurationValue.Key configurationKey;
 
@@ -55,7 +57,7 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
   // Cached on-demand default provider
   private final AtomicReference<DefaultInfo> defaultProvider = new AtomicReference<>();
 
-  // Accessors for Starlark
+  // Accessors for Skylark
   private static final String DATA_RUNFILES_FIELD = "data_runfiles";
   private static final String DEFAULT_RUNFILES_FIELD = "default_runfiles";
 
@@ -90,11 +92,6 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
     this.label = label;
     this.configurationKey = configurationKey;
     this.visibility = visibility;
-  }
-
-  @Override
-  public boolean isImmutable() {
-    return true; // all Targets are immutable and Starlark-hashable
   }
 
   @Override
@@ -220,25 +217,27 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
     return defaultProvider.get();
   }
 
-  /** Returns a declared provider provided by this target. Only meant to use from Starlark. */
+  /** Returns a declared provider provided by this target. Only meant to use from Skylark. */
   @Nullable
   @Override
   public final Info get(Provider.Key providerKey) {
     if (providerKey.equals(DefaultInfo.PROVIDER.getKey())) {
       return getDefaultProvider();
     }
-    return rawGetStarlarkProvider(providerKey);
+    return rawGetSkylarkProvider(providerKey);
   }
 
-  /** Implement in subclasses to get a Starlark provider for a given {@code providerKey}. */
+  /** Implement in subclasses to get a skylark provider for a given {@code providerKey}. */
   @Nullable
-  protected abstract Info rawGetStarlarkProvider(Provider.Key providerKey);
+  protected abstract Info rawGetSkylarkProvider(Provider.Key providerKey);
 
   public String getRuleClassString() {
     return "";
   }
 
-  /** Returns a value provided by this target. Only meant to use from Starlark. */
+  /**
+   * Returns a value provided by this target. Only meant to use from Skylark.
+   */
   @Override
   public final Object get(String providerKey) {
     switch (providerKey) {
@@ -253,12 +252,12 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
       case OutputGroupInfo.SKYLARK_NAME:
         return get(OutputGroupInfo.SKYLARK_CONSTRUCTOR);
       default:
-        return rawGetStarlarkProvider(providerKey);
+        return rawGetSkylarkProvider(providerKey);
     }
   }
 
-  /** Implement in subclasses to get a Starlark provider for a given {@code providerKey}. */
-  protected abstract Object rawGetStarlarkProvider(String providerKey);
+  /** Implement in subclasses to get a skylark provider for a given {@code providerKey}. */
+  protected abstract Object rawGetSkylarkProvider(String providerKey);
 
   // All main target classes must override this method to provide more descriptive strings.
   // Exceptions are currently EnvironmentGroupConfiguredTarget and PackageGroupConfiguredTarget.

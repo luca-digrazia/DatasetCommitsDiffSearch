@@ -43,7 +43,7 @@ import java.util.function.Consumer;
  * <p>This is an ephemeral object created only for the analysis of a single configured target. After
  * that configured target is analyzed, this is thrown away.
  */
-@Immutable
+@Immutable // (and Starlark-hashable)
 public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   private final ConfiguredTarget base;
   private final ImmutableList<ConfiguredAspect> aspects;
@@ -92,7 +92,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   @Override
-  protected Info rawGetStarlarkProvider(Provider.Key providerKey) {
+  protected Info rawGetSkylarkProvider(Provider.Key providerKey) {
     Info provider = nonBaseProviders.get(providerKey);
     if (provider == null) {
       provider = base.get(providerKey);
@@ -101,7 +101,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   @Override
-  protected Object rawGetStarlarkProvider(String providerKey) {
+  protected Object rawGetSkylarkProvider(String providerKey) {
     if (providerKey.equals(AbstractConfiguredTarget.ACTIONS_FIELD_NAME)) {
       ImmutableList.Builder<ActionAnalysisMetadata> actions = ImmutableList.builder();
       // Only expose actions which are SkylarkValues.
