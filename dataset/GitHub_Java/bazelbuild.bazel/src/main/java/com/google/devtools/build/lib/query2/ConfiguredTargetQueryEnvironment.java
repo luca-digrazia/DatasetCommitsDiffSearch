@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.query2.engine.QueryUtil.ThreadSafeMutableKe
 import com.google.devtools.build.lib.query2.engine.QueryUtil.UniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
-import com.google.devtools.build.lib.query2.output.CqueryOptions;
 import com.google.devtools.build.lib.query2.output.QueryOptions;
 import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
@@ -61,7 +60,6 @@ import com.google.devtools.build.lib.skyframe.GraphBackedRecursivePackageProvide
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.RecursivePackageProviderBackedTargetPatternResolver;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
-import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -69,7 +67,6 @@ import com.google.devtools.build.skyframe.WalkableGraph;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -190,20 +187,6 @@ public class ConfiguredTargetQueryEnvironment
       return ((AliasConfiguredTarget) target).getOriginalLabel();
     }
     return target.getLabel();
-  }
-
-  public static ImmutableList<CqueryThreadsafeCallback> getDefaultOutputFormatters(
-      TargetAccessor<ConfiguredTarget> accessor,
-      CqueryOptions options,
-      OutputStream out,
-      SkyframeExecutor skyframeExecutor,
-      BuildConfiguration hostConfiguration) {
-    return new ImmutableList.Builder<CqueryThreadsafeCallback>()
-        .add(new LabelAndConfigurationOutputFormatterCallback(options, out))
-        .add(
-            new TransitionsOutputFormatterCallback(
-                accessor, options, out, skyframeExecutor, hostConfiguration))
-        .build();
   }
 
   // Check to make sure the settings requested are currently supported by this class
@@ -608,6 +591,7 @@ public class ConfiguredTargetQueryEnvironment
       QueryExpression caller,
       ThreadSafeMutableSet<ConfiguredTarget> nodes,
       boolean buildFiles,
+      boolean subincludes,
       boolean loads)
       throws QueryException, InterruptedException {
     throw new QueryException("buildfiles() doesn't make sense for the configured target graph");

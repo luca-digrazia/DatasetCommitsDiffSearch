@@ -1210,8 +1210,7 @@ public class BuildView {
       BuildConfigurationCollection configurations)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException, ToolchainContextException {
-    BuildConfiguration targetConfig =
-        skyframeExecutor.getConfiguration(eventHandler, target.getConfigurationKey());
+    BuildConfiguration targetConfig = target.getConfiguration();
     CachingAnalysisEnvironment env =
         new CachingAnalysisEnvironment(
             getArtifactFactory(),
@@ -1237,8 +1236,7 @@ public class BuildView {
       BuildConfigurationCollection configurations)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException, ToolchainContextException {
-    BuildConfiguration targetConfig =
-        skyframeExecutor.getConfiguration(eventHandler, configuredTarget.getConfigurationKey());
+    BuildConfiguration targetConfig = configuredTarget.getConfiguration();
     Target target = null;
     try {
       target =

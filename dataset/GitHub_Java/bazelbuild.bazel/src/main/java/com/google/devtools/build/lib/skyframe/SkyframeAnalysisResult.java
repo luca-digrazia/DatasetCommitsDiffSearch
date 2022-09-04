@@ -25,7 +25,6 @@ import java.util.Collection;
 public class SkyframeAnalysisResult {
   private final boolean hasLoadingError;
   private final boolean hasAnalysisError;
-  private final boolean hasActionConflicts;
   private final ImmutableList<ConfiguredTarget> configuredTargets;
   private final WalkableGraph walkableGraph;
   private final ImmutableList<AspectValue> aspects;
@@ -34,14 +33,12 @@ public class SkyframeAnalysisResult {
   SkyframeAnalysisResult(
       boolean hasLoadingError,
       boolean hasAnalysisError,
-      boolean hasActionConflicts,
       ImmutableList<ConfiguredTarget> configuredTargets,
       WalkableGraph walkableGraph,
       ImmutableList<AspectValue> aspects,
       PackageRoots packageRoots) {
     this.hasLoadingError = hasLoadingError;
     this.hasAnalysisError = hasAnalysisError;
-    this.hasActionConflicts = hasActionConflicts;
     this.configuredTargets = configuredTargets;
     this.walkableGraph = walkableGraph;
     this.aspects = aspects;
@@ -59,10 +56,6 @@ public class SkyframeAnalysisResult {
 
   public boolean hasAnalysisError() {
     return hasAnalysisError;
-  }
-
-  public boolean hasActionConflicts() {
-    return hasActionConflicts;
   }
 
   public ImmutableList<ConfiguredTarget> getConfiguredTargets() {

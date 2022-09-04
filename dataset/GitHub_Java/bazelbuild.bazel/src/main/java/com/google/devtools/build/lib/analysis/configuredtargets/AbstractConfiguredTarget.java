@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProvider;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -33,7 +34,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -50,7 +50,7 @@ import javax.annotation.Nullable;
 public abstract class AbstractConfiguredTarget
     implements ConfiguredTarget, VisibilityProvider, ClassObject {
   private final Label label;
-  private final BuildConfigurationValue.Key configurationKey;
+  private final BuildConfiguration configuration;
 
   private final NestedSet<PackageGroupContents> visibility;
 
@@ -61,16 +61,14 @@ public abstract class AbstractConfiguredTarget
   private static final String DATA_RUNFILES_FIELD = "data_runfiles";
   private static final String DEFAULT_RUNFILES_FIELD = "default_runfiles";
 
-  public AbstractConfiguredTarget(Label label, BuildConfigurationValue.Key configurationKey) {
-    this(label, configurationKey, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
+  public AbstractConfiguredTarget(Label label, BuildConfiguration configuration) {
+    this(label, configuration, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
   }
 
   protected AbstractConfiguredTarget(
-      Label label,
-      BuildConfigurationValue.Key configurationKey,
-      NestedSet<PackageGroupContents> visibility) {
+      Label label, BuildConfiguration configuration, NestedSet<PackageGroupContents> visibility) {
     this.label = label;
-    this.configurationKey = configurationKey;
+    this.configuration = configuration;
     this.visibility = visibility;
   }
 
@@ -80,8 +78,8 @@ public abstract class AbstractConfiguredTarget
   }
 
   @Override
-  public BuildConfigurationValue.Key getConfigurationKey() {
-    return configurationKey;
+  public BuildConfiguration getConfiguration() {
+    return configuration;
   }
 
   @Override

@@ -70,7 +70,7 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   }
 
   @AutoCodec.Instantiator
-  public static ConfiguredTargetKey of(
+  static ConfiguredTargetKey of(
       Label label,
       @Nullable BuildConfigurationValue.Key configurationKey,
       boolean isHostConfiguration) {

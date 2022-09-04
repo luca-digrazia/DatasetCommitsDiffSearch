@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -77,6 +78,7 @@ public class BuildConfigurationValue implements SkyValue {
   }
 
   /** {@link SkyKey} for {@link BuildConfigurationValue}. */
+  @VisibleForSerialization
   public static final class Key implements SkyKey, Serializable {
     private static final Interner<Key> keyInterner = BlazeInterners.newWeakInterner();
 
@@ -90,7 +92,7 @@ public class BuildConfigurationValue implements SkyValue {
       return keyInterner.intern(new Key(fragments, optionsDiff));
     }
 
-    private Key(FragmentClassSet fragments, BuildOptions.OptionsDiffForReconstruction optionsDiff) {
+    Key(FragmentClassSet fragments, BuildOptions.OptionsDiffForReconstruction optionsDiff) {
       this.fragments = fragments;
       this.optionsDiff = optionsDiff;
     }
@@ -100,7 +102,7 @@ public class BuildConfigurationValue implements SkyValue {
       return fragments.fragmentClasses();
     }
 
-    public BuildOptions.OptionsDiffForReconstruction getOptionsDiff() {
+    BuildOptions.OptionsDiffForReconstruction getOptionsDiff() {
       return optionsDiff;
     }
 
