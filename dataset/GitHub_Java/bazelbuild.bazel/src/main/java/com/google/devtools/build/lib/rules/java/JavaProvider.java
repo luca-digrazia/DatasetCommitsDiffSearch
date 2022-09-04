@@ -41,9 +41,7 @@ public final class JavaProvider extends SkylarkClassObject implements Transitive
       ImmutableSet.of(
         JavaCompilationArgsProvider.class,
         JavaSourceJarsProvider.class,
-        ProtoJavaApiInfoAspectProvider.class,
-        JavaRuleOutputJarsProvider.class
-      );
+        ProtoJavaApiInfoAspectProvider.class);
 
   private final TransitiveInfoProviderMap providers;
 
@@ -79,9 +77,6 @@ public final class JavaProvider extends SkylarkClassObject implements Transitive
         .addProvider(
             ProtoJavaApiInfoAspectProvider.class,
             ProtoJavaApiInfoAspectProvider.merge(protoJavaApiInfoAspectProviders))
-        // When a rule merges multiple JavaProviders, its purpose is to pass on information, so
-        // it doesn't have any output jars.
-        .addProvider(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.builder().build())
         .build();
   }
 
