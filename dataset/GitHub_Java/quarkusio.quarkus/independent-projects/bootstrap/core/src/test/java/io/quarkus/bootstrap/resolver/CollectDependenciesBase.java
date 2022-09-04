@@ -1,14 +1,15 @@
 package io.quarkus.bootstrap.resolver;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import io.quarkus.bootstrap.model.AppDependency;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import io.quarkus.bootstrap.model.AppDependency;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  *
@@ -35,14 +36,14 @@ public abstract class CollectDependenciesBase extends ResolverSetupCleanup {
         install(root);
 
         List<AppDependency> expected;
-        if (deploymentDeps.isEmpty()) {
+        if(deploymentDeps.isEmpty()) {
             expected = expectedResult;
         } else {
             expected = new ArrayList<>(expectedResult.size() + deploymentDeps.size());
             expected.addAll(expectedResult);
             expected.addAll(deploymentDeps);
         }
-        final List<AppDependency> resolvedDeps = getTestResolver().resolveModel(root.toAppArtifact()).getFullDeploymentDeps();
+        final List<AppDependency> resolvedDeps = getTestResolver().resolveModel(root.toAppArtifact()).getAllDependencies();
         assertEquals(expected, resolvedDeps);
     }
 
@@ -51,8 +52,7 @@ public abstract class CollectDependenciesBase extends ResolverSetupCleanup {
     }
 
     protected Path getInstallDir(TsArtifact artifact) {
-        return repoHome.resolve(artifact.getGroupId().replace('.', '/')).resolve(artifact.getArtifactId())
-                .resolve(artifact.getVersion());
+        return repoHome.resolve(artifact.getGroupId().replace('.', '/')).resolve(artifact.getArtifactId()).resolve(artifact.getVersion());
     }
 
     protected TsArtifact install(TsArtifact dep, boolean collected) {
@@ -69,7 +69,7 @@ public abstract class CollectDependenciesBase extends ResolverSetupCleanup {
 
     protected TsArtifact install(TsArtifact dep, Path p, String collectedInScope) {
         install(dep, p);
-        if (collectedInScope != null) {
+        if(collectedInScope != null) {
             addCollectedDep(dep, collectedInScope, false);
         }
         return dep;
@@ -81,7 +81,7 @@ public abstract class CollectDependenciesBase extends ResolverSetupCleanup {
 
     protected void install(TsQuarkusExt ext, boolean collected) {
         ext.install(repo);
-        if (collected) {
+        if(collected) {
             addCollectedDep(ext.getRuntime(), "compile", false);
             addCollectedDeploymentDep(ext.getDeployment());
         }
@@ -122,7 +122,7 @@ public abstract class CollectDependenciesBase extends ResolverSetupCleanup {
         final TsArtifact artifact = dep.artifact;
         install(artifact, p);
         root.addDependency(dep);
-        if (!collected) {
+        if(!collected) {
             return;
         }
         addCollectedDep(artifact, dep.scope == null ? "compile" : dep.scope, dep.optional);
@@ -133,14 +133,14 @@ public abstract class CollectDependenciesBase extends ResolverSetupCleanup {
     }
 
     protected void addCollectedDep(final TsArtifact artifact, final String scope, boolean optional) {
-        if (expectedResult.isEmpty()) {
+        if(expectedResult.isEmpty()) {
             expectedResult = new ArrayList<>();
         }
         expectedResult.add(new AppDependency(artifact.toAppArtifact(), scope, optional));
     }
 
     protected void addCollectedDeploymentDep(TsArtifact ext) {
-        if (deploymentDeps.isEmpty()) {
+        if(deploymentDeps.isEmpty()) {
             deploymentDeps = new ArrayList<>();
         }
         deploymentDeps.add(new AppDependency(ext.toAppArtifact(), "compile", false));

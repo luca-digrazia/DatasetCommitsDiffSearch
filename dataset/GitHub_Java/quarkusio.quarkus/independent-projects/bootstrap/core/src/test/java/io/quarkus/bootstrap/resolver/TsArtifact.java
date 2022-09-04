@@ -200,9 +200,7 @@ public class TsArtifact {
     public void install(TsRepoBuilder repoBuilder) {
         if(!deps.isEmpty()) {
             for(TsDependency dep : deps) {
-                if(dep.artifact.getVersion() != null) {
-                    dep.artifact.install(repoBuilder);
-                }
+                dep.artifact.install(repoBuilder);
             }
         }
         if(!extDeps.isEmpty()) {
