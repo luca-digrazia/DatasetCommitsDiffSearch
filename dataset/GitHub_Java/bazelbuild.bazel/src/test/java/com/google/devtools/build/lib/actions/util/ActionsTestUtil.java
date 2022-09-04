@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
@@ -267,8 +266,8 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-      return ActionResult.EMPTY;
+    public void execute(ActionExecutionContext actionExecutionContext) {
+
     }
 
     @Override protected String computeKey() {
