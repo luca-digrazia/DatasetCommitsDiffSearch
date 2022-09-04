@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
- *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
- */
 package org.graylog.storage.elasticsearch6;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -362,12 +346,7 @@ public class IndicesAdapterES6 implements IndicesAdapter {
 
     @Override
     public HealthStatus waitForRecovery(String index) {
-        return waitForRecovery(index, 30);
-    }
-
-    @Override
-    public HealthStatus waitForRecovery(String index, int timeout) {
-        final Health.Status status = waitForStatus(index, Health.Status.YELLOW, timeout);
+        final Health.Status status = waitForStatus(index, Health.Status.YELLOW);
         return mapHealthStatus(status);
     }
 
@@ -375,20 +354,15 @@ public class IndicesAdapterES6 implements IndicesAdapter {
         return HealthStatus.fromString(status.toString());
     }
 
-    private Health.Status waitForStatus(String index, @SuppressWarnings("SameParameterValue") Health.Status clusterHealthStatus, int timeout) {
+    private Health.Status waitForStatus(String index, @SuppressWarnings("SameParameterValue") Health.Status clusterHealthStatus) {
         final Health request = new Health.Builder()
                 .addIndex(index)
                 .waitForStatus(clusterHealthStatus)
-                .timeout(timeout)
                 .build();
-        final JestResult jestResult = JestUtils.executeUnsafe(jestClient, null, request, () -> "Couldn't read health status for index " + index);
+        final JestResult jestResult = JestUtils.execute(jestClient, request, () -> "Couldn't read health status for index " + index);
 
         final String status = jestResult.getJsonObject().path("status").asText();
         return Health.Status.valueOf(status.toUpperCase(Locale.ENGLISH));
-    }
-
-    private Health.Status waitForStatus(String index, @SuppressWarnings("SameParameterValue") Health.Status clusterHealthStatus) {
-        return waitForStatus(index, clusterHealthStatus, 30);
     }
 
     @Override

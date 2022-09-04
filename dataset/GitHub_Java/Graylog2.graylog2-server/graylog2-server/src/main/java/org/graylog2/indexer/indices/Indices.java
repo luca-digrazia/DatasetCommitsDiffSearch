@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.indices;
 
@@ -197,7 +197,7 @@ public class Indices {
             indicesAdapter.ensureIndexTemplate(templateName, template);
             indicesAdapter.create(indexName, indexSettings, templateName, template);
         } catch (Exception e) {
-            LOG.warn("Couldn't create index {}. Error: {}", indexName, e.getMessage(), e);
+            LOG.warn("Couldn't create index {}. Error: {}", indexName, e.getMessage());
             auditEventSender.failure(AuditActor.system(nodeId), ES_INDEX_CREATE, ImmutableMap.of("indexName", indexName));
             return false;
         }
@@ -326,20 +326,9 @@ public class Indices {
         indicesAdapter.optimizeIndex(index, maxNumSegments, timeout);
     }
 
-    HealthStatus waitForRecovery(String index, int timeout) {
-        LOG.debug("Waiting until index health status of index {} is healthy", index);
-        return indicesAdapter.waitForRecovery(index, timeout);
-    }
-
     public HealthStatus waitForRecovery(String index) {
         LOG.debug("Waiting until index health status of index {} is healthy", index);
         return indicesAdapter.waitForRecovery(index);
-    }
-
-    public static <E extends Exception> void checkIfHealthy(HealthStatus healthStatus, Function<HealthStatus, E> errorMessageSupplier) throws E {
-        if (healthStatus.equals(HealthStatus.Red)) {
-            throw errorMessageSupplier.apply(healthStatus);
-        }
     }
 
     public Optional<DateTime> indexCreationDate(String index) {
