@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -31,8 +31,6 @@ import com.sun.codemodel.JVar;
 
 public class DeleteProcessor extends MethodProcessor {
 
-	private EBeansHolder activitiesHolder;
-
 	public DeleteProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		super(processingEnv, restImplementationHolder);
 	}
@@ -45,13 +43,13 @@ public class DeleteProcessor extends MethodProcessor {
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
 
-		this.activitiesHolder = activitiesHolder;
+		RestImplementationHolder holder = restImplementationsHolder.getEnclosingHolder(element);
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		Delete deleteAnnotation = element.getAnnotation(Delete.class);
 		String urlSuffix = deleteAnnotation.value();
 
-		generateRestTemplateCallBlock(new MethodProcessorHolder(activitiesHolder, executableElement, urlSuffix, null, null, codeModel));
+		generateRestTemplateCallBlock(new MethodProcessorHolder(executableElement, urlSuffix, null, null, codeModel));
 	}
 
 	@Override
@@ -72,7 +70,7 @@ public class DeleteProcessor extends MethodProcessor {
 
 	@Override
 	protected JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement) {
-		return generateHttpHeadersVar(activitiesHolder, body, executableElement);
+		return generateHttpHeadersVar(body, executableElement);
 	}
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,7 +19,6 @@ import java.util.TreeMap;
 
 import javax.lang.model.element.Element;
 
-import com.googlecode.androidannotations.processing.EBeansHolder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -35,10 +34,8 @@ public class MethodProcessorHolder {
 
 	private JBlock body;
 	private TreeMap<String, JVar> methodParams;
-	private final EBeansHolder activitiesHolder;
 
-	public MethodProcessorHolder(EBeansHolder activitiesHolder, Element element, String urlSuffix, JClass expectedClass, JClass generatedReturnType, JCodeModel codeModel) {
-		this.activitiesHolder = activitiesHolder;
+	public MethodProcessorHolder(Element element, String urlSuffix, JClass expectedClass, JClass generatedReturnType, JCodeModel codeModel) {
 		this.element = element;
 		this.urlSuffix = urlSuffix;
 		this.expectedClass = expectedClass;
@@ -80,10 +77,6 @@ public class MethodProcessorHolder {
 
 	public void setMethodParams(TreeMap<String, JVar> methodParams) {
 		this.methodParams = methodParams;
-	}
-
-	public EBeansHolder getActivitiesHolder() {
-		return activitiesHolder;
 	}
 
 }

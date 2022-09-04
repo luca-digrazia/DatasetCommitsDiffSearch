@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -25,7 +25,7 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.rest.Get;
-import com.googlecode.androidannotations.helper.CanonicalNameConstants;
+import com.googlecode.androidannotations.helper.ProcessorConstants;
 import com.googlecode.androidannotations.processing.EBeansHolder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -35,8 +35,6 @@ import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JVar;
 
 public class GetProcessor extends MethodProcessor {
-
-	private EBeansHolder activitiesHolder;
 
 	public GetProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		super(processingEnv, restImplementationHolder);
@@ -50,7 +48,7 @@ public class GetProcessor extends MethodProcessor {
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
 
-		this.activitiesHolder = activitiesHolder;
+		RestImplementationHolder holder = restImplementationsHolder.getEnclosingHolder(element);
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		TypeMirror returnType = executableElement.getReturnType();
@@ -60,13 +58,13 @@ public class GetProcessor extends MethodProcessor {
 		JClass expectedClass = null;
 
 		if (returnType.getKind() != TypeKind.VOID) {
-			if (returnTypeString.startsWith(CanonicalNameConstants.RESPONSE_ENTITY)) {
+			if (returnTypeString.startsWith(ProcessorConstants.RESPONSE_ENTITY)) {
 				DeclaredType declaredReturnedType = (DeclaredType) returnType;
 				TypeMirror typeParameter = declaredReturnedType.getTypeArguments().get(0);
-				expectedClass = activitiesHolder.refClass(typeParameter.toString());
-				generatedReturnType = activitiesHolder.refClass(CanonicalNameConstants.RESPONSE_ENTITY).narrow(expectedClass);
+				expectedClass = holder.refClass(typeParameter.toString());
+				generatedReturnType = holder.refClass(ProcessorConstants.RESPONSE_ENTITY).narrow(expectedClass);
 			} else {
-				generatedReturnType = activitiesHolder.refClass(returnTypeString);
+				generatedReturnType = holder.refClass(returnTypeString);
 				expectedClass = generatedReturnType;
 			}
 		}
@@ -74,7 +72,7 @@ public class GetProcessor extends MethodProcessor {
 		Get getAnnotation = element.getAnnotation(Get.class);
 		String urlSuffix = getAnnotation.value();
 
-		generateRestTemplateCallBlock(new MethodProcessorHolder(activitiesHolder, executableElement, urlSuffix, expectedClass, generatedReturnType, codeModel));
+		generateRestTemplateCallBlock(new MethodProcessorHolder(executableElement, urlSuffix, expectedClass, generatedReturnType, codeModel));
 	}
 
 	@Override
@@ -107,7 +105,7 @@ public class GetProcessor extends MethodProcessor {
 
 	@Override
 	protected JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement) {
-		return generateHttpHeadersVar(activitiesHolder, body, executableElement);
+		return generateHttpHeadersVar(body, executableElement);
 	}
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,7 +24,7 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.rest.Options;
-import com.googlecode.androidannotations.helper.CanonicalNameConstants;
+import com.googlecode.androidannotations.helper.ProcessorConstants;
 import com.googlecode.androidannotations.processing.EBeansHolder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -34,8 +34,6 @@ import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JVar;
 
 public class OptionsProcessor extends MethodProcessor {
-
-	private EBeansHolder activitiesHolder;
 
 	public OptionsProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		super(processingEnv, restImplementationHolder);
@@ -49,7 +47,7 @@ public class OptionsProcessor extends MethodProcessor {
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
 
-		this.activitiesHolder = activitiesHolder;
+		RestImplementationHolder holder = restImplementationsHolder.getEnclosingHolder(element);
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		TypeMirror returnType = executableElement.getReturnType();
@@ -58,14 +56,14 @@ public class OptionsProcessor extends MethodProcessor {
 
 		TypeMirror typeParameter = declaredReturnType.getTypeArguments().get(0);
 
-		JClass expectedClass = activitiesHolder.refClass(typeParameter.toString());
+		JClass expectedClass = holder.refClass(typeParameter.toString());
 
-		JClass generatedReturnType = activitiesHolder.refClass(CanonicalNameConstants.SET).narrow(expectedClass);
+		JClass generatedReturnType = holder.refClass(ProcessorConstants.SET).narrow(expectedClass);
 
 		Options optionsAnnotation = element.getAnnotation(Options.class);
 		String urlSuffix = optionsAnnotation.value();
 
-		generateRestTemplateCallBlock(new MethodProcessorHolder(activitiesHolder, executableElement, urlSuffix, expectedClass, generatedReturnType, codeModel));
+		generateRestTemplateCallBlock(new MethodProcessorHolder(executableElement, urlSuffix, expectedClass, generatedReturnType, codeModel));
 	}
 
 	@Override
@@ -87,7 +85,7 @@ public class OptionsProcessor extends MethodProcessor {
 
 	@Override
 	protected JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement) {
-		return generateHttpHeadersVar(activitiesHolder, body, executableElement);
+		return generateHttpHeadersVar(body, executableElement);
 	}
 
 }

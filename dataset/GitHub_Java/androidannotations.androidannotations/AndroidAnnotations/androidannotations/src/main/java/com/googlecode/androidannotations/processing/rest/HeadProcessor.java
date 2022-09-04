@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -33,8 +33,6 @@ import com.sun.codemodel.JVar;
 
 public class HeadProcessor extends MethodProcessor {
 
-	private EBeansHolder activitiesHolder;
-
 	public HeadProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		super(processingEnv, restImplementationHolder);
 	}
@@ -47,17 +45,17 @@ public class HeadProcessor extends MethodProcessor {
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
 
-		this.activitiesHolder = activitiesHolder;
+		RestImplementationHolder holder = restImplementationsHolder.getEnclosingHolder(element);
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		TypeMirror returnType = executableElement.getReturnType();
 
-		JClass expectedClass = activitiesHolder.refClass(returnType.toString());
+		JClass expectedClass = holder.refClass(returnType.toString());
 
 		Head headAnnotation = element.getAnnotation(Head.class);
 		String urlSuffix = headAnnotation.value();
 
-		generateRestTemplateCallBlock(new MethodProcessorHolder(activitiesHolder, executableElement, urlSuffix, expectedClass, expectedClass, codeModel));
+		generateRestTemplateCallBlock(new MethodProcessorHolder(executableElement, urlSuffix, expectedClass, expectedClass, codeModel));
 	}
 
 	@Override
@@ -77,7 +75,7 @@ public class HeadProcessor extends MethodProcessor {
 
 	@Override
 	protected JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement) {
-		return generateHttpHeadersVar(activitiesHolder, body, executableElement);
+		return generateHttpHeadersVar(body, executableElement);
 	}
 
 }
