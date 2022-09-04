@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.remote;
 
-import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
 import com.google.bytestream.ByteStreamGrpc.ByteStreamImplBase;
@@ -26,18 +25,12 @@ import com.google.devtools.build.lib.remote.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.Chunker;
 import com.google.devtools.build.lib.remote.Digests;
 import com.google.devtools.build.lib.remote.SimpleBlobStoreActionCache;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.remoteexecution.v1test.Digest;
 import com.google.protobuf.ByteString;
 import com.google.rpc.Code;
 import com.google.rpc.Status;
 import io.grpc.protobuf.StatusProto;
 import io.grpc.stub.StreamObserver;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.UUID;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -45,7 +38,6 @@ import javax.annotation.Nullable;
 final class ByteStreamServer extends ByteStreamImplBase {
   private static final Logger logger = Logger.getLogger(ByteStreamServer.class.getName());
   private final SimpleBlobStoreActionCache cache;
-  private final Path workPath;
 
   static @Nullable Digest parseDigestFromResourceName(String resourceName) {
     try {
@@ -61,9 +53,8 @@ final class ByteStreamServer extends ByteStreamImplBase {
     }
   }
 
-  public ByteStreamServer(SimpleBlobStoreActionCache cache, Path workPath) {
+  public ByteStreamServer(SimpleBlobStoreActionCache cache) {
     this.cache = cache;
-    this.workPath = workPath;
   }
 
   @Override
@@ -77,6 +68,11 @@ final class ByteStreamServer extends ByteStreamImplBase {
               "Failed parsing digest from resource_name:" + request.getResourceName()));
     }
 
+    if (!cache.containsKey(digest)) {
+      responseObserver.onError(StatusUtils.notFoundError(digest));
+      return;
+    }
+
     try {
       // This still relies on the blob size to be small enough to fit in memory.
       // TODO(olaola): refactor to fix this if the need arises.
@@ -87,6 +83,7 @@ final class ByteStreamServer extends ByteStreamImplBase {
       }
       responseObserver.onCompleted();
     } catch (CacheNotFoundException e) {
+      // This can only happen if an item gets evicted right after we check.
       responseObserver.onError(StatusUtils.notFoundError(digest));
     } catch (Exception e) {
       logger.log(WARNING, "Read request failed.", e);
@@ -96,22 +93,12 @@ final class ByteStreamServer extends ByteStreamImplBase {
 
   @Override
   public StreamObserver<WriteRequest> write(final StreamObserver<WriteResponse> responseObserver) {
-    Path temp = workPath.getRelative("upload").getRelative(UUID.randomUUID().toString());
-    try {
-      FileSystemUtils.createDirectoryAndParents(temp.getParentDirectory());
-      temp.getOutputStream().close();
-    } catch (IOException e) {
-      logger.log(SEVERE, "Failed to create temporary file for upload", e);
-      responseObserver.onError(StatusUtils.internalError(e));
-      // We need to make sure that subsequent onNext or onCompleted calls don't make any further
-      // calls on the responseObserver after the onError above, so we return a no-op observer.
-      return new NoOpStreamObserver<>();
-    }
     return new StreamObserver<WriteRequest>() {
-      private Digest digest;
-      private long offset;
-      private String resourceName;
-      private boolean closed;
+      byte[] blob;
+      Digest digest;
+      long offset;
+      String resourceName;
+      boolean closed;
 
       @Override
       public void onNext(WriteRequest request) {
@@ -122,6 +109,7 @@ final class ByteStreamServer extends ByteStreamImplBase {
         if (digest == null) {
           resourceName = request.getResourceName();
           digest = parseDigestFromResourceName(resourceName);
+          blob = new byte[(int) digest.getSizeBytes()];
         }
 
         if (digest == null) {
@@ -155,13 +143,7 @@ final class ByteStreamServer extends ByteStreamImplBase {
         long size = request.getData().size();
 
         if (size > 0) {
-          try (OutputStream out = temp.getOutputStream(true)) {
-            request.getData().writeTo(out);
-          } catch (IOException e) {
-            responseObserver.onError(StatusUtils.internalError(e));
-            closed = true;
-            return;
-          }
+          request.getData().copyTo(blob, (int) offset);
           offset += size;
         }
 
@@ -173,7 +155,6 @@ final class ByteStreamServer extends ByteStreamImplBase {
                   "finish_write",
                   "Expected:" + shouldFinishWrite + ", received: " + request.getFinishWrite()));
           closed = true;
-          return;
         }
       }
 
@@ -181,11 +162,6 @@ final class ByteStreamServer extends ByteStreamImplBase {
       public void onError(Throwable t) {
         logger.log(WARNING, "Write request failed remotely.", t);
         closed = true;
-        try {
-          temp.delete();
-        } catch (IOException e) {
-          logger.log(WARNING, "Could not delete temp file.", e);
-        }
       }
 
       @Override
@@ -206,15 +182,7 @@ final class ByteStreamServer extends ByteStreamImplBase {
         }
 
         try {
-          Digest d = Digests.computeDigest(temp);
-          try (InputStream in = temp.getInputStream()) {
-            cache.uploadBlob(d, in);
-          }
-          try {
-            temp.delete();
-          } catch (IOException e) {
-            logger.log(WARNING, "Could not delete temp file.", e);
-          }
+          Digest d = cache.uploadBlob(blob);
 
           if (!d.equals(digest)) {
             responseObserver.onError(
@@ -234,19 +202,5 @@ final class ByteStreamServer extends ByteStreamImplBase {
         }
       }
     };
-  }
-
-  private static class NoOpStreamObserver<T> implements StreamObserver<T> {
-    @Override
-    public void onNext(T value) {
-    }
-
-    @Override
-    public void onError(Throwable t) {
-    }
-
-    @Override
-    public void onCompleted() {
-    }
   }
 }
