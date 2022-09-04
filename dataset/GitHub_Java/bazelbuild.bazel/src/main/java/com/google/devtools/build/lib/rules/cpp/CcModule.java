@@ -112,8 +112,7 @@ public abstract class CcModule
         StarlarkRuleContext,
         CcToolchainConfigInfo,
         CcCompilationOutputs,
-        CcDebugInfoContext,
-        CppModuleMap> {
+        CcDebugInfoContext> {
 
   private static final ImmutableList<String> SUPPORTED_OUTPUT_TYPES =
       ImmutableList.of("executable", "dynamic_library");
@@ -360,9 +359,6 @@ public abstract class CcModule
    */
   @SuppressWarnings("unchecked")
   protected static <T> T convertFromNoneable(Object obj, @Nullable T defaultValue) {
-    if (Starlark.UNBOUND == obj) {
-      return null;
-    }
     if (Starlark.isNullOrNone(obj)) {
       return defaultValue;
     }
@@ -408,20 +404,6 @@ public abstract class CcModule
       return null;
     } else {
       ImmutableList<Artifact> list = ((Sequence<Artifact>) o).getImmutableList();
-      if (list.isEmpty()) {
-        return null;
-      }
-      return list;
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  @Nullable
-  protected <T> ImmutableList<T> asClassImmutableList(Object o) {
-    if (o == Starlark.UNBOUND) {
-      return null;
-    } else {
-      ImmutableList<T> list = ((Sequence<T>) o).getImmutableList();
       if (list.isEmpty()) {
         return null;
       }
@@ -737,19 +719,6 @@ public abstract class CcModule
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     } else {
       return Depset.noneableCast(obj, String.class, fieldName);
-    }
-  }
-
-  @Override
-  public CppModuleMap createCppModuleMap(
-      Artifact file, Object umbrellaHeaderNoneable, String name, StarlarkThread thread)
-      throws EvalException {
-    checkPrivateStarlarkificationAllowlist(thread);
-    Artifact umbrellaHeader = convertFromNoneable(umbrellaHeaderNoneable, /* defaultValue= */ null);
-    if (umbrellaHeader == null) {
-      return new CppModuleMap(file, name);
-    } else {
-      return new CppModuleMap(file, umbrellaHeader, name);
     }
   }
 
@@ -1827,16 +1796,8 @@ public abstract class CcModule
       Artifact grepIncludes,
       List<Artifact> headersForClifDoNotUseThisParam,
       Sequence<?> additionalInputs,
-      Object moduleMapNoneable,
-      Object additionalModuleMapsNoneable,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
-    if (moduleMapNoneable != Starlark.UNBOUND || additionalModuleMapsNoneable != Starlark.UNBOUND) {
-      CcModule.checkPrivateStarlarkificationAllowlist(thread);
-    }
-    CppModuleMap moduleMap = convertFromNoneable(moduleMapNoneable, /* defaultValue= */ null);
-    ImmutableList<CppModuleMap> additionalModuleMaps =
-        asClassImmutableList(additionalModuleMapsNoneable);
     List<Artifact> sources = Sequence.cast(sourcesUnchecked, Artifact.class, "srcs");
     List<Artifact> publicHeaders = Sequence.cast(publicHeadersUnchecked, Artifact.class, "srcs");
     List<Artifact> privateHeaders = Sequence.cast(privateHeadersUnchecked, Artifact.class, "srcs");
@@ -1924,14 +1885,6 @@ public abstract class CcModule
                             .getConfiguration()
                             .getFragment(CppConfiguration.class),
                         ccToolchainProvider));
-    if (moduleMap != null) {
-      helper.setCppModuleMap(moduleMap);
-    }
-    if (additionalModuleMaps != null) {
-      for (CppModuleMap additionalModuleMap : additionalModuleMaps) {
-        helper.registerAdditionalModuleMap(additionalModuleMap);
-      }
-    }
     if (disallowNopicOutputs) {
       helper.setGenerateNoPicAction(false);
     }
