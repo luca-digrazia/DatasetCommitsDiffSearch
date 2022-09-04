@@ -15,19 +15,12 @@
 package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.vfs.FileSystem;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 /** Options for sandboxed execution. */
@@ -78,8 +71,6 @@ public class SandboxOptions extends OptionsBase {
     name = "ignore_unsupported_sandboxing",
     defaultValue = "false",
     category = "strategy",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help = "Do not print a warning when sandboxed execution is not supported on this system."
   )
   public boolean ignoreUnsupportedSandboxing;
@@ -88,8 +79,6 @@ public class SandboxOptions extends OptionsBase {
     name = "sandbox_debug",
     defaultValue = "false",
     category = "strategy",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Let the sandbox print debug information on execution. This might help developers of "
             + "Bazel or Skylark rules with debugging failures due to missing input files, etc."
@@ -100,8 +89,6 @@ public class SandboxOptions extends OptionsBase {
     name = "experimental_sandbox_base",
     defaultValue = "",
     category = "strategy",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Lets the sandbox create its sandbox directories underneath this path. Specify a path "
             + "on tmpfs (like /run/shm) to possibly improve performance a lot when your build / "
@@ -114,8 +101,6 @@ public class SandboxOptions extends OptionsBase {
     name = "sandbox_fake_hostname",
     defaultValue = "false",
     category = "strategy",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help = "Change the current hostname to 'localhost' for sandboxed actions."
   )
   public boolean sandboxFakeHostname;
@@ -124,8 +109,6 @@ public class SandboxOptions extends OptionsBase {
     name = "sandbox_fake_username",
     defaultValue = "false",
     category = "strategy",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help = "Change the current username to 'nobody' for sandboxed actions."
   )
   public boolean sandboxFakeUsername;
@@ -135,35 +118,27 @@ public class SandboxOptions extends OptionsBase {
     allowMultiple = true,
     defaultValue = "",
     category = "config",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help = "For sandboxed actions, disallow access to this path."
   )
   public List<String> sandboxBlockPath;
 
   @Option(
-    name = "sandbox_tmpfs_path",
-    allowMultiple = true,
-    defaultValue = "",
-    category = "config",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    help =
-        "For sandboxed actions, mount an empty, writable directory at this path"
-            + " (if supported by the sandboxing implementation, ignored otherwise)."
+      name = "sandbox_tmpfs_path",
+      allowMultiple = true,
+      defaultValue = "",
+      category = "config",
+      help = "For sandboxed actions, mount an empty, writable directory at this path"
+          + " (if supported by the sandboxing implementation, ignored otherwise)."
   )
   public List<String> sandboxTmpfsPath;
 
   @Option(
-    name = "sandbox_writable_path",
-    allowMultiple = true,
-    defaultValue = "",
-    category = "config",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    help =
-        "For sandboxed actions, make an existing directory writable in the sandbox"
-            + " (if supported by the sandboxing implementation, ignored otherwise)."
+      name = "sandbox_writable_path",
+      allowMultiple = true,
+      defaultValue = "",
+      category = "config",
+      help = "For sandboxed actions, make an existing directory writable in the sandbox"
+          + " (if supported by the sandboxing implementation, ignored otherwise)."
   )
   public List<String> sandboxWritablePath;
 
@@ -173,35 +148,7 @@ public class SandboxOptions extends OptionsBase {
     converter = MountPairConverter.class,
     defaultValue = "",
     category = "config",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help = "Add additional path pair to mount in sandbox."
   )
   public List<ImmutableMap.Entry<String, String>> sandboxAdditionalMounts;
-
-  public ImmutableSet<Path> getInaccessiblePaths(FileSystem fs) {
-    List<Path> inaccessiblePaths = new ArrayList<>();
-    for (String path : sandboxBlockPath) {
-      Path blockedPath = fs.getPath(path);
-      try {
-        inaccessiblePaths.add(blockedPath.resolveSymbolicLinks());
-      } catch (IOException e) {
-        // It's OK to block access to an invalid symlink. In this case we'll just make the symlink
-        // itself inaccessible, instead of the target, though.
-        inaccessiblePaths.add(blockedPath);
-      }
-    }
-    return ImmutableSet.copyOf(inaccessiblePaths);
-  }
-
-  @Option(
-    name = "experimental_collect_local_sandbox_action_metrics",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.EXECUTION},
-    help =
-        "When enabled, execution statistics (such as user and system time) are recorded for "
-            + "locally executed actions which use sandboxing"
-  )
-  public boolean collectLocalSandboxExecutionStatistics;
 }

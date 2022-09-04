@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
@@ -92,13 +93,14 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
     // Certain actions can't run remotely or in a sandbox - pass them on to the standalone strategy.
     if (!spawn.isRemotable() || spawn.hasNoSandbox()) {
-      SandboxHelpers.fallbackToNonSandboxedExecution(spawn, actionExecutionContext);
+      SandboxHelpers.fallbackToNonSandboxedExecution(spawn, actionExecutionContext, executor);
       return;
     }
 
-    EventBus eventBus = actionExecutionContext.getEventBus();
+    EventBus eventBus = actionExecutionContext.getExecutor().getEventBus();
     ActionExecutionMetadata owner = spawn.getResourceOwner();
     eventBus.post(ActionStatusMessage.schedulingStrategy(owner));
     try (ResourceHandle ignored =
@@ -124,7 +126,7 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
       SandboxRunner runner,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
-    EventHandler eventHandler = actionExecutionContext.getEventHandler();
+    EventHandler eventHandler = actionExecutionContext.getExecutor().getEventHandler();
     ExecException execException = null;
     OutErr outErr = actionExecutionContext.getFileOutErr();
     try {
