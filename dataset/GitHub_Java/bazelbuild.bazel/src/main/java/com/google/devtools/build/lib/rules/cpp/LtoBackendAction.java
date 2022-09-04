@@ -35,17 +35,12 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.LtoAction;
-import com.google.devtools.build.lib.server.FailureDetails.LtoAction.Code;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -132,35 +127,34 @@ public final class LtoBackendAction extends SpawnAction {
   @Override
   public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
-    List<String> lines;
-    try {
-      lines = FileSystemUtils.readLinesAsLatin1(actionExecutionContext.getInputPath(imports));
-    } catch (IOException e) {
-      String message =
-          String.format(
-              "error reading imports file %s: %s",
-              actionExecutionContext.getInputPath(imports), e.getMessage());
-      DetailedExitCode code = createDetailedExitCode(message, Code.IMPORTS_READ_IO_EXCEPTION);
-      throw new ActionExecutionException(message, e, this, false, code);
-    }
-
     // Build set of files this LTO backend artifact will import from.
     HashSet<PathFragment> importSet = new HashSet<>();
-    for (String line : lines) {
-      if (line.isEmpty()) {
-        continue;
+    try {
+      for (String line :
+          FileSystemUtils.iterateLinesAsLatin1(actionExecutionContext.getInputPath(imports))) {
+        if (!line.isEmpty()) {
+          PathFragment execPath = PathFragment.create(line);
+          if (execPath.isAbsolute()) {
+            throw new ActionExecutionException(
+                "Absolute paths not allowed in imports file "
+                    + actionExecutionContext.getInputPath(imports)
+                    + ": "
+                    + execPath,
+                this,
+                false);
+          }
+          importSet.add(PathFragment.create(line));
+        }
       }
-      PathFragment execPath = PathFragment.create(line);
-      if (execPath.isAbsolute()) {
-        String message =
-            String.format(
-                "Absolute paths not allowed in imports file %s: %s",
-                actionExecutionContext.getInputPath(imports), execPath);
-        DetailedExitCode code =
-            createDetailedExitCode(message, Code.INVALID_ABSOLUTE_PATH_IN_IMPORTS);
-        throw new ActionExecutionException(message, this, false, code);
-      }
-      importSet.add(execPath);
+    } catch (IOException e) {
+      throw new ActionExecutionException(
+          "error iterating imports file "
+              + actionExecutionContext.getInputPath(imports)
+              + ": "
+              + e.getMessage(),
+          e,
+          this,
+          false);
     }
 
     // Convert the import set of paths to the set of bitcode file artifacts.
@@ -172,7 +166,7 @@ public final class LtoBackendAction extends SpawnAction {
               bitcodeInputSet.toList().stream()
                   .map(Artifact::getExecPath)
                   .collect(Collectors.toSet()));
-      String message =
+      throw new ActionExecutionException(
           String.format(
               "error computing inputs from imports file: %s, missing bitcode files (first 10): %s",
               actionExecutionContext.getInputPath(imports),
@@ -181,26 +175,15 @@ public final class LtoBackendAction extends SpawnAction {
                   .map(Object::toString)
                   .sorted()
                   .limit(10)
-                  .collect(Collectors.joining(", ")));
-      DetailedExitCode code = createDetailedExitCode(message, Code.MISSING_BITCODE_FILES);
-      throw new ActionExecutionException(message, this, false, code);
+                  .collect(Collectors.joining(", "))),
+          this,
+          false);
     }
     updateInputs(
-        NestedSetBuilder.fromNestedSet(bitcodeInputSet).addTransitive(mandatoryInputs).build());
-    return bitcodeInputSet;
-  }
-
-  @Override
-  protected NestedSet<Artifact> getOriginalInputs() {
-    return mandatoryInputs;
-  }
-
-  private static DetailedExitCode createDetailedExitCode(String message, Code detailedCode) {
-    return DetailedExitCode.of(
-        FailureDetail.newBuilder()
-            .setMessage(message)
-            .setLtoAction(LtoAction.newBuilder().setCode(detailedCode))
+        NestedSetBuilder.fromNestedSet(bitcodeInputSet)
+            .addTransitive(getMandatoryInputs())
             .build());
+    return bitcodeInputSet;
   }
 
   @Override
@@ -214,11 +197,7 @@ public final class LtoBackendAction extends SpawnAction {
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable Artifact.ArtifactExpander artifactExpander,
-      Fingerprint fp)
-      throws InterruptedException {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(GUID);
     try {
       fp.addStrings(getArguments());
@@ -231,7 +210,7 @@ public final class LtoBackendAction extends SpawnAction {
     for (Artifact runfilesManifest : runfilesManifests) {
       fp.addPath(runfilesManifest.getExecPath());
     }
-    for (Artifact input : mandatoryInputs.toList()) {
+    for (Artifact input : getMandatoryInputs().toList()) {
       fp.addPath(input.getExecPath());
     }
     if (imports != null) {
