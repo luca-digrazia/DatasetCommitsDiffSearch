@@ -7,15 +7,15 @@ import javax.ws.rs.core.Response;
 
 public class UniInvoker extends AbstractRxInvoker<Uni<?>> {
 
-    private InvocationBuilderImpl invocationBuilder;
+    private WebTargetImpl target;
 
-    public UniInvoker(InvocationBuilderImpl invocationBuilder) {
-        this.invocationBuilder = invocationBuilder;
+    public UniInvoker(WebTargetImpl target) {
+        this.target = target;
     }
 
     @Override
     public <R> Uni<R> method(String name, Entity<?> entity, GenericType<R> responseType) {
-        AsyncInvokerImpl invoker = (AsyncInvokerImpl) invocationBuilder.rx();
+        AsyncInvokerImpl invoker = (AsyncInvokerImpl) target.request().rx();
         return Uni.createFrom().completionStage(invoker.method(name, entity, responseType));
     }
 
