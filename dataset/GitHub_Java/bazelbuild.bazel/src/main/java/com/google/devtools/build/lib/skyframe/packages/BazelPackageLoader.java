@@ -13,29 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe.packages;
 
-import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
-import com.google.devtools.build.lib.rules.repository.LocalRepositoryFunction;
-import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
-import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
-import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
-import com.google.devtools.build.lib.rules.repository.RepositoryLoaderFunction;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.LocalRepositoryLookupFunction;
 import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptionReadingBuildFile;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
-import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Concrete implementation of {@link PackageLoader} that uses skyframe under the covers, but with
@@ -44,34 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class BazelPackageLoader extends AbstractPackageLoader {
   /** Returns a fresh {@link Builder} instance. */
   public static Builder builder(Path workspaceDir) {
-    Builder builder = new Builder(workspaceDir);
-
-    // Set up SkyFunctions and PrecomputedValues needed to make local repositories work correctly.
-    ImmutableMap<String, RepositoryFunction> repositoryHandlers =
-        ImmutableMap.of(
-            LocalRepositoryRule.NAME, (RepositoryFunction) new LocalRepositoryFunction());
-
-    builder.addExtraSkyFunctions(
-        ImmutableMap.<SkyFunctionName, SkyFunction>of(
-            SkyFunctions.LOCAL_REPOSITORY_LOOKUP,
-            new LocalRepositoryLookupFunction(),
-            SkyFunctions.REPOSITORY_DIRECTORY,
-            new RepositoryDelegatorFunction(
-                repositoryHandlers,
-                null,
-                new AtomicBoolean(true),
-                ImmutableMap::of,
-                builder.directories),
-            SkyFunctions.REPOSITORY,
-            new RepositoryLoaderFunction()));
-
-    // Set extra precomputed values.
-    builder.addExtraPrecomputedValues(
-        PrecomputedValue.injected(
-            RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
-            Suppliers.ofInstance(ImmutableMap.of())));
-
-    return builder;
+    return new Builder(workspaceDir);
   }
 
   /** Builder for {@link BazelPackageLoader} instances. */
@@ -91,7 +56,7 @@ public class BazelPackageLoader extends AbstractPackageLoader {
     }
 
     @Override
-    protected String getDefaultDefaultPackageContents() {
+    protected String getDefaultDefaulsPackageContents() {
       return BazelRuleClassProvider.create().getDefaultsPackageContent(
           InvocationPolicy.getDefaultInstance());
     }
@@ -124,5 +89,12 @@ public class BazelPackageLoader extends AbstractPackageLoader {
   @Override
   protected ActionOnIOExceptionReadingBuildFile getActionOnIOExceptionReadingBuildFile() {
     return BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE;
+  }
+
+  @Override
+  protected ImmutableMap<SkyFunctionName, SkyFunction> getExtraExtraSkyFunctions() {
+    return ImmutableMap.<SkyFunctionName, SkyFunction>of(
+        SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction());
+    // TODO(nharmata): Add support for external repositories.
   }
 }
