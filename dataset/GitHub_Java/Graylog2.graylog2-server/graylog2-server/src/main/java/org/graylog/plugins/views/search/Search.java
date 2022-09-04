@@ -34,7 +34,6 @@ import org.graylog.plugins.views.search.views.PluginMetadataSummary;
 import org.graylog2.contentpacks.ContentPackable;
 import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.contentpacks.model.entities.SearchEntity;
-import org.graylog2.shared.rest.exceptions.MissingStreamPermissionException;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.mongojack.Id;
@@ -132,10 +131,8 @@ public abstract class Search implements ContentPackable<SearchEntity> {
 
         final ImmutableSet<String> defaultStreams = defaultStreamsSupplier.get();
 
-        if (defaultStreams.isEmpty()) {
-            throw new MissingStreamPermissionException("User doesn't have access to any streams",
-                    Collections.emptySet());
-        }
+        if (defaultStreams.isEmpty())
+            throw new PermissionException("User doesn't have access to any streams");
 
         final Set<Query> withDefaultStreams = withoutStreams.stream()
                 .map(q -> q.addStreamsToFilter(defaultStreams))
