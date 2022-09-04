@@ -179,17 +179,17 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public boolean supportsModifications(Path path) {
+  public boolean supportsModifications() {
     return true;
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively(Path path) {
+  public boolean supportsSymbolicLinksNatively() {
     return true;
   }
 
   @Override
-  public boolean supportsHardLinksNatively(Path path) {
+  public boolean supportsHardLinksNatively() {
     return true;
   }
 
