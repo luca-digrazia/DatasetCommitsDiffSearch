@@ -394,7 +394,6 @@ public class CcToolchainProviderHelper {
       return null;
     }
 
-
     if (fdoInputs != null) {
       fdoInputFile = fdoInputs.getFirst();
       protoProfileArtifact = fdoInputs.getSecond();
@@ -473,59 +472,49 @@ public class CcToolchainProviderHelper {
         configuration.getBinFragment().getRelative(runtimeSolibDirBase);
 
     // Static runtime inputs.
-    if (cppConfiguration.disableRuntimesFilegroups()
-        && !attributes.getStaticRuntimesLibs().isEmpty()) {
-      ruleContext.ruleError(
-          "cc_toolchain.static_runtime_libs attribute is removed, please use "
-              + "cc_toolchain.static_runtime_lib (singular) instead. See "
-              + "https://github.com/bazelbuild/bazel/issues/6942 for details.");
-    }
     TransitiveInfoCollection staticRuntimeLibDep =
-        attributes.getStaticRuntimeLib() != null
-            ? attributes.getStaticRuntimeLib()
-            : selectDep(
-                attributes.getStaticRuntimesLibs(), toolchainInfo.getStaticRuntimeLibsLabel());
+        selectDep(attributes.getStaticRuntimesLibs(), toolchainInfo.getStaticRuntimeLibsLabel());
     final NestedSet<Artifact> staticRuntimeLinkInputs;
     final Artifact staticRuntimeLinkMiddleman;
-
-    if (staticRuntimeLibDep != null) {
+    if (toolchainInfo.supportsEmbeddedRuntimes()) {
+      if (staticRuntimeLibDep == null) {
+        throw ruleContext.throwWithRuleError(
+            "Toolchain supports embedded runtimes, but didn't "
+                + "provide static_runtime_libs attribute.");
+      }
       staticRuntimeLinkInputs =
           staticRuntimeLibDep.getProvider(FileProvider.class).getFilesToBuild();
-      if (!staticRuntimeLinkInputs.isEmpty()) {
-        NestedSet<Artifact> staticRuntimeLinkMiddlemanSet =
-            CompilationHelper.getAggregatingMiddleman(
-                ruleContext, purposePrefix + "static_runtime_link", staticRuntimeLibDep);
-        staticRuntimeLinkMiddleman =
-            staticRuntimeLinkMiddlemanSet.isEmpty()
-                ? null
-                : Iterables.getOnlyElement(staticRuntimeLinkMiddlemanSet);
-      } else {
-        staticRuntimeLinkMiddleman = null;
-      }
-      Preconditions.checkState(
-          (staticRuntimeLinkMiddleman == null) == staticRuntimeLinkInputs.isEmpty());
     } else {
-      staticRuntimeLinkInputs = null;
+      staticRuntimeLinkInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    }
+
+    if (!staticRuntimeLinkInputs.isEmpty()) {
+      NestedSet<Artifact> staticRuntimeLinkMiddlemanSet =
+          CompilationHelper.getAggregatingMiddleman(
+              ruleContext, purposePrefix + "static_runtime_link", staticRuntimeLibDep);
+      staticRuntimeLinkMiddleman =
+          staticRuntimeLinkMiddlemanSet.isEmpty()
+              ? null
+              : Iterables.getOnlyElement(staticRuntimeLinkMiddlemanSet);
+    } else {
       staticRuntimeLinkMiddleman = null;
     }
 
+    Preconditions.checkState(
+        (staticRuntimeLinkMiddleman == null) == staticRuntimeLinkInputs.isEmpty());
+
     // Dynamic runtime inputs.
-    if (cppConfiguration.disableRuntimesFilegroups()
-        && !attributes.getDynamicRuntimesLibs().isEmpty()) {
-      ruleContext.ruleError(
-          "cc_toolchain.dynamic_runtime_libs attribute is removed, please use "
-              + "cc_toolchain.dynamic_runtime_lib (singular) instead. See "
-              + "https://github.com/bazelbuild/bazel/issues/6942 for details.");
-    }
     TransitiveInfoCollection dynamicRuntimeLibDep =
-        attributes.getDynamicRuntimeLib() != null
-            ? attributes.getDynamicRuntimeLib()
-            : selectDep(
-                attributes.getDynamicRuntimesLibs(), toolchainInfo.getDynamicRuntimeLibsLabel());
+        selectDep(attributes.getDynamicRuntimesLibs(), toolchainInfo.getDynamicRuntimeLibsLabel());
     NestedSet<Artifact> dynamicRuntimeLinkSymlinks;
     List<Artifact> dynamicRuntimeLinkInputs = new ArrayList<>();
     Artifact dynamicRuntimeLinkMiddleman;
-    if (dynamicRuntimeLibDep != null) {
+    if (toolchainInfo.supportsEmbeddedRuntimes()) {
+      if (dynamicRuntimeLibDep == null) {
+        throw ruleContext.throwWithRuleError(
+            "Toolchain supports embedded runtimes, but didn't "
+                + "provide dynamic_runtime_libs attribute.");
+      }
       NestedSetBuilder<Artifact> dynamicRuntimeLinkSymlinksBuilder = NestedSetBuilder.stableOrder();
       for (Artifact artifact :
           dynamicRuntimeLibDep.getProvider(FileProvider.class).getFilesToBuild()) {
@@ -540,14 +529,9 @@ public class CcToolchainProviderHelper {
                   configuration));
         }
       }
-      if (dynamicRuntimeLinkInputs.isEmpty()) {
-        dynamicRuntimeLinkSymlinks = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-      } else {
-        dynamicRuntimeLinkSymlinks = dynamicRuntimeLinkSymlinksBuilder.build();
-      }
-
+      dynamicRuntimeLinkSymlinks = dynamicRuntimeLinkSymlinksBuilder.build();
     } else {
-      dynamicRuntimeLinkSymlinks = null;
+      dynamicRuntimeLinkSymlinks = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
 
     if (!dynamicRuntimeLinkInputs.isEmpty()) {
@@ -568,8 +552,7 @@ public class CcToolchainProviderHelper {
     }
 
     Preconditions.checkState(
-        (dynamicRuntimeLinkMiddleman == null)
-            == (dynamicRuntimeLinkSymlinks == null || dynamicRuntimeLinkSymlinks.isEmpty()));
+        (dynamicRuntimeLinkMiddleman == null) == dynamicRuntimeLinkSymlinks.isEmpty());
 
     CcCompilationContext.Builder ccCompilationContextBuilder =
         new CcCompilationContext.Builder(ruleContext);
@@ -657,7 +640,7 @@ public class CcToolchainProviderHelper {
             attributes.getAdditionalBuildVariables()),
         getBuiltinIncludes(attributes.getLibc()),
         coverageEnvironment.build(),
-        toolchainInfo.supportsInterfaceSharedLibraries()
+        toolchainInfo.supportsInterfaceSharedObjects()
             ? attributes.getLinkDynamicLibraryTool()
             : null,
         builtInIncludeDirectories,
@@ -722,6 +705,8 @@ public class CcToolchainProviderHelper {
               ruleContext.getLabel(),
               configInfo,
               cppConfiguration.disableLegacyCrosstoolFields(),
+              cppConfiguration.disableCompilationModeFlags(),
+              cppConfiguration.disableLinkingModeFlags(),
               cppConfiguration.disableGenruleCcToolchainDependency());
         } catch (EvalException e) {
           throw ruleContext.throwWithRuleError(e.getMessage());
@@ -746,12 +731,13 @@ public class CcToolchainProviderHelper {
       toolchain =
           CppToolchainInfo.addLegacyFeatures(
               toolchain, CppToolchainInfo.getToolsDirectory(attributes.getCcToolchainLabel()));
-      CcToolchainConfigInfo ccToolchainConfigInfo =
-          CcToolchainConfigInfo.fromToolchain(ruleContext, toolchain);
+      CcToolchainConfigInfo ccToolchainConfigInfo = CcToolchainConfigInfo.fromToolchain(toolchain);
       return CppToolchainInfo.create(
           attributes.getCcToolchainLabel(),
           ccToolchainConfigInfo,
           cppConfiguration.disableLegacyCrosstoolFields(),
+          cppConfiguration.disableCompilationModeFlags(),
+          cppConfiguration.disableLinkingModeFlags(),
           cppConfiguration.disableGenruleCcToolchainDependency());
     } catch (EvalException e) {
       throw ruleContext.throwWithRuleError(e.getMessage());

@@ -91,9 +91,9 @@ public final class CcToolchainRule implements RuleDefinition {
 
   private static final LabelLateBoundDefault<?> FDO_PREFETCH_HINTS =
       LabelLateBoundDefault.fromTargetConfiguration(
-          CppConfiguration.class,
-          null,
-          (rule, attributes, cppConfig) -> cppConfig.getFdoPrefetchHintsLabel());
+      CppConfiguration.class,
+      null,
+      (rule, attributes, cppConfig) -> cppConfig.getFdoPrefetchHintsLabel());
 
   /**
    * Returns true if zipper should be loaded. We load the zipper executable if FDO optimization is
@@ -115,20 +115,16 @@ public final class CcToolchainRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(cpu) -->
          Deprecated. Use toolchain_identifier attribute instead. It will be a noop after
          <a href="https://github.com/bazelbuild/bazel/issues/5380">CROSSTOOL migration to Starlark
-         </a>, and will be removed by
-         <a href="https://github.com/bazelbuild/bazel/issues/7075">#7075</a>.
+         </a>.
 
          <p>When set, it will be used to perform crosstool_config.toolchain selection. It will take
          precedence over --cpu Bazel option.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("cpu", STRING).nonconfigurable("Used in configuration creation"))
+        .add(attr("cpu", STRING).nonconfigurable("Used in configuration creation").mandatory())
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(compiler) -->
-         Deprecated. Use <code>toolchain_identifier</code> attribute instead. It will be a noop
-         after
-         <a href="https://github.com/bazelbuild/bazel/issues/5380">
-           CROSSTOOL migration to Starlark
-         </a>, and will be removed by
-         <a href="https://github.com/bazelbuild/bazel/issues/7075">#7075</a>.
+         Deprecated. Use toolchain_identifier attribute instead. It will be a noop after
+         <a href="https://github.com/bazelbuild/bazel/issues/5380">CROSSTOOL migration to Starlark
+         </a>.
 
          <p>When set, it will be used to perform crosstool_config.toolchain selection. It will take
          precedence over --cpu Bazel option.</p>
@@ -137,13 +133,9 @@ public final class CcToolchainRule implements RuleDefinition {
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(all_files) -->
         Collection of all cc_toolchain artifacts. These artifacts will be added as inputs to all
         rules_cc related actions (with the exception of actions that are using more precise sets of
-        artifacts from attributes below). Bazel assumes that <code>all_files</code> is a superset
-        of all other artifact-providing attributes (e.g. linkstamp compilation needs both compile
-        and link files, so it takes <code>all_files</code>).
+        artifacts from attributes below).
 
-        <p>
-        This is what <code>cc_toolchain.files</code> contains, and this is used by all Starlark
-        rules using C++ toolchain.</p>
+        <p>This is what Runfiles provider of the cc_toolchain contains.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(
             attr("all_files", LABEL)
@@ -222,48 +214,20 @@ public final class CcToolchainRule implements RuleDefinition {
         all_files are used.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("coverage_files", LABEL).legacyAllowAnyFileType().cfg(HostTransition.INSTANCE))
-        /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(static_runtime_lib) -->
-        Static library artifact for the C++ runtime library (e.g. libstdc++.a).
-
-        <p>When specified, this will take precedence over 'static_runtime_libs'.</p>
-
-        <p>This will be used when 'static_link_cpp_runtimes' feature is enabled, and we're linking
-        dependencies statically.</p>
-        <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("static_runtime_lib", LABEL).legacyAllowAnyFileType())
-        /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(dynamic_runtime_lib) -->
-        Dynamic library artifact for the C++ runtime library (e.g. libstdc++.so).
-
-        <p>When specified, this will take precedence over 'dynamic_runtime_libs'.</p>
-
-        <p>This will be used when 'static_link_cpp_runtimes' feature is enabled, and we're linking
-        dependencies dynamically.</p>
-        <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("dynamic_runtime_lib", LABEL).legacyAllowAnyFileType())
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(static_runtime_libs) -->
-        Deprecated, use <code>static_runtime_lib</code>
-        (see <a href="https://github.com/bazelbuild/bazel/issues/6942">#6942</a>).
         A collection of artifacts for static libraries for the C++ runtime library
         (e.g. libstdc++.a).
 
         <p>cc_toolchain will select one of these libraries based on the label from
         crosstool_proto.static_runtimes_filegroup field.</p>
-
-        <p>This will be used when 'static_link_cpp_runtimes' feature is enabled, and we're linking
-        dependencies statically.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("static_runtime_libs", LABEL_LIST).legacyAllowAnyFileType())
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(dynamic_runtime_libs) -->
-        Deprecated, use <code>dynamic_runtime_lib</code>
-        (see <a href="https://github.com/bazelbuild/bazel/issues/6942">#6942</a>).
         A collection of artifacts for dynamic libraries for the C++ runtime library
         (e.g. libstdc++.so).
 
         <p>cc_toolchain will select one of these libraries based on the label from
         crosstool_proto.dynamic_runtimes_filegroup field.</p>
-
-        <p>This will be used when 'static_link_cpp_runtimes' feature is enabled, and we're linking
-        dependencies dynamically.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("dynamic_runtime_libs", LABEL_LIST).legacyAllowAnyFileType())
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(module_map) -->
@@ -325,31 +289,23 @@ public final class CcToolchainRule implements RuleDefinition {
                 .mandatoryProviders(ImmutableList.of(FdoPrefetchHintsProvider.PROVIDER.id()))
                 .value(FDO_PREFETCH_HINTS))
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(proto) -->
-        Deprecated, will be removed as part of
-        <a href="https://github.com/bazelbuild/bazel/issues/5380">
-          CROSSTOOL migration to Starlark
-        </a>.
         Inline content of the crosstool_config.toolchain. When specified, it will take precedence
         over the CROSSTOOL file.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("proto", Type.STRING))
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(toolchain_identifier) -->
-        The identifier used to match this cc_toolchain with the corresponding
-        crosstool_config.toolchain.
+        Deprecated. Will be replaced by toolchain_config attribute.
 
-        <p>
-          Until issue <a href="https://github.com/bazelbuild/bazel/issues/5380">#5380</a> is fixed
-          this is the recommended way of associating <code>cc_toolchain</code> with
-          <code>CROSSTOOL.toolchain</code>. It will be replaced by the <code>toolchain_config</code>
-          attribute (<a href="https://github.com/bazelbuild/bazel/issues/5380">#5380</a>).</p>
+        <p>The identifier used to match this cc_toolchain with the corresponding
+        crosstool_config.toolchain.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(
             attr("toolchain_identifier", Type.STRING)
                 .nonconfigurable("Used in configuration creation")
                 .value(""))
         /* <!-- #BLAZE_RULE(cc_toolchain).ATTRIBUTE(toolchain_config) -->
-        The label of the rule providing <code>cc_toolchain_config_info</code>. When specified,
-        cc_toolchain will not use the CROSSTOOL file at all.
+        The label of the rule providing cc_toolchain_config_info. When specified, cc_toolchain will
+        not use the CROSSTOOL file at all.
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(
             attr(TOOLCHAIN_CONFIG_ATTR, LABEL)
@@ -367,42 +323,3 @@ public final class CcToolchainRule implements RuleDefinition {
         .build();
   }
 }
-
-/*<!-- #BLAZE_RULE (NAME = cc_toolchain, TYPE = OTHER, FAMILY = C / C++) -->
-
-<p>Represents a C++ toolchain.</p>
-
-<p>
-  This rule is responsible for:
-
-  <ul>
-    <li>
-      Collecting all artifacts needed for C++ actions to run. This is done by
-      attributes such as <code>all_files</code>, <code>compiler_files</code>,
-      <code>linker_files</code>, or other attributes ending with <code>_files</code>). These are
-      most commonly filegroups globbing all required files.
-    </li>
-    <li>
-      Generating correct command lines for C++ actions. This is done using CROSSTOOL, or using
-      <code>CcToolchainConfigInfo</code> provider (details below).
-    </li>
-  </ul>
-</p>
-
-<p>
-  When using CROSSTOOL to configure command line generation, use
-  <code>toolchain_identifier</code> attribute to match current <code>cc_toolchain</code> with
-  the corresponding <code>CROSSTOOL.toolchain</code>. See also this
-  <a href="https://docs.bazel.build/versions/master/crosstool-reference.html">
-    page
-  </a> for elaborate CROSSTOOL documentation.
-</p>
-
-<p>
-  When using <code>CcToolchainConfigInfo</code> provider to configure command line generation,
-  use <code>toolchain_config</code> attribute to point to a rule that provides
-  <code>CcToolchainConfigInfo</code>. This will be the preferred way of configuring command line
-  generation once the issue <a href="https://github.com/bazelbuild/bazel/issues/5380">#5380</a>
-  is fixed.
-</p>
-<!-- #END_BLAZE_RULE -->*/
