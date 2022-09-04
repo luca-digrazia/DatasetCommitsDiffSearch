@@ -122,8 +122,8 @@ public class MongoIndexSet implements IndexSet {
     }
 
     @Override
-    public String[] getManagedIndices() {
-        final Set<String> indexNames = indices.getIndexNamesAndAliases(getIndexWildcard()).keySet();
+    public String[] getManagedIndicesNames() {
+        final Set<String> indexNames = indices.getIndexNamesAndAliases(getWriteIndexWildcard()).keySet();
         // also allow restore archives to be returned
         final List<String> result = indexNames.stream()
                 .filter(this::isManagedIndex)
@@ -138,18 +138,18 @@ public class MongoIndexSet implements IndexSet {
     }
 
     @Override
-    public String getIndexWildcard() {
+    public String getWriteIndexWildcard() {
         return indexWildcard;
     }
 
     @Override
-    public String getNewestIndex() throws NoTargetIndexException {
-        return buildIndexName(getNewestIndexNumber());
+    public String getNewestTargetName() throws NoTargetIndexException {
+        return buildIndexName(getNewestTargetNumber());
     }
 
     @VisibleForTesting
-    int getNewestIndexNumber() throws NoTargetIndexException {
-        final Set<String> indexNames = indices.getIndexNamesAndAliases(getIndexWildcard()).keySet();
+    int getNewestTargetNumber() throws NoTargetIndexException {
+        final Set<String> indexNames = indices.getIndexNamesAndAliases(getWriteIndexWildcard()).keySet();
 
         if (indexNames.isEmpty()) {
             throw new NoTargetIndexException();
@@ -196,18 +196,18 @@ public class MongoIndexSet implements IndexSet {
 
     @VisibleForTesting
     boolean isGraylogDeflectorIndex(final String indexName) {
-        return !isNullOrEmpty(indexName) && !isWriteIndexAlias(indexName) && deflectorIndexPattern.matcher(indexName).matches();
+        return !isNullOrEmpty(indexName) && !isDeflectorAlias(indexName) && deflectorIndexPattern.matcher(indexName).matches();
     }
 
     @Override
     @Nullable
-    public String getActiveWriteIndex() throws TooManyAliasesException {
+    public String getCurrentActualTargetIndex() throws TooManyAliasesException {
         return indices.aliasTarget(getWriteIndexAlias());
     }
 
     @Override
-    public Map<String, Set<String>> getAllIndexAliases() {
-        final Map<String, Set<String>> indexNamesAndAliases = indices.getIndexNamesAndAliases(getIndexWildcard());
+    public Map<String, Set<String>> getAllDeflectorAliases() {
+        final Map<String, Set<String>> indexNamesAndAliases = indices.getIndexNamesAndAliases(getWriteIndexWildcard());
 
         // filter out the restored archives from the result set
         return indexNamesAndAliases.entrySet().stream()
@@ -226,13 +226,13 @@ public class MongoIndexSet implements IndexSet {
     }
 
     @Override
-    public boolean isWriteIndexAlias(String index) {
+    public boolean isDeflectorAlias(String index) {
         return getWriteIndexAlias().equals(index);
     }
 
     @Override
     public boolean isManagedIndex(String index) {
-        return !isNullOrEmpty(index) && !isWriteIndexAlias(index) && indexPattern.matcher(index).matches();
+        return !isNullOrEmpty(index) && !isDeflectorAlias(index) && indexPattern.matcher(index).matches();
     }
 
     @Override
@@ -250,7 +250,7 @@ public class MongoIndexSet implements IndexSet {
 
             // Do we have a target index to point to?
             try {
-                final String currentTarget = getNewestIndex();
+                final String currentTarget = getNewestTargetName();
                 LOG.info("Pointing to already existing index target <{}>", currentTarget);
 
                 pointTo(currentTarget);
@@ -276,7 +276,7 @@ public class MongoIndexSet implements IndexSet {
         int oldTargetNumber;
 
         try {
-            oldTargetNumber = getNewestIndexNumber();
+            oldTargetNumber = getNewestTargetNumber();
         } catch (NoTargetIndexException ex) {
             oldTargetNumber = -1;
         }

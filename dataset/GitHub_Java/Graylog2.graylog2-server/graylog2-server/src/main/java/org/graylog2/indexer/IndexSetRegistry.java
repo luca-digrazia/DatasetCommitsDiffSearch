@@ -27,7 +27,7 @@ public interface IndexSetRegistry extends Iterable<IndexSet> {
      *
      * @return list of index sets
      */
-    Set<IndexSet> getAll();
+    Set<IndexSet> getAllIndexSets();
 
     /**
      * Returns the {@link IndexSet} for the given ID.
@@ -38,12 +38,12 @@ public interface IndexSetRegistry extends Iterable<IndexSet> {
     Optional<IndexSet> get(String indexSetId);
 
     /**
-     * Returns the {@link IndexSet} for the given index.
+     * Returns the {@link IndexSet} for the given index name.
      *
-     * @param index name of the index
+     * @param indexName name of the index
      * @return index set that manages the given index
      */
-    Optional<IndexSet> getForIndex(String index);
+    Optional<IndexSet> getForIndexName(String indexName);
 
     /**
      * Returns the {@link IndexSet} that is marked as default.
@@ -55,33 +55,33 @@ public interface IndexSetRegistry extends Iterable<IndexSet> {
     IndexSet getDefault();
 
     /**
-     * Returns a list of all managed indices.
+     * Returns a list with the names of all managed indices.
      *
-     * @return list of managed indices
+     * @return list with names of managed indices
      */
-    String[] getManagedIndices();
+    String[] getManagedIndicesNames();
 
     /**
-     * Checks if the given index is managed by any index set.
+     * Checks if the given index name is managed by Graylog.
      *
-     * @param index the index name to check
-     * @return true when index is managed by any index set, false otherwise
+     * @param indexName the index name to check
+     * @return true when index is managed by Graylog, false otherwise
      */
-    boolean isManagedIndex(String index);
+    boolean isManagedIndex(String indexName);
 
     /**
-     * Returns the list of all index wildcards.
+     * Returns the list of all write index wildcards.
      *
      * @return list of wildcards
      */
-    String[] getIndexWildcards();
+    String[] getWriteIndexWildcards();
 
     /**
-     * Returns the list of all write index aliases.
+     * Returns the list of all write index names.
      *
      * @return list of names
      */
-    String[] getWriteIndexAliases();
+    String[] getWriteIndexNames();
 
     /**
      * Checks if all deflector aliases exist.
@@ -99,11 +99,11 @@ public interface IndexSetRegistry extends Iterable<IndexSet> {
     boolean isCurrentWriteIndexAlias(String indexName);
 
     /**
-     * Checks if the given index is a current write index in any {@link IndexSet}.
+     * Checks if the given index name is a current write index in any {@link IndexSet}.
      *
-     * @param index the index name to check
+     * @param indexName the index name to check
      * @return true when index is a current write index, false otherwise
      * @throws TooManyAliasesException
      */
-    boolean isCurrentWriteIndex(String index) throws TooManyAliasesException;
+    boolean isCurrentWriteIndex(String indexName) throws TooManyAliasesException;
 }
