@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.actions;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -81,6 +82,17 @@ public final class Root implements Comparable<Root>, Serializable, SkylarkValue 
     Preconditions.checkArgument(root.startsWith(execRoot));
     Preconditions.checkArgument(!root.equals(execRoot));
     return new Root(execRoot, root);
+  }
+
+  /**
+   * DO NOT USE IN PRODUCTION CODE!
+   *
+   * <p>Returns the given path as a derived root. This method only exists as a convenience for
+   * tests, which don't need a proper Root object.
+   */
+  @VisibleForTesting
+  public static Root asDerivedRoot(Path path) {
+    return new Root(path, path);
   }
 
   public static Root middlemanRoot(Path execRoot, Path outputDir) {
