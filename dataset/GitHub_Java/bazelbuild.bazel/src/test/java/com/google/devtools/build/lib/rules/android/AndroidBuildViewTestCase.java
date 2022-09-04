@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -60,9 +61,17 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
   }
 
   protected Iterable<Artifact> getNativeLibrariesInApk(ConfiguredTarget target) {
-    return Iterables.filter(
-        getGeneratingAction(getCompressedUnsignedApk(target)).getInputs(),
-        a -> a.getFilename().endsWith(".so"));
+    SpawnAction compressedUnsignedApkaction = getCompressedUnsignedApkAction(target);
+    ImmutableList.Builder<Artifact> result = ImmutableList.builder();
+    for (Artifact output : compressedUnsignedApkaction.getInputs()) {
+      if (!output.getExecPathString().endsWith(".so")) {
+        continue;
+      }
+
+      result.add(output);
+    }
+
+    return result.build();
   }
 
   protected Label getGeneratingLabelForArtifact(Artifact artifact) {
@@ -101,9 +110,17 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
         "_unsigned.apk");
   }
 
+  protected SpawnAction getCompressedUnsignedApkAction(ConfiguredTarget target) {
+    return getGeneratingSpawnAction(getCompressedUnsignedApk(target));
+  }
+
   protected Artifact getFinalUnsignedApk(ConfiguredTarget target) {
     return getFirstArtifactEndingWith(
         target.getProvider(FileProvider.class).getFilesToBuild(), "_unsigned.apk");
+  }
+
+  protected SpawnAction getFinalUnsignedApkAction(ConfiguredTarget target) {
+    return getGeneratingSpawnAction(getFinalUnsignedApk(target));
   }
 
   protected Artifact getResourceApk(ConfiguredTarget target) {
@@ -123,7 +140,7 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
   }
 
   protected List<String> resourceArguments(ResourceContainer resource) {
-    return getGeneratingSpawnActionArgs(resource.getApk());
+    return resourceGeneratingAction(resource).getArguments();
   }
 
   protected SpawnAction resourceGeneratingAction(ResourceContainer resource) {
@@ -146,20 +163,21 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
             : provider.getDirectAndroidResources());
   }
 
-  protected Artifact getResourceClassJar(final ConfiguredTarget target) {
+  protected ActionAnalysisMetadata getResourceClassJarAction(final ConfiguredTarget target) {
     JavaRuleOutputJarsProvider jarProvider = target.getProvider(JavaRuleOutputJarsProvider.class);
     assertThat(jarProvider).isNotNull();
-    return Iterables.find(
-            jarProvider.getOutputJars(),
-            outputJar -> {
-              assertThat(outputJar).isNotNull();
-              assertThat(outputJar.getClassJar()).isNotNull();
-              return outputJar
-                  .getClassJar()
-                  .getFilename()
-                  .equals(target.getTarget().getName() + "_resources.jar");
-            })
-        .getClassJar();
+    return getGeneratingAction(
+        Iterables.find(
+                jarProvider.getOutputJars(),
+                outputJar -> {
+                  assertThat(outputJar).isNotNull();
+                  assertThat(outputJar.getClassJar()).isNotNull();
+                  return outputJar
+                      .getClassJar()
+                      .getFilename()
+                      .equals(target.getTarget().getName() + "_resources.jar");
+                })
+            .getClassJar());
   }
 
   // android resources related tests
