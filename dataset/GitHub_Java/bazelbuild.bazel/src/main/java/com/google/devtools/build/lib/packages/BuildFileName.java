@@ -24,12 +24,6 @@ public enum BuildFileName {
       return getFilenameFragment();
     }
   },
-  WORKSPACE_DOT_BAZEL("WORKSPACE.bazel") {
-    @Override
-    public PathFragment getBuildFileFragment(PackageIdentifier packageIdentifier) {
-      return getFilenameFragment();
-    }
-  },
   BUILD("BUILD") {
     @Override
     public PathFragment getBuildFileFragment(PackageIdentifier packageIdentifier) {
@@ -43,9 +37,11 @@ public enum BuildFileName {
     }
   };
 
+  private static final BuildFileName[] VALUES = BuildFileName.values();
+
   private final PathFragment filenameFragment;
 
-  BuildFileName(String filename) {
+  private BuildFileName(String filename) {
     this.filenameFragment = PathFragment.create(filename);
   }
 
@@ -59,4 +55,8 @@ public enum BuildFileName {
    * @param packageIdentifier the identifier for this package
    */
   public abstract PathFragment getBuildFileFragment(PackageIdentifier packageIdentifier);
+
+  public static BuildFileName lookupByOrdinal(int ordinal) {
+    return VALUES[ordinal];
+  }
 }

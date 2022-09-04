@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.expectThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.UnixGlob;
 import java.io.IOException;
 import java.util.Arrays;
@@ -160,12 +159,12 @@ public class PathPackageLocatorTest extends FoundationTestCase {
     locator =
         new PathPackageLocator(
             outputBase,
-            ImmutableList.of(Root.fromPath(rootDir1), Root.fromPath(rootDir2)),
+            ImmutableList.of(rootDir1, rootDir2),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     locatorWithSymlinks =
         new PathPackageLocator(
             outputBase,
-            ImmutableList.of(Root.fromPath(rootDir3)),
+            ImmutableList.of(rootDir3),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
   }
 
@@ -273,7 +272,7 @@ public class PathPackageLocatorTest extends FoundationTestCase {
     createBuildFile(nonExistentRoot1, "X");
     // The package isn't found
     // The package is found, because we didn't drop the root:
-    assertThrows(
+    expectThrows(
         NoSuchPackageException.class,
         () -> locator.getPackageBuildFile(PackageIdentifier.createInMainRepo("X")));
 
@@ -309,10 +308,10 @@ public class PathPackageLocatorTest extends FoundationTestCase {
                     BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY)
                 .getPathEntries())
         .containsExactly(
-            Root.fromPath(belowClient),
-            Root.fromPath(clientPath),
-            Root.fromPath(workspace.getRelative("somewhere")),
-            Root.fromPath(clientPath.getRelative("below")))
+            belowClient,
+            clientPath,
+            workspace.getRelative("somewhere"),
+            clientPath.getRelative("below"))
         .inOrder();
   }
 
@@ -338,7 +337,7 @@ public class PathPackageLocatorTest extends FoundationTestCase {
         workspace.getRelative("foo"),
         BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     assertThat(eventCollector.count()).isSameAs(1);
-    assertContainsEvent("The package path element 'foo' will be taken relative");
+    assertContainsEvent("The package path element './foo' will be taken relative");
   }
 
   /** Regression test for bug: "IllegalArgumentException in PathPackageLocator.create()" */

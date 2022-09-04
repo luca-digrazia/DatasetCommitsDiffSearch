@@ -35,7 +35,9 @@ import com.google.devtools.build.lib.repository.ExternalPackageUtil;
 import com.google.devtools.build.lib.repository.ExternalRuleNotFoundException;
 import com.google.devtools.build.lib.skyframe.ActionEnvironmentFunction;
 import com.google.devtools.build.lib.skyframe.FileStateValue.RegularFileStateValue;
+import com.google.devtools.build.lib.skyframe.FileSymlinkException;
 import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
@@ -216,7 +218,13 @@ public abstract class RepositoryFunction {
       }
 
       SkyKey fileSkyKey = FileValue.key(rootedPath);
-      FileValue fileValue = (FileValue) env.getValueOrThrow(fileSkyKey, IOException.class);
+      FileValue fileValue =
+          (FileValue)
+              env.getValueOrThrow(
+                  fileSkyKey,
+                  IOException.class,
+                  FileSymlinkException.class,
+                  InconsistentFilesystemException.class);
 
       if (fileValue == null || !fileValue.isFile() || fileValue.isSpecialFile()) {
         return false;
@@ -226,7 +234,10 @@ public abstract class RepositoryFunction {
     } catch (LabelSyntaxException e) {
       throw new IllegalStateException(
           "Key " + key + " is not a correct file key (should be in form FILE:label)", e);
-    } catch (IOException | EvalException e) {
+    } catch (IOException
+        | FileSymlinkException
+        | InconsistentFilesystemException
+        | EvalException e) {
       // Consider those exception to be a cause for invalidation
       return false;
     }
@@ -477,8 +488,9 @@ public abstract class RepositoryFunction {
         repositoryDirectory, PathFragment.EMPTY_FRAGMENT));
     FileValue value;
     try {
-      value = (FileValue) env.getValueOrThrow(outputDirectoryKey, IOException.class);
-    } catch (IOException e) {
+      value = (FileValue) env.getValueOrThrow(outputDirectoryKey, IOException.class,
+          FileSymlinkException.class, InconsistentFilesystemException.class);
+    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
       throw new RepositoryFunctionException(
           new IOException("Could not access " + repositoryDirectory + ": " + e.getMessage()),
           Transience.PERSISTENT);

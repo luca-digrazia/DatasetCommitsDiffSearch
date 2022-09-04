@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.runtime.ProjectFile;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.common.options.OptionPriority.PriorityCategory;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -61,7 +60,7 @@ public final class ProjectFileSupport {
       // cwd is a subdirectory of the workspace, that will be surprising, and we should interpret it
       // relative to the cwd instead.
       PathFragment projectFilePath = PathFragment.create(targets.get(0).substring(1));
-      List<Root> packagePath =
+      List<Path> packagePath =
           PathPackageLocator.create(
                   // We only need a non-null outputBase for the PathPackageLocator if we support
                   // external
@@ -74,7 +73,7 @@ public final class ProjectFileSupport {
                   BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY)
               .getPathEntries();
       ProjectFile projectFile = projectFileProvider.getProjectFile(
-          workingDir, packagePath, projectFilePath, optionsParser);
+          workingDir, packagePath, projectFilePath);
       eventHandler.handle(Event.info("Using " + projectFile.getName()));
 
       optionsParser.parse(

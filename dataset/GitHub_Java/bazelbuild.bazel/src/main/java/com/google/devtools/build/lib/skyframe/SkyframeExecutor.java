@@ -262,6 +262,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   protected int modifiedFiles;
   protected int outputDirtyFiles;
   protected int modifiedFilesDuringPreviousBuild;
+  private final Predicate<PathFragment> allowedMissingInputs;
   private final ExternalFileAction externalFileAction;
 
   private final ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions;
@@ -295,6 +296,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       BlazeDirectories directories,
       Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
+      Predicate<PathFragment> allowedMissingInputs,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ExternalFileAction externalFileAction,
       PathFragment blacklistedPackagePrefixesFile,
@@ -319,6 +321,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       factoryMapBuilder.put(factory.getKey(), factory);
     }
     this.buildInfoFactories = factoryMapBuilder.build();
+    this.allowedMissingInputs = allowedMissingInputs;
     this.extraSkyFunctions = extraSkyFunctions;
     this.externalFileAction = externalFileAction;
     this.blacklistedPackagePrefixesFile = blacklistedPackagePrefixesFile;
@@ -338,7 +341,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   private ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions(
-      PackageFactory pkgFactory) {
+      PackageFactory pkgFactory,
+      Predicate<PathFragment> allowedMissingInputs) {
     ConfiguredRuleClassProvider ruleClassProvider =
         (ConfiguredRuleClassProvider) pkgFactory.getRuleClassProvider();
     // TODO(janakr): use this semaphore to bound memory usage for SkyFunctions besides
@@ -427,7 +431,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.TARGET_COMPLETION, CompletionFunction.targetCompletionFunction(eventBus));
     map.put(SkyFunctions.ASPECT_COMPLETION, CompletionFunction.aspectCompletionFunction(eventBus));
     map.put(SkyFunctions.TEST_COMPLETION, new TestCompletionFunction());
-    map.put(SkyFunctions.ARTIFACT, new ArtifactFunction());
+    map.put(SkyFunctions.ARTIFACT, new ArtifactFunction(allowedMissingInputs));
     map.put(
         SkyFunctions.BUILD_INFO_COLLECTION,
         new BuildInfoCollectionFunction(
@@ -589,7 +593,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   protected void init() {
     progressReceiver = newSkyframeProgressReceiver();
-    ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions = skyFunctions(pkgFactory);
+    ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions =
+        skyFunctions(pkgFactory, allowedMissingInputs);
     memoizingEvaluator =
         evaluatorSupplier.create(
             skyFunctions,

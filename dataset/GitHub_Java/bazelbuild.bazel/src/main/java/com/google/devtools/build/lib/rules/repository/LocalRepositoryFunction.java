@@ -18,7 +18,9 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.skyframe.FileSymlinkException;
 import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -101,8 +103,14 @@ public class LocalRepositoryFunction extends RepositoryFunction {
     SkyKey workspaceFileKey = FileValue.key(workspaceRootedFile);
     FileValue value;
     try {
-      value = (FileValue) env.getValueOrThrow(workspaceFileKey, IOException.class);
-    } catch (IOException e) {
+      value =
+          (FileValue)
+              env.getValueOrThrow(
+                  workspaceFileKey,
+                  IOException.class,
+                  FileSymlinkException.class,
+                  InconsistentFilesystemException.class);
+    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
       throw new RepositoryFunctionException(
           new IOException("Could not access " + workspaceRootedFile + ": " + e.getMessage()),
           Transience.PERSISTENT);

@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
@@ -84,8 +83,7 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
                 .put(SkyFunctions.ARTIFACT, new DummyArtifactFunction(artifactValueMap))
                 .put(
                     SkyFunctions.ACTION_TEMPLATE_EXPANSION,
-                    new ActionTemplateExpansionFunction(
-                        new ActionKeyContext(), Suppliers.ofInstance(false)))
+                    new ActionTemplateExpansionFunction(Suppliers.ofInstance(false)))
                 .build(),
             differencer);
     driver = new SequentialBuildDriver(evaluator);
@@ -104,7 +102,8 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
     List<Action> actions = evaluate(spawnActionTemplate);
     assertThat(actions).hasSize(3);
 
-    ArtifactOwner owner = ActionTemplateExpansionValue.key(spawnActionTemplate);
+    ArtifactOwner owner = ActionTemplateExpansionValue.createActionTemplateExpansionKey(
+        spawnActionTemplate);
     int i = 0;
     for (Action action : actions) {
       String childName = "child" + i;

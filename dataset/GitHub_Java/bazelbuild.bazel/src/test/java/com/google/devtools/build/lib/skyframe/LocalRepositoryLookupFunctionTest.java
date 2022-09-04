@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
@@ -70,15 +69,15 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
         new AtomicReference<>(
             new PathPackageLocator(
                 outputBase,
-                ImmutableList.of(Root.fromPath(rootDirectory)),
+                ImmutableList.of(rootDirectory),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
     deletedPackages = new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(rootDirectory, outputBase, rootDirectory),
+            new ServerDirectories(rootDirectory, outputBase),
             rootDirectory,
             analysisMock.getProductName());
-    ExternalFilesHelper externalFilesHelper = ExternalFilesHelper.createForTesting(
+    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(
         pkgLocator, ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS, directories);
 
     Map<SkyFunctionName, SkyFunction> skyFunctions = new HashMap<>();
@@ -108,7 +107,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
                 .setEnvironmentExtensions(
                     ImmutableList.<EnvironmentExtension>of(
                         new PackageFactory.EmptyEnvironmentExtension()))
-                .build(ruleClassProvider),
+                .build(ruleClassProvider, scratch.getFileSystem()),
             directories));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
     skyFunctions.put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction());
@@ -144,8 +143,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
   @Test
   public void testNoPath() throws Exception {
     LocalRepositoryLookupValue repositoryLookupValue =
-        lookupDirectory(
-            RootedPath.toRootedPath(Root.fromPath(rootDirectory), PathFragment.EMPTY_FRAGMENT));
+        lookupDirectory(RootedPath.toRootedPath(rootDirectory, PathFragment.EMPTY_FRAGMENT));
     assertThat(repositoryLookupValue).isNotNull();
     assertThat(repositoryLookupValue.getRepository()).isEqualTo(RepositoryName.MAIN);
     assertThat(repositoryLookupValue.getPath()).isEqualTo(PathFragment.EMPTY_FRAGMENT);
@@ -156,9 +154,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
     scratch.file("some/path/BUILD");
 
     LocalRepositoryLookupValue repositoryLookupValue =
-        lookupDirectory(
-            RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory), PathFragment.create("some/path")));
+        lookupDirectory(RootedPath.toRootedPath(rootDirectory, PathFragment.create("some/path")));
     assertThat(repositoryLookupValue).isNotNull();
     assertThat(repositoryLookupValue.getRepository()).isEqualTo(RepositoryName.MAIN);
     assertThat(repositoryLookupValue.getPath()).isEqualTo(PathFragment.EMPTY_FRAGMENT);
@@ -171,9 +167,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
     scratch.file("local/repo/BUILD");
 
     LocalRepositoryLookupValue repositoryLookupValue =
-        lookupDirectory(
-            RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory), PathFragment.create("local/repo")));
+        lookupDirectory(RootedPath.toRootedPath(rootDirectory, PathFragment.create("local/repo")));
     assertThat(repositoryLookupValue).isNotNull();
     assertThat(repositoryLookupValue.getRepository().getName()).isEqualTo("@local");
     assertThat(repositoryLookupValue.getPath()).isEqualTo(PathFragment.create("local/repo"));
@@ -188,8 +182,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
     LocalRepositoryLookupValue repositoryLookupValue =
         lookupDirectory(
             RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory.getRelative("/abs")),
-                PathFragment.create("local/repo")));
+                rootDirectory.getRelative("/abs"), PathFragment.create("local/repo")));
     assertThat(repositoryLookupValue).isNotNull();
     assertThat(repositoryLookupValue.getRepository().getName()).isEqualTo("@local");
     assertThat(repositoryLookupValue.getPath()).isEqualTo(PathFragment.create("/abs/local/repo"));
@@ -202,9 +195,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
     scratch.file("local/repo/BUILD");
 
     LocalRepositoryLookupValue repositoryLookupValue =
-        lookupDirectory(
-            RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory), PathFragment.create("local/repo")));
+        lookupDirectory(RootedPath.toRootedPath(rootDirectory, PathFragment.create("local/repo")));
     assertThat(repositoryLookupValue).isNotNull();
     assertThat(repositoryLookupValue.getRepository().getName()).isEqualTo("@local");
     assertThat(repositoryLookupValue.getPath()).isEqualTo(PathFragment.create("local/repo"));
@@ -219,8 +210,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
     LocalRepositoryLookupValue repositoryLookupValue =
         lookupDirectory(
             RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory.getRelative("/abs")),
-                PathFragment.create("local/repo")));
+                rootDirectory.getRelative("/abs"), PathFragment.create("local/repo")));
     assertThat(repositoryLookupValue).isNotNull();
     assertThat(repositoryLookupValue.getRepository().getName()).isEqualTo("@local");
     assertThat(repositoryLookupValue.getPath()).isEqualTo(PathFragment.create("/abs/local/repo"));
@@ -235,8 +225,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
 
     LocalRepositoryLookupValue repositoryLookupValue =
         lookupDirectory(
-            RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory), PathFragment.create("local/repo/sub/package")));
+            RootedPath.toRootedPath(rootDirectory, PathFragment.create("local/repo/sub/package")));
     assertThat(repositoryLookupValue).isNotNull();
     assertThat(repositoryLookupValue.getRepository().getName()).isEqualTo("@local");
     assertThat(repositoryLookupValue.getPath()).isEqualTo(PathFragment.create("local/repo"));
@@ -249,9 +238,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
     scratch.file("local/repo/BUILD");
 
     LocalRepositoryLookupValue repositoryLookupValue =
-        lookupDirectory(
-            RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory), PathFragment.create("local/repo")));
+        lookupDirectory(RootedPath.toRootedPath(rootDirectory, PathFragment.create("local/repo")));
     assertThat(repositoryLookupValue).isNotNull();
     assertThat(repositoryLookupValue.getRepository()).isEqualTo(RepositoryName.MAIN);
     assertThat(repositoryLookupValue.getPath()).isEqualTo(PathFragment.EMPTY_FRAGMENT);
@@ -269,9 +256,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
     scratch.file("local/repo/BUILD");
 
     SkyKey localRepositoryKey =
-        createKey(
-            RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory), PathFragment.create("local/repo")));
+        createKey(RootedPath.toRootedPath(rootDirectory, PathFragment.create("local/repo")));
     EvaluationResult<LocalRepositoryLookupValue> result = lookupDirectory(localRepositoryKey);
 
     assertThatEvaluationResult(result)
@@ -291,9 +276,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
     scratch.file("local/repo/BUILD");
 
     LocalRepositoryLookupValue repositoryLookupValue =
-        lookupDirectory(
-            RootedPath.toRootedPath(
-                Root.fromPath(rootDirectory), PathFragment.create("local/repo")));
+        lookupDirectory(RootedPath.toRootedPath(rootDirectory, PathFragment.create("local/repo")));
     assertThat(repositoryLookupValue).isNotNull();
     // In this case, the repository should be MAIN as we can't find any local_repository rules.
     assertThat(repositoryLookupValue.getRepository()).isEqualTo(RepositoryName.MAIN);

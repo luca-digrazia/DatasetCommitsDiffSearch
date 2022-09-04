@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe.packages;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
@@ -77,9 +76,6 @@ public class BazelPackageLoader extends AbstractPackageLoader {
 
   /** Builder for {@link BazelPackageLoader} instances. */
   public static class Builder extends AbstractPackageLoader.Builder {
-    private static final ConfiguredRuleClassProvider DEFAULT_RULE_CLASS_PROVIDER =
-        BazelRuleClassProvider.create();
-
     private Builder(Path workspaceDir) {
       super(workspaceDir);
     }
@@ -91,12 +87,12 @@ public class BazelPackageLoader extends AbstractPackageLoader {
 
     @Override
     protected RuleClassProvider getDefaultRuleClassProvider() {
-      return DEFAULT_RULE_CLASS_PROVIDER;
+      return BazelRuleClassProvider.create();
     }
 
     @Override
     protected String getDefaultDefaultPackageContents() {
-      return DEFAULT_RULE_CLASS_PROVIDER.getDefaultsPackageContent(
+      return BazelRuleClassProvider.create().getDefaultsPackageContent(
           InvocationPolicy.getDefaultInstance());
     }
   }

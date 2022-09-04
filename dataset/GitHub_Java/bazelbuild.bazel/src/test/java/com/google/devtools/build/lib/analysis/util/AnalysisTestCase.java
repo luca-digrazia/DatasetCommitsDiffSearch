@@ -170,6 +170,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         workspaceStatusActionFactory,
         buildInfoFactories,
         ImmutableList.of(),
+        input -> false,
         analysisMock.getSkyFunctions(directories),
         ImmutableList.of(),
         PathFragment.EMPTY_FRAGMENT,
