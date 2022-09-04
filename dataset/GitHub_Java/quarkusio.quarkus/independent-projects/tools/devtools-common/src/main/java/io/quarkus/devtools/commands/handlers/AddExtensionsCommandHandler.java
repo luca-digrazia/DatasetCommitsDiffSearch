@@ -3,6 +3,8 @@ package io.quarkus.devtools.commands.handlers;
 import static io.quarkus.devtools.commands.AddExtensions.EXTENSION_MANAGER;
 import static io.quarkus.devtools.messagewriter.MessageIcons.NOK_ICON;
 
+import io.quarkus.bootstrap.model.AppArtifactCoords;
+import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.devtools.commands.AddExtensions;
 import io.quarkus.devtools.commands.data.QuarkusCommandException;
 import io.quarkus.devtools.commands.data.QuarkusCommandInvocation;
@@ -12,7 +14,6 @@ import io.quarkus.devtools.project.extensions.ExtensionInstallPlan;
 import io.quarkus.devtools.project.extensions.ExtensionManager;
 import io.quarkus.devtools.project.extensions.ExtensionManager.InstallResult;
 import io.quarkus.maven.ArtifactCoords;
-import io.quarkus.maven.ArtifactKey;
 import io.quarkus.platform.catalog.predicate.ExtensionPredicate;
 import io.quarkus.registry.catalog.Extension;
 import io.quarkus.registry.catalog.ExtensionCatalog;
@@ -70,7 +71,7 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
             throws IOException {
         final ExtensionCatalog catalog = invocation.getExtensionsCatalog();
         final String quarkusCore = catalog.getQuarkusCoreVersion();
-        final Collection<ArtifactCoords> importedPlatforms = invocation.getQuarkusProject().getExtensionManager()
+        final Collection<AppArtifactCoords> importedPlatforms = invocation.getQuarkusProject().getExtensionManager()
                 .getInstalledPlatforms();
         ExtensionInstallPlan.Builder builder = ExtensionInstallPlan.builder();
         boolean multipleKeywords = keywords.size() > 1;
@@ -78,12 +79,12 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
             int countColons = StringUtils.countMatches(keyword, ":");
             // Check if it's just groupId:artifactId
             if (countColons == 1) {
-                ArtifactKey artifactKey = ArtifactKey.fromString(keyword);
-                builder.addManagedExtension(new ArtifactCoords(artifactKey, null));
+                AppArtifactKey artifactKey = AppArtifactKey.fromString(keyword);
+                builder.addManagedExtension(new AppArtifactCoords(artifactKey, null));
                 continue;
             } else if (countColons > 1) {
                 // it's a gav
-                builder.addIndependentExtension(ArtifactCoords.fromString(keyword));
+                builder.addIndependentExtension(AppArtifactCoords.fromString(keyword));
                 continue;
             }
             List<Extension> listed = listInternalExtensions(quarkusCore, keyword, catalog.getExtensions());
@@ -100,7 +101,7 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
                 String groupId = e.getArtifact().getGroupId();
                 String artifactId = e.getArtifact().getArtifactId();
                 String version = e.getArtifact().getVersion();
-                ArtifactCoords extensionCoords = new ArtifactCoords(groupId, artifactId, version);
+                AppArtifactCoords extensionCoords = new AppArtifactCoords(groupId, artifactId, version);
 
                 boolean managed = false;
                 ExtensionOrigin firstPlatform = null;
@@ -108,7 +109,7 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
                     if (!origin.isPlatform()) {
                         continue;
                     }
-                    if (importedPlatforms.contains(new ArtifactCoords(origin.getBom().getGroupId(),
+                    if (importedPlatforms.contains(new AppArtifactCoords(origin.getBom().getGroupId(),
                             origin.getBom().getArtifactId(), null, "pom", origin.getBom().getVersion()))) {
                         managed = true;
                         builder.addManagedExtension(extensionCoords);
@@ -121,7 +122,9 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
                 if (!managed && firstPlatform != null) {
                     // TODO this is not properly picking the platform BOMs
                     builder.addManagedExtension(extensionCoords);
-                    builder.addPlatform(firstPlatform.getBom());
+                    final ArtifactCoords bomCoords = firstPlatform.getBom();
+                    builder.addPlatform(new AppArtifactCoords(bomCoords.getGroupId(), bomCoords.getArtifactId(), null, "pom",
+                            bomCoords.getVersion()));
                     managed = true;
                 }
                 if (!managed) {
@@ -130,7 +133,7 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
             }
             // TODO
             //if (!listed.isEmpty()) {
-            //    builder.addPlatform(new ArtifactCoords(catalog.getBomGroupId(), catalog.getBomArtifactId(), null, "pom",
+            //    builder.addPlatform(new AppArtifactCoords(catalog.getBomGroupId(), catalog.getBomArtifactId(), null, "pom",
             //            catalog.getBomVersion()));
             //}
         }
