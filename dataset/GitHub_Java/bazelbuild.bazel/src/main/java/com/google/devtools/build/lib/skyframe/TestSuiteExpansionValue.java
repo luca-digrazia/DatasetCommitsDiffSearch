@@ -21,8 +21,8 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.serialization.NotSerializableRuntimeException;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -38,16 +38,15 @@ import java.util.Collection;
 @ThreadSafe
 @VisibleForTesting
 public final class TestSuiteExpansionValue implements SkyValue {
-  private ResolvedTargets<Label> labels;
+  private ResolvedTargets<Target> targets;
 
-  TestSuiteExpansionValue(ResolvedTargets<Label> labels) {
-    this.labels = Preconditions.checkNotNull(labels);
+  TestSuiteExpansionValue(ResolvedTargets<Target> targets) {
+    this.targets = Preconditions.checkNotNull(targets);
   }
 
-  public ResolvedTargets<Label> getLabels() {
-    return labels;
+  public ResolvedTargets<Target> getTargets() {
+    return targets;
   }
-
 
   @SuppressWarnings("unused")
   private void writeObject(ObjectOutputStream out) {
@@ -75,7 +74,6 @@ public final class TestSuiteExpansionValue implements SkyValue {
   }
 
   /** A list of targets of which all test suites should be expanded. */
-  @AutoCodec
   @ThreadSafe
   static final class TestSuiteExpansionKey implements SkyKey {
     private final ImmutableSortedSet<Label> targets;
