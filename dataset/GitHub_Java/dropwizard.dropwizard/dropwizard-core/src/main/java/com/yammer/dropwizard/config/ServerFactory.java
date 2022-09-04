@@ -52,10 +52,9 @@ public class ServerFactory {
     private final HttpConfiguration config;
     private final RequestLogHandlerFactory requestLogHandlerFactory;
 
-    public ServerFactory(HttpConfiguration config, String name) {
+    public ServerFactory(HttpConfiguration config) {
         this.config = config;
-        this.requestLogHandlerFactory = new RequestLogHandlerFactory(config.getRequestLogConfiguration(),
-                                                                     name);
+        this.requestLogHandlerFactory = new RequestLogHandlerFactory(config.getRequestLogConfiguration());
     }
 
     public Server buildServer(Environment env) throws ConfigurationException {
