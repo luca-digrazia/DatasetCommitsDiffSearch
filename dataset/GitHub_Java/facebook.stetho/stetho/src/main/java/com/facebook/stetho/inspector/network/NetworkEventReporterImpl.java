@@ -110,7 +110,7 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       if (body != null) {
         return new String(body, Utf8Charset.INSTANCE);
       }
-    } catch (IOException | OutOfMemoryError e) {
+    } catch (IOException e) {
       CLog.writeToConsole(
           peerManager,
           Console.MessageLevel.WARNING,
