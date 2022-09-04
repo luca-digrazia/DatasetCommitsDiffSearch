@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -36,6 +35,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.BufferedReader;
@@ -201,12 +201,6 @@ public final class Runfiles {
   private final NestedSet<SymlinkEntry> rootSymlinks;
 
   /**
-   * A set of middlemen artifacts. {@link RuleConfiguredTargetBuilder} adds these to the {@link
-   * FilesToRunProvider} of binaries that include this runfiles tree in their runfiles.
-   */
-  private final NestedSet<Artifact> extraMiddlemen;
-
-  /**
    * Interface used for adding empty files to the runfiles at the last minute. Mainly to support
    * python-related rules adding __init__.py files.
    */
@@ -300,7 +294,6 @@ public final class Runfiles {
       NestedSet<SymlinkEntry> symlinks,
       NestedSet<SymlinkEntry> rootSymlinks,
       NestedSet<PruningManifest> pruningManifests,
-      NestedSet<Artifact> extraMiddlemen,
       EmptyFilesSupplier emptyFilesSupplier,
       ConflictPolicy conflictPolicy,
       boolean legacyExternalRunfiles) {
@@ -308,7 +301,6 @@ public final class Runfiles {
     this.unconditionalArtifacts = Preconditions.checkNotNull(artifacts);
     this.symlinks = Preconditions.checkNotNull(symlinks);
     this.rootSymlinks = Preconditions.checkNotNull(rootSymlinks);
-    this.extraMiddlemen = Preconditions.checkNotNull(extraMiddlemen);
     this.pruningManifests = Preconditions.checkNotNull(pruningManifests);
     this.emptyFilesSupplier = Preconditions.checkNotNull(emptyFilesSupplier);
     this.conflictPolicy = conflictPolicy;
@@ -330,8 +322,13 @@ public final class Runfiles {
     return unconditionalArtifacts;
   }
 
-  public NestedSet<Artifact> getExtraMiddlemen() {
-    return extraMiddlemen;
+  /**
+   * Returns the artifacts that are unconditionally included in the runfiles (as opposed to
+   * pruning manifest candidates, which may or may not be included). Middleman artifacts are
+   * excluded.
+   */
+  public Iterable<Artifact> getUnconditionalArtifactsWithoutMiddlemen() {
+    return Iterables.filter(unconditionalArtifacts, Artifact.MIDDLEMAN_FILTER);
   }
 
   /**
@@ -350,6 +347,14 @@ public final class Runfiles {
       allArtifacts.addTransitive(manifest.getCandidateRunfiles());
     }
     return allArtifacts.build();
+  }
+
+  /**
+   * Returns the collection of runfiles as artifacts, including both unconditional artifacts
+   * and pruning manifest candidates. Middleman artifacts are excluded.
+   */
+  public Iterable<Artifact> getArtifactsWithoutMiddlemen() {
+    return Iterables.filter(getArtifacts(), Artifact.MIDDLEMAN_FILTER);
   }
 
   /** Returns the symlinks. */
@@ -439,7 +444,7 @@ public final class Runfiles {
     ConflictChecker checker = new ConflictChecker(conflictPolicy, eventHandler, location);
     Map<PathFragment, Artifact> manifest = getSymlinksAsMap(checker);
     // Add unconditional artifacts (committed to inclusion on construction of runfiles).
-    for (Artifact artifact : getUnconditionalArtifacts()) {
+    for (Artifact artifact : getUnconditionalArtifactsWithoutMiddlemen()) {
       checker.put(manifest, artifact.getRootRelativePath(), artifact);
     }
 
@@ -592,7 +597,7 @@ public final class Runfiles {
     // If multiple artifacts have the same root-relative path, the last one in the list will win.
     // That is because the runfiles tree cannot contain the same artifact for different
     // configurations, because it only uses root-relative paths.
-    for (Artifact artifact : unconditionalArtifacts) {
+    for (Artifact artifact : Iterables.filter(unconditionalArtifacts, Artifact.MIDDLEMAN_FILTER)) {
       result.put(artifact.getRootRelativePath(), artifact);
     }
     return result;
@@ -636,11 +641,8 @@ public final class Runfiles {
    * Returns if there are no runfiles.
    */
   public boolean isEmpty() {
-    return unconditionalArtifacts.isEmpty()
-        && symlinks.isEmpty()
-        && rootSymlinks.isEmpty()
-        && pruningManifests.isEmpty()
-        && extraMiddlemen.isEmpty();
+    return unconditionalArtifacts.isEmpty() && symlinks.isEmpty() && rootSymlinks.isEmpty()
+        && pruningManifests.isEmpty();
   }
 
   /**
@@ -712,8 +714,6 @@ public final class Runfiles {
      * @param artifact Artifact to store in map. This may be null to indicate an empty file.
      */
     public void put(Map<PathFragment, Artifact> map, PathFragment path, Artifact artifact) {
-      Preconditions.checkArgument(
-          artifact == null || !artifact.isMiddlemanArtifact(), "%s", artifact);
       if (policy != ConflictPolicy.IGNORE && map.containsKey(path)) {
         // Previous and new entry might have value of null
         Artifact previous = map.get(path);
@@ -753,7 +753,6 @@ public final class Runfiles {
         NestedSetBuilder.stableOrder();
     private NestedSetBuilder<PruningManifest> pruningManifestsBuilder =
         NestedSetBuilder.stableOrder();
-    private NestedSetBuilder<Artifact> extraMiddlemenBuilder = NestedSetBuilder.stableOrder();
     private EmptyFilesSupplier emptyFilesSupplier = DUMMY_EMPTY_FILES_SUPPLIER;
 
     /** Build the Runfiles object with this policy */
@@ -805,16 +804,9 @@ public final class Runfiles {
      * Builds a new Runfiles object.
      */
     public Runfiles build() {
-      return new Runfiles(
-          suffix,
-          artifactsBuilder.build(),
-          symlinksBuilder.build(),
-          rootSymlinksBuilder.build(),
-          pruningManifestsBuilder.build(),
-          extraMiddlemenBuilder.build(),
-          emptyFilesSupplier,
-          conflictPolicy,
-          legacyExternalRunfiles);
+      return new Runfiles(suffix, artifactsBuilder.build(), symlinksBuilder.build(),
+          rootSymlinksBuilder.build(), pruningManifestsBuilder.build(),
+          emptyFilesSupplier, conflictPolicy, legacyExternalRunfiles);
     }
 
     /**
@@ -1059,17 +1051,6 @@ public final class Runfiles {
     }
 
     /**
-     * Add extra middlemen artifacts that should be built by reverse dependency binaries. This
-     * method exists solely to support the unfortunate legacy behavior of some rules; new uses
-     * should not be added.
-     */
-    public Builder addLegacyExtraMiddleman(Artifact middleman) {
-      Preconditions.checkArgument(middleman.isMiddlemanArtifact(), middleman);
-      extraMiddlemenBuilder.add(middleman);
-      return this;
-    }
-
-    /**
      * Add the other {@link Runfiles} object transitively.
      */
     public Builder merge(Runfiles runfiles) {
@@ -1116,7 +1097,6 @@ public final class Runfiles {
       if (includePruningManifests) {
         pruningManifestsBuilder.addTransitive(runfiles.getPruningManifests());
       }
-      extraMiddlemenBuilder.addTransitive(runfiles.getExtraMiddlemen());
       if (emptyFilesSupplier == DUMMY_EMPTY_FILES_SUPPLIER) {
         emptyFilesSupplier = runfiles.getEmptyFilesProvider();
       } else {

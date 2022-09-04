@@ -97,6 +97,10 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
             .addProvider(RunfilesProvider.withData(Runfiles.EMPTY, runfiles))
             .addOutputGroup(
                 OutputGroupProvider.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
+            .addProvider(dependencyArgsProviders)
+            .addProvider(sourceJarsProvider)
+            .addProvider(javaRunfilesProvider)
+            .addProvider(JavaRuleOutputJarsProvider.EMPTY)
             .addNativeDeclaredProvider(javaInfo);
 
     if (ruleContext.getFragment(JavaConfiguration.class).jplPropagateCcLinkParamsStore()) {

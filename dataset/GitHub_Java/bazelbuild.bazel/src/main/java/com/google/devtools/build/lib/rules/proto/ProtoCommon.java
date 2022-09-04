@@ -20,7 +20,7 @@ import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
@@ -100,44 +99,6 @@ public class ProtoCommon {
   }
 
   /**
-   * Returns all proto source roots in this lib and in its transitive dependencies, each prefixed
-   * by {@code --proto_path}.
-   *
-   * Build will fail if the {@code proto_source_root} of the current lib is different than the
-   * package name.
-   */
-  public static NestedSet<String> collectTransitiveProtoPathFlags(RuleContext ruleContext) {
-    NestedSetBuilder<String> protoPathFlags = NestedSetBuilder.stableOrder();
-
-    // first add the protoSourceRoot of the current target, if any
-    String protoSourceRoot =
-        ruleContext.attributes().get("proto_source_root", Type.STRING);
-    if (protoSourceRoot != null && !protoSourceRoot.isEmpty()) {
-      checkProtoSourceRootIsTheSameAsPackage(protoSourceRoot, ruleContext);
-      protoPathFlags.add("--proto_path=" + protoSourceRoot);
-    }
-
-    for (ProtoSourcesProvider provider : ruleContext.getPrerequisites(
-            "deps", Mode.TARGET, ProtoSourcesProvider.class)) {
-      protoPathFlags.addTransitive(provider.getTransitiveProtoPathFlags());
-    }
-
-    return protoPathFlags.build();
-  }
-
-  private static void checkProtoSourceRootIsTheSameAsPackage(
-      String protoSourceRoot, RuleContext ruleContext) {
-    if (!ruleContext.getLabel().getPackageName().equals(protoSourceRoot)) {
-      ruleContext.attributeError(
-          "proto_source_root",
-          "proto_source_root must be the same as the package name ("
-              + ruleContext.getLabel().getPackageName() + ")."
-              + " not '" + protoSourceRoot + "'."
-      );
-    }
-  }
-
-  /**
    * Check that .proto files in sources are from the same package. This is done to avoid clashes
    * with the generated sources.
    */
@@ -181,8 +142,8 @@ public class ProtoCommon {
   public static ImmutableList<Artifact> getGeneratedOutputs(RuleContext ruleContext,
       ImmutableList<Artifact> protoSources, String extension, boolean pythonNames) {
     ImmutableList.Builder<Artifact> outputsBuilder = new ImmutableList.Builder<>();
-    ArtifactRoot genfiles =
-        ruleContext.getConfiguration().getGenfilesDirectory(ruleContext.getRule().getRepository());
+    Root genfiles = ruleContext.getConfiguration().getGenfilesDirectory(
+        ruleContext.getRule().getRepository());
     for (Artifact src : protoSources) {
       PathFragment srcPath = src.getRootRelativePath();
       if (pythonNames) {

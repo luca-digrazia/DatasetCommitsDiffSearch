@@ -484,7 +484,7 @@ public class JavaSkylarkCommon {
             .build())
       .useDefaultShellEnvironment()
       .setMnemonic("JavaIjar");
-    actions.registerAction(actionBuilder.build(actions.getActionConstructionContext()));
+    actions.buildAndRegisterSpawnAction(actionBuilder);
     return interfaceJar;
   }
   /**
