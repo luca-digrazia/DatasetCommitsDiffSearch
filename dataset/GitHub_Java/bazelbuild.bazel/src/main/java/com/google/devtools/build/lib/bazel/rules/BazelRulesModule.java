@@ -24,10 +24,12 @@ import com.google.devtools.build.lib.rules.cpp.FdoSupportFunction;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportValue;
 import com.google.devtools.build.lib.rules.genquery.GenQuery;
 import com.google.devtools.build.lib.runtime.BlazeModule;
+import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
+
 import java.io.IOException;
 
 /**
@@ -38,7 +40,7 @@ public class BazelRulesModule extends BlazeModule {
   private CommandEnvironment env;
 
   @Override
-  public void beforeCommand(CommandEnvironment env) {
+  public void beforeCommand(Command command, CommandEnvironment env) {
     this.env = env;
     env.getEventBus().register(this);
   }

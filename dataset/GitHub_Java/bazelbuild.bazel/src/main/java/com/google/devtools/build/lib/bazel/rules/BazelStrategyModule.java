@@ -23,9 +23,8 @@ import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.common.options.Converters.AssignmentConverter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.util.List;
 import java.util.Map;
 
@@ -39,13 +38,10 @@ public class BazelStrategyModule extends BlazeModule {
       name = "spawn_strategy",
       defaultValue = "",
       category = "strategy",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
-          "Specify how spawn actions are executed by default. "
-              + "'standalone' means run all of them locally without any kind of sandboxing. "
-              + "'sandboxed' means to run them in a sandboxed environment with limited privileges "
-              + "(details depend on platform support)."
+          "Specify how spawn actions are executed by default."
+              + "'standalone' means run all of them locally."
+              + "'sandboxed' means run them in namespaces based sandbox (available only on Linux)"
     )
     public String spawnStrategy;
 
@@ -53,28 +49,21 @@ public class BazelStrategyModule extends BlazeModule {
       name = "genrule_strategy",
       defaultValue = "",
       category = "strategy",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
-          "Specify how to execute genrules. "
-              + "'standalone' means run all of them locally. "
+          "Specify how to execute genrules."
+              + "'standalone' means run all of them locally."
               + "'sandboxed' means run them in namespaces based sandbox (available only on Linux)"
     )
     public String genruleStrategy;
 
-    @Option(
-      name = "strategy",
-      allowMultiple = true,
-      converter = AssignmentConverter.class,
-      defaultValue = "",
-      category = "strategy",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Specify how to distribute compilation of other spawn actions. "
-              + "Example: 'Javac=local' means to spawn Java compilation locally. "
-              + "'JavaIjar=sandboxed' means to spawn Java Ijar actions in a sandbox. "
-    )
+    @Option(name = "strategy",
+        allowMultiple = true,
+        converter = AssignmentConverter.class,
+        defaultValue = "",
+        category = "strategy",
+        help = "Specify how to distribute compilation of other spawn actions. "
+            + "Example: 'Javac=local' means to spawn Java compilation locally. "
+            + "'JavaIjar=sandboxed' means to spawn Java Ijar actions in a sandbox. ")
     public List<Map.Entry<String, String>> strategy;
   }
 
