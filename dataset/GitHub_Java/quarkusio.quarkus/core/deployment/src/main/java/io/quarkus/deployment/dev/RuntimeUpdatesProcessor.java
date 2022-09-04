@@ -281,13 +281,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
         try {
             ClassScanResult changedTestClassResult = compileTestClasses();
             ClassScanResult changedApp = checkForChangedClasses(compiler, DevModeContext.ModuleInfo::getMain, false, test);
-            if (changedApp.compilationHappened) {
-                if (compileProblem != null) {
-                    testSupport.getTestRunner().testCompileFailed(compileProblem);
-                } else {
-                    testSupport.getTestRunner().testCompileSucceeded();
-                }
-            }
             Set<String> filesChanges = new HashSet<>(checkForFileChange(s -> s.getTest().orElse(null), test));
             filesChanges.addAll(checkForFileChange(DevModeContext.ModuleInfo::getMain, test));
             boolean configFileRestartNeeded = filesChanges.stream().map(test.watchedFilePaths::get)
@@ -295,11 +288,15 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
 
             ClassScanResult merged = ClassScanResult.merge(changedTestClassResult, changedApp);
             if (configFileRestartNeeded) {
-                if (compileProblem == null) {
+                if (compileProblem != null) {
+                    testSupport.getTestRunner().testCompileFailed(compileProblem);
+                } else {
                     testSupport.getTestRunner().runTests(null);
                 }
             } else if (merged.isChanged()) {
-                if (compileProblem == null) {
+                if (compileProblem != null) {
+                    testSupport.getTestRunner().testCompileFailed(compileProblem);
+                } else {
                     testSupport.getTestRunner().runTests(merged);
                 }
             }
@@ -662,7 +659,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                             compileProblem = null;
                         } catch (Exception e) {
                             compileProblem = e;
-                            return classScanResult;
+                            return new ClassScanResult();
                         }
                         boolean timestampsChanged = false;
                         //check to make sure no changes have occurred while the compilation was
