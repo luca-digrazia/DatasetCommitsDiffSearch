@@ -111,10 +111,9 @@ public class AndroidDeviceTest extends BuildViewTestCase {
         .containsExactly("nexus_6", "userdata_images.dat", "emulator-meta-data.pb");
 
     Runfiles runfiles = getDefaultRunfiles(target);
-    assertThat(ActionsTestUtil.execPaths(runfiles.getUnconditionalArtifacts()))
-        .containsAtLeast(
-            getToolDependencyExecPathString("//tools/android/emulator:support_file1"),
-            getToolDependencyExecPathString("//tools/android/emulator:support_file2"));
+    assertThat(ActionsTestUtil.execPaths(runfiles.getUnconditionalArtifacts())).containsAllOf(
+        getToolDependencyExecPathString("//tools/android/emulator:support_file1"),
+        getToolDependencyExecPathString("//tools/android/emulator:support_file2"));
 
     SpawnAction action = (SpawnAction) actionsTestUtil().getActionForArtifactEndingWith(
         actionsTestUtil().artifactClosureOf(getFilesToBuild(target)),
@@ -166,7 +165,7 @@ public class AndroidDeviceTest extends BuildViewTestCase {
 
     assertThat(action.getExecutionInfo()).doesNotContainKey(REQUIRES_KVM);
     assertThat(ActionsTestUtil.execPaths(action.getInputs()))
-        .containsAtLeast(
+        .containsAllOf(
             getToolDependencyExecPathString("//tools/android/emulator:support_file1"),
             getToolDependencyExecPathString("//tools/android/emulator:support_file2"));
 
@@ -576,7 +575,8 @@ public class AndroidDeviceTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testAndroidDeviceBrokerInfoExposedToSkylark() throws Exception {
+  public void testDeviceBrokerInfoExposedToSkylark()
+      throws Exception {
     scratch.file(
         "tools/android/emulated_device/BUILD",
         "android_device(",
@@ -594,7 +594,7 @@ public class AndroidDeviceTest extends BuildViewTestCase {
         "javatests/com/app/skylarktest/skylarktest.bzl",
         "mystring = provider(fields = ['content'])",
         "def _impl(ctx):",
-        "  return [mystring(content = ctx.attr.dep[AndroidDeviceBrokerInfo])]",
+        "  return [mystring(content = ctx.attr.dep[DeviceBrokerInfo])]",
         "skylarktest = rule(implementation=_impl, attrs = {'dep': attr.label()})");
     scratch.file(
         "javatests/com/app/skylarktest/BUILD",
