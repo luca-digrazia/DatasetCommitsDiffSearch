@@ -29,9 +29,9 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.packages.NativeProvider.WithLegacySkylarkName;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor.WithLegacySkylarkName;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
@@ -55,7 +55,7 @@ import java.util.Map;
   category = SkylarkModuleCategory.PROVIDER,
   doc = "A provider for compilation and linking of objc."
 )
-public final class ObjcProvider extends Info {
+public final class ObjcProvider extends SkylarkClassObject {
 
   /** Skylark name for the ObjcProvider. */
   public static final String SKYLARK_NAME = "objc";
@@ -499,7 +499,8 @@ public final class ObjcProvider extends Info {
   private final ImmutableMap<Key<?>, NestedSet<?>> strictDependencyItems;
 
   /** Skylark constructor and identifier for ObjcProvider. */
-  public static final NativeProvider<ObjcProvider> SKYLARK_CONSTRUCTOR = new Constructor();
+  public static final NativeClassObjectConstructor<ObjcProvider> SKYLARK_CONSTRUCTOR =
+      new Constructor();
 
   private ObjcProvider(
       ImmutableMap<Key<?>, NestedSet<?>> items,
@@ -609,27 +610,30 @@ public final class ObjcProvider extends Info {
    * @param avoidCcProviders cc providers which contain the dependency subtrees to subtract
    */
   // TODO(b/19795062): Investigate subtraction generalized to NestedSet.
+  @SuppressWarnings("unchecked")
   public ObjcProvider subtractSubtrees(Iterable<ObjcProvider> avoidObjcProviders,
       Iterable<CcLinkParamsProvider> avoidCcProviders) {
     // LIBRARY and CC_LIBRARY need to be special cased for objc-cc interop.
-    // A library which is a dependency of a cc_library may be present in all or any of 
+    // A library which is a dependency of a cc_library may be present in all or any of
     // three possible locations (and may be duplicated!):
     // 1. ObjcProvider.LIBRARY
     // 2. ObjcProvider.CC_LIBRARY
     // 3. CcLinkParamsProvider->LibraryToLink->getArtifact()
     // TODO(cpeyser): Clean up objc-cc interop.
-    HashSet<Artifact> avoidLibrariesSet = new HashSet<>();
+    HashSet<PathFragment> avoidLibrariesSet = new HashSet<>();
     for (CcLinkParamsProvider linkProvider : avoidCcProviders) {
       NestedSet<LibraryToLink> librariesToLink =
           linkProvider.getCcLinkParams(true, false).getLibraries();
       for (LibraryToLink libraryToLink : librariesToLink.toList()) {
-        avoidLibrariesSet.add(libraryToLink.getArtifact());
+        avoidLibrariesSet.add(libraryToLink.getArtifact().getRunfilesPath());
       }
     }
     for (ObjcProvider avoidProvider : avoidObjcProviders) {
-      avoidLibrariesSet.addAll(avoidProvider.getCcLibraries());
+      for (Artifact ccLibrary : avoidProvider.getCcLibraries()) {
+        avoidLibrariesSet.add(ccLibrary.getRunfilesPath());
+      }
       for (Artifact libraryToAvoid : avoidProvider.getPropagable(LIBRARY)) {
-        avoidLibrariesSet.add(libraryToAvoid);
+        avoidLibrariesSet.add(libraryToAvoid.getRunfilesPath());
       }
     }
     ObjcProvider.Builder objcProviderBuilder = new ObjcProvider.Builder();
@@ -638,10 +642,12 @@ public final class ObjcProvider extends Info {
         addTransitiveAndFilter(objcProviderBuilder, CC_LIBRARY,
             ccLibraryNotYetLinked(avoidLibrariesSet));
       } else if (key == LIBRARY) {
-        addTransitiveAndFilter(objcProviderBuilder, LIBRARY,
-            notContainedIn(avoidLibrariesSet));
+        addTransitiveAndFilter(objcProviderBuilder, LIBRARY, notContainedIn(avoidLibrariesSet));
       } else if (NON_SUBTRACTABLE_KEYS.contains(key)) {
         addTransitiveAndAvoid(objcProviderBuilder, key, ImmutableList.<ObjcProvider>of());
+      } else if (key.getType() == Artifact.class) {
+        addTransitiveAndAvoidArtifacts(objcProviderBuilder, ((Key<Artifact>) key),
+            avoidObjcProviders);
       } else {
         addTransitiveAndAvoid(objcProviderBuilder, key, avoidObjcProviders);
       }
@@ -657,8 +663,8 @@ public final class ObjcProvider extends Info {
    *     return false
    */
   private static Predicate<Artifact> notContainedIn(
-      final HashSet<Artifact> linkedLibraryArtifacts) {
-    return libraryToLink -> !linkedLibraryArtifacts.contains(libraryToLink);
+      final HashSet<PathFragment> linkedLibraryArtifacts) {
+    return libraryToLink -> !linkedLibraryArtifacts.contains(libraryToLink.getRunfilesPath());
   }
 
   /**
@@ -669,8 +675,9 @@ public final class ObjcProvider extends Info {
    *     predicate will return false
    */
   private static Predicate<LibraryToLink> ccLibraryNotYetLinked(
-      final HashSet<Artifact> linkedLibraryArtifacts) {
-    return libraryToLink -> !linkedLibraryArtifacts.contains(libraryToLink.getArtifact());
+      final HashSet<PathFragment> linkedLibraryArtifacts) {
+    return libraryToLink -> !linkedLibraryArtifacts.contains(
+        libraryToLink.getArtifact().getRunfilesPath());
   }
 
   @SuppressWarnings("unchecked")
@@ -692,6 +699,19 @@ public final class ObjcProvider extends Info {
       objcProviderBuilder.addAllForDirectDependents(key,
           Iterables.filter(strictItems.toList(), filterPredicate));
     }
+  }
+
+  private void addTransitiveAndAvoidArtifacts(ObjcProvider.Builder objcProviderBuilder,
+      Key<Artifact> key, Iterable<ObjcProvider> avoidProviders) {
+    // Artifacts to avoid may be in a different configuration and thus a different
+    // root directory, hence only the path fragment after the root directory is compared.
+    HashSet<PathFragment> avoidPathsSet = new HashSet<>();
+    for (ObjcProvider avoidProvider : avoidProviders) {
+      for (Artifact artifact : avoidProvider.getPropagable(key)) {
+        avoidPathsSet.add(artifact.getRunfilesPath());
+      }
+    }
+    addTransitiveAndFilter(objcProviderBuilder, key, notContainedIn(avoidPathsSet));
   }
 
   @SuppressWarnings("unchecked")
@@ -987,7 +1007,8 @@ public final class ObjcProvider extends Info {
     }
   }
 
-  private static class Constructor extends NativeProvider<ObjcProvider>
+  private static class Constructor
+      extends NativeClassObjectConstructor<ObjcProvider>
       implements WithLegacySkylarkName {
     public Constructor() {
       super(ObjcProvider.class, ObjcProvider.SKYLARK_NAME);
