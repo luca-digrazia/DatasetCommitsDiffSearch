@@ -77,6 +77,7 @@ import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.ideinfo.AndroidStudioInfoAspect;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
 import com.google.devtools.build.lib.rules.Alias.AliasRule;
 import com.google.devtools.build.lib.rules.android.AarImportBaseRule;
@@ -509,6 +510,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AndroidRuleClasses.AndroidSdkRule());
           builder.addRuleDefinition(new BazelAndroidToolsDefaultsJarRule());
           builder.addRuleDefinition(new AndroidRuleClasses.AndroidBaseRule());
+          builder.addRuleDefinition(new AndroidRuleClasses.AndroidAaptBaseRule());
           builder.addRuleDefinition(new AndroidRuleClasses.AndroidResourceSupportRule());
           builder.addRuleDefinition(
               new AndroidRuleClasses.AndroidBinaryBaseRule(
@@ -656,6 +658,20 @@ public class BazelRuleClassProvider {
         }
       };
 
+  public static final RuleSet ANDROID_STUDIO_ASPECT =
+      new RuleSet() {
+        @Override
+        public void init(Builder builder) {
+          AndroidStudioInfoAspect androidStudioInfoAspect = new AndroidStudioInfoAspect();
+          builder.addNativeAspectClass(androidStudioInfoAspect);
+        }
+
+        @Override
+        public ImmutableList<RuleSet> requires() {
+          return ImmutableList.of(CORE_RULES);
+        }
+      };
+
   public static final RuleSet VARIOUS_WORKSPACE_RULES =
       new RuleSet() {
         @Override
@@ -698,6 +714,7 @@ public class BazelRuleClassProvider {
           PYTHON_RULES,
           OBJC_RULES,
           J2OBJC_RULES,
+          ANDROID_STUDIO_ASPECT,
           TESTING_SUPPORT,
           VARIOUS_WORKSPACE_RULES,
           // This rule set is a little special: it needs to depend on every configuration fragment
