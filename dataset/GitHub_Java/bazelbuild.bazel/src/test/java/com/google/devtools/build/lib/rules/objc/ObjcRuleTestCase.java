@@ -35,7 +35,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.ReleaseBu
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.STRIP;
 import static com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.NO_ASSET_CATALOG_ERROR_FORMAT;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.expectThrows;
+import static org.junit.Assert.fail;
 
 import com.dd.plist.NSDictionary;
 import com.dd.plist.PropertyListParser;
@@ -2176,7 +2176,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       ConfiguredTarget target,
       String platformName,
       String zipName,
-      String bundlePath)
+      String bundlePath,
+      String toolchain)
       throws Exception {
     String zipArtifactName = String.format("%s.%s.zip", target.getTarget().getName(), zipName);
     Artifact swiftLibsZip = getBinArtifact(zipArtifactName, target);
@@ -2190,6 +2191,10 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     CustomCommandLine.Builder expectedCommandLine =
         CustomCommandLine.builder().addDynamicString(MOCK_SWIFTSTDLIBTOOLWRAPPER_PATH);
 
+    if (toolchain != null) {
+      expectedCommandLine.add("--toolchain", toolchain);
+    }
+
     expectedCommandLine
         .addExecPath("--output_zip_path", swiftLibsZip)
         .add("--bundle_path", bundlePath)
@@ -2200,24 +2205,45 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   protected void checkRegisterSwiftSupportActions(
+      RuleType ruleType, String platformName, String toolchain) throws Exception {
+    checkRegisterSwiftSupportActions(createTargetWithSwift(ruleType), platformName, toolchain);
+  }
+
+  protected void checkRegisterSwiftSupportActions(
       RuleType ruleType, String platformName) throws Exception {
-    checkRegisterSwiftSupportActions(createTargetWithSwift(ruleType), platformName);
+    checkRegisterSwiftSupportActions(createTargetWithSwift(ruleType), platformName, null);
+  }
+
+  protected void checkRegisterSwiftSupportActions(
+      ConfiguredTarget target, String platformName, String toolchain) throws Exception {
+    assertSwiftStdlibToolAction(
+        target, platformName, "swiftsupport", "SwiftSupport/" + platformName, toolchain);
   }
 
   protected void checkRegisterSwiftSupportActions(
       ConfiguredTarget target, String platformName) throws Exception {
     assertSwiftStdlibToolAction(
-        target, platformName, "swiftsupport", "SwiftSupport/" + platformName);
+        target, platformName, "swiftsupport", "SwiftSupport/" + platformName, null);
+  }
+
+  protected void checkRegisterSwiftStdlibActions(
+      RuleType ruleType, String platformName, String toolchain) throws Exception {
+    checkRegisterSwiftStdlibActions(createTargetWithSwift(ruleType), platformName, toolchain);
   }
 
   protected void checkRegisterSwiftStdlibActions(
       RuleType ruleType, String platformName) throws Exception {
-    checkRegisterSwiftStdlibActions(createTargetWithSwift(ruleType), platformName);
+    checkRegisterSwiftStdlibActions(createTargetWithSwift(ruleType), platformName, null);
+  }
+
+  protected void checkRegisterSwiftStdlibActions(
+      ConfiguredTarget target, String platformName, String toolchain) throws Exception {
+    assertSwiftStdlibToolAction(target, platformName, "swiftstdlib", "Frameworks", toolchain);
   }
 
   protected void checkRegisterSwiftStdlibActions(
       ConfiguredTarget target, String platformName) throws Exception {
-    assertSwiftStdlibToolAction(target, platformName, "swiftstdlib", "Frameworks");
+    assertSwiftStdlibToolAction(target, platformName, "swiftstdlib", "Frameworks", null);
   }
 
   /**
@@ -2828,13 +2854,16 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "--ios_multi_cpus=i386,x86_64,armv7,arm64", "--watchos_cpus=armv7k", "--cpu=ios_armv7");
     ruleTypePair.scratchTargets(scratch);
 
-    AssertionError expected =
-        expectThrows(AssertionError.class, () -> getConfiguredTarget("//x:x"));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "--ios_multi_cpus does not currently allow values for both simulator and device "
-                + "builds.");
+    try {
+      getConfiguredTarget("//x:x");
+      fail("Multiplatform binary should have failed");
+    } catch (AssertionError expected) {
+      assertThat(expected)
+          .hasMessageThat()
+          .contains(
+              "--ios_multi_cpus does not currently allow values for both simulator and device "
+              + "builds.");
+    }
   }
 
   protected void checkMultiCpuResourceInheritance(BinaryRuleTypePair ruleTypePair)
