@@ -394,7 +394,9 @@ public class PackageFunctionTest extends BuildViewTestCase {
     preparePackageLoading(rootDirectory);
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//foo"));
     Package pkg = validPackageWithoutErrors(skyKey);
-    assertThat((Iterable<Label>) pkg.getTarget("foo").getAssociatedRule().getAttr("srcs"))
+    assertThat(
+            (Iterable<Label>)
+                pkg.getTarget("foo").getAssociatedRule().getAttributeContainer().getAttr("srcs"))
         .containsExactly(
             Label.parseAbsoluteUnchecked("//foo:b.txt"),
             Label.parseAbsoluteUnchecked("//foo:c/c.txt"))
@@ -406,7 +408,9 @@ public class PackageFunctionTest extends BuildViewTestCase {
             ModifiedFileSet.builder().modify(PathFragment.create("foo/d.txt")).build(),
             Root.fromPath(rootDirectory));
     pkg = validPackageWithoutErrors(skyKey);
-    assertThat((Iterable<Label>) pkg.getTarget("foo").getAssociatedRule().getAttr("srcs"))
+    assertThat(
+            (Iterable<Label>)
+                pkg.getTarget("foo").getAssociatedRule().getAttributeContainer().getAttr("srcs"))
         .containsExactly(
             Label.parseAbsoluteUnchecked("//foo:b.txt"),
             Label.parseAbsoluteUnchecked("//foo:c/c.txt"),
@@ -530,7 +534,8 @@ public class PackageFunctionTest extends BuildViewTestCase {
   @SuppressWarnings("unchecked")
   private static Iterable<Label> getSrcs(Package pkg, String targetName)
       throws NoSuchTargetException {
-    return (Iterable<Label>) pkg.getTarget(targetName).getAssociatedRule().getAttr("srcs");
+    return (Iterable<Label>)
+        pkg.getTarget(targetName).getAssociatedRule().getAttributeContainer().getAttr("srcs");
   }
 
   @Test
@@ -1448,51 +1453,43 @@ public class PackageFunctionTest extends BuildViewTestCase {
       assertContainsEvent("FOO");
     }
 
+    // TODO(brandjon): Invert this test once the prelude is a module instead of a syntactic
+    // mutation on BUILD files.
     @Test
-    public void testPreludeSymbolCannotBeMutated() throws Exception {
+    public void testPreludeSymbolCanBeMutated() throws Exception {
       scratch.file("tools/build_rules/BUILD");
       scratch.file(
           "tools/build_rules/test_prelude", //
           "foo = ['FOO']");
       scratch.file(
           "pkg/BUILD", //
-          "foo.append('BAR')");
+          "foo.append('BAR')",
+          "print(foo)");
+
+      getConfiguredTarget("//pkg:BUILD");
+      assertContainsEvent("[\"FOO\", \"BAR\"]");
+    }
+
+    // TODO(brandjon): Invert this test once the prelude is a module instead of a syntactic
+    // mutation on BUILD files.
+    @Test
+    public void testPreludeCannotAccessBzlDialectSymbols() throws Exception {
+      scratch.file("tools/build_rules/BUILD");
+      scratch.file(
+          "tools/build_rules/test_prelude", //
+          "v = native.glob()",
+          "foo = 'FOO'");
+      scratch.file(
+          "pkg/BUILD", //
+          "print(foo)");
 
       reporter.removeHandler(failFastHandler);
       getConfiguredTarget("//pkg:BUILD");
-      assertContainsEvent("trying to mutate a frozen list value");
-    }
-
-    @Test
-    public void testPreludeCanAccessBzlDialectFeatures() throws Exception {
-      scratch.file("tools/build_rules/BUILD");
-      // Test both bzl symbols and syntax (e.g. function defs).
-      scratch.file(
-          "tools/build_rules/test_prelude", //
-          "def foo():",
-          "    return native.glob");
-      scratch.file(
-          "pkg/BUILD", //
-          "print(foo())");
-
-      getConfiguredTarget("//pkg:BUILD");
-      // Prelude can access native.glob (though only a BUILD thread can call it).
-      assertContainsEvent("<built-in function glob>");
+      assertContainsEvent("name 'native' is not defined");
     }
 
     @Test
     public void testPreludeNeedNotBePresent() throws Exception {
-      scratch.file(
-          "pkg/BUILD", //
-          "print('FOO')");
-
-      getConfiguredTarget("//pkg:BUILD");
-      assertContainsEvent("FOO");
-    }
-
-    @Test
-    public void testPreludeNeedNotBePresent_evenWhenPackageIs() throws Exception {
-      scratch.file("tools/build_rules/BUILD");
       scratch.file(
           "pkg/BUILD", //
           "print('FOO')");
