@@ -48,7 +48,6 @@ public class CreateProjectMojoIT extends MojoTestBase {
         Properties properties = new Properties();
         properties.put("projectGroupId", "org.acme");
         properties.put("projectArtifactId", "acme");
-        properties.put("projectVersion", "1.0-SNAPSHOT");
         setup(properties);
         assertThat(new File(testDir, "pom.xml")).isFile();
         assertThat(new File(testDir, "src/main/java")).isDirectory();
@@ -131,6 +130,8 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(testDir).isDirectory();
         init(testDir);
         Properties properties = new Properties();
+        properties.put("projectGroupId", "org.acme");
+        properties.put("projectArtifactId", "acme");
         properties.put("className", "org.acme.MyResource.java");
         setup(properties);
 
@@ -216,6 +217,8 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(testDir).isDirectory();
         init(testDir);
         Properties properties = new Properties();
+        properties.put("projectGroupId", "org.acme");
+        properties.put("projectArtifactId", "acme");
         properties.put("className", "org.acme.MyResource");
         properties.put("extensions", "commons-io:commons-io:2.5");
         setup(properties);
@@ -223,38 +226,6 @@ public class CreateProjectMojoIT extends MojoTestBase {
         check(new File(testDir, "src/main/java/org/acme/MyResource.java"), "package org.acme;");
         check(new File(testDir, "pom.xml"), "commons-io");
     }
-
-    /**
-     * Reproducer for https://github.com/jbossas/protean-shamrock/issues/671
-     */
-    @Test
-    public void testThatDefaultPackageAreReplaced() throws Exception {
-        testDir = initEmptyProject("projects/default-package-test");
-        assertThat(testDir).isDirectory();
-        init(testDir);
-        Properties properties = new Properties();
-        properties.put("className", "MyGreatResource");
-        setup(properties);
-        check(new File(testDir, "src/main/java/io/jboss/shamrock/sample/MyGreatResource.java"), "package io.jboss.shamrock.sample;");
-    }
-
-
-    /**
-     * Reproducer for https://github.com/jbossas/protean-shamrock/issues/673
-     */
-    @Test
-    public void testThatGenerationFailedWhenTheUserPassGAVonExistingPom() throws Exception {
-        testDir = initProject("projects/simple-pom-it","projects/fail-on-gav-and-existing-pom");
-        assertThat(testDir).isDirectory();
-        init(testDir);
-        Properties properties = new Properties();
-        properties.put("projectGroupId", "org.acme");
-        properties.put("className", "MyResource");
-        InvocationResult result = setup(properties);
-        assertThat(result.getExitCode()).isNotZero();
-        assertThat(new File(testDir, "src/main/java/org/acme/MyResource.java")).doesNotExist();
-    }
-
 
     private void check(final File resource, final String contentsToFind) throws IOException {
         assertThat(resource).isFile();
@@ -294,7 +265,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(greeting).containsIgnoringCase("hello");
     }
 
-    private InvocationResult setup(Properties params) throws MavenInvocationException, FileNotFoundException {
+    private void setup(Properties params) throws MavenInvocationException, FileNotFoundException {
         InvocationRequest request = new DefaultInvocationRequest();
         request.setBatchMode(true);
         request.setGoals(Collections.singletonList(
@@ -306,8 +277,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
         PrintStreamLogger logger = new PrintStreamLogger(new PrintStream(new FileOutputStream(log)),
                 InvokerLogger.DEBUG);
         invoker.setLogger(logger);
-        InvocationResult result = invoker.execute(request);
-        return result;
+        invoker.execute(request);
     }
 
 }

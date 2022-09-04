@@ -17,14 +17,17 @@
 package org.jboss.shamrock.maven;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.MalformedURLException;
+import java.net.JarURLConnection;
 import java.net.Socket;
-import java.net.URI;
 import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -65,6 +68,9 @@ public class DevMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
+
+    @Parameter(defaultValue = "${fakereplace}")
+    private boolean fakereplace = false;
 
     /**
      * If this server should be started in debug mode. The default is to start in debug mode without suspending and listen on
@@ -190,35 +196,61 @@ public class DevMojo extends AbstractMojo {
 
             //build a class-path string for the base platform
             //this stuff does not change
-            // Do not include URIs in the manifest, because some JVMs do not like that
-            StringBuilder classPathManifest = new StringBuilder();
             StringBuilder classPath = new StringBuilder();
             for (Artifact artifact : project.getArtifacts()) {
-                addToClassPaths(classPathManifest, classPath, artifact.getFile());
+                classPath.append(artifact.getFile().toPath().toAbsolutePath().toUri().toURL().toString());
+                classPath.append(" ");
             }
             args.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
             File wiringClassesDirectory = new File(buildDir, "wiring-classes");
             wiringClassesDirectory.mkdirs();
 
-            addToClassPaths(classPathManifest, classPath, wiringClassesDirectory);
+            classPath.append(wiringClassesDirectory.toPath().toAbsolutePath().toUri().toURL().toString()).append("/");
+            classPath.append(' ');
+
+            if (fakereplace) {
+                File target = new File(buildDir, "fakereplace.jar");
+                if (!target.exists()) {
+                    //this is super yuck, but there does not seen to be an easy way
+                    //to get dependency artifacts. Fakereplace must be called fakereplace.jar to work
+                    //so we copy it to the target directory
+                    URL resource = getClass().getClassLoader().getResource("org/fakereplace/core/Fakereplace.class");
+                    if (resource == null) {
+                        throw new RuntimeException("Could not determine Fakereplace location");
+                    }
+                    String filePath = resource.getPath();
+                    try (FileInputStream in = new FileInputStream(filePath.substring(5, filePath.lastIndexOf('!')))) {
+                        try (FileOutputStream out = new FileOutputStream(target)) {
+                            byte[] buffer = new byte[1024];
+                            int r;
+                            while ((r = in.read(buffer)) > 0) {
+                                out.write(buffer, 0, r);
+                            }
+                        }
+                    }
+                }
+                args.add("-javaagent:" + target.getAbsolutePath());
+                args.add("-Dshamrock.fakereplace=true");
+            }
 
             //we also want to add the maven plugin jar to the class path
             //this allows us to just directly use classes, without messing around copying them
             //to the runner jar
             URL classFile = DevModeMain.class.getClassLoader().getResource(DevModeMain.class.getName().replace('.', '/') + ".class");
-            File path;
+            Path path;
             if (classFile.getProtocol().equals("jar")) {
                 String jarPath = classFile.getPath().substring(0, classFile.getPath().lastIndexOf('!'));
-                if(jarPath.startsWith("file:"))
-                    jarPath = jarPath.substring(5);
-                path = new File(jarPath);
+                path = Paths.get(new URI(jarPath));
             } else if (classFile.getProtocol().equals("file")) {
                 String filePath = classFile.getPath().substring(0, classFile.getPath().lastIndexOf(DevModeMain.class.getName().replace('.', '/')));
-                path = new File(filePath);
+                path = Paths.get(new URI(classFile.getProtocol(), classFile.getHost(), filePath, null));
             } else {
                 throw new MojoFailureException("Unsupported DevModeMain artifact URL:" + classFile);
             }
-            addToClassPaths(classPathManifest, classPath, path);
+            classPath.append(path.toAbsolutePath().toUri().toURL().toString());
+            if (classFile.getProtocol().equals("file")) {
+                classPath.append('/');
+            }
 
             //now we need to build a temporary jar to actually run
 
@@ -230,7 +262,7 @@ public class DevMojo extends AbstractMojo {
                 out.putNextEntry(new ZipEntry("META-INF/"));
                 Manifest manifest = new Manifest();
                 manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-                manifest.getMainAttributes().put(Attributes.Name.CLASS_PATH, classPathManifest.toString());
+                manifest.getMainAttributes().put(Attributes.Name.CLASS_PATH, classPath.toString());
                 manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, DevModeMain.class.getName());
                 out.putNextEntry(new ZipEntry("META-INF/MANIFEST.MF"));
                 manifest.write(out);
@@ -264,36 +296,10 @@ public class DevMojo extends AbstractMojo {
             pb.directory(outputDirectory);
             Process p = pb.start();
 
-            //https://github.com/jbossas/protean-shamrock/issues/232
-            Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    p.destroy();
-                }
-            }, "Development Mode Shutdown Hook"));
-            try {
-                p.waitFor();
-            } catch (Exception e)  {
-                p.destroy();
-                throw e;
-            }
-
+            int val = p.waitFor();
         } catch (Exception e) {
             throw new MojoFailureException("Failed to run", e);
         }
-    }
-
-
-    private void addToClassPaths(StringBuilder classPathManifest, StringBuilder classPath, File file) throws MalformedURLException {
-        URI uri = file.toPath().toAbsolutePath().toUri();
-        classPathManifest.append(uri.getPath());
-        classPath.append(uri.toURL().toString());
-        if(file.isDirectory()) {
-            classPathManifest.append("/");
-            classPath.append("/");
-        }
-        classPathManifest.append(" ");
-        classPath.append(" ");
     }
 
 }
