@@ -2,6 +2,8 @@ package io.quarkus.flyway.runtime;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
@@ -15,11 +17,14 @@ import org.flywaydb.core.api.Location;
 import org.flywaydb.core.api.configuration.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class FlywayCreatorTest {
 
     private FlywayDataSourceRuntimeConfig runtimeConfig = FlywayDataSourceRuntimeConfig.defaultConfig();
-    private FlywayDataSourceBuildConfig buildConfig = FlywayDataSourceBuildConfig.defaultConfig();
+    private FlywayDataSourceBuildTimeConfig buildConfig = FlywayDataSourceBuildTimeConfig.defaultConfig();
     private Configuration defaultConfig = Flyway.configure().load().getConfiguration();
 
     /**
@@ -37,15 +42,14 @@ class FlywayCreatorTest {
     @Test
     @DisplayName("locations carried over from configuration")
     void testLocationsOverridden() {
-        buildConfig.locations = Optional.of(Arrays.asList("db/migrations", "db/something"));
+        buildConfig.locations = Arrays.asList("db/migrations", "db/something");
         creator = new FlywayCreator(runtimeConfig, buildConfig);
-        assertEquals(buildConfig.locations.get(), pathList(createdFlywayConfig().getLocations()));
+        assertEquals(buildConfig.locations, pathList(createdFlywayConfig().getLocations()));
     }
 
     @Test
     @DisplayName("not configured locations replaced by default")
     void testNotPresentLocationsOverridden() {
-        buildConfig.locations = Optional.empty();
         creator = new FlywayCreator(runtimeConfig, buildConfig);
         assertEquals(pathList(defaultConfig.getLocations()), pathList(createdFlywayConfig().getLocations()));
     }
@@ -155,11 +159,88 @@ class FlywayCreatorTest {
         assertEquals(runtimeConfig.table.get(), createdFlywayConfig().getTable());
     }
 
+    @Test
+    @DisplayName("validate on migrate default matches to true")
+    void testValidateOnMigrate() {
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertEquals(runtimeConfig.validateOnMigrate, createdFlywayConfig().isValidateOnMigrate());
+        assertTrue(runtimeConfig.validateOnMigrate);
+    }
+
+    @Test
+    @DisplayName("clean disabled default matches to false")
+    void testCleanDisabled() {
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertEquals(runtimeConfig.cleanDisabled, createdFlywayConfig().isCleanDisabled());
+        assertFalse(runtimeConfig.cleanDisabled);
+
+        runtimeConfig.cleanDisabled = false;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertFalse(createdFlywayConfig().isCleanDisabled());
+
+        runtimeConfig.cleanDisabled = true;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertTrue(createdFlywayConfig().isCleanDisabled());
+    }
+
+    @Test
+    @DisplayName("outOfOrder is correctly set")
+    void testOutOfOrder() {
+        runtimeConfig.outOfOrder = false;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertFalse(createdFlywayConfig().isOutOfOrder());
+
+        runtimeConfig.outOfOrder = true;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertTrue(createdFlywayConfig().isOutOfOrder());
+    }
+
+    @Test
+    @DisplayName("ignoreMissingMigrations is correctly set")
+    void testIgnoreMissingMigrations() {
+        runtimeConfig.ignoreMissingMigrations = false;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertFalse(createdFlywayConfig().isIgnoreMissingMigrations());
+
+        runtimeConfig.ignoreMissingMigrations = true;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertTrue(createdFlywayConfig().isIgnoreMissingMigrations());
+    }
+
+    @Test
+    @DisplayName("ignoreFutureMigrations is correctly set")
+    void testIgnoreFutureMigrations() {
+        runtimeConfig.ignoreFutureMigrations = false;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertFalse(createdFlywayConfig().isIgnoreFutureMigrations());
+
+        runtimeConfig.ignoreFutureMigrations = true;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertTrue(createdFlywayConfig().isIgnoreFutureMigrations());
+    }
+
+    @ParameterizedTest
+    @MethodSource("validateOnMigrateOverwritten")
+    @DisplayName("validate on migrate overwritten in configuration")
+    void testValidateOnMigrateOverwritten(final boolean input, final boolean expected) {
+        runtimeConfig.validateOnMigrate = input;
+        creator = new FlywayCreator(runtimeConfig, buildConfig);
+        assertEquals(createdFlywayConfig().isValidateOnMigrate(), expected);
+        assertEquals(runtimeConfig.validateOnMigrate, expected);
+    }
+
     private static List<String> pathList(Location[] locations) {
         return Stream.of(locations).map(Location::getPath).collect(Collectors.toList());
     }
 
     private Configuration createdFlywayConfig() {
         return creator.createFlyway(null).getConfiguration();
+    }
+
+    private static Stream<Arguments> validateOnMigrateOverwritten() {
+        return Stream.<Arguments> builder()
+                .add(Arguments.arguments(false, false))
+                .add(Arguments.arguments(true, true))
+                .build();
     }
 }
