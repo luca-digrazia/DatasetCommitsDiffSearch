@@ -35,7 +35,6 @@ public class ListNormalAdapter extends BaseAdapter {
     private Context context;
 
     private StandardGSYVideoPlayer curPlayer;
-    private StandardGSYVideoPlayer itemPlayer;
 
     protected OrientationUtils orientationUtils;
 
@@ -178,11 +177,7 @@ public class ListNormalAdapter extends BaseAdapter {
                 if (!holder.gsyVideoPlayer.getCurrentPlayer().isIfCurrentIsFullscreen()) {
                     GSYVideoManager.instance().setNeedMute(true);
                 }
-                if (holder.gsyVideoPlayer.getCurrentPlayer().isIfCurrentIsFullscreen()) {
-                   GSYVideoManager.instance().setLastListener(holder.gsyVideoPlayer);
-                }
                 curPlayer = (StandardGSYVideoPlayer) objects[1];
-                itemPlayer = holder.gsyVideoPlayer;
                 isPlay = true;
                 if (getListNeedAutoLand()) {
                     //重力全屏工具类
@@ -213,7 +208,6 @@ public class ListNormalAdapter extends BaseAdapter {
             public void onAutoComplete(String url, Object... objects) {
                 super.onAutoComplete(url, objects);
                 curPlayer = null;
-                itemPlayer = null;
                 isPlay = false;
                 isFull = false;
                 if (getListNeedAutoLand()) {
@@ -300,8 +294,8 @@ public class ListNormalAdapter extends BaseAdapter {
 
     public void onConfigurationChanged(Activity activity, Configuration newConfig) {
         //如果旋转了就全屏
-        if (isPlay && itemPlayer != null && orientationUtils != null) {
-            itemPlayer.onConfigurationChanged(activity, newConfig, orientationUtils, false, true);
+        if (isPlay && curPlayer != null && orientationUtils != null) {
+            curPlayer.getCurrentPlayer().onConfigurationChanged(activity, newConfig, orientationUtils, false, true);
         }
     }
 
