@@ -121,8 +121,8 @@ public class GracefulShutdown implements Runnable {
         // stop all maintenance tasks
         periodicalsService.stopAsync().awaitTerminated();
 
-        // disconnect from elasticsearch is done by a listener in indexerSetupService
-        // no need to terminate that service here.
+        // disconnect from elasticsearch
+        indexerSetupService.stopAsync().awaitTerminated();
 
         // Shut down hard with no shutdown hooks running.
         LOG.info("Goodbye.");
