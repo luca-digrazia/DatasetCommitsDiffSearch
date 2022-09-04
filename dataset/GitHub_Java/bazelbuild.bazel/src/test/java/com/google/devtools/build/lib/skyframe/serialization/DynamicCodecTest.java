@@ -15,13 +15,10 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
-import com.google.protobuf.ByteString;
-import com.google.protobuf.CodedInputStream;
-import com.google.protobuf.CodedOutputStream;
 import java.io.BufferedInputStream;
 import java.util.Arrays;
 import java.util.Objects;
@@ -389,94 +386,21 @@ public final class DynamicCodecTest {
   }
 
   @Test
-  public void testNoCodecExample() {
+  public void testNoCodecExample() throws Exception {
     ObjectCodecs codecs = new ObjectCodecs(AutoRegistry.get(), ImmutableMap.of());
-    SerializationException.NoCodecException expected =
-        assertThrows(
-            SerializationException.NoCodecException.class,
-            () -> codecs.serializeMemoized(new NoCodecExample1()));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "java.io.BufferedInputStream ["
-                + "java.io.BufferedInputStream, "
-                + "com.google.devtools.build.lib.skyframe.serialization."
-                + "DynamicCodecTest$NoCodecExample2, "
-                + "com.google.devtools.build.lib.skyframe.serialization."
-                + "DynamicCodecTest$NoCodecExample1]");
-  }
-
-  private static class SpecificObject {}
-
-  private static class SpecificObjectWrapper {
-    @SuppressWarnings("unused")
-    private final SpecificObject field;
-
-    SpecificObjectWrapper(SpecificObject field) {
-      this.field = field;
+    try {
+      codecs.serializeMemoized(new NoCodecExample1());
+      fail();
+    } catch (SerializationException.NoCodecException expected) {
+      assertThat(expected)
+          .hasMessageThat()
+          .contains(
+              "java.io.BufferedInputStream ["
+                  + "java.io.BufferedInputStream, "
+                  + "com.google.devtools.build.lib.skyframe.serialization."
+                  + "DynamicCodecTest$NoCodecExample2, "
+                  + "com.google.devtools.build.lib.skyframe.serialization."
+                  + "DynamicCodecTest$NoCodecExample1]");
     }
-  }
-
-  @Test
-  public void overGeneralCodec() throws Exception {
-    // Class must be hidden from other tests.
-    class OverGeneralCodec implements ObjectCodec<Object> {
-      @Override
-      public Class<?> getEncodedClass() {
-        return Object.class;
-      }
-
-      @Override
-      public void serialize(SerializationContext context, Object obj, CodedOutputStream codedOut) {}
-
-      @Override
-      public Object deserialize(DeserializationContext context, CodedInputStream codedIn) {
-        return new Object();
-      }
-    }
-    ObjectCodecRegistry registry =
-        ObjectCodecRegistry.newBuilder()
-            .add(new DynamicCodec(SpecificObjectWrapper.class))
-            .add(new OverGeneralCodec())
-            .build();
-    ObjectCodecs codecs = new ObjectCodecs(registry);
-    ByteString bytes = codecs.serializeMemoized(new SpecificObjectWrapper(new SpecificObject()));
-    SerializationException expected =
-        assertThrows(SerializationException.class, () -> codecs.deserializeMemoized(bytes));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "was not instance of class "
-                + "com.google.devtools.build.lib.skyframe.serialization."
-                + "DynamicCodecTest$SpecificObject");
-  }
-
-  @Test
-  public void overGeneralCodecOkWhenNull() throws Exception {
-    // Class must be hidden from other tests.
-    class OverGeneralCodec implements ObjectCodec<Object> {
-      @Override
-      public Class<?> getEncodedClass() {
-        return Object.class;
-      }
-
-      @Override
-      public void serialize(SerializationContext context, Object obj, CodedOutputStream codedOut) {}
-
-      @Override
-      public Object deserialize(DeserializationContext context, CodedInputStream codedIn) {
-        return new Object();
-      }
-    }
-    ObjectCodecRegistry registry =
-        ObjectCodecRegistry.newBuilder()
-            .add(new DynamicCodec(SpecificObjectWrapper.class))
-            .add(new OverGeneralCodec())
-            .build();
-    ObjectCodecs codecs = new ObjectCodecs(registry);
-    ByteString bytes = codecs.serializeMemoized(new SpecificObjectWrapper(null));
-    Object deserialized = codecs.deserializeMemoized(bytes);
-    assertThat(deserialized).isInstanceOf(SpecificObjectWrapper.class);
-    assertThat(((SpecificObjectWrapper) deserialized).field).isNull();
   }
 }
