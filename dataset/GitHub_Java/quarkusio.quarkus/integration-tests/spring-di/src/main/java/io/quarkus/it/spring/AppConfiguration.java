@@ -1,6 +1,5 @@
 package io.quarkus.it.spring;
 
-import javax.inject.Named;
 import javax.inject.Singleton;
 
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -49,11 +48,6 @@ public class AppConfiguration {
     }
 
     public static class CustomPrototypeBean {
-
-    }
-
-    @Named
-    public static class NamedBean {
 
     }
 }
