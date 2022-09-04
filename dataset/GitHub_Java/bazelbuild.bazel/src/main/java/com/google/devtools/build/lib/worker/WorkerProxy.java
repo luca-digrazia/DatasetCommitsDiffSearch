@@ -18,23 +18,21 @@ import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
+import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Optional;
 import java.util.Set;
 
+// TODO(karlgray): Refactor WorkerProxy so that it does not inherit from class Worker.
 /** A proxy that talks to the multiplexer */
 final class WorkerProxy extends Worker {
   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
   private final WorkerMultiplexer workerMultiplexer;
-  /** The execution root of the worker. */
-  private final Path workDir;
-
-  private Thread shutdownHook;
+  private String recordingStreamMessage;
 
   WorkerProxy(
       WorkerKey workerKey,
@@ -42,31 +40,33 @@ final class WorkerProxy extends Worker {
       Path workDir,
       Path logFile,
       WorkerMultiplexer workerMultiplexer) {
-    super(workerKey, workerId, logFile);
-    this.workDir = workDir;
+    super(workerKey, workerId, workDir, logFile);
     this.workerMultiplexer = workerMultiplexer;
-    final WorkerProxy self = this;
-    this.shutdownHook =
-        new Thread(
-            () -> {
-              self.shutdownHook = null;
-              self.destroy();
-            });
-    Runtime.getRuntime().addShutdownHook(shutdownHook);
+  }
+
+  @Override
+  Subprocess createProcess() {
+    throw new IllegalStateException(
+        "WorkerProxy does not override createProcess(), the multiplexer process is started in"
+            + " prepareExecution");
+  }
+
+  @Override
+  boolean isAlive() {
+    return workerMultiplexer.isProcessAlive();
   }
 
   @Override
   public void prepareExecution(
       SandboxInputs inputFiles, SandboxOutputs outputs, Set<PathFragment> workerFiles)
       throws IOException {
-    workerMultiplexer.createProcess(workerKey, workDir);
+    workerMultiplexer.createProcess(workerKey, workDir, logFile);
   }
 
-  /** Send the WorkRequest to multiplexer. */
   @Override
-  synchronized void destroy() {
+  synchronized void destroy() throws IOException {
     try {
-      WorkerMultiplexerManager.removeInstance(workerKey);
+      WorkerMultiplexerManager.removeInstance(workerKey.hashCode());
     } catch (InterruptedException e) {
       logger.atWarning().withCause(e).log(
           "InterruptedException was caught while destroying multiplexer. "
@@ -80,7 +80,7 @@ final class WorkerProxy extends Worker {
   @Override
   void putRequest(WorkRequest request) throws IOException {
     try {
-      workerMultiplexer.resetResponseChecker(request.getRequestId());
+      workerMultiplexer.resetResponseChecker(workerId);
       workerMultiplexer.putRequest(request);
     } catch (InterruptedException e) {
       /**
@@ -96,14 +96,15 @@ final class WorkerProxy extends Worker {
 
   /** Wait for WorkResponse from multiplexer. */
   @Override
-  WorkResponse getResponse(int requestId) throws IOException {
+  WorkResponse getResponse() throws IOException {
     try {
-      InputStream inputStream = workerMultiplexer.getResponse(requestId);
+      InputStream inputStream = workerMultiplexer.getResponse(workerId);
       if (inputStream == null) {
         return null;
       }
       return WorkResponse.parseDelimitedFrom(inputStream);
     } catch (IOException e) {
+      recordingStreamMessage = e.toString();
       throw new IOException(
           "IOException was caught while waiting for worker response. "
               + "It could because the worker returned unparseable response.");
@@ -123,20 +124,7 @@ final class WorkerProxy extends Worker {
   }
 
   @Override
-  public void finishExecution(Path execRoot) throws IOException {}
-
-  @Override
-  boolean diedUnexpectedly() {
-    return workerMultiplexer.diedUnexpectedly();
-  }
-
-  @Override
-  public Optional<Integer> getExitValue() {
-    return workerMultiplexer.getExitValue();
-  }
-
-  @Override
   String getRecordingStreamMessage() {
-    return workerMultiplexer.getRecordingStreamMessage();
+    return recordingStreamMessage;
   }
 }

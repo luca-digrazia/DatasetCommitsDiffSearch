@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.worker;
 
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
@@ -31,7 +30,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
-import javax.annotation.Nullable;
 
 /**
  * Interface to a worker process running as a child process.
@@ -51,15 +49,10 @@ class Worker {
   protected final int workerId;
   /** The execution root of the worker. */
   protected final Path workDir;
-  /** The path of the log file for this worker. */
-  private final Path logFile;
-  /**
-   * Stream for recording the WorkResponse as it's read, so that it can be printed in the case of
-   * parsing failures.
-   */
-  @Nullable private RecordingInputStream recordingInputStream;
-  /** The implementation of the worker protocol (JSON or Proto). */
-  @Nullable private WorkerProtocolImpl workerProtocol;
+  /** The path of the log file. */
+  protected final Path logFile;
+  /** Stream for reading the WorkResponse. */
+  protected RecordingInputStream recordingStream;
 
   private Subprocess process;
   private Thread shutdownHook;
@@ -106,10 +99,6 @@ class Worker {
     if (shutdownHook != null) {
       Runtime.getRuntime().removeShutdownHook(shutdownHook);
     }
-    if (workerProtocol != null) {
-      workerProtocol.close();
-      workerProtocol = null;
-    }
     if (process != null) {
       wasDestroyed = true;
       process.destroyAndWait();
@@ -122,11 +111,6 @@ class Worker {
    */
   int getWorkerId() {
     return this.workerId;
-  }
-
-  /** Returns the path of the log file for this worker. */
-  public Path getLogFile() {
-    return logFile;
   }
 
   HashCode getWorkerFilesCombinedHash() {
@@ -156,17 +140,21 @@ class Worker {
   }
 
   void putRequest(WorkRequest request) throws IOException {
-    workerProtocol.putRequest(request);
+    request.writeDelimitedTo(process.getOutputStream());
+    process.getOutputStream().flush();
   }
 
   WorkResponse getResponse() throws IOException {
-    recordingInputStream.startRecording(4096);
-    return workerProtocol.getResponse();
+    recordingStream = new RecordingInputStream(process.getInputStream());
+    recordingStream.startRecording(4096);
+    // response can be null when the worker has already closed stdout at this point and thus
+    // the InputStream is at EOF.
+    return WorkResponse.parseDelimitedFrom(recordingStream);
   }
 
   String getRecordingStreamMessage() {
-    recordingInputStream.readRemaining();
-    return recordingInputStream.getRecordedDataAsString();
+    recordingStream.readRemaining();
+    return recordingStream.getRecordedDataAsString();
   }
 
   public void prepareExecution(
@@ -174,19 +162,12 @@ class Worker {
       throws IOException {
     if (process == null) {
       process = createProcess();
-      recordingInputStream = new RecordingInputStream(process.getInputStream());
-    }
-    if (workerProtocol == null) {
-      switch (workerKey.getProtocolFormat()) {
-        case JSON:
-          workerProtocol = new JsonWorkerProtocol(recordingInputStream, process.getOutputStream());
-          break;
-        case PROTO:
-          workerProtocol = new ProtoWorkerProtocol(recordingInputStream, process.getOutputStream());
-          break;
-      }
     }
   }
 
   public void finishExecution(Path execRoot) throws IOException {}
+
+  public Path getLogFile() {
+    return logFile;
+  }
 }
