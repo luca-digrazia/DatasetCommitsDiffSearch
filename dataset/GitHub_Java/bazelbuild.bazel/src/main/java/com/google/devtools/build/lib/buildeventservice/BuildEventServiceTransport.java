@@ -22,7 +22,6 @@ import static com.google.devtools.build.v1.BuildStatus.Result.UNKNOWN_STATUS;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Throwables;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -186,7 +185,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
    */
   @FunctionalInterface
   public interface ExitFunction {
-    void accept(String message, Throwable cause);
+    void accept(String message, Exception cause);
   }
 
   /**
@@ -194,13 +193,13 @@ public class BuildEventServiceTransport implements BuildEventTransport {
    * carry error messages.
    */
   @VisibleForTesting
-  public void throwUploaderError() throws Throwable {
+  public void throwUploaderError() throws Exception {
     synchronized (besUploader.lock) {
       checkState(besUploader.closeFuture != null && besUploader.closeFuture.isDone());
       try {
         besUploader.closeFuture.get();
       } catch (ExecutionException e) {
-        throw e.getCause();
+        throw (Exception) e.getCause();
       }
     }
   }
@@ -411,21 +410,24 @@ public class BuildEventServiceTransport implements BuildEventTransport {
           failCloseFuture(e);
         }
       } catch (LocalFileUploadException e) {
-        Throwables.throwIfUnchecked(e.getCause());
         try {
           String message =
               "The Build Event Protocol local file upload failed: " + e.getCause().getMessage();
-          logInfo(e.getCause(), message);
-          exitFunc.accept(message, e.getCause());
+          logInfo((Exception) e.getCause(), message);
+          exitFunc.accept(message, (Exception) e.getCause());
         } finally {
-          failCloseFuture(e.getCause());
+          failCloseFuture((Exception) e.getCause());
         }
-      } catch (Throwable e) {
+      } catch (RuntimeException e) {
         failCloseFuture(e);
-        logError(e, "BES upload failed due to a RuntimeException / Error. This is a bug.");
+        logError(e, "BES upload failed due to a RuntimeException. This is a bug.");
         throw e;
       } finally {
-        localFileUploader.shutdown();
+        try {
+          besClient.shutdown();
+        } finally {
+          localFileUploader.shutdown();
+        }
       }
     }
 
@@ -686,7 +688,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       closeTimer.start();
     }
 
-    private void failCloseFuture(Throwable cause) {
+    private void failCloseFuture(Exception cause) {
       synchronized (lock) {
         if (closeFuture == null) {
           closeFuture = SettableFuture.create();
@@ -706,8 +708,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
             String.format(
                 "Failed to upload local files referenced by build event: %s", e.getMessage()),
             e);
-        Throwables.throwIfUnchecked(e.getCause());
-        throw new LocalFileUploadException(e.getCause());
+        throw new LocalFileUploadException((Exception) e.getCause());
       }
     }
 
@@ -766,11 +767,11 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       logger.log(Level.INFO, String.format(message, args));
     }
 
-    private static void logInfo(Throwable cause, String message, Object... args) {
+    private static void logInfo(Exception cause, String message, Object... args) {
       logger.log(Level.INFO, String.format(message, args), cause);
     }
 
-    private static void logError(Throwable cause, String message, Object... args) {
+    private static void logError(Exception cause, String message, Object... args) {
       logger.log(Level.SEVERE, String.format(message, args), cause);
     }
 
@@ -950,7 +951,8 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     }
 
     private static class LocalFileUploadException extends Exception {
-      LocalFileUploadException(Throwable cause) {
+
+      public LocalFileUploadException(Exception cause) {
         super(cause);
       }
     }
