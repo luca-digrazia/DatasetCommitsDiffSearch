@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jetty.ConnectorFactory;
 import io.dropwizard.logging.AppenderFactory;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.ServiceLoader;
 import java.util.stream.Collectors;
@@ -16,19 +16,19 @@ public class ConfigurationTest {
     private final Configuration configuration = new Configuration();
 
     @Test
-    void hasAnHttpConfiguration() throws Exception {
+    public void hasAnHttpConfiguration() throws Exception {
         assertThat(configuration.getServerFactory())
                 .isNotNull();
     }
 
     @Test
-    void hasALoggingConfiguration() throws Exception {
+    public void hasALoggingConfiguration() throws Exception {
         assertThat(configuration.getLoggingFactory())
                 .isNotNull();
     }
 
     @Test
-    void ensureConfigSerializable() throws Exception {
+    public void ensureConfigSerializable() throws Exception {
         final ObjectMapper mapper = Jackson.newObjectMapper();
         Class<?>[] dummyArray = {};
 

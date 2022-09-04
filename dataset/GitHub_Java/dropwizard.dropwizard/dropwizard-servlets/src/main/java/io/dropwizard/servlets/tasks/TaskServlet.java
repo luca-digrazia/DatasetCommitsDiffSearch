@@ -54,32 +54,35 @@ public class TaskServlet extends HttpServlet {
 
         TaskExecutor taskExecutor = new TaskExecutor(task);
         try {
-            final Method executeMethod = task.getClass().getMethod("execute",
+            Method executeMethod = task.getClass().getMethod("execute",
                     ImmutableMultimap.class, PrintWriter.class);
 
             if (executeMethod.isAnnotationPresent(Timed.class)) {
-                final Timed annotation = executeMethod.getAnnotation(Timed.class);
-                final String name = chooseName(annotation.name(),
+                Timed annotation = executeMethod.getAnnotation(Timed.class);
+                String name = chooseName(annotation.name(),
                         annotation.absolute(),
                         task);
-                taskExecutor = new TimedTask(taskExecutor, metricRegistry.timer(name));
+                Timer timer = metricRegistry.timer(name);
+                taskExecutor = new TimedTask(taskExecutor, timer);
             }
 
             if (executeMethod.isAnnotationPresent(Metered.class)) {
-                final Metered annotation = executeMethod.getAnnotation(Metered.class);
-                final String name = chooseName(annotation.name(),
+                Metered annotation = executeMethod.getAnnotation(Metered.class);
+                String name = chooseName(annotation.name(),
                                         annotation.absolute(),
                                         task);
-                taskExecutor = new MeteredTask(taskExecutor, metricRegistry.meter(name));
+                Meter meter = metricRegistry.meter(name);
+                taskExecutor = new MeteredTask(taskExecutor, meter);
             }
 
             if (executeMethod.isAnnotationPresent(ExceptionMetered.class)) {
-                final ExceptionMetered annotation = executeMethod.getAnnotation(ExceptionMetered.class);
-                final String name = chooseName(annotation.name(),
+                ExceptionMetered annotation = executeMethod.getAnnotation(ExceptionMetered.class);
+                String name = chooseName(annotation.name(),
                                         annotation.absolute(),
                                         task,
                                         ExceptionMetered.DEFAULT_NAME_SUFFIX);
-                taskExecutor = new ExceptionMeteredTask(taskExecutor, metricRegistry.meter(name), annotation.cause());
+                Meter exceptionMeter = metricRegistry.meter(name);
+                taskExecutor = new ExceptionMeteredTask(taskExecutor, exceptionMeter, annotation.cause());
             }
         } catch (NoSuchMethodException ignored) {
         }
@@ -95,7 +98,7 @@ public class TaskServlet extends HttpServlet {
             resp.setContentType(MediaType.PLAIN_TEXT_UTF_8.toString());
             final PrintWriter output = resp.getWriter();
             try {
-                final TaskExecutor taskExecutor = taskExecutors.get(task);
+                TaskExecutor taskExecutor = taskExecutors.get(task);
                 taskExecutor.executeTask(getParams(req), output);
             } catch (Exception e) {
                 LOGGER.error("Error running {}", task.getName(), e);

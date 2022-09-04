@@ -67,7 +67,7 @@ public class Bootstrap<T extends Configuration> {
         this.metricRegistry = new MetricRegistry();
         this.configurationSourceProvider = new FileConfigurationSourceProvider();
         this.classLoader = Thread.currentThread().getContextClassLoader();
-        this.configurationFactoryFactory = new DefaultConfigurationFactoryFactory<>();
+        this.configurationFactoryFactory = new DefaultConfigurationFactoryFactory<T>();
     }
 
     /**

@@ -5,7 +5,6 @@ import com.google.common.collect.Iterables;
 import io.dropwizard.util.Size;
 import org.eclipse.jetty.server.Handler;
 
-import javax.annotation.Nullable;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
@@ -45,33 +44,14 @@ import static java.util.Objects.requireNonNull;
  *     </tr>
  *     <tr>
  *         <td>{@code excludedUserAgentPatterns}</td>
- *         <td>(Jetty's default)</td>
- *         <td>A list of regex patterns for User-Agent names from which requests should not be compressed. The default
- *             is {@code [".*MSIE 6.0.*"]}</td>
+ *         <td>(none)</td>
+ *         <td>The set of user agent patterns to exclude from compression. </td>
  *     </tr>
  *     <tr>
  *         <td>{@code compressedMimeTypes}</td>
  *         <td>(Jetty's default)</td>
- *         <td>List of MIME types to compress. The default is all types apart the
+ *         <td>The list of mime types to compress. The default is all types apart the
  *         commonly known image, video, audio and compressed types.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code excludedMimeTypes}</td>
- *         <td>(Jetty's default)</td>
- *         <td>List of MIME types not to compress. The default is a list of commonly known image, video, audio and
- *             compressed types.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code includedPaths}</td>
- *         <td>(Jetty's default)</td>
- *         <td>List of paths to consider for compression. The default is all paths.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code excludedPaths}</td>
- *         <td>(none)</td>
- *         <td>List of paths to exclude from compression. Performs a {@code String.startsWith(String)} comparison to
- *             check if the path matches. If it does match then there is no compression. To match subpaths use
- *             excludePathPatterns instead.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code includedMethods}</td>
@@ -103,29 +83,14 @@ public class GzipHandlerFactory {
 
     // By default compress responses for all user-agents
     private Set<String> excludedUserAgentPatterns = new HashSet<>();
-
-    @Nullable
     private Set<String> compressedMimeTypes;
-
-    @Nullable
-    private Set<String> excludedMimeTypes;
-
-    @Nullable
     private Set<String> includedMethods;
-
-    @Nullable
-    private Set<String> excludedPaths;
-
-    @Nullable
-    private Set<String> includedPaths;
 
     @Min(Deflater.DEFAULT_COMPRESSION)
     @Max(Deflater.BEST_COMPRESSION)
     private int deflateCompressionLevel = Deflater.DEFAULT_COMPRESSION;
 
     private boolean gzipCompatibleInflation = true;
-
-    private boolean syncFlush = false;
 
     @JsonProperty
     public boolean isEnabled() {
@@ -158,7 +123,6 @@ public class GzipHandlerFactory {
     }
 
     @JsonProperty
-    @Nullable
     public Set<String> getCompressedMimeTypes() {
         return compressedMimeTypes;
     }
@@ -166,17 +130,6 @@ public class GzipHandlerFactory {
     @JsonProperty
     public void setCompressedMimeTypes(Set<String> mimeTypes) {
         this.compressedMimeTypes = mimeTypes;
-    }
-
-    @JsonProperty
-    @Nullable
-    public Set<String> getExcludedMimeTypes() {
-        return excludedMimeTypes;
-    }
-
-    @JsonProperty
-    public void setExcludedMimeTypes(Set<String> mimeTypes) {
-        this.excludedMimeTypes = mimeTypes;
     }
 
     @JsonProperty
@@ -208,7 +161,6 @@ public class GzipHandlerFactory {
     }
 
     @JsonProperty
-    @Nullable
     public Set<String> getIncludedMethods() {
         return includedMethods;
     }
@@ -218,64 +170,19 @@ public class GzipHandlerFactory {
         this.includedMethods = methods;
     }
 
-    @JsonProperty
-    @Nullable
-    public Set<String> getExcludedPaths() {
-        return excludedPaths;
-    }
-
-    @JsonProperty
-    public void setExcludedPaths(Set<String> paths) {
-        this.excludedPaths = paths;
-    }
-
-    @JsonProperty
-    @Nullable
-    public Set<String> getIncludedPaths() {
-        return includedPaths;
-    }
-
-    @JsonProperty
-    public void setIncludedPaths(Set<String> paths) {
-        this.includedPaths = paths;
-    }
-
-    @JsonProperty
-    public boolean isSyncFlush() {
-        return syncFlush;
-    }
-
-    @JsonProperty
-    public void setSyncFlush(boolean syncFlush) {
-        this.syncFlush = syncFlush;
-    }
-
-    public BiDiGzipHandler build(@Nullable Handler handler) {
+    public BiDiGzipHandler build(Handler handler) {
         final BiDiGzipHandler gzipHandler = new BiDiGzipHandler();
         gzipHandler.setHandler(handler);
         gzipHandler.setMinGzipSize((int) minimumEntitySize.toBytes());
         gzipHandler.setInputBufferSize((int) bufferSize.toBytes());
         gzipHandler.setCompressionLevel(deflateCompressionLevel);
-        gzipHandler.setSyncFlush(syncFlush);
 
         if (compressedMimeTypes != null) {
             gzipHandler.setIncludedMimeTypes(Iterables.toArray(compressedMimeTypes, String.class));
         }
 
-        if (excludedMimeTypes != null) {
-            gzipHandler.setExcludedMimeTypes(Iterables.toArray(excludedMimeTypes, String.class));
-        }
-
         if (includedMethods != null) {
             gzipHandler.setIncludedMethods(Iterables.toArray(includedMethods, String.class));
-        }
-
-        if (excludedPaths != null) {
-            gzipHandler.setExcludedPaths(Iterables.toArray(excludedPaths, String.class));
-        }
-
-        if (includedPaths != null) {
-            gzipHandler.setIncludedPaths(Iterables.toArray(includedPaths, String.class));
         }
 
         gzipHandler.setExcludedAgentPatterns(Iterables.toArray(excludedUserAgentPatterns, String.class));

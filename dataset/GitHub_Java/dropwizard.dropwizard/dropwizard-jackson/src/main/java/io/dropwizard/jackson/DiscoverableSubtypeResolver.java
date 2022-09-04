@@ -5,7 +5,6 @@ import com.google.common.collect.ImmutableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -63,9 +62,10 @@ public class DiscoverableSubtypeResolver extends StdSubtypeResolver {
                      BufferedReader reader = new BufferedReader(streamReader)) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        final Class<?> loadedClass = loadClass(line);
-                        if (loadedClass != null) {
-                            serviceClasses.add(loadedClass);
+                        try {
+                            serviceClasses.add(getClassLoader().loadClass(line.trim()));
+                        } catch (ClassNotFoundException e) {
+                            LOGGER.info("Unable to load {}", line);
                         }
                     }
                 }
@@ -74,15 +74,5 @@ public class DiscoverableSubtypeResolver extends StdSubtypeResolver {
             LOGGER.warn("Unable to load META-INF/services/{}", klass.getName(), e);
         }
         return serviceClasses;
-    }
-
-    @Nullable
-    private Class<?> loadClass(String line) {
-        try {
-            return getClassLoader().loadClass(line.trim());
-        } catch (ClassNotFoundException e) {
-            LOGGER.info("Unable to load {}", line);
-            return null;
-        }
     }
 }

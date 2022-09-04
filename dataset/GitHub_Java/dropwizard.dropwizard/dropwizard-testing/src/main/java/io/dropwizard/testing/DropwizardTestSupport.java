@@ -203,7 +203,7 @@ public class DropwizardTestSupport<C extends Configuration> {
             application.initialize(bootstrap);
             final ServerCommand<C> command = new ServerCommand<>(application);
 
-            final ImmutableMap.Builder<String, Object> file = ImmutableMap.builder();
+            ImmutableMap.Builder<String, Object> file = ImmutableMap.builder();
             if (!Strings.isNullOrEmpty(configPath)) {
                 file.put("file", configPath);
             }
