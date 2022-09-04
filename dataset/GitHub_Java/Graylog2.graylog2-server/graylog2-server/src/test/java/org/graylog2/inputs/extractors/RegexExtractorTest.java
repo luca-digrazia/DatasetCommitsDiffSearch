@@ -26,7 +26,6 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
-import org.joda.time.DateTime;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -44,7 +43,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testBasicExtraction() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
@@ -58,7 +57,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testBasicExtractionWithCutStrategy() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
@@ -72,7 +71,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testBasicExtractionWithCutStrategyCanOverwriteSameField() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "message", "message", config("The (.+)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
         x.runExtractor(new GraylogServerStub(), msg);
@@ -82,7 +81,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testBasicExtractionDoesNotFailOnNonMatch() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
@@ -95,7 +94,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testBasicExtractionDoesNotFailOnNonMatchWithCutStrategy() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
@@ -108,7 +107,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testExtractsFirstMatcherGroupWhenProvidedWithSeveral() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001 lolwut");
 
@@ -122,7 +121,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testDoesNotFailOnNonExistentSourceField() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         RegexExtractor x = new RegexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "LOLIDONTEXIST", "our_result", config("id:(\\d+)"), "foo", noConverters(), Extractor.ConditionType.NONE, null);
         x.runExtractor(new GraylogServerStub(), msg);
@@ -130,7 +129,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testDoesNotFailOnSourceFieldThatIsNotOfTypeString() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", 9001);
 
@@ -140,7 +139,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testBasicExtractionWithCutStrategyDoesNotLeaveEmptyFields() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
@@ -168,7 +167,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testDoesNotRunWhenRegexConditionFails() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
@@ -181,7 +180,7 @@ public class RegexExtractorTest {
 
     @Test
     public void testDoesNotRunWhenStringConditionFails() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
+        Message msg = new Message("The short message", "TestUnit", Tools.getUTCTimestampWithMilliseconds());
 
         msg.addField("somefield", "<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001");
 
