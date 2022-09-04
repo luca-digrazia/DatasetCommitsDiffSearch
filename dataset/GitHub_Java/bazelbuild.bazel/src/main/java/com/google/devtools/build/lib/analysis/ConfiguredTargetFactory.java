@@ -200,7 +200,7 @@ public final class ConfiguredTargetFactory {
       ConfiguredTargetKey configuredTargetKey,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ResolvedToolchainContext toolchainContext)
+      @Nullable ToolchainContext toolchainContext)
       throws InterruptedException, ActionConflictException {
     if (target instanceof Rule) {
       try {
@@ -286,7 +286,7 @@ public final class ConfiguredTargetFactory {
       ConfiguredTargetKey configuredTargetKey,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ResolvedToolchainContext toolchainContext)
+      @Nullable ToolchainContext toolchainContext)
       throws InterruptedException, ActionConflictException {
 
     // Visibility computation and checking is done for every rule.
@@ -473,7 +473,7 @@ public final class ConfiguredTargetFactory {
       Aspect aspect,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ResolvedToolchainContext toolchainContext,
+      @Nullable ToolchainContext toolchainContext,
       BuildConfiguration aspectConfiguration,
       BuildConfiguration hostConfiguration,
       ActionLookupValue.ActionLookupKey aspectKey)

@@ -19,16 +19,14 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.skylarkbuildapi.test.AnalysisFailureInfoApi;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkType;
 
 /**
  * Implementation of {@link AnalysisFailureInfoApi}.
  *
- * <p>Encapsulates information about analysis-phase errors which would have occurred during a build.
+ * Encapsulates information about analysis-phase errors which would have occurred during a
+ * build.
  */
-public final class AnalysisFailureInfo extends Info
-    implements AnalysisFailureInfoApi<AnalysisFailure> {
+public class AnalysisFailureInfo extends Info implements AnalysisFailureInfoApi<AnalysisFailure> {
 
   /**
    * Singleton provider instance for {@link AnalysisFailureInfo}.
@@ -67,11 +65,7 @@ public final class AnalysisFailureInfo extends Info
   }
 
   @Override
-  public SkylarkNestedSet /*<AnalysisFailure>*/ getCauses() {
-    return SkylarkNestedSet.of(SkylarkType.of(AnalysisFailure.class), causes);
-  }
-
-  public NestedSet<AnalysisFailure> getCausesNestedSet() {
+  public NestedSet<AnalysisFailure> getCauses() {
     return causes;
   }
 
