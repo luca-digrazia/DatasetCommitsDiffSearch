@@ -17,7 +17,7 @@
 package org.graylog.security.shares;
 
 import com.google.common.collect.ImmutableSet;
-import org.graylog.security.shares.EntityShareResponse.AvailableGrantee;
+import org.graylog.security.shares.EntitySharePrepareResponse.AvailableGrantee;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.shared.users.UserService;
 import org.graylog2.utilities.GRNRegistry;
@@ -46,9 +46,6 @@ public class DefaultGranteeService implements GranteeService {
         // TODO: We can only expose users that are in the same teams as the sharing user by default. There should
         //       also be a global config setting to allow exposing all existing users in the system.
         return userService.loadAll().stream()
-                // Don't return the sharing user in available grantees until we want to support that sharing users
-                // can remove themselves from an entity.
-                .filter(user -> !sharingUser.getId().equals(user.getId()))
                 .map(user -> AvailableGrantee.create(
                         grnRegistry.newGRN("user", user.getName()).toString(),
                         "user",

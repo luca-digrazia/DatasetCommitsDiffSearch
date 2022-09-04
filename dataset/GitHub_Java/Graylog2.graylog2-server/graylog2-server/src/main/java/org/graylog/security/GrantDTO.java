@@ -22,12 +22,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import org.graylog.autovalue.WithBeanGetter;
-import org.graylog.grn.GRN;
+import org.graylog2.utilities.GRN;
 import org.mongojack.Id;
 import org.mongojack.ObjectId;
 
 import javax.annotation.Nullable;
-import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Optional;
@@ -39,7 +39,7 @@ import java.util.Optional;
 public abstract class GrantDTO {
     private static final String FIELD_ID = "id";
     static final String FIELD_GRANTEE = "grantee";
-    static final String FIELD_CAPABILITY = "capability";
+    private static final String FIELD_ROLE = "role";
     public static final String FIELD_TARGET = "target";
     private static final String FIELD_CREATED_BY = "created_by";
     private static final String FIELD_CREATED_AT = "created_at";
@@ -56,11 +56,11 @@ public abstract class GrantDTO {
     @JsonProperty(FIELD_GRANTEE)
     public abstract GRN grantee();
 
-    @NotNull
-    @JsonProperty(FIELD_CAPABILITY)
-    public abstract Capability capability();
+    @NotBlank
+    @JsonProperty(FIELD_ROLE)
+    public abstract String role();
 
-    @NotNull
+    @NotBlank
     @JsonProperty(FIELD_TARGET)
     public abstract GRN target();
 
@@ -78,14 +78,6 @@ public abstract class GrantDTO {
 
     @JsonProperty(FIELD_EXPIRES_AT)
     public abstract Optional<ZonedDateTime> expiresAt();
-
-    public static GrantDTO of(GRN grantee, Capability capability, GRN target) {
-        return GrantDTO.builder()
-                .grantee(grantee)
-                .capability(capability)
-                .target(target)
-                .build();
-    }
 
     public static Builder builder() {
         return Builder.create();
@@ -112,8 +104,8 @@ public abstract class GrantDTO {
         @JsonProperty(FIELD_GRANTEE)
         public abstract Builder grantee(GRN grantee);
 
-        @JsonProperty(FIELD_CAPABILITY)
-        public abstract Builder capability(Capability capability);
+        @JsonProperty(FIELD_ROLE)
+        public abstract Builder role(String role);
 
         @JsonProperty(FIELD_TARGET)
         public abstract Builder target(GRN target);

@@ -16,11 +16,11 @@
  */
 package org.graylog.security.rest;
 
-import org.graylog.grn.GRN;
 import org.graylog.security.permissions.GRNPermission;
 import org.graylog2.plugin.rest.PluginRestResource;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.utilities.GRN;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,9 +32,9 @@ public abstract class RestResourceWithOwnerCheck extends RestResource implements
 
     protected void checkOwnership(GRN entity) {
         if (!isOwner(entity)) {
-            LOG.info("Not authorized to access entity <{}>. User <{}> is missing permission <{}:{}>",
+            LOG.info("Not authorized to access resource <{}>. User <{}> is missing permission <{}:{}>",
                     entity, getSubject().getPrincipal(), RestPermissions.ENTITY_OWN, entity);
-            throw new ForbiddenException("Not authorized to access entity <" + entity + ">");
+            throw new ForbiddenException("Not authorized to access resource <" + entity + ">");
         }
     }
 

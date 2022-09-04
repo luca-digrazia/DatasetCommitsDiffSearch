@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import org.graylog.security.Capability;
 import org.graylog2.utilities.GRN;
 
 import java.util.Collections;
@@ -36,23 +35,20 @@ public abstract class EntitySharePrepareResponse {
     @JsonProperty("entity")
     public abstract String entity();
 
-    @JsonProperty("sharing_user")
-    public abstract GRN sharingUser();
-
     @JsonProperty("available_grantees")
     public abstract ImmutableSet<AvailableGrantee> availableGrantees();
 
-    @JsonProperty("available_capabilities")
-    public abstract ImmutableSet<AvailableCapability> availableCapabilities();
+    @JsonProperty("available_roles")
+    public abstract ImmutableSet<AvailableRole> availableRoles();
 
     @JsonProperty("active_shares")
     public abstract ImmutableSet<ActiveShare> activeShares();
 
-    @JsonProperty("selected_grantee_capabilities")
-    public abstract ImmutableMap<GRN, Capability> selectedGranteeCapabilities();
+    @JsonProperty("selected_grantee_roles")
+    public abstract ImmutableMap<GRN, GRN> selectedGranteeRoles();
 
     @JsonProperty("missing_dependencies")
-    public abstract ImmutableMap<GRN, MissingDependency> missingDependencies();
+    public abstract ImmutableSet<MissingDependency> missingDependencies();
 
     public static Builder builder() {
         return Builder.create();
@@ -64,30 +60,27 @@ public abstract class EntitySharePrepareResponse {
         public static Builder create() {
             return new AutoValue_EntitySharePrepareResponse.Builder()
                     .activeShares(Collections.emptySet())
-                    .selectedGranteeCapabilities(Collections.emptyMap())
-                    .missingDependencies(Collections.emptyMap());
+                    .selectedGranteeRoles(Collections.emptyMap())
+                    .missingDependencies(Collections.emptySet());
         }
 
         @JsonProperty("entity")
         public abstract Builder entity(String entity);
 
-        @JsonProperty("sharing_user")
-        public abstract Builder sharingUser(GRN sharingUser);
-
         @JsonProperty("available_grantees")
         public abstract Builder availableGrantees(Set<AvailableGrantee> availableGrantees);
 
-        @JsonProperty("available_capabilities")
-        public abstract Builder availableCapabilities(Set<AvailableCapability> availableCapabilities);
+        @JsonProperty("available_roles")
+        public abstract Builder availableRoles(Set<AvailableRole> availableRoles);
 
         @JsonProperty("active_shares")
         public abstract Builder activeShares(Set<ActiveShare> activeShares);
 
-        @JsonProperty("selected_grantee_capabilities")
-        public abstract Builder selectedGranteeCapabilities(Map<GRN, Capability> selectedGranteeCapabilities);
+        @JsonProperty("selected_grantee_roles")
+        public abstract Builder selectedGranteeRoles(Map<GRN, GRN> selectedGranteeRoles);
 
         @JsonProperty("missing_dependencies")
-        public abstract Builder missingDependencies(Map<GRN, MissingDependency> missingDependencies);
+        public abstract Builder missingDependencies(Set<MissingDependency> missingDependencies);
 
         public abstract EntitySharePrepareResponse build();
     }
@@ -112,7 +105,7 @@ public abstract class EntitySharePrepareResponse {
     }
 
     @AutoValue
-    public static abstract class AvailableCapability {
+    public static abstract class AvailableRole {
         @JsonProperty("id")
         public abstract String id();
 
@@ -120,9 +113,9 @@ public abstract class EntitySharePrepareResponse {
         public abstract String title();
 
         @JsonCreator
-        public static AvailableCapability create(@JsonProperty("id") String id,
-                                                 @JsonProperty("title") String title) {
-            return new AutoValue_EntitySharePrepareResponse_AvailableCapability(id, title);
+        public static AvailableRole create(@JsonProperty("id") String id,
+                                           @JsonProperty("title") String title) {
+            return new AutoValue_EntitySharePrepareResponse_AvailableRole(id, title);
         }
     }
 
@@ -134,14 +127,14 @@ public abstract class EntitySharePrepareResponse {
         @JsonProperty("grantee")
         public abstract GRN grantee();
 
-        @JsonProperty("capability")
-        public abstract Capability capability();
+        @JsonProperty("role")
+        public abstract String role();
 
         @JsonCreator
         public static ActiveShare create(@JsonProperty("grant") String grant,
                                          @JsonProperty("grantee") GRN grantee,
-                                         @JsonProperty("capability") Capability capability) {
-            return new AutoValue_EntitySharePrepareResponse_ActiveShare(grant, grantee, capability);
+                                         @JsonProperty("role") String role) {
+            return new AutoValue_EntitySharePrepareResponse_ActiveShare(grant, grantee, role);
         }
     }
 

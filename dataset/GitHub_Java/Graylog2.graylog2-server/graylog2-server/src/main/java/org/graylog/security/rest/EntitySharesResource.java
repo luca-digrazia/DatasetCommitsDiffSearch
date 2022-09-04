@@ -23,8 +23,9 @@ import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog.security.DBGrantService;
 import org.graylog.security.GrantDTO;
+import org.graylog.security.shares.EntitySharePrepareRequest;
+import org.graylog.security.shares.EntitySharePrepareResponse;
 import org.graylog.security.shares.EntityShareRequest;
-import org.graylog.security.shares.EntityShareResponse;
 import org.graylog.security.shares.EntitySharesService;
 import org.graylog2.audit.AuditEventTypes;
 import org.graylog2.audit.jersey.AuditEvent;
@@ -77,8 +78,8 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
     @ApiOperation(value = "Prepare shares for an entity or collection")
     @Path("entities/{entityGRN}/prepare")
     @NoAuditEvent("This does not change any data")
-    public EntityShareResponse prepareShare(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
-                                            @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntityShareRequest request) {
+    public EntitySharePrepareResponse prepareShare(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
+                                                   @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntitySharePrepareRequest request) {
         final GRN grn = grnRegistry.parse(entityGRN);
         checkOwnership(grn);
 
@@ -94,8 +95,8 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
     @Path("entities/{entityGRN}")
     // TODO add description to GraylogServerEventFormatter
     @AuditEvent(type = AuditEventTypes.GRANTS_UPDATE)
-    public EntityShareResponse updateEntityShares(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
-                                                  @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntityShareRequest request) {
+    public EntitySharePrepareResponse updateEntityShares(@ApiParam(name = "entityGRN", required = true) @PathParam("entityGRN") @NotBlank String entityGRN,
+                                                         @ApiParam(name = "JSON Body", required = true) @NotNull @Valid EntityShareRequest request) {
         final GRN entity = grnRegistry.parse(entityGRN);
         checkOwnership(entity);
 
@@ -109,9 +110,12 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
 
         checkOwnership(grn);
 
+        final String userName = requireNonNull(getCurrentUser()).getName();
+        final GRN currentUser = grnRegistry.newGRN("user", userName);
+
         // TODO: We need to make the return value of this resource more useful to the frontend
         //       (e.g. returning a list of entities with title, etc.)
-        final List<GrantDTO> grants = grantService.getForTarget(grn);
+        final List<GrantDTO> grants = grantService.getForTarget(grn, currentUser);
 
         return Response.ok(ImmutableMap.of("grants", grants)).build();
     }

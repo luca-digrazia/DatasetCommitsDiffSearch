@@ -16,9 +16,7 @@
  */
 package org.graylog.security;
 
-import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.multibindings.OptionalBinder;
-import org.graylog.security.migrations.V20200811143600_ViewSharingToGrantsMigration;
 import org.graylog.security.shares.DefaultGranteeService;
 import org.graylog.security.shares.GranteeService;
 import org.graylog2.plugin.PluginModule;
@@ -27,9 +25,7 @@ public class SecurityModule extends PluginModule {
     @Override
     protected void configure() {
 
-        bind(BuiltinCapabilities.class).asEagerSingleton();
-
-        install(new FactoryModuleBuilder().implement(GranteeAuthorizer.class, GranteeAuthorizer.class).build(GranteeAuthorizer.Factory.class));
+        bind(BuiltinRoles.class).asEagerSingleton();
 
         OptionalBinder.newOptionalBinder(binder(), GrantPermissionResolver.class)
                 .setDefault().to(DefaultGrantPermissionResolver.class);
@@ -41,7 +37,5 @@ public class SecurityModule extends PluginModule {
         // TODO: Check if we need to use addRestResource() here for the final version to make sure
         //       we get the path prefix. Do we want this?
         registerRestControllerPackage(getClass().getPackage().getName());
-
-        addMigration(V20200811143600_ViewSharingToGrantsMigration.class);
     }
 }

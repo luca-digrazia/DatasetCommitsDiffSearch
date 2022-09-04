@@ -19,9 +19,10 @@ package org.graylog.security;
 import com.google.common.collect.ImmutableSet;
 import org.apache.shiro.authz.Permission;
 import org.apache.shiro.authz.permission.WildcardPermission;
-import org.graylog.grn.GRN;
 import org.graylog.security.permissions.GRNPermission;
 import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.utilities.GRN;
+import org.graylog2.utilities.GRNRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,21 +35,25 @@ public class DefaultGrantPermissionResolver implements GrantPermissionResolver {
     private static final Logger LOG = LoggerFactory.getLogger(DefaultGrantPermissionResolver.class);
 
     private final Logger logger;
-    private final BuiltinCapabilities builtinCapabilities;
+    private final BuiltinRoles builtinRoles;
     private final DBGrantService grantService;
+    private final GRNRegistry grnRegistry;
 
     @Inject
-    public DefaultGrantPermissionResolver(BuiltinCapabilities builtinCapabilities,
-                                          DBGrantService grantService) {
-        this(LOG, builtinCapabilities, grantService);
+    public DefaultGrantPermissionResolver(BuiltinRoles builtinRoles,
+                                          DBGrantService grantService,
+                                          GRNRegistry grnRegistry) {
+        this(LOG, builtinRoles, grantService, grnRegistry);
     }
 
     public DefaultGrantPermissionResolver(Logger logger,
-                                          BuiltinCapabilities builtinCapabilities,
-                                          DBGrantService grantService) {
+                                          BuiltinRoles builtinRoles,
+                                          DBGrantService grantService,
+                                          GRNRegistry grnRegistry) {
         this.logger = logger;
-        this.builtinCapabilities = builtinCapabilities;
+        this.builtinRoles = builtinRoles;
         this.grantService = grantService;
+        this.grnRegistry = grnRegistry;
     }
 
     protected Set<GRN> resolveTargets(GRN target) {
@@ -62,23 +67,23 @@ public class DefaultGrantPermissionResolver implements GrantPermissionResolver {
         }
     }
 
-    protected Set<GRN> resolveGrantees(GRN principal) {
-        return Collections.singleton(principal);
+    protected Set<GRN> resolveGrantees(String userName) {
+        return Collections.singleton(grnRegistry.newGRN("user", userName));
     }
 
     @Override
-    public Set<Permission> resolvePermissionsForPrincipal(GRN principal) {
-        final Set<GrantDTO> grants = grantService.getForGranteesOrGlobal(resolveGrantees(principal));
+    public Set<Permission> resolvePermissionsForUser(String userName) {
+        final Set<GrantDTO> grants = grantService.getForGranteesOrGlobal(resolveGrantees(userName));
 
         final ImmutableSet.Builder<Permission> permissionsBuilder = ImmutableSet.builder();
 
         for (GrantDTO grant : grants) {
-            final Optional<CapabilityDescriptor> capability = builtinCapabilities.get(grant.capability());
+            final Optional<RoleDTO> role = builtinRoles.get(grant.role());
 
-            if (capability.isPresent()) {
+            if (role.isPresent()) {
                 final Set<GRN> targets = resolveTargets(grant.target());
 
-                for (String permission : capability.get().permissions()) {
+                for (String permission : role.get().permissions()) {
                     for (GRN target : targets) {
                         if (target.isPermissionApplicable(permission)) {
                             // TODO Find a better way to distinguish between old and new types of permissions
@@ -92,15 +97,10 @@ public class DefaultGrantPermissionResolver implements GrantPermissionResolver {
                     }
                 }
             } else {
-                logger.warn("Couldn't find capability <{}>", grant.capability());
+                logger.warn("Couldn't find role <{}>", grant.role());
             }
         }
 
         return permissionsBuilder.build();
-    }
-
-    @Override
-    public Set<String> resolveRolesForPrincipal(GRN principal) {
-        return ImmutableSet.of();
     }
 }
