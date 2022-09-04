@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.actions.RunningActionEvent;
 import com.google.devtools.build.lib.actions.ScanningActionEvent;
 import com.google.devtools.build.lib.actions.SchedulingActionEvent;
 import com.google.devtools.build.lib.actions.StoppedScanningActionEvent;
+import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
@@ -66,7 +67,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -322,10 +322,8 @@ class ExperimentalStateTracker {
   private int failedTests;
   private boolean ok;
   private boolean buildComplete;
-
-  // These are only null between the completion of analysis and the beginning of execution.
-  @Nullable private String defaultStatus = "Loading";
-  @Nullable private String defaultActivity = "loading...";
+  private String defaultStatus = "Loading";
+  private String defaultActivity = "loading...";
 
   private ExecutionProgressReceiver executionProgressReceiver;
   private PackageProgressReceiver packageProgressReceiver;
@@ -387,7 +385,7 @@ class ExperimentalStateTracker {
    * Make the state tracker aware of the fact that the analysis has finished. Return a summary of
    * the work done in the analysis phase.
    */
-  synchronized String analysisComplete() {
+  synchronized String analysisComplete(AnalysisPhaseCompleteEvent event) {
     String workDone = "Analyzed " + additionalMessage;
     if (packageProgressReceiver != null) {
       Pair<String, String> progress = packageProgressReceiver.progressState();
@@ -401,15 +399,13 @@ class ExperimentalStateTracker {
     status = null;
     packageProgressReceiver = null;
     configuredTargetProgressReceiver = null;
-    defaultStatus = null;
-    defaultActivity = null;
+    defaultStatus = "Building";
+    defaultActivity = "checking cached actions";
     return workDone;
   }
 
-  synchronized void progressReceiverAvailable(ExecutionProgressReceiverAvailableEvent event) {
+  void progressReceiverAvailable(ExecutionProgressReceiverAvailableEvent event) {
     executionProgressReceiver = event.getExecutionProgressReceiver();
-    defaultStatus = "Building";
-    defaultActivity = "checking cached actions";
   }
 
   void buildComplete(BuildCompleteEvent event, String additionalInfo) {
@@ -802,29 +798,21 @@ class ExperimentalStateTracker {
   }
 
   private void sampleOldestActions(AnsiTerminalWriter terminalWriter) throws IOException {
-    // This method can only be called if 'activeActions.size()' was observed to be larger than 1 at
-    // some point in the past. But the 'activeActions' map can grow and shrink concurrent with this
-    // code here so we need to be very careful lest we fall victim to a check-then-act race.
-    int racyActiveActionsCount = activeActions.size();
+    int count = 0;
+    int totalCount = 0;
+    long nanoTime = clock.nanoTime();
+    int actionCount = activeActions.size();
+    Set<Artifact> toSkip = new HashSet<>();
+
     PriorityQueue<Map.Entry<Artifact, ActionState>> priorityHeap =
         new PriorityQueue<>(
-            // The 'initialCapacity' parameter must be positive.
-            /*initialCapacity=*/ Math.max(racyActiveActionsCount, 1),
+            activeActions.size(),
             Comparator.comparing(
                     (Map.Entry<Artifact, ActionState> entry) ->
                         entry.getValue().runningStrategiesBitmap == 0)
                 .thenComparingLong(entry -> entry.getValue().nanoStartTime)
                 .thenComparingInt(entry -> entry.getValue().hashCode()));
     priorityHeap.addAll(activeActions.entrySet());
-    // From this point on, we no longer consume 'activeActions'. So now it's sound to look at how
-    // many entries were added to 'priorityHeap' and act appropriately based on that count.
-    int actualObservedActiveActionsCount = priorityHeap.size();
-
-    int count = 0;
-    int totalCount = 0;
-    long nanoTime = clock.nanoTime();
-    Set<Artifact> toSkip = new HashSet<>();
-
     while (!priorityHeap.isEmpty()) {
       Map.Entry<Artifact, ActionState> entry = priorityHeap.poll();
       totalCount++;
@@ -837,16 +825,12 @@ class ExperimentalStateTracker {
         break;
       }
       int width =
-          targetWidth
-              - 4
-              - ((count >= sampleSize && count < actualObservedActiveActionsCount)
-                  ? AND_MORE.length()
-                  : 0);
+          targetWidth - 4 - ((count >= sampleSize && count < actionCount) ? AND_MORE.length() : 0);
       terminalWriter
           .newline()
           .append("    " + describeAction(entry.getValue(), nanoTime, width, toSkip));
     }
-    if (totalCount < actualObservedActiveActionsCount) {
+    if (totalCount < actionCount) {
       terminalWriter.append(AND_MORE);
     }
   }
@@ -1107,8 +1091,6 @@ class ExperimentalStateTracker {
     }
     if (executionProgressReceiver != null) {
       terminalWriter.okStatus().append(executionProgressReceiver.getProgressString());
-    } else if (defaultStatus == null) {
-      return;
     } else {
       terminalWriter.okStatus().append(defaultStatus).append(":");
     }
