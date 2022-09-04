@@ -279,7 +279,7 @@ public class Message {
         return ImmutableMap.copyOf(fields);
     }
 
-    public void setStreams(final List<Stream> streams) {
+    public void setStreams(final Iterable<Stream> streams) {
         this.streams = Lists.newArrayList(streams);
     }
 
