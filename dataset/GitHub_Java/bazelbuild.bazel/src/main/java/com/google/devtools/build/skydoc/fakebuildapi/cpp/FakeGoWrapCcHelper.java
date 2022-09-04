@@ -14,10 +14,9 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.cpp;
 
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.RunfilesApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StarlarkRuleContextApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.TransitiveInfoCollectionApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
@@ -33,6 +32,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.go.GoConfigurationApi;
 import com.google.devtools.build.lib.skylarkbuildapi.go.GoContextInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.go.GoPackageInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Tuple;
 
@@ -41,7 +41,7 @@ public class FakeGoWrapCcHelper
     implements GoWrapCcHelperApi<
         FileApi,
         ConstraintValueInfoApi,
-        StarlarkRuleContextApi<ConstraintValueInfoApi>,
+        SkylarkRuleContextApi<ConstraintValueInfoApi>,
         CcInfoApi<FileApi>,
         FeatureConfigurationApi,
         CcToolchainProviderApi<FeatureConfigurationApi>,
@@ -54,8 +54,8 @@ public class FakeGoWrapCcHelper
         WrapCcIncludeProviderApi> {
 
   @Override
-  public RunfilesApi starlarkGetGoRunfiles(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext) {
+  public RunfilesApi skylarkGetGoRunfiles(
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext) {
     return null;
   }
 
@@ -65,33 +65,32 @@ public class FakeGoWrapCcHelper
   }
 
   @Override
-  public GoContextInfoApi starlarkCollectTransitiveGoContextGopkg(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+  public GoContextInfoApi skylarkCollectTransitiveGoContextGopkg(
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       FileApi export,
       FileApi pkg,
       FileApi gopkg,
-      Object starlarkWrapContext,
+      Object skylarkWrapContext,
       CcInfoApi<FileApi> ccInfo) {
     return null;
   }
 
   @Override
   public GoWrapCcInfoApi<FileApi> getGoWrapCcInfo(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
-      CcInfoApi<FileApi> ccInfo) {
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext, CcInfoApi<FileApi> ccInfo) {
     return null;
   }
 
   @Override
   public GoCcLinkParamsInfoApi getGoCcLinkParamsProvider(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> ruleContext,
+      SkylarkRuleContextApi<ConstraintValueInfoApi> ruleContext,
       CcLinkingContextApi<FileApi> ccLinkingContext) {
     return null;
   }
 
   @Override
   public Tuple<FileApi> createGoCompileActions(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       CcToolchainProviderApi<FeatureConfigurationApi> ccToolchainProvider,
       Sequence<?> srcs,
       Sequence<?> deps) {
@@ -100,7 +99,7 @@ public class FakeGoWrapCcHelper
 
   @Override
   public Tuple<FileApi> createGoCompileActionsGopkg(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       CcToolchainProviderApi<FeatureConfigurationApi> ccToolchainProvider,
       Sequence<?> srcs,
       Sequence<?> deps) {
@@ -109,8 +108,8 @@ public class FakeGoWrapCcHelper
 
   @Override
   public GoPackageInfoApi createTransitiveGopackageInfo(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
-      FileApi starlarkGopkg,
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
+      FileApi skylarkGopkg,
       FileApi export,
       FileApi swigOutGo) {
     return null;
@@ -118,26 +117,26 @@ public class FakeGoWrapCcHelper
 
   @Override
   public Depset /*<FileApi>*/ getGopackageFilesForStarlark(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext, FileApi starlarkGopkg) {
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext, FileApi skylarkGopkg) {
     return null;
   }
 
   @Override
-  public FeatureConfigurationApi starlarkGetFeatureConfiguration(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+  public FeatureConfigurationApi skylarkGetFeatureConfiguration(
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain) {
     return null;
   }
 
   @Override
-  public Depset starlarkCollectTransitiveSwigIncludes(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext) {
+  public Depset skylarkCollectTransitiveSwigIncludes(
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext) {
     return null;
   }
 
   @Override
-  public CompilationInfoApi<FileApi> starlarkCreateCompileActions(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+  public CompilationInfoApi<FileApi> skylarkCreateCompileActions(
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       FeatureConfigurationApi featureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain,
       FileApi ccFile,
@@ -148,20 +147,20 @@ public class FakeGoWrapCcHelper
   }
 
   @Override
-  public String starlarkGetMangledTargetName(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext) {
+  public String skylarkGetMangledTargetName(
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext) {
     return null;
   }
 
   @Override
   public WrapCcIncludeProviderApi getWrapCcIncludeProvider(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext, Depset swigIncludes) {
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext, Depset swigIncludes) {
     return null;
   }
 
   @Override
   public void registerSwigAction(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> starlarkRuleContext,
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain,
       FeatureConfigurationApi featureConfiguration,
       CcCompilationContextApi<FileApi> wrapperCcCompilationContext,

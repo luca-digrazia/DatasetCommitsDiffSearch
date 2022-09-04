@@ -1001,9 +1001,9 @@ public final class CcCompilationHelper {
     // Add this package's dir to declaredIncludeDirs, & this rule's headers to declaredIncludeSrcs
     // Note: no include dir for STRICT mode.
     if (headersCheckingMode == HeadersCheckingMode.LOOSE) {
-      ccCompilationContextBuilder.addLooseHdrsDir(label.getPackageFragment());
+      ccCompilationContextBuilder.addDeclaredIncludeDir(label.getPackageFragment());
       for (PathFragment looseIncludeDir : looseIncludeDirs) {
-        ccCompilationContextBuilder.addLooseHdrsDir(looseIncludeDir);
+        ccCompilationContextBuilder.addDeclaredIncludeDir(looseIncludeDir);
       }
       ccCompilationContextBuilder.setHeadersCheckingMode(headersCheckingMode);
     }

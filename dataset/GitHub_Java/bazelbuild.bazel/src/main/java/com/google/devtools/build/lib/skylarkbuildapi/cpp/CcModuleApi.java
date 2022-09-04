@@ -15,16 +15,16 @@
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StarlarkActionFactoryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.NoneType;
@@ -35,11 +35,11 @@ import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.syntax.Tuple;
 
 /** Utilites related to C++ support. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "cc_common",
     doc = "Utilities for C++ compilation, linking, and command line generation.")
 public interface CcModuleApi<
-        SkylarkActionFactoryT extends StarlarkActionFactoryApi,
+        SkylarkActionFactoryT extends SkylarkActionFactoryApi,
         FileT extends FileApi,
         CcToolchainProviderT extends CcToolchainProviderApi<?>,
         FeatureConfigurationT extends FeatureConfigurationApi,
@@ -510,7 +510,7 @@ public interface CcModuleApi<
       parameters = {
         @Param(
             name = "actions",
-            type = StarlarkActionFactoryApi.class,
+            type = SkylarkActionFactoryApi.class,
             positional = false,
             named = true,
             doc = "<code>actions</code> object."),
@@ -989,13 +989,12 @@ public interface CcModuleApi<
       doc =
           "Should be used for creating library rules that can propagate information downstream in"
               + " order to be linked later by a top level rule that does transitive linking to"
-              + " create an executable or dynamic library. Returns tuple of "
-              + "(<code>CcLinkingContext</code>, <code>CcLinkingOutputs</code>).",
+              + " create an executable or dynamic library.",
       useStarlarkThread = true,
       parameters = {
         @Param(
             name = "actions",
-            type = StarlarkActionFactoryApi.class,
+            type = SkylarkActionFactoryApi.class,
             positional = false,
             named = true,
             doc = "<code>actions</code> object."),

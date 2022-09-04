@@ -157,12 +157,12 @@ public final class CcInfo extends NativeInfo implements CcInfoApi<Artifact> {
 
     @Override
     public CcInfoApi<Artifact> createInfo(
-        Object starlarkCcCompilationContext, Object starlarkCcLinkingInfo) throws EvalException {
+        Object skylarkCcCompilationContext, Object skylarkCcLinkingInfo) throws EvalException {
       CcCompilationContext ccCompilationContext =
-          nullIfNone(starlarkCcCompilationContext, CcCompilationContext.class);
+          nullIfNone(skylarkCcCompilationContext, CcCompilationContext.class);
       // TODO(b/118663806): Eventually only CcLinkingContext will be allowed, this is for
       // backwards compatibility.
-      CcLinkingContext ccLinkingContext = nullIfNone(starlarkCcLinkingInfo, CcLinkingContext.class);
+      CcLinkingContext ccLinkingContext = nullIfNone(skylarkCcLinkingInfo, CcLinkingContext.class);
       CcInfo.Builder ccInfoBuilder = CcInfo.builder();
       if (ccCompilationContext != null) {
         ccInfoBuilder.setCcCompilationContext(ccCompilationContext);

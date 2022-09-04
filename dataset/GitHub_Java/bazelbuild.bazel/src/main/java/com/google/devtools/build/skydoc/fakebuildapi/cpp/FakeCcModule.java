@@ -16,8 +16,8 @@ package com.google.devtools.build.skydoc.fakebuildapi.cpp;
 
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StarlarkActionFactoryApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StarlarkRuleContextApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.BazelCcModuleApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
@@ -44,10 +44,10 @@ import com.google.devtools.build.skydoc.fakebuildapi.FakeProviderApi;
 /** Fake implementation of {@link CcModuleApi}. */
 public class FakeCcModule
     implements BazelCcModuleApi<
-        StarlarkActionFactoryApi,
+        SkylarkActionFactoryApi,
         FileApi,
         ConstraintValueInfoApi,
-        StarlarkRuleContextApi<ConstraintValueInfoApi>,
+        SkylarkRuleContextApi<ConstraintValueInfoApi>,
         CcToolchainProviderApi<FeatureConfigurationApi>,
         FeatureConfigurationApi,
         CcCompilationContextApi<FileApi>,
@@ -218,13 +218,13 @@ public class FakeCcModule
 
   @Override
   public boolean isCcToolchainResolutionEnabled(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> context) {
+      SkylarkRuleContextApi<ConstraintValueInfoApi> context) {
     return false;
   }
 
   @Override
   public Tuple<Object> compile(
-      StarlarkActionFactoryApi starlarkActionFactoryApi,
+      SkylarkActionFactoryApi skylarkActionFactoryApi,
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
       Sequence<?> sources,
@@ -249,7 +249,7 @@ public class FakeCcModule
 
   @Override
   public Tuple<Object> createLinkingContextFromCompilationOutputs(
-      StarlarkActionFactoryApi starlarkActionFactoryApi,
+      SkylarkActionFactoryApi skylarkActionFactoryApi,
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
       CcCompilationOutputsApi<FileApi> compilationOutputs,
@@ -269,7 +269,7 @@ public class FakeCcModule
 
   @Override
   public CcLinkingOutputsApi<FileApi> link(
-      StarlarkActionFactoryApi starlarkActionFactoryApi,
+      SkylarkActionFactoryApi skylarkActionFactoryApi,
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
       Object compilationOutputs,
@@ -279,7 +279,6 @@ public class FakeCcModule
       String language,
       String outputType,
       boolean linkDepsStatically,
-      int stamp,
       Sequence<?> additionalInputs,
       Object grepIncludes,
       StarlarkThread thread)
@@ -288,8 +287,8 @@ public class FakeCcModule
   }
 
   @Override
-  public CcToolchainConfigInfoApi ccToolchainConfigInfoFromStarlark(
-      StarlarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
+  public CcToolchainConfigInfoApi ccToolchainConfigInfoFromSkylark(
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       Sequence<?> features,
       Sequence<?> actionConfigs,
       Sequence<?> artifactNamePatterns,
@@ -311,7 +310,7 @@ public class FakeCcModule
   }
 
   @Override
-  public CcCompilationOutputsApi<FileApi> createCompilationOutputsFromStarlark(
+  public CcCompilationOutputsApi<FileApi> createCompilationOutputsFromSkylark(
       Object objectsObject, Object picObjectsObject) {
     return null;
   }
