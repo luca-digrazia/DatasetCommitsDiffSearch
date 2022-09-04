@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableList;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,28 +24,16 @@ public final class SpawnMetrics {
 
   /** Indicates whether the metrics correspond to the remote, local or worker execution. */
   public static enum ExecKind {
-    REMOTE("Remote"),
-    LOCAL("Local"),
-    WORKER("Worker");
-
-    private final String name;
-
-    private ExecKind(String name) {
-      this.name = name;
-    }
-
-    @Override
-    public String toString() {
-      return name;
-    }
+    REMOTE,
+    LOCAL,
+    WORKER
   }
 
   /** Any non important stats < than 10% will not be shown in the summary. */
   private static final double STATS_SHOW_THRESHOLD = 0.10;
 
   /** Represents a zero cost/null statistic. */
-  public static final SpawnMetrics EMPTY_REMOTE =
-      new Builder().setExecKind(ExecKind.REMOTE).build();
+  public static final SpawnMetrics EMPTY = new Builder().build();
 
   public static SpawnMetrics forLocalExecution(Duration wallTime) {
     return new Builder()
@@ -274,6 +263,31 @@ public final class SpawnMetrics {
       return "N/A";
     }
     return String.format("%.2f%%", duration.toMillis() * 100.0 / total.toMillis());
+  }
+
+  /**
+   * Sums all the metrics (both duration and non-duration ones).
+   *
+   * @param spawnMetrics - collection of SpawnMetrics to aggregate
+   * @return a single SpawnMetrics object has the total duration (and other values)
+   */
+  public static SpawnMetrics sumAllMetrics(ImmutableList<SpawnMetrics> spawnMetrics) {
+    Builder builder = new Builder();
+    for (SpawnMetrics metric : spawnMetrics) {
+      builder.addDurations(metric);
+      builder.addNonDurations(metric);
+    }
+    return builder.build();
+  }
+
+  /** Sums all the duration metrics and selects the maximum of the non-duration ones. */
+  public static SpawnMetrics sumDurationsMaxOther(ImmutableList<SpawnMetrics> spawnMetrics) {
+    Builder builder = new Builder();
+    for (SpawnMetrics metric : spawnMetrics) {
+      builder.addDurations(metric);
+      builder.maxNonDurations(metric);
+    }
+    return builder.build();
   }
 
   /** Builder class for SpawnMetrics. */
