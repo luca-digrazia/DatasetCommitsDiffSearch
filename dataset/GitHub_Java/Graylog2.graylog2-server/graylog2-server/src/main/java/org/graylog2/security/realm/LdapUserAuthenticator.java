@@ -26,7 +26,6 @@ import org.apache.shiro.authc.*;
 import org.apache.shiro.authc.credential.AllowAllCredentialsMatcher;
 import org.apache.shiro.realm.AuthenticatingRealm;
 import org.graylog2.Core;
-import org.graylog2.security.TrustAllX509TrustManager;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapEntry;
 import org.graylog2.security.ldap.LdapSettings;
@@ -67,9 +66,6 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
         config.setLdapPort(ldapSettings.getUri().getPort());
         config.setUseSsl(ldapSettings.getUri().getScheme().startsWith("ldaps"));
         config.setUseTls(ldapSettings.isUseStartTls());
-        if (ldapSettings.isTrustAllCertificates()) {
-            config.setTrustManagers(new TrustAllX509TrustManager());
-        }
         config.setName(ldapSettings.getSystemUserName());
         config.setCredentials(ldapSettings.getSystemPassword());
 
