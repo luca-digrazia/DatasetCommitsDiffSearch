@@ -1,8 +1,6 @@
 package io.quarkus.smallrye.reactivemessaging.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.BLOCKING;
-import static io.quarkus.smallrye.reactivemessaging.deployment.ReactiveMessagingDotNames.SMALLRYE_BLOCKING;
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -145,7 +143,7 @@ public class SmallRyeReactiveMessagingProcessor {
                 AnnotationInstance outgoing = annotationStore.getAnnotation(method,
                         ReactiveMessagingDotNames.OUTGOING);
                 AnnotationInstance blocking = annotationStore.getAnnotation(method,
-                        BLOCKING);
+                        ReactiveMessagingDotNames.BLOCKING);
                 if (incoming != null || outgoing != null) {
                     if (incoming != null && incoming.value().asString().isEmpty()) {
                         validationPhase.getContext().addDeploymentProblem(
@@ -339,13 +337,10 @@ public class SmallRyeReactiveMessagingProcessor {
              */
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, generatedInvokerName));
 
-            if (methodInfo.hasAnnotation(BLOCKING) || methodInfo.hasAnnotation(SMALLRYE_BLOCKING)) {
-                // Just in case both annotation are used, use @Blocking value.
-                String poolName = Blocking.DEFAULT_WORKER_POOL;
-                if (methodInfo.hasAnnotation(ReactiveMessagingDotNames.BLOCKING)) {
-                    AnnotationInstance blocking = methodInfo.annotation(ReactiveMessagingDotNames.BLOCKING);
-                    poolName = blocking.value() == null ? Blocking.DEFAULT_WORKER_POOL : blocking.value().asString();
-                }
+            if (methodInfo.hasAnnotation(ReactiveMessagingDotNames.BLOCKING)) {
+                AnnotationInstance blocking = methodInfo.annotation(ReactiveMessagingDotNames.BLOCKING);
+                String poolName = blocking.value() == null ? Blocking.DEFAULT_WORKER_POOL : blocking.value().asString();
+
                 recorder.configureWorkerPool(beanContainer.getValue(), methodInfo.declaringClass().toString(),
                         methodInfo.name(), poolName);
             }
