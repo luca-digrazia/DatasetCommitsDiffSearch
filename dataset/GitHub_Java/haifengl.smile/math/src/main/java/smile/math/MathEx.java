@@ -1215,7 +1215,6 @@ public class MathEx {
      * If there are multiple modes, one of them will be returned.
      *
      * @param a the array. The order of elements will be changed on output.
-     * @return the mode.
      */
     public static int mode(int[] a) {
         Arrays.sort(a);
