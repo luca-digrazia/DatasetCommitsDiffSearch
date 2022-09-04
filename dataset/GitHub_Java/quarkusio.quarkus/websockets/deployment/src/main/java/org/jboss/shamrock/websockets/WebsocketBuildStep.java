@@ -38,10 +38,10 @@ import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.ServiceStartBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.undertow.ServletContextAttributeBuildItem;
-import org.jboss.shamrock.undertow.ServletDeploymentBuildItem;
 import org.jboss.shamrock.undertow.UndertowBuildItem;
 import org.jboss.shamrock.websockets.runtime.WebsocketTemplate;
 
+import io.undertow.websockets.jsr.JsrWebSocketFilter;
 import io.undertow.websockets.jsr.WebSocketDeploymentInfo;
 
 public class WebsocketBuildStep {
@@ -105,6 +105,7 @@ public class WebsocketBuildStep {
             return null;
         }
         reflection.produce(new ReflectiveClassBuildItem(true, false , annotatedEndpoints.toArray(new String[annotatedEndpoints.size()])));
+        reflection.produce(new ReflectiveClassBuildItem(false, false , JsrWebSocketFilter.class.getName()));
         
         return new ServletContextAttributeBuildItem(WebSocketDeploymentInfo.ATTRIBUTE_NAME, template.createDeploymentInfo(annotatedEndpoints, endpoints, config));
     }

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.shamrock.undertow;
 
 import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.DENY;
@@ -6,6 +22,7 @@ import static javax.servlet.DispatcherType.REQUEST;
 import static org.jboss.shamrock.annotations.ExecutionTime.RUNTIME_INIT;
 import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,7 +31,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -26,9 +42,10 @@ import javax.servlet.annotation.ServletSecurity;
 import javax.servlet.annotation.WebFilter;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.annotation.WebServlet;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamReader;
 
-import io.undertow.servlet.api.HttpMethodSecurityInfo;
-import io.undertow.servlet.api.ServletSecurityInfo;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.annotation.javaee.Descriptions;
 import org.jboss.annotation.javaee.DisplayNames;
 import org.jboss.annotation.javaee.Icons;
@@ -50,6 +67,9 @@ import org.jboss.metadata.javaee.spec.RunAsMetaData;
 import org.jboss.metadata.javaee.spec.SecurityRoleMetaData;
 import org.jboss.metadata.javaee.spec.SecurityRoleRefMetaData;
 import org.jboss.metadata.javaee.spec.SecurityRolesMetaData;
+import org.jboss.metadata.parser.servlet.WebMetaDataParser;
+import org.jboss.metadata.parser.util.MetaDataElementParser;
+import org.jboss.metadata.property.PropertyReplacers;
 import org.jboss.metadata.web.spec.AnnotationMetaData;
 import org.jboss.metadata.web.spec.AnnotationsMetaData;
 import org.jboss.metadata.web.spec.DispatcherType;
@@ -73,19 +93,25 @@ import org.jboss.shamrock.deployment.ApplicationArchive;
 import org.jboss.shamrock.deployment.builditem.ApplicationArchivesBuildItem;
 import org.jboss.shamrock.deployment.builditem.ArchiveRootBuildItem;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
+import org.jboss.shamrock.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import org.jboss.shamrock.deployment.builditem.InjectionFactoryBuildItem;
 import org.jboss.shamrock.deployment.builditem.ServiceStartBuildItem;
+import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import org.jboss.shamrock.deployment.cdi.BeanDefiningAnnotationBuildItem;
 import org.jboss.shamrock.deployment.recording.RecorderContext;
-import org.jboss.shamrock.runtime.ConfiguredValue;
 import org.jboss.shamrock.runtime.RuntimeValue;
+import org.jboss.shamrock.undertow.runtime.HttpConfig;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
+import io.undertow.Undertow;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.FilterInfo;
+import io.undertow.servlet.api.HttpMethodSecurityInfo;
 import io.undertow.servlet.api.ServletInfo;
+import io.undertow.servlet.api.ServletSecurityInfo;
 import io.undertow.servlet.handlers.DefaultServlet;
 
 public class UndertowBuildStep {
@@ -98,15 +124,23 @@ public class UndertowBuildStep {
     private static final DotName declareRoles = DotName.createSimple(DeclareRoles.class.getName());
     private static final DotName multipartConfig = DotName.createSimple(MultipartConfig.class.getName());
     private static final DotName servletSecurity = DotName.createSimple(ServletSecurity.class.getName());
+    private static final String WEB_XML = "META-INF/web.xml";
 
     @Inject
     CombinedIndexBuildItem combinedIndexBuildItem;
 
+    @ConfigProperty(name = "shamrock.http")
+    HttpConfig config;
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    public ServiceStartBuildItem boot(UndertowDeploymentTemplate template, ServletHandlerBuildItem servletHandlerBuildItem, List<HttpHandlerWrapperBuildItem> wrappers) throws Exception {
-        template.startUndertow(null, servletHandlerBuildItem.getHandler(), new ConfiguredValue("http.port", "8080"), new ConfiguredValue("http.host", "localhost"), new ConfiguredValue("http.io-threads", ""), new ConfiguredValue("http.worker-threads", ""), wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
+    public ServiceStartBuildItem boot(UndertowDeploymentTemplate template,
+                                      ServletDeploymentBuildItem servletDeploymentBuildItem,
+                                      List<HttpHandlerWrapperBuildItem> wrappers,
+                                      ShutdownContextBuildItem shutdown,
+                                      BuildProducer<UndertowBuildItem> undertowProducer) throws Exception {
+        RuntimeValue<Undertow> ut = template.startUndertow(shutdown, servletDeploymentBuildItem.getDeployment(), config, wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
+        undertowProducer.produce(new UndertowBuildItem(ut));
         return new ServiceStartBuildItem("undertow");
     }
 
@@ -119,20 +153,34 @@ public class UndertowBuildStep {
 
                 .build();
     }
+    
+    @BuildStep
+    List<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations() {
+        List<BeanDefiningAnnotationBuildItem> annotations = new ArrayList<>();
+        annotations.add(new BeanDefiningAnnotationBuildItem(webFilter));
+        annotations.add(new BeanDefiningAnnotationBuildItem(webServlet));
+        annotations.add(new BeanDefiningAnnotationBuildItem(webListener));
+        return annotations;
+    }
 
+
+    @BuildStep
+    HotDeploymentConfigFileBuildItem configFile() {
+        return new HotDeploymentConfigFileBuildItem(WEB_XML);
+    }
 
     @Record(STATIC_INIT)
     @BuildStep
-    public ServletHandlerBuildItem build(ApplicationArchivesBuildItem applicationArchivesBuildItem,
-                                         List<ServletBuildItem> servlets,
-                                         List<FilterBuildItem> filters,
-                                         List<ServletInitParamBuildItem> initParams,
-                                         List<ServletContextAttributeBuildItem> contextParams,
-                                         UndertowDeploymentTemplate template, RecorderContext context,
-                                         List<ServletExtensionBuildItem> extensions,
-                                         RecorderContext recorderContext,
-                                         InjectionFactoryBuildItem injectionFactory,
-                                         BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
+    public ServletDeploymentBuildItem build(ApplicationArchivesBuildItem applicationArchivesBuildItem,
+                                            List<ServletBuildItem> servlets,
+                                            List<FilterBuildItem> filters,
+                                            List<ServletInitParamBuildItem> initParams,
+                                            List<ServletContextAttributeBuildItem> contextParams,
+                                            UndertowDeploymentTemplate template, RecorderContext context,
+                                            List<ServletExtensionBuildItem> extensions,
+                                            InjectionFactoryBuildItem injectionFactory,
+                                            InjectionFactoryBuildItem bc,
+                                            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
 
         reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName(), "io.undertow.server.protocol.http.HttpRequestParser$$generated"));
 
@@ -159,15 +207,28 @@ public class UndertowBuildStep {
 
         RuntimeValue<DeploymentInfo> deployment = template.createDeployment("test", knownFiles, knownDirectories);
 
+        WebMetaData result;
+        Path webXml = applicationArchivesBuildItem.getRootArchive().getChildPath(WEB_XML);
+        if (webXml != null) {
+
+            final XMLInputFactory inputFactory = XMLInputFactory.newInstance();
+            MetaDataElementParser.DTDInfo dtdInfo = new MetaDataElementParser.DTDInfo();
+            inputFactory.setXMLResolver(dtdInfo);
+            try (FileInputStream in = new FileInputStream(webXml.toFile())) {
+                final XMLStreamReader xmlReader = inputFactory.createXMLStreamReader(in);
+                result = WebMetaDataParser.parse(xmlReader, dtdInfo, PropertyReplacers.noop());
+            }
+        } else {
+            result = new WebMetaData();
+        }
+
         final IndexView index = combinedIndexBuildItem.getIndex();
-        WebMetaData result = processAnnotations(index);
-
-
+        processAnnotations(index, result);
         //add servlets
         if (result.getServlets() != null) {
             for (ServletMetaData servlet : result.getServlets()) {
                 reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
-                AtomicReference<ServletInfo> sref = template.registerServlet(deployment, servlet.getServletName(),
+                RuntimeValue<ServletInfo> sref = template.registerServlet(deployment, servlet.getServletName(),
                         context.classProxy(servlet.getServletClass()),
                         servlet.isAsyncSupported(),
                         servlet.getLoadOnStartupInt(),
@@ -223,7 +284,7 @@ public class UndertowBuildStep {
         if (result.getFilters() != null) {
             for (FilterMetaData filter : result.getFilters()) {
                 reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, filter.getFilterClass()));
-                AtomicReference<FilterInfo> sref = template.registerFilter(deployment,
+                RuntimeValue<FilterInfo> sref = template.registerFilter(deployment,
                         filter.getFilterName(),
                         context.classProxy(filter.getFilterClass()),
                         filter.isAsyncSupported(),
@@ -291,7 +352,7 @@ public class UndertowBuildStep {
         for (ServletExtensionBuildItem i : extensions) {
             template.addServletExtension(deployment, i.getValue());
         }
-        return new ServletHandlerBuildItem(template.bootServletContainer(deployment));
+        return new ServletDeploymentBuildItem(template.bootServletContainer(deployment, bc.getFactory()));
 
     }
 
@@ -318,8 +379,7 @@ public class UndertowBuildStep {
      *
      * @param index the annotation index
      */
-    private WebMetaData processAnnotations(IndexView index) {
-        WebMetaData metaData = new WebMetaData();
+    private void processAnnotations(IndexView index, WebMetaData metaData) {
         // @WebServlet
         final Collection<AnnotationInstance> webServletAnnotations = index.getAnnotations(webServlet);
         if (webServletAnnotations != null && webServletAnnotations.size() > 0) {
@@ -675,11 +735,11 @@ public class UndertowBuildStep {
                 annotationMD.setServletSecurity(servletSecurity);
             }
         }
-        return metaData;
     }
 
     /**
      * Map web metadata type to undertow type
+     *
      * @param type web metadata TransportGuaranteeType
      * @return undertow TransportGuaranteeType
      */
