@@ -27,6 +27,7 @@ import org.graylog2.restclient.models.Stream;
 import org.graylog2.restclient.models.api.requests.alerts.CreateAlertConditionRequest;
 import org.graylog2.restclient.models.api.responses.alerts.AlertConditionSummaryResponse;
 import org.graylog2.restclient.models.api.responses.alerts.AlertConditionsResponse;
+import org.graylog2.restroutes.generated.routes;
 
 import java.io.IOException;
 import java.util.List;
@@ -48,8 +49,7 @@ public class AlertConditionService {
     public List<AlertCondition> allOfStream(Stream stream) throws APIException, IOException {
         List<AlertCondition> conditions = Lists.newArrayList();
 
-        AlertConditionsResponse response = api.get(AlertConditionsResponse.class)
-                .path("/streams/{0}/alerts/conditions", stream.getId())
+        AlertConditionsResponse response = api.path(routes.StreamAlertConditionResource().list(stream.getId()), AlertConditionsResponse.class)
                 .execute();
 
         for (AlertConditionSummaryResponse c : response.conditions) {
@@ -60,11 +60,14 @@ public class AlertConditionService {
     }
 
     public void delete(Stream stream, String conditionId) throws APIException, IOException {
-        api.delete().path("/streams/{0}/alerts/conditions/{1}", stream.getId(), conditionId).expect(204).execute();
+        api.path(routes.StreamAlertConditionResource().delete(stream.getId(), conditionId)).expect(204).execute();
     }
 
     public void create(Stream stream, CreateAlertConditionRequest r) throws APIException, IOException {
-        api.post().body(r).path("/streams/{0}/alerts/conditions", stream.getId()).expect(201).execute();
+        api.path(routes.StreamAlertConditionResource().create(stream.getId())).body(r).expect(201).execute();
     }
 
+    public void update(Stream stream, String conditionId, CreateAlertConditionRequest r) throws APIException, IOException {
+        api.path(routes.StreamAlertConditionResource().update(stream.getId(), conditionId)).body(r).expect(204).execute();
+    }
 }
