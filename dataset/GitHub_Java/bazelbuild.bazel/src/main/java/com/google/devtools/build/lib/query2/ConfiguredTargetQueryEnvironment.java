@@ -20,7 +20,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -74,8 +73,6 @@ public class ConfiguredTargetQueryEnvironment
 
   private final KeyExtractor<ConfiguredTarget, ConfiguredTargetKey> configuredTargetKeyExtractor;
 
-  private final ConfiguredTargetAccessor accessor;
-
   @Override
   protected KeyExtractor<ConfiguredTarget, ConfiguredTargetKey> getConfiguredTargetKeyExtractor() {
     return configuredTargetKeyExtractor;
@@ -100,8 +97,8 @@ public class ConfiguredTargetQueryEnvironment
         parserPrefix,
         pkgPath,
         walkableGraphSupplier,
-        settings);
-    this.accessor = new ConfiguredTargetAccessor(walkableGraphSupplier.get(), this);
+        settings,
+        new ConfiguredTargetAccessor(walkableGraphSupplier.get()));
     this.configuredTargetKeyExtractor =
         element -> {
           try {
@@ -176,11 +173,6 @@ public class ConfiguredTargetQueryEnvironment
 
   public String getOutputFormat() {
     return cqueryOptions.outputFormat;
-  }
-
-  @Override
-  public ConfiguredTargetAccessor getAccessor() {
-    return accessor;
   }
 
   @Override
@@ -332,15 +324,6 @@ public class ConfiguredTargetQueryEnvironment
   @Override
   protected ConfiguredTarget getNullConfiguredTarget(Label label) throws InterruptedException {
     return getValueFromKey(ConfiguredTargetValue.key(label, null));
-  }
-
-  @Nullable
-  @Override
-  protected RuleConfiguredTarget getRuleConfiguredTarget(ConfiguredTarget configuredTarget) {
-    if (configuredTarget instanceof RuleConfiguredTarget) {
-      return (RuleConfiguredTarget) configuredTarget;
-    }
-    return null;
   }
 
   @Nullable

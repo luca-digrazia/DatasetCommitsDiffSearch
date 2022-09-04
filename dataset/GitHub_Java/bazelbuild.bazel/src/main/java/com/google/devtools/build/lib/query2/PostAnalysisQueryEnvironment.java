@@ -90,6 +90,7 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
   private final String parserPrefix;
   private final PathPackageLocator pkgPath;
   private final Supplier<WalkableGraph> walkableGraphSupplier;
+  private final TargetAccessor<T> accessor;
   protected WalkableGraph graph;
 
   private static final Function<SkyKey, ConfiguredTargetKey> SKYKEY_TO_CTKEY =
@@ -120,13 +121,15 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
       String parserPrefix,
       PathPackageLocator pkgPath,
       Supplier<WalkableGraph> walkableGraphSupplier,
-      Set<Setting> settings) {
+      Set<Setting> settings,
+      TargetAccessor<T> targetAccessor) {
     super(keepGoing, true, Rule.ALL_LABELS, eventHandler, settings, extraFunctions);
     this.defaultTargetConfiguration = defaultTargetConfiguration;
     this.hostConfiguration = hostConfiguration;
     this.parserPrefix = parserPrefix;
     this.pkgPath = pkgPath;
     this.walkableGraphSupplier = walkableGraphSupplier;
+    this.accessor = targetAccessor;
   }
 
   public abstract ImmutableList<NamedThreadSafeOutputFormatterCallback<T>>
@@ -182,6 +185,11 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
     return hostConfiguration;
   }
 
+  @Override
+  public TargetAccessor<T> getAccessor() {
+    return accessor;
+  }
+
   // TODO(bazel-team): It's weird that this untemplated function exists. Fix? Or don't implement?
   @Override
   public Target getTarget(Label label) throws TargetNotFoundException, InterruptedException {
@@ -232,7 +240,8 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
     return targetPatternKey.getParsedPattern();
   }
 
-  ThreadSafeMutableSet<T> getFwdDeps(Iterable<T> targets)
+  @Override
+  public ThreadSafeMutableSet<T> getFwdDeps(Iterable<T> targets, QueryExpressionContext<T> context)
       throws InterruptedException {
     Map<SkyKey, T> targetsByKey = Maps.newHashMapWithExpectedSize(Iterables.size(targets));
     for (T target : targets) {
@@ -253,12 +262,6 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
       result.addAll(filterFwdDeps(targetsByKey.get(entry.getKey()), entry.getValue()));
     }
     return result;
-  }
-
-  @Override
-  public ThreadSafeMutableSet<T> getFwdDeps(Iterable<T> targets, QueryExpressionContext<T> context)
-      throws InterruptedException {
-    return getFwdDeps(targets);
   }
 
   private Collection<T> filterFwdDeps(T configTarget, Collection<T> rawFwdDeps) {
@@ -338,23 +341,18 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
                 .collect(Collectors.toList());
       }
     }
-    if (settings.contains(Setting.NO_IMPLICIT_DEPS)) {
-      RuleConfiguredTarget ruleConfiguredTarget = getRuleConfiguredTarget(target);
-      if (ruleConfiguredTarget != null) {
-        Set<ConfiguredTargetKey> implicitDeps = ruleConfiguredTarget.getImplicitDeps();
-        deps =
-            deps.stream()
-                .filter(
-                    dep ->
-                        !implicitDeps.contains(
-                            ConfiguredTargetKey.of(getCorrectLabel(dep), getConfiguration(dep))))
-                .collect(Collectors.toList());
-      }
+    if (settings.contains(Setting.NO_IMPLICIT_DEPS) && target instanceof RuleConfiguredTarget) {
+      Set<ConfiguredTargetKey> implicitDeps = ((RuleConfiguredTarget) target).getImplicitDeps();
+      deps =
+          deps.stream()
+              .filter(
+                  dep ->
+                      !implicitDeps.contains(
+                          ConfiguredTargetKey.of(getCorrectLabel(dep), getConfiguration(dep))))
+              .collect(Collectors.toList());
     }
     return deps;
   }
-
-  protected abstract RuleConfiguredTarget getRuleConfiguredTarget(T target);
 
   protected Map<SkyKey, Collection<T>> targetifyValues(
       Map<SkyKey, ? extends Iterable<SkyKey>> input) throws InterruptedException {
