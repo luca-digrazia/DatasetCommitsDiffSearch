@@ -2,9 +2,11 @@ package io.dropwizard.testing.junit;
 
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMultimap;
+
 import io.dropwizard.Application;
 import io.dropwizard.servlets.tasks.Task;
 import io.dropwizard.setup.Environment;
+
 import org.junit.ClassRule;
 import org.junit.Test;
 
@@ -13,6 +15,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
+
 import java.io.PrintWriter;
 
 import static io.dropwizard.testing.ResourceHelpers.resourceFilePath;
@@ -28,8 +31,10 @@ public class DropwizardAppRuleTest {
 
     @Test
     public void canGetExpectedResourceOverHttp() {
-        final String content = ClientBuilder.newClient().target(
-            "http://localhost:" + RULE.getLocalPort() + "/test").request().get(String.class);
+        final String content = ClientBuilder.newClient().target("http://localhost:" +
+                                         RULE.getLocalPort()
+                                         +"/test")
+                                         .request().get(String.class);
 
         assertThat(content, is("Yes, it's here"));
     }
@@ -94,7 +99,7 @@ public class DropwizardAppRuleTest {
         }
 
         @Override
-        public void execute(ImmutableMultimap<String, String> parameters, String body, PrintWriter output) throws Exception {
+        public void execute(ImmutableMultimap<String, String> parameters, PrintWriter output) throws Exception {
             ImmutableCollection<String> names = parameters.get("name");
             String name = !names.isEmpty() ? names.asList().get(0) : "Anonymous";
             output.print("Hello has been said to " + name);

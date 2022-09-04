@@ -11,7 +11,6 @@ import io.dropwizard.testing.DropwizardTestSupport;
 import org.junit.rules.ExternalResource;
 
 import javax.annotation.Nullable;
-import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
@@ -22,50 +21,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * override the {@link #newApplication()} method to provide your application instance(s).
  * </p>
  *
- * <p>
- * Using DropwizardAppRule at the suite level can speed up test runs, as the application is only started and stopped
- * once for the entire suite:
- * </p>
- *
- * <pre>
- * @RunWith(Suite.class)
- * @SuiteClasses({FooTest.class, BarTest.class})
- * public class MySuite {
- *   @ClassRule
- *   public static final DropwizardAppRule&lt;MyConfig> DROPWIZARD = new DropwizardAppRule&lt;>(MyApp.class);
- * }
- * </pre>
- *
- * <p>
- * If the same instance of DropwizardAppRule is reused at the suite- and class-level, then the application will be
- * started and stopped once, regardless of whether the entire suite or a single test is executed.
- * </p>
- *
- * <pre>
- * public class FooTest {
- *   @ClassRule public static final DropwizardAppRule&lt;MyConfig> DROPWIZARD = MySuite.DROPWIZARD;
- *
- *   public void testFoo() { ... }
- * }
- *
- * public class BarTest {
- *   @ClassRule public static final DropwizardAppRule&lt;MyConfig> DROPWIZARD = MySuite.DROPWIZARD;
- *
- *   public void testBar() { ... }
- * }
- * </pre>
- *
- * <p>
- *
- * </p>
- *
  * @param <C> the configuration type
  */
 public class DropwizardAppRule<C extends Configuration> extends ExternalResource {
 
     private final DropwizardTestSupport<C> testSupport;
-
-    private final AtomicInteger recursiveCallCount = new AtomicInteger(0);
 
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass) {
         this(applicationClass, (String) null);
@@ -124,16 +84,12 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
 
     @Override
     protected void before() {
-        if (recursiveCallCount.getAndIncrement() == 0) {
-            testSupport.before();
-        }
+        testSupport.before();
     }
 
     @Override
     protected void after() {
-        if (recursiveCallCount.decrementAndGet() == 0) {
-            testSupport.after();
-        }
+        testSupport.after();
     }
 
     public C getConfiguration() {
@@ -142,10 +98,6 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
 
     public int getLocalPort() {
         return testSupport.getLocalPort();
-    }
-
-    public int getPort(int connectorIndex) {
-       return testSupport.getPort(connectorIndex);
     }
 
     public int getAdminPort() {
