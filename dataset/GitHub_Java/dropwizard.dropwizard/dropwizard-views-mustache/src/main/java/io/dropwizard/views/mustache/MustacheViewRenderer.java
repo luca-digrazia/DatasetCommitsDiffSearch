@@ -28,15 +28,16 @@ import java.util.Optional;
 public class MustacheViewRenderer implements ViewRenderer {
     private final LoadingCache<Class<? extends View>, MustacheFactory> factories;
     private boolean useCache = true;
-    private Optional<File> fileRoot = Optional.empty();
+    private File fileRoot;
 
     public MustacheViewRenderer() {
-        this.factories = CacheBuilder.newBuilder().build(new CacheLoader<Class<? extends View>, MustacheFactory>() {
-            @Override
-            public MustacheFactory load(Class<? extends View> key) throws Exception {
-                return createNewMustacheFactory(key);
-            }
-        });
+        this.factories = CacheBuilder.newBuilder()
+                                     .build(new CacheLoader<Class<? extends View>, MustacheFactory>() {
+                                         @Override
+                                         public MustacheFactory load(Class<? extends View> key) throws Exception {
+                                             return createNewMustacheFactory(key);
+                                         }
+                                     });
     }
 
     @Override
@@ -47,8 +48,8 @@ public class MustacheViewRenderer implements ViewRenderer {
     @Override
     public void render(View view, Locale locale, OutputStream output) throws IOException {
         try {
-            final MustacheFactory mustacheFactory = useCache ? factories.get(view.getClass())
-                    : createNewMustacheFactory(view.getClass());
+            final MustacheFactory mustacheFactory = useCache ? factories.get(view.getClass()) :
+                createNewMustacheFactory(view.getClass());
             final Mustache template = mustacheFactory.compile(view.getTemplateName());
             final Charset charset = view.getCharset().orElse(StandardCharsets.UTF_8);
             try (OutputStreamWriter writer = new OutputStreamWriter(output, charset)) {
@@ -61,8 +62,12 @@ public class MustacheViewRenderer implements ViewRenderer {
 
     @Override
     public void configure(Map<String, String> options) {
-        useCache = Optional.ofNullable(options.get("cache")).map(Boolean::parseBoolean).orElse(true);
-        fileRoot = Optional.ofNullable(options.get("fileRoot")).map(File::new);
+        useCache = Optional.ofNullable(options.get("cache"))
+            .map(Boolean::parseBoolean)
+            .orElse(true);
+        if (options.containsKey("fileRoot")) {
+            fileRoot = new File(options.get("fileRoot"));
+        }
     }
 
     @VisibleForTesting
@@ -76,8 +81,8 @@ public class MustacheViewRenderer implements ViewRenderer {
     }
 
     private MustacheFactory createNewMustacheFactory(Class<? extends View> key) {
-        return new DefaultMustacheFactory(
-                fileRoot.isPresent() ? new FileSystemResolver(fileRoot.get()) : new PerClassMustacheResolver(key));
+        return (fileRoot != null) ? new DefaultMustacheFactory(new FileSystemResolver(fileRoot))
+                : new DefaultMustacheFactory(new PerClassMustacheResolver(key));
     }
 
 }
