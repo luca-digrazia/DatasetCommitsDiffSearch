@@ -67,9 +67,7 @@ public class TypeTest {
       // This does not use assertMessageContainsWordsWithQuotes because at least
       // one test should test exact wording (but they all shouldn't to make
       // changing/improving the messages easy).
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("expected value of type 'int', but got \"foo\" (string)");
+      assertThat(e).hasMessage("expected value of type 'int', but got \"foo\" (string)");
     }
   }
 
@@ -80,11 +78,8 @@ public class TypeTest {
       Type.STRING_LIST.convert("[(1,2), 3, 4]", "myexpr", null);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "expected value of type 'list(string)' for myexpr, "
-                  + "but got \"[(1,2), 3, 4]\" (string)");
+      assertThat(e).hasMessage("expected value of type 'list(string)' for myexpr, "
+          + "but got \"[(1,2), 3, 4]\" (string)");
     }
   }
 
@@ -101,7 +96,7 @@ public class TypeTest {
       Type.STRING.convert(3, null);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e).hasMessageThat().isEqualTo("expected value of type 'string', but got 3 (int)");
+      assertThat(e).hasMessage("expected value of type 'string', but got 3 (int)");
     }
   }
 
@@ -124,9 +119,8 @@ public class TypeTest {
       Type.BOOLEAN.convert("unexpected", null);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("expected value of type 'int', but got \"unexpected\" (string)");
+      assertThat(e).hasMessage(
+          "expected value of type 'int', but got \"unexpected\" (string)");
     }
     // Integers other than [0, 1] should fail.
     try {
@@ -271,7 +265,7 @@ public class TypeTest {
       BuildType.LABEL.convert(3, null);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e).hasMessageThat().isEqualTo("expected value of type 'string', but got 3 (int)");
+      assertThat(e).hasMessage("expected value of type 'string', but got 3 (int)");
     }
   }
 
@@ -302,11 +296,8 @@ public class TypeTest {
       Type.STRING_DICT.convert(input, null);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "expected value of type 'string' for dict value element, "
-                  + "but got [\"bar\", \"baz\"] (list)");
+      assertThat(e).hasMessage("expected value of type 'string' for dict value element, "
+          + "but got [\"bar\", \"baz\"] (list)");
     }
   }
 
@@ -316,9 +307,7 @@ public class TypeTest {
       Type.STRING_LIST.convert(3, "blah");
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("expected value of type 'list(string)' for blah, but got 3 (int)");
+      assertThat(e).hasMessage("expected value of type 'list(string)' for blah, but got 3 (int)");
     }
   }
 
@@ -329,10 +318,8 @@ public class TypeTest {
       Type.STRING_LIST.convert(input, "argument quux");
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "expected value of type 'string' for element 2 of argument quux, but got 1 (int)");
+      assertThat(e).hasMessage(
+          "expected value of type 'string' for element 2 of argument quux, but got 1 (int)");
     }
   }
 
@@ -364,9 +351,7 @@ public class TypeTest {
       BuildType.LABEL_LIST.convert(3, "foo", currentRule);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("expected value of type 'list(label)' for foo, but got 3 (int)");
+      assertThat(e).hasMessage("expected value of type 'list(label)' for foo, but got 3 (int)");
     }
   }
 
@@ -377,9 +362,8 @@ public class TypeTest {
       BuildType.LABEL_LIST.convert(list, null, currentRule);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("expected value of type 'string' for element 1 of null, but got 2 (int)");
+      assertThat(e).hasMessage(
+          "expected value of type 'string' for element 1 of null, but got 2 (int)");
     }
   }
 
@@ -390,12 +374,9 @@ public class TypeTest {
       BuildType.LABEL_LIST.convert(list, "myexpr", currentRule);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "invalid label '//foo:bar/..' in element 0 of myexpr: "
-                  + "invalid target name 'bar/..': "
-                  + "target names may not contain up-level references '..'");
+      assertThat(e).hasMessage("invalid label '//foo:bar/..' in element 0 of myexpr: "
+          + "invalid target name 'bar/..': "
+          + "target names may not contain up-level references '..'");
     }
   }
 
@@ -421,9 +402,8 @@ public class TypeTest {
       Type.STRING_LIST_DICT.convert(input, null, currentRule);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("expected value of type 'string' for dict key element, but got 2 (int)");
+      assertThat(e).hasMessage(
+          "expected value of type 'string' for dict key element, but got 2 (int)");
     }
   }
 
@@ -435,11 +415,9 @@ public class TypeTest {
       Type.STRING_LIST_DICT.convert(input, null, currentRule);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "expected value of type 'list(string)' for dict value element, "
-                  + "but got \"bar\" (string)");
+      assertThat(e).hasMessage(
+          "expected value of type 'list(string)' for dict value element, "
+          + "but got \"bar\" (string)");
     }
   }
 
@@ -450,11 +428,8 @@ public class TypeTest {
       Type.STRING_LIST_DICT.convert(input, null);
       fail();
     } catch (Type.ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "expected value of type 'string' for dict key element, but got "
-                  + "(\"foo\",) (tuple)");
+      assertThat(e).hasMessage("expected value of type 'string' for dict key element, but got "
+          + "(\"foo\",) (tuple)");
     }
   }
 
@@ -464,10 +439,8 @@ public class TypeTest {
       Type.STRING_DICT.convert("some string", null);
       fail();
     } catch (ConversionException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
-              "expected value of type 'dict(string, string)', but got \"some string\" (string)");
+      assertThat(e).hasMessage(
+          "expected value of type 'dict(string, string)', but got \"some string\" (string)");
     }
   }
 

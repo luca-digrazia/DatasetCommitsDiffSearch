@@ -25,10 +25,6 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
-import com.google.devtools.build.lib.packages.Type.ConversionException;
-import com.google.devtools.build.lib.packages.Type.DictType;
-import com.google.devtools.build.lib.packages.Type.LabelClass;
-import com.google.devtools.build.lib.packages.Type.ListType;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
@@ -37,6 +33,11 @@ import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SelectorValue;
+import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Type.ConversionException;
+import com.google.devtools.build.lib.syntax.Type.DictType;
+import com.google.devtools.build.lib.syntax.Type.LabelClass;
+import com.google.devtools.build.lib.syntax.Type.ListType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -262,22 +263,20 @@ public final class BuildType {
         if (!(x instanceof String)) {
           throw new ConversionException(Type.STRING, x, what);
         }
-        // This String here is about to be parsed into a Label. We do not use STRING.convert since
-        // there is absolutely no motivation to intern the String; the Label we create will be
-        // storing a reference to different string (a substring in fact).
-        String str = (String) x;
         // TODO(b/110101445): check if context is ever actually null
         if (context == null) {
           return Label.parseAbsolute(
-              str, /* defaultToMain= */ false, /* repositoryMapping= */ ImmutableMap.of());
+              (String) x, /* defaultToMain= */ false, /* repositoryMapping= */ ImmutableMap.of());
           // TODO(b/110308446): remove instances of context being a Label
         } else if (context instanceof Label) {
-          return ((Label) context).getRelativeWithRemapping(str, ImmutableMap.of());
+          return ((Label) context)
+              .getRelativeWithRemapping(STRING.convert(x, what, context), ImmutableMap.of());
         } else if (context instanceof LabelConversionContext) {
           LabelConversionContext labelConversionContext = (LabelConversionContext) context;
           return labelConversionContext
               .getLabel()
-              .getRelativeWithRemapping(str, labelConversionContext.getRepositoryMapping());
+              .getRelativeWithRemapping(
+                  STRING.convert(x, what, context), labelConversionContext.getRepositoryMapping());
         } else {
           throw new ConversionException("invalid context '" + context + "' in " + what);
         }
