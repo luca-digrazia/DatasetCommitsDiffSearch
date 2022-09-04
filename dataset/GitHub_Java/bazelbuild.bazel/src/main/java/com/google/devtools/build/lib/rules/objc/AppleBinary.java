@@ -188,13 +188,9 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         Artifact dsymBinary = intermediateArtifacts.dsymSymbol(DsymOutputType.APP);
         builder.addOutput(arch, OutputType.DSYM_BINARY, dsymBinary);
       }
-      if (childObjcConfig.generateLinkmap()) {
-        Artifact linkmap = intermediateArtifacts.linkmap();
-        builder.addOutput(arch, OutputType.LINKMAP, linkmap);
-      }
     }
 
-    targetBuilder.addNativeDeclaredProvider(builder.build());
+    targetBuilder.addProvider(AppleDebugOutputsProvider.class, builder.build());
 
     return targetBuilder.build();
   }
