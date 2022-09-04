@@ -191,6 +191,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleRemoveNativeMavenJar();
 
+  public abstract boolean incompatibleRestrictAttributeNames();
+
   public abstract boolean incompatibleRestrictNamedParams();
 
   public abstract boolean incompatibleRunShellCommandString();
@@ -206,6 +208,8 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleRestrictStringEscapes();
 
   public abstract boolean incompatibleDisallowDictLookupUnhashableKeys();
+
+  public abstract boolean incompatibleDisablePartitionDefaultParameter();
 
   public abstract boolean incompatibleAllowTagsPropagation();
 
@@ -279,6 +283,7 @@ public abstract class StarlarkSemantics {
           .incompatibleRemapMainRepo(false)
           .incompatibleRemoveNativeMavenJar(false)
           .incompatibleRunShellCommandString(false)
+          .incompatibleRestrictAttributeNames(false)
           .incompatibleRestrictNamedParams(false)
           .incompatibleStringJoinRequiresStrings(true)
           .internalSkylarkFlagTestCanary(false)
@@ -286,6 +291,7 @@ public abstract class StarlarkSemantics {
           .incompatibleDepsetForLibrariesToLinkGetter(true)
           .incompatibleRestrictStringEscapes(false)
           .incompatibleDisallowDictLookupUnhashableKeys(false)
+          .incompatibleDisablePartitionDefaultParameter(false)
           .incompatibleAllowTagsPropagation(false)
           .incompatibleDisallowHashingFrozenMutables(false)
           .build();
@@ -366,6 +372,8 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder incompatibleRemoveNativeMavenJar(boolean value);
 
+    public abstract Builder incompatibleRestrictAttributeNames(boolean value);
+
     public abstract Builder incompatibleRestrictNamedParams(boolean value);
 
     public abstract Builder incompatibleRunShellCommandString(boolean value);
@@ -381,6 +389,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleRestrictStringEscapes(boolean value);
 
     public abstract Builder incompatibleDisallowDictLookupUnhashableKeys(boolean value);
+
+    public abstract Builder incompatibleDisablePartitionDefaultParameter(boolean value);
 
     public abstract Builder incompatibleDisallowHashingFrozenMutables(boolean value);
 

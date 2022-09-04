@@ -249,6 +249,20 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
               + "the 'transitive' and 'direct' parameters instead.")
   public boolean incompatibleDisableDepsetItems;
 
+  @Option(
+      name = "incompatible_disable_partition_default_parameter",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If set to true, the default value `' '` for the parameter `sep` of `string.partion` and"
+              + " `string.rpartition` will be disabled.")
+  public boolean incompatibleDisablePartitionDefaultParameter;
+
   // For Bazel, this flag is a no-op. Bazel doesn't support built-in third party license checking
   // (see https://github.com/bazelbuild/bazel/issues/7444).
   //
@@ -615,6 +629,18 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean incompatibleRestrictNamedParams;
 
   @Option(
+      name = "incompatible_restrict_attribute_names",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set to true, restrict rule attribute names to valid identifiers")
+  public boolean incompatibleRestrictAttributeNames;
+
+  @Option(
       name = "incompatible_depset_for_libraries_to_link_getter",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -691,6 +717,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleObjcFrameworkCleanup(incompatibleObjcFrameworkCleanup)
             .incompatibleRemapMainRepo(incompatibleRemapMainRepo)
             .incompatibleRemoveNativeMavenJar(incompatibleRemoveNativeMavenJar)
+            .incompatibleRestrictAttributeNames(incompatibleRestrictAttributeNames)
             .incompatibleRestrictNamedParams(incompatibleRestrictNamedParams)
             .incompatibleRunShellCommandString(incompatibleRunShellCommandString)
             .incompatibleStringJoinRequiresStrings(incompatibleStringJoinRequiresStrings)
@@ -700,6 +727,8 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleRestrictStringEscapes(incompatibleRestrictStringEscapes)
             .incompatibleDisallowDictLookupUnhashableKeys(
                 incompatibleDisallowDictLookupUnhashableKeys)
+            .incompatibleDisablePartitionDefaultParameter(
+                incompatibleDisablePartitionDefaultParameter)
             .incompatibleAllowTagsPropagation(incompatibleAllowTagsPropagation)
             .incompatibleDisallowHashingFrozenMutables(incompatibleDisallowHashingFrozenMutables)
             .build();
