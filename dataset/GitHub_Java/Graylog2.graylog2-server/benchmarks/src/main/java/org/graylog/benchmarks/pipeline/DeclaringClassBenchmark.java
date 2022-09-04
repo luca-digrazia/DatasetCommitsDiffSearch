@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog Pipeline Processor.
+ * This file is part of Graylog.
  *
- * Graylog Pipeline Processor is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog Pipeline Processor is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog Pipeline Processor.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.benchmarks.pipeline;
 
@@ -21,7 +21,6 @@ import org.graylog.plugins.pipelineprocessor.EvaluationContext;
 import org.graylog.plugins.pipelineprocessor.ast.functions.AbstractFunction;
 import org.graylog.plugins.pipelineprocessor.ast.functions.FunctionArgs;
 import org.graylog.plugins.pipelineprocessor.ast.functions.FunctionDescriptor;
-import org.graylog.plugins.pipelineprocessor.ast.functions.ParameterDescriptor;
 import org.joda.time.DateTime;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
@@ -155,14 +154,14 @@ public class DeclaringClassBenchmark {
 
     @Benchmark
     public void stringConversion(Blackhole bh, BState state) {
-        state.args.setPreComputedValue("value", state.objects[state.i++ % 4]);
+        state.args.setPreComputedValue(StringConversion.VALUE, state.objects[state.i++ % 4]);
 
         bh.consume(state.conversion.evaluate(state.args, state.context));
     }
 
     @Benchmark
     public void oldStringConversion(Blackhole bh, BState state) {
-        state.args.setPreComputedValue("value", state.objects[state.i++ % 4]);
+        state.args.setPreComputedValue(StringConversion.VALUE, state.objects[state.i++ % 4]);
 
         bh.consume(state.oldconversion.evaluate(state.args, state.context));
     }
@@ -184,8 +183,8 @@ public class DeclaringClassBenchmark {
 
         public static final String NAME = "tostring";
 
-        private final ParameterDescriptor<Object, Object> valueParam = object("value").build();
-        private final ParameterDescriptor<String, String> defaultParam = string("default").optional().build();
+        private static final String VALUE = "value";
+        private static final String DEFAULT = "default";
 
         // this is per-thread to save an expensive concurrent hashmap access
         private final ThreadLocal<LinkedHashMap<Class<?>, Class<?>>> declaringClassCache;
@@ -206,7 +205,7 @@ public class DeclaringClassBenchmark {
 
         @Override
         public String evaluate(FunctionArgs args, EvaluationContext context) {
-            final Object evaluated = valueParam.required(args, context);
+            final Object evaluated = args.param(VALUE).evalRequired(args, context, Object.class);
             // fast path for the most common targets
             if (evaluated instanceof String
                     || evaluated instanceof Number
@@ -227,11 +226,11 @@ public class DeclaringClassBenchmark {
                     if ((declaringClass != Object.class)) {
                         return evaluated.toString();
                     } else {
-                        return defaultParam.optional(args, context).orElse("");
+                        return args.param(DEFAULT).eval(args, context, String.class).orElse("");
                     }
                 } catch (NoSuchMethodException ignored) {
                     // should never happen because toString is always there
-                    return defaultParam.optional(args, context).orElse("");
+                    return args.param(DEFAULT).eval(args, context, String.class).orElse("");
                 }
             }
         }
@@ -242,8 +241,8 @@ public class DeclaringClassBenchmark {
                     .name(NAME)
                     .returnType(String.class)
                     .params(of(
-                            valueParam,
-                            defaultParam
+                            object(VALUE).build(),
+                            string(DEFAULT).optional().build()
                     ))
                     .build();
         }
@@ -254,13 +253,12 @@ public class DeclaringClassBenchmark {
 
         public static final String NAME = "tostring";
 
-        private final ParameterDescriptor<Object, Object> valueParam = object("value").build();
-        private final ParameterDescriptor<String, String> defaultParam = string("default").optional().build();
-
+        private static final String VALUE = "value";
+        private static final String DEFAULT = "default";
 
         @Override
         public String evaluate(FunctionArgs args, EvaluationContext context) {
-            final Object evaluated = valueParam.required(args, context);
+            final Object evaluated = args.param(VALUE).evalRequired(args, context, Object.class);
             if (evaluated instanceof String) {
                 return (String) evaluated;
             } else {
@@ -268,11 +266,11 @@ public class DeclaringClassBenchmark {
                     if ((evaluated.getClass().getMethod("toString").getDeclaringClass() != Object.class)) {
                         return evaluated.toString();
                     } else {
-                        return defaultParam.optional(args, context).orElse("");
+                        return args.param(DEFAULT).eval(args, context, String.class).orElse("");
                     }
                 } catch (NoSuchMethodException ignored) {
                     // should never happen because toString is always there
-                    return defaultParam.optional(args, context).orElse("");
+                    return args.param(DEFAULT).eval(args, context, String.class).orElse("");
                 }
             }
         }
@@ -283,8 +281,8 @@ public class DeclaringClassBenchmark {
                     .name(NAME)
                     .returnType(String.class)
                     .params(of(
-                            valueParam,
-                            defaultParam
+                            object(VALUE).build(),
+                            string(DEFAULT).optional().build()
                     ))
                     .build();
         }
