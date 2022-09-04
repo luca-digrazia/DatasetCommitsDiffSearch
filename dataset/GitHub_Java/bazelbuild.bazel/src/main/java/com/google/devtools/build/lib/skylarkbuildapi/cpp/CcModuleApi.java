@@ -633,7 +633,7 @@ public interface CcModuleApi<
       parameters = {
         @Param(
             name = "owner",
-            doc = "The label of the target that produced all files used in this input.",
+            doc = "List of <code>LibraryToLink</code>.",
             positional = false,
             named = true,
             type = Label.class),

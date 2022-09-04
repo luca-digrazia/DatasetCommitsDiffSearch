@@ -28,8 +28,8 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkActionFactory;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkActionFactory;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
@@ -1777,14 +1777,7 @@ public abstract class CcModule
             .addAdditionalCompilationInputs(
                 Sequence.cast(additionalInputs, Artifact.class, "additional_inputs"))
             .addAditionalIncludeScanningRoots(headersForClifDoNotUseThisParam)
-            .setPurpose(common.getPurpose(getSemantics()))
-            .setHeadersCheckingMode(
-                getSemantics()
-                    .determineStarlarkHeadersCheckingMode(
-                        actions
-                            .getActionConstructionContext()
-                            .getConfiguration()
-                            .getFragment(CppConfiguration.class)));
+            .setPurpose(common.getPurpose(getSemantics()));
     if (disallowNopicOutputs) {
       helper.setGenerateNoPicAction(false);
     }
