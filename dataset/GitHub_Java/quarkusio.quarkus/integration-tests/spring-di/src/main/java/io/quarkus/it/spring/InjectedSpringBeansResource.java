@@ -11,7 +11,6 @@ import javax.ws.rs.core.MediaType;
 
 import io.quarkus.it.spring.AppConfiguration.CustomPrototypeBean;
 import io.quarkus.it.spring.AppConfiguration.NamedBean;
-import io.quarkus.it.spring.AppConfiguration.PrototypeBean;
 
 @Path("/")
 public class InjectedSpringBeansResource {
@@ -23,11 +22,7 @@ public class InjectedSpringBeansResource {
     @Inject
     SessionBean sessionBean;
     @Inject
-    CustomPrototypeBean customPrototypeBean;
-    @Inject
-    PrototypeBean prototypeBean;
-    @Inject
-    PrototypeBean anotherPrototypeBean;
+    CustomPrototypeBean anotherRequestBean;
     @Inject
     NamedBean namedBean;
 
@@ -55,11 +50,5 @@ public class InjectedSpringBeansResource {
     @Path("invalidate")
     public void invalidate(final @Context HttpServletRequest req) {
         req.getSession().invalidate();
-    }
-
-    @GET
-    @Path("prototype")
-    public String prototype() {
-        return prototypeBean.index + "/" + anotherPrototypeBean.index;
     }
 }

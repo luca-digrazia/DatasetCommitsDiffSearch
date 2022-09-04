@@ -409,11 +409,6 @@ public class SpringDIProcessor {
                         CDI_NAMED_ANNOTATION,
                         target,
                         Collections.singletonList(AnnotationValue.createStringValue("value", beanName))));
-            } else if (methodInfo.hasAnnotation(AUTOWIRED_ANNOTATION)) {
-                annotationsToAdd.add(create(
-                        CDI_INJECT_ANNOTATION,
-                        target,
-                        Collections.emptyList()));
             }
 
             // add method parameter conversion annotations
