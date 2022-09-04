@@ -69,14 +69,14 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
         CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(ruleContext, ccToolchain);
-    FdoProvider fdoProvider =
-        CppHelper.getFdoProviderUsingDefaultCcToolchainAttribute(ruleContext);
+    FdoSupportProvider fdoSupport =
+        CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext);
 
     // Add headers to compilation step.
     final CcCommon common = new CcCommon(ruleContext);
     CompilationInfo compilationInfo =
         new CcCompilationHelper(
-                ruleContext, semantics, featureConfiguration, ccToolchain, fdoProvider)
+                ruleContext, semantics, featureConfiguration, ccToolchain, fdoSupport)
             .addPublicHeaders(common.getHeaders())
             .setHeadersCheckingMode(HeadersCheckingMode.STRICT)
             .compile();
@@ -99,7 +99,7 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
             semantics,
             featureConfiguration,
             ccToolchain,
-            fdoProvider,
+            fdoSupport,
             ruleContext.getConfiguration());
 
     if (staticLibrary != null) {
@@ -107,12 +107,12 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
         linkingHelper.addPicStaticLibraries(
             ImmutableList.of(
                 LinkerInputs.opaqueLibraryToLink(
-                    staticLibrary, staticLibraryCategory, libraryIdentifier)));
+                    staticLibrary, staticLibraryCategory, libraryIdentifier, alwayslink)));
       } else {
         linkingHelper.addStaticLibraries(
             ImmutableList.of(
                 LinkerInputs.opaqueLibraryToLink(
-                    staticLibrary, staticLibraryCategory, libraryIdentifier)));
+                    staticLibrary, staticLibraryCategory, libraryIdentifier, alwayslink)));
       }
     }
 
