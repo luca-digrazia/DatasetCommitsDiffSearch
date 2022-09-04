@@ -23,7 +23,7 @@ import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import com.lmax.disruptor.EventHandler;
-import org.graylog2.shared.journal.Journal;
+import org.graylog2.shared.journal.KafkaJournal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,11 +38,11 @@ public class JournallingMessageHandler implements EventHandler<RawMessageEvent> 
 
     private final List<RawMessageEvent> batch = Lists.newArrayList();
     private final Counter byteCounter;
-    private final Journal journal;
+    private final KafkaJournal journal;
     private final Semaphore journalFilled;
 
     @Inject
-    public JournallingMessageHandler(MetricRegistry metrics, Journal journal, @Named("JournalSignal") Semaphore journalFilled) {
+    public JournallingMessageHandler(MetricRegistry metrics, KafkaJournal journal, @Named("JournalSignal") Semaphore journalFilled) {
         this.journal = journal;
         this.journalFilled = journalFilled;
         byteCounter = metrics.counter(MetricRegistry.name(JournallingMessageHandler.class, "written_bytes"));
@@ -58,18 +58,16 @@ public class JournallingMessageHandler implements EventHandler<RawMessageEvent> 
 
             final Converter converter = new Converter();
             // copy to avoid re-running this all the time
-            final List<Journal.Entry> entries = Lists.newArrayList(transform(batch, converter));
+            final List<KafkaJournal.Entry> entries = Lists.newArrayList(transform(batch, converter));
             final long lastOffset = journal.write(entries);
-            log.info("Processed batch, wrote {} bytes, last journal offset: {}, signalling reader.",
-                     converter.getBytesWritten(),
-                     lastOffset);
+            log.info("Processed batch, wrote {} bytes, last journal offset: {}, signalling reader.", converter.getBytesWritten(), lastOffset);
             journalFilled.release();
 
             batch.clear();
         }
     }
 
-    private class Converter implements Function<RawMessageEvent, Journal.Entry> {
+    private class Converter implements Function<RawMessageEvent, KafkaJournal.Entry> {
         private long bytesWritten = 0;
 
         public long getBytesWritten() {
@@ -78,7 +76,7 @@ public class JournallingMessageHandler implements EventHandler<RawMessageEvent> 
 
         @Nullable
         @Override
-        public Journal.Entry apply(RawMessageEvent input) {
+        public KafkaJournal.Entry apply(RawMessageEvent input) {
             log.info("Journalling message {}", input.rawMessage.getId());
             // stats
             final int size = input.encodedRawMessage.length;
