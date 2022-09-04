@@ -81,17 +81,17 @@ public abstract class IMatrix<T> implements Cloneable, Serializable {
      * Returns the number of rows.
      * @return the number of rows.
      */
-    public abstract int nrow();
+    public abstract int nrows();
 
     /**
      * Returns the number of columns.
      * @return the number of columns.
      */
-    public abstract int ncol();
+    public abstract int ncols();
 
     /**
      * Returns the number of stored matrix elements. For conventional matrix,
-     * it is simplify nrow * ncol. But it is usually much less for band,
+     * it is simplify nrows * ncols. But it is usually much less for band,
      * packed or sparse matrix.
      * @return the number of stored matrix elements.
      */
@@ -110,8 +110,8 @@ public abstract class IMatrix<T> implements Cloneable, Serializable {
      * @param names the row names.
      */
     public void rowNames(String[] names) {
-        if (names != null && names.length != nrow()) {
-            throw new IllegalArgumentException(String.format("Invalid row names length: %d != %d", names.length, nrow()));
+        if (names != null && names.length != nrows()) {
+            throw new IllegalArgumentException(String.format("Invalid row names length: %d != %d", names.length, nrows()));
         }
         rowNames = names;
     }
@@ -138,8 +138,8 @@ public abstract class IMatrix<T> implements Cloneable, Serializable {
      * @param names the column names.
      */
     public void colNames(String[] names) {
-        if (names != null && names.length != ncol()) {
-            throw new IllegalArgumentException(String.format("Invalid column names length: %d != %d", names.length, ncol()));
+        if (names != null && names.length != ncols()) {
+            throw new IllegalArgumentException(String.format("Invalid column names length: %d != %d", names.length, ncols()));
         }
         colNames = names;
     }
@@ -165,7 +165,7 @@ public abstract class IMatrix<T> implements Cloneable, Serializable {
      * @return the string representation of matrix.
      */
     public String toString(boolean full) {
-        return full ? toString(nrow(), ncol()) : toString(7, 7);
+        return full ? toString(nrows(), ncols()) : toString(7, 7);
     }
 
     /**
@@ -175,11 +175,11 @@ public abstract class IMatrix<T> implements Cloneable, Serializable {
      * @return the string representation of matrix.
      */
     public String toString(int m, int n) {
-        StringBuilder sb = new StringBuilder(nrow() + " x " + ncol() + "\n");
-        m = Math.min(m, nrow());
-        n = Math.min(n, ncol());
+        StringBuilder sb = new StringBuilder(nrows() + " x " + ncols() + "\n");
+        m = Math.min(m, nrows());
+        n = Math.min(n, ncols());
 
-        String newline = n < ncol() ? "  ...\n" : "\n";
+        String newline = n < ncols() ? "  ...\n" : "\n";
 
         if (colNames != null) {
             sb.append(rowNames == null ? "   " : "            ");
@@ -199,7 +199,7 @@ public abstract class IMatrix<T> implements Cloneable, Serializable {
             sb.append(newline);
         }
 
-        if (m < nrow()) {
+        if (m < nrows()) {
             sb.append("  ...\n");
         }
 
@@ -257,35 +257,4 @@ public abstract class IMatrix<T> implements Cloneable, Serializable {
      * @param outputOffset the offset of output vector in workspace.
      */
     public abstract void tv(T work, int inputOffset, int outputOffset);
-
-    /**
-     * Returns the optimal leading dimension. The present process have
-     * cascade caches. And read/write cache are 64 byte (multiple of 16
-     * for single precision) related on Intel CPUs. In order to avoid
-     * cache conflict, we expected the leading dimensions should be
-     * multiple of cache line (multiple of 16 for single precision),
-     * but not the power of 2, like not multiple of 256, not multiple
-     * of 128 etc.
-     * <p>
-     * To improve performance, ensure that the leading dimensions of
-     * the arrays are divisible by 64/element_size, where element_size
-     * is the number of bytes for the matrix elements (4 for
-     * single-precision real, 8 for double-precision real and
-     * single precision complex, and 16 for double-precision complex).
-     * <p>
-     * But as present processor use cache-cascading structure: set->cache
-     * line. In order to avoid the cache stall issue, we suggest to avoid
-     * leading dimension are multiples of 128, If ld % 128 = 0, then add
-     * 16 to the leading dimension.
-     * <p>
-     * Generally, set the leading dimension to the following integer expression:
-     * (((n * element_size + 511) / 512) * 512 + 64) /element_size,
-     * where n is the matrix dimension along the leading dimension.
-     */
-    static int ld(int n) {
-        int elementSize = 4;
-        if (n <= 256 / elementSize) return n;
-
-        return (((n * elementSize + 511) / 512) * 512 + 64) / elementSize;
-    }
 }

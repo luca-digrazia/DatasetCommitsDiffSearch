@@ -44,7 +44,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
      * @param x the matrix cell value.
      * @return this matrix.
      */
-    public abstract void set(int i, int j, float x);
+    public abstract SMatrix set(int i, int j, float x);
 
     /**
      * Sets {@code A[i,j] = x} for Scala users.
@@ -53,8 +53,8 @@ public abstract class SMatrix extends IMatrix<float[]> {
      * @param x the matrix cell value.
      * @return this matrix.
      */
-    public void update(int i, int j, float x) {
-        set(i, j, x);
+    public SMatrix update(int i, int j, float x) {
+        return set(i, j, x);
     }
 
     /**
@@ -85,7 +85,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
      * @return the diagonal elements.
      */
     public float[] diag() {
-        int n = Math.min(nrow(), ncol());
+        int n = Math.min(nrows(), ncols());
 
         float[] d = new float[n];
         for (int i = 0; i < n; i++) {
@@ -100,7 +100,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
      * @return the matrix trace.
      */
     public float trace() {
-        int n = Math.min(nrow(), ncol());
+        int n = Math.min(nrows(), ncols());
 
         float t = 0.0f;
         for (int i = 0; i < n; i++) {
@@ -129,7 +129,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
 
     @Override
     public float[] mv(float[] x) {
-        float[] y = new float[nrow()];
+        float[] y = new float[nrows()];
         mv(NO_TRANSPOSE, 1.0f, x, 0.0f, y);
         return y;
     }
@@ -157,7 +157,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
 
     @Override
     public float[] tv(float[] x) {
-        float[] y = new float[ncol()];
+        float[] y = new float[ncols()];
         mv(TRANSPOSE, 1.0f, x, 0.0f, y);
         return y;
     }
@@ -234,12 +234,12 @@ public abstract class SMatrix extends IMatrix<float[]> {
             if (format.equals("array")) {
                 // Size line
                 Scanner s = new Scanner(line);
-                int nrow = s.nextInt();
-                int ncol = s.nextInt();
+                int nrows = s.nextInt();
+                int ncols = s.nextInt();
 
-                FloatMatrix matrix = new FloatMatrix(nrow, ncol);
-                for (int j = 0; j < ncol; j++) {
-                    for (int i = 0; i < nrow; i++) {
+                FloatMatrix matrix = new FloatMatrix(nrows, ncols);
+                for (int j = 0; j < ncols; j++) {
+                    for (int i = 0; i < nrows; i++) {
                         float x = scanner.nextFloat();
                         matrix.set(i, j, x);
                     }
@@ -255,16 +255,16 @@ public abstract class SMatrix extends IMatrix<float[]> {
             if (format.equals("coordinate")) {
                 // Size line
                 Scanner s = new Scanner(line);
-                int nrow = s.nextInt();
-                int ncol = s.nextInt();
+                int nrows = s.nextInt();
+                int ncols = s.nextInt();
                 int nz = s.nextInt();
 
-                if (symmetric && nz == nrow * (nrow + 1) / 2) {
-                    if (nrow != ncol) {
-                        throw new IllegalStateException(String.format("Symmetric matrix is not square: %d != %d", nrow, ncol));
+                if (symmetric && nz == nrows * (nrows + 1) / 2) {
+                    if (nrows != ncols) {
+                        throw new IllegalStateException(String.format("Symmetric matrix is not square: %d != %d", nrows, ncols));
                     }
 
-                    FloatSymmMatrix matrix = new FloatSymmMatrix(LOWER, nrow);
+                    FloatSymmMatrix matrix = new FloatSymmMatrix(LOWER, nrows);
                     for (int k = 0; k < nz; k++) {
                         String[] tokens = scanner.nextLine().trim().split("\\s+");
                         if (tokens.length != 3) {
@@ -279,12 +279,12 @@ public abstract class SMatrix extends IMatrix<float[]> {
                     }
 
                     return matrix;
-                } else if (skew && nz == nrow * (nrow + 1) / 2) {
-                    if (nrow != ncol) {
-                        throw new IllegalStateException(String.format("Skew-symmetric matrix is not square: %d != %d", nrow, ncol));
+                } else if (skew && nz == nrows * (nrows + 1) / 2) {
+                    if (nrows != ncols) {
+                        throw new IllegalStateException(String.format("Skew-symmetric matrix is not square: %d != %d", nrows, ncols));
                     }
 
-                    FloatMatrix matrix = new FloatMatrix(nrow, ncol);
+                    FloatMatrix matrix = new FloatMatrix(nrows, ncols);
                     for (int k = 0; k < nz; k++) {
                         String[] tokens = scanner.nextLine().trim().split("\\s+");
                         if (tokens.length != 3) {
@@ -303,9 +303,9 @@ public abstract class SMatrix extends IMatrix<float[]> {
                 }
 
                 // General sparse matrix
-                int[] colSize = new int[ncol];
+                int[] colSize = new int[ncols];
                 List<SparseArray> rows = new ArrayList<>();
-                for (int i = 0; i < nrow; i++) {
+                for (int i = 0; i < nrows; i++) {
                     rows.add(new SparseArray());
                 }
 
@@ -334,9 +334,9 @@ public abstract class SMatrix extends IMatrix<float[]> {
                     }
                 }
 
-                int[] pos = new int[ncol];
-                int[] colIndex = new int[ncol + 1];
-                for (int i = 0; i < ncol; i++) {
+                int[] pos = new int[ncols];
+                int[] colIndex = new int[ncols + 1];
+                for (int i = 0; i < ncols; i++) {
                     colIndex[i + 1] = colIndex[i] + colSize[i];
                 }
 
@@ -346,7 +346,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
                 int[] rowIndex = new int[nz];
                 float[] x = new float[nz];
 
-                for (int i = 0; i < nrow; i++) {
+                for (int i = 0; i < nrows; i++) {
                     for (SparseArray.Entry e :rows.get(i)) {
                         int j = e.i;
                         int k = colIndex[j] + pos[j];
@@ -357,7 +357,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
                     }
                 }
 
-                return new FloatSparseMatrix(nrow, ncol, x, rowIndex, colIndex);
+                return new FloatSparseMatrix(nrows, ncols, x, rowIndex, colIndex);
 
             }
 
@@ -377,23 +377,23 @@ public abstract class SMatrix extends IMatrix<float[]> {
             /**
              * The larger dimension of A.
              */
-            private final int m = Math.max(A.nrow(), A.ncol());
+            private final int m = Math.max(A.nrows(), A.ncols());
             /**
              * The smaller dimension of A.
              */
-            private final int n = Math.min(A.nrow(), A.ncol());
+            private final int n = Math.min(A.nrows(), A.ncols());
             /**
              * Workspace for A * x
              */
             private final float[] Ax = new float[m + n];
 
             @Override
-            public int nrow() {
+            public int nrows() {
                 return n;
             }
 
             @Override
-            public int ncol() {
+            public int ncols() {
                 return n;
             }
 
@@ -406,7 +406,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
             public void mv(float[] work, int inputOffset, int outputOffset) {
                 System.arraycopy(work, inputOffset, Ax, 0, n);
 
-                if (A.nrow() >= A.ncol()) {
+                if (A.nrows() >= A.ncols()) {
                     A.mv(Ax, 0, n);
                     A.tv(Ax, n, 0);
                 } else {
@@ -433,7 +433,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
             }
 
             @Override
-            public void set(int i, int j, float x) {
+            public SMatrix set(int i, int j, float x) {
                 throw new UnsupportedOperationException();
             }
         };

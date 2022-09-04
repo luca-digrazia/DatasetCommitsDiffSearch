@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
@@ -29,6 +29,7 @@ public interface ClassificationMetric extends Serializable {
      * Returns a score to measure the quality of classification.
      * @param truth the true class labels.
      * @param prediction the predicted class labels.
+     * @return the metric.
      */
     double score(int[] truth, int[] prediction);
 }

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data.measure;
 
@@ -38,9 +38,17 @@ public interface Measure extends Serializable {
     /** Percent. */
     RatioScale Percent = new RatioScale(NumberFormat.getPercentInstance());
 
-    /** Returns a measurement value object represented by the argument string s. */
+    /**
+     * Returns a measurement value object represented by the argument string s.
+     * @param s a string.
+     * @return the parsed value.
+     */
     Number valueOf(String s) throws NumberFormatException;
 
-    /** Returns the string representation of a value of the measure. */
+    /**
+     * Returns the string representation of an object in the measure.
+     * @param o an object.
+     * @return the string representation
+     */
     String toString(Object o);
 }

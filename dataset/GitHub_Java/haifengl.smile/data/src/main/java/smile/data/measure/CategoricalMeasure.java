@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data.measure;
 
@@ -74,7 +74,7 @@ public abstract class CategoricalMeasure implements Measure {
      * @param levels the levels of discrete values.
      */
     public CategoricalMeasure(List<String> levels) {
-        this(levels.toArray(new String[levels.size()]));
+        this(levels.toArray(new String[0]));
     }
 
     /**
@@ -82,7 +82,7 @@ public abstract class CategoricalMeasure implements Measure {
      * @param values the valid values.
      */
     public CategoricalMeasure(int[] values) {
-        this(values, Arrays.stream(values).mapToObj(v -> Integer.toString(v)).toArray(String[]::new));
+        this(values, Arrays.stream(values).mapToObj(Integer::toString).toArray(String[]::new));
     }
 
     /**
@@ -127,41 +127,66 @@ public abstract class CategoricalMeasure implements Measure {
         this.factor = factor;
     }
 
-    /** Returns the ordinal values of an enum. */
+    /**
+     * Returns the ordinal values of an enum.
+     * @param clazz the Class of an enum.
+     * @return the ordinal values of an enum.
+     */
     static int[] values(Class<? extends Enum> clazz) {
         return Arrays.stream(clazz.getEnumConstants())
-                .mapToInt(e -> ((Enum) e).ordinal())
+                .mapToInt(Enum::ordinal)
                 .toArray();
     }
 
-    /** Returns the string values of an enum. */
+    /**
+     * Returns the string values of an enum.
+     * @param clazz the Class of an enum.
+     * @return the string values of an enum.
+     */
     static String[] levels(Class<? extends Enum> clazz) {
         return Arrays.stream(clazz.getEnumConstants())
                 .map(Object::toString)
                 .toArray(String[]::new);
     }
 
-    /** Returns the number of levels. */
+    /**
+     * Returns the number of levels.
+     * @return the number of levels.
+     */
     public int size() {
         return levels.length;
     }
 
-    /** Returns the valid value set. */
+    /**
+     * Returns the valid value set.
+     * @return the valid value set.
+     */
     public int[] values() {
         return values;
     }
 
-    /** Returns the levels. */
+    /**
+     * Returns the levels.
+     * @return the levels.
+     */
     public String[] levels() {
         return levels;
     }
 
-    /** Returns the level string representation. */
+    /**
+     * Returns the level string representation.
+     * @param value the level value.
+     * @return the level string representation.
+     */
     public String level(int value) {
         return value2level.get(value);
     }
 
-    /** Returns the factor value (in range [0, size)) of level. */
+    /**
+     * Returns the factor value (in range [0, size)) of level.
+     * @param value the level value.
+     * @return the factor value.
+     */
     public int factor(int value) {
         if (factor) return value;
 
@@ -172,7 +197,10 @@ public abstract class CategoricalMeasure implements Measure {
         throw new IllegalArgumentException("Invalid level: " + value);
     }
 
-    /** Returns the data type that is suitable for this measure scale. */
+    /**
+     * Returns the data type that is suitable for this measure scale.
+     * @return the data type that is suitable for this measure scale.
+     */
     public DataType type() {
         if (levels.length <= Byte.MAX_VALUE + 1) {
             return DataTypes.ByteType;
@@ -183,7 +211,11 @@ public abstract class CategoricalMeasure implements Measure {
         }
     }
 
-    /** Returns the string value of a level. */
+    /**
+     * Returns the string value of a level.
+     * @param value the level value.
+     * @return the string value of a level.
+     */
     public String toString(int value) {
         return level(value);
     }
@@ -202,7 +234,7 @@ public abstract class CategoricalMeasure implements Measure {
     public boolean equals(Object o) {
         if (o instanceof CategoricalMeasure) {
             CategoricalMeasure measure = (CategoricalMeasure) o;
-            return Arrays.equals(levels, measure.levels) && Arrays.equals(values, values);
+            return Arrays.equals(levels, measure.levels) && Arrays.equals(values, measure.values);
         }
 
         return false;

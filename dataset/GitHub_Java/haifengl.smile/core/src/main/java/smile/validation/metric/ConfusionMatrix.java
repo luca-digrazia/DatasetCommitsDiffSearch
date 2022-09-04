@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,10 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
+import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -25,17 +26,26 @@ import java.util.Set;
  *
  * @author owlmsj
  */
-public class ConfusionMatrix {
+public class ConfusionMatrix implements Serializable {
+    private static final long serialVersionUID = 2L;
 
     /** Confusion matrix. */
     public final int[][] matrix;
 
-    /** Constructor. */
+    /**
+     * Constructor.
+     * @param matrix the confusion matrix.
+     */
     public ConfusionMatrix(int[][] matrix) {
         this.matrix = matrix;
     }
 
-    /** Creates the confusion matrix. */
+    /**
+     * Creates the confusion matrix.
+     * @param truth the ground truth.
+     * @param prediction the prediction.
+     * @return the confusion matrix.
+     */
     public static ConfusionMatrix of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
              throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));

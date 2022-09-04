@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data.measure;
 
@@ -30,7 +30,7 @@ import java.text.NumberFormat;
  * multiplication/division cannot be carried out between any two dates
  * directly. However, ratios of differences can be expressed; for example,
  * one difference can be twice another.
- *
+ * <p>
  * The mode, median, and arithmetic mean are allowed to measure central
  * tendency of interval variables, while measures of statistical dispersion
  * include range and standard deviation. Since one can only divide by
@@ -45,9 +45,12 @@ import java.text.NumberFormat;
  *
  * @author Haifeng Li
  */
-public class IntervalScale extends ContinuousMeasure {
+public class IntervalScale extends NumericalMeasure {
 
-    /** Constructor. */
+    /**
+     * Constructor.
+     * @param format the number format.
+     */
     public IntervalScale(NumberFormat format) {
         super(format);
     }

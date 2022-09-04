@@ -326,14 +326,31 @@ public class MathEx {
     }
         
     /**
-     * Logistic sigmoid function <code>1 / (1 + exp(-x))</code>.
+     * Logistic sigmoid function.
      * @param x a real number.
-     * @return the sigmoid function.
+     * @return the value <code>1 / (1 + exp(-x))</code>.
      */
-    public static double sigmoid(double x) {
-        // clip x in [-36, 36] to prevent overflow/underflow.
-        x = Math.max(-36, Math.min(x, 36));
-        return 1.0 / (1.0 + exp(-x));
+    public static double logistic(double x) {
+        double y;
+        if (x < -40) {
+            y = 2.353853e+17;
+        } else if (x > 40) {
+            y = 1.0 + 4.248354e-18;
+        } else {
+            y = 1.0 + exp(-x);
+        }
+
+        return 1.0 / y;
+    }
+
+    /**
+     * Hyperbolic tangent function. The tanh function is a rescaling of the
+     * logistic sigmoid, such that its outputs range from -1 to 1.
+     * @param x a real number.
+     * @return the value <code>(exp(x) - exp(-x)) / (exp(x) + exp(-x))</code>.
+     */
+    public static double tanh(double x) {
+        return 2.0 * logistic(2.0 * x) - 1.0;
     }
 
     /**

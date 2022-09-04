@@ -42,19 +42,19 @@ public abstract class DMatrix extends IMatrix<double[]> {
      * @param i the row index.
      * @param j the column index.
      * @param x the matrix cell value.
+     * @return this matrix.
      */
-    public void set(int i, int j, double x) {
-        throw new UnsupportedOperationException();
-    }
+    public abstract DMatrix set(int i, int j, double x);
 
     /**
      * Sets {@code A[i, j] = x} for Scala users.
      * @param i the row index.
      * @param j the column index.
      * @param x the matrix cell value.
+     * @return this matrix.
      */
-    public void update(int i, int j, double x) {
-        set(i, j, x);
+    public DMatrix update(int i, int j, double x) {
+        return set(i, j, x);
     }
 
     /**
@@ -63,9 +63,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
      * @param j the column index.
      * @return the matrix cell value.
      */
-    public double get(int i, int j) {
-        throw new UnsupportedOperationException();
-    }
+    public abstract double get(int i, int j);
 
     /**
      * Returns {@code A[i, j]} for Scala users.
@@ -87,7 +85,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
      * @return the diagonal elements.
      */
     public double[] diag() {
-        int n = Math.min(nrow(), ncol());
+        int n = Math.min(nrows(), ncols());
 
         double[] d = new double[n];
         for (int i = 0; i < n; i++) {
@@ -102,7 +100,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
      * @return the matrix trace.
      */
     public double trace() {
-        int n = Math.min(nrow(), ncol());
+        int n = Math.min(nrows(), ncols());
 
         double t = 0.0;
         for (int i = 0; i < n; i++) {
@@ -131,7 +129,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
 
     @Override
     public double[] mv(double[] x) {
-        double[] y = new double[nrow()];
+        double[] y = new double[nrows()];
         mv(NO_TRANSPOSE, 1.0, x, 0.0, y);
         return y;
     }
@@ -159,7 +157,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
 
     @Override
     public double[] tv(double[] x) {
-        double[] y = new double[ncol()];
+        double[] y = new double[ncols()];
         mv(TRANSPOSE, 1.0, x, 0.0, y);
         return y;
     }
@@ -236,12 +234,12 @@ public abstract class DMatrix extends IMatrix<double[]> {
             if (format.equals("array")) {
                 // Size line
                 Scanner s = new Scanner(line);
-                int nrow = s.nextInt();
-                int ncol = s.nextInt();
+                int nrows = s.nextInt();
+                int ncols = s.nextInt();
 
-                Matrix matrix = new Matrix(nrow, ncol);
-                for (int j = 0; j < ncol; j++) {
-                    for (int i = 0; i < nrow; i++) {
+                Matrix matrix = new Matrix(nrows, ncols);
+                for (int j = 0; j < ncols; j++) {
+                    for (int i = 0; i < nrows; i++) {
                         double x = scanner.nextDouble();
                         matrix.set(i, j, x);
                     }
@@ -257,16 +255,16 @@ public abstract class DMatrix extends IMatrix<double[]> {
             if (format.equals("coordinate")) {
                 // Size line
                 Scanner s = new Scanner(line);
-                int nrow = s.nextInt();
-                int ncol = s.nextInt();
+                int nrows = s.nextInt();
+                int ncols = s.nextInt();
                 int nz = s.nextInt();
 
-                if (symmetric && nz == nrow * (nrow + 1) / 2) {
-                    if (nrow != ncol) {
-                        throw new IllegalStateException(String.format("Symmetric matrix is not square: %d != %d", nrow, ncol));
+                if (symmetric && nz == nrows * (nrows + 1) / 2) {
+                    if (nrows != ncols) {
+                        throw new IllegalStateException(String.format("Symmetric matrix is not square: %d != %d", nrows, ncols));
                     }
 
-                    SymmMatrix matrix = new SymmMatrix(LOWER, nrow);
+                    SymmMatrix matrix = new SymmMatrix(LOWER, nrows);
                     for (int k = 0; k < nz; k++) {
                         String[] tokens = scanner.nextLine().trim().split("\\s+");
                         if (tokens.length != 3) {
@@ -281,12 +279,12 @@ public abstract class DMatrix extends IMatrix<double[]> {
                     }
 
                     return matrix;
-                } else if (skew && nz == nrow * (nrow + 1) / 2) {
-                    if (nrow != ncol) {
-                        throw new IllegalStateException(String.format("Skew-symmetric matrix is not square: %d != %d", nrow, ncol));
+                } else if (skew && nz == nrows * (nrows + 1) / 2) {
+                    if (nrows != ncols) {
+                        throw new IllegalStateException(String.format("Skew-symmetric matrix is not square: %d != %d", nrows, ncols));
                     }
 
-                    Matrix matrix = new Matrix(nrow, ncol);
+                    Matrix matrix = new Matrix(nrows, ncols);
                     for (int k = 0; k < nz; k++) {
                         String[] tokens = scanner.nextLine().trim().split("\\s+");
                         if (tokens.length != 3) {
@@ -305,9 +303,9 @@ public abstract class DMatrix extends IMatrix<double[]> {
                 }
 
                 // General sparse matrix
-                int[] colSize = new int[ncol];
+                int[] colSize = new int[ncols];
                 List<SparseArray> rows = new ArrayList<>();
-                for (int i = 0; i < nrow; i++) {
+                for (int i = 0; i < nrows; i++) {
                     rows.add(new SparseArray());
                 }
 
@@ -336,9 +334,9 @@ public abstract class DMatrix extends IMatrix<double[]> {
                     }
                 }
 
-                int[] pos = new int[ncol];
-                int[] colIndex = new int[ncol + 1];
-                for (int i = 0; i < ncol; i++) {
+                int[] pos = new int[ncols];
+                int[] colIndex = new int[ncols + 1];
+                for (int i = 0; i < ncols; i++) {
                     colIndex[i + 1] = colIndex[i] + colSize[i];
                 }
 
@@ -348,7 +346,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
                 int[] rowIndex = new int[nz];
                 double[] x = new double[nz];
 
-                for (int i = 0; i < nrow; i++) {
+                for (int i = 0; i < nrows; i++) {
                     for (SparseArray.Entry e :rows.get(i)) {
                         int j = e.i;
                         int k = colIndex[j] + pos[j];
@@ -359,7 +357,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
                     }
                 }
 
-                return new SparseMatrix(nrow, ncol, x, rowIndex, colIndex);
+                return new SparseMatrix(nrows, ncols, x, rowIndex, colIndex);
 
             }
 
@@ -379,23 +377,23 @@ public abstract class DMatrix extends IMatrix<double[]> {
             /**
              * The larger dimension of A.
              */
-            private final int m = Math.max(A.nrow(), A.ncol());
+            private final int m = Math.max(A.nrows(), A.ncols());
             /**
              * The smaller dimension of A.
              */
-            private final int n = Math.min(A.nrow(), A.ncol());
+            private final int n = Math.min(A.nrows(), A.ncols());
             /**
              * Workspace for A * x
              */
             private final double[] Ax = new double[m + n];
 
             @Override
-            public int nrow() {
+            public int nrows() {
                 return n;
             }
 
             @Override
-            public int ncol() {
+            public int ncols() {
                 return n;
             }
 
@@ -408,7 +406,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
             public void mv(double[] work, int inputOffset, int outputOffset) {
                 System.arraycopy(work, inputOffset, Ax, 0, n);
 
-                if (A.nrow() >= A.ncol()) {
+                if (A.nrows() >= A.ncols()) {
                     A.mv(Ax, 0, n);
                     A.tv(Ax, n, 0);
                 } else {
@@ -435,7 +433,7 @@ public abstract class DMatrix extends IMatrix<double[]> {
             }
 
             @Override
-            public void set(int i, int j, double x) {
+            public DMatrix set(int i, int j, double x) {
                 throw new UnsupportedOperationException();
             }
         };

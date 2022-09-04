@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
@@ -27,8 +27,9 @@ import java.io.Serializable;
 public interface ClusteringMetric extends Serializable {
     /**
      * Returns a score to measure the quality of clustering.
-     * @param y1 the cluster labels.
-     * @param y2 the alternative cluster labels.
+     * @param truth the ground truth (or simply a clustering labels).
+     * @param cluster the alternative cluster labels.
+     * @return the metric.
      */
-    double score(int[] y1, int[] y2);
+    double score(int[] truth, int[] cluster);
 }

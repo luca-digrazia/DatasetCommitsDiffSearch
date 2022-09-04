@@ -28,22 +28,6 @@ import smile.math.MathEx;
 public class BiconjugateGradient {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BiconjugateGradient.class);
 
-    /**
-     * The preconditioner matrix. The preconditioner matrix A<sub>d</sub>
-     * is close to A and should be easy to solve for linear systems.
-     * The preconditioner matrix could be as simple as the trivial
-     * diagonal part of A in some cases.
-     */
-    public interface Preconditioner {
-        /**
-         * Solve A<sub>d</sub> * x = b for the preconditioner matrix A<sub>d</sub>.
-         *
-         * @param b the right hand side of linear system.
-         * @param x the output solution vector.
-         */
-        void solve(double[] b, double[] x);
-    }
-
     /** Private constructor to prevent instance creation. */
     private BiconjugateGradient() {
 
@@ -76,7 +60,7 @@ public class BiconjugateGradient {
      * @return the estimated error.
      */
     public static double solve(DMatrix A, double[] b, double[] x) {
-        return solve(A, b, x, Jacobi(A), 1E-6, 1, 2 * Math.max(A.nrow(), A.ncol()));
+        return solve(A, b, x, Jacobi(A), 1E-6, 1, 2 * Math.max(A.nrows(), A.ncols()));
     }
 
     /**

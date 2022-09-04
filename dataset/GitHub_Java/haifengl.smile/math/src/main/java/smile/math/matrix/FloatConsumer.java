@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.matrix;
 
@@ -27,9 +27,9 @@ public interface FloatConsumer {
      * Accepts one matrix element and performs the operation
      * on the given arguments.
      *
-     * @param i the row
-     * @param j the column
-     * @param x the value
+     * @param i the row index.
+     * @param j the column index.
+     * @param x the matrix cell value.
      */
     void accept(int i, int j, float x);
 }

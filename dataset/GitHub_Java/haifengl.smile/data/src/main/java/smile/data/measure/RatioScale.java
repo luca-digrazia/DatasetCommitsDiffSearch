@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,12 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data.measure;
 
 import java.text.NumberFormat;
-import java.util.Arrays;
 
 /**
  * The ratio scale allows for both difference and ratio of two values.
@@ -32,7 +31,7 @@ import java.util.Arrays;
  * non-arbitrary zero point called absolute zero.
  * Most measurement in the physical sciences and engineering
  * is done on ratio scales.
- *
+ * <p>
  * The geometric mean and the harmonic mean are allowed to measure
  * the central tendency of ratio variables, in addition to the mode,
  * median, and arithmetic mean. In fact, all statistical measures are
@@ -41,9 +40,12 @@ import java.util.Arrays;
  *
  * @author Haifeng Li
  */
-public class RatioScale extends ContinuousMeasure {
+public class RatioScale extends NumericalMeasure {
 
-    /** Constructor. */
+    /**
+     * Constructor.
+     * @param format the number format.
+     */
     public RatioScale(NumberFormat format) {
         super(format);
     }

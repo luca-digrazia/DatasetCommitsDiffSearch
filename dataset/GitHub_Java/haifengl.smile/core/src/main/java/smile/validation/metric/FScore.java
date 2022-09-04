@@ -53,7 +53,7 @@ public class FScore implements ClassificationMetric {
      * as much importance to recall as precision. The default value 1.0
      * corresponds to F1-score.
      */
-    private final double beta;
+    private double beta = 1.0;
 
     /** Constructor of F1 score. */
     public FScore() {

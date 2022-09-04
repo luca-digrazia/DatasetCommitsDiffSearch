@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
@@ -40,8 +40,8 @@ public class LogLoss implements ProbabilisticClassificationMetric {
 
     /**
      * Calculates the Log Loss for binary classifier.
-     * @param truth The sample labels
-     * @param probability The posterior probability of positive class.
+     * @param truth the ground truth.
+     * @param probability the posterior probability of positive class.
      * @return Log Loss
      */
     public static double of(int[] truth, double[] probability) {
@@ -67,6 +67,6 @@ public class LogLoss implements ProbabilisticClassificationMetric {
 
     @Override
     public String toString() {
-        return "Log Loss";
+        return "LogLoss";
     }
 }

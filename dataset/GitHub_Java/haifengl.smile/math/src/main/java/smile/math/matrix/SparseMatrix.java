@@ -212,12 +212,12 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
     }
 
     @Override
-    public int nrow() {
+    public int nrows() {
         return m;
     }
 
     @Override
-    public int ncol() {
+    public int ncols() {
         return n;
     }
 
@@ -371,6 +371,11 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
     }
 
     @Override
+    public SparseMatrix set(int i, int j, double x) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public void mv(Transpose trans, double alpha, double[] x, double beta, double[] y) {
         int k = trans == Transpose.NO_TRANSPOSE ? m : n;
         double[] ax = y;
@@ -463,7 +468,7 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
      */
     public SparseMatrix mm(SparseMatrix B) {
         if (n != B.m) {
-            throw new IllegalArgumentException(String.format("Matrix dimensions do not match for matrix multiplication: %d x %d vs %d x %d", nrow(), ncol(), B.nrow(), B.ncol()));
+            throw new IllegalArgumentException(String.format("Matrix dimensions do not match for matrix multiplication: %d x %d vs %d x %d", nrows(), ncols(), B.nrows(), B.ncols()));
         }
 
         int n = B.n;
@@ -635,7 +640,7 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
 
     @Override
     public double[] diag() {
-        int n = Math.min(nrow(), ncol());
+        int n = Math.min(nrows(), ncols());
         double[] d = new double[n];
 
         for (int i = 0; i < n; i++) {
@@ -683,8 +688,8 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
             }
 
             tokens = line.split("\\s+");
-            int nrow = Integer.parseInt(tokens[1]);
-            int ncol = Integer.parseInt(tokens[2]);
+            int nrows = Integer.parseInt(tokens[1]);
+            int ncols = Integer.parseInt(tokens[2]);
             int nz = Integer.parseInt(tokens[3]);
 
             line = scanner.nextLine();
@@ -694,10 +699,10 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
                 logger.info(line);
             }
 
-            int[] colIndex = new int[ncol + 1];
+            int[] colIndex = new int[ncols + 1];
             int[] rowIndex = new int[nz];
             double[] data = new double[nz];
-            for (int i = 0; i <= ncol; i++) {
+            for (int i = 0; i <= ncols; i++) {
                 colIndex[i] = scanner.nextInt() - 1;
             }
             for (int i = 0; i < nz; i++) {
@@ -707,7 +712,7 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
                 data[i] = scanner.nextDouble();
             }
 
-            return new SparseMatrix(nrow, ncol, data, rowIndex, colIndex);
+            return new SparseMatrix(nrows, ncols, data, rowIndex, colIndex);
         }
     }
 
@@ -751,14 +756,14 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
     public static SparseMatrix text(Path path) throws IOException {
         try (InputStream stream = Files.newInputStream(path);
              Scanner scanner = new Scanner(stream)) {
-            int nrow = scanner.nextInt();
-            int ncol = scanner.nextInt();
+            int nrows = scanner.nextInt();
+            int ncols = scanner.nextInt();
             int nz = scanner.nextInt();
 
-            int[] colIndex = new int[ncol + 1];
+            int[] colIndex = new int[ncols + 1];
             int[] rowIndex = new int[nz];
             double[] data = new double[nz];
-            for (int i = 0; i <= ncol; i++) {
+            for (int i = 0; i <= ncols; i++) {
                 colIndex[i] = scanner.nextInt() - 1;
             }
             for (int i = 0; i < nz; i++) {
@@ -768,7 +773,7 @@ public class SparseMatrix extends DMatrix implements Iterable<SparseMatrix.Entry
                 data[i] = scanner.nextDouble();
             }
 
-            return new SparseMatrix(nrow, ncol, data, rowIndex, colIndex);
+            return new SparseMatrix(nrows, ncols, data, rowIndex, colIndex);
         }
     }
 }

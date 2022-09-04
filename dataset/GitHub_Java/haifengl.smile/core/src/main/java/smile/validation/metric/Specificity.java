@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
@@ -21,7 +21,6 @@ package smile.validation.metric;
  * Specificity (SPC) or True Negative Rate is a statistical measures of the
  * performance of a binary classification test. Specificity measures the
  * proportion of negatives which are correctly identified.
- * <p>
  * <pre>
  *     SPC = TN / N = TN / (FP + TN) = 1 - FPR
  * </pre>
@@ -44,7 +43,12 @@ public class Specificity implements ClassificationMetric {
         return of(truth, prediction);
     }
 
-    /** Calculates the specificity. */
+    /**
+     * Calculates the specificity.
+     * @param truth the ground truth.
+     * @param prediction the prediction.
+     * @return the metric.
+     */
     public static double of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));

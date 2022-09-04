@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.matrix;
 
@@ -29,6 +29,9 @@ public interface Preconditioner {
      * easy to solve for linear systems. This method is useful for preconditioned
      * conjugate gradient method. The preconditioner matrix could be as simple
      * as the trivial diagonal part of A in some cases.
+     *
+     * @param b the right hand side of linear system.
+     * @param x the output solution vector.
      */
     void solve(double[] b, double[] x);
 }
