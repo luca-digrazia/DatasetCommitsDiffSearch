@@ -445,9 +445,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         reporter.addHandler(handler);
         env.getEventBus().register(handler);
 
-        runtime
-            .getRetainedHeapLimiter()
-            .update(commonOptions.oomMoreEagerlyThreshold, commonOptions.oomMessage, reporter);
+        int oomMoreEagerlyThreshold = commonOptions.oomMoreEagerlyThreshold;
+        runtime.getRetainedHeapLimiter().updateThreshold(oomMoreEagerlyThreshold);
 
         // We register an ANSI-allowing handler associated with {@code handler} so that ANSI control
         // codes can be re-introduced later even if blaze is invoked with --color=no. This is useful

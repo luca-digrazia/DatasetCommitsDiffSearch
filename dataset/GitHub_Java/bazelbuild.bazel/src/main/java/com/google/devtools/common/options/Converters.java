@@ -15,9 +15,10 @@ package com.google.devtools.common.options;
 
 import static com.google.devtools.common.options.OptionsParser.STARLARK_SKIPPED_PREFIXES;
 
-import com.github.benmanes.caffeine.cache.CaffeineSpec;
 import com.google.common.base.Ascii;
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
+import com.google.common.cache.CacheBuilderSpec;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -307,21 +308,16 @@ public final class Converters {
 
   public static class LogLevelConverter implements Converter<Level> {
 
-    static final ImmutableList<Level> LEVELS =
-        ImmutableList.of(
-            Level.OFF,
-            Level.SEVERE,
-            Level.WARNING,
-            Level.INFO,
-            Level.FINE,
-            Level.FINER,
-            Level.FINEST);
+    public static final Level[] LEVELS =
+        new Level[] {
+          Level.OFF, Level.SEVERE, Level.WARNING, Level.INFO, Level.FINE, Level.FINER, Level.FINEST
+        };
 
     @Override
     public Level convert(String input) throws OptionsParsingException {
       try {
         int level = Integer.parseInt(input);
-        return LEVELS.get(level);
+        return LEVELS[level];
       } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
         throw new OptionsParsingException("Not a log level: " + input);
       }
@@ -329,7 +325,7 @@ public final class Converters {
 
     @Override
     public String getTypeDescription() {
-      return "0 <= an integer <= " + (LEVELS.size() - 1);
+      return "0 <= an integer <= " + (LEVELS.length - 1);
     }
   }
 
@@ -659,22 +655,22 @@ public final class Converters {
   }
 
   /**
-   * A {@link Converter} for {@link com.github.benmanes.caffeine.cache.CaffeineSpec}. The spec may
-   * be empty, in which case this converter returns null.
+   * A {@link Converter} for {@link CacheBuilderSpec}. The spec may be empty, in which case this
+   * converter returns null.
    */
-  public static final class CaffeineSpecConverter implements Converter<CaffeineSpec> {
+  public static class CacheBuilderSpecConverter implements Converter<CacheBuilderSpec> {
     @Override
-    public CaffeineSpec convert(String spec) throws OptionsParsingException {
+    public CacheBuilderSpec convert(String spec) throws OptionsParsingException {
       try {
-        return CaffeineSpec.parse(spec);
+        return Strings.isNullOrEmpty(spec) ? null : CacheBuilderSpec.parse(spec);
       } catch (IllegalArgumentException e) {
-        throw new OptionsParsingException("Failed to parse CaffeineSpec: " + e.getMessage(), e);
+        throw new OptionsParsingException("Failed to parse CacheBuilderSpec: " + e.getMessage(), e);
       }
     }
 
     @Override
     public String getTypeDescription() {
-      return "Converts to a CaffeineSpec, or null if the input is empty";
+      return "Converts to a CacheBuilderSpec, or null if the input is empty";
     }
   }
 }

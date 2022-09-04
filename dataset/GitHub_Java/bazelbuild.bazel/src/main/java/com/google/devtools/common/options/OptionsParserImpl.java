@@ -674,10 +674,10 @@ class OptionsParserImpl {
    * </pre>
    *
    * This method returns immediately when aliasFlag is not set via the builder, which is an implicit
-   * disabling of the aliasing functionality.
+   * disabling of the aliaising functionality.
    */
   private String swapShorthandAlias(String arg) {
-    if (aliasFlag == null || !arg.startsWith("--")) {
+    if (aliasFlag == null) {
       return arg;
     }
 
