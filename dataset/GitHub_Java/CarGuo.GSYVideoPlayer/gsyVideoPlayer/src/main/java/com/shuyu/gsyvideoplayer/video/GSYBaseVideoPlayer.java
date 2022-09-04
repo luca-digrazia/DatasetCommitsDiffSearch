@@ -81,7 +81,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected float mSeekRatio = 1; //触摸滑动进度的比例系数
 
-    protected float mSpeed = 1;//播放速度
+    protected float mSpeed = 1;//播放速度，只支持6.0以上
 
     protected boolean mRotateViewAuto = true; //是否自动旋转
 
@@ -113,7 +113,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected String mUrl; //转化后的URL
 
-    protected String mTitle;
+    protected Object[] mObjects;
 
     protected File mCachePath;
 
@@ -242,7 +242,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
         if (mVideoAllCallBack != null) {
             Debuger.printfError("onEnterFullscreen");
-            mVideoAllCallBack.onEnterFullscreen(mOriginUrl, mTitle, gsyVideoPlayer);
+            mVideoAllCallBack.onEnterFullscreen(mUrl, mObjects);
         }
         mIfCurrentIsFullscreen = true;
     }
@@ -269,7 +269,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         CLICK_QUIT_FULLSCREEN_TIME = System.currentTimeMillis();
         if (mVideoAllCallBack != null) {
             Debuger.printfError("onQuitFullscreen");
-            mVideoAllCallBack.onQuitFullscreen(mOriginUrl, mTitle, this);
+            mVideoAllCallBack.onQuitFullscreen(mUrl, mObjects);
         }
         mIfCurrentIsFullscreen = false;
         if (mHideKey) {
@@ -381,7 +381,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.mNetChanged = mNetChanged;
             gsyVideoPlayer.mNetSate = mNetSate;
             gsyVideoPlayer.mRotateWithSystem = mRotateWithSystem;
-            gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mTitle);
+            gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
 
@@ -565,7 +565,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.mHadPlay = mHadPlay;
             gsyVideoPlayer.mNetChanged = mNetChanged;
             gsyVideoPlayer.mNetSate = mNetSate;
-            gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mTitle);
+            gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
             //隐藏掉所有的弹出状态哟
@@ -580,7 +580,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
             if (mVideoAllCallBack != null) {
                 Debuger.printfError("onEnterSmallWidget");
-                mVideoAllCallBack.onEnterSmallWidget(mOriginUrl, mTitle, gsyVideoPlayer);
+                mVideoAllCallBack.onEnterSmallWidget(mUrl, mObjects);
             }
 
             return gsyVideoPlayer;
@@ -611,7 +611,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         CLICK_QUIT_FULLSCREEN_TIME = System.currentTimeMillis();
         if (mVideoAllCallBack != null) {
             Debuger.printfLog("onQuitSmallWidget");
-            mVideoAllCallBack.onQuitSmallWidget(mOriginUrl, mTitle, this);
+            mVideoAllCallBack.onQuitSmallWidget(mUrl, mObjects);
         }
     }
 
@@ -621,10 +621,10 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      *
      * @param url
      * @param cacheWithPlay 是否边播边缓存
-     * @param title
+     * @param objects
      * @return
      */
-    public abstract boolean setUp(String url, boolean cacheWithPlay, File cachePath, String title);
+    public abstract boolean setUp(String url, boolean cacheWithPlay, File cachePath, Object... objects);
 
     /**
      * 设置播放URL
@@ -632,11 +632,11 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      * @param url
      * @param cacheWithPlay 是否边播边缓存
      * @param mapHeadData
-     * @param title
+     * @param objects
      * @return
      */
 
-    public abstract boolean setUp(String url, boolean cacheWithPlay, File cachePath, Map<String, String> mapHeadData, String title);
+    public abstract boolean setUp(String url, boolean cacheWithPlay, File cachePath, Map<String, String> mapHeadData, Object... objects);
 
     /**
      * 设置播放显示状态
