@@ -70,7 +70,7 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "sh_binary(name = 'myrule',",
         "          srcs = ['a.sh'])");
     assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
-        .containsExactly(ImmutableList.of(label("//a:a.sh")));
+        .containsExactly(ImmutableList.of(Label.create("@//a", "a.sh")));
   }
 
   /**
@@ -88,9 +88,9 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "          }))");
     assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
         .containsExactly(
-            ImmutableList.of(label("//a:a.sh")),
-            ImmutableList.of(label("//a:b.sh")),
-            ImmutableList.of(label("//a:default.sh")));
+            ImmutableList.of(Label.create("@//a", "a.sh")),
+            ImmutableList.of(Label.create("@//a", "b.sh")),
+            ImmutableList.of(Label.create("@//a", "default.sh")));
   }
 
   @Test
@@ -106,10 +106,10 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "          )");
     assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
         .containsExactly(
-            ImmutableList.of(label("//a:a1.sh"), label("//a:a2.sh")),
-            ImmutableList.of(label("//a:a1.sh"), label("//a:b2.sh")),
-            ImmutableList.of(label("//a:b1.sh"), label("//a:a2.sh")),
-            ImmutableList.of(label("//a:b1.sh"), label("//a:b2.sh")));
+            ImmutableList.of(Label.create("@//a", "a1.sh"), Label.create("@//a", "a2.sh")),
+            ImmutableList.of(Label.create("@//a", "a1.sh"), Label.create("@//a", "b2.sh")),
+            ImmutableList.of(Label.create("@//a", "b1.sh"), Label.create("@//a", "a2.sh")),
+            ImmutableList.of(Label.create("@//a", "b1.sh"), Label.create("@//a", "b2.sh")));
   }
 
   /**
@@ -129,28 +129,6 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
     // Naive evaluation would visit 2^26 cases and either overflow memory or timeout the test.
     assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("cmd", Type.STRING))
         .containsExactly("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-  }
-
-  @Test
-  public void testGetPossibleValuesWithMultipleSelectsWithOverlappingConditions() throws Exception {
-    Rule rule =
-        scratchRule(
-            "a",
-            "myrule",
-            "sh_binary(name = 'myrule',",
-            // Even though this combination seems invalid it's allowed due to select specialization.
-            "          srcs = select({'//conditions:x': ['x1.sh']})",
-            "              + select({'//conditions:y': ['y1.sh']})",
-            "              + select({",
-            "                   '//conditions:x': ['x2.sh'],",
-            "                   '//conditions:y': ['y2.sh'],",
-            "                   '//conditions:z': ['z2.sh']})",
-            "          )");
-    assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
-        .containsExactly(
-            ImmutableList.of(label("//a:x1.sh"), label("//a:y1.sh"), label("//a:x2.sh")),
-            ImmutableList.of(label("//a:x1.sh"), label("//a:y1.sh"), label("//a:y2.sh")),
-            ImmutableList.of(label("//a:x1.sh"), label("//a:y1.sh"), label("//a:z2.sh")));
   }
 
   /**
@@ -204,15 +182,13 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "        '" + BuildType.Selector.DEFAULT_CONDITION_KEY + "': ['default.cc'],",
         "    }))");
 
-    ImmutableList<Label> valueLabels =
-        ImmutableList.of(
-            label("//x:a.cc"), label("@//x:b.cc"),
-            label("//x:always.cc"), label("@//x:c.cc"),
-            label("//x:d.cc"), label("@//x:default.cc"));
-    ImmutableList<Label> keyLabels =
-        ImmutableList.of(
-            label("@//conditions:a"), label("@//conditions:b"),
-            label("@//conditions:c"), label("@//conditions:d"));
+    ImmutableList<Label> valueLabels = ImmutableList.of(
+        Label.create("@//x", "a.cc"), Label.create("@//x", "b.cc"),
+        Label.create("@//x", "always.cc"), Label.create("@//x", "c.cc"),
+        Label.create("@//x", "d.cc"), Label.create("@//x", "default.cc"));
+    ImmutableList<Label> keyLabels = ImmutableList.of(
+        Label.create("@//conditions", "a"), Label.create("@//conditions", "b"),
+        Label.create("@//conditions", "c"), Label.create("@//conditions", "d"));
 
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     assertThat(mapper.getReachableLabels("srcs", true))
@@ -231,7 +207,8 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
 
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     assertThat(mapper.getReachableLabels("malloc", true))
-        .containsExactly(getDefaultMallocLabel(rule), label("//conditions:a"));
+        .containsExactly(
+            getDefaultMallocLabel(rule), Label.create("@//conditions", "a"));
   }
 
   @Test
@@ -329,7 +306,4 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         .containsExactly("swim up");
   }
 
-  private static Label label(String labelString) {
-    return Label.parseAbsoluteUnchecked(labelString);
-  }
 }

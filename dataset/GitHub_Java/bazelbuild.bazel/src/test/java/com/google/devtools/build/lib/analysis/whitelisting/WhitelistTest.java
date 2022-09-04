@@ -26,10 +26,10 @@ import org.junit.runners.JUnit4;
 public final class WhitelistTest extends BuildViewTestCase {
 
   @Override
-  protected ConfiguredRuleClassProvider getRuleClassProvider() {
+  protected ConfiguredRuleClassProvider createRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
-    return builder.addRuleDefinition(new WhitelistDummyRule()).build();
+    return builder.addRuleDefinition(WhitelistDummyRule.DEFINITION).build();
   }
 
   @Test
@@ -99,7 +99,7 @@ public final class WhitelistTest extends BuildViewTestCase {
         "x",
         "every rule of type rule_with_whitelist implicitly depends upon the target"
             + " '//whitelist:whitelist', but this target could not be found because of: no such"
-            + " package 'whitelist': BUILD file not found on package path",
+            + " package 'whitelist': BUILD file not found",
         "rule_with_whitelist(name='x')");
   }
 

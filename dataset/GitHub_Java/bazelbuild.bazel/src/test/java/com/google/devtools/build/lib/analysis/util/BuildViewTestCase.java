@@ -85,7 +85,6 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.CoreOptions.ConfigsMode;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -95,7 +94,7 @@ import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.extra.ExtraAction;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
 import com.google.devtools.build.lib.analysis.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
@@ -420,6 +419,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     // TODO(dmarting): Add --stamp option only to test that requires it.
     allArgs.add("--stamp");  // Stamp is now defaulted to false.
     allArgs.add("--experimental_extended_sanity_checks");
+    allArgs.add("--features=cc_include_scanning");
     // Always default to k8, even on mac and windows. Tests that need different cpu should set it
     // using {@link useConfiguration()} explicitly.
     allArgs.add("--cpu=k8");
@@ -1845,9 +1845,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         return skyframeExecutor.getConfigurationForTesting(
             reporter,
             fromConfig.fragmentClasses(),
-            transition.patch(
-                new BuildOptionsView(fromConfig.getOptions(), transition.requiresOptionFragments()),
-                eventCollector));
+            transition.patch(fromConfig.getOptions(), eventCollector));
       } catch (OptionsParsingException | InvalidConfigurationException e) {
         throw new AssertionError(e);
       }
