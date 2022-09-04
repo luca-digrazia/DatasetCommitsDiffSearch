@@ -25,7 +25,6 @@ import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.search.highlight.HighlightField;
-import org.graylog2.plugin.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +38,7 @@ import static org.graylog2.plugin.Tools.ES_DATE_FORMAT_FORMATTER;
 public class ResultMessage {
     private static final Logger LOG = LoggerFactory.getLogger(ResultMessage.class);
 
-    private Message message;
+    private Map<String, Object> message;
     private String index;
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -74,19 +73,19 @@ public class ResultMessage {
     }
 
     public void setMessage(String id, Map<String, Object> message) {
-        Map<String, Object> tmp = Maps.newHashMap();
-        tmp.putAll(message);
-        tmp.put("_id", id);
-        if (tmp.containsKey("timestamp")) {
-            final Object tsField = tmp.get("timestamp");
+        this.message = message;
+        this.message.put("_id", id);
+
+        if (this.message.containsKey("timestamp")) {
+            final Object tsField = this.message.get("timestamp");
             try {
-                tmp.put("timestamp", ES_DATE_FORMAT_FORMATTER.parseDateTime(String.valueOf(tsField)));
+                this.message.put("timestamp",
+                        ES_DATE_FORMAT_FORMATTER.parseDateTime(String.valueOf(tsField)));
             } catch (IllegalArgumentException e) {
                 // could not parse date string, this is likely a bug, but we will leave the original value alone
                 LOG.warn("Could not parse timestamp of message {}", message.get("id"), e);
             }
         }
-        this.message = new Message(tmp);
     }
 
     public void setHighlightRanges(Map<String, HighlightField> highlightFields) {
@@ -110,7 +109,7 @@ public class ResultMessage {
                     highlightRanges.put(hlEntry.getKey(), highlightPosition);
                 }
             }
-            LOG.debug("Highlight positions for message {}: {}", message.getId(), highlightRanges);
+            LOG.debug("Highlight positions for message {}: {}", message.get("_id"), highlightRanges);
         }
     }
 
@@ -118,7 +117,7 @@ public class ResultMessage {
         this.index = index;
     }
 
-    public Message getMessage() {
+    public Map<String, Object> getMessage() {
         return message;
     }
 
