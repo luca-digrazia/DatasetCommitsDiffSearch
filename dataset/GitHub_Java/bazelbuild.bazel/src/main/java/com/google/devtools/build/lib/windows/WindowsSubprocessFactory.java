@@ -18,7 +18,6 @@ import com.google.common.base.Charsets;
 import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.shell.SubprocessBuilder;
 import com.google.devtools.build.lib.shell.SubprocessBuilder.StreamAction;
-import com.google.devtools.build.lib.shell.SubprocessFactory;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.windows.jni.WindowsProcesses;
 import java.io.File;
@@ -30,11 +29,16 @@ import java.util.TreeMap;
 /**
  * A subprocess factory that uses the Win32 API.
  */
-public class WindowsSubprocessFactory implements SubprocessFactory {
+public class WindowsSubprocessFactory implements Subprocess.Factory {
   public static final WindowsSubprocessFactory INSTANCE = new WindowsSubprocessFactory();
 
   private WindowsSubprocessFactory() {
     // Singleton
+  }
+
+  @Override
+  public boolean supportsTimeout() {
+    return true;
   }
 
   @Override

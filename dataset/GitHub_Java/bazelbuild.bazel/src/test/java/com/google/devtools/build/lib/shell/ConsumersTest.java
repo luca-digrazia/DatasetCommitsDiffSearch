@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.shell;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.shell.Consumers.OutErrConsumers;
@@ -58,8 +57,12 @@ public class ConsumersTest {
     ByteArrayInputStream outInput = new ByteArrayInputStream(new byte[]{'a'});
     ByteArrayInputStream errInput = new ByteArrayInputStream(new byte[0]);
     outErr.registerInputs(outInput, errInput, false);
-    IOException e = assertThrows(IOException.class, () -> outErr.waitForCompletion());
-    assertThat(e).hasMessageThat().isEqualTo(SECRET_MESSAGE);
+    try {
+      outErr.waitForCompletion();
+      fail();
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().isEqualTo(SECRET_MESSAGE);
+    }
   }
 
   /**
@@ -85,7 +88,7 @@ public class ConsumersTest {
     } catch (IOException e) {
       fail();
     } catch (OutOfMemoryError e) {
-      assertWithMessage("OutOfMemoryError is not masked").that(e).isSameInstanceAs(error);
+      assertWithMessage("OutOfMemoryError is not masked").that(e).isSameAs(error);
     }
   }
 
@@ -105,9 +108,14 @@ public class ConsumersTest {
     ByteArrayInputStream outInput = new ByteArrayInputStream(new byte[]{'a'});
     ByteArrayInputStream errInput = new ByteArrayInputStream(new byte[0]);
     outErr.registerInputs(outInput, errInput, false);
-    Error error = assertThrows(Error.class, () -> outErr.waitForCompletion());
-    assertThat(error).isNotInstanceOf(IOException.class);
-    assertThat(error).hasMessageThat().isEqualTo(SECRET_MESSAGE);
+    try {
+      outErr.waitForCompletion();
+      fail();
+    } catch (IOException e) {
+      fail();
+    } catch (Error e) {
+      assertThat(e).hasMessageThat().isEqualTo(SECRET_MESSAGE);
+    }
   }
 
   /**
@@ -127,7 +135,11 @@ public class ConsumersTest {
     ByteArrayInputStream outInput = new ByteArrayInputStream(new byte[]{'a'});
     ByteArrayInputStream errInput = new ByteArrayInputStream(new byte[0]);
     outErr.registerInputs(outInput, errInput, false);
-    RuntimeException e = assertThrows(RuntimeException.class, () -> outErr.waitForCompletion());
-    assertThat(e).hasMessageThat().isEqualTo(SECRET_MESSAGE);
+    try {
+      outErr.waitForCompletion();
+      fail();
+    } catch (RuntimeException e) {
+      assertThat(e).hasMessageThat().isEqualTo(SECRET_MESSAGE);
+    }
   }
 }

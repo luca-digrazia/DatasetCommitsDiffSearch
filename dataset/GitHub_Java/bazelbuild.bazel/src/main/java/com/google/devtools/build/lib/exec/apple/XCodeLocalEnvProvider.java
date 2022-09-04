@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.exec.apple;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
@@ -47,43 +46,18 @@ public final class XCodeLocalEnvProvider implements LocalEnvProvider {
   private static final String XCRUN_CACHE_FILENAME = "__xcruncache";
   private static final String XCODE_LOCATOR_CACHE_FILENAME = "__xcodelocatorcache";
 
-  private final String productName;
-  private final Map<String, String> clientEnv;
-
-  /**
-   * Creates a new {@link XCodeLocalEnvProvider}.
-   *
-   * @param clientEnv a map of the current Bazel command's environment
-   */
-  public XCodeLocalEnvProvider(String productName, Map<String, String> clientEnv) {
-    this.productName = productName;
-    this.clientEnv = clientEnv;
-  }
-
   @Override
   public Map<String, String> rewriteLocalEnv(
-      Map<String, String> env, Path execRoot, String fallbackTmpDir)
-      throws IOException {
+      Map<String, String> env, Path execRoot, String productName) throws IOException {
     boolean containsXcodeVersion = env.containsKey(AppleConfiguration.XCODE_VERSION_ENV_NAME);
     boolean containsAppleSdkVersion =
         env.containsKey(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME);
+    if (!containsXcodeVersion && !containsAppleSdkVersion) {
+      return env;
+    }
 
     ImmutableMap.Builder<String, String> newEnvBuilder = ImmutableMap.builder();
-    newEnvBuilder.putAll(Maps.filterKeys(env, k -> !k.equals("TMPDIR")));
-    String p = clientEnv.get("TMPDIR");
-    if (Strings.isNullOrEmpty(p)) {
-      // Do not use `fallbackTmpDir`, use `/tmp` instead. This way if the user didn't export TMPDIR
-      // in their environment, Bazel will still set a TMPDIR that's Posixy enough and plays well
-      // with heavily path-length-limited scenarios, such as the socket creation scenario that
-      // motivated https://github.com/bazelbuild/bazel/issues/4376.
-      p = "/tmp";
-    }
-    newEnvBuilder.put("TMPDIR", p);
-
-    if (!containsXcodeVersion && !containsAppleSdkVersion) {
-      return newEnvBuilder.build();
-    }
-
+    newEnvBuilder.putAll(env);
     // Empty developer dir indicates to use the system default.
     // TODO(bazel-team): Bazel's view of the xcode version and developer dir should be explicitly
     // set for build hermeticity.
@@ -104,7 +78,6 @@ public final class XCodeLocalEnvProvider implements LocalEnvProvider {
           "SDKROOT",
           getSdkRoot(execRoot, developerDir, iosSdkVersion, appleSdkPlatform, productName));
     }
-
     return newEnvBuilder.build();
   }
 
