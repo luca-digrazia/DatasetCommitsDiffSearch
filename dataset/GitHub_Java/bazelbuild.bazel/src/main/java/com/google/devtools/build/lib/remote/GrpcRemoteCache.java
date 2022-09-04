@@ -25,12 +25,15 @@ import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.EnvironmentalExecException;
+import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.remote.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.util.io.FileOutErr;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.remoteexecution.v1test.ActionCacheGrpc;
 import com.google.devtools.remoteexecution.v1test.ActionCacheGrpc.ActionCacheBlockingStub;
@@ -43,6 +46,7 @@ import com.google.devtools.remoteexecution.v1test.Directory;
 import com.google.devtools.remoteexecution.v1test.FindMissingBlobsRequest;
 import com.google.devtools.remoteexecution.v1test.FindMissingBlobsResponse;
 import com.google.devtools.remoteexecution.v1test.GetActionResultRequest;
+import com.google.devtools.remoteexecution.v1test.OutputFile;
 import com.google.devtools.remoteexecution.v1test.UpdateActionResultRequest;
 import io.grpc.CallCredentials;
 import io.grpc.Channel;
@@ -53,6 +57,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -62,12 +67,13 @@ import java.util.concurrent.TimeUnit;
 
 /** A RemoteActionCache implementation that uses gRPC calls to a remote cache server. */
 @ThreadSafe
-public class GrpcRemoteCache extends AbstractRemoteActionCache {
+public class GrpcRemoteCache implements RemoteActionCache {
   private final RemoteOptions options;
   private final CallCredentials credentials;
   private final Channel channel;
   private final RemoteRetrier retrier;
   private final ByteStreamUploader uploader;
+  private final DigestUtil digestUtil;
   private final ListeningScheduledExecutorService retryScheduler =
       MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
 
@@ -78,11 +84,11 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
       RemoteOptions options,
       RemoteRetrier retrier,
       DigestUtil digestUtil) {
-    super(digestUtil);
     this.options = options;
     this.credentials = credentials;
     this.channel = channel;
     this.retrier = retrier;
+    this.digestUtil = digestUtil;
 
     uploader = new ByteStreamUploader(options.remoteInstanceName, channel, credentials,
         options.remoteTimeout, retrier, retryScheduler);
@@ -174,10 +180,99 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
   }
 
   /**
+   * Download all results of a remotely executed action locally. TODO(olaola): will need to amend to
+   * include the {@link com.google.devtools.build.lib.remote.TreeNodeRepository} for updating.
+   */
+  @Override
+  public void download(ActionResult result, Path execRoot, FileOutErr outErr)
+      throws ExecException, IOException, InterruptedException {
+    try {
+      for (OutputFile file : result.getOutputFilesList()) {
+        Path path = execRoot.getRelative(file.getPath());
+        FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
+        Digest digest = file.getDigest();
+        if (digest.getSizeBytes() == 0) {
+          // Handle empty file locally.
+          FileSystemUtils.writeContent(path, new byte[0]);
+        } else {
+          if (!file.getContent().isEmpty()) {
+            try (OutputStream stream = path.getOutputStream()) {
+              file.getContent().writeTo(stream);
+            }
+          } else {
+            retrier.execute(
+                () -> {
+                  try (OutputStream stream = path.getOutputStream()) {
+                    readBlob(digest, stream);
+                  }
+                  return null;
+                });
+            Digest receivedDigest = digestUtil.compute(path);
+            if (!receivedDigest.equals(digest)) {
+              throw new IOException(
+                  "Digest does not match " + receivedDigest + " != " + digest);
+            }
+          }
+        }
+        path.setExecutable(file.getIsExecutable());
+      }
+      if (!result.getOutputDirectoriesList().isEmpty()) {
+        throw new UnsupportedOperationException();
+      }
+      // TODO(ulfjack): use same code as above also for stdout / stderr if applicable.
+      downloadOutErr(result, outErr);
+    } catch (IOException downloadException) {
+      try {
+        // Delete any (partially) downloaded output files, since any subsequent local execution
+        // of this action may expect none of the output files to exist.
+        for (OutputFile file : result.getOutputFilesList()) {
+          execRoot.getRelative(file.getPath()).delete();
+        }
+        outErr.getOutputPath().delete();
+        outErr.getErrorPath().delete();
+      } catch (IOException e) {
+        // If deleting of output files failed, we abort the build with a decent error message as
+        // any subsequent local execution failure would likely be incomprehensible.
+
+        // We don't propagate the downloadException, as this is a recoverable error and the cause
+        // of the build failure is really that we couldn't delete output files.
+        throw new EnvironmentalExecException("Failed to delete output files after incomplete "
+            + "download. Cannot continue with local execution.", e, true);
+      }
+      throw downloadException;
+    }
+  }
+
+  private void downloadOutErr(ActionResult result, FileOutErr outErr)
+      throws IOException, InterruptedException {
+    if (!result.getStdoutRaw().isEmpty()) {
+      result.getStdoutRaw().writeTo(outErr.getOutputStream());
+      outErr.getOutputStream().flush();
+    } else if (result.hasStdoutDigest()) {
+      byte[] stdoutBytes = downloadBlob(result.getStdoutDigest());
+      outErr.getOutputStream().write(stdoutBytes);
+      outErr.getOutputStream().flush();
+    }
+    if (!result.getStderrRaw().isEmpty()) {
+      result.getStderrRaw().writeTo(outErr.getErrorStream());
+      outErr.getErrorStream().flush();
+    } else if (result.hasStderrDigest()) {
+      byte[] stderrBytes = downloadBlob(result.getStderrDigest());
+      outErr.getErrorStream().write(stderrBytes);
+      outErr.getErrorStream().flush();
+    }
+  }
+
+  /**
    * This method can throw {@link StatusRuntimeException}, but the RemoteCache interface does not
    * allow throwing such an exception. Any caller must make sure to catch the
    * {@link StatusRuntimeException}. Note that the retrier implicitly catches it, so if this is used
    * in the context of {@link RemoteRetrier#execute}, that's perfectly safe.
+   *
+   * <p>This method also converts any NOT_FOUND code returned from the server into a
+   * {@link CacheNotFoundException}. TODO(olaola): this is not enough. NOT_FOUND can also be raised
+   * by execute, in which case the server should return the missing digest in the Status.details
+   * field. This should be part of the API.
    */
   private void readBlob(Digest digest, OutputStream stream)
       throws IOException, StatusRuntimeException {
@@ -186,45 +281,14 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
       resourceName += options.remoteInstanceName + "/";
     }
     resourceName += "blobs/" + digest.getHash() + "/" + digest.getSizeBytes();
-    Iterator<ReadResponse> replies = bsBlockingStub()
-        .read(ReadRequest.newBuilder().setResourceName(resourceName).build());
-    while (replies.hasNext()) {
-      replies.next().getData().writeTo(stream);
-    }
-  }
-
-  @Override
-  protected void downloadBlob(Digest digest, Path dest) throws IOException, InterruptedException {
     try {
-      retrier.execute(
-          () -> {
-            try (OutputStream stream = dest.getOutputStream()) {
-              readBlob(digest, stream);
-            }
-            return null;
-          });
-    } catch (RetryException e) {
-      if (RemoteRetrierUtils.causedByStatus(e, Status.Code.NOT_FOUND)) {
-        throw new CacheNotFoundException(digest);
+      Iterator<ReadResponse> replies = bsBlockingStub()
+          .read(ReadRequest.newBuilder().setResourceName(resourceName).build());
+      while (replies.hasNext()) {
+        replies.next().getData().writeTo(stream);
       }
-      throw e;
-    }
-  }
-
-  @Override
-  protected byte[] downloadBlob(Digest digest) throws IOException, InterruptedException {
-    if (digest.getSizeBytes() == 0) {
-      return new byte[0];
-    }
-    try {
-      return retrier.execute(
-          () -> {
-            ByteArrayOutputStream stream = new ByteArrayOutputStream((int) digest.getSizeBytes());
-            readBlob(digest, stream);
-            return stream.toByteArray();
-          });
-    } catch (RetryException e) {
-      if (RemoteRetrierUtils.causedByStatus(e, Status.Code.NOT_FOUND)) {
+    } catch (StatusRuntimeException e) {
+      if (e.getStatus().getCode() == Status.Code.NOT_FOUND) {
         throw new CacheNotFoundException(digest);
       }
       throw e;
@@ -265,33 +329,38 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
 
   void upload(Path execRoot, Collection<Path> files, FileOutErr outErr, ActionResult.Builder result)
       throws IOException, InterruptedException {
-    UploadManifest manifest = new UploadManifest(result, execRoot);
-    manifest.addFiles(files);
-
-    List<Chunker> filesToUpload = new ArrayList<>();
-
-    Map<Digest, Path> digestToFile = manifest.getDigestToFile();
-    Map<Digest, Chunker> digestToChunkers = manifest.getDigestToChunkers();
-    Collection<Digest> digests = new ArrayList<>();
-    digests.addAll(digestToFile.keySet());
-    digests.addAll(digestToChunkers.keySet());
-
-    ImmutableSet<Digest> digestsToUpload = getMissingDigests(digests);
-    for (Digest digest : digestsToUpload) {
-      Chunker chunker;
-      Path file = digestToFile.get(digest);
-      if (file != null) {
-        chunker = new Chunker(file);
-      } else {
-        chunker = digestToChunkers.get(digest);
-        if (chunker == null) {
-          String message = "FindMissingBlobs call returned an unknown digest: " + digest;
-          throw new IOException(message);
-        }
+    Map<Digest, Path> digestToFile = new HashMap<>();
+    for (Path file : files) {
+      if (!file.exists()) {
+        // We ignore requested results that have not been generated by the action.
+        continue;
       }
-      filesToUpload.add(chunker);
+      if (file.isDirectory()) {
+        // TODO(olaola): to implement this for a directory, will need to create or pass a
+        // TreeNodeRepository to call uploadTree.
+        throw new UnsupportedOperationException("Storing a directory is not yet supported.");
+      }
+
+      Digest digest = digestUtil.compute(file);
+      // TODO(olaola): inline small results here.
+      result
+          .addOutputFilesBuilder()
+          .setPath(file.relativeTo(execRoot).getPathString())
+          .setDigest(digest)
+          .setIsExecutable(file.isExecutable());
+      digestToFile.put(digest, file);
     }
 
+    ImmutableSet<Digest> digestsToUpload = getMissingDigests(digestToFile.keySet());
+    List<Chunker> filesToUpload = new ArrayList<>();
+    for (Digest digest : digestsToUpload) {
+      Path file = digestToFile.get(digest);
+      if (file == null) {
+        String message = "FindMissingBlobs call returned an unknown digest: " + digest;
+        throw new IOException(message);
+      }
+      filesToUpload.add(new Chunker(file));
+    }
     if (!filesToUpload.isEmpty()) {
       uploader.uploadBlobs(filesToUpload);
     }
@@ -345,6 +414,19 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
       uploader.uploadBlob(new Chunker(blob, digestUtil));
     }
     return digest;
+  }
+
+  byte[] downloadBlob(Digest digest)
+      throws IOException, InterruptedException {
+    if (digest.getSizeBytes() == 0) {
+      return new byte[0];
+    }
+    return retrier.execute(
+        () -> {
+          ByteArrayOutputStream stream = new ByteArrayOutputStream((int) digest.getSizeBytes());
+          readBlob(digest, stream);
+          return stream.toByteArray();
+        });
   }
 
   // Execution Cache API

@@ -17,12 +17,11 @@ package com.google.devtools.build.lib.remote;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
-import com.google.devtools.build.lib.authandtls.GoogleAuthUtils;
+import com.google.devtools.build.lib.authandtls.GrpcUtils;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
-import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -30,11 +29,11 @@ import com.google.devtools.build.lib.runtime.ServerBuilder;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.FileSystem.HashFunction;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsProvider;
 import com.google.devtools.remoteexecution.v1test.Digest;
+import io.grpc.CallCredentials;
 import io.grpc.Channel;
 import java.io.IOException;
 import java.util.logging.Logger;
@@ -98,18 +97,6 @@ public final class RemoteModule extends BlazeModule {
     String buildRequestId = env.getBuildRequestId().toString();
     String commandId = env.getCommandId().toString();
     logger.info("Command: buildRequestId = " + buildRequestId + ", commandId = " + commandId);
-    Path logDir =
-        env.getOutputBase().getRelative(env.getRuntime().getProductName() + "-remote-logs");
-    try {
-      // Clean out old logs files.
-      if (logDir.exists()) {
-        FileSystemUtils.deleteTree(logDir);
-      }
-      logDir.createDirectory();
-    } catch (IOException e) {
-      env.getReporter()
-          .handle(Event.error("Could not create base directory for remote logs: " + logDir));
-    }
     RemoteOptions remoteOptions = env.getOptions().getOptions(RemoteOptions.class);
     AuthAndTLSOptions authAndTlsOptions = env.getOptions().getOptions(AuthAndTLSOptions.class);
     HashFunction hashFn = env.getRuntime().getFileSystem().getDigestFunction();
@@ -122,6 +109,7 @@ public final class RemoteModule extends BlazeModule {
       return;
     }
 
+
     try {
       boolean remoteOrLocalCache = SimpleBlobStoreFactory.isRemoteCacheOptions(remoteOptions);
       boolean grpcCache = GrpcRemoteCache.isRemoteCacheOptions(remoteOptions);
@@ -129,46 +117,36 @@ public final class RemoteModule extends BlazeModule {
       RemoteRetrier retrier =
           new RemoteRetrier(
               remoteOptions, RemoteRetrier.RETRIABLE_GRPC_ERRORS, Retrier.ALLOW_ALL_CALLS);
+      CallCredentials creds = GrpcUtils.newCallCredentials(authAndTlsOptions);
       // TODO(davido): The naming is wrong here. "Remote"-prefix in RemoteActionCache class has no
       // meaning.
-      final AbstractRemoteActionCache cache;
+      final RemoteActionCache cache;
       if (remoteOrLocalCache) {
         cache =
             new SimpleBlobStoreActionCache(
-                SimpleBlobStoreFactory.create(
-                    remoteOptions,
-                    GoogleAuthUtils.newCredentials(authAndTlsOptions),
-                    env.getWorkingDirectory()),
+                SimpleBlobStoreFactory.create(remoteOptions, env.getWorkingDirectory()),
                 digestUtil);
       } else if (grpcCache || remoteOptions.remoteExecutor != null) {
         // If a remote executor but no remote cache is specified, assume both at the same target.
         String target = grpcCache ? remoteOptions.remoteCache : remoteOptions.remoteExecutor;
-        Channel ch = GoogleAuthUtils.newChannel(target, authAndTlsOptions);
-        cache =
-            new GrpcRemoteCache(
-                ch,
-                GoogleAuthUtils.newCallCredentials(authAndTlsOptions),
-                remoteOptions,
-                retrier,
-                digestUtil);
+        Channel ch = GrpcUtils.newChannel(target, authAndTlsOptions);
+        cache = new GrpcRemoteCache(ch, creds, remoteOptions, retrier, digestUtil);
       } else {
         cache = null;
       }
 
       final GrpcRemoteExecutor executor;
       if (remoteOptions.remoteExecutor != null) {
-        executor =
-            new GrpcRemoteExecutor(
-                GoogleAuthUtils.newChannel(remoteOptions.remoteExecutor, authAndTlsOptions),
-                GoogleAuthUtils.newCallCredentials(authAndTlsOptions),
-                remoteOptions.remoteTimeout,
-                retrier);
+        executor = new GrpcRemoteExecutor(
+            GrpcUtils.newChannel(remoteOptions.remoteExecutor, authAndTlsOptions),
+            creds,
+            remoteOptions.remoteTimeout,
+            retrier);
       } else {
         executor = null;
       }
 
-      actionContextProvider =
-          new RemoteActionContextProvider(env, cache, executor, digestUtil, logDir);
+      actionContextProvider = new RemoteActionContextProvider(env, cache, executor, digestUtil);
     } catch (IOException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
       env.getBlazeModuleEnvironment().exit(new AbruptExitException(ExitCode.COMMAND_LINE_ERROR));

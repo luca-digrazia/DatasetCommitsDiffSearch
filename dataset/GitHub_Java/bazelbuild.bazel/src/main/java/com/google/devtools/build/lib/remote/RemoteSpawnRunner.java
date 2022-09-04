@@ -26,12 +26,11 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SpawnExecException;
+import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.remote.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.Retrier.RetryException;
@@ -47,8 +46,6 @@ import com.google.devtools.remoteexecution.v1test.Digest;
 import com.google.devtools.remoteexecution.v1test.ExecuteRequest;
 import com.google.devtools.remoteexecution.v1test.ExecuteResponse;
 import com.google.devtools.remoteexecution.v1test.Platform;
-import com.google.protobuf.TextFormat;
-import com.google.protobuf.TextFormat.ParseException;
 import io.grpc.Context;
 import io.grpc.Status.Code;
 import java.io.IOException;
@@ -73,11 +70,13 @@ class RemoteSpawnRunner implements SpawnRunner {
 
   private final Path execRoot;
   private final RemoteOptions options;
+  // TODO(olaola): This will be set on a per-action basis instead.
+  private final Platform platform;
   private final SpawnRunner fallbackRunner;
   private final boolean verboseFailures;
 
   @Nullable private final Reporter cmdlineReporter;
-  @Nullable private final AbstractRemoteActionCache remoteCache;
+  @Nullable private final RemoteActionCache remoteCache;
   @Nullable private final GrpcRemoteExecutor remoteExecutor;
   private final String buildRequestId;
   private final String commandId;
@@ -94,11 +93,12 @@ class RemoteSpawnRunner implements SpawnRunner {
       @Nullable Reporter cmdlineReporter,
       String buildRequestId,
       String commandId,
-      @Nullable AbstractRemoteActionCache remoteCache,
+      @Nullable RemoteActionCache remoteCache,
       @Nullable GrpcRemoteExecutor remoteExecutor,
       DigestUtil digestUtil) {
     this.execRoot = execRoot;
     this.options = options;
+    this.platform = options.parseRemotePlatformOverride();
     this.fallbackRunner = fallbackRunner;
     this.remoteCache = remoteCache;
     this.remoteExecutor = remoteExecutor;
@@ -126,13 +126,11 @@ class RemoteSpawnRunner implements SpawnRunner {
     Command command = buildCommand(spawn.getArguments(), spawn.getEnvironment());
     Action action =
         buildAction(
-            execRoot,
             spawn.getOutputFiles(),
             digestUtil.compute(command),
             repository.getMerkleDigest(inputRoot),
-            spawn.getExecutionPlatform(),
-            policy.getTimeout(),
-            Spawns.mayBeCached(spawn));
+            platform,
+            policy.getTimeout());
 
     // Look up action cache, and reuse the action output if it is found.
     ActionKey actionKey = digestUtil.computeActionKey(action);
@@ -245,8 +243,7 @@ class RemoteSpawnRunner implements SpawnRunner {
     if (exception instanceof RetryException
         && RemoteRetrierUtils.causedByStatus((RetryException) exception, Code.UNAVAILABLE)) {
       status = Status.EXECUTION_FAILED_CATASTROPHICALLY;
-    } else if (exception instanceof CacheNotFoundException
-        || cause instanceof CacheNotFoundException) {
+    } else if (cause instanceof CacheNotFoundException) {
       status = Status.REMOTE_CACHE_FAILED;
     } else {
       status = Status.EXECUTION_FAILED;
@@ -261,60 +258,28 @@ class RemoteSpawnRunner implements SpawnRunner {
   }
 
   static Action buildAction(
-      Path execRoot,
       Collection<? extends ActionInput> outputs,
       Digest command,
       Digest inputRoot,
-      @Nullable PlatformInfo executionPlatform,
-      Duration timeout,
-      boolean cacheable) {
-
+      Platform platform,
+      Duration timeout) {
     Action.Builder action = Action.newBuilder();
     action.setCommandDigest(command);
     action.setInputRootDigest(inputRoot);
     ArrayList<String> outputPaths = new ArrayList<>();
-    ArrayList<String> outputDirectoryPaths = new ArrayList<>();
     for (ActionInput output : outputs) {
-      String pathString = output.getExecPathString();
-      if (execRoot.getRelative(pathString).isDirectory()) {
-        outputDirectoryPaths.add(pathString);
-      } else {
-        outputPaths.add(pathString);
-      }
+      outputPaths.add(output.getExecPathString());
     }
     Collections.sort(outputPaths);
-    Collections.sort(outputDirectoryPaths);
+    // TODO: output directories should be handled here, when they are supported.
     action.addAllOutputFiles(outputPaths);
-
-    // Get the remote platform properties.
-    if (executionPlatform != null) {
-      Platform platform =
-          parsePlatform(executionPlatform.label(), executionPlatform.remoteExecutionProperties());
+    if (platform != null) {
       action.setPlatform(platform);
     }
-
     if (!timeout.isZero()) {
       action.setTimeout(com.google.protobuf.Duration.newBuilder().setSeconds(timeout.getSeconds()));
     }
-    if (!cacheable) {
-      action.setDoNotCache(true);
-    }
     return action.build();
-  }
-
-  static Platform parsePlatform(Label platformLabel, @Nullable String platformDescription) {
-    Platform.Builder platformBuilder = Platform.newBuilder();
-    try {
-      if (platformDescription != null) {
-        TextFormat.getParser().merge(platformDescription, platformBuilder);
-      }
-    } catch (ParseException e) {
-      throw new IllegalArgumentException(
-          String.format(
-              "Failed to parse remote_execution_properties from platform %s", platformLabel),
-          e);
-    }
-    return platformBuilder.build();
   }
 
   static Command buildCommand(List<String> arguments, ImmutableMap<String, String> env) {
@@ -332,7 +297,7 @@ class RemoteSpawnRunner implements SpawnRunner {
     HashMap<Path, Long>  ctimes = new HashMap<>();
     for (Map.Entry<PathFragment, ActionInput> e : inputMap.entrySet()) {
       ActionInput input = e.getValue();
-      if (input instanceof VirtualActionInput) {
+      if (input == SpawnInputExpander.EMPTY_FILE || input instanceof VirtualActionInput) {
         continue;
       }
       Path path = execRoot.getRelative(input.getExecPathString());
@@ -358,10 +323,10 @@ class RemoteSpawnRunner implements SpawnRunner {
       SpawnExecutionPolicy policy,
       SortedMap<PathFragment, ActionInput> inputMap,
       boolean uploadToCache,
-      @Nullable AbstractRemoteActionCache remoteCache,
+      @Nullable RemoteActionCache remoteCache,
       @Nullable ActionKey actionKey)
       throws ExecException, IOException, InterruptedException {
-    if (uploadToCache && remoteCache != null && actionKey != null) {
+    if (uploadToCache && Spawns.mayBeCached(spawn) && remoteCache != null && actionKey != null) {
       return execLocallyAndUpload(spawn, policy, inputMap, remoteCache, actionKey);
     }
     return fallbackRunner.exec(spawn, policy);
@@ -372,7 +337,7 @@ class RemoteSpawnRunner implements SpawnRunner {
       Spawn spawn,
       SpawnExecutionPolicy policy,
       SortedMap<PathFragment, ActionInput> inputMap,
-      AbstractRemoteActionCache remoteCache,
+      RemoteActionCache remoteCache,
       ActionKey actionKey)
       throws ExecException, IOException, InterruptedException {
     Map<Path, Long> ctimesBefore = getInputCtimes(inputMap);
@@ -386,10 +351,7 @@ class RemoteSpawnRunner implements SpawnRunner {
     }
     List<Path> outputFiles = listExistingOutputFiles(execRoot, spawn);
     try {
-      boolean uploadAction =
-          Spawns.mayBeCached(spawn)
-              && Status.SUCCESS.equals(result.status())
-              && result.exitCode() == 0;
+      boolean uploadAction = Status.SUCCESS.equals(result.status()) && result.exitCode() == 0;
       remoteCache.upload(actionKey, execRoot, outputFiles, policy.getFileOutErr(), uploadAction);
     } catch (IOException e) {
       if (verboseFailures) {
