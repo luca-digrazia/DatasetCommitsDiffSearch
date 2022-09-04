@@ -246,7 +246,6 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
           supportData.getDirectProtoSources(),
           supportData.getTransitiveImports(),
           supportData.getProtosInDirectDeps(),
-          supportData.getTransitiveProtoPathFlags(),
           ruleContext.getLabel(),
           ImmutableList.of(sourceJar),
           "JavaLite",

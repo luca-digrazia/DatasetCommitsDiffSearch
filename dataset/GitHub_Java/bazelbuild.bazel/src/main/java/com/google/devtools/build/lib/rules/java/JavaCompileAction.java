@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -43,6 +42,7 @@ import com.google.devtools.build.lib.actions.extra.JavaCompileInfo;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomMultiArgv;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
@@ -59,8 +59,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -75,7 +73,6 @@ import javax.annotation.Nullable;
 /** Action that represents a Java compilation. */
 @ThreadCompatible
 @Immutable
-@AutoCodec
 public final class JavaCompileAction extends SpawnAction {
   private static final String JACOCO_INSTRUMENTATION_PROCESSOR = "jacoco";
 
@@ -174,9 +171,7 @@ public final class JavaCompileAction extends SpawnAction {
    * @param compileTimeDependencyArtifacts the jdeps files for direct dependencies
    * @param progressMessage the progress message
    */
-  @VisibleForSerialization
-  @AutoCodec.Instantiator
-  JavaCompileAction(
+  private JavaCompileAction(
       ActionOwner owner,
       NestedSet<Artifact> tools,
       NestedSet<Artifact> inputs,
@@ -199,7 +194,7 @@ public final class JavaCompileAction extends SpawnAction {
       StrictDepsMode strictJavaDeps,
       NestedSet<Artifact> compileTimeDependencyArtifacts,
       CharSequence progressMessage,
-      RunfilesSupplier runfilesSupplier) {
+      RunfilesSupplier runfiles) {
     super(
         owner,
         tools,
@@ -212,7 +207,7 @@ public final class JavaCompileAction extends SpawnAction {
         UTF8_ACTION_ENVIRONMENT,
         ImmutableMap.copyOf(executionInfo),
         progressMessage,
-        runfilesSupplier,
+        runfiles,
         "Javac",
         false /*executeUnconditionally*/,
         null /*extraActionInfoSupplier*/);

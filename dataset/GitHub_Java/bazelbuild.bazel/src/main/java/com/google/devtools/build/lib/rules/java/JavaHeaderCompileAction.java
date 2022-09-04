@@ -30,10 +30,8 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -42,7 +40,9 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
+import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -71,7 +70,6 @@ import javax.annotation.Nullable;
  * <p>The implementation of the header compiler tool can be found under {@code
  * //src/java_tools/buildjar/java/com/google/devtools/build/java/turbine}.
  */
-@AutoCodec
 public class JavaHeaderCompileAction extends SpawnAction {
 
   private static final String GUID = "952db158-2654-4ced-87e5-4646d50523cf";
@@ -95,28 +93,28 @@ public class JavaHeaderCompileAction extends SpawnAction {
    * @param owner the action owner, typically a java_* RuleConfiguredTarget
    * @param tools the set of files comprising the tool that creates the header interface jar
    * @param directInputs the set of direct input artifacts of the compile action
-   * @param inputs the set of transitive input artifacts of the compile action
+   * @param transitiveInputs the set of transitive input artifacts of the compile action
    * @param outputs the outputs of the action
    * @param directCommandLine the direct command line arguments for the java header compiler
-   * @param argv the transitive command line arguments for the java header compiler
+   * @param transitiveCommandLine the transitive command line arguments for the java header compiler
    * @param progressMessage the message printed during the progression of the build
    */
   protected JavaHeaderCompileAction(
       ActionOwner owner,
       Iterable<Artifact> tools,
       Iterable<Artifact> directInputs,
-      Iterable<Artifact> inputs,
+      Iterable<Artifact> transitiveInputs,
       Iterable<Artifact> outputs,
       CommandLine directCommandLine,
-      CommandLine argv,
+      CommandLine transitiveCommandLine,
       CharSequence progressMessage) {
     super(
         owner,
         tools,
-        inputs,
+        transitiveInputs,
         outputs,
         LOCAL_RESOURCES,
-        argv,
+        transitiveCommandLine,
         false,
         // TODO(#3320): This is missing the config's action environment.
         JavaCompileAction.UTF8_ACTION_ENVIRONMENT,
