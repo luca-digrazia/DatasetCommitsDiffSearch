@@ -22,8 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
+import org.apache.shiro.crypto.hash.SimpleHash;
 import org.bson.types.ObjectId;
 import org.graylog2.Configuration;
 import org.graylog2.database.CollectionName;
@@ -36,7 +35,6 @@ import org.graylog2.database.validators.LimitedStringValidator;
 import org.graylog2.database.validators.ListValidator;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.database.validators.Validator;
-import org.graylog2.plugin.security.PasswordAlgorithm;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,14 +51,6 @@ import static com.google.common.base.Strings.nullToEmpty;
 
 @CollectionName(UserImpl.COLLECTION_NAME)
 public class UserImpl extends PersistedImpl implements User {
-    private final PasswordAlgorithmFactory passwordAlgorithmFactory;
-
-    public interface Factory {
-        UserImpl create(final Map<String, Object> fields);
-        UserImpl create(final ObjectId id, final Map<String, Object> fields);
-        LocalAdminUser createLocalAdminUser(String adminRoleObjectId);
-    }
-
     private static final Logger LOG = LoggerFactory.getLogger(UserImpl.class);
 
     private static final Map<String, Object> DEFAULT_PREFERENCES = new ImmutableMap.Builder<String, Object>()
@@ -87,19 +77,12 @@ public class UserImpl extends PersistedImpl implements User {
     public static final int MAX_EMAIL_LENGTH = 254;
     public static final int MAX_FULL_NAME_LENGTH = 200;
 
-    @AssistedInject
-    public UserImpl(PasswordAlgorithmFactory passwordAlgorithmFactory,
-                    @Assisted final Map<String, Object> fields) {
+    public UserImpl(final Map<String, Object> fields) {
         super(fields);
-        this.passwordAlgorithmFactory = passwordAlgorithmFactory;
     }
 
-    @AssistedInject
-    protected UserImpl(PasswordAlgorithmFactory passwordAlgorithmFactory,
-                       @Assisted final ObjectId id,
-                       @Assisted final Map<String, Object> fields) {
+    protected UserImpl(final ObjectId id, final Map<String, Object> fields) {
         super(id, fields);
-        this.passwordAlgorithmFactory = passwordAlgorithmFactory;
     }
 
     @Override
@@ -215,24 +198,20 @@ public class UserImpl extends PersistedImpl implements User {
     }
 
     @Override
-    public void setPassword(final String password) {
+    public void setPassword(final String password, final String passwordSecret) {
         if (password == null || "".equals(password)) {
             // If no password is given, we leave the hashed password empty and we fail during validation.
             setHashedPassword("");
         } else {
-            final String newPassword = passwordAlgorithmFactory.defaultPasswordAlgorithm().hash(password);
+            final String newPassword = new SimpleHash(HASH_ALGORITHM, password, passwordSecret).toString();
             setHashedPassword(newPassword);
         }
     }
 
     @Override
-    public boolean isUserPassword(final String password) {
-        final PasswordAlgorithm passwordAlgorithm = passwordAlgorithmFactory.forPassword(getHashedPassword());
-        if (passwordAlgorithm == null) {
-            return false;
-        }
-
-        return passwordAlgorithm.matches(getHashedPassword(), password);
+    public boolean isUserPassword(final String password, final String passwordSecret) {
+        final String oldPasswordHash = new SimpleHash(HASH_ALGORITHM, password, passwordSecret).toString();
+        return getHashedPassword().equals(oldPasswordHash);
     }
 
     @Override
@@ -310,11 +289,8 @@ public class UserImpl extends PersistedImpl implements User {
         private final Configuration configuration;
         private final Set<String> roles;
 
-        @AssistedInject
-        LocalAdminUser(PasswordAlgorithmFactory passwordAlgorithmFactory,
-                              Configuration configuration,
-                              @Assisted String adminRoleObjectId) {
-            super(passwordAlgorithmFactory, (ObjectId)null, Collections.<String, Object>emptyMap());
+        public LocalAdminUser(Configuration configuration, String adminRoleObjectId) {
+            super(null, Collections.<String, Object>emptyMap());
             this.configuration = configuration;
             this.roles = ImmutableSet.of(adminRoleObjectId);
         }
