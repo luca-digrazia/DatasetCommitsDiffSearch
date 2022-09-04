@@ -10,7 +10,7 @@ import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.logging.async.AsyncLoggingEventAppenderFactory;
 import io.dropwizard.logging.filter.NullLevelFilterFactory;
 import io.dropwizard.logging.layout.DropwizardLayoutFactory;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
@@ -25,25 +25,25 @@ public class SyslogAppenderFactoryTest {
     }
 
     @Test
-    void isDiscoverable() throws Exception {
+    public void isDiscoverable() throws Exception {
         assertThat(new DiscoverableSubtypeResolver().getDiscoveredSubtypes())
                 .contains(SyslogAppenderFactory.class);
     }
 
     @Test
-    void defaultIncludesAppName() throws Exception {
+    public void defaultIncludesAppName() throws Exception {
         assertThat(new SyslogAppenderFactory().getLogFormat())
                 .contains("%app");
     }
 
     @Test
-    void defaultIncludesPid() throws Exception {
+    public void defaultIncludesPid() throws Exception {
         assertThat(new SyslogAppenderFactory().getLogFormat())
                 .contains("%pid");
     }
 
     @Test
-    void patternIncludesAppNameAndPid() throws Exception {
+    public void patternIncludesAppNameAndPid() throws Exception {
         final AsyncAppender wrapper = (AsyncAppender) new SyslogAppenderFactory()
                 .build(new LoggerContext(), "MyApplication", new DropwizardLayoutFactory(), new NullLevelFilterFactory<>(), new AsyncLoggingEventAppenderFactory());
         assertThat(((SyslogAppender) wrapper.getAppender("syslog-appender")).getSuffixPattern())
@@ -51,7 +51,7 @@ public class SyslogAppenderFactoryTest {
     }
 
     @Test
-    void stackTracePatternCanBeSet() throws Exception {
+    public void stackTracePatternCanBeSet() throws Exception {
         final SyslogAppenderFactory syslogAppenderFactory = new SyslogAppenderFactory();
         syslogAppenderFactory.setStackTracePrefix("--->");
         final AsyncAppender wrapper = (AsyncAppender) syslogAppenderFactory
@@ -61,7 +61,7 @@ public class SyslogAppenderFactoryTest {
     }
 
     @Test
-    void appenderContextIsSet() throws Exception {
+    public void appenderContextIsSet() throws Exception {
         final Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         final SyslogAppenderFactory appenderFactory = new SyslogAppenderFactory();
         final Appender<ILoggingEvent> appender = appenderFactory.build(root.getLoggerContext(), "test", new DropwizardLayoutFactory(),
@@ -71,7 +71,7 @@ public class SyslogAppenderFactoryTest {
     }
 
     @Test
-    void appenderNameIsSet() throws Exception {
+    public void appenderNameIsSet() throws Exception {
         final Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         final SyslogAppenderFactory appenderFactory = new SyslogAppenderFactory();
         final Appender<ILoggingEvent> appender = appenderFactory.build(root.getLoggerContext(), "test", new DropwizardLayoutFactory(),
@@ -81,7 +81,7 @@ public class SyslogAppenderFactoryTest {
     }
 
     @Test
-    void syslogFacilityTest() {
+    public void syslogFacilityTest() {
         for (SyslogAppenderFactory.Facility facility : SyslogAppenderFactory.Facility.values()) {
             assertThatCode(() ->
                     SyslogAppender.facilityStringToint(facility.toString().toLowerCase(Locale.ENGLISH)))

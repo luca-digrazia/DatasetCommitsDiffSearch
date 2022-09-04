@@ -19,6 +19,8 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+
 /**
  * An {@link AppenderFactory} implementation which provides an appender that sends events to a
  * syslog server.
@@ -62,16 +64,6 @@ import java.util.regex.Pattern;
  *         <td>
  *             The Logback pattern with which events will be formatted. See
  *             <a href="http://logback.qos.ch/manual/layouts.html#conversionWord">the Logback documentation</a>
- *             for details.
- *         </td>
- *     </tr>
- *     <tr>
- *         <td>{@code includeStackTrace}</td>
- *         <td>include stack traces in log messages</td>
- *         <td>
- *             Setting {@code includeStackTrace} to {@code false} causes no Throwable's stack trace data to be sent to the syslog daemon.
- *             By default, stack trace data is sent to syslog daemon.
- *             See <a href="http://logback.qos.ch/apidocs/ch/qos/logback/classic/net/SyslogAppender.html#setThrowableExcluded(boolean)">the Logback documentation</a>
  *             for details.
  *         </td>
  *     </tr>
@@ -204,10 +196,10 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory<ILoggingEvent
         final SyslogAppender appender = new SyslogAppender();
         appender.setName("syslog-appender");
         appender.setContext(context);
-        if (logFormat != null && !logFormat.isEmpty()) {
+        if (!isNullOrEmpty(logFormat)) {
             appender.setSuffixPattern(logFormat
-                    .replace(LOG_TOKEN_PID, pid)
-                    .replace(LOG_TOKEN_NAME, Matcher.quoteReplacement(applicationName)));
+                    .replaceAll(LOG_TOKEN_PID, pid)
+                    .replaceAll(LOG_TOKEN_NAME, Matcher.quoteReplacement(applicationName)));
         }
         appender.setSyslogHost(host);
         appender.setPort(port);
