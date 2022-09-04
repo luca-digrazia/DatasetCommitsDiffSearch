@@ -37,29 +37,19 @@ import java.util.logging.Level;
 public class TestSummaryPrinter {
 
   /**
-   * Interface for getting the {@link String} to display to the user for a {@link Path}
-   * corresponding to a test output (e.g. test log).
-   */
-  public interface TestLogPathFormatter {
-    String getPathStringToPrint(Path path);
-  }
-
-  /**
    * Print the cached test log to the given printer.
    */
-  public static void printCachedOutput(
-      TestSummary summary,
+  public static void printCachedOutput(TestSummary summary,
       TestOutputFormat testOutput,
-      AnsiTerminalPrinter printer,
-      TestLogPathFormatter testLogPathFormatter) {
+      AnsiTerminalPrinter printer) {
 
     String testName = summary.getLabel().toString();
     List<String> allLogs = new ArrayList<>();
     for (Path path : summary.getFailedLogs()) {
-      allLogs.add(testLogPathFormatter.getPathStringToPrint(path));
+      allLogs.add(path.getPathString());
     }
     for (Path path : summary.getPassedLogs()) {
-      allLogs.add(testLogPathFormatter.getPathStringToPrint(path));
+      allLogs.add(path.getPathString());
     }
     printer.printLn("" + TestSummary.getStatusMode(summary.getStatus()) + summary.getStatus() + ": "
         + Mode.DEFAULT + testName + " (see " + Joiner.on(' ').join(allLogs) + ")");
@@ -102,16 +92,8 @@ public class TestSummaryPrinter {
   public static void print(
       TestSummary summary,
       AnsiTerminalPrinter terminalPrinter,
-      TestLogPathFormatter testLogPathFormatter,
-      boolean verboseSummary,
-      boolean printFailedTestCases) {
-    print(
-        summary,
-        terminalPrinter,
-        testLogPathFormatter,
-        verboseSummary,
-        printFailedTestCases,
-        false);
+      boolean verboseSummary, boolean printFailedTestCases) {
+    print(summary, terminalPrinter, verboseSummary, printFailedTestCases, false);
   }
 
   /**
@@ -121,13 +103,11 @@ public class TestSummaryPrinter {
   public static void print(
       TestSummary summary,
       AnsiTerminalPrinter terminalPrinter,
-      TestLogPathFormatter testLogPathFormatter,
-      boolean verboseSummary,
-      boolean printFailedTestCases,
+      boolean verboseSummary, boolean printFailedTestCases,
       boolean withConfigurationName) {
     BlazeTestStatus status = summary.getStatus();
     // Skip output for tests that failed to build.
-    if ((!verboseSummary && status == BlazeTestStatus.FAILED_TO_BUILD)
+    if (status == BlazeTestStatus.FAILED_TO_BUILD
         || status == BlazeTestStatus.BLAZE_HALTED_BEFORE_TESTING) {
       return;
     }
@@ -138,8 +118,8 @@ public class TestSummaryPrinter {
     }
     terminalPrinter.print(
         Strings.padEnd(targetName, 78 - message.length(), ' ')
-            + " " + TestSummary.getStatusMode(summary.getStatus()) + message + Mode.DEFAULT
-            + (verboseSummary ? getAttemptSummary(summary) + getTimeSummary(summary) : "") + "\n");
+        + " " + TestSummary.getStatusMode(summary.getStatus()) + message + Mode.DEFAULT
+        + (verboseSummary ? getAttemptSummary(summary) + getTimeSummary(summary) : "") + "\n");
 
     if (printFailedTestCases && summary.getStatus() == BlazeTestStatus.FAILED) {
       if (summary.getFailedTestCasesStatus() == FailedTestCasesStatus.NOT_AVAILABLE) {
@@ -171,7 +151,11 @@ public class TestSummaryPrinter {
 
       for (Path path : summary.getFailedLogs()) {
         if (path.exists()) {
-          terminalPrinter.print("  " + testLogPathFormatter.getPathStringToPrint(path) + "\n");
+          // Don't use getPrettyPath() here - we want to print the absolute path,
+          // so that it cut and paste into a different terminal, and we don't
+          // want to use the blaze-bin etc. symbolic links because they could be changed
+          // by a subsequent build with different options.
+          terminalPrinter.print("  " + path.getPathString() + "\n");
         }
       }
     }
@@ -179,7 +163,7 @@ public class TestSummaryPrinter {
       // Print only non-trivial coverage files.
       try {
         if (path.exists() && path.getFileSize() > 0) {
-          terminalPrinter.print("  " + testLogPathFormatter.getPathStringToPrint(path) + "\n");
+          terminalPrinter.print("  " + path.getPathString() + "\n");
         }
       } catch (IOException e) {
         LoggingUtil.logToRemote(Level.WARNING, "Error while reading coverage data file size",
