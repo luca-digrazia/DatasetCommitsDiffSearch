@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.hibernate.orm.runtime;
 
 import java.util.Collections;
@@ -14,6 +30,7 @@ import javax.sql.DataSource;
 
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
@@ -26,7 +43,6 @@ import io.quarkus.arc.InstanceHandle;
 import io.quarkus.hibernate.orm.runtime.boot.FastBootEntityManagerFactoryBuilder;
 import io.quarkus.hibernate.orm.runtime.boot.registry.PreconfiguredServiceRegistryBuilder;
 import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrations;
-import io.quarkus.hibernate.orm.runtime.recording.PrevalidatedQuarkusMetadata;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 
 /**
@@ -145,9 +161,15 @@ final class FastBootHibernatePersistenceProvider implements PersistenceProvider 
 
             RecordedState recordedState = PersistenceUnitsHolder.getRecordedState(persistenceUnitName);
 
-            final PrevalidatedQuarkusMetadata metadata = recordedState.getMetadata();
+            final MetadataImplementor metadata = recordedState.getMetadata();
+
             final BuildTimeSettings buildTimeSettings = recordedState.getBuildTimeSettings();
             final IntegrationSettings integrationSettings = recordedState.getIntegrationSettings();
+            // TODO:
+            final Object validatorFactory = null;
+            // TODO:
+            final Object cdiBeanManager = null;
+
             RuntimeSettings.Builder runtimeSettingsBuilder = new RuntimeSettings.Builder(buildTimeSettings,
                     integrationSettings);
 
@@ -160,9 +182,6 @@ final class FastBootHibernatePersistenceProvider implements PersistenceProvider 
 
             StandardServiceRegistry standardServiceRegistry = rewireMetadataAndExtractServiceRegistry(
                     runtimeSettings, recordedState);
-
-            final Object cdiBeanManager = Arc.container().beanManager();
-            final Object validatorFactory = Arc.container().instance("quarkus-hibernate-validator-factory").get();
 
             return new FastBootEntityManagerFactoryBuilder(
                     metadata /* Uses the StandardServiceRegistry references by this! */,

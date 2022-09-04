@@ -29,11 +29,6 @@ public class RuntimeSettings {
         return settings.containsKey(key);
     }
 
-    @Override
-    public String toString() {
-        return this.getClass().getSimpleName() + " {" + settings.toString() + "}";
-    }
-
     public static class Builder {
 
         private final Map<String, Object> settings;

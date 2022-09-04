@@ -1,8 +1,25 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.hibernate.orm.runtime.recording;
 
 import java.io.File;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +33,7 @@ import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
+import org.hibernate.cfg.Environment;
 import org.hibernate.engine.config.internal.ConfigurationServiceInitiator;
 import org.hibernate.engine.jdbc.batch.internal.BatchBuilderInitiator;
 import org.hibernate.engine.jdbc.connections.internal.ConnectionProviderInitiator;
@@ -25,8 +43,11 @@ import org.hibernate.engine.jdbc.dialect.internal.DialectResolverInitiator;
 import org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator;
 import org.hibernate.engine.jdbc.internal.JdbcServicesInitiator;
 import org.hibernate.engine.jndi.internal.JndiServiceInitiator;
+import org.hibernate.engine.transaction.jta.platform.internal.JtaPlatformInitiator;
+import org.hibernate.engine.transaction.jta.platform.internal.JtaPlatformResolverInitiator;
 import org.hibernate.event.internal.EntityCopyObserverFactoryInitiator;
 import org.hibernate.hql.internal.QueryTranslatorFactoryInitiator;
+import org.hibernate.id.factory.internal.MutableIdentifierGeneratorFactoryInitiator;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.integrator.spi.IntegratorService;
 import org.hibernate.internal.util.config.ConfigurationHelper;
@@ -44,7 +65,6 @@ import org.hibernate.tool.hbm2ddl.ImportSqlCommandExtractorInitiator;
 import org.hibernate.tool.schema.internal.SchemaManagementToolInitiator;
 
 import io.quarkus.hibernate.orm.runtime.boot.QuarkusEnvironment;
-import io.quarkus.hibernate.orm.runtime.customized.QuarkusJtaPlatformInitiator;
 import io.quarkus.hibernate.orm.runtime.service.DialectFactoryInitiator;
 import io.quarkus.hibernate.orm.runtime.service.DisabledJMXInitiator;
 import io.quarkus.hibernate.orm.runtime.service.QuarkusMutableIdentifierGeneratorFactoryInitiator;
@@ -59,7 +79,6 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
     private final Map settings;
     private final List<StandardServiceInitiator> initiators = standardInitiatorList();
     private final List<ProvidedService> providedServices = new ArrayList<ProvidedService>();
-    private final List<Class<? extends Service>> postBuildProvidedServices = new ArrayList<>();
 
     private boolean autoCloseRegistry = true;
 
@@ -122,7 +141,8 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
         // Custom one! Also, this one has state so can't use the singleton.
         serviceInitiators.add(new QuarkusMutableIdentifierGeneratorFactoryInitiator());// MutableIdentifierGeneratorFactoryInitiator.INSTANCE);
 
-        serviceInitiators.add(QuarkusJtaPlatformInitiator.INSTANCE);
+        serviceInitiators.add(JtaPlatformResolverInitiator.INSTANCE);
+        serviceInitiators.add(JtaPlatformInitiator.INSTANCE);
 
         serviceInitiators.add(SessionFactoryServiceRegistryFactoryInitiator.INSTANCE);
 
@@ -278,7 +298,6 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
     @SuppressWarnings({ "UnusedDeclaration" })
     public StandardServiceRegistryBuilder addInitiator(StandardServiceInitiator initiator) {
         initiators.add(initiator);
-        postBuildProvidedServices.add(initiator.getServiceInitiated());
         return this;
     }
 
@@ -400,12 +419,4 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
 
         ((StandardServiceRegistryImpl) serviceRegistry).destroy();
     }
-
-    /**
-     * @return the list of services to get from the service registry and turn into provided services
-     */
-    public List<Class<? extends Service>> getPostBuildProvidedServices() {
-        return postBuildProvidedServices;
-    }
-
 }

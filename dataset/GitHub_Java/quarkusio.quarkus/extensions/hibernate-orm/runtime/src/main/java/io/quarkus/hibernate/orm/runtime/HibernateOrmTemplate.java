@@ -17,13 +17,15 @@
 package io.quarkus.hibernate.orm.runtime;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
-import javax.sql.DataSource;
-
 import org.hibernate.boot.archive.scan.spi.Scanner;
+import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
+import org.hibernate.service.spi.ServiceContributor;
 import org.jboss.logging.Logger;
+
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.BeanContainerListener;
 import io.quarkus.runtime.annotations.Template;
@@ -35,8 +37,6 @@ import io.quarkus.runtime.annotations.Template;
 public class HibernateOrmTemplate {
 
     private List<String> entities = new ArrayList<>();
-
-    private static final String CONNECTION_URL = "hibernate.connection.url";
 
     public void addEntity(String entityClass) {
         entities.add(entityClass);
@@ -77,25 +77,14 @@ public class HibernateOrmTemplate {
         };
     }
 
-    public BeanContainerListener initMetadata(List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors, Scanner scanner) {
+    public BeanContainerListener initMetadata(List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors,
+            Scanner scanner, Collection<Class<? extends Integrator>> additionalIntegrators,
+            Collection<Class<? extends ServiceContributor>> additionalServiceContributors) {
         return new BeanContainerListener() {
             @Override
             public void created(BeanContainer beanContainer) {
-                //this initializes the JPA metadata, and also sets the datasource if no connection URL has been set and a DataSource
-                //is available
-                if (beanContainer != null) {
-                    BeanContainer.Factory<DataSource> ds = beanContainer.instanceFactory(DataSource.class);
-                    if (ds != null) {
-                        DataSource dataSource = ds.create().get();
-                        for (ParsedPersistenceXmlDescriptor i : parsedPersistenceXmlDescriptors) {
-                            if (!i.getProperties().containsKey(CONNECTION_URL)) {
-                                i.setJtaDataSource(dataSource);
-                            }
-                        }
-                    }
-                }
-
-                PersistenceUnitsHolder.initializeJpa(parsedPersistenceXmlDescriptors, scanner);
+                PersistenceUnitsHolder.initializeJpa(parsedPersistenceXmlDescriptors, scanner, additionalIntegrators,
+                        additionalServiceContributors);
             }
         };
     }

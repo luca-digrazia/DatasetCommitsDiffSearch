@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.hibernate.orm.runtime;
 
 import java.util.Collection;
@@ -16,7 +32,6 @@ import org.hibernate.service.spi.ServiceContributor;
 
 import io.quarkus.hibernate.orm.runtime.boot.FastBootMetadataBuilder;
 import io.quarkus.hibernate.orm.runtime.boot.LightPersistenceXmlDescriptor;
-import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 
 public final class PersistenceUnitsHolder {
@@ -43,11 +58,10 @@ public final class PersistenceUnitsHolder {
      */
     static void initializeJpa(List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors,
             Scanner scanner, Collection<Class<? extends Integrator>> additionalIntegrators,
-            Collection<Class<? extends ServiceContributor>> additionalServiceContributors,
-            PreGeneratedProxies preGeneratedProxies) {
+            Collection<Class<? extends ServiceContributor>> additionalServiceContributors) {
         final List<PersistenceUnitDescriptor> units = convertPersistenceUnits(parsedPersistenceXmlDescriptors);
         final Map<String, RecordedState> metadata = constructMetadataAdvance(units, scanner, additionalIntegrators,
-                preGeneratedProxies);
+                additionalServiceContributors);
 
         persistenceUnits = new PersistenceUnits(units, metadata);
     }
@@ -79,11 +93,11 @@ public final class PersistenceUnitsHolder {
     private static Map<String, RecordedState> constructMetadataAdvance(
             final List<PersistenceUnitDescriptor> parsedPersistenceXmlDescriptors, Scanner scanner,
             Collection<Class<? extends Integrator>> additionalIntegrators,
-            PreGeneratedProxies proxyClassDefinitions) {
+            Collection<Class<? extends ServiceContributor>> additionalServiceContributors) {
         Map<String, RecordedState> recordedStates = new HashMap<>();
 
         for (PersistenceUnitDescriptor unit : parsedPersistenceXmlDescriptors) {
-            RecordedState m = createMetadata(unit, scanner, additionalIntegrators, proxyClassDefinitions);
+            RecordedState m = createMetadata(unit, scanner, additionalIntegrators);
             Object previous = recordedStates.put(unitName(unit), m);
             if (previous != null) {
                 throw new IllegalStateException("Duplicate persistence unit name: " + unit.getName());
@@ -107,10 +121,9 @@ public final class PersistenceUnitsHolder {
         return name;
     }
 
-    public static RecordedState createMetadata(PersistenceUnitDescriptor unit, Scanner scanner,
-            Collection<Class<? extends Integrator>> additionalIntegrators, PreGeneratedProxies proxyDefinitions) {
-        FastBootMetadataBuilder fastBootMetadataBuilder = new FastBootMetadataBuilder(unit, scanner, additionalIntegrators,
-                proxyDefinitions);
+    private static RecordedState createMetadata(PersistenceUnitDescriptor unit, Scanner scanner,
+            Collection<Class<? extends Integrator>> additionalIntegrators) {
+        FastBootMetadataBuilder fastBootMetadataBuilder = new FastBootMetadataBuilder(unit, scanner, additionalIntegrators);
         return fastBootMetadataBuilder.build();
     }
 
