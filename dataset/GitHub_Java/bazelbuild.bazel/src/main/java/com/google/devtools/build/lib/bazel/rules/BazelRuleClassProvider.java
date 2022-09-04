@@ -17,13 +17,11 @@ package com.google.devtools.build.lib.bazel.rules;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSet;
-import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.ShellConfiguration;
 import com.google.devtools.build.lib.analysis.ShellConfiguration.ShellExecutableProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -55,7 +53,6 @@ import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
-import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
 import com.google.devtools.build.lib.rules.android.AarImportBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidDeviceBrokerInfo;
@@ -201,7 +198,9 @@ public class BazelRuleClassProvider {
   public static ConfiguredRuleClassProvider create() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     builder.setToolsRepository(TOOLS_REPOSITORY);
-    builder.setThirdPartyLicenseExistencePolicy(ThirdPartyLicenseExistencePolicy.NEVER_CHECK);
+    // TODO(gregce): uncomment the below line in the same change that retires
+    // --incompatible_disable_third_party_license_checking. See the flag's comments for details.
+    // builder.setThirdPartyLicenseExistencePolicy(ThirdPartyLicenseExistencePolicy.NEVER_CHECK);
     setup(builder);
     return builder.build();
   }
@@ -210,7 +209,6 @@ public class BazelRuleClassProvider {
     for (RuleSet ruleSet : RULE_SETS) {
       ruleSet.init(builder);
     }
-    builder.setThirdPartyLicenseExistencePolicy(ThirdPartyLicenseExistencePolicy.NEVER_CHECK);
   }
 
   public static final RuleSet BAZEL_SETUP =
@@ -221,17 +219,17 @@ public class BazelRuleClassProvider {
               .setPrelude("//tools/build_rules:prelude_bazel")
               .setRunfilesPrefix(LabelConstants.DEFAULT_REPOSITORY_DIRECTORY)
               .setPrerequisiteValidator(new BazelPrerequisiteValidator())
-              .setActionEnvironmentProvider(SHELL_ACTION_ENV)
-              .addConfigurationOptions(ShellConfiguration.Options.class)
-              .addConfigurationFragment(
-                  new ShellConfiguration.Loader(
-                      SHELL_EXECUTABLE,
-                      ShellConfiguration.Options.class,
-                      StrictActionEnvOptions.class))
-              .addUniversalConfigurationFragment(ShellConfiguration.class)
-              .addUniversalConfigurationFragment(PlatformConfiguration.class)
-              .addConfigurationOptions(StrictActionEnvOptions.class)
-              .addConfigurationOptions(BuildConfiguration.Options.class);
+              .setActionEnvironmentProvider(SHELL_ACTION_ENV);
+
+          builder.addConfigurationOptions(ShellConfiguration.Options.class);
+          builder.addConfigurationFragment(
+              new ShellConfiguration.Loader(
+                  SHELL_EXECUTABLE,
+                  ShellConfiguration.Options.class,
+                  StrictActionEnvOptions.class));
+          builder.addUniversalConfigurationFragment(ShellConfiguration.class);
+          builder.addConfigurationOptions(StrictActionEnvOptions.class);
+          builder.addConfigurationOptions(BuildConfiguration.Options.class);
         }
 
         @Override
@@ -341,11 +339,6 @@ public class BazelRuleClassProvider {
           try {
             builder.addWorkspaceFilePrefix(
                 ResourceFileLoader.loadResource(BazelAndroidSemantics.class, "android.WORKSPACE"));
-            builder.addWorkspaceFileSuffix(
-                ResourceFileLoader.loadResource(
-                    BazelAndroidSemantics.class, "android_remote_tools.WORKSPACE"));
-            builder.addWorkspaceFileSuffix(
-                ResourceFileLoader.loadResource(JavaRules.class, "coverage.WORKSPACE"));
           } catch (IOException e) {
             throw new IllegalStateException(e);
           }
@@ -447,10 +440,9 @@ public class BazelRuleClassProvider {
       return "/bin:/usr/bin";
     }
 
-    String newPath = "";
     // Attempt to compute the MSYS root (the real Windows path of "/") from `sh`.
     if (sh != null && sh.getParentDirectory() != null) {
-      newPath = sh.getParentDirectory().getPathString();
+      String newPath = sh.getParentDirectory().getPathString();
       if (sh.getParentDirectory().endsWith(PathFragment.create("usr/bin"))) {
         newPath +=
             ";" + sh.getParentDirectory().getParentDirectory().replaceName("bin").getPathString();
@@ -459,22 +451,13 @@ public class BazelRuleClassProvider {
             ";" + sh.getParentDirectory().replaceName("usr").getRelative("bin").getPathString();
       }
       newPath = newPath.replace('/', '\\');
+
+      if (path != null) {
+        newPath += ";" + path;
+      }
+      return newPath;
+    } else {
+      return null;
     }
-    // On Windows, the following dirs should always be available in PATH:
-    //   C:\Windows
-    //   C:\Windows\System32
-    //   C:\Windows\System32\WindowsPowerShell\v1.0
-    // They are similar to /bin:/usr/bin, which makes the basic tools on the platform available.
-    String systemRoot = System.getenv("SYSTEMROOT");
-    if (Strings.isNullOrEmpty(systemRoot)) {
-      systemRoot = "C:\\Windows";
-    }
-    newPath += ";" + systemRoot;
-    newPath += ";" + systemRoot + "\\System32";
-    newPath += ";" + systemRoot + "\\System32\\WindowsPowerShell\\v1.0";
-    if (path != null) {
-      newPath += ";" + path;
-    }
-    return newPath;
   }
 }

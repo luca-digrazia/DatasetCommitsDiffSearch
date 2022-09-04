@@ -585,6 +585,44 @@ public class BuildConfiguration implements BuildConfigurationApi {
     public boolean collectCodeCoverage;
 
     @Option(
+        name = "incompatible_java_coverage",
+        defaultValue = "true",
+        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+        metadataTags = {
+          OptionMetadataTag.INCOMPATIBLE_CHANGE,
+          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+        },
+        oldName = "experimental_java_coverage",
+        help =
+            "If true Bazel will use a new way of computing code coverage for java targets. "
+                + "It allows collecting  coverage for Starlark JVM rules and java_import. "
+                + "Only includes JVM files in the coverage report (e.g. dismisses data files). "
+                + "The report includes the actual path of the files relative to the workspace root "
+                + "instead of the package path (e.g. src/com/google/Action.java instead of "
+                + "com/google/Action.java.")
+    public boolean experimentalJavaCoverage;
+
+    @Option(
+        name = "incompatible_cc_coverage",
+        defaultValue = "false",
+        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+        effectTags = {
+          OptionEffectTag.CHANGES_INPUTS,
+          OptionEffectTag.AFFECTS_OUTPUTS,
+          OptionEffectTag.LOADING_AND_ANALYSIS
+        },
+        oldName = "experimental_cc_coverage",
+        metadataTags = {
+          OptionMetadataTag.INCOMPATIBLE_CHANGE,
+          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+        },
+        help =
+            "If specified, Bazel will use gcov to collect code coverage for C++ test targets. "
+                + "This option only works for gcc compilation.")
+    public boolean useGcovCoverage;
+
+    @Option(
       name = "build_runfile_manifests",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
@@ -1090,14 +1128,13 @@ public class BuildConfiguration implements BuildConfigurationApi {
   private final Supplier<BuildConfigurationEvent> buildEventSupplier;
 
   /**
-   * Returns true if this configuration is semantically equal to the other, with the possible
-   * exception that the other has fewer fragments.
+   * Returns true if this configuration is semantically equal to the other, with
+   * the possible exception that the other has fewer fragments.
    *
    * <p>This is useful for trimming: as the same configuration gets "trimmed" while going down a
    * dependency chain, it's still the same configuration but loses some of its fragments. So we need
    * a more nuanced concept of "equality" than simple reference equality.
    */
-  // TODO(b/121048710): make this reflect starlark options
   public boolean equalsOrIsSupersetOf(BuildConfiguration other) {
     return this.equals(other)
         || (other != null
@@ -1700,6 +1737,14 @@ public class BuildConfiguration implements BuildConfigurationApi {
   @Override
   public boolean isCodeCoverageEnabled() {
     return options.collectCodeCoverage;
+  }
+
+  public boolean isExperimentalJavaCoverage() {
+    return true;
+  }
+
+  public boolean useGcovCoverage() {
+    return options.useGcovCoverage;
   }
 
   public RunUnder getRunUnder() {
