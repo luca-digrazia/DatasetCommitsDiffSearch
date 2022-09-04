@@ -214,6 +214,11 @@ public class CompilationSupport {
     return ruleContext.getExecutablePrerequisite("$xcrunwrapper");
   }
 
+  /** Returns the location of the libtool tool. */
+  public static final FilesToRunProvider libtool(RuleContext ruleContext) {
+    return ruleContext.getExecutablePrerequisite(ObjcRuleClasses.LIBTOOL_ATTRIBUTE);
+  }
+
   /**
    * Files which can be instrumented along with the attributes in which they may occur and the
    * attributes along which they are propagated from dependencies (via {@link
@@ -486,8 +491,7 @@ public class CompilationSupport {
             featureConfiguration,
             ruleContext,
             /* generateHeaderTokensGroup= */ true,
-            /* addSelfHeaderTokens= */ true,
-            /* generateHiddenTopLevelGroup= */ true);
+            /* addSelfHeaderTokens= */ true);
 
     Map<String, NestedSet<Artifact>> nonArcOutputGroups =
         CcCompilationHelper.buildOutputGroupsForEmittingCompileProviders(
@@ -498,8 +502,7 @@ public class CompilationSupport {
             featureConfiguration,
             ruleContext,
             /* generateHeaderTokensGroup= */ true,
-            /* addSelfHeaderTokens= */ false,
-            /* generateHiddenTopLevelGroup= */ true);
+            /* addSelfHeaderTokens= */ false);
 
     Map<String, NestedSet<Artifact>> mergedOutputGroups =
         CcCommon.mergeOutputGroups(ImmutableList.of(arcOutputGroups, nonArcOutputGroups));

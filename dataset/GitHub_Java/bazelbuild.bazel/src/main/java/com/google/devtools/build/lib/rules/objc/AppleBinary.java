@@ -157,12 +157,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
-    ApplePlatform platform = null;
-    try {
-      platform = appleConfiguration.getMultiArchPlatform(platformType);
-    } catch (IllegalArgumentException e) {
-      ruleContext.throwWithRuleError(e);
-    }
+    ApplePlatform platform = appleConfiguration.getMultiArchPlatform(platformType);
     ImmutableListMultimap<String, TransitiveInfoCollection> cpuToDepsCollectionMap =
         MultiArchBinarySupport.transformMap(ruleContext.getPrerequisitesByConfiguration("deps"));
     ImmutableListMultimap<String, ConfiguredTargetAndData> cpuToCTATDepsCollectionMap =

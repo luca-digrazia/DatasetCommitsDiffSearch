@@ -23,9 +23,8 @@ import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
@@ -87,17 +86,7 @@ final class ProtoAttributes {
 
   /** Returns the list of well known type protos. */
   NestedSet<Artifact> getWellKnownTypeProtos() {
-    NestedSetBuilder<Artifact> wellKnownTypeProtos = NestedSetBuilder.stableOrder();
-    for (TransitiveInfoCollection protos :
-        ruleContext.getPrerequisites(ObjcRuleClasses.PROTOBUF_WELL_KNOWN_TYPES)) {
-      ProtoInfo protoInfo = protos.get(ProtoInfo.PROVIDER);
-      if (protoInfo != null) {
-        wellKnownTypeProtos.addTransitive(protoInfo.getTransitiveProtoSources());
-      } else {
-        wellKnownTypeProtos.addTransitive(protos.getProvider(FileProvider.class).getFilesToBuild());
-      }
-    }
-    return wellKnownTypeProtos.build();
+    return PrerequisiteArtifacts.nestedSet(ruleContext, ObjcRuleClasses.PROTOBUF_WELL_KNOWN_TYPES);
   }
 
   /** Returns the list of proto files to compile. */

@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -50,7 +51,6 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigRule;
@@ -88,6 +88,9 @@ import java.util.List;
 /** J2ObjC transpilation aspect for Java and proto rules. */
 public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectFactory {
   public static final String NAME = "J2ObjcAspect";
+
+  private static final ExtraCompileArgs EXTRA_COMPILE_ARGS = new ExtraCompileArgs(
+      "-fno-strict-overflow");
 
   private static LabelLateBoundDefault<ProtoConfiguration> getProtoToolchainLabel(
       String defaultValue) {
@@ -145,7 +148,6 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
             ObjcConfiguration.class,
             ProtoConfiguration.class)
         .addRequiredToolchains(ccToolchainType)
-        .useToolchainTransition(true)
         .add(
             attr("$grep_includes", LABEL)
                 .cfg(HostTransition.createFactory())
@@ -201,6 +203,11 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                 .cfg(HostTransition.createFactory())
                 .exec()
                 .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/objc:xcrunwrapper")))
+        .add(
+            attr(ObjcRuleClasses.LIBTOOL_ATTRIBUTE, LABEL)
+                .cfg(HostTransition.createFactory())
+                .exec()
+                .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/objc:libtool")))
         .add(
             attr(XcodeConfigRule.XCODE_CONFIG_ATTR_NAME, LABEL)
                 .allowedRuleClasses("xcode_config")
@@ -270,14 +277,10 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                 .setIntermediateArtifacts(ObjcRuleClasses.j2objcIntermediateArtifacts(ruleContext))
                 .doNotUsePch()
                 .build();
-        ExtraCompileArgs extraCompileArgs =
-            j2objcCompileWithARC(ruleContext)
-                ? new ExtraCompileArgs("-fno-strict-overflow", "-fobjc-arc-exceptions")
-                : new ExtraCompileArgs("-fno-strict-overflow");
 
         compilationSupport
             .registerCompileAndArchiveActions(
-                common, extraCompileArgs, ImmutableList.<PathFragment>of())
+                common, EXTRA_COMPILE_ARGS, ImmutableList.<PathFragment>of())
             .registerFullyLinkAction(
                 compilationSupport.getObjcProvider(),
                 ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB));
@@ -715,10 +718,6 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     return ruleContext.getTreeArtifact(rootRelativePath, ruleContext.getBinOrGenfilesDirectory());
   }
 
-  private static boolean j2objcCompileWithARC(RuleContext ruleContext) {
-    return ruleContext.getFragment(J2ObjcConfiguration.class).compileWithARC();
-  }
-
   private static J2ObjcSource javaJ2ObjcSource(
       RuleContext ruleContext,
       ImmutableList<Artifact> javaInputSourceFiles,
@@ -726,6 +725,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     PathFragment objcFileRootRelativePath =
         ruleContext.getUniqueDirectory(j2objcHeaderBase(ruleContext));
     PathFragment objcFileRootExecPath = ruleContext
+        .getConfiguration()
         .getBinFragment()
         .getRelative(objcFileRootRelativePath);
 
@@ -750,8 +750,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         objcHdrs,
         objcFileRootExecPath,
         SourceType.JAVA,
-        headerSearchPaths,
-        j2objcCompileWithARC(ruleContext));
+        headerSearchPaths);
   }
 
   private static J2ObjcSource protoJ2ObjcSource(
@@ -767,13 +766,13 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         ProtoCommon.getGeneratedOutputs(ruleContext, protoSources, ".j2objc.pb.h"),
         objcFileRootExecPath,
         SourceType.PROTO,
-        headerSearchPaths,
-        /*compileWithARC=*/ false); // generated protos do not support ARC.
+        headerSearchPaths);
   }
 
   private static PathFragment getProtoOutputRoot(RuleContext ruleContext)
       throws InterruptedException {
     return ruleContext
+        .getConfiguration()
         .getGenfilesFragment()
         .getRelative(
             ruleContext
@@ -784,7 +783,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                     ruleContext
                         .getAnalysisEnvironment()
                         .getStarlarkSemantics()
-                        .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT)));
+                        .experimentalSiblingRepositoryLayout()));
   }
 
   private static boolean isProtoRule(ConfiguredTarget base) {
@@ -817,7 +816,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       RuleContext ruleContext,
       PathFragment objcFileRootExecPath,
       Collection<Artifact> sourcesToTranslate) {
-    PathFragment genRoot = ruleContext.getGenfilesFragment();
+    PathFragment genRoot = ruleContext.getConfiguration().getGenfilesFragment();
     List<PathFragment> headerSearchPaths = new ArrayList<>();
     headerSearchPaths.add(objcFileRootExecPath);
     // We add another header search path with gen root if we have generated sources to translate.
@@ -846,16 +845,12 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         ObjcRuleClasses.j2objcIntermediateArtifacts(ruleContext);
 
     if (!transpiledSources.isEmpty() || !transpiledHeaders.isEmpty()) {
-      CompilationArtifacts.Builder compilationArtifactsBuilder =
-          new CompilationArtifacts.Builder()
-              .setIntermediateArtifacts(intermediateArtifacts)
-              .addAdditionalHdrs(transpiledHeaders);
-      if (j2objcCompileWithARC(ruleContext)) {
-        compilationArtifactsBuilder.addSrcs(transpiledSources);
-      } else {
-        compilationArtifactsBuilder.addNonArcSrcs(transpiledSources);
-      }
-      builder.setCompilationArtifacts(compilationArtifactsBuilder.build());
+      CompilationArtifacts compilationArtifacts = new CompilationArtifacts.Builder()
+          .addNonArcSrcs(transpiledSources)
+          .setIntermediateArtifacts(intermediateArtifacts)
+          .addAdditionalHdrs(transpiledHeaders)
+          .build();
+      builder.setCompilationArtifacts(compilationArtifacts);
       builder.setHasModuleMap();
     }
 
@@ -863,7 +858,8 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       if (ruleContext.attributes().has(attrName, BuildType.LABEL_LIST)
           || ruleContext.attributes().has(attrName, BuildType.LABEL)) {
         ImmutableList.Builder<CcInfo> ccInfoList = new ImmutableList.Builder<>();
-        for (TransitiveInfoCollection dep : ruleContext.getPrerequisites(attrName)) {
+        for (TransitiveInfoCollection dep :
+            ruleContext.getPrerequisites(attrName, TransitionMode.DONT_CHECK)) {
           J2ObjcCcInfo j2objcCcInfo = dep.getProvider(J2ObjcCcInfo.class);
           CcInfo ccInfo = dep.get(CcInfo.PROVIDER);
           // If a dep has both a J2ObjcCcInfo and a CcInfo, skip the CcInfo.  This can only happen
@@ -876,7 +872,8 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         }
         builder.addDepCcHeaderProviders(ccInfoList.build());
         builder.addDepObjcProviders(
-            ruleContext.getPrerequisites(attrName, ObjcProvider.STARLARK_CONSTRUCTOR));
+            ruleContext.getPrerequisites(
+                attrName, TransitionMode.DONT_CHECK, ObjcProvider.STARLARK_CONSTRUCTOR));
       }
     }
 
