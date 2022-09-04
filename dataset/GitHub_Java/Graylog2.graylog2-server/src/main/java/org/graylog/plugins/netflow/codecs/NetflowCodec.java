@@ -4,8 +4,8 @@ import com.google.common.collect.Lists;
 import com.google.inject.assistedinject.Assisted;
 import org.graylog.plugins.netflow.flows.FlowException;
 import org.graylog.plugins.netflow.flows.NetFlowParser;
-import org.graylog.plugins.netflow.flows.cflow.NetFlowV5;
-import org.graylog.plugins.netflow.flows.cflow.NetFlowV5Packet;
+import org.graylog.plugins.netflow.flows.cflow.NetFlow;
+import org.graylog.plugins.netflow.flows.cflow.NetFlowPacket;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -14,6 +14,7 @@ import org.graylog2.plugin.inputs.annotations.ConfigClass;
 import org.graylog2.plugin.inputs.annotations.FactoryClass;
 import org.graylog2.plugin.inputs.codecs.AbstractCodec;
 import org.graylog2.plugin.inputs.codecs.MultiMessageCodec;
+import org.graylog2.plugin.inputs.transports.NettyTransport;
 import org.graylog2.plugin.journal.RawMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,27 +37,23 @@ public class NetflowCodec extends AbstractCodec implements MultiMessageCodec {
     @Nullable
     @Override
     public Message decode(RawMessage rawMessage) {
-        throw new UnsupportedOperationException("MessageListCodec does not support decode()");
+        throw new UnsupportedOperationException("MultiMessageCodec " + getClass() + " does not support decode()");
     }
 
     @Nullable
     @Override
     public Collection<Message> decodeMessages(@Nonnull RawMessage rawMessage) {
         try {
-            final NetFlowV5Packet packet = NetFlowParser.parse(rawMessage);
+            final NetFlowPacket packet = NetFlowParser.parse(rawMessage);
 
             if (packet == null) {
                 return null;
             }
 
-            final List<Message> messages = Lists.newArrayList();
+            final List<Message> messages = Lists.newArrayListWithCapacity(packet.getFlows().size());
 
-            for (NetFlowV5 flow : packet.flows) {
-                final String source = rawMessage.getRemoteAddress() != null ? rawMessage.getRemoteAddress().getAddress().toString() : null;
-                final Message message = new Message(flow.toMessageString(), source, flow.timestamp);
-
-                messages.add(message);
-                LOG.info("NetFLow Message: {}", message);
+            for (NetFlow flow : packet.getFlows()) {
+                messages.add(flow.toMessage());
             }
 
             return messages;
@@ -79,6 +76,9 @@ public class NetflowCodec extends AbstractCodec implements MultiMessageCodec {
     public static class Config extends AbstractCodec.Config {
         @Override
         public void overrideDefaultValues(@Nonnull ConfigurationRequest cr) {
+            if (cr.containsField(NettyTransport.CK_PORT)) {
+                cr.getField(NettyTransport.CK_PORT).setDefaultValue(2055);
+            }
         }
     }
 }
