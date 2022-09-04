@@ -69,7 +69,7 @@ import com.google.devtools.build.lib.exec.RemoteLocalFallbackRegistry;
 import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
 import com.google.devtools.build.lib.exec.SpawnStrategyResolver;
 import com.google.devtools.build.lib.exec.SymlinkTreeStrategy;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.GoogleAutoProfilerUtils;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
@@ -133,8 +133,7 @@ public class ExecutionTool {
   private final SpawnStrategyRegistry spawnStrategyRegistry;
   private final ModuleActionContextRegistry actionContextRegistry;
 
-  ExecutionTool(CommandEnvironment env, BuildRequest request)
-      throws AbruptExitException, InterruptedException {
+  ExecutionTool(CommandEnvironment env, BuildRequest request) throws AbruptExitException {
     this.env = env;
     this.runtime = env.getRuntime();
     this.request = request;
@@ -196,6 +195,20 @@ public class ExecutionTool {
 
     this.actionContextRegistry = moduleActionContextRegistry;
     this.spawnStrategyRegistry = spawnStrategyRegistry;
+
+    if (options.availableResources != null && options.removeLocalResources) {
+      throw new AbruptExitException(
+          DetailedExitCode.of(
+              FailureDetail.newBuilder()
+                  .setMessage(
+                      "--local_resources is deprecated. Please use --local_ram_resources and/or"
+                          + " --local_cpu_resources")
+                  .setExecutionOptions(
+                      FailureDetails.ExecutionOptions.newBuilder()
+                          .setCode(
+                              FailureDetails.ExecutionOptions.Code.DEPRECATED_LOCAL_RESOURCES_USED))
+                  .build()));
+    }
   }
 
   Executor getExecutor() throws AbruptExitException {
@@ -461,7 +474,8 @@ public class ExecutionTool {
                 getExecRoot(),
                 runtime.getProductName(),
                 nonSymlinkedDirectoriesUnderExecRoot,
-                request.getOptions(BuildLanguageOptions.class).experimentalSiblingRepositoryLayout);
+                request.getOptions(StarlarkSemanticsOptions.class)
+                    .experimentalSiblingRepositoryLayout);
         symlinkForest.plantSymlinkForest();
       } catch (IOException e) {
         throw new AbruptExitException(
@@ -513,7 +527,7 @@ public class ExecutionTool {
         logDeleteTreeFailure(directory, "action output directory", e);
         throw createExitException(
             "Couldn't delete action output directory",
-            Code.TEMP_ACTION_OUTPUT_DIRECTORY_DELETION_FAILURE,
+            Code.ACTION_OUTPUT_DIRECTORY_DELETION_FAILURE,
             e);
       }
     }
@@ -523,7 +537,7 @@ public class ExecutionTool {
     } catch (IOException e) {
       throw createExitException(
           "Couldn't create action output directory",
-          Code.TEMP_ACTION_OUTPUT_DIRECTORY_CREATION_FAILURE,
+          Code.ACTION_OUTPUT_DIRECTORY_CREATION_FAILURE,
           e);
     }
 
@@ -797,7 +811,15 @@ public class ExecutionTool {
   public static void configureResourceManager(ResourceManager resourceMgr, BuildRequest request) {
     ExecutionOptions options = request.getOptions(ExecutionOptions.class);
     ResourceSet resources;
-    resources = ResourceSet.createWithRamCpu(options.localRamResources, options.localCpuResources);
+    if (options.availableResources != null && !options.removeLocalResources) {
+      logger.atWarning().log(
+          "--local_resources will be deprecated. Please use --local_ram_resources "
+              + "and/or --local_cpu_resources.");
+      resources = options.availableResources;
+    } else {
+      resources =
+          ResourceSet.createWithRamCpu(options.localRamResources, options.localCpuResources);
+    }
     resourceMgr.setUseLocalMemoryEstimate(options.localMemoryEstimate);
 
     resourceMgr.setAvailableResources(
