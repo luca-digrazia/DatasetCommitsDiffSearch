@@ -14,14 +14,21 @@
 package com.google.devtools.build.lib.rules.core;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.Builder;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSet;
-import com.google.devtools.build.lib.analysis.test.TestConfiguration;
+import com.google.devtools.build.lib.analysis.featurecontrol.FeaturePolicyLoader;
+import com.google.devtools.build.lib.analysis.featurecontrol.FeaturePolicyOptions;
+import com.google.devtools.build.lib.rules.config.ConfigFeatureFlag;
+import com.google.devtools.build.lib.rules.test.TestConfiguration;
 
 /** A set of basic rules - Bazel won't work correctly without these. */
 public final class CoreRules implements RuleSet {
   public static final CoreRules INSTANCE = new CoreRules();
+
+  public static final ImmutableSet<String> FEATURE_POLICY_FEATURES =
+      ImmutableSet.of(ConfigFeatureFlag.POLICY_NAME);
 
   private CoreRules() {
     // Use the static INSTANCE field instead.
@@ -29,6 +36,10 @@ public final class CoreRules implements RuleSet {
 
   @Override
   public void init(Builder builder) {
+    builder.addConfigurationOptions(FeaturePolicyOptions.class);
+    builder.addConfigurationFragment(new FeaturePolicyLoader(FEATURE_POLICY_FEATURES));
+    builder.addDynamicTransitionMaps(BaseRuleClasses.DYNAMIC_TRANSITIONS_MAP);
+
     builder.addConfig(TestConfiguration.TestOptions.class, new TestConfiguration.Loader());
     builder.addRuleDefinition(new BaseRuleClasses.RootRule());
     builder.addRuleDefinition(new BaseRuleClasses.BaseRule());

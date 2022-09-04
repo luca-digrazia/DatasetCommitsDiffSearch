@@ -20,19 +20,20 @@ import static com.google.devtools.build.lib.packages.Attribute.ANY_RULE;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.analysis.AspectCollection;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
-import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
 import com.google.devtools.build.lib.analysis.util.TestAspects.DummyRuleFactory;
@@ -44,11 +45,11 @@ import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
+import com.google.devtools.build.lib.rules.test.TestConfiguration;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.util.List;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -58,14 +59,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ConfigurationsForTargetsWithDynamicConfigurationsTest
     extends ConfigurationsForTargetsTest {
-
-  private ConfigurationResolver configResolver;
-
-  @Before
-  public void createConfigResolver() {
-    configResolver = new ConfigurationResolver(ruleClassProvider.getDynamicTransitionMapper());
-  }
-
   @Override
   protected FlagBuilder defaultFlags() {
     return super.defaultFlags().with(Flag.DYNAMIC_CONFIGURATIONS);
@@ -512,14 +505,16 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   }
 
   /**
-   * Returns the value of {@link TestConfiguration.TestOptions#testFilter} for a transition
-   * applied over the target configuration.
+   * Returns the value of {@link TestConfiguration.TestOptions#testFilter} in the output {@link
+   * BuildOptions} the given transition applier returns in its current state.
    */
-  private List<String> getTestFilterOptionValue(Transition transition)
+  private List<String> getTestFilterOptionValue(BuildConfiguration.TransitionApplier applier)
       throws Exception {
+    Dependency dep = Iterables.getOnlyElement(
+        applier.getDependencies(Label.create("some", "target"), AspectCollection.EMPTY));
     ImmutableList.Builder<String> outValues = ImmutableList.builder();
     for (BuildOptions toOptions : ConfiguredTargetFunction.getDynamicTransitionOptions(
-        getTargetConfiguration().getOptions(), transition,
+        getTargetConfiguration().getOptions(), dep.getTransition(),
         ruleClassProvider.getAllFragments(), ruleClassProvider, false)) {
       outValues.add(toOptions.get(TestConfiguration.TestOptions.class).testFilter);
     }
@@ -529,41 +524,41 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   @Test
   public void composedStraightTransitions() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(getTestFilterOptionValue(
-        configResolver.composeTransitions(
-            newPatchTransition("foo"),
-            newPatchTransition("bar"))))
-        .containsExactly("foobar");
+    BuildConfiguration.TransitionApplier applier = getTargetConfiguration().getTransitionApplier();
+    applier.applyTransition(newPatchTransition("foo"));
+    applier.applyTransition(newPatchTransition("bar"));
+    assertThat(getTestFilterOptionValue(applier)).containsExactly("foobar");
   }
 
   @Test
   public void composedStraightTransitionThenSplitTransition() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(getTestFilterOptionValue(
-        configResolver.composeTransitions(
-            newPatchTransition("foo"),
-            newSplitTransition("split"))))
-        .containsExactly("foosplit1", "foosplit2");
+    BuildConfiguration.TransitionApplier applier = getTargetConfiguration().getTransitionApplier();
+    applier.applyTransition(newPatchTransition("foo"));
+    applier.split(newSplitTransition("split"));
+    assertThat(getTestFilterOptionValue(applier)).containsExactly("foosplit1", "foosplit2");
   }
 
   @Test
   public void composedSplitTransitionThenStraightTransition() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(getTestFilterOptionValue(
-        configResolver.composeTransitions(
-            newSplitTransition("split"),
-            newPatchTransition("foo"))))
-        .containsExactly("split1foo", "split2foo");
+    BuildConfiguration.TransitionApplier applier = getTargetConfiguration().getTransitionApplier();
+    applier.split(newSplitTransition("split"));
+    applier.applyTransition(newPatchTransition("foo"));
+    assertThat(getTestFilterOptionValue(applier)).containsExactly("split1foo", "split2foo");
   }
 
   @Test
   public void composedSplitTransitions() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(getTestFilterOptionValue(
-        configResolver.composeTransitions(
-            newSplitTransition("s"),
-            newSplitTransition("t"))))
-        .containsExactly("s1t1", "s1t2", "s2t1", "s2t2");
+    BuildConfiguration.TransitionApplier applier = getTargetConfiguration().getTransitionApplier();
+    applier.split(newSplitTransition("split"));
+    try {
+      applier.split(newSplitTransition("disallowed second split"));
+      fail("expected failure: deps cannot apply more than one split transition each");
+    } catch (IllegalStateException e) {
+      assertThat(e).hasMessageThat().contains("dependency edges may apply at most one split");
+    }
   }
 
   /**
@@ -596,21 +591,18 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   @Test
   public void attributeConfigurator() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(getTestFilterOptionValue(
-        configResolver.applyAttributeConfigurator(
-            Attribute.ConfigurationTransition.NONE,
-            newAttributeWithStaticConfigurator("from attr"))))
-        .containsExactly("from attr");
+    BuildConfiguration.TransitionApplier applier = getTargetConfiguration().getTransitionApplier();
+    applier.applyAttributeConfigurator(newAttributeWithStaticConfigurator("from attr"));
+    assertThat(getTestFilterOptionValue(applier)).containsExactly("from attr");
   }
 
   @Test
   public void straightTransitionThenAttributeConfigurator() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(getTestFilterOptionValue(
-        configResolver.applyAttributeConfigurator(
-            newPatchTransition("from patch "),
-            newAttributeWithStaticConfigurator("from attr"))))
-        .containsExactly("from patch from attr");
+    BuildConfiguration.TransitionApplier applier = getTargetConfiguration().getTransitionApplier();
+    applier.applyTransition(newPatchTransition("from patch "));
+    applier.applyAttributeConfigurator(newAttributeWithStaticConfigurator("from attr"));
+    assertThat(getTestFilterOptionValue(applier)).containsExactly("from patch from attr");
   }
 
   /**
@@ -633,23 +625,20 @@ public class ConfigurationsForTargetsWithDynamicConfigurationsTest
   @Test
   public void splitTransitionThenAttributeConfigurator() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(getTestFilterOptionValue(
-        configResolver.applyAttributeConfigurator(
-            newSplitTransition(" split"),
-            ATTRIBUTE_WITH_REPEATING_CONFIGURATOR)))
+    BuildConfiguration.TransitionApplier applier = getTargetConfiguration().getTransitionApplier();
+    applier.split(newSplitTransition(" split"));
+    applier.applyAttributeConfigurator(ATTRIBUTE_WITH_REPEATING_CONFIGURATOR);
+    assertThat(getTestFilterOptionValue(applier))
         .containsExactly(" split1 split1 (attr)", " split2 split2 (attr)");
   }
 
   @Test
   public void composedAttributeConfigurators() throws Exception {
     update(); // Creates the target configuration.
-    assertThat(getTestFilterOptionValue(
-        configResolver.applyAttributeConfigurator(
-            configResolver.applyAttributeConfigurator(
-                Attribute.ConfigurationTransition.NONE,
-                newAttributeWithStaticConfigurator("from attr 1 ")),
-            ATTRIBUTE_WITH_REPEATING_CONFIGURATOR)))
-        .containsExactly("from attr 1 from attr 1  (attr)");
+    BuildConfiguration.TransitionApplier applier = getTargetConfiguration().getTransitionApplier();
+    applier.applyAttributeConfigurator(newAttributeWithStaticConfigurator("from attr 1 "));
+    applier.applyAttributeConfigurator(newAttributeWithStaticConfigurator("from attr 2"));
+    assertThat(getTestFilterOptionValue(applier)).containsExactly("from attr 1 from attr 2");
   }
 
   /** Sets {@link TestConfiguration.TestOptions#testFilter} to the rule class of the given rule. */

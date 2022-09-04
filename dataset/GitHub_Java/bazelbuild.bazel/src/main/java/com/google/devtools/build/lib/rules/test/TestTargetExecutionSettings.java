@@ -55,8 +55,7 @@ public final class TestTargetExecutionSettings {
     TestConfiguration testConfig = config.getFragment(TestConfiguration.class);
 
     CommandLine targetArgs = runfilesSupport.getArgs();
-    testArguments =
-        CommandLine.concat(targetArgs, ImmutableList.copyOf(testConfig.getTestArguments()));
+    testArguments = CommandLine.concat(targetArgs, ImmutableList.copyOf(config.getTestArguments()));
 
     totalShards = shards;
     runUnder = config.getRunUnder();
