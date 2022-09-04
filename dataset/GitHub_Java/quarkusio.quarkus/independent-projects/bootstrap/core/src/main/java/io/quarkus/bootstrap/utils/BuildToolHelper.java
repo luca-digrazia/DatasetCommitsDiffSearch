@@ -17,25 +17,16 @@ public class BuildToolHelper {
 
     public enum BuildTool {
         MAVEN("pom.xml"),
-        GRADLE("build.gradle", "build.gradle.kts");
+        GRADLE("build.gradle");
 
-        private final String[] buildFiles;
+        private final String buildFile;
 
-        BuildTool(String... buildFile) {
-            this.buildFiles = buildFile;
+        BuildTool(String buildFile) {
+            this.buildFile = buildFile;
         }
 
-        public String[] getBuildFiles() {
-            return buildFiles;
-        }
-
-        public boolean exists(Path root) {
-            for (String buildFile : buildFiles) {
-                if (Files.exists(root.resolve(buildFile))) {
-                    return true;
-                }
-            }
-            return false;
+        public String getBuildFile() {
+            return buildFile;
         }
     }
 
@@ -46,10 +37,10 @@ public class BuildToolHelper {
     public static boolean isMavenProject(Path project) {
         Path currentPath = project;
         while (currentPath != null) {
-            if (BuildTool.MAVEN.exists(currentPath)) {
+            if (Files.exists(currentPath.resolve(BuildTool.MAVEN.getBuildFile()))) {
                 return true;
             }
-            if (BuildTool.GRADLE.exists(currentPath)) {
+            if (Files.exists(currentPath.resolve(BuildTool.GRADLE.getBuildFile()))) {
                 return false;
             }
             currentPath = currentPath.getParent();
@@ -60,7 +51,7 @@ public class BuildToolHelper {
     public static Path getBuildFile(Path project, BuildTool tool) {
         Path currentPath = project;
         while (currentPath != null) {
-            if (tool.exists(currentPath)) {
+            if (Files.exists(currentPath.resolve(tool.getBuildFile()))) {
                 return currentPath;
             }
             currentPath = currentPath.getParent();

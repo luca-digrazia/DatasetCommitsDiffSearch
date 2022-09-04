@@ -16,10 +16,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -143,9 +141,6 @@ public class QuarkusTestExtension
             sysPropRestore.put(ProfileManager.QUARKUS_TEST_PROFILE_PROP,
                     System.getProperty(ProfileManager.QUARKUS_TEST_PROFILE_PROP));
 
-            // clear the test.url system property as the value leaks into the run when using different profiles
-            System.clearProperty("test.url");
-
             final QuarkusBootstrap.Builder runnerBuilder = QuarkusBootstrap.builder()
                     .setIsolateDeployment(true)
                     .setMode(QuarkusBootstrap.Mode.TEST);
@@ -176,17 +171,7 @@ public class QuarkusTestExtension
                 }
             }
 
-            final Path projectRoot = Paths.get("").normalize().toAbsolutePath();
-            runnerBuilder.setProjectRoot(projectRoot);
-            Path outputDir;
-            try {
-                // this should work for both maven and gradle
-                outputDir = projectRoot.resolve(projectRoot.relativize(testClassLocation).getName(0));
-            } catch (Exception e) {
-                // this shouldn't happen since testClassLocation is usually found under the project dir
-                outputDir = projectRoot;
-            }
-            runnerBuilder.setTargetDirectory(outputDir);
+            runnerBuilder.setProjectRoot(Paths.get("").normalize().toAbsolutePath());
 
             rootBuilder.add(appClassLocation);
             final Path appResourcesLocation = PathTestHelper.getResourcesForClassesDirOrNull(appClassLocation, "main");
@@ -194,9 +179,10 @@ public class QuarkusTestExtension
                 rootBuilder.add(appResourcesLocation);
             }
 
+            Path root = Paths.get("").normalize().toAbsolutePath();
             // If gradle project running directly with IDE
             if (System.getProperty(BootstrapConstants.SERIALIZED_APP_MODEL) == null) {
-                BuildToolHelper.enableGradleAppModel(projectRoot, "TEST", QuarkusModelHelper.TEST_REQUIRED_TASKS);
+                BuildToolHelper.enableGradleAppModel(root, "TEST", QuarkusModelHelper.TEST_REQUIRED_TASKS);
             }
 
             runnerBuilder.setApplicationRoot(rootBuilder.build());
@@ -260,10 +246,6 @@ public class QuarkusTestExtension
                                 }
                             }
                             tm.close();
-                        }
-                        try {
-                            TestClassIndexer.removeIndex(requiredTestClass);
-                        } catch (Exception ignored) {
                         }
                     }
                 }
@@ -370,14 +352,8 @@ public class QuarkusTestExtension
                 }
                 String endpointPath = getEndpointPath(context, testHttpEndpointProviders);
                 if (runningQuarkusApplication != null) {
-                    boolean secure = false;
-                    Optional<String> insecureAllowed = runningQuarkusApplication
-                            .getConfigValue("quarkus.http.insecure-requests", String.class);
-                    if (insecureAllowed.isPresent()) {
-                        secure = !insecureAllowed.get().toLowerCase(Locale.ENGLISH).equals("enabled");
-                    }
                     runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
-                            .getDeclaredMethod("setURL", boolean.class, String.class).invoke(null, secure, endpointPath);
+                            .getDeclaredMethod("setURL", boolean.class, String.class).invoke(null, false, endpointPath);
                     runningQuarkusApplication.getClassLoader().loadClass(TestScopeManager.class.getName())
                             .getDeclaredMethod("setup", boolean.class).invoke(null, false);
                 }
