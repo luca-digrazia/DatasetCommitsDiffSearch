@@ -14,6 +14,7 @@ import static io.quarkus.devtools.project.codegen.ProjectGenerator.PACKAGE_NAME;
 import static io.quarkus.devtools.project.codegen.ProjectGenerator.PROJECT_GROUP_ID;
 import static io.quarkus.devtools.project.codegen.ProjectGenerator.QUARKUS_VERSION;
 
+import io.quarkus.bootstrap.model.AppArtifactCoords;
 import io.quarkus.devtools.codestarts.CodestartProjectDefinition;
 import io.quarkus.devtools.codestarts.CodestartType;
 import io.quarkus.devtools.codestarts.quarkus.QuarkusCodestartCatalog;
@@ -24,9 +25,8 @@ import io.quarkus.devtools.commands.data.QuarkusCommandInvocation;
 import io.quarkus.devtools.commands.data.QuarkusCommandOutcome;
 import io.quarkus.devtools.messagewriter.MessageIcons;
 import io.quarkus.devtools.project.codegen.ProjectGenerator;
-import io.quarkus.maven.ArtifactCoords;
+import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.tools.ToolsUtils;
-import io.quarkus.registry.catalog.ExtensionCatalog;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,15 +45,11 @@ public class CreateProjectCommandHandler implements QuarkusCommandHandler {
 
     @Override
     public QuarkusCommandOutcome execute(QuarkusCommandInvocation invocation) throws QuarkusCommandException {
-        final ExtensionCatalog platformDescr = invocation.getExtensionsCatalog();
-        final ArtifactCoords bom = platformDescr.getBom();
-        if (bom == null) {
-            throw new QuarkusCommandException("The platform BOM is missing");
-        }
-        invocation.setValue(BOM_GROUP_ID, bom.getGroupId());
-        invocation.setValue(BOM_ARTIFACT_ID, bom.getArtifactId());
-        invocation.setValue(BOM_VERSION, bom.getVersion());
-        invocation.setValue(QUARKUS_VERSION, platformDescr.getQuarkusCoreVersion());
+        final QuarkusPlatformDescriptor platformDescr = invocation.getPlatformDescriptor();
+        invocation.setValue(BOM_GROUP_ID, platformDescr.getBomGroupId());
+        invocation.setValue(BOM_ARTIFACT_ID, platformDescr.getBomArtifactId());
+        invocation.setValue(QUARKUS_VERSION, platformDescr.getQuarkusVersion());
+        invocation.setValue(BOM_VERSION, platformDescr.getBomVersion());
         final Set<String> extensionsQuery = invocation.getValue(ProjectGenerator.EXTENSIONS, Collections.emptySet());
 
         final Properties quarkusProps = ToolsUtils.readQuarkusProperties(platformDescr);
@@ -78,7 +74,7 @@ public class CreateProjectCommandHandler implements QuarkusCommandHandler {
             }
         }
 
-        final List<ArtifactCoords> extensionsToAdd = computeCoordsFromQuery(invocation, extensionsQuery);
+        final List<AppArtifactCoords> extensionsToAdd = computeCoordsFromQuery(invocation, extensionsQuery);
         if (extensionsToAdd == null) {
             throw new QuarkusCommandException("Failed to create project because of invalid extensions");
         }
@@ -110,18 +106,17 @@ public class CreateProjectCommandHandler implements QuarkusCommandHandler {
             }
 
             final QuarkusCodestartCatalog catalog = QuarkusCodestartCatalog
-                    .fromExtensionsCatalog(invocation.getQuarkusProject().getExtensionsCatalog(),
-                            invocation.getQuarkusProject().getCodestartResourceLoaders());
+                    .fromQuarkusPlatformDescriptor(invocation.getPlatformDescriptor());
             final CodestartProjectDefinition projectDefinition = catalog.createProject(input);
             projectDefinition.generate(invocation.getQuarkusProject().getProjectDirPath());
             invocation.log()
-                    .info("\n-----------\n" + MessageIcons.OK_ICON + " "
+                    .info("\n-----------\n" + MessageIcons.NOOP_ICON + " "
                             + projectDefinition.getRequiredCodestart(CodestartType.PROJECT).getName()
                             + " project has been successfully generated in:\n--> "
                             + invocation.getQuarkusProject().getProjectDirPath().toString() + "\n-----------");
 
         } catch (IOException e) {
-            throw new QuarkusCommandException("Failed to create project: " + e.getMessage(), e);
+            throw new QuarkusCommandException("Failed to create project", e);
         }
         return QuarkusCommandOutcome.success();
     }

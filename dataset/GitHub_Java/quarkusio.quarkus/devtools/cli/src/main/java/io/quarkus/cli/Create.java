@@ -6,12 +6,10 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 
 import io.quarkus.cli.core.BaseSubCommand;
-import io.quarkus.cli.core.QuarkusCliVersion;
 import io.quarkus.devtools.commands.CreateProject;
 import io.quarkus.devtools.project.BuildTool;
-import io.quarkus.devtools.project.QuarkusProject;
-import io.quarkus.devtools.project.QuarkusProjectHelper;
 import io.quarkus.devtools.project.codegen.SourceType;
+import io.quarkus.platform.tools.config.QuarkusPlatformConfig;
 import picocli.CommandLine;
 
 @CommandLine.Command(name = "create", sortOptions = false, usageHelpAutoWidth = true, mixinStandardHelpOptions = false, description = "Create a new quarkus project.")
@@ -33,7 +31,7 @@ public class Create extends BaseSubCommand implements Callable<Integer> {
             "--no-examples" }, order = 4, description = "Generate without example code.")
     boolean noExamples = false;
 
-    @CommandLine.Option(names = { "-x",
+    @CommandLine.Option(names = { "-e",
             "--examples" }, order = 4, description = "Choose which example(s) you want in the generated Quarkus application.")
     Set<String> examples;
 
@@ -113,17 +111,17 @@ public class Create extends BaseSubCommand implements Callable<Integer> {
             else if (targetBuildTool.gradleKotlinDsl)
                 buildTool = BuildTool.GRADLE_KOTLIN_DSL;
 
-            final QuarkusProject project = QuarkusProjectHelper.getProject(projectRoot.getAbsoluteFile().toPath(), buildTool,
-                    QuarkusCliVersion.version());
-            boolean status = new CreateProject(project)
-                    .groupId(groupId)
-                    .artifactId(artifactId)
-                    .version(version)
-                    .sourceType(sourceType)
-                    .overrideExamples(examples)
-                    .extensions(extensions)
-                    .noExamples(noExamples)
-                    .execute().isSuccess();
+            boolean status = new CreateProject(projectRoot.getAbsoluteFile().toPath(),
+                    QuarkusPlatformConfig.getGlobalDefault().getPlatformDescriptor())
+                            .buildTool(buildTool)
+                            .groupId(groupId)
+                            .artifactId(artifactId)
+                            .version(version)
+                            .sourceType(sourceType)
+                            .overrideExamples(examples)
+                            .extensions(extensions)
+                            .noExamples(noExamples)
+                            .execute().isSuccess();
 
             if (status) {
                 out().println("Project " + artifactId +
@@ -134,9 +132,9 @@ public class Create extends BaseSubCommand implements Callable<Integer> {
                 return CommandLine.ExitCode.SOFTWARE;
             }
         } catch (Exception e) {
-            err().println("Project creation failed, " + e.getMessage());
             if (parent.showErrors)
                 e.printStackTrace(err());
+            err().println("Project creation failed, " + e.getMessage());
             return CommandLine.ExitCode.SOFTWARE;
         }
 
