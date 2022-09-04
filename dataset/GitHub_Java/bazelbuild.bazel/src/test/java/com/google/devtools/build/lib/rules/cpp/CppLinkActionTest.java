@@ -702,16 +702,17 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 ruleContext,
                 ruleContext,
                 ruleContext.getLabel(),
-                ActionsTestUtil.createArtifact(
-                    getTargetConfiguration().getBinDirectory(ruleContext.getRule().getRepository()),
-                    outputPath),
+                new Artifact(
+                    PathFragment.create(outputPath),
+                    getTargetConfiguration()
+                        .getBinDirectory(ruleContext.getRule().getRepository())),
                 ruleContext.getConfiguration(),
                 toolchain,
                 toolchain.getFdoContext(),
                 featureConfiguration,
                 MockCppSemantics.INSTANCE)
             .addObjectFiles(nonLibraryInputs)
-            .addLibraries(libraryInputs)
+            .addLibraries(NestedSetBuilder.wrap(Order.LINK_ORDER, libraryInputs))
             .setLinkType(type)
             .setLinkerFiles(NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER))
             .setLinkingMode(LinkingMode.STATIC);
@@ -731,7 +732,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   }
 
   public Artifact getOutputArtifact(String relpath) {
-    return ActionsTestUtil.createArtifactWithExecPath(
+    return new Artifact(
         getTargetConfiguration().getBinDirectory(RepositoryName.MAIN),
         getTargetConfiguration().getBinFragment().getRelative(relpath));
   }
@@ -741,8 +742,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
     Path outputRoot = execRoot.getRelative("out");
     ArtifactRoot root = ArtifactRoot.asDerivedRoot(execRoot, outputRoot);
     try {
-      return ActionsTestUtil.createArtifact(
-          root, scratch.overwriteFile(outputRoot.getRelative(s).toString()));
+      return new Artifact(scratch.overwriteFile(outputRoot.getRelative(s).toString()), root);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

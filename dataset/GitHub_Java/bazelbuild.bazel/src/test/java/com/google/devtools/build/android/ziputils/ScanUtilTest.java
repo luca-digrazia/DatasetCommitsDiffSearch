@@ -14,7 +14,7 @@
 package com.google.devtools.build.android.ziputils;
 
 import static com.google.common.truth.Truth.assertWithMessage;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -80,8 +80,7 @@ public class ScanUtilTest {
   private void assertLocation(byte[] target, byte[] domain, int expected) {
     int pos = ScanUtil.scanTo(target, domain != null ? ByteBuffer.wrap(domain) : null);
     assertWithMessage("Position of " + Arrays.toString(target) + " in " + Arrays.toString(domain))
-        .that(pos)
-        .isEqualTo(expected);
+        .that(expected).isEqualTo(pos);
   }
 
   private void assertBackwardsLocation(byte[] target, byte[] domain, int expected) {
@@ -91,16 +90,8 @@ public class ScanUtilTest {
       buf.position(buf.limit());
     }
     int pos = ScanUtil.scanBackwardsTo(target, buf);
-    assertWithMessage(
-            "Position of "
-                + Arrays.toString(target)
-                + " in "
-                + Arrays.toString(domain)
-                + ", "
-                + buf.position()
-                + ", "
-                + buf.limit())
-        .that(pos)
-        .isEqualTo(expected);
+    assertWithMessage("Position of " + Arrays.toString(target) + " in " + Arrays.toString(domain)
+        + ", " + buf.position() + ", " + buf.limit())
+        .that(expected).isEqualTo(pos);
   }
 }

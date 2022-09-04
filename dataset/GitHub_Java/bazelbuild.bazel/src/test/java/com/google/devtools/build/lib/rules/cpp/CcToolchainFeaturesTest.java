@@ -1761,18 +1761,19 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
 
   @Test
   public void testErrorForNoMatchingArtifactPatternForCategory() throws Exception {
+    EvalException e =
+        assertThrows(
+            EvalException.class,
+            () -> {
               CcToolchainFeatures toolchainFeatures =
                   buildFeatures(
                       "artifact_name_pattern {",
                       "category_name: 'static_library'",
                       "prefix: 'foo'",
                       "extension: '.a'}");
-    EvalException e =
-        assertThrows(
-            EvalException.class,
-            () ->
-                toolchainFeatures.getArtifactNameForCategory(
-                    ArtifactCategory.DYNAMIC_LIBRARY, "output_name"));
+              toolchainFeatures.getArtifactNameForCategory(
+                  ArtifactCategory.DYNAMIC_LIBRARY, "output_name");
+            });
     assertThat(e)
         .hasMessageThat()
         .contains(

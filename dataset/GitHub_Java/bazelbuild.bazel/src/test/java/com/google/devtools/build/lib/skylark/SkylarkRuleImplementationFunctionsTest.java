@@ -3020,7 +3020,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     }
 
     // Ensure errors are handled
-    assertThrows(
+    MoreAsserts.assertThrows(
         CommandLineExpansionException.class,
         () -> {
           SkylarkCustomCommandLine commandLine =

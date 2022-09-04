@@ -332,7 +332,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def _impl(ctx):",
         "  f = ctx.attr.dep.output_group('_hidden_top_level" + INTERNAL_SUFFIX + "')",
-        "  g = f.to_list()",
+        "  g = list(f)",
         "  return [MyInfo(result = f),",
         "      OutputGroupInfo(my_group = g, my_empty_group = [])]",
         "my_rule = rule(implementation = _impl,",
@@ -361,7 +361,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def _impl(ctx):",
         "  f = ctx.attr.dep[OutputGroupInfo]._hidden_top_level" + INTERNAL_SUFFIX,
-        "  g = f.to_list()",
+        "  g = list(f)",
         "  return [MyInfo(result = f),",
         "      OutputGroupInfo(my_group = g, my_empty_group = [])]",
         "my_rule = rule(implementation = _impl,",
@@ -2890,6 +2890,30 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "Returning a struct from a rule implementation function is deprecated and will be "
             + "removed soon. It may be temporarily re-enabled by setting "
             + "--incompatible_disallow_struct_provider_syntax=false");
+  }
+
+  @Test
+  public void testNoRuleOutputsParam() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_no_rule_outputs_param=true");
+    scratch.file(
+        "test/skylark/test_rule.bzl",
+        "def _impl(ctx):",
+        "  output = ctx.outputs.out",
+        "  ctx.actions.write(output = output, content = 'hello')",
+        "",
+        "my_rule = rule(",
+        "  implementation = _impl,",
+        "  outputs = {\"out\": \"%{name}.txt\"})");
+    scratch.file(
+        "test/skylark/BUILD",
+        "load('//test/skylark:test_rule.bzl', 'my_rule')",
+        "my_rule(name = 'target')");
+
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test/skylark:target");
+    assertContainsEvent(
+        "parameter 'outputs' is deprecated and will be removed soon. It may be temporarily "
+            + "re-enabled by setting --incompatible_no_rule_outputs_param=false");
   }
 
   @Test

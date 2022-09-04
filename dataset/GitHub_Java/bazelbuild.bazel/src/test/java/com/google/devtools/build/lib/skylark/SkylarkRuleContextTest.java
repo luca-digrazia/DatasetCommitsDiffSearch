@@ -798,7 +798,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testConfiguration() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.configuration");
-    assertThat(ruleContext.getRuleContext().getConfiguration()).isSameInstanceAs(result);
+    assertThat(ruleContext.getRuleContext().getConfiguration()).isSameAs(result);
   }
 
   @Test
@@ -819,7 +819,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testHostConfiguration() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.host_configuration");
-    assertThat(ruleContext.getRuleContext().getHostConfiguration()).isSameInstanceAs(result);
+    assertThat(ruleContext.getRuleContext().getHostConfiguration()).isSameAs(result);
   }
 
   @Test

@@ -283,16 +283,26 @@ public class CcToolchainTest extends BuildViewTestCase {
 
   public void assertInvalidIncludeDirectoryMessage(String entry, String messageRegex)
       throws Exception {
-    scratch.overwriteFile("a/BUILD", "cc_toolchain_alias(name = 'b')");
-    getAnalysisMock()
-        .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig, CcToolchainConfig.builder().withCxxBuiltinIncludeDirectories(entry));
+    AssertionError e =
+        assertThrows(
+            AssertionError.class,
+            () -> {
+              scratch.overwriteFile("a/BUILD", "cc_toolchain_alias(name = 'b')");
+              getAnalysisMock()
+                  .ccSupport()
+                  .setupCcToolchainConfig(
+                      mockToolsConfig,
+                      CcToolchainConfig.builder().withCxxBuiltinIncludeDirectories(entry));
 
-    useConfiguration();
-    invalidatePackages();
+              useConfiguration();
+              invalidatePackages();
 
-    AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//a:b"));
+              ConfiguredTarget target = getConfiguredTarget("//a:b");
+              CcToolchainProvider toolchainProvider =
+                  (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
+              // Must call this function to actually see if there's an error with the directories.
+              toolchainProvider.getBuiltInIncludeDirectories();
+            });
     assertThat(e).hasMessageThat().containsMatch(messageRegex);
   }
 
