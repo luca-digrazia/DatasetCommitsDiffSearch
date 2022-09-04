@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,6 +21,7 @@ import org.apache.http.client.HttpClient;
 
 import android.app.Activity;
 
+@SuppressWarnings("deprecation")
 @EActivity
 public class SSLConnection extends Activity {
 
@@ -35,5 +36,17 @@ public class SSLConnection extends Activity {
 
 	@HttpsClient(trustStoreResName = "cacerts", keyStoreResName = "cacerts")
 	HttpClient mHttpsClientTest4;
+
+	HttpClient methodInjectedHttpsClient;
+	HttpClient multiInjectedHttpsClient;
+
+	@HttpsClient
+	void methodInjectedHttpsClient(HttpClient httpsClient) {
+		methodInjectedHttpsClient = httpsClient;
+	}
+
+	void multiInjectedHttpsClient(@HttpsClient HttpClient httpsClient, @HttpsClient HttpClient httpsClient2) {
+		multiInjectedHttpsClient = httpsClient;
+	}
 
 }
