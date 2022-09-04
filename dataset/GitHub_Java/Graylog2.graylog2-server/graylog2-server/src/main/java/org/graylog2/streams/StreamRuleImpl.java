@@ -19,7 +19,6 @@
 
 package org.graylog2.streams;
 
-import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.common.collect.Maps;
 import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
@@ -128,7 +127,6 @@ public class StreamRuleImpl extends PersistedImpl implements StreamRule {
         return Maps.newHashMap();
     }
 
-    @JsonValue
     public Map<String, Object> asMap() {
         // We work on the result a bit to allow correct JSON serializing.
         Map<String, Object> result = Maps.newHashMap(fields);
