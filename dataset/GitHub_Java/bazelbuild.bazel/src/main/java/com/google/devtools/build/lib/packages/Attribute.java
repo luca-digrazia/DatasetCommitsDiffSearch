@@ -974,10 +974,10 @@ public final class Attribute implements Comparable<Attribute> {
      * of {@link #allowedRuleClasses}, otherwise an error is produced during the analysis phase.
      */
     public Builder<TYPE> mandatoryProvidersList(
-        Iterable<? extends Iterable<StarlarkProviderIdentifier>> providersList) {
+        Iterable<? extends Iterable<SkylarkProviderIdentifier>> providersList) {
       Preconditions.checkState(type.getLabelClass() == LabelClass.DEPENDENCY,
           "must be a label-valued type");
-      for (Iterable<StarlarkProviderIdentifier> providers : providersList) {
+      for (Iterable<SkylarkProviderIdentifier> providers : providersList) {
         this.requiredProvidersBuilder.addSkylarkSet(ImmutableSet.copyOf(providers));
       }
       return this;
@@ -989,18 +989,18 @@ public final class Attribute implements Comparable<Attribute> {
               Arrays.asList(ids),
               s -> {
                 Preconditions.checkNotNull(s);
-                return StarlarkProviderIdentifier.forLegacy(s);
+                return SkylarkProviderIdentifier.forLegacy(s);
               }));
     }
 
-    public Builder<TYPE> mandatoryProviders(Iterable<StarlarkProviderIdentifier> providers) {
+    public Builder<TYPE> mandatoryProviders(Iterable<SkylarkProviderIdentifier> providers) {
       if (providers.iterator().hasNext()) {
         mandatoryProvidersList(ImmutableList.of(providers));
       }
       return this;
     }
 
-    public Builder<TYPE> mandatoryProviders(StarlarkProviderIdentifier... providers) {
+    public Builder<TYPE> mandatoryProviders(SkylarkProviderIdentifier... providers) {
       mandatoryProviders(Arrays.asList(providers));
       return this;
     }

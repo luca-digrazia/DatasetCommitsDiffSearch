@@ -726,7 +726,9 @@ public class RuleContextConstraintSemantics implements ConstraintSemantics<RuleC
         // Use the same implicit deps check that query uses. This facilitates running queries to
         // determine exactly which rules need to be constraint-annotated for depot migrations.
         if (!DependencyFilter.NO_IMPLICIT_DEPS.apply(ruleContext.getRule(), attrDef)
-            || attrDef.getTransitionFactory().isTool()) {
+            // We can't identify host deps by calling BuildConfiguration.isHostConfiguration()
+            // because --nodistinct_host_configuration subverts that call.
+            || attrDef.getTransitionFactory().isHost()) {
           continue;
         }
       }
