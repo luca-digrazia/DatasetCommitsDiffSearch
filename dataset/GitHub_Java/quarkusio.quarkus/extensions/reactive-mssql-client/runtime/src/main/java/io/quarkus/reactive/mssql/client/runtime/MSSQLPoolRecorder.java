@@ -95,10 +95,6 @@ public class MSSQLPoolRecorder {
             mssqlConnectOptions = new MSSQLConnectOptions();
         }
 
-        if (dataSourceReactiveMSSQLConfig.packetSize.isPresent()) {
-            mssqlConnectOptions.setPacketSize(dataSourceReactiveMSSQLConfig.packetSize.getAsInt());
-        }
-
         if (dataSourceRuntimeConfig.username.isPresent()) {
             mssqlConnectOptions.setUser(dataSourceRuntimeConfig.username.get());
         }
