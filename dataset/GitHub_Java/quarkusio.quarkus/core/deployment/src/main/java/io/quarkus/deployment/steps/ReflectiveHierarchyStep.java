@@ -1,7 +1,22 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.deployment.steps;
 
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,9 +48,6 @@ import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
 public class ReflectiveHierarchyStep {
 
     private static final Logger log = Logger.getLogger(ReflectiveHierarchyStep.class);
-
-    private static final Set<String> IGNORED_PARAMETERIZED_TYPE_PACKAGE_NAMES = new HashSet<>(
-            Arrays.asList("java.util", "io.reactivex"));
 
     @Inject
     List<ReflectiveHierarchyBuildItem> hierarchy;
@@ -87,9 +99,7 @@ public class ReflectiveHierarchyStep {
             addReflectiveHierarchy(i, type.asArrayType().component(), processedReflectiveHierarchies, unindexedClasses);
         } else if (type instanceof ParameterizedType) {
             ParameterizedType p = (ParameterizedType) type;
-            if (!IGNORED_PARAMETERIZED_TYPE_PACKAGE_NAMES.contains(p.name().toString())) {
-                addClassTypeHierarchy(i, p.name(), processedReflectiveHierarchies, unindexedClasses);
-            }
+            addReflectiveHierarchy(i, p.owner(), processedReflectiveHierarchies, unindexedClasses);
             for (Type arg : p.arguments()) {
                 addReflectiveHierarchy(i, arg, processedReflectiveHierarchies, unindexedClasses);
             }
