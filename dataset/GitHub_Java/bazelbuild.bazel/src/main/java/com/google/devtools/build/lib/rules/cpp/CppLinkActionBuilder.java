@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.CPP_LINK_EXEC_GROUP;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -548,7 +547,7 @@ public class CppLinkActionBuilder {
     }
   }
 
-  private ImmutableList<LinkerInputs.LibraryToLink> collectLinkerInputs(
+  private List<LinkerInputs.LibraryToLink> convertLibraryToLinkListToLibraryToLinkList(
       NestedSet<LibraryToLink> librariesToLink) {
     ImmutableList.Builder<LinkerInputs.LibraryToLink> librariesToLinkBuilder =
         ImmutableList.builder();
@@ -599,7 +598,7 @@ public class CppLinkActionBuilder {
       Preconditions.checkState(libraries.isEmpty());
       originalUniqueLibraries =
           NestedSetBuilder.<LinkerInputs.LibraryToLink>linkOrder()
-              .addAll(collectLinkerInputs(librariesToLink.build()))
+              .addAll(convertLibraryToLinkListToLibraryToLinkList(librariesToLink.build()))
               .build();
     }
 
@@ -1080,7 +1079,9 @@ public class CppLinkActionBuilder {
         fake,
         fakeLinkerInputArtifacts,
         isLtoIndexing,
-        linkstampMap,
+        linkstampMap.keySet().stream()
+            .map(CcLinkingContext.Linkstamp::getArtifact)
+            .collect(ImmutableList.toImmutableList()),
         linkCommandLine,
         configuration.getActionEnvironment(),
         toolchainEnv,
@@ -1206,8 +1207,7 @@ public class CppLinkActionBuilder {
   }
 
   protected ActionOwner getOwner() {
-    ActionOwner execGroupOwner = actionConstructionContext.getActionOwner(CPP_LINK_EXEC_GROUP);
-    return execGroupOwner == null ? actionConstructionContext.getActionOwner() : execGroupOwner;
+    return actionConstructionContext.getActionOwner();
   }
 
   /** Sets the mnemonic for the link action. */

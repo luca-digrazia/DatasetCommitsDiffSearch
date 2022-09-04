@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitionMode;
@@ -63,6 +62,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidBinaryMobileInstall.MobileInstallResourceApks;
@@ -507,9 +507,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_UNSIGNED_APK);
     Artifact zipAlignedApk =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_APK);
-    ImmutableList<Artifact> signingKeys = AndroidCommon.getApkDebugSigningKeys(ruleContext);
-    Artifact signingLineage =
-        ruleContext.getPrerequisiteArtifact("debug_signing_lineage_file", TransitionMode.HOST);
+    Artifact signingKey = AndroidCommon.getApkDebugSigningKey(ruleContext);
     FilesToRunProvider resourceExtractor =
         ruleContext.getExecutablePrerequisite("$resource_extractor", TransitionMode.HOST);
 
@@ -579,8 +577,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .setNativeLibs(nativeLibs)
         .setUnsignedApk(unsignedApk)
         .setSignedApk(zipAlignedApk)
-        .setSigningKeys(signingKeys)
-        .setSigningLineageFile(signingLineage)
+        .setSigningKey(signingKey)
         .setZipalignApk(true)
         .registerActions(ruleContext);
 
@@ -671,8 +668,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           mobileInstallResourceApks,
           resourceExtractor,
           nativeLibsAar,
-          signingKeys,
-          signingLineage,
+          signingKey,
           additionalMergedManifests);
     }
 
@@ -696,8 +692,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 unsignedApk,
                 getCoverageInstrumentationJarForApk(ruleContext),
                 resourceApk.getManifest(),
-                signingKeys,
-                signingLineage))
+                AndroidCommon.getApkDebugSigningKey(ruleContext)))
         .addNativeDeclaredProvider(new AndroidPreDexJarProvider(jarToDex))
         .addNativeDeclaredProvider(
             AndroidFeatureFlagSetProvider.create(
@@ -910,8 +905,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Artifact shrunkApk =
         shrinkResources(
             dataContext,
-            resourceApk.getRTxt(),
-            resourceApk.getResourcesZip(),
+            resourceApk.getValidatedResources(),
+            resourceApk.getResourceDependencies(),
             proguardOutput.getOutputJar(),
             proguardOutput.getMapping(),
             ResourceFilterFactory.fromRuleContextAndAttrs(ruleContext),
@@ -925,25 +920,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   static Artifact shrinkResources(
       AndroidDataContext dataContext,
       ValidatedAndroidResources validatedResources,
-      Artifact proguardOutputJar,
-      Artifact proguardMapping,
-      ResourceFilterFactory resourceFilterFactory,
-      List<String> noCompressExtensions)
-      throws InterruptedException {
-    return shrinkResources(
-        dataContext,
-        Preconditions.checkNotNull(validatedResources).getRTxt(),
-        dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP),
-        proguardOutputJar,
-        proguardMapping,
-        resourceFilterFactory,
-        noCompressExtensions);
-  }
-
-  static Artifact shrinkResources(
-      AndroidDataContext dataContext,
-      Artifact rTxt,
-      Artifact resourcesZip,
+      ResourceDependencies resourceDeps,
       Artifact proguardOutputJar,
       Artifact proguardMapping,
       ResourceFilterFactory resourceFilterFactory,
@@ -958,10 +935,12 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_SHRUNK_ZIP))
             .setLogOut(
                 dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCE_SHRINKER_LOG))
-            .withResourceFiles(resourcesZip)
+            .withResourceFiles(
+                dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP))
             .withShrunkJar(proguardOutputJar)
             .withProguardMapping(proguardMapping)
-            .withRTxt(rTxt)
+            .withPrimary(validatedResources)
+            .withDependencies(resourceDeps)
             .setResourceFilterFactory(resourceFilterFactory)
             .setUncompressedExtensions(noCompressExtensions)
             .setResourceOptimizationConfigOut(
