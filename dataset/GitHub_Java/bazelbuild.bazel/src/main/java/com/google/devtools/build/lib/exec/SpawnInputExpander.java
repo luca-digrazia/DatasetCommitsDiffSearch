@@ -96,10 +96,9 @@ public class SpawnInputExpander {
   private void addMapping(
       Map<PathFragment, ActionInput> inputMappings,
       PathFragment targetLocation,
-      ActionInput input,
-      PathFragment baseDirectory) {
+      ActionInput input) {
     Preconditions.checkArgument(!targetLocation.isAbsolute(), targetLocation);
-    inputMappings.put(baseDirectory.getRelative(targetLocation), input);
+    inputMappings.put(targetLocation, input);
   }
 
   /** Adds runfiles inputs from runfilesSupplier to inputMappings. */
@@ -108,8 +107,7 @@ public class SpawnInputExpander {
       Map<PathFragment, ActionInput> inputMap,
       RunfilesSupplier runfilesSupplier,
       MetadataProvider actionFileCache,
-      ArtifactExpander artifactExpander,
-      PathFragment baseDirectory)
+      ArtifactExpander artifactExpander)
       throws IOException {
     Map<PathFragment, Map<PathFragment, Artifact>> rootsAndMappings =
         runfilesSupplier.getMappings();
@@ -131,8 +129,7 @@ public class SpawnInputExpander {
               addMapping(
                   inputMap,
                   location.getRelative(((TreeFileArtifact) input).getParentRelativePath()),
-                  input,
-                  baseDirectory);
+                  input);
             }
           } else if (localArtifact.isFileset()) {
             ImmutableList<FilesetOutputSymlink> filesetLinks;
@@ -141,15 +138,15 @@ public class SpawnInputExpander {
             } catch (MissingExpansionException e) {
               throw new IllegalStateException(e);
             }
-            addFilesetManifest(location, localArtifact, filesetLinks, inputMap, baseDirectory);
+            addFilesetManifest(location, localArtifact, filesetLinks, inputMap);
           } else {
             if (strict) {
               failIfDirectory(actionFileCache, localArtifact);
             }
-            addMapping(inputMap, location, localArtifact, baseDirectory);
+            addMapping(inputMap, location, localArtifact);
           }
         } else {
-          addMapping(inputMap, location, VirtualActionInput.EMPTY_MARKER, baseDirectory);
+          addMapping(inputMap, location, VirtualActionInput.EMPTY_MARKER);
         }
       }
     }
@@ -159,12 +156,10 @@ public class SpawnInputExpander {
   public Map<PathFragment, ActionInput> addRunfilesToInputs(
       RunfilesSupplier runfilesSupplier,
       MetadataProvider actionFileCache,
-      ArtifactExpander artifactExpander,
-      PathFragment baseDirectory)
+      ArtifactExpander artifactExpander)
       throws IOException {
     Map<PathFragment, ActionInput> inputMap = new HashMap<>();
-    addRunfilesToInputs(
-        inputMap, runfilesSupplier, actionFileCache, artifactExpander, baseDirectory);
+    addRunfilesToInputs(inputMap, runfilesSupplier, actionFileCache, artifactExpander);
     return inputMap;
   }
 
@@ -179,16 +174,11 @@ public class SpawnInputExpander {
   @VisibleForTesting
   void addFilesetManifests(
       Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings,
-      Map<PathFragment, ActionInput> inputMappings,
-      PathFragment baseDirectory)
+      Map<PathFragment, ActionInput> inputMappings)
       throws IOException {
     for (Artifact fileset : filesetMappings.keySet()) {
       addFilesetManifest(
-          fileset.getExecPath(),
-          fileset,
-          filesetMappings.get(fileset),
-          inputMappings,
-          baseDirectory);
+          fileset.getExecPath(), fileset, filesetMappings.get(fileset), inputMappings);
     }
   }
 
@@ -196,8 +186,7 @@ public class SpawnInputExpander {
       PathFragment location,
       Artifact filesetArtifact,
       ImmutableList<FilesetOutputSymlink> filesetLinks,
-      Map<PathFragment, ActionInput> inputMappings,
-      PathFragment baseDirectory)
+      Map<PathFragment, ActionInput> inputMappings)
       throws IOException {
     Preconditions.checkState(filesetArtifact.isFileset(), filesetArtifact);
     FilesetManifest filesetManifest =
@@ -209,19 +198,16 @@ public class SpawnInputExpander {
           value == null
               ? VirtualActionInput.EMPTY_MARKER
               : ActionInputHelper.fromPath(execRoot.getRelative(value).getPathString());
-      addMapping(inputMappings, mapping.getKey(), artifact, baseDirectory);
+        addMapping(inputMappings, mapping.getKey(), artifact);
       }
   }
 
   private void addInputs(
-      Map<PathFragment, ActionInput> inputMap,
-      Spawn spawn,
-      ArtifactExpander artifactExpander,
-      PathFragment baseDirectory) {
+      Map<PathFragment, ActionInput> inputMap, Spawn spawn, ArtifactExpander artifactExpander) {
     List<ActionInput> inputs =
         ActionInputHelper.expandArtifacts(spawn.getInputFiles(), artifactExpander);
     for (ActionInput input : inputs) {
-      addMapping(inputMap, input.getExecPath(), input, baseDirectory);
+      addMapping(inputMap, input.getExecPath(), input);
     }
   }
 
@@ -237,20 +223,14 @@ public class SpawnInputExpander {
    * <p>The returned map contains all runfiles, but not the {@code MANIFEST}.
    */
   public SortedMap<PathFragment, ActionInput> getInputMapping(
-      Spawn spawn,
-      ArtifactExpander artifactExpander,
-      PathFragment baseDirectory,
-      MetadataProvider actionInputFileCache)
+      Spawn spawn, ArtifactExpander artifactExpander, MetadataProvider actionInputFileCache)
       throws IOException {
+
     TreeMap<PathFragment, ActionInput> inputMap = new TreeMap<>();
-    addInputs(inputMap, spawn, artifactExpander, baseDirectory);
+    addInputs(inputMap, spawn, artifactExpander);
     addRunfilesToInputs(
-        inputMap,
-        spawn.getRunfilesSupplier(),
-        actionInputFileCache,
-        artifactExpander,
-        baseDirectory);
-    addFilesetManifests(spawn.getFilesetMappings(), inputMap, baseDirectory);
+        inputMap, spawn.getRunfilesSupplier(), actionInputFileCache, artifactExpander);
+    addFilesetManifests(spawn.getFilesetMappings(), inputMap);
     return inputMap;
   }
 }
