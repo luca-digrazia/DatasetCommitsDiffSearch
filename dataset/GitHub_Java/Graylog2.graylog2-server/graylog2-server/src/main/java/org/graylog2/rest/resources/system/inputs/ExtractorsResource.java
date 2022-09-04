@@ -22,7 +22,6 @@ package org.graylog2.rest.resources.system.inputs;
 import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.ConfigurationException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
@@ -48,7 +47,6 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@RequiresAuthentication
 @Api(value = "Extractors", description = "Extractors of an input")
 @Path("/system/inputs/{inputId}/extractors")
 public class ExtractorsResource extends RestResource {
