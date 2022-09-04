@@ -22,8 +22,6 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Streams;
-import com.google.devtools.build.lib.actions.FileValue;
-import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.packages.Rule;
@@ -31,6 +29,8 @@ import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.skyframe.DirectoryListingValue;
 import com.google.devtools.build.lib.skyframe.Dirents;
+import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
@@ -46,7 +46,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Map;
 import java.util.Properties;
 
@@ -312,10 +311,9 @@ public class AndroidSdkRepositoryFunction extends AndroidRepositoryFunction {
       env.getValueOrThrow(releaseFileKey, IOException.class);
 
       Properties properties = new Properties();
-      try (InputStream in = sourcePropertiesFilePath.getInputStream()) {
-        properties.load(in);
-      }
+      properties.load(sourcePropertiesFilePath.getInputStream());
       return properties;
+
     } catch (IOException e) {
       String error = String.format(
           "Could not read %s in Android SDK: %s", sourcePropertiesFilePath, e.getMessage());
