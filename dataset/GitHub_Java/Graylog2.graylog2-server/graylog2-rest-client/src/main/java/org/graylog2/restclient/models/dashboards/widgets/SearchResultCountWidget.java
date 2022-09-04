@@ -76,7 +76,5 @@ public class SearchResultCountWidget extends DashboardWidget {
         return false;
     }
 
-    public boolean getTrend() { return trend; }
-
     public boolean getLowerIsBetter() { return lowerIsBetter; }
 }

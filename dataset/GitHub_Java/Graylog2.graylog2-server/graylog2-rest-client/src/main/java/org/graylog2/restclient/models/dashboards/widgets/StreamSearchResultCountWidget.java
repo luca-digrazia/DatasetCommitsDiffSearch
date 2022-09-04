@@ -83,7 +83,5 @@ public class StreamSearchResultCountWidget extends DashboardWidget {
         return false;
     }
 
-    public boolean getTrend() { return trend; }
-
     public boolean getLowerIsBetter() { return lowerIsBetter; }
 }

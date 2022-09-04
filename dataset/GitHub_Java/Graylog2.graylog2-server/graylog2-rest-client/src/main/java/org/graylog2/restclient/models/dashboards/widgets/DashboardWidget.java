@@ -36,8 +36,7 @@ public abstract class DashboardWidget {
         STREAM_SEARCH_RESULT_COUNT,
         FIELD_CHART,
         QUICKVALUES,
-        SEARCH_RESULT_CHART,
-        STATS_COUNT
+        SEARCH_RESULT_CHART
     }
 
     private final Type type;
@@ -197,21 +196,6 @@ public abstract class DashboardWidget {
                         TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
                         w.creatorUserId,
                         (String) w.config.get("interval")
-                );
-                break;
-            case STATS_COUNT:
-                widget = new StatisticalCountWidget(
-                        dashboard,
-                        w.id,
-                        w.description,
-                        w.cacheTime,
-                        (String) w.config.get("query"),
-                        TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
-                        w.config.get("trend") != null && Boolean.parseBoolean(String.valueOf(w.config.get("trend"))),
-                        w.config.get("lower_is_better") != null && Boolean.parseBoolean(String.valueOf(w.config.get("lower_is_better"))),
-                        (String) w.config.get("field"),
-                        (String) w.config.get("stats_function"),
-                        w.creatorUserId
                 );
                 break;
             default:
