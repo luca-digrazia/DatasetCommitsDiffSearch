@@ -49,8 +49,7 @@ public abstract class ProtoSourcesProvider
       String protoSourceRoot,
       NestedSet<String> directProtoSourceRoots,
       NestedSet<String> transitiveProtoSourceRoots,
-      @Nullable NestedSet<Artifact> protosInExports,
-      NestedSet<String> exportedProtoSourceRoots) {
+      @Nullable NestedSet<Artifact> protosInExports) {
     return new AutoValue_ProtoSourcesProvider(
         transitiveImports,
         transitiveProtoSources,
@@ -62,8 +61,7 @@ public abstract class ProtoSourcesProvider
         protoSourceRoot,
         directProtoSourceRoots,
         transitiveProtoSourceRoots,
-        protosInExports,
-        exportedProtoSourceRoots);
+        protosInExports);
   }
 
   /**
@@ -143,8 +141,6 @@ public abstract class ProtoSourcesProvider
    */
   @Nullable
   public abstract NestedSet<Artifact> getProtosInExports();
-
-  public abstract NestedSet<String> getExportedProtoSourceRoots();
 
   ProtoSourcesProvider() {}
 }
