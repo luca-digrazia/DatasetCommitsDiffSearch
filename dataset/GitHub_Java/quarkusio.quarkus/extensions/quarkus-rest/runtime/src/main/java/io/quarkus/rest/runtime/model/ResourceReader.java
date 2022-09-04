@@ -17,7 +17,6 @@ public class ResourceReader {
     private BeanFactory<MessageBodyReader<?>> factory;
     private List<String> mediaTypeStrings = new ArrayList<>();
     private RuntimeType constraint;
-    private boolean builtin = true;
     private volatile List<MediaType> mediaTypes;
     private volatile MessageBodyReader<?> instance;
 
@@ -45,14 +44,6 @@ public class ResourceReader {
     public ResourceReader setConstraint(RuntimeType constraint) {
         this.constraint = constraint;
         return this;
-    }
-
-    public boolean isBuiltin() {
-        return builtin;
-    }
-
-    public void setBuiltin(boolean builtin) {
-        this.builtin = builtin;
     }
 
     public MessageBodyReader<?> getInstance() {
@@ -108,11 +99,6 @@ public class ResourceReader {
 
         @Override
         public int compare(ResourceReader o1, ResourceReader o2) {
-            int builtInCompare = Boolean.compare(o1.isBuiltin(), o2.isBuiltin());
-            if (builtInCompare != 0) {
-                return builtInCompare;
-            }
-
             List<MediaType> mediaTypes1 = o1.mediaTypes();
             List<MediaType> mediaTypes2 = o2.mediaTypes();
             if (mediaTypes1.isEmpty() && mediaTypes2.isEmpty()) {

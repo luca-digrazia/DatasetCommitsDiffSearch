@@ -343,16 +343,7 @@ public class Serialisers {
         if (configuration != null && !configuration.getResourceReaders().isEmpty()) {
             readers = new MultivaluedHashMap<>();
             readers.putAll(this.readers);
-            for (Map.Entry<Class<?>, List<ResourceReader>> entry : configuration.getResourceReaders().entrySet()) {
-                List<ResourceReader> resourceReadersOfKey = readers.get(entry.getKey());
-                if (resourceReadersOfKey == null) {
-                    readers.put(entry.getKey(), entry.getValue());
-                } else {
-                    Set<ResourceReader> resourceReadersSet = new HashSet<>(resourceReadersOfKey);
-                    resourceReadersSet.addAll(entry.getValue());
-                    readers.put(entry.getKey(), new ArrayList<>(resourceReadersSet));
-                }
-            }
+            readers.putAll(configuration.getResourceReaders());
         } else {
             readers = this.readers;
         }
@@ -498,16 +489,7 @@ public class Serialisers {
         if (configuration != null && !configuration.getResourceWriters().isEmpty()) {
             writers = new MultivaluedHashMap<>();
             writers.putAll(this.writers);
-            for (Map.Entry<Class<?>, List<ResourceWriter>> entry : configuration.getResourceWriters().entrySet()) {
-                List<ResourceWriter> resourceWritersOfKey = writers.get(entry.getKey());
-                if (resourceWritersOfKey == null) {
-                    writers.put(entry.getKey(), entry.getValue());
-                } else {
-                    Set<ResourceWriter> resourceWriterSet = new HashSet<>(resourceWritersOfKey);
-                    resourceWriterSet.addAll(entry.getValue());
-                    writers.put(entry.getKey(), new ArrayList<>(resourceWriterSet));
-                }
-            }
+            writers.putAll(configuration.getResourceWriters());
         } else {
             writers = this.writers;
         }
@@ -552,16 +534,7 @@ public class Serialisers {
         if (configuration != null && !configuration.getResourceWriters().isEmpty()) {
             writers = new MultivaluedHashMap<>();
             writers.putAll(this.writers);
-            for (Map.Entry<Class<?>, List<ResourceWriter>> entry : configuration.getResourceWriters().entrySet()) {
-                List<ResourceWriter> resourceWritersOfKey = writers.get(entry.getKey());
-                if (resourceWritersOfKey == null) {
-                    writers.put(entry.getKey(), entry.getValue());
-                } else {
-                    Set<ResourceWriter> resourceWriterSet = new HashSet<>(resourceWritersOfKey);
-                    resourceWriterSet.addAll(entry.getValue());
-                    writers.put(entry.getKey(), new ArrayList<>(resourceWriterSet));
-                }
-            }
+            writers.putAll(configuration.getResourceWriters());
         } else {
             writers = this.writers;
         }
@@ -625,18 +598,11 @@ public class Serialisers {
         }
     }
 
-    public NoMediaTypeResult findWriterNoMediaType(QuarkusRestRequestContext requestContext, Object entity,
-            RuntimeType runtimeType) {
+    public NoMediaTypeResult findWriterNoMediaType(QuarkusRestRequestContext requestContext, Object entity) {
         List<ResourceWriter> resultForClass = noMediaTypeClassCache.computeIfAbsent(entity.getClass(), mappingFunction);
-        List<ResourceWriter> constrainedResultsForClass = new ArrayList<>(resultForClass.size());
-        for (ResourceWriter writer : resultForClass) {
-            if (!writer.matchesRuntimeType(runtimeType)) {
-                continue;
-            }
-            constrainedResultsForClass.add(writer);
-        }
+        //TODO: more work is needed on internal default ordering
         MediaType selected = null;
-        for (ResourceWriter writer : constrainedResultsForClass) {
+        for (ResourceWriter writer : resultForClass) {
             selected = writer.serverMediaType().negotiateProduces(requestContext.getContext().request());
             if (selected != null) {
                 break;
@@ -644,7 +610,7 @@ public class Serialisers {
         }
         if (selected == null) {
             Set<MediaType> acceptable = new HashSet<>();
-            for (ResourceWriter i : constrainedResultsForClass) {
+            for (ResourceWriter i : resultForClass) {
                 acceptable.addAll(i.mediaTypes());
             }
 
@@ -658,8 +624,8 @@ public class Serialisers {
         if (selected.isWildcardType() || (selected.getType().equals("application") && selected.isWildcardSubtype())) {
             selected = MediaType.APPLICATION_OCTET_STREAM_TYPE;
         }
-        List<MessageBodyWriter<?>> finalResult = new ArrayList<>(constrainedResultsForClass.size());
-        for (ResourceWriter i : constrainedResultsForClass) {
+        List<MessageBodyWriter<?>> finalResult = new ArrayList<>(resultForClass.size());
+        for (ResourceWriter i : resultForClass) {
             // this part seems to be needed in order to pass com.sun.ts.tests.jaxrs.ee.resource.java2entity.JAXRSClient
             if (i.mediaTypes().isEmpty()) {
                 finalResult.add(i.getInstance());

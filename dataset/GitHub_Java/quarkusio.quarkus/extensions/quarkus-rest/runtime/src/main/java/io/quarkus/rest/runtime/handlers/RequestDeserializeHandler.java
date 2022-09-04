@@ -3,13 +3,11 @@ package io.quarkus.rest.runtime.handlers;
 import java.io.InputStream;
 import java.util.List;
 
-import javax.ws.rs.BadRequestException;
 import javax.ws.rs.NotSupportedException;
 import javax.ws.rs.RuntimeType;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.NoContentException;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.ReaderInterceptor;
@@ -54,17 +52,12 @@ public class RequestDeserializeHandler implements RestHandler {
                 Object result;
                 ReaderInterceptor[] interceptors = requestContext.getReaderInterceptors();
                 try {
-                    try {
-                        if (interceptors == null) {
-                            result = reader.readFrom((Class) type, type, null, requestType,
-                                    requestContext.getHttpHeaders().getRequestHeaders(), in);
-                        } else {
-                            result = new QuarkusRestReaderInterceptorContext(requestContext,
-                                    requestContext.getMethodAnnotations(),
-                                    type, type, requestType, reader, in, interceptors).proceed();
-                        }
-                    } catch (NoContentException e) {
-                        throw new BadRequestException(e);
+                    if (interceptors == null) {
+                        result = reader.readFrom((Class) type, type, null, requestType,
+                                requestContext.getHttpHeaders().getRequestHeaders(), in);
+                    } else {
+                        result = new QuarkusRestReaderInterceptorContext(requestContext, requestContext.getMethodAnnotations(),
+                                type, type, requestType, reader, in, interceptors).proceed();
                     }
                 } catch (Exception e) {
                     requestContext.restart(requestContext.getAbortHandlerChain());
