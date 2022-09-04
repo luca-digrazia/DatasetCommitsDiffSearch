@@ -52,6 +52,7 @@ public class MessagesController extends AuthenticatedController {
     public Result show(String index, String id) {
         try {
             MessageResult message = messagesService.getMessage(index, id);
+            message = FieldMapper.run(message);
             Node sourceNode = getSourceNode(message);
             Radio sourceRadio = getSourceRadio(message);
 
@@ -80,7 +81,7 @@ public class MessagesController extends AuthenticatedController {
 
 	public Result partial(String index, String id) {
 		try {
-            MessageResult message = messagesService.getMessage(index, id);
+            MessageResult message = FieldMapper.run(messagesService.getMessage(index, id));
             Node sourceNode = getSourceNode(message);
             Radio sourceRadio = getSourceRadio(message);
             List<Stream> messageInStreams = Lists.newArrayList();
