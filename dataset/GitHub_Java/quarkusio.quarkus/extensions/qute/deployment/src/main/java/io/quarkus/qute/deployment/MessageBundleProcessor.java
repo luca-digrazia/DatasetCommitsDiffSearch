@@ -15,7 +15,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -50,15 +49,12 @@ import io.quarkus.arc.processor.Annotations;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.deployment.ApplicationArchive;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
-import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
-import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
 import io.quarkus.gizmo.AssignableResultHandle;
 import io.quarkus.gizmo.BranchResult;
 import io.quarkus.gizmo.BytecodeCreator;
@@ -76,7 +72,6 @@ import io.quarkus.qute.EvalContext;
 import io.quarkus.qute.EvaluatedParams;
 import io.quarkus.qute.Expression;
 import io.quarkus.qute.Expression.Part;
-import io.quarkus.qute.Namespaces;
 import io.quarkus.qute.Resolver;
 import io.quarkus.qute.deployment.QuteProcessor.Match;
 import io.quarkus.qute.deployment.TemplatesAnalysisBuildItem.TemplateAnalysis;
@@ -134,12 +129,6 @@ public class MessageBundleProcessor {
                 if (Modifier.isInterface(bundleClass.flags())) {
                     AnnotationValue nameValue = bundleAnnotation.value();
                     String name = nameValue != null ? nameValue.asString() : MessageBundle.DEFAULT_NAME;
-                    if (!Namespaces.isValidNamespace(name)) {
-                        throw new MessageBundleException(
-                                String.format(
-                                        "Message bundle name [%s] declared on %s must be a valid namespace - the value can only consist of alphanumeric characters and underscores",
-                                        name, bundleClass));
-                    }
 
                     if (found.containsKey(name)) {
                         throw new MessageBundleException(
@@ -496,32 +485,6 @@ public class MessageBundleProcessor {
         }
     }
 
-    @BuildStep(onlyIf = IsNormal.class)
-    void generateExamplePropertiesFiles(List<MessageBundleMethodBuildItem> messageBundleMethods,
-            BuildSystemTargetBuildItem target, BuildProducer<GeneratedResourceBuildItem> dummy) throws IOException {
-        Map<String, List<MessageBundleMethodBuildItem>> bundles = new HashMap<>();
-        for (MessageBundleMethodBuildItem messageBundleMethod : messageBundleMethods) {
-            if (messageBundleMethod.isDefaultBundle()) {
-                List<MessageBundleMethodBuildItem> methods = bundles.get(messageBundleMethod.getBundleName());
-                if (methods == null) {
-                    methods = new ArrayList<>();
-                    bundles.put(messageBundleMethod.getBundleName(), methods);
-                }
-                methods.add(messageBundleMethod);
-            }
-        }
-        Path generatedExamplesDir = target.getOutputDirectory()
-                .resolve("qute-i18n-examples");
-        Files.createDirectories(generatedExamplesDir);
-        for (Entry<String, List<MessageBundleMethodBuildItem>> entry : bundles.entrySet()) {
-            List<MessageBundleMethodBuildItem> messages = entry.getValue();
-            messages.sort(Comparator.comparing(MessageBundleMethodBuildItem::getKey));
-            Path exampleProperfies = generatedExamplesDir.resolve(entry.getKey() + ".properties");
-            Files.write(exampleProperfies,
-                    messages.stream().map(m -> m.getMethod().name() + "=" + m.getTemplate()).collect(Collectors.toList()));
-        }
-    }
-
     private Map<String, String> generateImplementations(List<MessageBundleBuildItem> bundles,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             BuildProducer<GeneratedClassBuildItem> generatedClasses,
@@ -547,34 +510,25 @@ public class MessageBundleProcessor {
             for (Entry<String, Path> entry : bundle.getLocalizedFiles().entrySet()) {
                 Path localizedFile = entry.getValue();
                 Map<String, String> keyToTemplate = new HashMap<>();
-                for (ListIterator<String> it = Files.readAllLines(localizedFile).listIterator(); it.hasNext();) {
-                    String line = it.next();
-                    if (line.startsWith("#") || line.isBlank()) {
-                        // Comments and blank lines are skipped
-                        continue;
-                    }
-                    int eqIdx = line.indexOf('=');
-                    if (eqIdx == -1) {
-                        throw new MessageBundleException(
-                                "Missing key/value separator\n\t- file: " + localizedFile + "\n\t- line " + it.previousIndex());
-                    }
-                    String key = line.substring(0, eqIdx).strip();
-                    if (!hasMessageBundleMethod(bundleInterface, key)) {
-                        throw new MessageBundleException(
-                                "Message bundle method " + key + "() not found on: " + bundleInterface + "\n\t- file: "
-                                        + localizedFile + "\n\t- line " + it.previousIndex());
-                    }
-                    String value = adaptLine(line.substring(eqIdx + 1, line.length()));
-                    if (value.endsWith("\\")) {
-                        // The logical line is spread out across several normal lines
-                        StringBuilder builder = new StringBuilder(value.substring(0, value.length() - 1));
-                        constructLine(builder, it);
-                        keyToTemplate.put(key, builder.toString());
-                    } else {
+                int linesProcessed = 0;
+                for (String line : Files.readAllLines(localizedFile)) {
+                    linesProcessed++;
+                    if (!line.startsWith("#")) {
+                        int eqIndex = line.indexOf('=');
+                        if (eqIndex == -1) {
+                            throw new MessageBundleException(
+                                    "Missing key/value separator\n\t- file: " + localizedFile + "\n\t- line " + linesProcessed);
+                        }
+                        String key = line.substring(0, eqIndex).trim();
+                        if (!hasMessageBundleMethod(bundleInterface, key)) {
+                            throw new MessageBundleException(
+                                    "Message bundle method " + key + "() not found on: " + bundleInterface + "\n\t- file: "
+                                            + localizedFile + "\n\t- line " + linesProcessed);
+                        }
+                        String value = line.substring(eqIndex + 1, line.length()).trim();
                         keyToTemplate.put(key, value);
                     }
                 }
-
                 String locale = entry.getKey();
                 ClassOutput localeAwareGizmoAdaptor = new GeneratedClassGizmoAdaptor(generatedClasses,
                         new AppClassPredicate(applicationArchivesBuildItem,
@@ -595,22 +549,6 @@ public class MessageBundleProcessor {
             }
         }
         return generatedTypes;
-    }
-
-    private void constructLine(StringBuilder builder, Iterator<String> it) {
-        if (it.hasNext()) {
-            String nextLine = adaptLine(it.next());
-            if (nextLine.endsWith("\\")) {
-                builder.append(nextLine.substring(0, nextLine.length() - 1));
-                constructLine(builder, it);
-            } else {
-                builder.append(nextLine);
-            }
-        }
-    }
-
-    private String adaptLine(String line) {
-        return line.stripLeading().replace("\\n", "\n");
     }
 
     private boolean hasMessageBundleMethod(ClassInfo bundleInterface, String name) {
@@ -721,7 +659,7 @@ public class MessageBundleProcessor {
             }
 
             MessageBundleMethodBuildItem messageBundleMethod = new MessageBundleMethodBuildItem(bundleName, key, templateId,
-                    method, messageTemplate, defaultBundleInterface == null);
+                    method, messageTemplate);
             messageTemplateMethods
                     .produce(messageBundleMethod);
 
@@ -818,7 +756,7 @@ public class MessageBundleProcessor {
         BytecodeCreator success = throwableIsNull.trueBranch();
 
         // Return if the name is null or NOT_FOUND
-        ResultHandle resultNotFound = success.invokeStaticInterfaceMethod(Descriptors.NOT_FOUND_FROM_EC, whenEvalContext);
+        ResultHandle resultNotFound = success.readStaticField(Descriptors.RESULT_NOT_FOUND);
         BytecodeCreator nameIsNull = success.ifNull(whenComplete.getMethodParam(0)).trueBranch();
         nameIsNull.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_COMPLETE, whenRet,
                 resultNotFound);
@@ -893,7 +831,7 @@ public class MessageBundleProcessor {
                     MethodDescriptor.ofMethod(defaultBundleImpl, "resolve", CompletionStage.class, EvalContext.class),
                     resolve.getThis(), evalContext));
         } else {
-            resolve.returnValue(resolve.invokeStaticMethod(Descriptors.RESULTS_NOT_FOUND_EC, evalContext));
+            resolve.returnValue(resolve.readStaticField(Descriptors.RESULTS_NOT_FOUND));
         }
     }
 
