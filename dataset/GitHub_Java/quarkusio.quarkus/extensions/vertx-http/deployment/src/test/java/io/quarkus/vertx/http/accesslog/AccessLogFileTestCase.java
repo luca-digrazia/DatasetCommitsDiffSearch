@@ -5,7 +5,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -69,8 +69,6 @@ public class AccessLogFileTestCase {
                         p.setProperty("quarkus.http.access-log.log-to-file", "true");
                         p.setProperty("quarkus.http.access-log.base-file-name", "server");
                         p.setProperty("quarkus.http.access-log.log-directory", logDirectory.toAbsolutePath().toString());
-                        p.setProperty("quarkus.http.access-log.pattern", "long");
-                        p.setProperty("quarkus.http.access-log.exclude-pattern", "/health|/liveliness");
                         ByteArrayOutputStream out = new ByteArrayOutputStream();
                         p.store(out, null);
 
@@ -105,8 +103,6 @@ public class AccessLogFileTestCase {
                 new HttpClientConfig().setParam(CoreProtocolPNames.PROTOCOL_VERSION, new ProtocolVersion("HTTP", 1, 0)));
         final RequestSpecification requestSpec = new RequestSpecBuilder().setConfig(http10Config).build();
         final String paramValue = UUID.randomUUID().toString();
-        RestAssured.given(requestSpec).get("/health"); //should be ignored
-        RestAssured.given(requestSpec).get("/liveliness"); //should be ignored
         RestAssured.given(requestSpec).get("/does-not-exist?foo=" + paramValue);
 
         Awaitility.given().pollInterval(100, TimeUnit.MILLISECONDS)
@@ -120,8 +116,7 @@ public class AccessLogFileTestCase {
                         Path path = logDirectory.resolve("server.log");
                         Assertions.assertTrue(Files.exists(path));
                         String data = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
-                        Assertions.assertFalse(data.contains("/health"));
-                        Assertions.assertFalse(data.contains("/liveliness"));
+                        Assertions.assertTrue(data.contains("404"));
                         Assertions.assertTrue(data.contains("/does-not-exist"));
                         Assertions.assertTrue(data.contains("?foo=" + paramValue),
                                 "access log is missing query params");
@@ -129,8 +124,6 @@ public class AccessLogFileTestCase {
                                 "access log contains duplicated query params");
                         Assertions.assertTrue(data.contains("HTTP/1.0"),
                                 "HTTP/1.0 protocol value is missing in the access log");
-                        Assertions.assertTrue(data.contains("Accept: */*"),
-                                "Accept header is missing in the access log");
                     }
                 });
     }
