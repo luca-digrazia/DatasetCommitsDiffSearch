@@ -220,8 +220,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         ImmutableList.<Artifact>of(),
         NativeLibs.EMPTY,
         // TODO(elenairina): Use JavaCommon.isNeverlink(ruleContext) for consistency among rules.
-        androidCommon.isNeverLink(),
-        /* isLibrary = */ true);
+        androidCommon.isNeverLink());
 
     NestedSetBuilder<Artifact> transitiveResourcesJars = collectTransitiveResourceJars(ruleContext);
     if (resourceApk.getResourceJavaClassJar() != null) {

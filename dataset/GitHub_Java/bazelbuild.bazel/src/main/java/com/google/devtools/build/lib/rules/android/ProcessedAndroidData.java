@@ -48,7 +48,7 @@ public class ProcessedAndroidData {
   private final Artifact apk;
   @Nullable private final Artifact dataBindingInfoZip;
   private final ResourceDependencies resourceDeps;
-  private final Artifact resourceProguardConfig;
+  @Nullable private final Artifact resourceProguardConfig;
   @Nullable private final Artifact mainDexProguardConfig;
 
   /** Processes Android data (assets, resources, and manifest) for android_binary targets. */
@@ -249,7 +249,7 @@ public class ProcessedAndroidData {
       Artifact apk,
       @Nullable Artifact dataBindingInfoZip,
       ResourceDependencies resourceDeps,
-      Artifact resourceProguardConfig,
+      @Nullable Artifact resourceProguardConfig,
       @Nullable Artifact mainDexProguardConfig) {
     return new ProcessedAndroidData(
         resources, assets, manifest, rTxt, sourceJar, apk, dataBindingInfoZip, resourceDeps,
@@ -265,7 +265,7 @@ public class ProcessedAndroidData {
       Artifact apk,
       @Nullable Artifact dataBindingInfoZip,
       ResourceDependencies resourceDeps,
-      Artifact resourceProguardConfig,
+      @Nullable Artifact resourceProguardConfig,
       @Nullable Artifact mainDexProguardConfig) {
     this.resources = resources;
     this.assets = assets;
