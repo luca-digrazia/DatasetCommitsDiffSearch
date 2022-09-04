@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.remote.blobstore.http;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.auth.Credentials;
-import com.google.common.collect.ImmutableList;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -33,7 +32,6 @@ import io.netty.handler.stream.ChunkedStream;
 import io.netty.handler.timeout.WriteTimeoutException;
 import io.netty.util.internal.StringUtil;
 import java.io.IOException;
-import java.util.Map.Entry;
 
 /** ChannelHandler for uploads. */
 final class HttpUploadHandler extends AbstractHttpHandler<FullHttpResponse> {
@@ -43,9 +41,8 @@ final class HttpUploadHandler extends AbstractHttpHandler<FullHttpResponse> {
   /** the size of the data being uploaded in bytes */
   private long contentLength;
 
-  public HttpUploadHandler(
-      Credentials credentials, ImmutableList<Entry<String, String>> extraHttpHeaders) {
-    super(credentials, extraHttpHeaders);
+  public HttpUploadHandler(Credentials credentials) {
+    super(credentials);
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
@@ -95,7 +92,6 @@ final class HttpUploadHandler extends AbstractHttpHandler<FullHttpResponse> {
     contentLength = cmd.contentLength();
     HttpRequest request = buildRequest(path, constructHost(cmd.uri()), contentLength);
     addCredentialHeaders(request, cmd.uri());
-    addExtraRemoteHeaders(request);
     addUserAgentHeader(request);
     HttpChunkedInput body = buildBody(cmd);
     ctx.writeAndFlush(request)
