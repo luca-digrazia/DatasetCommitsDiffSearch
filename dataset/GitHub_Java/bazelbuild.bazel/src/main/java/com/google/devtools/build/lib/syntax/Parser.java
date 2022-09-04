@@ -1053,10 +1053,10 @@ public class Parser {
 
       parseLoadSymbol(symbols);
     }
+    expect(TokenKind.RPAREN);
 
     LoadStatement stmt = new LoadStatement(importString, symbols);
-    list.add(setLocation(stmt, start, token.right));
-    expect(TokenKind.RPAREN);
+    list.add(setLocation(stmt, start, token.left));
     expectAndRecover(TokenKind.NEWLINE);
   }
 
@@ -1120,7 +1120,8 @@ public class Parser {
   // small_stmt | 'pass'
   private void parseSmallStatementOrPass(List<Statement> list) {
     if (token.kind == TokenKind.PASS) {
-      list.add(setLocation(new PassStatement(), token.left, token.right));
+      // Skip the token, don't add it to the list.
+      // It has no existence in the AST.
       expect(TokenKind.PASS);
     } else {
       list.add(parseSmallStatement());

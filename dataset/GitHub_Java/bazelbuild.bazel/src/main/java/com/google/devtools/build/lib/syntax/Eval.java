@@ -206,8 +206,6 @@ public class Eval {
       case LOAD:
         execLoad((LoadStatement) st);
         break;
-      case PASS:
-        break;
       case RETURN:
         execReturn((ReturnStatement) st);
         break;

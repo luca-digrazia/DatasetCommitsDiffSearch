@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -34,6 +33,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.EvalException.EvalExceptionWithJavaCause;
 import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtilities;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -616,7 +616,7 @@ public final class FuncallExpression extends Expression {
     Location location = call.getLocation();
     Object value = positionals.get(0);
     ImmutableList<Object> positionalArgs = positionals.subList(1, positionals.size());
-    BaseFunction function = Runtime.getBuiltinRegistry().getFunction(value.getClass(), method);
+    BaseFunction function = Runtime.getFunction(EvalUtils.getSkylarkType(value.getClass()), method);
     Object fieldValue =
         (value instanceof ClassObject) ? ((ClassObject) value).getValue(method) : null;
     if (function != null) {
