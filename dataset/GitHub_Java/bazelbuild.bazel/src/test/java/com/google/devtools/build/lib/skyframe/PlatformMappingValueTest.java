@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -46,7 +45,8 @@ public class PlatformMappingValueTest {
       ImmutableSet.of(PlatformConfiguration.class);
 
   private static final ImmutableList<Class<? extends FragmentOptions>>
-      BUILD_CONFIG_PLATFORM_OPTIONS = ImmutableList.of(CoreOptions.class, PlatformOptions.class);
+      BUILD_CONFIG_PLATFORM_OPTIONS =
+          ImmutableList.of(BuildConfiguration.Options.class, PlatformOptions.class);
 
   private static final Label PLATFORM1 = Label.parseAbsoluteUnchecked("//platforms:one");
   private static final Label PLATFORM2 = Label.parseAbsoluteUnchecked("//platforms:two");
@@ -65,7 +65,7 @@ public class PlatformMappingValueTest {
         new PlatformMappingValue(ImmutableMap.of(), ImmutableMap.of());
 
     BuildConfigurationValue.Key key =
-        BuildConfigurationValue.keyWithoutPlatformMapping(PLATFORM_FRAGMENT_CLASS, EMPTY_DIFF);
+        BuildConfigurationValue.key(PLATFORM_FRAGMENT_CLASS, EMPTY_DIFF);
 
     BuildConfigurationValue.Key mapped =
         mappingValue.map(key, DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
@@ -90,7 +90,7 @@ public class PlatformMappingValueTest {
 
     assertThat(mapped.getFragments()).isEqualTo(PLATFORM_FRAGMENT_CLASS);
 
-    assertThat(toMappedOptions(mapped).get(CoreOptions.class).cpu).isEqualTo("one");
+    assertThat(toMappedOptions(mapped).get(BuildConfiguration.Options.class).cpu).isEqualTo("one");
   }
 
   @Test
@@ -102,8 +102,8 @@ public class PlatformMappingValueTest {
         new PlatformMappingValue(ImmutableMap.of(), flagsToPlatforms);
 
     BuildOptions modifiedOptions = DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS.clone();
-    modifiedOptions.get(CoreOptions.class).cpu = "one";
-    modifiedOptions.get(CoreOptions.class).compilationMode = CompilationMode.DBG;
+    modifiedOptions.get(BuildConfiguration.Options.class).cpu = "one";
+    modifiedOptions.get(BuildConfiguration.Options.class).compilationMode = CompilationMode.DBG;
 
     BuildConfigurationValue.Key mapped =
         mappingValue.map(keyForOptions(modifiedOptions), DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
@@ -125,7 +125,7 @@ public class PlatformMappingValueTest {
         new PlatformMappingValue(ImmutableMap.of(), flagsToPlatforms);
 
     BuildOptions modifiedOptions = DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS.clone();
-    modifiedOptions.get(CoreOptions.class).cpu = "foo";
+    modifiedOptions.get(BuildConfiguration.Options.class).cpu = "foo";
 
     BuildConfigurationValue.Key mapped =
         mappingValue.map(keyForOptions(modifiedOptions), DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
@@ -143,7 +143,7 @@ public class PlatformMappingValueTest {
         new PlatformMappingValue(ImmutableMap.of(), flagsToPlatforms);
 
     BuildOptions modifiedOptions = DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS.clone();
-    modifiedOptions.get(CoreOptions.class).cpu = "bar";
+    modifiedOptions.get(BuildConfiguration.Options.class).cpu = "bar";
 
     BuildConfigurationValue.Key mapped =
         mappingValue.map(keyForOptions(modifiedOptions), DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
@@ -160,7 +160,7 @@ public class PlatformMappingValueTest {
     PlatformMappingValue mappingValue =
         new PlatformMappingValue(ImmutableMap.of(), flagsToPlatforms);
 
-    BuildOptions options = BuildOptions.of(ImmutableList.of(CoreOptions.class));
+    BuildOptions options = BuildOptions.of(ImmutableList.of(BuildConfiguration.Options.class));
 
     assertThrows(
         IllegalArgumentException.class,
@@ -175,7 +175,7 @@ public class PlatformMappingValueTest {
         ImmutableMap.of(ImmutableList.of("--cpu=one"), PLATFORM1);
 
     BuildOptions modifiedOptions = DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS.clone();
-    modifiedOptions.get(CoreOptions.class).cpu = "one";
+    modifiedOptions.get(BuildConfiguration.Options.class).cpu = "one";
     modifiedOptions.get(PlatformOptions.class).platforms = ImmutableList.of(PLATFORM2);
 
     PlatformMappingValue mappingValue =
@@ -193,7 +193,7 @@ public class PlatformMappingValueTest {
         ImmutableMap.of(ImmutableList.of("--cpu=one"), PLATFORM1);
 
     BuildOptions modifiedOptions = DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS.clone();
-    modifiedOptions.get(CoreOptions.class).cpu = "one";
+    modifiedOptions.get(BuildConfiguration.Options.class).cpu = "one";
     modifiedOptions.get(PlatformOptions.class).platforms = ImmutableList.of(PLATFORM2);
 
     PlatformMappingValue mappingValue =
@@ -238,6 +238,6 @@ public class PlatformMappingValueTest {
     BuildOptions.OptionsDiffForReconstruction diff =
         BuildOptions.diffForReconstruction(DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS, modifiedOptions);
 
-    return BuildConfigurationValue.keyWithoutPlatformMapping(PLATFORM_FRAGMENT_CLASS, diff);
+    return BuildConfigurationValue.key(PLATFORM_FRAGMENT_CLASS, diff);
   }
 }

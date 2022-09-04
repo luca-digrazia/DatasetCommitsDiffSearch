@@ -183,6 +183,7 @@ public class PlatformOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_use_toolchain_resolution_for_java_rules",
+      oldName = "experimental_use_toolchain_resolution_for_java_rules",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = OptionEffectTag.UNKNOWN,
