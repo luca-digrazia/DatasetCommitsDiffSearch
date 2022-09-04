@@ -24,8 +24,5 @@ public class GSYApplication extends Application {
         //LeakCanary.install(this);
         //GSYVideoType.enableMediaCodec();
         //GSYVideoManager.instance().setVideoType(this, GSYVideoType.IJKEXOPLAYER);
-        //GSYVideoType.setShowType(GSYVideoType.SCREEN_MATCH_FULL);
-        //GSYVideoType.setShowType(GSYVideoType.SCREEN_TYPE_FULL);
-        //GSYVideoType.setRenderType(GSYVideoType.SUFRACE);
     }
 }
