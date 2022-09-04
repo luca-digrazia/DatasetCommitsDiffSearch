@@ -1,32 +1,23 @@
 package com.example.gsyvideoplayer.adapter;
 
-import android.app.Activity;
 import android.content.Context;
-import android.os.Build;
-import android.os.Handler;
-import android.transition.TransitionManager;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.TextView;
 
 import com.example.gsyvideoplayer.R;
 import com.example.gsyvideoplayer.model.VideoModel;
+import com.shuyu.gsyvideoplayer.listener.StandardVideoAllCallBack;
+import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.utils.ListVideoUtil;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
-import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
-import java.lang.reflect.Constructor;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-
-import static com.example.gsyvideoplayer.utils.CommonUtil.setViewHeight;
 
 /**
  * Created by shuyu on 2016/11/11.
@@ -34,7 +25,7 @@ import static com.example.gsyvideoplayer.utils.CommonUtil.setViewHeight;
 
 public class ListVideoAdapter extends BaseAdapter {
 
-    private String TAG = "TT";
+    public final static String TAG = "TT2";
 
     private List<VideoModel> list = new ArrayList<>();
     private LayoutInflater inflater = null;
@@ -82,29 +73,32 @@ public class ListVideoAdapter extends BaseAdapter {
             convertView = inflater.inflate(R.layout.list_video_item, null);
             holder.videoContainer = (FrameLayout) convertView.findViewById(R.id.list_item_container);
             holder.playerBtn = (ImageView) convertView.findViewById(R.id.list_item_btn);
+            holder.imageView = new ImageView(context);
             convertView.setTag(holder);
         } else {
             holder = (ViewHolder) convertView.getTag();
         }
 
         //增加封面
-        ImageView imageView = new ImageView(context);
-        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        imageView.setImageResource(R.mipmap.xxx1);
-
-        listVideoUtil.addVideoPlayer(position, imageView, TAG, holder.videoContainer, holder.playerBtn);
-
+        holder.imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        holder.imageView.setImageResource(R.mipmap.xxx1);
+        final Object[] objects = {"title " + position};
+        listVideoUtil.addVideoPlayer(position, holder.imageView, TAG, holder.videoContainer, holder.playerBtn);
         holder.playerBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 notifyDataSetChanged();
+                //listVideoUtil.setLoop(true);
                 listVideoUtil.setPlayPositionAndTag(position, TAG);
                 final String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
+                listVideoUtil.setObjects(objects);
+                //listVideoUtil.setCachePath(new File(FileUtils.getPath()));
                 listVideoUtil.startPlay(url);
+
+                //必须在startPlay之后设置才能生效
+                //listVideoUtil.getGsyVideoPlayer().getTitleTextView().setVisibility(View.VISIBLE);
             }
         });
-
-
         return convertView;
     }
 
@@ -112,6 +106,7 @@ public class ListVideoAdapter extends BaseAdapter {
     class ViewHolder {
         FrameLayout videoContainer;
         ImageView playerBtn;
+        ImageView imageView;
     }
 
     public void setRootView(ViewGroup rootView) {

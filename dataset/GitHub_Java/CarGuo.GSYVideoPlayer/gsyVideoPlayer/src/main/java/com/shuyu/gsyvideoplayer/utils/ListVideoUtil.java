@@ -5,7 +5,6 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Point;
 import android.os.Handler;
-import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -45,7 +44,7 @@ public class ListVideoUtil {
     private Context context;
     private File cachePath;
 
-    private String mTitle;
+    private Object[] objects;
 
     private Map<String, String> mapHeadData;
 
@@ -139,10 +138,10 @@ public class ListVideoUtil {
 
         gsyVideoPlayer.setNeedLockFull(needLockFull);
 
-        gsyVideoPlayer.setUp(url, true, cachePath, mapHeadData, mTitle);
+        gsyVideoPlayer.setUp(url, true, cachePath, mapHeadData, objects);
 
-        if(!TextUtils.isEmpty(mTitle)) {
-            gsyVideoPlayer.getTitleTextView().setText(mTitle);
+        if(objects != null && objects.length > 0) {
+            gsyVideoPlayer.getTitleTextView().setText((String)objects[0]);
         }
 
         //增加title
@@ -285,7 +284,7 @@ public class ListVideoUtil {
                 gsyVideoPlayer.setIfCurrentIsFullscreen(false);
                 if (videoAllCallBack != null) {
                     Debuger.printfLog("onQuitFullscreen");
-                    videoAllCallBack.onQuitFullscreen(url, mTitle, gsyVideoPlayer);
+                    videoAllCallBack.onQuitFullscreen(url);
                 }
                 if (hideKey) {
                     showNavKey(context, systemUiVisibility);
@@ -344,7 +343,7 @@ public class ListVideoUtil {
         gsyVideoPlayer.setIfCurrentIsFullscreen(true);
         if (videoAllCallBack != null) {
             Debuger.printfLog("onEnterFullscreen");
-            videoAllCallBack.onEnterFullscreen(this.url, mTitle, gsyVideoPlayer);
+            videoAllCallBack.onEnterFullscreen(this.url);
         }
     }
 
@@ -574,12 +573,12 @@ public class ListVideoUtil {
         this.cachePath = cachePath;
     }
 
-    public String getTitle() {
-        return mTitle;
+    public Object[] getObjects() {
+        return objects;
     }
 
-    public void setTitle(String title) {
-        this.mTitle = title;
+    public void setObjects(Object[] objects) {
+        this.objects = objects;
     }
 
     public Map<String, String> getMapHeadData() {
