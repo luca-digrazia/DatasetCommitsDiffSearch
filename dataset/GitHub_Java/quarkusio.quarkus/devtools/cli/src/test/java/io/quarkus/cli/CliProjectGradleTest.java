@@ -3,7 +3,6 @@ package io.quarkus.cli;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -55,36 +54,16 @@ public class CliProjectGradleTest {
             gradle = ExecuteUtil.findExecutableFile("gradle");
         }
 
-        List<String> args = new ArrayList<>();
-        args.add(gradle.getAbsolutePath());
-        args.add("--daemon");
-        args.add("-q");
-        args.add("--project-dir=" + project.toAbsolutePath());
-
-        String localMavenRepo = System.getProperty("maven.repo.local", null);
-        if (localMavenRepo != null) {
-            args.add("-Dmaven.repo.local=" + localMavenRepo);
-        }
-
-        CliDriver.Result result = CliDriver.executeArbitraryCommand(args.toArray(new String[0]));
+        CliDriver.Result result = CliDriver.executeArbitraryCommand(gradle.getAbsolutePath(), "--daemon", "-q",
+                "--project-dir=" + project.toAbsolutePath());
         Assertions.assertEquals(0, result.exitCode, "Gradle daemon should start properly");
     }
 
     @AfterEach
     void stopGradleDaemon() throws Exception {
         if (gradle != null) {
-
-            List<String> args = new ArrayList<>();
-            args.add(gradle.getAbsolutePath());
-            args.add("--stop");
-            args.add("--project-dir=" + project.toAbsolutePath());
-
-            String localMavenRepo = System.getProperty("maven.repo.local", null);
-            if (localMavenRepo != null) {
-                args.add("-Dmaven.repo.local=" + localMavenRepo);
-            }
-
-            CliDriver.Result result = CliDriver.executeArbitraryCommand(args.toArray(new String[0]));
+            CliDriver.Result result = CliDriver.executeArbitraryCommand(gradle.getAbsolutePath(), "--stop",
+                    "--project-dir=" + project.toAbsolutePath());
             Assertions.assertEquals(0, result.exitCode, "Gradle daemon should stop properly");
         }
     }
