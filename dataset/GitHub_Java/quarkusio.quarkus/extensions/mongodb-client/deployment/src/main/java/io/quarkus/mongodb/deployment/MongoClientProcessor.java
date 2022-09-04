@@ -135,13 +135,11 @@ public class MongoClientProcessor {
         reflectiveClassNames.addAll(propertyCodecProviders.getPropertyCodecProviderClassNames());
         reflectiveClassNames.addAll(bsonDiscriminators.getBsonDiscriminatorClassNames());
         reflectiveClassNames.addAll(commandListeners.getCommandListenerClassNames());
+        reflectiveClassNames.add(ChangeStreamDocument.class.getName());
 
-        List<ReflectiveClassBuildItem> reflectiveClass = reflectiveClassNames.stream()
+        return reflectiveClassNames.stream()
                 .map(s -> new ReflectiveClassBuildItem(true, true, false, s))
-                .collect(Collectors.toCollection(() -> new ArrayList<>()));
-        // ChangeStreamDocument needs to be registered for reflection with its fields.
-        reflectiveClass.add(new ReflectiveClassBuildItem(true, true, true, ChangeStreamDocument.class.getName()));
-        return reflectiveClass;
+                .collect(Collectors.toList());
     }
 
     @BuildStep
