@@ -31,12 +31,14 @@ import io.quarkus.hibernate.orm.runtime.IntegrationSettings;
 import io.quarkus.hibernate.orm.runtime.PersistenceUnitsHolder;
 import io.quarkus.hibernate.orm.runtime.RuntimeSettings;
 import io.quarkus.hibernate.orm.runtime.RuntimeSettings.Builder;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationRuntimeDescriptor;
+import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationRuntimeInitListener;
 import io.quarkus.hibernate.orm.runtime.recording.PrevalidatedQuarkusMetadata;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 import io.quarkus.hibernate.reactive.runtime.boot.FastBootReactiveEntityManagerFactoryBuilder;
 import io.quarkus.hibernate.reactive.runtime.boot.registry.PreconfiguredReactiveServiceRegistryBuilder;
 import io.quarkus.hibernate.reactive.runtime.customized.QuarkusReactiveConnectionPoolInitiator;
+import io.quarkus.hibernate.reactive.runtime.customized.VertxInstanceInitiator;
+import io.vertx.core.Vertx;
 import io.vertx.sqlclient.Pool;
 
 /**
@@ -55,12 +57,12 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
     private volatile FastBootHibernatePersistenceProvider delegate;
 
     private final HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig;
-    private final Map<String, List<HibernateOrmIntegrationRuntimeDescriptor>> integrationRuntimeDescriptors;
+    private final Map<String, List<HibernateOrmIntegrationRuntimeInitListener>> integrationRuntimeInitListeners;
 
     public FastBootHibernateReactivePersistenceProvider(HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig,
-            Map<String, List<HibernateOrmIntegrationRuntimeDescriptor>> integrationRuntimeDescriptors) {
+            Map<String, List<HibernateOrmIntegrationRuntimeInitListener>> integrationRuntimeInitListeners) {
         this.hibernateOrmRuntimeConfig = hibernateOrmRuntimeConfig;
-        this.integrationRuntimeDescriptors = integrationRuntimeDescriptors;
+        this.integrationRuntimeInitListeners = integrationRuntimeInitListeners;
     }
 
     @Override
@@ -139,10 +141,12 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
                 injectRuntimeConfiguration(persistenceUnitName, hibernateOrmRuntimeConfig, runtimeSettingsBuilder);
             }
 
-            for (HibernateOrmIntegrationRuntimeDescriptor descriptor : integrationRuntimeDescriptors
+            for (HibernateOrmIntegrationRuntimeInitListener listener : integrationRuntimeInitListeners
                     .getOrDefault(persistenceUnitName, Collections.emptyList())) {
-                descriptor.getInitListener()
-                        .ifPresent(listener -> listener.contributeRuntimeProperties(runtimeSettingsBuilder::put));
+                if (listener == null) {
+                    continue;
+                }
+                listener.contributeRuntimeProperties(runtimeSettingsBuilder::put);
             }
 
             RuntimeSettings runtimeSettings = runtimeSettingsBuilder.build();
@@ -171,7 +175,7 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
         PreconfiguredReactiveServiceRegistryBuilder serviceRegistryBuilder = new PreconfiguredReactiveServiceRegistryBuilder(
                 rs);
 
-        registerVertxPool(persistenceUnitName, runtimeSettings, serviceRegistryBuilder);
+        registerVertxAndPool(persistenceUnitName, runtimeSettings, serviceRegistryBuilder);
 
         runtimeSettings.getSettings().forEach((key, value) -> {
             serviceRegistryBuilder.applySetting(key, value);
@@ -213,7 +217,7 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
                 || "org.hibernate.jpa.HibernatePersistenceProvider".equals(requestedProviderName);
     }
 
-    private void registerVertxPool(String persistenceUnitName,
+    private void registerVertxAndPool(String persistenceUnitName,
             RuntimeSettings runtimeSettings,
             PreconfiguredReactiveServiceRegistryBuilder serviceRegistry) {
         if (runtimeSettings.isConfigured(AvailableSettings.URL)) {
@@ -228,6 +232,12 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
         }
 
         serviceRegistry.addInitiator(new QuarkusReactiveConnectionPoolInitiator(poolHandle.get()));
+
+        InstanceHandle<Vertx> vertxHandle = Arc.container().instance(Vertx.class);
+        if (!vertxHandle.isAvailable()) {
+            throw new IllegalStateException("No Vert.x instance has been registered in ArC ?");
+        }
+        serviceRegistry.addInitiator(new VertxInstanceInitiator(vertxHandle.get()));
     }
 
     private static void injectRuntimeConfiguration(String persistenceUnitName,
@@ -289,7 +299,7 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
                 localDelegate = this.delegate;
                 if (localDelegate == null) {
                     this.delegate = localDelegate = new FastBootHibernatePersistenceProvider(hibernateOrmRuntimeConfig,
-                            integrationRuntimeDescriptors);
+                            integrationRuntimeInitListeners);
                 }
             }
         }
