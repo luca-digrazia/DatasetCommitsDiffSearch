@@ -6,7 +6,6 @@ import org.apache.maven.plugins.annotations.Parameter;
 
 import io.quarkus.cli.commands.ListExtensions;
 import io.quarkus.cli.commands.file.BuildFile;
-import io.quarkus.cli.commands.writer.ProjectWriter;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.tools.MessageWriter;
 
@@ -39,10 +38,10 @@ public class ListExtensionsMojo extends BuildFileMojoBase {
     protected String searchPattern;
 
     @Override
-    public void doExecute(ProjectWriter writer, BuildFile buildFile, QuarkusPlatformDescriptor platformDescr, MessageWriter log)
+    public void doExecute(BuildFile buildFile, QuarkusPlatformDescriptor platformDescr, MessageWriter log)
             throws MojoExecutionException {
         try {
-            new ListExtensions(writer, buildFile, platformDescr)
+            new ListExtensions(buildFile, platformDescr)
                     .all(all)
                     .format(format)
                     .search(searchPattern)

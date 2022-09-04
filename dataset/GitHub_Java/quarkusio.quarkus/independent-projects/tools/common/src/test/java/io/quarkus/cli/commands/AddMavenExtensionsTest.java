@@ -1,28 +1,25 @@
 package io.quarkus.cli.commands;
 
+import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.maven.utilities.MojoUtils;
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-
 import org.apache.maven.model.Model;
-
-import io.quarkus.cli.commands.writer.FileProjectWriter;
-import io.quarkus.maven.utilities.MojoUtils;
 
 class AddMavenExtensionsTest extends AbstractAddExtensionsTest<Model> {
 
     @Override
-    protected Model createProject() throws IOException {
+    protected Model createProject() throws IOException, QuarkusCommandException {
         final File pom = getProjectPath().resolve("pom.xml").toFile();
         CreateProjectTest.delete(getProjectPath().toFile());
-        new CreateProject(new FileProjectWriter(getProjectPath().toFile()))
+        new CreateProject(new FileProjectWriter(getProjectPath().toFile()), getPlatformDescriptor())
                 .groupId("org.acme")
                 .artifactId("add-maven-extension-test")
                 .version("0.0.1-SNAPSHOT")
-                .doCreateProject(new HashMap<>());
+                .execute();
         return MojoUtils.readPom(pom);
     }
 
@@ -32,9 +29,10 @@ class AddMavenExtensionsTest extends AbstractAddExtensionsTest<Model> {
     }
 
     @Override
-    protected AddExtensionResult addExtensions(List<String> extensions) throws IOException {
-        return new AddExtensions(new FileProjectWriter(getProjectPath().toFile()))
-                .addExtensions(new HashSet<>(extensions));
+    protected QuarkusCommandOutcome addExtensions(List<String> extensions) throws IOException, QuarkusCommandException {
+        return new AddExtensions(new FileProjectWriter(getProjectPath().toFile()), getPlatformDescriptor())
+                .extensions(new HashSet<>(extensions))
+                .execute();
     }
 
     @Override

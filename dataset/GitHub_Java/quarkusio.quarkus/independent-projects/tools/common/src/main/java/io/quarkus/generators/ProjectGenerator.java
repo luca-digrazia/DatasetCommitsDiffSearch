@@ -1,11 +1,10 @@
 package io.quarkus.generators;
 
-import java.io.IOException;
-import java.util.Map;
-
 import io.quarkus.cli.commands.QuarkusCommandInvocation;
 import io.quarkus.cli.commands.legacy.LegacyQuarkusCommandInvocation;
 import io.quarkus.cli.commands.writer.ProjectWriter;
+import java.io.IOException;
+import java.util.Map;
 
 public interface ProjectGenerator {
     String BOM_GROUP_ID = "bom_groupId";
@@ -26,6 +25,11 @@ public interface ProjectGenerator {
 
     String getName();
 
+    /**
+     * @deprecated since 1.3.0.CR1
+     *             Please use {@link #generate(ProjectWriter, QuarkusCommandInvocation)} instead.
+     */
+    @Deprecated
     default void generate(ProjectWriter writer, Map<String, Object> parameters) throws IOException {
         generate(writer, new LegacyQuarkusCommandInvocation(parameters));
     }

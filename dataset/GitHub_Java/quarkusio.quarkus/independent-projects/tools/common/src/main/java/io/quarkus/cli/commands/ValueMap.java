@@ -28,10 +28,10 @@ public class ValueMap<V extends ValueMap<V>> {
     @SuppressWarnings("unchecked")
     public <T> T getValue(String name, T defaultValue) {
         final Object value = values.getOrDefault(name, NOT_SET);
-        if(value == NOT_SET) {
+        if (value == NOT_SET) {
             return defaultValue;
         }
-        if(value == null) {
+        if (value == null) {
             return null;
         }
         return (T) value;
@@ -46,6 +46,11 @@ public class ValueMap<V extends ValueMap<V>> {
             return ((Boolean) value).booleanValue();
         }
         return Boolean.parseBoolean(value.toString());
+    }
+
+    public boolean valueIs(String name, Object o) {
+        final Object value = values.get(name);
+        return o == null ? value == null : o.equals(value);
     }
 
     public boolean hasValue(String name) {

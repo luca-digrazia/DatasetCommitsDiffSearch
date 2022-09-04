@@ -2,7 +2,6 @@ package io.quarkus.maven;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.maven.model.Dependency;
@@ -23,7 +22,6 @@ import io.quarkus.cli.commands.file.BuildFile;
 import io.quarkus.cli.commands.file.GradleBuildFile;
 import io.quarkus.cli.commands.file.MavenBuildFile;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
-import io.quarkus.platform.descriptor.CombinedQuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.resolver.json.QuarkusJsonPlatformDescriptorResolver;
 import io.quarkus.platform.tools.MessageWriter;
@@ -78,7 +76,7 @@ public abstract class BuildFileMojoBase extends AbstractMojo {
                 final MavenBuildFile mvnBuild = new MavenBuildFile(fileProjectWriter);
                 buildFile = mvnBuild;
 
-                final List<Artifact> descrArtifactList = new ArrayList<>(2);
+                Artifact descrArtifact = null;
                 for (Dependency dep : mvnBuild.getManagedDependencies()) {
                     if (!dep.getScope().equals("import") && !dep.getType().equals("pom")) {
                         continue;
@@ -91,21 +89,29 @@ public abstract class BuildFileMojoBase extends AbstractMojo {
                         continue;
                     }
 
-                    final Artifact jsonArtifact = resolveJsonOrNull(mvn, bomGroupId, bomArtifactId, bomVersion);
-                    if (jsonArtifact != null) {
-                        descrArtifactList.add(jsonArtifact);
-                    }
-                }
-                if (!descrArtifactList.isEmpty()) {
-                    if (descrArtifactList.size() == 1) {
-                        platformDescr = loadPlatformDescriptor(mvn, log, descrArtifactList.get(0));
-                    } else {
-                        final CombinedQuarkusPlatformDescriptor.Builder builder = CombinedQuarkusPlatformDescriptor.builder();
-                        for (Artifact descrArtifact : descrArtifactList) {
-                            builder.addPlatform(loadPlatformDescriptor(mvn, log, descrArtifact));
+                    Artifact jsonArtifact = new DefaultArtifact(bomGroupId, bomArtifactId, null, "json", bomVersion);
+                    try {
+                        jsonArtifact = mvn.resolve(jsonArtifact).getArtifact();
+                    } catch (Exception e) {
+                        log.debug("Failed to resolve JSON descriptor as %s", jsonArtifact);
+                        jsonArtifact = new DefaultArtifact(bomGroupId, bomArtifactId + "-descriptor-json", null, "json",
+                                bomVersion);
+                        try {
+                            jsonArtifact = mvn.resolve(jsonArtifact).getArtifact();
+                        } catch (Exception e1) {
+                            getLog().debug("Failed to resolve JSON descriptor as " + jsonArtifact);
+                            continue;
                         }
-                        platformDescr = builder.build();
                     }
+                    descrArtifact = jsonArtifact;
+                    break;
+                }
+                if (descrArtifact != null) {
+                    log.debug("Quarkus platform JSON descriptor resolved from %s", descrArtifact);
+                    platformDescr = QuarkusJsonPlatformDescriptorResolver.newInstance()
+                            .setArtifactResolver(new BootstrapAppModelResolver(mvn))
+                            .setMessageWriter(log)
+                            .resolveFromJson(descrArtifact.getFile().toPath());
                 }
             } else if (new File(project.getBasedir(), "build.gradle").exists()
                     || new File(project.getBasedir(), "build.gradle.kts").exists()) {
@@ -131,39 +137,6 @@ public abstract class BuildFileMojoBase extends AbstractMojo {
         }
     }
 
-    private QuarkusPlatformDescriptor loadPlatformDescriptor(final MavenArtifactResolver mvn, final MessageWriter log,
-            Artifact descrArtifact) {
-        return QuarkusJsonPlatformDescriptorResolver.newInstance()
-                .setArtifactResolver(new BootstrapAppModelResolver(mvn))
-                .setMessageWriter(log)
-                .resolveFromJson(descrArtifact.getFile().toPath());
-    }
-
-    private Artifact resolveJsonOrNull(MavenArtifactResolver mvn, String bomGroupId, String bomArtifactId, String bomVersion) {
-        Artifact jsonArtifact = new DefaultArtifact(bomGroupId, bomArtifactId, null, "json", bomVersion);
-        try {
-            jsonArtifact = mvn.resolve(jsonArtifact).getArtifact();
-        } catch (Exception e) {
-            if (getLog().isDebugEnabled()) {
-                getLog().debug("Failed to resolve JSON descriptor as " + jsonArtifact);
-            }
-            jsonArtifact = new DefaultArtifact(bomGroupId, bomArtifactId + "-descriptor-json", null, "json",
-                    bomVersion);
-            try {
-                jsonArtifact = mvn.resolve(jsonArtifact).getArtifact();
-            } catch (Exception e1) {
-                if (getLog().isDebugEnabled()) {
-                    getLog().debug("Failed to resolve JSON descriptor as " + jsonArtifact);
-                }
-                return null;
-            }
-        }
-        if (getLog().isDebugEnabled()) {
-            getLog().debug("Resolve JSON descriptor " + jsonArtifact);
-        }
-        return jsonArtifact;
-    }
-
     protected void validateParameters() throws MojoExecutionException {
     }
 
@@ -172,12 +145,9 @@ public abstract class BuildFileMojoBase extends AbstractMojo {
 
     private String resolveValue(String expr, BuildFile buildFile) throws IOException {
         if (expr.startsWith("${") && expr.endsWith("}")) {
-            final String name = expr.substring(2, expr.length() - 1);
-            final String v = buildFile.getProperty(name);
+            final String v = buildFile.getProperty(expr.substring(2, expr.length() - 1));
             if (v == null) {
-                if (getLog().isDebugEnabled()) {
-                    getLog().debug("Failed to resolve property " + name);
-                }
+                getLog().debug("Failed to resolve version of " + v);
             }
             return v;
         }
