@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.remote;
 
 import com.google.auth.Credentials;
-import com.google.common.base.Ascii;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.remote.blobstore.CombinedDiskHttpBlobStore;
 import com.google.devtools.build.lib.remote.blobstore.ConcurrentMapBlobStore;
@@ -73,24 +72,19 @@ public final class SimpleBlobStoreFactory {
   }
 
   private static SimpleBlobStore createHttp(RemoteOptions options, Credentials creds) {
-    Preconditions.checkNotNull(options.remoteCache, "remoteCache");
-
     try {
-      URI uri = URI.create(options.remoteCache);
-      Preconditions.checkArgument(
-          Ascii.toLowerCase(uri.getScheme()).startsWith("http"),
-          "remoteCache should start with http");
+      URI uri = URI.create(options.remoteHttpCache);
 
-      if (options.remoteProxy != null) {
-        if (options.remoteProxy.startsWith("unix:")) {
+      if (options.remoteCacheProxy != null) {
+        if (options.remoteCacheProxy.startsWith("unix:")) {
           return HttpBlobStore.create(
-              new DomainSocketAddress(options.remoteProxy.replaceFirst("^unix:", "")),
+              new DomainSocketAddress(options.remoteCacheProxy.replaceFirst("^unix:", "")),
               uri,
               options.remoteTimeout,
               options.remoteMaxConnections,
               creds);
         } else {
-          throw new Exception("Remote cache proxy unsupported: " + options.remoteProxy);
+          throw new Exception("Remote cache proxy unsupported: " + options.remoteCacheProxy);
         }
       } else {
         return HttpBlobStore.create(
@@ -127,8 +121,6 @@ public final class SimpleBlobStoreFactory {
   }
 
   private static boolean isHttpUrlOptions(RemoteOptions options) {
-    return options.remoteCache != null
-        && (Ascii.toLowerCase(options.remoteCache).startsWith("http://")
-            || Ascii.toLowerCase(options.remoteCache).startsWith("https://"));
+    return options.remoteHttpCache != null && !options.remoteHttpCache.isEmpty();
   }
 }

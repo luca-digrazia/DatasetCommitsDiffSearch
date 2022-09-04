@@ -56,7 +56,6 @@ import com.google.devtools.common.options.OptionsParsingException;
 import io.grpc.Server;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
-import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -65,9 +64,6 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslProvider;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -160,10 +156,6 @@ public final class RemoteWorker {
             .addService(ServerInterceptors.intercept(casServer, headersInterceptor))
             .addService(ServerInterceptors.intercept(capabilitiesServer, headersInterceptor));
 
-    if (workerOptions.tlsCertificate != null) {
-      b.sslContext(getSslContextBuilder(workerOptions).build());
-    }
-
     if (execServer != null) {
       b.addService(ServerInterceptors.intercept(execServer, headersInterceptor));
     } else {
@@ -175,13 +167,6 @@ public final class RemoteWorker {
     server.start();
 
     return server;
-  }
-
-  private SslContextBuilder getSslContextBuilder(RemoteWorkerOptions workerOptions) {
-    SslContextBuilder sslClientContextBuilder =
-        SslContextBuilder.forServer(
-            new File(workerOptions.tlsCertificate), new File(workerOptions.tlsPrivateKey));
-    return GrpcSslContexts.configure(sslClientContextBuilder, SslProvider.OPENSSL);
   }
 
   private void createPidFile() throws IOException {
@@ -213,9 +198,7 @@ public final class RemoteWorker {
   @SuppressWarnings("FutureReturnValueIgnored")
   public static void main(String[] args) throws Exception {
     OptionsParser parser =
-        OptionsParser.builder()
-            .optionsClasses(RemoteOptions.class, RemoteWorkerOptions.class)
-            .build();
+        OptionsParser.newOptionsParser(RemoteOptions.class, RemoteWorkerOptions.class);
     parser.parseAndExitUponError(args);
     RemoteOptions remoteOptions = parser.getOptions(RemoteOptions.class);
     RemoteWorkerOptions remoteWorkerOptions = parser.getOptions(RemoteWorkerOptions.class);
