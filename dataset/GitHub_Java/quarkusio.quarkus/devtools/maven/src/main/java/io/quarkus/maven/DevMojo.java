@@ -72,7 +72,6 @@ import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalWorkspace;
 import io.quarkus.deployment.dev.DevModeContext;
 import io.quarkus.deployment.dev.DevModeMain;
-import io.quarkus.deployment.util.JavaVersionUtil;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.utilities.JavaBinFinder;
@@ -323,13 +322,7 @@ public class DevMojo extends AbstractMojo {
             // the following flags reduce startup time and are acceptable only for dev purposes
             args.add("-XX:TieredStopAtLevel=1");
             if (!preventnoverify) {
-                // in Java 13 and up, preventing verification is deprecated - see https://bugs.openjdk.java.net/browse/JDK-8218003
-                // this test isn't absolutely correct in the sense that depending on the user setup, the actual Java binary
-                // that is used might be different that the one running Maven, but given how small of an impact this has
-                // it's probably better than running an extra command on 'javaTool' just to figure out the version
-                if (!JavaVersionUtil.isJava13OrHigher()) {
-                    args.add("-Xverify:none");
-                }
+                args.add("-Xverify:none");
             }
 
             DevModeRunner runner = new DevModeRunner(args);
@@ -513,11 +506,13 @@ public class DevMojo extends AbstractMojo {
 
         String projectDirectory = null;
         Set<String> sourcePaths = null;
+        Set<String> sourceGenPaths = null;
         String classesPath = null;
         String resourcePath = null;
 
         final MavenProject mavenProject = session.getProjectMap().get(
                 String.format("%s:%s:%s", localProject.getGroupId(), localProject.getArtifactId(), localProject.getVersion()));
+
         if (mavenProject == null) {
             projectDirectory = localProject.getDir().toAbsolutePath().toString();
             Path sourcePath = localProject.getSourcesSourcesDir().toAbsolutePath();
@@ -535,6 +530,7 @@ public class DevMojo extends AbstractMojo {
                     .map(src -> src.toAbsolutePath().toString())
                     .collect(Collectors.toSet());
         }
+
         Path sourceParent = localProject.getSourcesDir().toAbsolutePath();
 
         Path classesDir = localProject.getClassesDir();
@@ -546,8 +542,7 @@ public class DevMojo extends AbstractMojo {
             resourcePath = resourcesSourcesDir.toAbsolutePath().toString();
         }
 
-        Path targetDir = Paths.get(project.getBuild().getDirectory());
-
+        Path targetDir = Paths.get(project.getBuild().getOutputDirectory()).getParent();
         DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(localProject.getKey(),
                 localProject.getArtifactId(),
                 projectDirectory,
@@ -679,14 +674,15 @@ public class DevMojo extends AbstractMojo {
             }
 
             setKotlinSpecificFlags(devModeContext);
+            final LocalProject localProject;
             if (noDeps) {
-                final LocalProject localProject = LocalProject.load(project.getModel().getPomFile().toPath());
+                localProject = LocalProject.load(project.getModel().getPomFile().toPath());
                 addProject(devModeContext, localProject, true);
                 pomFiles.add(localProject.getRawModel().getPomFile().toPath());
                 devModeContext.getLocalArtifacts()
                         .add(new AppArtifactKey(localProject.getGroupId(), localProject.getArtifactId(), null, "jar"));
             } else {
-                final LocalProject localProject = LocalProject.loadWorkspace(project.getModel().getPomFile().toPath());
+                localProject = LocalProject.loadWorkspace(project.getModel().getPomFile().toPath());
                 for (LocalProject project : filterExtensionDependencies(localProject)) {
                     addProject(devModeContext, project, project == localProject);
                     pomFiles.add(project.getRawModel().getPomFile().toPath());
