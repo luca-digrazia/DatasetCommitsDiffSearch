@@ -25,7 +25,8 @@ public class PrincipalImpl implements Principal {
             return false;
         }
 
-        final PrincipalImpl principal = (PrincipalImpl) o;
+        PrincipalImpl principal = (PrincipalImpl) o;
+
         return Objects.equals(this.name, principal.name);
     }
 
