@@ -21,7 +21,6 @@ import com.mongodb.DB;
 import com.mongodb.Mongo;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
-import com.mongodb.MongoCommandException;
 import com.mongodb.MongoException;
 import com.mongodb.WriteConcern;
 import org.graylog2.configuration.MongoDbConfiguration;
@@ -79,7 +78,7 @@ public class MongoConnectionImpl implements MongoConnection {
 
         try {
             db.command("{ ping: 1 }");
-        } catch (MongoCommandException e) {
+        } catch (CommandFailureException e) {
             if(e.getCode() == 18) {
                 throw new MongoException("Couldn't connect to MongoDB. Please check the authentication credentials.", e);
             } else {
