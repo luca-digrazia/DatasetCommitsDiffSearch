@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,13 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
 import smile.math.MathEx;
 import smile.stat.distribution.Distribution;
-import smile.util.IntSet;
 
 /**
  * Naive Bayes classifier. A naive Bayes classifier is a simple probabilistic
@@ -37,17 +36,17 @@ import smile.util.IntSet;
  * the users are free to use any discrete distributions to model categorical or
  * ordinal random variables.
  *
+ * @see Distribution
+ * @see LDA
+ * @see QDA
+ * @see RDA
+ * 
  * <h2>References</h2>
  * <ol>
  * <li> Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schutze. Introduction to Information Retrieval, Chapter 13, 2009.</li>
  * <li> Kevin P. Murphy. Machina Learning A Probability Perspective, Chapter 3, 2012.</li>
  * </ol>
- *
- * @see Distribution
- * @see LDA
- * @see QDA
- * @see RDA
- *
+ * 
  * @author Haifeng Li
  */
 public class NaiveBayes implements SoftClassifier<double[]> {
@@ -72,7 +71,7 @@ public class NaiveBayes implements SoftClassifier<double[]> {
     /**
      * The class label encoder.
      */
-    private IntSet labels;
+    private ClassLabel labels;
 
     /**
      * Constructor of general naive Bayes classifier.
@@ -83,7 +82,7 @@ public class NaiveBayes implements SoftClassifier<double[]> {
      * distribution P(x<sub>j</sub> | class i).
      */
     public NaiveBayes(double[] priori, Distribution[][] condprob) {
-        this(priori, condprob, IntSet.of(priori.length));
+        this(priori, condprob, ClassLabel.of(priori.length));
     }
 
     /**
@@ -95,7 +94,7 @@ public class NaiveBayes implements SoftClassifier<double[]> {
      * distribution P(x<sub>j</sub> | class i).
      * @param labels class labels
      */
-    public NaiveBayes(double[] priori, Distribution[][] condprob, IntSet labels) {
+    public NaiveBayes(double[] priori, Distribution[][] condprob, ClassLabel labels) {
         if (priori.length != condprob.length) {
             throw new IllegalArgumentException("The number of priori probabilities and that of the classes are not same.");
         }
@@ -171,6 +170,6 @@ public class NaiveBayes implements SoftClassifier<double[]> {
             posteriori[i] /= Z;
         }
 
-        return labels.valueOf(MathEx.whichMax(posteriori));
+        return labels.label(MathEx.whichMax(posteriori));
     }
 }
