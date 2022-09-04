@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
  * compliance with the License. You may obtain a copy of the License at
  *
  * https://opensource.org/licenses/Apache-2.0
@@ -20,7 +20,6 @@ package com.tencent.angel.ps.server.data;
 
 import com.google.protobuf.ServiceException;
 import com.tencent.angel.PartitionKey;
-import com.tencent.angel.common.AngelThreadFactory;
 import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.exception.WaitLockTimeOutException;
 import com.tencent.angel.ml.matrix.PartitionLocation;
@@ -29,38 +28,10 @@ import com.tencent.angel.ml.matrix.psf.get.base.GetFunc;
 import com.tencent.angel.ml.matrix.psf.get.base.PartitionGetResult;
 import com.tencent.angel.ml.matrix.psf.update.base.UpdateFunc;
 import com.tencent.angel.ps.PSContext;
-import com.tencent.angel.ps.server.data.request.CheckpointPSRequest;
-import com.tencent.angel.ps.server.data.request.GetClocksRequest;
-import com.tencent.angel.ps.server.data.request.GetPartitionRequest;
-import com.tencent.angel.ps.server.data.request.GetRowSplitRequest;
-import com.tencent.angel.ps.server.data.request.GetRowsSplitRequest;
-import com.tencent.angel.ps.server.data.request.GetStateRequest;
-import com.tencent.angel.ps.server.data.request.GetUDFRequest;
-import com.tencent.angel.ps.server.data.request.IndexPartGetRowRequest;
-import com.tencent.angel.ps.server.data.request.IndexPartGetRowsRequest;
-import com.tencent.angel.ps.server.data.request.IndexType;
-import com.tencent.angel.ps.server.data.request.PartitionRequest;
-import com.tencent.angel.ps.server.data.request.RecoverPartRequest;
-import com.tencent.angel.ps.server.data.request.UpdateClockRequest;
-import com.tencent.angel.ps.server.data.request.UpdateRequest;
-import com.tencent.angel.ps.server.data.request.UpdaterRequest;
-import com.tencent.angel.ps.server.data.request.ValueType;
-import com.tencent.angel.ps.server.data.response.CheckpointPSResponse;
-import com.tencent.angel.ps.server.data.response.GetClocksResponse;
-import com.tencent.angel.ps.server.data.response.GetPartitionResponse;
-import com.tencent.angel.ps.server.data.response.GetRowSplitResponse;
-import com.tencent.angel.ps.server.data.response.GetRowsSplitResponse;
-import com.tencent.angel.ps.server.data.response.GetStateResponse;
-import com.tencent.angel.ps.server.data.response.GetUDFResponse;
-import com.tencent.angel.ps.server.data.response.IndexPartGetRowResponse;
-import com.tencent.angel.ps.server.data.response.IndexPartGetRowsResponse;
-import com.tencent.angel.ps.server.data.response.Response;
-import com.tencent.angel.ps.server.data.response.ResponseType;
-import com.tencent.angel.ps.server.data.response.UpdateResponse;
-import com.tencent.angel.ps.server.data.response.UpdaterResponse;
+import com.tencent.angel.ps.server.data.request.*;
+import com.tencent.angel.ps.server.data.response.*;
 import com.tencent.angel.ps.storage.matrix.PartitionState;
-import com.tencent.angel.ps.storage.partition.ServerPartition;
-import com.tencent.angel.ps.storage.vector.ServerBasicTypeRow;
+import com.tencent.angel.ps.storage.matrix.ServerPartition;
 import com.tencent.angel.ps.storage.vector.ServerRow;
 import com.tencent.angel.utils.ByteBufUtils;
 import com.tencent.angel.utils.StringUtils;
@@ -71,6 +42,10 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
+
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;
@@ -78,18 +53,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
 
 /**
  * RPC worker pool for matrix transformation
  */
 public class WorkerPool {
-
   private static final Log LOG = LogFactory.getLog(WorkerPool.class);
   public static final AtomicInteger total = new AtomicInteger(0);
   public static final AtomicInteger normal = new AtomicInteger(0);
@@ -97,7 +67,7 @@ public class WorkerPool {
   public static final AtomicInteger network = new AtomicInteger(0);
   public static final AtomicInteger channelInUseCounter = new AtomicInteger(0);
   public static final AtomicInteger unknown = new AtomicInteger(0);
-  private static final int syncThreshold = 100;
+  private static final int syncThreshold = 10000;
   /**
    * Channel use state
    */
@@ -107,11 +77,6 @@ public class WorkerPool {
    * PS context
    */
   private final PSContext context;
-
-  /**
-   * Use unlock rpc handler or not
-   */
-  private final boolean useUnlockRPC;
 
   /**
    * Use direct buffer for Netty
@@ -144,24 +109,9 @@ public class WorkerPool {
   private volatile ExecutorService senderPool;
 
   /**
-   * Matrix partition to rpc message queue map
-   */
-  private final ConcurrentHashMap<MatrixPartition, LinkedBlockingQueue<ChannelHandlerContextMsg>> rpcQueues;
-
-  /**
    * Netty server running context
    */
   private final RunningContext runningContext;
-
-  /**
-   * Use independent worker pool for rpc handler
-   */
-  private final boolean useInDepWorkers;
-
-  /**
-   * Use independent sender pool for rpc handler
-   */
-  private final boolean useInDepSenders;
 
   /**
    * Create a WorkerPool
@@ -174,30 +124,18 @@ public class WorkerPool {
     channelStates = new ConcurrentHashMap<>();
     Configuration conf = context.getConf();
     useDirectorBuffer = conf.getBoolean(AngelConf.ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER,
-        AngelConf.DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER);
+      AngelConf.DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEDIRECTBUFFER);
 
     usePool = conf.getBoolean(AngelConf.ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEPOOL,
-        AngelConf.DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEPOOL);
+      AngelConf.DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_SERVER_USEPOOL);
 
     ByteBufUtils.useDirect = useDirectorBuffer;
     ByteBufUtils.usePool = usePool;
     useAyncHandler = conf.getBoolean(AngelConf.ANGEL_MATRIXTRANSFER_SERVER_USE_ASYNC_HANDLER,
-        AngelConf.DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_USE_ASYNC_HANDLER);
+      AngelConf.DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_USE_ASYNC_HANDLER);
 
     int partReplicNum = conf.getInt(AngelConf.ANGEL_PS_HA_REPLICATION_NUMBER,
-        AngelConf.DEFAULT_ANGEL_PS_HA_REPLICATION_NUMBER);
-
-    useUnlockRPC = conf.getBoolean(AngelConf.ANGEL_MATRIXTRANSFER_SERVER_USE_UNLOCK_RPC,
-        AngelConf.DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_USE_UNLOCK_RPC);
-
-    rpcQueues = new ConcurrentHashMap<>();
-
-    useInDepWorkers = conf.getBoolean(AngelConf.ANGEL_PS_USE_INDEPENDENT_WORKER_POOL,
-        AngelConf.DEFAULT_ANGEL_PS_USE_INDEPENDENT_WORKER_POOL);
-
-    useInDepSenders = conf.getBoolean(AngelConf.ANGEL_PS_USE_INDEPENDENT_SENDER_POOL,
-        AngelConf.DEFAULT_ANGEL_PS_USE_INDEPENDENT_SENDER_POOL);
-
+      AngelConf.DEFAULT_ANGEL_PS_HA_REPLICATION_NUMBER);
     if (partReplicNum > 1) {
       disableRouterCache = true;
     } else {
@@ -207,6 +145,9 @@ public class WorkerPool {
 
   /**
    * Init
+   *
+   * @throws IllegalAccessException
+   * @throws InstantiationException
    */
   public void init() throws IllegalAccessException, InstantiationException {
   }
@@ -215,19 +156,17 @@ public class WorkerPool {
    * Start workers
    */
   public void start() {
-    workerPool = useInDepWorkers ?
-        Executors.newFixedThreadPool(context.getConf()
-                .getInt(AngelConf.ANGEL_MATRIXTRANSFER_SERVER_WORKER_POOL_SIZE,
-                    AngelConf.DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_WORKER_POOL_SIZE),
-            new AngelThreadFactory("RPCWorker")) :
-        null;
+    senderPool = useAyncHandler ?
+      Executors.newFixedThreadPool(context.getConf()
+        .getInt(AngelConf.ANGEL_MATRIXTRANSFER_SERVER_SENDER_POOL_SIZE,
+          AngelConf.DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_SENDER_POOL_SIZE)) :
+      null;
 
-    senderPool = useInDepSenders ?
-        Executors.newFixedThreadPool(context.getConf()
-                .getInt(AngelConf.ANGEL_MATRIXTRANSFER_SERVER_SENDER_POOL_SIZE,
-                    AngelConf.DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_SENDER_POOL_SIZE),
-            new AngelThreadFactory("RPCResultSender")) :
-        null;
+    workerPool = useAyncHandler ?
+      Executors.newFixedThreadPool(context.getConf()
+        .getInt(AngelConf.ANGEL_MATRIXTRANSFER_SERVER_WORKER_POOL_SIZE,
+          AngelConf.DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_WORKER_POOL_SIZE)) :
+      null;
   }
 
   /**
@@ -281,90 +220,12 @@ public class WorkerPool {
       runningContext.relaseToken(clientId, token);
     }
 
-    try {
-      boolean useAsync = needAsync(method, in);
-      in.resetReaderIndex();
-      if (useAsync) {
-        if (useUnlockRPC) {
-          // Filter the head
-          boolean comeFromPs = in.readBoolean();
-          int clock = in.readInt();
-          int tokenNum = in.readInt();
-
-          // Get the RPC destination
-          PartitionKey partKey = new PartitionKey();
-          partKey.deserialize(in);
-          MatrixPartition mtxPart = new MatrixPartition(partKey.getMatrixId(),
-              partKey.getPartitionId());
-          in.resetReaderIndex();
-
-          // Get and init the queue
-          ChannelHandlerContextMsg chcMsg = new ChannelHandlerContextMsg((ByteBuf) msg, ctx);
-          LinkedBlockingQueue<ChannelHandlerContextMsg> queue = rpcQueues.get(mtxPart);
-          if (queue == null) {
-            queue = new LinkedBlockingQueue<>();
-            rpcQueues.putIfAbsent(mtxPart, queue);
-            queue = rpcQueues.get(mtxPart);
-          }
-
-          synchronized (queue) {
-            if (queue.isEmpty()) {
-              // If the queue is empty, activate the processor
-              queue.add(chcMsg);
-              getWorker(ctx).execute(new NoLockProcessor(mtxPart));
-            } else {
-              // Just put it to the rpc queue
-              queue.add(chcMsg);
-            }
-          }
-        } else {
-          getWorker(ctx).execute(new Processor((ByteBuf) msg, ctx));
-        }
-      } else {
-        handle(ctx, msg, true);
-      }
-    } catch (Throwable x) {
-      LOG.error("handle rpc " + seqId + " failed ", x);
-      throw x;
-    }
-  }
-
-  private ExecutorService getWorker(ChannelHandlerContext ctx) {
-    if (useInDepWorkers) {
-      return workerPool;
+    boolean useAsync = needAsync(method, in);
+    in.resetReaderIndex();
+    if (useAsync) {
+      workerPool.execute(new Processor((ByteBuf) msg, ctx));
     } else {
-      return ctx.executor();
-    }
-  }
-
-  private ExecutorService getSender(ChannelHandlerContext ctx) {
-    if (useInDepSenders) {
-      return senderPool;
-    }
-    return ctx.executor();
-  }
-
-  class NoLockProcessor implements Runnable {
-
-    private final MatrixPartition mtp;
-
-    public NoLockProcessor(MatrixPartition mtp) {
-      this.mtp = mtp;
-    }
-
-    @Override
-    public void run() {
-      LinkedBlockingQueue<ChannelHandlerContextMsg> tmp = rpcQueues.get(this.mtp);
-      ChannelHandlerContextMsg item;
-      synchronized (tmp) {
-        item = tmp.poll();
-      }
-      while (item != null) {
-        handle(item.getCtx(), item.getMessage(), false);
-        synchronized (tmp) {
-          item = tmp.poll();
-        }
-      }
+      handle(ctx, msg, true);
     }
   }
 
@@ -379,7 +240,6 @@ public class WorkerPool {
       case INDEX_GET_ROW:
       case INDEX_GET_ROWS:
       case UPDATE_PSF:
-      case CHECKPOINT:
         return true;
 
       default:
@@ -391,7 +251,6 @@ public class WorkerPool {
    * Response processor
    */
   class Processor extends Thread {
-
     /**
      * Request
      */
@@ -407,68 +266,10 @@ public class WorkerPool {
       this.ctx = ctx;
     }
 
-    @Override
-    public void run() {
-      try {
-        handle(ctx, message, false);
-        message = null;
-        ctx = null;
-      } catch (Throwable x) {
-        LOG.error("handle request failed ", x);
-      }
-    }
-  }
-
-  class NoLockHandlerContext {
-
-    private final LinkedBlockingQueue<ChannelHandlerContextMsg> msgQueue;
-    private final Thread handler;
-    private final AtomicBoolean stopped;
-
-    public NoLockHandlerContext() {
-      msgQueue = new LinkedBlockingQueue();
-      handler = new Processor();
-      stopped = new AtomicBoolean(false);
-    }
-
-    public LinkedBlockingQueue<ChannelHandlerContextMsg> getMsgQueue() {
-      return msgQueue;
-    }
-
-    public Thread getHandler() {
-      return handler;
-    }
-
-    public void stop() {
-      stopped.set(true);
-      try {
-        msgQueue.put(new StopMsg());
-      } catch (InterruptedException e) {
-        LOG.warn("put stop message to queue falied");
-      }
-    }
-
-    class Processor extends Thread {
-
-      @Override
-      public void run() {
-        while (!stopped.get() && !Thread.interrupted()) {
-          try {
-            ChannelHandlerContextMsg msg = msgQueue.take();
-            if (msg instanceof StopMsg) {
-              return;
-            }
-
-            handle(msg.getCtx(), msg.getMessage(), true);
-          } catch (InterruptedException e) {
-            if (stopped.get()) {
-              LOG.warn("No-lock rpc message queue is interrupted");
-            } else {
-              LOG.error("No-lock rpc message queue is interrupted ", e);
-            }
-          }
-        }
-      }
+    @Override public void run() {
+      handle(ctx, message, false);
+      message = null;
+      ctx = null;
     }
   }
 
@@ -477,7 +278,6 @@ public class WorkerPool {
    * Response sender
    */
   class Sender extends Thread {
-
     /**
      * Client ID
      */
@@ -506,7 +306,7 @@ public class WorkerPool {
     public String uuid;
 
     Sender(int clientId, int seqId, TransportMethod method, ChannelHandlerContext ctx,
-        Object result) {
+      Object result) {
       this.clientId = clientId;
       this.seqId = seqId;
       this.method = method;
@@ -514,15 +314,10 @@ public class WorkerPool {
       this.ctx = ctx;
     }
 
-    @Override
-    public void run() {
-      try {
-        send(clientId, seqId, method, ctx, result);
-        result = null;
-        ctx = null;
-      } catch (Throwable x) {
-        LOG.error("send result failed ", x);
-      }
+    @Override public void run() {
+      send(clientId, seqId, method, ctx, result);
+      result = null;
+      ctx = null;
     }
   }
 
@@ -533,18 +328,6 @@ public class WorkerPool {
    * @return true means it's a complex request, use async mode
    */
   private boolean needAsync(TransportMethod method, ByteBuf in) {
-    //if(useInDepWorkers) {
-      // Use independent rpc workers
-    //  if (method == TransportMethod.GET_CLOCKS || method == TransportMethod.UPDATE_CLOCK) {
-        // Small rpc request, use sync to avoid thread switch
-    //    return false;
-    //  }
-
-    //  return true;
-    //} else {
-    //  return false;
-    //}
-
     if (!useAyncHandler) {
       return false;
     }
@@ -552,7 +335,7 @@ public class WorkerPool {
     if (method == TransportMethod.GET_CLOCKS || method == TransportMethod.UPDATE_CLOCK) {
       return false;
     } else if (method == TransportMethod.INDEX_GET_ROW || method == TransportMethod.INDEX_GET_ROWS
-        || method == TransportMethod.UPDATE) {
+      || method == TransportMethod.UPDATE) {
       PartitionRequest request = new PartitionRequest();
       request.deserialize(in);
       if (request.getHandleElemNum() <= syncThreshold) {
@@ -567,18 +350,18 @@ public class WorkerPool {
    * Send back the result
    *
    * @param clientId PSClient id
-   * @param seqId RPC seq id
-   * @param ctx channel context
-   * @param result rpc result
+   * @param seqId    RPC seq id
+   * @param ctx      channel context
+   * @param result   rpc result
    */
   private void send(int clientId, int seqId, TransportMethod method, ChannelHandlerContext ctx,
-      Object result) {
+    Object result) {
     Channel ch = ctx.channel();
     try {
       AtomicBoolean channelInUse = channelStates.get(ctx);
       if (channelInUse == null) {
         LOG.error("send response of request " + requestToString(clientId, seqId)
-            + ", but channel is unregistered");
+          + ", but channel is unregistered");
         if (isDataRequest(method)) {
           channelInUseCounter.incrementAndGet();
           runningContext.after(clientId, seqId);
@@ -590,13 +373,12 @@ public class WorkerPool {
       while (true) {
         if (channelInUse.compareAndSet(false, true)) {
           ctx.writeAndFlush(result).addListener(new GenericFutureListener<Future<? super Void>>() {
-            @Override
-            public void operationComplete(Future<? super Void> future) throws Exception {
+            @Override public void operationComplete(Future<? super Void> future) throws Exception {
               if (isDataRequest(method)) {
                 if (future.isSuccess()) {
                   normal.incrementAndGet();
                 } else {
-                  LOG.error("send response of request " + requestToString(clientId, seqId) + " failed ");
+                  //                  LOG.error("send response of request " + requestToString(clientId, seqId) + " failed ");
                   network.incrementAndGet();
                 }
                 context.getRunningContext().after(clientId, seqId);
@@ -609,7 +391,7 @@ public class WorkerPool {
         Thread.sleep(10);
       }
     } catch (Throwable ex) {
-      LOG.error("send response of request failed, request seqId=" + seqId + ", channel=" + ch, ex);
+      //      LOG.error("send response of request failed, request seqId=" + seqId + ", channel=" + ch, ex);
       unknown.incrementAndGet();
     }
   }
@@ -621,29 +403,24 @@ public class WorkerPool {
   /**
    * Send the rpc result
    *
-   * @param ctx channel context
-   * @param result rpc result
+   * @param ctx     channel context
+   * @param result  rpc result
    * @param useSync true means send it directly, false means send it use sender
    */
   private void sendResult(int clientId, int seqId, TransportMethod method,
-      ChannelHandlerContext ctx, Object result, boolean useSync) {
-    if (useSync) {
-      send(clientId, seqId, method, ctx, result);
+    ChannelHandlerContext ctx, Object result, boolean useSync) {
+    if (!useSync && useAyncHandler) {
+      senderPool.execute(new Sender(clientId, seqId, method, ctx, result));
     } else {
-      getSender(ctx).execute(new Sender(clientId, seqId, method, ctx, result));
+      send(clientId, seqId, method, ctx, result);
     }
-    //if (!useSync && useAyncHandler) {
-    //  senderPool.execute(new Sender(clientId, seqId, method, ctx, result));
-    //} else {
-    //send(clientId, seqId, method, ctx, result);
-    //}
   }
 
   /**
    * Handle the request
    *
-   * @param ctx channel context
-   * @param msg rpc request
+   * @param ctx     channel context
+   * @param msg     rpc request
    * @param useSync true means handle it directly, false means handle it use Processor
    */
   private void handle(ChannelHandlerContext ctx, Object msg, boolean useSync) {
@@ -715,16 +492,15 @@ public class WorkerPool {
     IndexPartGetRowResponse result;
     if (state == ServerState.BUSY) {
       result =
-          new IndexPartGetRowResponse(ResponseType.SERVER_IS_BUSY,
-              "server is busy now, retry later");
+        new IndexPartGetRowResponse(ResponseType.SERVER_IS_BUSY, "server is busy now, retry later");
       result.setState(ServerState.BUSY);
     } else {
       IndexPartGetRowRequest request = new IndexPartGetRowRequest();
       request.deserialize(in);
       PartitionKey partKey = request.getPartKey();
 
-      ServerBasicTypeRow row = (ServerBasicTypeRow) context.getMatrixStorageManager()
-          .getRow(request.getMatrixId(), request.getRowId(), partKey.getPartitionId());
+      ServerRow row = context.getMatrixStorageManager()
+              .getRow(request.getMatrixId(), request.getRowId(), partKey.getPartitionId());
       IndexType indexType = IndexType.valueOf(in.readInt());
       ValueType valueType = getValueType(row.getRowType());
       int size = in.readInt();
@@ -735,8 +511,7 @@ public class WorkerPool {
       try {
         resultBuf = allocResultBuf(4 + result.bufferLen() + 4 + size * getValueSize(valueType));
       } catch (Throwable x) {
-        LOG.error(
-            "allocate result buffer for request " + TransportMethod.INDEX_GET_ROW + " failed ", x);
+        LOG.error("allocate result buffer for request " + TransportMethod.INDEX_GET_ROW + " failed ", x);
         result.setResponseType(ResponseType.SERVER_IS_BUSY);
         result.setState(ServerState.BUSY);
         result.setDetail(StringUtils.stringifyException(x));
@@ -769,7 +544,7 @@ public class WorkerPool {
           row.endWrite();
         }
         return resultBuf;
-      } catch (WaitLockTimeOutException | OutOfMemoryError x) {
+      } catch (WaitLockTimeOutException  | OutOfMemoryError x) {
         LOG.error("handle request " + TransportMethod.INDEX_GET_ROW + " failed ", x);
         resultBuf.release();
 
@@ -799,7 +574,7 @@ public class WorkerPool {
     IndexPartGetRowsResponse result;
     if (state == ServerState.BUSY) {
       result = new IndexPartGetRowsResponse(ResponseType.SERVER_IS_BUSY,
-          "server is busy now, retry later");
+        "server is busy now, retry later");
       result.setState(ServerState.BUSY);
     } else {
       IndexPartGetRowsRequest request = new IndexPartGetRowsRequest();
@@ -811,7 +586,7 @@ public class WorkerPool {
       int rowNum = rowIds.size();
 
       ValueType valueType = getValueType(
-          context.getMatrixMetaManager().getMatrixMeta(request.getMatrixId()).getRowType());
+        context.getMatrixMetaManager().getMatrixMeta(request.getMatrixId()).getRowType());
       result = new IndexPartGetRowsResponse(ResponseType.SUCCESS);
       result.setState(state);
 
@@ -819,10 +594,9 @@ public class WorkerPool {
       ByteBuf resultBuf = null;
       try {
         resultBuf =
-            allocResultBuf(4 + result.bufferLen() + 4 + colNum * rowNum * getValueSize(valueType));
+                allocResultBuf(4 + result.bufferLen() + 4 + colNum * rowNum * getValueSize(valueType));
       } catch (Throwable x) {
-        LOG.error(
-            "allocate result buffer for request " + TransportMethod.INDEX_GET_ROWS + " failed ", x);
+        LOG.error("allocate result buffer for request " + TransportMethod.INDEX_GET_ROWS + " failed ", x);
         result.setResponseType(ResponseType.SERVER_IS_BUSY);
         result.setState(ServerState.BUSY);
         result.setDetail(StringUtils.stringifyException(x));
@@ -849,10 +623,10 @@ public class WorkerPool {
         int markPos = in.readerIndex();
         for (int i = 0; i < rowNum; i++) {
           in.readerIndex(markPos);
-          ServerBasicTypeRow row = (ServerBasicTypeRow) context.getMatrixStorageManager()
-              .getRow(request.getMatrixId(), rowIds.get(i), partKey.getPartitionId());
+          ServerRow row = context.getMatrixStorageManager()
+            .getRow(request.getMatrixId(), rowIds.get(i), partKey.getPartitionId());
           resultBuf.writeInt(rowIds.get(i));
-          if (request.getFunc() == null) {
+          if(request.getFunc() == null) {
             row.startRead();
             row.indexGet(indexType, colNum, in, resultBuf, null);
             row.endRead();
@@ -939,7 +713,8 @@ public class WorkerPool {
     }
   }
 
-  private Response handleRPC(int clientId, int seqId, ByteBuf in, TransportMethod method) {
+  private Response handleRPC(int clientId, int seqId, ByteBuf in, TransportMethod method)
+    throws Throwable {
     Response result;
     ServerState state = runningContext.getState();
     String log = "server is busy now, retry later";
@@ -996,13 +771,6 @@ public class WorkerPool {
         break;
       }
 
-      case GET_STATE: {
-        GetStateRequest request = new GetStateRequest();
-        request.deserialize(in);
-        result = new GetStateResponse(ResponseType.SUCCESS);
-        break;
-      }
-
       case UPDATE_PSF: {
         if (state == ServerState.BUSY) {
           result = new UpdaterResponse(ResponseType.SERVER_IS_BUSY, log);
@@ -1012,8 +780,7 @@ public class WorkerPool {
             request.deserialize(in);
             result = update(request, in);
           } catch (Throwable x) {
-            result = new UpdaterResponse(ResponseType.SERVER_HANDLE_FATAL,
-                StringUtils.stringifyException(x));
+            result = new UpdaterResponse(ResponseType.SERVER_HANDLE_FATAL, StringUtils.stringifyException(x));
           }
         }
         break;
@@ -1028,8 +795,7 @@ public class WorkerPool {
             request.deserialize(in);
             result = getSplit(request);
           } catch (Throwable x) {
-            result = new GetUDFResponse(ResponseType.SERVER_HANDLE_FATAL,
-                StringUtils.stringifyException(x));
+            result = new GetUDFResponse(ResponseType.SERVER_HANDLE_FATAL, StringUtils.stringifyException(x));
           }
         }
         break;
@@ -1049,39 +815,17 @@ public class WorkerPool {
         break;
       }
 
-      case CHECKPOINT: {
-        CheckpointPSRequest request = new CheckpointPSRequest();
-        request.deserialize(in);
-        result = checkpoint(request);
-        break;
-      }
-
       default:
         throw new UnsupportedOperationException("Unknown RPC type " + method);
     }
 
     if (state == ServerState.BUSY) {
       LOG.info("Hanle request " + requestToString(clientId, seqId) + " Server is BUSY now ");
-      //runningContext.printToken();
+      runningContext.printToken();
     }
     result.setState(state);
     LOG.debug("handle request " + seqId + " use time=" + (System.currentTimeMillis() - startTs));
     return result;
-  }
-
-  private Response checkpoint(CheckpointPSRequest request) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("checkpoint request=" + request);
-    }
-
-    try {
-      context.getSnapshotDumper().checkpoint(request.getMatrixId(), request.getCheckPointId());
-      return new CheckpointPSResponse(ResponseType.SUCCESS, "");
-    } catch (Throwable e) {
-      String detail = StringUtils.stringifyException(e);
-      LOG.error("checkpoint failed", e);
-      return new CheckpointPSResponse(ResponseType.SERVER_HANDLE_FAILED, detail);
-    }
   }
 
   private ByteBuf serializeResponse(int seqId, Response response) {
@@ -1120,7 +864,7 @@ public class WorkerPool {
    */
   private boolean isPartMasterPs(PartitionLocation partLoc) {
     return !partLoc.psLocs.isEmpty() && partLoc.psLocs.get(0).psId
-        .equals(context.getPSAttemptId().getPsId());
+      .equals(context.getPSAttemptId().getPsId());
   }
 
   /**
@@ -1132,7 +876,7 @@ public class WorkerPool {
   private GetUDFResponse getSplit(GetUDFRequest request) {
     try {
       Class<? extends GetFunc> funcClass =
-          (Class<? extends GetFunc>) Class.forName(request.getGetFuncClass());
+        (Class<? extends GetFunc>) Class.forName(request.getGetFuncClass());
       Constructor<? extends GetFunc> constructor = funcClass.getConstructor();
       constructor.setAccessible(true);
       GetFunc func = constructor.newInstance();
@@ -1203,14 +947,14 @@ public class WorkerPool {
    * Update a partition use PSF
    *
    * @param request rpc request
-   * @param in serialized rpc request
+   * @param in      serialized rpc request
    * @return response
    */
   private UpdaterResponse update(UpdaterRequest request, ByteBuf in) {
     // Get partition and check the partition state
     PartitionKey partKey = request.getPartKey();
     ServerPartition part =
-        context.getMatrixStorageManager().getPart(partKey.getMatrixId(), partKey.getPartitionId());
+      context.getMatrixStorageManager().getPart(partKey.getMatrixId(), partKey.getPartitionId());
     if (part == null) {
       String log = "update " + request + " failed. The partition " + partKey + " does not exist";
       LOG.fatal(log);
@@ -1228,10 +972,10 @@ public class WorkerPool {
     PartitionLocation partLoc = null;
     try {
       partLoc =
-          context.getMatrixMetaManager().getPartLocation(request.getPartKey(), disableRouterCache);
+        context.getMatrixMetaManager().getPartLocation(request.getPartKey(), disableRouterCache);
     } catch (Throwable x) {
       String log = "update " + request + " failed, get partition location from master failed " + x
-          .getMessage();
+        .getMessage();
       LOG.error(log, x);
       return new UpdaterResponse(ResponseType.SERVER_HANDLE_FAILED, log);
     }
@@ -1239,13 +983,13 @@ public class WorkerPool {
     // Check this ps is the master ps for this location, only master ps can accept the update
     if (!request.isComeFromPs() && !isPartMasterPs(partLoc)) {
       String log =
-          "update " + request + " failed, update to slave ps for partition " + request.getPartKey();
+        "update " + request + " failed, update to slave ps for partition " + request.getPartKey();
       LOG.error(log);
       return new UpdaterResponse(ResponseType.SERVER_HANDLE_FAILED, log);
     } else {
       try {
         Class<? extends UpdateFunc> funcClass =
-            (Class<? extends UpdateFunc>) Class.forName(request.getUpdaterFuncClass());
+          (Class<? extends UpdateFunc>) Class.forName(request.getUpdaterFuncClass());
         Constructor<? extends UpdateFunc> constructor = funcClass.getConstructor();
         constructor.setAccessible(true);
         UpdateFunc func = constructor.newInstance();
@@ -1255,7 +999,7 @@ public class WorkerPool {
         state = part.getState();
         if (state != PartitionState.READ_AND_WRITE) {
           String log =
-              "update " + request + " failed. The partition " + partKey + " state is " + state;
+            "update " + request + " failed. The partition " + partKey + " state is " + state;
           LOG.error(log);
           return new UpdaterResponse(ResponseType.SERVER_HANDLE_FAILED, log);
         }
@@ -1349,8 +1093,7 @@ public class WorkerPool {
         return new GetPartitionResponse(ResponseType.CLOCK_NOTREADY, "clock not ready");
       } else {
         ServerPartition partition =
-            context.getMatrixStorageManager()
-                .getPart(partKey.getMatrixId(), partKey.getPartitionId());
+            context.getMatrixStorageManager().getPart(partKey.getMatrixId(), partKey.getPartitionId());
         return new GetPartitionResponse(ResponseType.SUCCESS, partition);
       }
     } catch (WaitLockTimeOutException | OutOfMemoryError e) {
@@ -1402,19 +1145,18 @@ public class WorkerPool {
 
   private boolean isClockReady(PartitionKey partKey, int clock) {
     boolean ready = clock < 0 ||
-        context.getClockVectorManager()
-            .getPartClock(partKey.getMatrixId(), partKey.getPartitionId())
-            >= clock;
+      context.getClockVectorManager().getPartClock(partKey.getMatrixId(), partKey.getPartitionId())
+        >= clock;
     if (!ready) {
       try {
         Int2ObjectOpenHashMap<Int2IntOpenHashMap> clocks =
-            context.getMaster().getTaskMatrixClocks();
+          context.getMaster().getTaskMatrixClocks();
         context.getClockVectorManager().adjustClocks(clocks);
       } catch (ServiceException e) {
         LOG.error("Get Clocks from master falied,", e);
       }
       ready = clock < 0 || context.getClockVectorManager()
-          .getPartClock(partKey.getMatrixId(), partKey.getPartitionId()) >= clock;
+        .getPartClock(partKey.getMatrixId(), partKey.getPartitionId()) >= clock;
     }
     return ready;
   }
@@ -1423,7 +1165,7 @@ public class WorkerPool {
    * Update a matrix partition
    *
    * @param request rpc request
-   * @param in serialized request
+   * @param in      serialized request
    * @return response
    */
   private UpdateResponse update(UpdateRequest request, ByteBuf in) {
@@ -1434,7 +1176,7 @@ public class WorkerPool {
     // Get partition and check the partition state
     PartitionKey partKey = request.getPartKey();
     ServerPartition part =
-        context.getMatrixStorageManager().getPart(partKey.getMatrixId(), partKey.getPartitionId());
+      context.getMatrixStorageManager().getPart(partKey.getMatrixId(), partKey.getPartitionId());
     if (part == null) {
       String log = "update " + request + " failed. The partition " + partKey + " does not exist";
       LOG.fatal(log);
@@ -1452,10 +1194,10 @@ public class WorkerPool {
     PartitionLocation partLoc = null;
     try {
       partLoc =
-          context.getMatrixMetaManager().getPartLocation(request.getPartKey(), disableRouterCache);
+        context.getMatrixMetaManager().getPartLocation(request.getPartKey(), disableRouterCache);
     } catch (Throwable x) {
       String log = "update " + request + " failed, get partition location from master failed " + x
-          .getMessage();
+        .getMessage();
       LOG.error(log, x);
       return new UpdateResponse(ResponseType.SERVER_HANDLE_FAILED, log);
     }
@@ -1463,7 +1205,7 @@ public class WorkerPool {
     // Check this ps is the master ps for this partition, if not, just return failed
     if (!request.isComeFromPs() && !isPartMasterPs(partLoc)) {
       String log = "local ps is " + context.getPSAttemptId().getPsId() + " update " + request
-          + " failed, update to slave ps for partition " + request.getPartKey();
+        + " failed, update to slave ps for partition " + request.getPartKey();
       LOG.error(log);
       return new UpdateResponse(ResponseType.SERVER_HANDLE_FAILED, log);
     } else {
@@ -1474,16 +1216,16 @@ public class WorkerPool {
 
       if (LOG.isDebugEnabled()) {
         LOG.debug(
-            "update split request matrixId = " + partKey.getMatrixId() + ", partId = " + partKey
-                .getPartitionId() + " clock = " + clock + ", taskIndex=" + taskIndex
-                + ", updateClock = " + updateClock);
+          "update split request matrixId = " + partKey.getMatrixId() + ", partId = " + partKey
+            .getPartitionId() + " clock = " + clock + ", taskIndex=" + taskIndex
+            + ", updateClock = " + updateClock);
       }
 
       try {
         state = part.getState();
         if (state != PartitionState.READ_AND_WRITE) {
           String log =
-              "update " + request + " failed. The partition " + partKey + " state is " + state;
+            "update " + request + " failed. The partition " + partKey + " state is " + state;
           LOG.error(log);
           return new UpdateResponse(ResponseType.SERVER_HANDLE_FAILED, log);
         }
@@ -1491,7 +1233,7 @@ public class WorkerPool {
         part.update(in, request.getOp());
         if (updateClock) {
           context.getClockVectorManager()
-              .updateClock(partKey.getMatrixId(), partKey.getPartitionId(), taskIndex, clock);
+            .updateClock(partKey.getMatrixId(), partKey.getPartitionId(), taskIndex, clock);
         }
 
         // Start to put the update to the slave pss
@@ -1523,7 +1265,7 @@ public class WorkerPool {
    * @return response
    */
   private Response recoverPart(RecoverPartRequest request) {
-    /*if (LOG.isDebugEnabled()) {
+    if (LOG.isDebugEnabled()) {
       LOG.debug("recover part request=" + request);
     }
 
@@ -1545,7 +1287,7 @@ public class WorkerPool {
     if (LOG.isDebugEnabled()) {
       LOG.debug("recover partition  request " + request + " use time=" + (System.currentTimeMillis()
         - startTs));
-    }*/
+    }
 
     return new Response(ResponseType.SUCCESS);
   }
@@ -1562,9 +1304,8 @@ public class WorkerPool {
     }
 
     context.getClockVectorManager()
-        .updateClock(request.getPartKey().getMatrixId(), request.getPartKey().getPartitionId(),
-            request.getTaskIndex(), request.getClock());
+      .updateClock(request.getPartKey().getMatrixId(), request.getPartKey().getPartitionId(),
+        request.getTaskIndex(), request.getClock());
     return new Response(ResponseType.SUCCESS);
   }
 }
-
