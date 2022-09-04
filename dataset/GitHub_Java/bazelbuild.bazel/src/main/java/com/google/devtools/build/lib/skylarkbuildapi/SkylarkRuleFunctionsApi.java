@@ -86,10 +86,8 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
             positional = false,
             defaultValue = "None")
       },
-      useLocation = true,
-      useEnvironment = true)
-  public ProviderApi provider(String doc, Object fields, Location location, Environment env)
-      throws EvalException;
+      useLocation = true)
+  public ProviderApi provider(String doc, Object fields, Location location) throws EvalException;
 
   @SkylarkCallable(
       name = "rule",
@@ -151,10 +149,9 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
             callbackEnabled = true,
             noneable = true,
             defaultValue = "None",
-            valueWhenDisabled = "None",
-            disableWithFlag = FlagIdentifier.INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM,
             doc =
-                "A schema for defining predeclared outputs. Unlike "
+                "<b>Experimental:</b> This API is in the process of being redesigned."
+                    + "<p>A schema for defining predeclared outputs. Unlike "
                     + "<a href='attr.html#output'><code>output</code></a> and "
                     + "<a href='attr.html#output_list'><code>output_list</code></a> attributes, "
                     + "the user does not specify the labels for these files. "
@@ -529,4 +526,27 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
       Environment env,
       StarlarkContext context)
       throws EvalException;
+
+  @SkylarkCallable(
+      name = "FileType",
+      doc =
+          "Deprecated. Creates a file filter from a list of strings. For example, to match "
+              + "files ending with .cc or .cpp, use: "
+              + "<pre class=language-python>FileType([\".cc\", \".cpp\"])</pre>",
+      parameters = {
+          @Param(
+              name = "types",
+              type = SkylarkList.class,
+              legacyNamed = true,
+              generic1 = String.class,
+              defaultValue = "[]",
+              doc = "a list of the accepted file extensions."
+          )
+      },
+      useLocation = true,
+      useEnvironment = true
+  )
+  @SkylarkConstructor(objectType = FileTypeApi.class)
+  public FileTypeApi<FileApiT> fileType(SkylarkList<?> types, Location loc, Environment env)
+     throws EvalException;
 }
