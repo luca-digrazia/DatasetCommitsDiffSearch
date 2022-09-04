@@ -35,8 +35,6 @@ public class PathHandler extends BaseAnnotationHandler<GeneratedClassHolder> {
 
 	@Override
 	protected void validate(Element element, ElementValidation validation) {
-		restValidatorHelper.doesNotHaveFieldAnnotation(element, validation);
-
 		restValidatorHelper.enclosingElementHasOneOfRestMethodAnnotations(element, validation);
 
 		if (validation.isValid()) {
