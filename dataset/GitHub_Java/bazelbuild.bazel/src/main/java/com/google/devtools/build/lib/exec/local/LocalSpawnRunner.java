@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.exec.ActionInputPrefetcher;
 import com.google.devtools.build.lib.exec.SpawnResult;
 import com.google.devtools.build.lib.exec.SpawnResult.Status;
 import com.google.devtools.build.lib.exec.SpawnRunner;
@@ -46,6 +47,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -67,6 +69,9 @@ public final class LocalSpawnRunner implements SpawnRunner {
   private final ResourceManager resourceManager;
 
   private final String hostName;
+  private final AtomicInteger execCount;
+
+  private final ActionInputPrefetcher actionInputPrefetcher;
 
   private final LocalExecutionOptions localExecutionOptions;
 
@@ -81,7 +86,9 @@ public final class LocalSpawnRunner implements SpawnRunner {
   }
 
   public LocalSpawnRunner(
+      AtomicInteger execCount,
       Path execRoot,
+      ActionInputPrefetcher actionInputPrefetcher,
       LocalExecutionOptions localExecutionOptions,
       ResourceManager resourceManager,
       boolean useProcessWrapper,
@@ -89,9 +96,11 @@ public final class LocalSpawnRunner implements SpawnRunner {
       String productName,
       LocalEnvProvider localEnvProvider) {
     this.execRoot = execRoot;
+    this.actionInputPrefetcher = Preconditions.checkNotNull(actionInputPrefetcher);
     this.processWrapper = getProcessWrapper(execRoot, localOs).getPathString();
     this.localExecutionOptions = Preconditions.checkNotNull(localExecutionOptions);
     this.hostName = NetUtil.findShortHostName();
+    this.execCount = execCount;
     this.resourceManager = resourceManager;
     this.useProcessWrapper = useProcessWrapper;
     this.productName = productName;
@@ -100,12 +109,15 @@ public final class LocalSpawnRunner implements SpawnRunner {
 
   public LocalSpawnRunner(
       Path execRoot,
+      ActionInputPrefetcher actionInputPrefetcher,
       LocalExecutionOptions localExecutionOptions,
       ResourceManager resourceManager,
       String productName,
       LocalEnvProvider localEnvProvider) {
     this(
+        new AtomicInteger(),
         execRoot,
+        actionInputPrefetcher,
         localExecutionOptions,
         resourceManager,
         OS.getCurrent() != OS.WINDOWS && getProcessWrapper(execRoot, OS.getCurrent()).exists(),
@@ -119,10 +131,10 @@ public final class LocalSpawnRunner implements SpawnRunner {
       Spawn spawn,
       SpawnExecutionPolicy policy) throws IOException, InterruptedException {
     ActionExecutionMetadata owner = spawn.getResourceOwner();
-    policy.report(ProgressStatus.SCHEDULING, "local");
+    policy.report(ProgressStatus.SCHEDULING);
     try (ResourceHandle handle =
         resourceManager.acquireResources(owner, spawn.getLocalResources())) {
-      policy.report(ProgressStatus.EXECUTING, "local");
+      policy.report(ProgressStatus.EXECUTING);
       policy.lockOutputFiles();
       return new SubprocessHandler(spawn, policy).run();
     }
@@ -137,7 +149,7 @@ public final class LocalSpawnRunner implements SpawnRunner {
     private State currentState = State.INITIALIZING;
     private final Map<State, Long> stateTimes = new EnumMap<>(State.class);
 
-    private final int id;
+    private final int id = execCount.getAndIncrement();
 
     public SubprocessHandler(
         Spawn spawn,
@@ -145,7 +157,6 @@ public final class LocalSpawnRunner implements SpawnRunner {
       Preconditions.checkArgument(!spawn.getArguments().isEmpty());
       this.spawn = spawn;
       this.policy = policy;
-      this.id = policy.getId();
       setState(State.PARSING);
     }
 
@@ -229,7 +240,7 @@ public final class LocalSpawnRunner implements SpawnRunner {
       if (Spawns.shouldPrefetchInputsForLocalExecution(spawn)) {
         stepLog(INFO, "prefetching inputs for local execution");
         setState(State.PREFETCHING_LOCAL_INPUTS);
-        policy.prefetchInputs(
+        actionInputPrefetcher.prefetchFiles(
             Iterables.filter(policy.getInputMapping().values(), Predicates.notNull()));
       }
 
