@@ -145,11 +145,6 @@ public class TestConsoleHandler implements TestListener {
     }
 
     @Override
-    public void testCompileFailed(String message) {
-        promptHandler.setStatus(message);
-    }
-
-    @Override
     public void testRunStarted(Consumer<TestRunListener> listenerConsumer) {
 
         AtomicLong totalNoTests = new AtomicLong();
