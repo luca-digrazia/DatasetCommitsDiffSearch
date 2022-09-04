@@ -1,22 +1,22 @@
 package io.quarkus.undertow.runtime;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
+import java.math.BigInteger;
 import java.net.SocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.EventListener;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
-import javax.net.ssl.SSLContext;
+import javax.enterprise.inject.Instance;
+import javax.enterprise.inject.spi.CDI;
 import javax.servlet.AsyncEvent;
 import javax.servlet.AsyncListener;
 import javax.servlet.DispatcherType;
@@ -26,27 +26,44 @@ import javax.servlet.Servlet;
 import javax.servlet.ServletContainerInitializer;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.SessionTrackingMode;
 
 import org.jboss.logging.Logger;
-import org.wildfly.common.net.Inet;
-import org.xnio.Xnio;
-import org.xnio.XnioWorker;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
+import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.runtime.ExecutorRecorder;
+import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
-import io.quarkus.runtime.ThreadPoolConfig;
-import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.annotations.Recorder;
-import io.quarkus.runtime.configuration.ConfigInstantiator;
-import io.undertow.Undertow;
+import io.quarkus.runtime.configuration.MemorySize;
+import io.quarkus.security.AuthenticationFailedException;
+import io.quarkus.security.ForbiddenException;
+import io.quarkus.security.UnauthorizedException;
+import io.quarkus.security.identity.CurrentIdentityAssociation;
+import io.quarkus.security.identity.SecurityIdentity;
+import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
+import io.quarkus.vertx.http.runtime.HttpConfiguration;
+import io.quarkus.vertx.http.runtime.VertxHttpRecorder;
+import io.quarkus.vertx.http.runtime.security.QuarkusHttpUser;
+import io.undertow.httpcore.BufferAllocator;
+import io.undertow.httpcore.StatusCodes;
+import io.undertow.httpcore.UndertowOptionMap;
+import io.undertow.httpcore.UndertowOptions;
+import io.undertow.security.api.AuthenticationMode;
+import io.undertow.security.api.NotificationReceiver;
+import io.undertow.security.api.SecurityNotification;
+import io.undertow.server.DefaultExchangeHandler;
 import io.undertow.server.HandlerWrapper;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
-import io.undertow.server.handlers.CanonicalPathHandler;
+import io.undertow.server.handlers.PathHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.server.handlers.resource.CachingResourceManager;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
@@ -59,21 +76,33 @@ import io.undertow.servlet.api.ClassIntrospecter;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.ErrorPage;
+import io.undertow.servlet.api.ExceptionHandler;
 import io.undertow.servlet.api.FilterInfo;
 import io.undertow.servlet.api.InstanceFactory;
 import io.undertow.servlet.api.InstanceHandle;
 import io.undertow.servlet.api.ListenerInfo;
+import io.undertow.servlet.api.LoginConfig;
+import io.undertow.servlet.api.MimeMapping;
+import io.undertow.servlet.api.SecurityConstraint;
+import io.undertow.servlet.api.SecurityInfo;
 import io.undertow.servlet.api.ServletContainer;
 import io.undertow.servlet.api.ServletContainerInitializerInfo;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ServletSecurityInfo;
+import io.undertow.servlet.api.ServletSessionConfig;
 import io.undertow.servlet.api.ThreadSetupHandler;
+import io.undertow.servlet.api.TransportGuaranteeType;
+import io.undertow.servlet.api.WebResourceCollection;
 import io.undertow.servlet.handlers.DefaultServlet;
 import io.undertow.servlet.handlers.ServletPathMatches;
 import io.undertow.servlet.handlers.ServletRequestContext;
 import io.undertow.servlet.spec.HttpServletRequestImpl;
+import io.undertow.servlet.spec.ServletContextImpl;
 import io.undertow.util.AttachmentKey;
-import io.undertow.util.StatusCodes;
+import io.undertow.util.ImmediateAuthenticationMechanismFactory;
+import io.undertow.vertx.VertxHttpExchange;
+import io.vertx.core.Handler;
+import io.vertx.ext.web.RoutingContext;
 
 /**
  * Provides the runtime methods to bootstrap Undertow. This class is present in the final uber-jar,
@@ -91,42 +120,62 @@ public class UndertowDeploymentRecorder {
         }
     };
 
-    private static volatile Undertow undertow;
     private static final List<HandlerWrapper> hotDeploymentWrappers = new CopyOnWriteArrayList<>();
     private static volatile List<Path> hotDeploymentResourcePaths;
     private static volatile HttpHandler currentRoot = ResponseCodeHandler.HANDLE_404;
-    private static volatile ServletContext servletContext;
+    private static volatile ServletContextImpl servletContext;
 
-    private static final AttachmentKey<Collection<io.quarkus.arc.ContextInstanceHandle<?>>> REQUEST_CONTEXT = AttachmentKey
-            .create(Collection.class);
+    private static final AttachmentKey<InjectableContext.ContextState> REQUEST_CONTEXT = AttachmentKey
+            .create(InjectableContext.ContextState.class);
+
+    protected static final int DEFAULT_BUFFER_SIZE;
+    protected static final boolean DEFAULT_DIRECT_BUFFERS;
+
+    static {
+        long maxMemory = Runtime.getRuntime().maxMemory();
+        //smaller than 64mb of ram we use 512b buffers
+        if (maxMemory < 64 * 1024 * 1024) {
+            //use 512b buffers
+            DEFAULT_DIRECT_BUFFERS = false;
+            DEFAULT_BUFFER_SIZE = 512;
+        } else if (maxMemory < 128 * 1024 * 1024) {
+            //use 1k buffers
+            DEFAULT_DIRECT_BUFFERS = true;
+            DEFAULT_BUFFER_SIZE = 1024;
+        } else {
+            //use 16k buffers for best performance
+            //as 16k is generally the max amount of data that can be sent in a single write() call
+            DEFAULT_DIRECT_BUFFERS = true;
+            DEFAULT_BUFFER_SIZE = 1024 * 16 - 20; //the 20 is to allow some space for protocol headers, see UNDERTOW-1209
+        }
+
+    }
 
     public static void setHotDeploymentResources(List<Path> resources) {
         hotDeploymentResourcePaths = resources;
     }
 
-    public static void startServerAfterFailedStart() {
-        try {
-            HttpConfig config = new HttpConfig();
-            ConfigInstantiator.handleObject(config);
-
-            ThreadPoolConfig threadPoolConfig = new ThreadPoolConfig();
-            ConfigInstantiator.handleObject(threadPoolConfig);
-
-            ExecutorService service = ExecutorRecorder.createDevModeExecutorForFailedStart(threadPoolConfig);
-            //we can't really do
-            doServerStart(config, LaunchMode.DEVELOPMENT, config.ssl.toSSLContext(), service);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories,
-            LaunchMode launchMode, ShutdownContext context) {
+            LaunchMode launchMode, ShutdownContext context, String contextPath, String httpRootPath, String defaultCharset,
+            String requestCharacterEncoding, String responseCharacterEncoding, boolean proactiveAuth,
+            List<String> welcomeFiles) {
+        String realMountPoint;
+        if (contextPath.equals("/")) {
+            realMountPoint = httpRootPath;
+        } else if (httpRootPath.equals("/")) {
+            realMountPoint = contextPath;
+        } else {
+            realMountPoint = httpRootPath + contextPath;
+        }
+
         DeploymentInfo d = new DeploymentInfo();
+        d.setDefaultRequestEncoding(requestCharacterEncoding);
+        d.setDefaultResponseEncoding(responseCharacterEncoding);
+        d.setDefaultEncoding(defaultCharset);
         d.setSessionIdGenerator(new QuarkusSessionIdGenerator());
         d.setClassLoader(getClass().getClassLoader());
         d.setDeploymentName(name);
-        d.setContextPath("/");
+        d.setContextPath(realMountPoint);
         d.setEagerFilterInit(true);
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) {
@@ -154,29 +203,39 @@ public class UndertowDeploymentRecorder {
         }
         d.setResourceManager(resourceManager);
 
-        d.addWelcomePages("index.html", "index.htm");
+        if (welcomeFiles != null) {
+            // if available, use welcome-files from web.xml
+            d.addWelcomePages(welcomeFiles);
+        } else {
+            d.addWelcomePages("index.html", "index.htm");
+        }
 
         d.addServlet(new ServletInfo(ServletPathMatches.DEFAULT_SERVLET_NAME, DefaultServlet.class).setAsyncSupported(true));
+        for (HandlerWrapper i : hotDeploymentWrappers) {
+            d.addOuterHandlerChainWrapper(i);
+        }
+        d.addAuthenticationMechanism("QUARKUS", new ImmediateAuthenticationMechanismFactory(QuarkusAuthMechanism.INSTANCE));
+        d.setLoginConfig(new LoginConfig("QUARKUS", "QUARKUS"));
+        context.addShutdownTask(new ShutdownContext.CloseRunnable(d.getResourceManager()));
 
-        context.addShutdownTask(new Runnable() {
+        d.addNotificationReceiver(new NotificationReceiver() {
             @Override
-            public void run() {
-                try {
-                    d.getResourceManager().close();
-                } catch (IOException e) {
-                    log.error("Failed to close Servlet ResourceManager", e);
+            public void handleNotification(SecurityNotification notification) {
+                if (notification.getEventType() == SecurityNotification.EventType.AUTHENTICATED) {
+                    QuarkusUndertowAccount account = (QuarkusUndertowAccount) notification.getAccount();
+                    CDI.current().select(CurrentIdentityAssociation.class).get().setIdentity(account.getSecurityIdentity());
                 }
             }
         });
+        if (proactiveAuth) {
+            d.setAuthenticationMode(AuthenticationMode.PRO_ACTIVE);
+        } else {
+            d.setAuthenticationMode(AuthenticationMode.CONSTRAINT_DRIVEN);
+        }
         return new RuntimeValue<>(d);
     }
 
     public static SocketAddress getHttpAddress() {
-        for (Undertow.ListenerInfo info : undertow.getListenerInfo()) {
-            if (info.getProtcol().equals("http") && info.getSslContext() == null) {
-                return info.getAddress();
-            }
-        }
         return null;
     }
 
@@ -185,16 +244,13 @@ public class UndertowDeploymentRecorder {
             Class<?> servletClass,
             boolean asyncSupported,
             int loadOnStartup,
-            BeanContainer beanContainer, Map<String, String> initParams,
+            BeanContainer beanContainer,
             InstanceFactory<? extends Servlet> instanceFactory) throws Exception {
 
         InstanceFactory<? extends Servlet> factory = instanceFactory != null ? instanceFactory
                 : new QuarkusInstanceFactory(beanContainer.instanceFactory(servletClass));
         ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass,
                 factory);
-        for (Map.Entry<String, String> e : initParams.entrySet()) {
-            servletInfo.addInitParam(e.getKey(), e.getValue());
-        }
         deploymentInfo.getValue().addServlet(servletInfo);
         servletInfo.setAsyncSupported(asyncSupported);
         if (loadOnStartup > 0) {
@@ -209,7 +265,9 @@ public class UndertowDeploymentRecorder {
 
     public void addServletMapping(RuntimeValue<DeploymentInfo> info, String name, String mapping) throws Exception {
         ServletInfo sv = info.getValue().getServlets().get(name);
-        sv.addMapping(mapping);
+        if (sv != null) {
+            sv.addMapping(mapping);
+        }
     }
 
     public void setMultipartConfig(RuntimeValue<ServletInfo> sref, String location, long fileSize, long maxRequestSize,
@@ -239,16 +297,11 @@ public class UndertowDeploymentRecorder {
             String name, Class<?> filterClass,
             boolean asyncSupported,
             BeanContainer beanContainer,
-            Map<String, String> initParams,
             InstanceFactory<? extends Filter> instanceFactory) throws Exception {
 
         InstanceFactory<? extends Filter> factory = instanceFactory != null ? instanceFactory
                 : new QuarkusInstanceFactory(beanContainer.instanceFactory(filterClass));
         FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, factory);
-
-        for (Map.Entry<String, String> e : initParams.entrySet()) {
-            filterInfo.addInitParam(e.getKey(), e.getValue());
-        }
         info.getValue().addFilter(filterInfo);
         filterInfo.setAsyncSupported(asyncSupported);
         return new RuntimeValue<>(filterInfo);
@@ -275,31 +328,24 @@ public class UndertowDeploymentRecorder {
                                 factory.instanceFactory(listenerClass))));
     }
 
+    public void addMimeMapping(RuntimeValue<DeploymentInfo> info, String extension,
+            String mimeType) throws Exception {
+        info.getValue().addMimeMapping(new MimeMapping(extension, mimeType));
+    }
+
     public void addServletInitParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
         info.getValue().addInitParameter(name, value);
     }
 
-    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, ExecutorService executorService,
-            DeploymentManager manager, HttpConfig config,
-            List<HandlerWrapper> wrappers, LaunchMode launchMode) throws Exception {
+    public void setupSecurity(DeploymentManager manager) {
 
-        if (undertow == null) {
-            SSLContext context = config.ssl.toSSLContext();
-            doServerStart(config, launchMode, context, executorService);
+        CDI.current().select(ServletHttpSecurityPolicy.class).get().setDeployment(manager.getDeployment());
+    }
 
-            if (launchMode != LaunchMode.DEVELOPMENT) {
-                //in development mode undertow should not be shut down
-                shutdown.addShutdownTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        XnioWorker worker = undertow.getWorker();
-                        undertow.stop();
-                        worker.shutdown();
-                        undertow = null;
-                    }
-                });
-            }
-        }
+    public Handler<RoutingContext> startUndertow(ShutdownContext shutdown, ExecutorService executorService,
+            DeploymentManager manager, List<HandlerWrapper> wrappers, HttpConfiguration httpConfiguration,
+            ServletRuntimeConfig servletRuntimeConfig) throws Exception {
+
         shutdown.addShutdownTask(new Runnable() {
             @Override
             public void run() {
@@ -315,69 +361,65 @@ public class UndertowDeploymentRecorder {
         for (HandlerWrapper i : wrappers) {
             main = i.wrap(main);
         }
+        if (!manager.getDeployment().getDeploymentInfo().getContextPath().equals("/")) {
+            PathHandler pathHandler = new PathHandler()
+                    .addPrefixPath(manager.getDeployment().getDeploymentInfo().getContextPath(), main);
+            main = pathHandler;
+        }
         currentRoot = main;
 
-        Timing.setHttpServer(String.format(
-                "Listening on: " + undertow.getListenerInfo().stream().map(l -> {
-                    String address;
-                    if (l.getAddress() instanceof InetSocketAddress) {
-                        InetSocketAddress inetAddress = (InetSocketAddress) l.getAddress();
-                        address = Inet.toURLString(inetAddress.getAddress(), true) + ":" + inetAddress.getPort();
-                    } else {
-                        address = l.getAddress().toString();
-                    }
-                    return l.getProtcol() + "://" + address;
-                }).collect(Collectors.joining(", "))));
+        DefaultExchangeHandler defaultHandler = new DefaultExchangeHandler(ROOT_HANDLER);
 
-        return new RuntimeValue<>(undertow);
+        UndertowBufferAllocator allocator = new UndertowBufferAllocator(
+                servletRuntimeConfig.directBuffers.orElse(DEFAULT_DIRECT_BUFFERS), (int) servletRuntimeConfig.bufferSize
+                        .orElse(new MemorySize(BigInteger.valueOf(DEFAULT_BUFFER_SIZE))).asLongValue());
+
+        UndertowOptionMap.Builder undertowOptions = UndertowOptionMap.builder();
+        undertowOptions.set(UndertowOptions.MAX_PARAMETERS, servletRuntimeConfig.maxParameters);
+        UndertowOptionMap undertowOptionMap = undertowOptions.getMap();
+
+        return new Handler<RoutingContext>() {
+            @Override
+            public void handle(RoutingContext event) {
+                if (!event.request().isEnded()) {
+                    event.request().pause();
+                }
+
+                //we handle auth failure directly
+                event.remove(QuarkusHttpUser.AUTH_FAILURE_HANDLER);
+
+                VertxHttpExchange exchange = new VertxHttpExchange(event.request(), allocator, executorService, event,
+                        event.getBody());
+                exchange.setPushHandler(VertxHttpRecorder.getRootHandler());
+
+                Optional<MemorySize> maxBodySize = httpConfiguration.limits.maxBodySize;
+                if (maxBodySize.isPresent()) {
+                    exchange.setMaxEntitySize(maxBodySize.get().asLongValue());
+                }
+                Duration readTimeout = httpConfiguration.readTimeout;
+                exchange.setReadTimeout(readTimeout.toMillis());
+
+                exchange.setUndertowOptions(undertowOptionMap);
+
+                //we eagerly dispatch to the exector, as Undertow needs to be blocking anyway
+                //its actually possible to be on a different IO thread at this point which confuses Undertow
+                //see https://github.com/quarkusio/quarkus/issues/7782
+                if (BlockingOperationControl.isBlockingAllowed()) {
+                    defaultHandler.handle(exchange);
+                } else {
+                    executorService.submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            defaultHandler.handle(exchange);
+                        }
+                    });
+                }
+            }
+        };
     }
 
     public static void addHotDeploymentWrapper(HandlerWrapper handlerWrapper) {
         hotDeploymentWrappers.add(handlerWrapper);
-    }
-
-    /**
-     * Used for quarkus:run, where we want undertow to start very early in the process.
-     * <p>
-     * This enables recovery from errors on boot. In a normal boot undertow is one of the last things start, so there would
-     * be no chance to use hot deployment to fix the error. In development mode we start Undertow early, so any error
-     * on boot can be corrected via the hot deployment handler
-     */
-    private static void doServerStart(HttpConfig config, LaunchMode launchMode, SSLContext sslContext, ExecutorService executor)
-            throws ServletException {
-        if (undertow == null) {
-            int port = config.determinePort(launchMode);
-            int sslPort = config.determineSslPort(launchMode);
-            log.debugf("Starting Undertow on port %d", port);
-            HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
-            for (HandlerWrapper i : hotDeploymentWrappers) {
-                rootHandler = i.wrap(rootHandler);
-            }
-
-            XnioWorker.Builder workerBuilder = Xnio.getInstance().createWorkerBuilder()
-                    .setExternalExecutorService(executor);
-
-            Undertow.Builder builder = Undertow.builder()
-                    .addHttpListener(port, config.host)
-                    .setHandler(rootHandler);
-            if (config.ioThreads.isPresent()) {
-                workerBuilder.setWorkerIoThreads(config.ioThreads.getAsInt());
-            } else if (launchMode.isDevOrTest()) {
-                //we limit the number of IO and worker threads in development and testing mode
-                workerBuilder.setWorkerIoThreads(2);
-            } else {
-                workerBuilder.setWorkerIoThreads(Runtime.getRuntime().availableProcessors() * 2);
-            }
-            XnioWorker worker = workerBuilder.build();
-            builder.setWorker(worker);
-            if (sslContext != null) {
-                log.debugf("Starting Undertow HTTPS listener on port %d", sslPort);
-                builder.addHttpsListener(sslPort, config.host, sslContext);
-            }
-            undertow = builder
-                    .build();
-            undertow.start();
-        }
     }
 
     public Supplier<ServletContext> servletContextSupplier() {
@@ -404,6 +446,7 @@ public class UndertowDeploymentRecorder {
                         .addInitParam(QuarkusErrorServlet.SHOW_STACK, Boolean.toString(launchMode.isDevOrTest())));
             }
         }
+        setupRequestScope(info.getValue(), beanContainer);
 
         try {
             ClassIntrospecter defaultVal = info.getValue().getClassIntrospecter();
@@ -433,6 +476,42 @@ public class UndertowDeploymentRecorder {
                     };
                 }
             });
+            ExceptionHandler existing = info.getValue().getExceptionHandler();
+            info.getValue().setExceptionHandler(new ExceptionHandler() {
+                @Override
+                public boolean handleThrowable(HttpServerExchange exchange, ServletRequest request, ServletResponse response,
+                        Throwable throwable) {
+                    if (throwable instanceof AuthenticationFailedException || throwable instanceof UnauthorizedException) {
+                        String location = servletContext.getDeployment().getErrorPages().getErrorLocation(throwable);
+                        //if these have been mapped we use the mapping
+                        if (location == null || location.equals("/@QuarkusError")) {
+                            if (throwable instanceof AuthenticationFailedException
+                                    || exchange.getSecurityContext().getAuthenticatedAccount() == null) {
+                                if (!exchange.isResponseStarted()) {
+                                    exchange.getSecurityContext().setAuthenticationRequired();
+                                    if (exchange.getSecurityContext().authenticate()) {
+                                        //if we can authenticate then the request is just forbidden
+                                        //this can happen with lazy auth
+                                        exchange.setStatusCode(StatusCodes.FORBIDDEN);
+                                    }
+                                }
+                            } else {
+                                exchange.setStatusCode(StatusCodes.FORBIDDEN);
+                            }
+                            return true;
+                        }
+                    } else if (throwable instanceof ForbiddenException) {
+                        String location = servletContext.getDeployment().getErrorPages().getErrorLocation(throwable);
+                        //if these have been mapped we use the mapping
+                        if (location == null || location.equals("/@QuarkusError")) {
+                            exchange.setStatusCode(StatusCodes.FORBIDDEN);
+                            return true;
+                        }
+                    }
+                    return existing.handleThrowable(exchange, request, response, throwable);
+                }
+            });
+
             ServletContainer servletContainer = Servlets.defaultContainer();
             DeploymentManager manager = servletContainer.addDeployment(info.getValue());
             manager.deploy();
@@ -458,78 +537,164 @@ public class UndertowDeploymentRecorder {
         deployment.getValue().addServletExtension(extension);
     }
 
-    public ServletExtension setupRequestScope(BeanContainer beanContainer) {
-        return new ServletExtension() {
+    public void setupRequestScope(DeploymentInfo deploymentInfo, BeanContainer beanContainer) {
+        CurrentVertxRequest currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
+        Instance<CurrentIdentityAssociation> identityAssociations = CDI.current()
+                .select(CurrentIdentityAssociation.class);
+        CurrentIdentityAssociation association;
+        if (identityAssociations.isResolvable()) {
+            association = identityAssociations.get();
+        } else {
+            association = null;
+        }
+        deploymentInfo.addThreadSetupAction(new ThreadSetupHandler() {
             @Override
-            public void handleDeployment(DeploymentInfo deploymentInfo, ServletContext servletContext) {
-                deploymentInfo.addThreadSetupAction(new ThreadSetupHandler() {
+            public <T, C> ThreadSetupHandler.Action<T, C> create(Action<T, C> action) {
+                return new Action<T, C>() {
                     @Override
-                    public <T, C> ThreadSetupHandler.Action<T, C> create(Action<T, C> action) {
-                        return new Action<T, C>() {
-                            @Override
-                            public T call(HttpServerExchange exchange, C context) throws Exception {
-                                // Not sure what to do here
-                                if (exchange == null) {
-                                    return action.call(exchange, context);
-                                }
-                                ManagedContext requestContext = beanContainer.requestContext();
-                                if (requestContext.isActive()) {
-                                    return action.call(exchange, context);
-                                } else {
-                                    Collection<io.quarkus.arc.ContextInstanceHandle<?>> existingRequestContext = exchange
-                                            .getAttachment(REQUEST_CONTEXT);
-                                    try {
-                                        requestContext.activate(existingRequestContext);
-                                        return action.call(exchange, context);
-                                    } finally {
-                                        ServletRequestContext src = exchange
-                                                .getAttachment(ServletRequestContext.ATTACHMENT_KEY);
-                                        HttpServletRequestImpl req = src.getOriginalRequest();
-                                        if (req.isAsyncStarted()) {
-                                            exchange.putAttachment(REQUEST_CONTEXT, requestContext.getAll());
-                                            requestContext.deactivate();
-                                            if (existingRequestContext == null) {
-                                                req.getAsyncContextInternal().addListener(new AsyncListener() {
-                                                    @Override
-                                                    public void onComplete(AsyncEvent event) throws IOException {
-                                                        for (io.quarkus.arc.InstanceHandle<?> i : exchange
-                                                                .getAttachment(REQUEST_CONTEXT)) {
-                                                            i.destroy();
-                                                        }
-                                                    }
+                    public T call(HttpServerExchange exchange, C context) throws Exception {
+                        // Not sure what to do here
+                        ManagedContext requestContext = beanContainer.requestContext();
+                        if (requestContext.isActive()) {
+                            return action.call(exchange, context);
+                        } else if (exchange == null) {
+                            requestContext.activate();
+                            try {
+                                return action.call(exchange, context);
+                            } finally {
+                                requestContext.terminate();
+                            }
+                        } else {
+                            InjectableContext.ContextState existingRequestContext = exchange
+                                    .getAttachment(REQUEST_CONTEXT);
+                            try {
+                                requestContext.activate(existingRequestContext);
 
-                                                    @Override
-                                                    public void onTimeout(AsyncEvent event) throws IOException {
-                                                        onComplete(event);
-                                                    }
+                                VertxHttpExchange delegate = (VertxHttpExchange) exchange.getDelegate();
+                                RoutingContext rc = (RoutingContext) delegate.getContext();
+                                currentVertxRequest.setCurrent(rc);
 
-                                                    @Override
-                                                    public void onError(AsyncEvent event) throws IOException {
-                                                        onComplete(event);
-                                                    }
-
-                                                    @Override
-                                                    public void onStartAsync(AsyncEvent event) throws IOException {
-
-                                                    }
-                                                });
-                                            }
-                                        } else {
-                                            requestContext.terminate();
-                                        }
+                                if (association != null) {
+                                    QuarkusHttpUser existing = (QuarkusHttpUser) rc.user();
+                                    if (existing != null) {
+                                        SecurityIdentity identity = existing.getSecurityIdentity();
+                                        association.setIdentity(identity);
+                                    } else {
+                                        association.setIdentity(QuarkusHttpUser.getSecurityIdentity(rc, null));
                                     }
                                 }
+
+                                return action.call(exchange, context);
+                            } finally {
+                                ServletRequestContext src = exchange
+                                        .getAttachment(ServletRequestContext.ATTACHMENT_KEY);
+                                HttpServletRequestImpl req = src.getOriginalRequest();
+                                if (req.isAsyncStarted()) {
+                                    exchange.putAttachment(REQUEST_CONTEXT, requestContext.getState());
+                                    requestContext.deactivate();
+                                    if (existingRequestContext == null) {
+                                        req.getAsyncContextInternal().addListener(new AsyncListener() {
+                                            @Override
+                                            public void onComplete(AsyncEvent event) throws IOException {
+                                                requestContext.activate(exchange
+                                                        .getAttachment(REQUEST_CONTEXT));
+                                                requestContext.terminate();
+                                            }
+
+                                            @Override
+                                            public void onTimeout(AsyncEvent event) throws IOException {
+                                                onComplete(event);
+                                            }
+
+                                            @Override
+                                            public void onError(AsyncEvent event) throws IOException {
+                                                onComplete(event);
+                                            }
+
+                                            @Override
+                                            public void onStartAsync(AsyncEvent event) throws IOException {
+
+                                            }
+                                        });
+                                    }
+                                } else {
+                                    requestContext.terminate();
+                                }
                             }
-                        };
+                        }
                     }
-                });
+                };
             }
-        };
+        });
     }
 
     public void addServletContainerInitializer(RuntimeValue<DeploymentInfo> deployment,
             Class<? extends ServletContainerInitializer> sciClass, Set<Class<?>> handlesTypes) {
         deployment.getValue().addServletContainerInitializer(new ServletContainerInitializerInfo(sciClass, handlesTypes));
+    }
+
+    public void addContextParam(RuntimeValue<DeploymentInfo> deployment, String paramName, String paramValue) {
+        deployment.getValue().addInitParameter(paramName, paramValue);
+    }
+
+    public void setDenyUncoveredHttpMethods(RuntimeValue<DeploymentInfo> deployment, boolean denyUncoveredHttpMethods) {
+        deployment.getValue().setDenyUncoveredHttpMethods(denyUncoveredHttpMethods);
+    }
+
+    public void addSecurityConstraint(RuntimeValue<DeploymentInfo> deployment, SecurityConstraint securityConstraint) {
+        deployment.getValue().addSecurityConstraint(securityConstraint);
+    }
+
+    public void addSecurityConstraint(RuntimeValue<DeploymentInfo> deployment, SecurityInfo.EmptyRoleSemantic emptyRoleSemantic,
+            TransportGuaranteeType transportGuaranteeType,
+            Set<String> rolesAllowed, Set<WebResourceCollection> webResourceCollections) {
+
+        SecurityConstraint securityConstraint = new SecurityConstraint()
+                .setEmptyRoleSemantic(emptyRoleSemantic)
+                .addRolesAllowed(rolesAllowed)
+                .setTransportGuaranteeType(transportGuaranteeType)
+                .addWebResourceCollections(webResourceCollections.toArray(new WebResourceCollection[0]));
+        deployment.getValue().addSecurityConstraint(securityConstraint);
+
+    }
+
+    public void setSessionTimeout(RuntimeValue<DeploymentInfo> deployment, int sessionTimeout) {
+        deployment.getValue().setDefaultSessionTimeout(sessionTimeout * 60);
+    }
+
+    public ServletSessionConfig sessionConfig(RuntimeValue<DeploymentInfo> deployment) {
+        ServletSessionConfig config = new ServletSessionConfig();
+        deployment.getValue().setServletSessionConfig(config);
+        return config;
+    }
+
+    public void setSessionTracking(ServletSessionConfig config, Set<SessionTrackingMode> modes) {
+        config.setSessionTrackingModes(modes);
+    }
+
+    public void setSessionCookieConfig(ServletSessionConfig config, String name, String path, String comment, String domain,
+            Boolean httpOnly, Integer maxAge, Boolean secure) {
+        if (name != null) {
+            config.setName(name);
+        }
+        if (path != null) {
+            config.setPath(path);
+        }
+        if (comment != null) {
+            config.setComment(comment);
+        }
+        if (domain != null) {
+            config.setDomain(domain);
+        }
+        if (httpOnly != null) {
+            config.setHttpOnly(httpOnly);
+        }
+        if (maxAge != null) {
+            config.setMaxAge(maxAge);
+        }
+        if (secure != null) {
+            config.setSecure(secure);
+        }
     }
 
     /**
@@ -620,6 +785,50 @@ public class UndertowDeploymentRecorder {
         @Override
         public ServletContext get() {
             return servletContext;
+        }
+    }
+
+    private static class UndertowBufferAllocator implements BufferAllocator {
+
+        private final boolean defaultDirectBuffers;
+        private final int defaultBufferSize;
+
+        private UndertowBufferAllocator(boolean defaultDirectBuffers, int defaultBufferSize) {
+            this.defaultDirectBuffers = defaultDirectBuffers;
+            this.defaultBufferSize = defaultBufferSize;
+        }
+
+        @Override
+        public ByteBuf allocateBuffer() {
+            return allocateBuffer(defaultDirectBuffers);
+        }
+
+        @Override
+        public ByteBuf allocateBuffer(boolean direct) {
+            if (direct) {
+                return ByteBufAllocator.DEFAULT.directBuffer(defaultBufferSize);
+            } else {
+                return ByteBufAllocator.DEFAULT.heapBuffer(defaultBufferSize);
+            }
+        }
+
+        @Override
+        public ByteBuf allocateBuffer(int bufferSize) {
+            return allocateBuffer(defaultDirectBuffers, bufferSize);
+        }
+
+        @Override
+        public ByteBuf allocateBuffer(boolean direct, int bufferSize) {
+            if (direct) {
+                return ByteBufAllocator.DEFAULT.directBuffer(bufferSize);
+            } else {
+                return ByteBufAllocator.DEFAULT.heapBuffer(bufferSize);
+            }
+        }
+
+        @Override
+        public int getBufferSize() {
+            return defaultBufferSize;
         }
     }
 }
