@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.util.io;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.ByteStreams;
-import com.google.common.primitives.Bytes;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -24,7 +23,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -129,22 +127,17 @@ public class FileOutErr extends OutErr {
     return getFileErrorStream().getFile();
   }
 
-  public byte[] outAsBytes() {
+  /** Interprets the captured out content as an {@code ISO-8859-1} encoded string. */
+  public String outAsLatin1() {
     return getFileOutputStream().getRecordedOutput();
   }
 
-  @VisibleForTesting
-  public String outAsLatin1() {
-    return new String(outAsBytes(), StandardCharsets.ISO_8859_1);
-  }
-
-  public byte[] errAsBytes() {
-    return getFileErrorStream().getRecordedOutput();
-  }
-
-  @VisibleForTesting
+  /**
+   * Interprets the captured err content as an {@code ISO-8859-1} encoded
+   * string.
+   */
   public String errAsLatin1() {
-    return new String(errAsBytes(), StandardCharsets.ISO_8859_1);
+    return getFileErrorStream().getRecordedOutput();
   }
 
   /** Return a reference to the recorded stderr */
@@ -240,8 +233,10 @@ public class FileOutErr extends OutErr {
      */
     abstract boolean hasRecordedOutput();
 
-    /** Returns the output this AbstractFileOutErr has recorded. */
-    abstract byte[] getRecordedOutput();
+    /**
+     * Returns the output this AbstractFileOutErr has recorded.
+     */
+    abstract String getRecordedOutput();
 
     /**
      * Writes the output to the given output stream,
@@ -287,8 +282,8 @@ public class FileOutErr extends OutErr {
     }
 
     @Override
-    byte[] getRecordedOutput() {
-      return new byte[] {};
+    String getRecordedOutput() {
+      return "";
     }
 
     @Override
@@ -422,25 +417,20 @@ public class FileOutErr extends OutErr {
     }
 
     @Override
-    byte[] getRecordedOutput() {
-      byte[] bytes = null;
+    String getRecordedOutput() {
+      StringBuilder result = new StringBuilder();
       try {
         if (mightHaveOutput && getFile().exists()) {
-          bytes = FileSystemUtils.readContent(getFile());
+          result.append(FileSystemUtils.readContentAsLatin1(getFile()));
         }
       } catch (IOException ex) {
         recordError(ex);
       }
 
       if (hadError()) {
-        byte[] errorBytes = error.getBytes(StandardCharsets.ISO_8859_1);
-        if (bytes == null) {
-          bytes = errorBytes;
-        } else {
-          bytes = Bytes.concat(bytes, errorBytes);
-        }
+        result.append(error);
       }
-      return bytes == null ? new byte[] {} : bytes;
+      return result.toString();
     }
 
     @Override

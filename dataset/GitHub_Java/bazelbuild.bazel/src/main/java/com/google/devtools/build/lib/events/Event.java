@@ -16,14 +16,10 @@ package com.google.devtools.build.lib.events;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.syntax.Location;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.SyntaxError;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.FileOutErr.OutputReference;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -137,11 +133,11 @@ public final class Event implements Serializable {
    * output originated from.
    */
   @Nullable
-  public byte[] getStdOut() {
+  public String getStdOut() {
     if (outErr == null) {
       return null;
     }
-    return outErr.outAsBytes();
+    return outErr.outAsLatin1();
   }
 
   /**
@@ -149,11 +145,11 @@ public final class Event implements Serializable {
    * output originated from.
    */
   @Nullable
-  public byte[] getStdErr() {
+  public String getStdErr() {
     if (outErr == null) {
       return null;
     }
-    return outErr.errAsBytes();
+    return outErr.errAsLatin1();
   }
 
   /** Get a reference to the associated output. */
@@ -175,14 +171,13 @@ public final class Event implements Serializable {
     return location;
   }
 
-  /** Returns the event formatted as {@code "ERROR foo.bzl:1:2: oops"}. */
+  /**
+   * Returns <i>some</i> moderately sane representation of the event. Should never be used in
+   * user-visible places, only for debugging and testing.
+   */
   @Override
   public String toString() {
-    // TODO(adonovan): <no location> is just noise.
-    return kind
-        + " "
-        + (location != null ? location.toString() : "<no location>")
-        + ": "
+    return kind + " " + (location != null ? location.print() : "<no location>") + ": "
         + getMessage();
   }
 
@@ -222,17 +217,12 @@ public final class Event implements Serializable {
         && Arrays.equals(this.messageBytes, that.messageBytes);
   }
 
-  /** Replays a sequence of events on {@code handler}. */
-  public static void replayEventsOn(EventHandler handler, Iterable<Event> events) {
+  /**
+   * Replay a sequence of events on an {@link EventHandler}.
+   */
+  public static void replayEventsOn(EventHandler eventHandler, Iterable<Event> events) {
     for (Event event : events) {
-      handler.handle(event);
-    }
-  }
-
-  /** Converts a list of SyntaxErrors to Events and replay on {@code handler}. */
-  public static void replayEventsOn(EventHandler handler, List<SyntaxError> errors) {
-    for (SyntaxError error : errors) {
-      handler.handle(Event.error(error.location(), error.message()));
+      eventHandler.handle(event);
     }
   }
 
@@ -325,10 +315,5 @@ public final class Event implements Serializable {
         return Arrays.copyOfRange(message, message.length - count, message.length);
       }
     }
-  }
-
-  /** Returns a StarlarkThread PrintHandler that sends DEBUG events to the provided EventHandler. */
-  public static StarlarkThread.PrintHandler makeDebugPrintHandler(EventHandler h) {
-    return (thread, msg) -> h.handle(Event.debug(thread.getCallerLocation(), msg));
   }
 }

@@ -415,17 +415,17 @@ public class UiEventHandler implements EventHandler {
               if (remainingCapacity() < 0) {
                 return;
               }
-              writeToStream(
-                  stream,
-                  event.getKind(),
-                  event.getMessageReference(),
-                  /* readdProgressBar= */ showProgress && cursorControl);
+              writeToStream(stream, event.getKind(), event.getMessageReference());
+              stream.flush();
+              if (showProgress && cursorControl) {
+                addProgressBar();
+              }
+              terminal.flush();
             }
             break;
           case ERROR:
           case FAIL:
           case WARNING:
-          case CANCELLED:
           case INFO:
           case DEBUG:
           case SUBCOMMAND:
@@ -482,17 +482,9 @@ public class UiEventHandler implements EventHandler {
         if (event.hasStdoutStderr()) {
           clearProgressBar();
           terminal.flush();
-          writeToStream(
-              outErr.getErrorStream(),
-              EventKind.STDERR,
-              event.getStdErrReference(),
-              /* readdProgressBar= */ false);
+          writeToStream(outErr.getErrorStream(), EventKind.STDERR, event.getStdErrReference());
           outErr.getErrorStream().flush();
-          writeToStream(
-              outErr.getOutputStream(),
-              EventKind.STDOUT,
-              event.getStdOutReference(),
-              /* readdProgressBar= */ false);
+          writeToStream(outErr.getOutputStream(), EventKind.STDOUT, event.getStdOutReference());
           outErr.getOutputStream().flush();
           if (showProgress && cursorControl) {
             addProgressBar();
@@ -505,8 +497,7 @@ public class UiEventHandler implements EventHandler {
     }
   }
 
-  private void writeToStream(
-      OutputStream stream, EventKind eventKind, OutputReference reference, boolean readdProgressBar)
+  private void writeToStream(OutputStream stream, EventKind eventKind, OutputReference reference)
       throws IOException {
     byte[] message;
     double cap = remainingCapacity(reference.getLength());
@@ -539,11 +530,6 @@ public class UiEventHandler implements EventHandler {
       } else {
         stderrBuffer = restMessage;
       }
-      stream.flush();
-      if (readdProgressBar) {
-        addProgressBar();
-        terminal.flush();
-      }
     } else {
       if (eventKind == EventKind.STDOUT) {
         stdoutBuffer = Bytes.concat(stdoutBuffer, message);
@@ -561,7 +547,6 @@ public class UiEventHandler implements EventHandler {
         terminal.textBold();
         break;
       case WARNING:
-      case CANCELLED:
         terminal.setTextColor(Color.MAGENTA);
         break;
       case INFO:
