@@ -2,10 +2,8 @@ package io.quarkus.elytron.security.common.runtime;
 
 import java.security.Security;
 
-import org.jboss.logging.Logger;
 import org.wildfly.security.password.WildFlyElytronPasswordProvider;
 
-import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 
 /**
@@ -13,21 +11,14 @@ import io.quarkus.runtime.annotations.Recorder;
  */
 @Recorder
 public class ElytronCommonRecorder {
-    static final Logger log = Logger.getLogger(ElytronCommonRecorder.class);
 
-    /**
-     * As of Graal 19.3.0 this has to be registered at runtime, due to a bug.
-     *
-     * 19.3.1 should fix this, see https://github.com/oracle/graal/issues/1883
-     */
-    public void registerPasswordProvider(ShutdownContext shutdownContext) {
+    public void registerPasswordProvider() {
+        //we don't remove this, as there is no correct place where it can be removed
+        //as continuous testing can be running along side the dev mode app, but there is
+        //only ever one provider
         WildFlyElytronPasswordProvider provider = new WildFlyElytronPasswordProvider();
-        Security.addProvider(provider);
-        shutdownContext.addShutdownTask(new Runnable() {
-            @Override
-            public void run() {
-                Security.removeProvider(provider.getName());
-            }
-        });
+        if (Security.getProvider(provider.getName()) == null) {
+            Security.addProvider(provider);
+        }
     }
 }
