@@ -27,7 +27,7 @@ import org.graylog2.streams.matchers.*;
  *
  * [description]
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class StreamRuleMatcherFactory {
 
@@ -53,6 +53,9 @@ public class StreamRuleMatcherFactory {
                 break;
             case StreamRule.TYPE_ADDITIONAL:
                 matcher = new AdditionalFieldMatcher();
+                break;
+            case StreamRule.TYPE_HOSTGROUP:
+                matcher = new HostgroupMatcher();
                 break;
             case StreamRule.TYPE_SEVERITY_OR_HIGHER:
                 matcher = new SeverityOrHigherMatcher();
