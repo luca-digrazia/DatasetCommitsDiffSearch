@@ -63,8 +63,8 @@ public class Cluster {
     }
 
     public ClusterHealthResponse health() {
-        ClusterHealthRequest request = new ClusterHealthRequest(deflector.getDeflectorWildcard());
-        return c.admin().cluster().health(request).actionGet();
+        String[] indices = deflector.getAllDeflectorIndexNames();
+        return c.admin().cluster().health(new ClusterHealthRequest(indices)).actionGet();
     }
 
     public int getNumberOfNodes() {

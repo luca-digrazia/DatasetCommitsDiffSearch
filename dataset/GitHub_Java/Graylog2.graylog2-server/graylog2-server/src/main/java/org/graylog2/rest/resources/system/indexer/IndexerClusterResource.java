@@ -23,17 +23,16 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.graylog2.indexer.cluster.Cluster;
-import org.graylog2.rest.models.system.indexer.responses.ClusterHealth;
-import org.graylog2.rest.models.system.indexer.responses.ClusterName;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.rest.resources.system.indexer.responses.ClusterHealth;
+import org.graylog2.rest.resources.system.indexer.responses.ClusterName;
+import org.graylog2.security.RestPermissions;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
-import java.util.Locale;
 
 @RequiresAuthentication
 @Api(value = "Indexer/Cluster", description = "Indexer cluster information")
@@ -67,6 +66,6 @@ public class IndexerClusterResource extends RestResource {
                 health.getRelocatingShards(),
                 health.getUnassignedShards());
 
-        return ClusterHealth.create(health.getStatus().toString().toLowerCase(Locale.ENGLISH), shards);
+        return ClusterHealth.create(health.getStatus().toString().toLowerCase(), shards);
     }
 }
