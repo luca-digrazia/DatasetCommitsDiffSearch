@@ -21,12 +21,11 @@ import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
+import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 import java.util.List;
 import java.util.Set;
@@ -41,8 +40,7 @@ public class QueryEnvironmentFactory {
       WalkableGraphFactory graphFactory,
       TargetProvider targetProvider,
       CachingPackageLocator cachingPackageLocator,
-      TargetPatternPreloader targetPatternPreloader,
-      PathFragment relativeWorkingDirectory,
+      TargetPatternEvaluator targetPatternEvaluator,
       boolean keepGoing,
       boolean strictScope,
       boolean orderedResults,
@@ -62,7 +60,7 @@ public class QueryEnvironmentFactory {
           eventHandler,
           settings,
           functions,
-          relativeWorkingDirectory.getPathString(),
+          targetPatternEvaluator.getOffset(),
           graphFactory,
           universeScope,
           packagePath,
@@ -72,8 +70,7 @@ public class QueryEnvironmentFactory {
           transitivePackageLoader,
           targetProvider,
           cachingPackageLocator,
-          targetPatternPreloader,
-          relativeWorkingDirectory,
+          targetPatternEvaluator,
           keepGoing,
           strictScope,
           loadingPhaseThreads,
