@@ -29,8 +29,6 @@ import java.util.zip.ZipEntry;
  */
 public class SerializedApplication {
 
-    public static final String META_INF_VERSIONS = "META-INF/versions/";
-
     private static final int MAGIC = 0XF0315432;
     private static final int VERSION = 1;
 
@@ -51,7 +49,7 @@ public class SerializedApplication {
     }
 
     public static void write(OutputStream outputStream, String mainClass, Path applicationRoot, List<Path> classPath,
-            List<Path> parentFirst, List<String> nonExistentResources)
+            List<Path> parentFirst)
             throws IOException {
         try (DataOutputStream data = new DataOutputStream(outputStream)) {
             data.writeInt(MAGIC);
@@ -71,10 +69,6 @@ public class SerializedApplication {
             data.writeInt(parentFirstPackages.size());
             for (String p : parentFirstPackages) {
                 data.writeUTF(p.replace("/", ".").replace("\\", "."));
-            }
-            data.writeInt(nonExistentResources.size());
-            for (String nonExistentResource : nonExistentResources) {
-                data.writeUTF(nonExistentResource);
             }
             data.flush();
         }
@@ -119,14 +113,8 @@ public class SerializedApplication {
             for (int i = 0; i < packages; ++i) {
                 parentFirstPackages.add(in.readUTF());
             }
-            Set<String> nonExistentResources = new HashSet<>();
-            int nonExistentResourcesSize = in.readInt();
-            for (int i = 0; i < nonExistentResourcesSize; i++) {
-                nonExistentResources.add(in.readUTF());
-            }
             return new SerializedApplication(
-                    new RunnerClassLoader(ClassLoader.getSystemClassLoader(), resourceDirectoryMap, parentFirstPackages,
-                            nonExistentResources),
+                    new RunnerClassLoader(ClassLoader.getSystemClassLoader(), resourceDirectoryMap, parentFirstPackages),
                     mainClass);
         }
     }
@@ -172,20 +160,6 @@ public class SerializedApplication {
                     //looking at you h2
                     final int index = entry.getName().lastIndexOf('/');
                     dirs.add(entry.getName().substring(0, index));
-
-                    if (entry.getName().startsWith(META_INF_VERSIONS)) {
-                        //multi release jar
-                        //we add all packages here
-                        //they may no be relevant for some versions, but that is fine
-                        String part = entry.getName().substring(META_INF_VERSIONS.length());
-                        int slash = part.indexOf("/");
-                        if (slash != -1) {
-                            final int subIndex = part.lastIndexOf('/');
-                            if (subIndex != slash) {
-                                dirs.add(part.substring(slash + 1, subIndex));
-                            }
-                        }
-                    }
                 }
             }
             if (hasDefaultPackge) {
