@@ -21,13 +21,8 @@ import java.io.File;
  *     </tr>
  *     <tr>
  *         <td>file</td>
- *         <td>No default. You must define a directory.</td>
- *         <td>The directory where the csv metrics will be written. If the
- *         directory does not exist on startup, an attempt will be made to
- *         create it and any parent directories as necessary. If this
- *         operation fails dropwizard will fail on startup, but it may
- *         have succeeded in creating some of the necessary parent
- *         directories.</td>
+ *         <td>No default. You must define a file.</td>
+ *         <td>The CSV file to write metrics to.</td>
  *     </tr>
  *     <tr>
  *         <td colspan="3">See {@link BaseFormattedReporterFactory} for more options.</td>
@@ -54,8 +49,6 @@ public class CsvReporterFactory extends BaseFormattedReporterFactory {
 
     @Override
     public ScheduledReporter build(MetricRegistry registry) {
-        file.mkdirs();
-
         return CsvReporter.forRegistry(registry)
                           .convertDurationsTo(getDurationUnit())
                           .convertRatesTo(getRateUnit())
