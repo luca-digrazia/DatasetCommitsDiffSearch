@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.common.options.Option;
@@ -46,8 +45,9 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ConfigSettingTest extends BuildViewTestCase {
 
-  /** Test option that has its null default overridden by its fragment. */
-  @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
+  /**
+   * Test option that has its null default overridden by its fragment.
+   */
   public static class LateBoundTestOptions extends FragmentOptions {
     public LateBoundTestOptions() {}
 
@@ -60,8 +60,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
     public String optwithDefault;
   }
 
-  @AutoCodec
-  static class LateBoundTestOptionsFragment extends BuildConfiguration.Fragment {
+  private static class LateBoundTestOptionsFragment extends BuildConfiguration.Fragment {
     @Override
     public Map<String, Object> lateBoundOptionDefaults() {
       return ImmutableMap.<String, Object>of("opt_with_default", "overridden");
@@ -86,8 +85,9 @@ public class ConfigSettingTest extends BuildViewTestCase {
     }
   }
 
-  /** Test option which is private. */
-  @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
+  /**
+   * Test option which is private.
+   */
   public static class InternalTestOptions extends FragmentOptions {
     public InternalTestOptions() {}
 
@@ -101,9 +101,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
     public String optwithDefault;
   }
 
-  @AutoCodec
-  static class InternalTestOptionsFragment extends BuildConfiguration.Fragment {
-  }
+  private static class InternalTestOptionsFragment extends BuildConfiguration.Fragment {}
 
   private static class InternalTestOptionsLoader implements ConfigurationFragmentFactory {
     @Override
@@ -241,11 +239,9 @@ public class ConfigSettingTest extends BuildViewTestCase {
    */
   @Test
   public void emptySettings() throws Exception {
-    checkError(
-        "foo",
-        "empty",
+    checkError("foo", "empty",
         "in config_setting rule //foo:empty: "
-            + "Either values, flag_values or constraint_values must be specified and non-empty",
+        + "Either values or flag_values must be specified and non-empty",
         "config_setting(",
         "    name = 'empty',",
         "    values = {})");
@@ -264,19 +260,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = { 'opt_with_default': 'overridden' }",
         ")");
     assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
-  }
-
-  /** Tests disallowing {@link BuildConfiguration.Fragment#lateBoundOptionDefaults} */
-  @Test
-  public void disallowLateBoundOptionDefaults() throws Exception {
-    useConfiguration("--experimental_use_late_bound_option_defaults=false");
-    scratch.file(
-        "test/BUILD",
-        "config_setting(",
-        "    name = 'match',",
-        "    values = { 'opt_with_default': 'overridden' }",
-        ")");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
   }
 
   /**
@@ -1139,144 +1122,4 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    default_value = 'valid',",
         ")");
   }
-
-  @Test
-  public void constraintValue() throws Exception {
-    scratch.file(
-        "test/BUILD",
-        "constraint_setting(name = 'notable_building')",
-        "constraint_value(name = 'empire_state', constraint_setting = 'notable_building')",
-        "constraint_value(name = 'space_needle', constraint_setting = 'notable_building')",
-        "platform(",
-        "    name = 'new_york_platform',",
-        "    constraint_values = [':empire_state'],",
-        ")",
-        "platform(",
-        "    name = 'seattle_platform',",
-        "    constraint_values = [':space_needle'],",
-        ")",
-        "config_setting(",
-        "    name = 'match',",
-        "    constraint_values = [':empire_state'],",
-        ");");
-
-    useConfiguration("--experimental_platforms=//test:new_york_platform");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
-    useConfiguration("--experimental_platforms=//test:seattle_platform");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
-    useConfiguration("");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
-  }
-
-  @Test
-  public void multipleConstraintValues() throws Exception {
-    scratch.file(
-        "test/BUILD",
-        "constraint_setting(name = 'notable_building')",
-        "constraint_value(name = 'empire_state', constraint_setting = 'notable_building')",
-        "constraint_setting(name = 'museum')",
-        "constraint_value(name = 'cloisters', constraint_setting = 'museum')",
-        "constraint_setting(name = 'theme_park')",
-        "constraint_value(name = 'coney_island', constraint_setting = 'theme_park')",
-        "platform(",
-        "    name = 'manhattan_platform',",
-        "    constraint_values = [",
-        "        ':empire_state',",
-        "        ':cloisters',",
-        "    ],",
-        ")",
-        "platform(",
-        "    name = 'museum_platform',",
-        "    constraint_values = [':cloisters'],",
-        ")",
-        "platform(",
-        "    name = 'new_york_platform',",
-        "    constraint_values = [",
-        "        ':empire_state',",
-        "        ':cloisters',",
-        "        ':coney_island',",
-        "    ],",
-        ")",
-        "config_setting(",
-        "    name = 'match',",
-        "    constraint_values = [':empire_state', ':cloisters'],",
-        ");");
-    useConfiguration("--experimental_platforms=//test:manhattan_platform");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
-    useConfiguration("--experimental_platforms=//test:museum_platform");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
-    useConfiguration("--experimental_platforms=//test:new_york_platform");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
-  }
-
-  @Test
-  public void definesAndConstraints() throws Exception {
-    scratch.file(
-        "test/BUILD",
-        "constraint_setting(name = 'notable_building')",
-        "constraint_value(name = 'empire_state', constraint_setting = 'notable_building')",
-        "constraint_value(name = 'space_needle', constraint_setting = 'notable_building')",
-        "platform(",
-        "    name = 'new_york_platform',",
-        "    constraint_values = [':empire_state'],",
-        ")",
-        "platform(",
-        "    name = 'seattle_platform',",
-        "    constraint_values = [':space_needle'],",
-        ")",
-        "config_setting(",
-        "    name = 'match',",
-        "    constraint_values = [':empire_state'],",
-        "    values = {",
-        "        'define': 'a=c',",
-        "    },",
-        "    define_values = {",
-        "        'b': 'd',",
-        "    },",
-        ");");
-
-    useConfiguration(
-        "--experimental_platforms=//test:new_york_platform", "--define", "a=c", "--define", "b=d");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
-    useConfiguration("--experimental_platforms=//test:new_york_platform");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
-    useConfiguration("--define", "a=c");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
-    useConfiguration("--define", "a=c", "--experimental_platforms=//test:new_york_platform");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
-  }
-
-  /**
-   * Tests that a config_setting doesn't allow a constraint_values list with more than one
-   * constraint value per constraint setting.
-   */
-  @Test
-  public void multipleValuesPerSetting() throws Exception {
-    checkError(
-        "foo",
-        "bad",
-        "in config_setting rule //foo:bad: "
-            + "Duplicate constraint_values detected: "
-            + "constraint_setting //foo:notable_building has "
-            + "[//foo:empire_state, //foo:space_needle], "
-            + "constraint_setting //foo:museum has "
-            + "[//foo:moma, //foo:sam]",
-        "constraint_setting(name = 'notable_building')",
-        "constraint_value(name = 'empire_state', constraint_setting = 'notable_building')",
-        "constraint_value(name = 'space_needle', constraint_setting = 'notable_building')",
-        "constraint_value(name = 'peace_arch', constraint_setting = 'notable_building')",
-        "constraint_setting(name = 'museum')",
-        "constraint_value(name = 'moma', constraint_setting = 'museum')",
-        "constraint_value(name = 'sam', constraint_setting = 'museum')",
-        "config_setting(",
-        "    name = 'bad',",
-        "    constraint_values = [",
-        "        ':empire_state',",
-        "        ':space_needle',",
-        "        ':moma',",
-        "        ':sam',",
-        "    ],",
-        ");");
-  }
 }
-
