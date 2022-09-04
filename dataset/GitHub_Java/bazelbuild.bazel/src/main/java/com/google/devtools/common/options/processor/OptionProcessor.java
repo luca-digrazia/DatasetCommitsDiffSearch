@@ -15,10 +15,11 @@ package com.google.devtools.common.options.processor;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMap.Builder;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
+import com.google.devtools.common.options.ExpansionFunction;
 import com.google.devtools.common.options.Option;
+import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
@@ -26,15 +27,15 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.List;
-import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
@@ -55,12 +56,26 @@ import javax.tools.Diagnostic;
 /**
  * Annotation processor for {@link Option}.
  *
- * <p>The {@link OptionsParser} only accepts publicly declared options in {@link
- * OptionsBase}-inheriting classes, and there is no support for {@link Option} annotated fields
- * declared elsewhere or privately. Prevent such uses from compiling.
+ * <p>Checks the following invariants about {@link Option}-annotated fields ("options"):
+ *
+ * <ul>
+ *   <li>The {@link OptionsParser} only accepts options in {@link OptionsBase}-inheriting classes
+ *   <li>All options must be declared publicly and be neither static nor final.
+ *   <li>All options that must be used on the command line must have sensible names without
+ *       whitespace or other confusing characters, such as equal signs.
+ *   <li>The type of the option must match the converter that will convert the unparsed string value
+ *       into the option type. For options that do not specify a converter, check that there is a
+ *       valid match in the {@link Converters#DEFAULT_CONVERTERS} list.
+ *   <li>Options must list valid combinations of tags and documentation categories.
+ *   <li>Expansion options and options with implicit requirements cannot expand in more than one
+ *       way, how multiple expansions would interact is not defined and should not be necessary.
+ *   <li>Multiple options must not declare default value (see {@link
+ *       #MULTIPLE_OPTIONS_DEFAULT_VALUE_EXCEPTIONS} for exceptions).
+ * </ul>
+ *
+ * <p>These properties can be relied upon at runtime without additional checks.
  */
 @SupportedAnnotationTypes({"com.google.devtools.common.options.Option"})
-@SupportedSourceVersion(SourceVersion.RELEASE_8)
 public final class OptionProcessor extends AbstractProcessor {
 
   private Types typeUtils;
@@ -68,6 +83,11 @@ public final class OptionProcessor extends AbstractProcessor {
   private Messager messager;
   private ImmutableMap<TypeMirror, Converter<?>> defaultConverters;
   private ImmutableMap<Class<?>, PrimitiveType> primitiveTypeMap;
+
+  @Override
+  public SourceVersion getSupportedSourceVersion() {
+    return SourceVersion.latestSupported();
+  }
 
   @Override
   public synchronized void init(ProcessingEnvironment processingEnv) {
@@ -79,18 +99,19 @@ public final class OptionProcessor extends AbstractProcessor {
     // Because of the discrepancies between the java.lang and javax.lang type models, we can't
     // directly use the get() method for the default converter map. Instead, we'll convert it once,
     // to be more usable, and with the boxed type return values of convert() as the keys.
-    ImmutableMap.Builder<TypeMirror, Converter<?>> converterMapBuilder = new Builder<>();
+    ImmutableMap.Builder<TypeMirror, Converter<?>> converterMapBuilder =
+        new ImmutableMap.Builder<>();
 
     // Create a link from the primitive Classes to their primitive types. This intentionally
     // only contains the types in the DEFAULT_CONVERTERS map.
-    ImmutableMap.Builder<Class<?>, PrimitiveType> builder = new Builder<>();
+    ImmutableMap.Builder<Class<?>, PrimitiveType> builder = new ImmutableMap.Builder<>();
     builder.put(int.class, typeUtils.getPrimitiveType(TypeKind.INT));
     builder.put(double.class, typeUtils.getPrimitiveType(TypeKind.DOUBLE));
     builder.put(boolean.class, typeUtils.getPrimitiveType(TypeKind.BOOLEAN));
     builder.put(long.class, typeUtils.getPrimitiveType(TypeKind.LONG));
     primitiveTypeMap = builder.build();
 
-    for (Entry<Class<?>, Converter<?>> entry : Converters.DEFAULT_CONVERTERS.entrySet()) {
+    for (Map.Entry<Class<?>, Converter<?>> entry : Converters.DEFAULT_CONVERTERS.entrySet()) {
       Class<?> converterClass = entry.getKey();
       String typeName = converterClass.getCanonicalName();
       TypeElement typeElement = elementUtils.getTypeElement(typeName);
@@ -138,7 +159,7 @@ public final class OptionProcessor extends AbstractProcessor {
    *
    * <p>Static or final fields would cause issue with correct value assigning at the end of parsing.
    */
-  private void checkModifiers(VariableElement optionField) throws OptionProcessorException {
+  private static void checkModifiers(VariableElement optionField) throws OptionProcessorException {
     if (!optionField.getModifiers().contains(Modifier.PUBLIC)) {
       throw new OptionProcessorException(optionField, "@Option annotated fields should be public.");
     }
@@ -261,9 +282,7 @@ public final class OptionProcessor extends AbstractProcessor {
     // instead check that T of Converter<T> matches the option's type, but this is all we can
     // do.
     List<ExecutableElement> methodList =
-        elementUtils
-            .getAllMembers(converterElement)
-            .stream()
+        elementUtils.getAllMembers(converterElement).stream()
             .filter(element -> element.getKind() == ElementKind.METHOD)
             .map(methodElement -> (ExecutableElement) methodElement)
             .filter(methodElement -> methodElement.getSimpleName().contentEquals("convert"))
@@ -340,7 +359,7 @@ public final class OptionProcessor extends AbstractProcessor {
    * Check that the option lists at least one effect, and that no nonsensical combinations are
    * listed, such as having a known effect listed with UNKNOWN.
    */
-  private void checkEffectTagRationality(VariableElement optionField)
+  private static void checkEffectTagRationality(VariableElement optionField)
       throws OptionProcessorException {
     Option annotation = optionField.getAnnotation(Option.class);
     OptionEffectTag[] effectTags = annotation.effectTags();
@@ -373,7 +392,7 @@ public final class OptionProcessor extends AbstractProcessor {
    * Check that if the metadata tags listed by an option require the option to be unknown by the
    * average user, the same option will be omitted from documentation.
    */
-  private void checkMetadataTagAndCategoryRationality(VariableElement optionField)
+  private static void checkMetadataTagAndCategoryRationality(VariableElement optionField)
       throws OptionProcessorException {
     Option annotation = optionField.getAnnotation(Option.class);
     OptionMetadataTag[] metadataTags = annotation.metadataTags();
@@ -391,6 +410,125 @@ public final class OptionProcessor extends AbstractProcessor {
     }
   }
 
+  /** These categories used to indicate whether a flag was documented, but no longer. */
+  private static final ImmutableList<String> DEPRECATED_CATEGORIES =
+      ImmutableList.of("undocumented", "hidden", "internal");
+
+  private static void checkOldCategoriesAreNotUsed(VariableElement optionField)
+      throws OptionProcessorException {
+    Option annotation = optionField.getAnnotation(Option.class);
+    if (DEPRECATED_CATEGORIES.contains(annotation.category())) {
+      throw new OptionProcessorException(
+          optionField,
+          "Documentation level is no longer read from the option category. Category \""
+              + annotation.category()
+              + "\" is disallowed, see OptionMetadataTags for the relevant tags.");
+    }
+  }
+
+  private static void checkOptionName(VariableElement optionField) throws OptionProcessorException {
+    Option annotation = optionField.getAnnotation(Option.class);
+    String optionName = annotation.name();
+    if (optionName.isEmpty()) {
+      throw new OptionProcessorException(optionField, "Option must have an actual name.");
+    }
+
+    // Specifically for non-internal options, which are flags intended to be used on the command
+    // line, check that there are no weird characters or whitespace.
+    if (!ImmutableList.copyOf(annotation.metadataTags()).contains(OptionMetadataTag.INTERNAL)) {
+      if (!Pattern.matches("([\\w:-])*", optionName)) {
+        // Ideally, this would be just \w, but - and : are needed for legacy options. We can lie in
+        // the error though, no harm in encouraging good behavior.
+        throw new OptionProcessorException(
+            optionField,
+            "Options that are used on the command line as flags must have names made from word "
+                + "characters only.");
+      }
+    }
+  }
+
+  /**
+   * Some flags expand to other flags, either in place, or with "implicit requirements" that get
+   * added on top of the flag's value. Don't let these flags do too many crazy things, dealing with
+   * this is enough.
+   */
+  private void checkExpansionOptions(VariableElement optionField) throws OptionProcessorException {
+    Option annotation = optionField.getAnnotation(Option.class);
+    boolean isStaticExpansion = annotation.expansion().length > 0;
+    boolean hasImplicitRequirements = annotation.implicitRequirements().length > 0;
+
+    AnnotationMirror annotationMirror =
+        ProcessorUtils.getAnnotation(elementUtils, typeUtils, optionField, Option.class);
+    TypeElement expansionFunction =
+        ProcessorUtils.getClassTypeFromAnnotationField(
+            elementUtils, annotationMirror, "expansionFunction");
+    TypeElement defaultExpansionFunction =
+        elementUtils.getTypeElement(ExpansionFunction.class.getCanonicalName());
+    boolean isFunctionalExpansion =
+        !typeUtils.isSameType(expansionFunction.asType(), defaultExpansionFunction.asType());
+
+    if (isStaticExpansion && isFunctionalExpansion) {
+      throw new OptionProcessorException(
+          optionField,
+          "Options cannot expand using both a static expansion list and an expansion function.");
+    }
+    boolean isExpansion = isStaticExpansion || isFunctionalExpansion;
+
+    if (isExpansion && hasImplicitRequirements) {
+      throw new OptionProcessorException(
+          optionField,
+          "Can't set an option to be both an expansion option and have implicit requirements.");
+    }
+
+    if (isExpansion || hasImplicitRequirements) {
+      if (annotation.allowMultiple()) {
+        throw new OptionProcessorException(
+            optionField,
+            "Can't set an option to accumulate multiple values and let it expand to other flags.");
+      }
+    }
+  }
+
+  private static boolean hasSpecialNullDefaultValue(Option annotation) {
+    return OptionDefinition.SPECIAL_NULL_DEFAULT_VALUE.equals(annotation.defaultValue());
+  }
+
+  /**
+   * Options that are allowed to have default values.
+   *
+   * <p>DO NOT ADD new (especially production) options here - the long-term goal is to prohibit
+   * multiple options to have default values.
+   */
+  private static final ImmutableList<String> MULTIPLE_OPTIONS_DEFAULT_VALUE_EXCEPTIONS =
+      ImmutableList.of(
+          // Multiple options used in OptionDefinitionTest
+          "non_empty_string_multiple_option",
+          "empty_string_multiple_option",
+          // Production multiple options that still have default value.
+          // Mostly due to backward compatibility reasons.
+          "runs_per_test",
+          "flaky_test_attempts",
+          "worker_max_instances");
+
+  private static boolean isMultipleOptionDefaultValueException(Option annotation) {
+    return MULTIPLE_OPTIONS_DEFAULT_VALUE_EXCEPTIONS.contains(annotation.name());
+  }
+
+  private static void checkNoDefaultValueForMultipleOption(VariableElement optionField)
+      throws OptionProcessorException {
+    Option annotation = optionField.getAnnotation(Option.class);
+
+    if (annotation.allowMultiple()
+        && !hasSpecialNullDefaultValue(annotation)
+        && !isMultipleOptionDefaultValueException(annotation)) {
+      String message =
+          String.format(
+              "Default values for multiple options are not allowed - use \"%s\" special value",
+              "null");
+      throw new OptionProcessorException(optionField, message);
+    }
+  }
+
   @Override
   public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
     for (Element annotatedElement : roundEnv.getElementsAnnotatedWith(Option.class)) {
@@ -401,15 +539,18 @@ public final class OptionProcessor extends AbstractProcessor {
 
         checkModifiers(optionField);
         checkInOptionBase(optionField);
+        checkOptionName(optionField);
+        checkOldCategoriesAreNotUsed(optionField);
+        checkExpansionOptions(optionField);
         checkConverter(optionField);
         checkEffectTagRationality(optionField);
         checkMetadataTagAndCategoryRationality(optionField);
+        checkNoDefaultValueForMultipleOption(optionField);
       } catch (OptionProcessorException e) {
         error(e.getElementInError(), e.getMessage());
       }
     }
-    // Claim all Option annotated fields.
-    return true;
+    return false;
   }
 
   /**
