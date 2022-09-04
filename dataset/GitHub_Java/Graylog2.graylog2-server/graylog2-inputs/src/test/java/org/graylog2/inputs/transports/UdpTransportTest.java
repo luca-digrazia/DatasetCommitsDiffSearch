@@ -43,7 +43,6 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,7 +57,7 @@ import static org.mockito.Mockito.when;
 
 public class UdpTransportTest {
     private static final String BIND_ADDRESS = "127.0.0.1";
-    private static final int PORT = 0;
+    private static final int PORT = 5555;
     private static final int RECV_BUFFER_SIZE = 1024;
     private static final ImmutableMap<String, Object> CONFIG_SOURCE = ImmutableMap.<String, Object>of(
             NettyTransport.CK_BIND_ADDRESS, BIND_ADDRESS,
@@ -81,9 +80,8 @@ public class UdpTransportTest {
     public void transportReceivesDataSmallerThanRecvBufferSize() throws Exception {
         final CountingChannelUpstreamHandler handler = new CountingChannelUpstreamHandler();
         final UdpTransport transport = launchTransportForBootStrapTest(handler);
-        final InetSocketAddress localAddress = (InetSocketAddress) transport.getLocalAddress();
 
-        sendUdpDatagram(BIND_ADDRESS, localAddress.getPort(), 100);
+        sendUdpDatagram(BIND_ADDRESS, PORT, 100);
         await().atMost(5, TimeUnit.SECONDS).until(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
@@ -99,13 +97,12 @@ public class UdpTransportTest {
     public void transportReceivesDataExactlyRecvBufferSize() throws Exception {
         final CountingChannelUpstreamHandler handler = new CountingChannelUpstreamHandler();
         final UdpTransport transport = launchTransportForBootStrapTest(handler);
-        final InetSocketAddress localAddress = (InetSocketAddress) transport.getLocalAddress();
 
         // This will be variable depending on the version of the IP protocol and the UDP packet size.
         final int udpOverhead = 16;
         final int maxPacketSize = RECV_BUFFER_SIZE - udpOverhead;
 
-        sendUdpDatagram(BIND_ADDRESS, localAddress.getPort(), maxPacketSize);
+        sendUdpDatagram(BIND_ADDRESS, PORT, maxPacketSize);
         await().atMost(5, TimeUnit.SECONDS).until(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
@@ -123,9 +120,8 @@ public class UdpTransportTest {
 
         final CountingChannelUpstreamHandler handler = new CountingChannelUpstreamHandler();
         final UdpTransport transport = launchTransportForBootStrapTest(handler);
-        final InetSocketAddress localAddress = (InetSocketAddress) transport.getLocalAddress();
 
-        sendUdpDatagram(BIND_ADDRESS, localAddress.getPort(), 2 * RECV_BUFFER_SIZE);
+        sendUdpDatagram(BIND_ADDRESS, PORT, 2 * RECV_BUFFER_SIZE);
         Uninterruptibles.sleepUninterruptibly(2, TimeUnit.SECONDS);
 
         transport.stop();
@@ -139,9 +135,8 @@ public class UdpTransportTest {
 
         final CountingChannelUpstreamHandler handler = new CountingChannelUpstreamHandler();
         final UdpTransport transport = launchTransportForBootStrapTest(handler);
-        final InetSocketAddress localAddress = (InetSocketAddress) transport.getLocalAddress();
 
-        sendUdpDatagram(BIND_ADDRESS, localAddress.getPort(), 2 * RECV_BUFFER_SIZE);
+        sendUdpDatagram(BIND_ADDRESS, PORT, 2 * RECV_BUFFER_SIZE);
         await().atMost(5, TimeUnit.SECONDS).until(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
