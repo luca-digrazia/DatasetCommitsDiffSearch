@@ -177,7 +177,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
   public void labelGetter() throws Exception {
     writeSimpleExample();
     assertThat(getConfigMatchingProvider("//pkg:foo").label())
-        .isEqualTo(Label.parseAbsolute("//pkg:foo", ImmutableMap.of()));
+        .isEqualTo(Label.parseAbsolute("//pkg:foo"));
   }
 
   /**

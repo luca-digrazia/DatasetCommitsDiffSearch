@@ -774,12 +774,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertThat((SkylarkList<?>) result).containsExactly("cc_include_scanning", "f1", "f2");
   }
 
-  @Test
-  public void testDisabledFeatures() throws Exception {
-    SkylarkRuleContext ruleContext = createRuleContext("//foo:cc_with_features");
-    Object result = evalRuleContextCode(ruleContext, "ruleContext.disabled_features");
-    assertThat((SkylarkList<?>) result).containsExactly("f3");
-  }
 
   @Test
   public void testHostConfiguration() throws Exception {

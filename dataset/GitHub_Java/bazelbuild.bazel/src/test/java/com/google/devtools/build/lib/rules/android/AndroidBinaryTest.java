@@ -705,7 +705,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     assertNoEvents();
 
     SpawnAction splitAction =
-        getGeneratingSpawnAction(getTreeArtifact("dexsplits/top", topTarget));
+        getGeneratingSpawnAction(getBinArtifact("dexsplits/top", topTarget));
     assertThat(splitAction.getArguments()).contains("--main-dex-list");
     assertThat(splitAction.getArguments()).contains("--minimal-main-dex");
     assertThat(ActionsTestUtil.baseArtifactNames(getNonToolInputs(splitAction)))
