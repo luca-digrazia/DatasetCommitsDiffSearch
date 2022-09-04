@@ -62,8 +62,10 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.AbstractRuleErrorConsumer;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -633,12 +635,29 @@ public final class RuleContext extends TargetContext
     return getAnalysisEnvironment().getDerivedArtifact(rootRelativePath, root);
   }
 
-  @Override
+  /**
+   * Creates an artifact in a directory that is unique to the package that contains the rule, thus
+   * guaranteeing that it never clashes with artifacts created by rules in other packages.
+   */
   public Artifact getPackageRelativeArtifact(PathFragment relative, ArtifactRoot root) {
     return getDerivedArtifact(getPackageDirectory().getRelative(relative), root);
   }
 
-  @Override
+  /**
+   * Returns the root-relative path fragment under which output artifacts of this rule should go.
+   *
+   * <p>Note that:
+   *
+   * <ul>
+   *   <li>This doesn't guarantee that there are no clashes with rules in the same package.
+   *   <li>If possible, {@link #getPackageRelativeArtifact(PathFragment, ArtifactRoot)} should be
+   *       used instead of this method.
+   * </ul>
+   *
+   * Ideally, user-visible artifacts should all have corresponding output file targets, all others
+   * should go into a rule-specific directory. {@link #getUniqueDirectoryArtifact(String,
+   * PathFragment, ArtifactRoot)}) ensures that this is the case.
+   */
   public PathFragment getPackageDirectory() {
     return getLabel().getPackageIdentifier().getSourceRoot();
   }
@@ -687,11 +706,6 @@ public final class RuleContext extends TargetContext
   public Artifact getUniqueDirectoryArtifact(
       String uniqueDirectory, String relative, ArtifactRoot root) {
     return getUniqueDirectoryArtifact(uniqueDirectory, PathFragment.create(relative), root);
-  }
-
-  @Override
-  public Artifact getUniqueDirectoryArtifact(String uniqueDirectorySuffix, String relative) {
-    return getUniqueDirectoryArtifact(uniqueDirectorySuffix, relative, getBinOrGenfilesDirectory());
   }
 
   /**
@@ -1242,7 +1256,10 @@ public final class RuleContext extends TargetContext
     return label;
   }
 
-  @Override
+  /**
+   * Returns the implicit output artifact for a given template function. If multiple or no artifacts
+   * can be found as a result of the template, an exception is thrown.
+   */
   public Artifact getImplicitOutputArtifact(ImplicitOutputsFunction function)
       throws InterruptedException {
     Iterable<String> result;
@@ -1911,15 +1928,20 @@ public final class RuleContext extends TargetContext
   }
 
   /** Helper class for reporting errors and warnings. */
-  public static final class ErrorReporter extends EventHandlingErrorReporter
+  public static final class ErrorReporter extends AbstractRuleErrorConsumer
       implements RuleErrorConsumer {
     private final AnalysisEnvironment env;
     private final Rule rule;
+    private final String ruleClassNameForLogging;
 
     ErrorReporter(AnalysisEnvironment env, Rule rule, String ruleClassNameForLogging) {
-      super(ruleClassNameForLogging, env);
       this.env = env;
       this.rule = rule;
+      this.ruleClassNameForLogging = ruleClassNameForLogging;
+    }
+
+    public void reportError(Location location, String message) {
+      env.getEventHandler().handle(Event.error(location, message));
     }
 
     public void post(Postable event) {
@@ -1927,33 +1949,72 @@ public final class RuleContext extends TargetContext
     }
 
     @Override
-    protected String getMacroMessageAppendix(String attrName) {
-      return rule.wasCreatedByMacro()
-          ? String.format(
-              ". Since this rule was created by the macro '%s', the error might have been "
+    public void ruleError(String message) {
+      reportError(rule.getLocation(), prefixRuleMessage(message));
+    }
+
+    @Override
+    public void attributeError(String attrName, String message) {
+      reportError(rule.getAttributeLocation(attrName), completeAttributeMessage(attrName, message));
+    }
+
+    @Override
+    public boolean hasErrors() {
+      return env.hasErrors();
+    }
+
+    public void reportWarning(Location location, String message) {
+      env.getEventHandler().handle(Event.warn(location, message));
+    }
+
+    @Override
+    public void ruleWarning(String message) {
+      env.getEventHandler().handle(Event.warn(rule.getLocation(), prefixRuleMessage(message)));
+    }
+
+    @Override
+    public void attributeWarning(String attrName, String message) {
+      reportWarning(
+          rule.getAttributeLocation(attrName), completeAttributeMessage(attrName, message));
+    }
+
+    private String prefixRuleMessage(String message) {
+      return String.format(
+          "in %s rule %s: %s", getRuleClassNameForLogging(), rule.getLabel(), message);
+    }
+
+    private String maskInternalAttributeNames(String name) {
+      return Attribute.isImplicit(name) ? "(an implicit dependency)" : name;
+    }
+
+    /**
+     * Prefixes the given message with details about the rule and appends details about the macro
+     * that created this rule, if applicable.
+     */
+    private String completeAttributeMessage(String attrName, String message) {
+      // Appends a note to the given message if the offending rule was created by a macro.
+      String macroMessageAppendix =
+          rule.wasCreatedByMacro()
+              ? String.format(
+                  ". Since this rule was created by the macro '%s', the error might have been "
                   + "caused by the macro implementation in %s",
-              getGeneratorFunction(), rule.getAttributeLocationWithoutMacro(attrName))
-          : "";
+                  getGeneratorFunction(), rule.getAttributeLocationWithoutMacro(attrName))
+              : "";
+
+      return String.format("in %s attribute of %s rule %s: %s%s",
+          maskInternalAttributeNames(attrName), getRuleClassNameForLogging(), rule.getLabel(),
+          message, macroMessageAppendix);
+    }
+
+    /**
+     * Returns a rule class name suitable for log messages, including an aspect name if applicable.
+     */
+    private String getRuleClassNameForLogging() {
+      return ruleClassNameForLogging;
     }
 
     private String getGeneratorFunction() {
       return (String) rule.getAttributeContainer().getAttr("generator_function");
     }
-
-    @Override
-    protected Label getLabel() {
-      return rule.getLabel();
-    }
-
-    @Override
-    protected Location getRuleLocation() {
-      return rule.getLocation();
-    }
-
-    @Override
-    protected Location getAttributeLocation(String attrName) {
-      return rule.getAttributeLocation(attrName);
-    }
-
   }
 }
