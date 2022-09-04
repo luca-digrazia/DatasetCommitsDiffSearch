@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.sandbox;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -73,7 +73,6 @@ public class SandboxfsSandboxedSpawnTest {
             ImmutableMap.of(),
             new SandboxInputs(
                 ImmutableMap.of(PathFragment.create("such/input.txt"), helloTxt),
-                ImmutableSet.of(),
                 ImmutableMap.of()),
             SandboxOutputs.create(
                 ImmutableSet.of(PathFragment.create("very/output.txt")), ImmutableSet.of()),
@@ -103,7 +102,7 @@ public class SandboxfsSandboxedSpawnTest {
             "some-workspace-name",
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
-            new SandboxInputs(ImmutableMap.of(), ImmutableSet.of(), ImmutableMap.of()),
+            new SandboxInputs(ImmutableMap.of(), ImmutableMap.of()),
             SandboxOutputs.create(ImmutableSet.of(), ImmutableSet.of()),
             ImmutableSet.of(),
             /* mapSymlinkTargets= */ false,
@@ -129,7 +128,6 @@ public class SandboxfsSandboxedSpawnTest {
             ImmutableMap.of(),
             new SandboxInputs(
                 ImmutableMap.of(PathFragment.create("such/input.txt"), helloTxt),
-                ImmutableSet.of(),
                 ImmutableMap.of()),
             SandboxOutputs.create(
                 ImmutableSet.of(PathFragment.create("very/output.txt")), ImmutableSet.of()),
@@ -163,7 +161,7 @@ public class SandboxfsSandboxedSpawnTest {
             "workspace",
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
-            new SandboxInputs(ImmutableMap.of(), ImmutableSet.of(), ImmutableMap.of()),
+            new SandboxInputs(ImmutableMap.of(), ImmutableMap.of()),
             SandboxOutputs.create(ImmutableSet.of(outputFile), ImmutableSet.of()),
             ImmutableSet.of(),
             /* mapSymlinkTargets= */ false,
@@ -227,7 +225,6 @@ public class SandboxfsSandboxedSpawnTest {
                     PathFragment.create("such/link-1.txt"), linkToInput1,
                     PathFragment.create("such/link-to-link.txt"), linkToLink,
                     PathFragment.create("such/abs-link.txt"), linkToAbsolutePath),
-                ImmutableSet.of(),
                 ImmutableMap.of()),
             SandboxOutputs.create(
                 ImmutableSet.of(PathFragment.create("very/output.txt")), ImmutableSet.of()),
@@ -274,12 +271,12 @@ public class SandboxfsSandboxedSpawnTest {
   }
 
   @Test
-  public void testSymlinks_targetsMappedIfRequested() throws Exception {
+  public void testSymlinks_TargetsMappedIfRequested() throws Exception {
     testSymlinks(true);
   }
 
   @Test
-  public void testSymlinks_targetsNotMappedIfNotRequested() throws Exception {
+  public void testSymlinks_TargetsNotMappedIfNotRequested() throws Exception {
     testSymlinks(false);
   }
 }

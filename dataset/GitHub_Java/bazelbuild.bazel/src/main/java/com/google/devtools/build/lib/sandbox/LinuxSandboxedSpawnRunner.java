@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -159,16 +158,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
         localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), binTools, "/tmp");
 
     ImmutableSet<Path> writableDirs = getWritableDirs(sandboxExecRoot, environment);
-
-    SandboxInputs inputs =
-        SandboxHelpers.processInputFiles(
-            context.getInputMapping(
-                getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
-            spawn,
-            context.getArtifactExpander(),
-            execRoot);
     SandboxOutputs outputs = SandboxHelpers.getOutputs(spawn);
-
     Duration timeout = context.getTimeout();
 
     LinuxSandboxUtil.CommandLineBuilder commandLineBuilder =
@@ -207,7 +197,11 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
           workspaceName,
           commandLineBuilder.build(),
           environment,
-          inputs,
+          SandboxHelpers.processInputFiles(
+              spawn,
+              context,
+              execRoot,
+              getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
           outputs,
           ImmutableSet.of(),
           sandboxfsMapSymlinkTargets,
@@ -219,7 +213,11 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
           sandboxExecRoot,
           commandLineBuilder.build(),
           environment,
-          inputs,
+          SandboxHelpers.processInputFiles(
+              spawn,
+              context,
+              execRoot,
+              getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
           outputs,
           writableDirs,
           treeDeleter,
