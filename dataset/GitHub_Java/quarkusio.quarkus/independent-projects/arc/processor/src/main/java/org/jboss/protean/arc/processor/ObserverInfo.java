@@ -91,9 +91,9 @@ public class ObserverInfo {
         return isAsync;
     }
 
-    void init(List<Throwable> errors) {
+    void init() {
         for (InjectionPointInfo injectionPoint : injection.injectionPoints) {
-            Beans.resolveInjectionPoint(declaringBean.getDeployment(), getDeclaringBean(), injectionPoint, errors);
+            Beans.resolveInjectionPoint(declaringBean.getDeployment(), null, injectionPoint);
         }
     }
 
