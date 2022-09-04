@@ -1,6 +1,5 @@
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.AlternativePriority;
 import io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext;
 import io.quarkus.arc.processor.BuildExtension.BuildContext;
 import io.quarkus.arc.processor.BuildExtension.Key;
@@ -19,7 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import javax.annotation.Priority;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
@@ -60,7 +58,6 @@ public class BeanProcessor {
     private final Predicate<DotName> applicationClassPredicate;
     private final BeanDeployment beanDeployment;
     private final boolean generateSources;
-    private final boolean allowMocking;
 
     private BeanProcessor(String name, IndexView index, Collection<BeanDefiningAnnotation> additionalBeanDefiningAnnotations,
             ResourceOutput output,
@@ -81,15 +78,13 @@ public class BeanProcessor {
             List<InterceptorBindingRegistrar> interceptorBindingRegistrars,
             boolean transformUnproxyableClasses,
             boolean jtaCapabilities,
-            boolean generateSources, boolean allowMocking,
-            AlternativePriorities alternativePriorities) {
+            boolean generateSources) {
         this.reflectionRegistration = reflectionRegistration;
         this.applicationClassPredicate = applicationClassPredicate;
         this.name = name;
         this.output = output;
         this.sharedAnnotationLiterals = sharedAnnotationLiterals;
         this.generateSources = generateSources;
-        this.allowMocking = allowMocking;
 
         // Initialize all build processors
         buildContext = new BuildContextImpl();
@@ -106,7 +101,7 @@ public class BeanProcessor {
                 resourceAnnotations, buildContext,
                 unusedBeansRemovalEnabled, unusedExclusions,
                 additionalStereotypes, interceptorBindingRegistrars,
-                transformUnproxyableClasses, jtaCapabilities, alternativePriorities);
+                transformUnproxyableClasses, jtaCapabilities);
     }
 
     public ContextRegistrar.RegistrationContext registerCustomContexts() {
@@ -157,8 +152,7 @@ public class BeanProcessor {
                 applicationClassPredicate);
         BeanGenerator beanGenerator = new BeanGenerator(annotationLiterals, applicationClassPredicate, privateMembers,
                 generateSources);
-        ClientProxyGenerator clientProxyGenerator = new ClientProxyGenerator(applicationClassPredicate, generateSources,
-                allowMocking);
+        ClientProxyGenerator clientProxyGenerator = new ClientProxyGenerator(applicationClassPredicate, generateSources);
         InterceptorGenerator interceptorGenerator = new InterceptorGenerator(annotationLiterals, applicationClassPredicate,
                 privateMembers, generateSources);
         SubclassGenerator subclassGenerator = new SubclassGenerator(annotationLiterals, applicationClassPredicate,
@@ -285,9 +279,6 @@ public class BeanProcessor {
         private boolean generateSources = false;
         private boolean jtaCapabilities = false;
         private boolean transformUnproxyableClasses = false;
-        private boolean allowMocking = false;
-
-        private AlternativePriorities alternativePriorities;
 
         private Predicate<DotName> applicationClassPredicate = new Predicate<DotName>() {
             @Override
@@ -389,10 +380,6 @@ public class BeanProcessor {
             return this;
         }
 
-        public void setAllowMocking(boolean allowMocking) {
-            this.allowMocking = allowMocking;
-        }
-
         /**
          * If set to true the container will attempt to remove all unused beans.
          * <p>
@@ -462,26 +449,12 @@ public class BeanProcessor {
             return this;
         }
 
-        /**
-         * Can be used to compute a priority of an alternative bean. A non-null computed value always
-         * takes precedence over the priority defined by {@link Priority}, {@link AlternativePriority} or an alternative
-         * stereotype.
-         * 
-         * @param priorities
-         * @return self
-         */
-        public Builder setAlternativePriorities(AlternativePriorities priorities) {
-            this.alternativePriorities = priorities;
-            return this;
-        }
-
         public BeanProcessor build() {
             return new BeanProcessor(name, index, additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
                     reflectionRegistration, annotationTransformers, injectionPointTransformers, observerTransformers,
                     resourceAnnotations, beanRegistrars, observerRegistrars, contextRegistrars, beanDeploymentValidators,
                     applicationClassPredicate, removeUnusedBeans, removalExclusions, additionalStereotypes,
-                    additionalInterceptorBindingRegistrars, transformUnproxyableClasses, jtaCapabilities, generateSources,
-                    allowMocking, alternativePriorities);
+                    additionalInterceptorBindingRegistrars, transformUnproxyableClasses, jtaCapabilities, generateSources);
         }
 
     }
