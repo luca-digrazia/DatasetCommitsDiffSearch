@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.rules.android.databinding.UsesDataBindingProvider;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -204,7 +203,8 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
             "-Aandroid.databinding.xmlOutDir=" + dataBindingFilesDir,
             "-Aandroid.databinding.exportClassListTo=/tmp/exported_classes",
             "-Aandroid.databinding.modulePackage=android.binary",
-            "-Aandroid.databinding.minApi=14");
+            "-Aandroid.databinding.minApi=14",
+            "-Aandroid.databinding.printEncodedErrors=0");
     assertThat(paramFileArgsForAction(binCompileAction)).containsAllIn(expectedJavacopts);
 
     // Regression test for b/63134122
@@ -325,17 +325,15 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
         "    main_dex_list_creator = 'main_dex_list_creator',",
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'],",
-        ")");
+        "    zipalign = 'zipalign')");
     scratch.file(
         "java/a/BUILD",
         "android_library(",
-        "    name = 'a', ",
-        "    srcs = ['A.java'],",
-        "    enable_data_binding = 1,",
-        "    manifest = 'a/AndroidManifest.xml',",
-        "    resource_files = ['res/values/a.xml'],",
+        "  name = 'a', ",
+        "  srcs = ['A.java'],",
+        "  enable_data_binding = 1,",
+        "  manifest = 'a/AndroidManifest.xml',",
+        "  resource_files = [ 'res/values/a.xml' ]",
         ")");
 
     useConfiguration("--android_sdk=//sdk:sdk");
@@ -343,7 +341,7 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
     final UsesDataBindingProvider usesDataBindingProvider = a.get(UsesDataBindingProvider.PROVIDER);
 
     Truth.assertThat(usesDataBindingProvider)
-        .named(UsesDataBindingProvider.NAME)
+        .named(UsesDataBindingProvider.PROVIDER_NAME)
         .isNotNull();
 
     Truth.assertThat(
@@ -376,24 +374,22 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
         "    main_dex_list_creator = 'main_dex_list_creator',",
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'],",
-        ")");
+        "    zipalign = 'zipalign')");
     scratch.file(
         "java/a/BUILD",
         "android_library(",
-        "    name = 'a', ",
-        "    srcs = ['A.java'],",
-        "    enable_data_binding = 1,",
-        "    manifest = 'a/AndroidManifest.xml',",
-        "    resource_files = ['res/values/a.xml'],",
+        "  name = 'a', ",
+        "  srcs = ['A.java'],",
+        "  enable_data_binding = 1,",
+        "  manifest = 'a/AndroidManifest.xml',",
+        "  resource_files = [ 'res/values/a.xml' ]",
         ")");
     scratch.file(
         "java/b/BUILD",
         "android_library(",
-        "    name = 'b', ",
-        "    srcs = ['A.java'],",
-        "    deps = ['//java/a:a'],",
+        "  name = 'b', ",
+        "  srcs = ['A.java'],",
+        "  deps = [ '//java/a:a' ]",
         ")");
     useConfiguration("--android_sdk=//sdk:sdk");
     ConfiguredTarget b = getConfiguredTarget("//java/b:b");

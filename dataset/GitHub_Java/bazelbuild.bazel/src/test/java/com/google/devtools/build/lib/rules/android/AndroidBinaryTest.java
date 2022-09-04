@@ -2441,8 +2441,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    main_dex_list_creator = 'main_dex_list_creator',",
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'])");
+        "    zipalign = 'zipalign')");
 
     scratch.file("java/a/BUILD",
         "android_binary(",
@@ -2479,8 +2478,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    main_dex_list_creator = 'main_dex_list_creator',",
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'])");
+        "    zipalign = 'zipalign')");
 
     scratch.file("java/a/BUILD",
         "android_binary(",
@@ -3590,13 +3588,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               proguard_specs = ['proguard-spec.pro'],)");
 
     useConfiguration("--android_sdk=//sdk:sdk");
-    ConfiguredTargetAndData targetAndData =
-        getConfiguredTargetAndData("//java/com/google/android/hello:hello");
-    ConfiguredTarget binary = targetAndData.getConfiguredTarget();
-
-    Artifact jar = getResourceClassJar(targetAndData);
-    assertThat(getGeneratingAction(jar).getMnemonic()).isEqualTo("RClassGenerator");
-    assertThat(getGeneratingSpawnActionArgs(jar)).contains("--finalFields");
+    ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android/hello:hello");
 
     Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(getFilesToBuild(binary));
 
@@ -3655,13 +3647,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               shrink_resources = 1,",
         "               proguard_specs = ['proguard-spec.pro'],)");
 
-    ConfiguredTargetAndData targetAndData =
-        getConfiguredTargetAndData("//java/com/google/android/hello:hello");
-    ConfiguredTarget binary = targetAndData.getConfiguredTarget();
-
-    Artifact jar = getResourceClassJar(targetAndData);
-    assertThat(getGeneratingAction(jar).getMnemonic()).isEqualTo("RClassGenerator");
-    assertThat(getGeneratingSpawnActionArgs(jar)).contains("--nofinalFields");
+    ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android/hello:hello");
 
     Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(getFilesToBuild(binary));
 

@@ -22,7 +22,6 @@ import static org.junit.Assert.fail;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
@@ -246,32 +245,30 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
 
   protected void checkDebugKey(String debugKeyFile, boolean hasDebugKeyTarget) throws Exception {
     ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android/hello:b");
-    Label defaultKeyStoreFile =
-        Label.parseAbsoluteUnchecked(
-            ruleClassProvider.getToolsRepository() + "//tools/android:debug_keystore");
-    Label debugKeyFileLabel = Label.parseAbsolute(debugKeyFile, ImmutableMap.of());
+    String defaultKeyStoreFile =
+        ruleClassProvider.getToolsRepository() + "//tools/android:debug_keystore";
 
     if (hasDebugKeyTarget) {
       assertWithMessage("Debug key file target missing.")
-          .that(checkKeyPresence(binary, debugKeyFileLabel, defaultKeyStoreFile))
+          .that(checkKeyPresence(binary, debugKeyFile, defaultKeyStoreFile))
           .isTrue();
     } else {
       assertWithMessage("Debug key file is default, although different target specified.")
-          .that(checkKeyPresence(binary, defaultKeyStoreFile, debugKeyFileLabel))
+          .that(checkKeyPresence(binary, defaultKeyStoreFile, debugKeyFile))
           .isTrue();
     }
   }
 
   private boolean checkKeyPresence(
-      ConfiguredTarget binary, Label shouldHaveKey, Label shouldNotHaveKey) throws Exception {
+      ConfiguredTarget binary, String shouldHaveKey, String shouldNotHaveKey) throws Exception {
     boolean hasKey = false;
     boolean doesNotHaveKey = false;
 
     for (ConfiguredTarget debugKeyTarget : getDirectPrerequisites(binary)) {
-      if (debugKeyTarget.getLabel().equals(shouldHaveKey)) {
+      if (debugKeyTarget.getLabel().toString().equals(shouldHaveKey)) {
         hasKey = true;
       }
-      if (debugKeyTarget.getLabel().equals(shouldNotHaveKey)) {
+      if (debugKeyTarget.getLabel().toString().equals(shouldNotHaveKey)) {
         doesNotHaveKey = true;
       }
     }
@@ -418,8 +415,6 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
         "    main_dex_list_creator = 'main_dex_list_creator',",
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'],",
-        ")");
+        "    zipalign = 'zipalign')");
   }
 }
