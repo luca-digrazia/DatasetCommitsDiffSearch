@@ -1,53 +1,59 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog2.lookup.adapters;
 
 import au.com.bytecode.opencsv.CSVReader;
+import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Multimap;
 import com.google.common.primitives.Ints;
 import com.google.inject.assistedinject.Assisted;
 import org.graylog.autovalue.WithBeanGetter;
+import org.graylog2.lookup.AllowedAuxiliaryPathChecker;
+import org.graylog2.plugin.lookup.LookupCachePurge;
 import org.graylog2.plugin.lookup.LookupDataAdapter;
 import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
 import org.graylog2.plugin.lookup.LookupResult;
 import org.graylog2.plugin.utilities.FileInfo;
-import org.hibernate.validator.constraints.NotEmpty;
 import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.inject.Named;
 import javax.validation.constraints.Min;
+import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.Size;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -57,16 +63,31 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
 
     public static final String NAME = "csvfile";
 
+    /**
+     * If the AllowedAuxiliaryPathChecker is enabled (one or more paths provided to the allowed_auxiliary_paths server
+     * configuration property), then this error path will also be triggered for cases where the file does not exist.
+     * This is unavoidable, since the AllowedAuxiliaryPathChecker tries to resolve symbolic links and relative paths,
+     * which cannot be done if the file does not exist. Therefore this error message also indicates the possibility
+     * that the file does not exist.
+     */
+    public static final String ALLOWED_PATH_ERROR =
+            "The specified CSV file either does not exist or is not in an allowed path.";
+
     private final Config config;
+    private final AllowedAuxiliaryPathChecker pathChecker;
     private final AtomicReference<Map<String, String>> lookupRef = new AtomicReference<>(ImmutableMap.of());
 
-    private FileInfo fileInfo;
+    private FileInfo fileInfo = FileInfo.empty();
 
     @Inject
-    public CSVFileDataAdapter(@Named("daemonScheduler") ScheduledExecutorService scheduler,
-                              @Assisted LookupDataAdapterConfiguration config) {
-        super(config, scheduler);
+    public CSVFileDataAdapter(@Assisted("id") String id,
+                              @Assisted("name") String name,
+                              @Assisted LookupDataAdapterConfiguration config,
+                              MetricRegistry metricRegistry,
+                              AllowedAuxiliaryPathChecker pathChecker) {
+        super(id, name, config, metricRegistry);
         this.config = (Config) config;
+        this.pathChecker = pathChecker;
     }
 
     @Override
@@ -75,36 +96,46 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
         if (isNullOrEmpty(config.path())) {
             throw new IllegalStateException("File path needs to be set");
         }
+        if (!pathChecker.fileIsInAllowedPath(Paths.get(config.path()))) {
+            throw new IllegalStateException(ALLOWED_PATH_ERROR);
+        }
+        if (config.checkInterval() < 1) {
+            throw new IllegalStateException("Check interval setting cannot be smaller than 1");
+        }
 
         // Set file info before parsing the data for the first time
         fileInfo = FileInfo.forPath(Paths.get(config.path()));
         lookupRef.set(parseCSVFile());
-
-        if (config.checkInterval() < 1) {
-            throw new IllegalStateException("Check interval setting cannot be smaller than 1");
-        }
     }
 
     @Override
-    protected Duration refreshInterval() {
+    public Duration refreshInterval() {
         return Duration.standardSeconds(Ints.saturatedCast(config.checkInterval()));
     }
 
     @Override
-    protected void doRefresh() throws Exception {
+    protected void doRefresh(LookupCachePurge cachePurge) throws Exception {
+        if (!pathChecker.fileIsInAllowedPath(Paths.get(config.path()))) {
+            LOG.error(ALLOWED_PATH_ERROR);
+            setError(new IllegalStateException(ALLOWED_PATH_ERROR));
+            return;
+        }
+
         try {
             final FileInfo.Change fileChanged = fileInfo.checkForChange();
-            if (!fileChanged.isChanged()) {
+            if (!fileChanged.isChanged() && !getError().isPresent()) {
                 // Nothing to do, file did not change
                 return;
             }
 
             LOG.debug("CSV file {} has changed, updating data", config.path());
             lookupRef.set(parseCSVFile());
-            getLookupTable().cache().purge();
+            cachePurge.purgeAll();
             fileInfo = fileChanged.fileInfo();
+            clearError();
         } catch (IOException e) {
-            LOG.error("Couldn't check CSV file {} for updates", config.path(), e);
+            LOG.error("Couldn't check data adapter <{}> CSV file {} for updates: {} {}", name(), config.path(), e.getClass().getCanonicalName(), e.getMessage());
+            setError(e);
         }
     }
 
@@ -132,7 +163,8 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
                         if (!isNullOrEmpty(column)) {
                             if (config.keyColumn().equals(column)) {
                                 keyColumn = col;
-                            } else if (config.valueColumn().equals(column)) {
+                            }
+                            if (config.valueColumn().equals(column)) {
                                 valueColumn = col;
                             }
                         }
@@ -143,12 +175,17 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
                     if (keyColumn < 0 || valueColumn < 0) {
                         throw new IllegalStateException("Couldn't detect column number for key or value - check CSV file format");
                     }
-                    newLookupBuilder.put(next[keyColumn], next[valueColumn]);
+                    if (config.isCaseInsensitiveLookup()) {
+                        newLookupBuilder.put(next[keyColumn].toLowerCase(Locale.ENGLISH), next[valueColumn]);
+                    } else {
+                        newLookupBuilder.put(next[keyColumn], next[valueColumn]);
+                    }
                 }
             }
         } catch (Exception e) {
             LOG.error("Couldn't parse CSV file {} (settings separator=<{}> quotechar=<{}> key_column=<{}> value_column=<{}>)", config.path(),
                     config.separator(), config.quotechar(), config.keyColumn(), config.valueColumn(), e);
+            setError(e);
         }
 
         return newLookupBuilder.build();
@@ -161,10 +198,11 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
 
     @Override
     public LookupResult doGet(Object key) {
-        final String value = lookupRef.get().get(String.valueOf(key));
+        final String stringKey = config.isCaseInsensitiveLookup() ? String.valueOf(key).toLowerCase(Locale.ENGLISH) : String.valueOf(key);
+        final String value = lookupRef.get().get(stringKey);
 
         if (value == null) {
-            return LookupResult.empty();
+            return getEmptyResult();
         }
 
         return LookupResult.single(value);
@@ -177,7 +215,9 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
 
     public interface Factory extends LookupDataAdapter.Factory<CSVFileDataAdapter> {
         @Override
-        CSVFileDataAdapter create(LookupDataAdapterConfiguration configuration);
+        CSVFileDataAdapter create(@Assisted("id") String id,
+                                  @Assisted("name") String name,
+                                  LookupDataAdapterConfiguration configuration);
 
         @Override
         Descriptor getDescriptor();
@@ -198,6 +238,7 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
                     .keyColumn("key")
                     .valueColumn("value")
                     .checkInterval(60)
+                    .caseInsensitiveLookup(false)
                     .build();
         }
     }
@@ -253,8 +294,37 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
         @Min(1)
         public abstract long checkInterval();
 
+        @JsonProperty("case_insensitive_lookup")
+        public abstract Optional<Boolean> caseInsensitiveLookup();
+
+        public boolean isCaseInsensitiveLookup() {
+            return caseInsensitiveLookup().isPresent() && caseInsensitiveLookup().get();
+        }
+
         public static Builder builder() {
             return new AutoValue_CSVFileDataAdapter_Config.Builder();
+        }
+
+        @Override
+        public Optional<Multimap<String, String>> validate(LookupDataAdapterValidationContext context) {
+            final ArrayListMultimap<String, String> errors = ArrayListMultimap.create();
+
+            final Path path = Paths.get(path());
+            if (!context.getPathChecker().fileIsInAllowedPath(path)) {
+                errors.put("path", ALLOWED_PATH_ERROR);
+
+                // Intentionally return here, because in the Cloud context, we should not perform the following checks
+                // to report to the user whether or not a file exists.
+                return Optional.of(errors);
+            }
+
+            if (!Files.exists(path)) {
+                errors.put("path", "The file does not exist.");
+            } else if (!Files.isReadable(path)) {
+                errors.put("path", "The file cannot be read.");
+            }
+
+            return errors.isEmpty() ? Optional.empty() : Optional.of(errors);
         }
 
         @AutoValue.Builder
@@ -279,6 +349,9 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
 
             @JsonProperty("check_interval")
             public abstract Builder checkInterval(long checkInterval);
+
+            @JsonProperty("case_insensitive_lookup")
+            public abstract Builder caseInsensitiveLookup(Boolean caseInsensitiveLookup);
 
             public abstract Config build();
         }
