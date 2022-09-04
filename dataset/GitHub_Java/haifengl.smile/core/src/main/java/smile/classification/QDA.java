@@ -119,7 +119,7 @@ public class QDA extends AbstractClassifier<double[]> {
     }
 
     /**
-     * Fits quadratic discriminant analysis.
+     * Learn quadratic discriminant analysis.
      * @param x training samples.
      * @param y training labels in [0, k), where k is the number of classes.
      * @return the model.
@@ -129,20 +129,20 @@ public class QDA extends AbstractClassifier<double[]> {
     }
 
     /**
-     * Fits quadratic discriminant analysis.
+     * Learns quadratic discriminant analysis.
      * @param x training samples.
      * @param y training labels.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @return the model.
      */
-    public static QDA fit(double[][] x, int[] y, Properties params) {
-        double[] priori = Strings.parseDoubleArray(params.getProperty("smile.qda.priori"));
-        double tol = Double.parseDouble(params.getProperty("smile.qda.tolerance", "1E-4"));
+    public static QDA fit(double[][] x, int[] y, Properties prop) {
+        double[] priori = Strings.parseDoubleArray(prop.getProperty("smile.qda.priori"));
+        double tol = Double.parseDouble(prop.getProperty("smile.qda.tolerance", "1E-4"));
         return fit(x, y, priori, tol);
     }
 
     /**
-     * Fits quadratic discriminant analysis.
+     * Learn quadratic discriminant analysis.
      * @param x training samples.
      * @param y training labels in [0, k), where k is the number of classes.
      * @param priori the priori probability of each class. If null, it will be

@@ -66,21 +66,21 @@ public class RDA extends QDA {
     }
 
     /**
-     * Fits regularized discriminant analysis.
+     * Learns regularized discriminant analysis.
      * @param x training samples.
      * @param y training labels.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @return the model.
      */
-    public static RDA fit(double[][] x, int[] y, Properties params) {
-        double alpha = Double.parseDouble(params.getProperty("smile.rda.alpha", "0.9"));
-        double[] priori = Strings.parseDoubleArray(params.getProperty("smile.rda.priori"));
-        double tol = Double.parseDouble(params.getProperty("smile.rda.tolerance", "1E-4"));
+    public static RDA fit(double[][] x, int[] y, Properties prop) {
+        double alpha = Double.parseDouble(prop.getProperty("smile.rda.alpha", "0.9"));
+        double[] priori = Strings.parseDoubleArray(prop.getProperty("smile.rda.priori"));
+        double tol = Double.parseDouble(prop.getProperty("smile.rda.tolerance", "1E-4"));
         return fit(x, y, alpha, priori, tol);
     }
 
     /**
-     * Fits regularized discriminant analysis.
+     * Learn regularized discriminant analysis.
      * @param x training samples.
      * @param y training labels in [0, k), where k is the number of classes.
      * @param alpha regularization factor in [0, 1] allows a continuum of models
@@ -92,7 +92,7 @@ public class RDA extends QDA {
     }
 
     /**
-     * Fits regularized discriminant analysis.
+     * Learn regularized discriminant analysis.
      * @param x training samples.
      * @param y training labels in [0, k), where k is the number of classes.
      * @param alpha regularization factor in [0, 1] allows a continuum of models
