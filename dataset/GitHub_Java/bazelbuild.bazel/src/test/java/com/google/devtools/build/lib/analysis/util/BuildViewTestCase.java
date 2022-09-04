@@ -168,7 +168,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected ConfigurationFactory configurationFactory;
   protected BuildView view;
 
-  protected SequencedSkyframeExecutor skyframeExecutor;
+  private SequencedSkyframeExecutor skyframeExecutor;
 
   protected TimestampGranularityMonitor tsgm;
   protected BlazeDirectories directories;
@@ -686,14 +686,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected final SpawnAction getGeneratingSpawnAction(Artifact artifact) {
     return (SpawnAction) getGeneratingAction(artifact);
-  }
-
-  protected final List<String> getGeneratingSpawnActionArgs(Artifact artifact) {
-    SpawnAction a = getGeneratingSpawnAction(artifact);
-    ParameterFileWriteAction p = findParamsFileAction(a);
-    return p == null
-        ? a.getArguments()
-        : ImmutableList.copyOf(Iterables.concat(a.getArguments(), p.getContents()));
   }
 
   protected SpawnAction getGeneratingSpawnAction(ConfiguredTarget target, String outputName) {

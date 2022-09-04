@@ -315,7 +315,7 @@ public class SkylarkRuleImplementationFunctions {
           try {
             return new LocationExpander(
                     ctx.getRuleContext(),
-                    makeLabelMap(targets.getContents(TransitiveInfoCollection.class, "targets")),
+                    makeLabelMap(targets.getContents(AbstractConfiguredTarget.class, "targets")),
                     false)
                 .expand(input);
           } catch (IllegalStateException ise) {
@@ -326,15 +326,14 @@ public class SkylarkRuleImplementationFunctions {
 
   /**
    * Builds a map: Label -> List of files from the given labels
-   *
    * @param knownLabels List of known labels
    * @return Immutable map with immutable collections as values
    */
   private static ImmutableMap<Label, ImmutableCollection<Artifact>> makeLabelMap(
-      Iterable<TransitiveInfoCollection> knownLabels) {
+      Iterable<AbstractConfiguredTarget> knownLabels) {
     ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> builder = ImmutableMap.builder();
 
-    for (TransitiveInfoCollection current : knownLabels) {
+    for (AbstractConfiguredTarget current : knownLabels) {
       builder.put(
           AliasProvider.getDependencyLabel(current),
           ImmutableList.copyOf(current.getProvider(FileProvider.class).getFilesToBuild()));
@@ -496,8 +495,7 @@ public class SkylarkRuleImplementationFunctions {
         // Also, allow empty set for init
         @Param(name = "transitive_files", type = SkylarkNestedSet.class, generic1 = Artifact.class,
             noneable = true, defaultValue = "None",
-            doc = "The (transitive) set of files to be added to the runfiles. The depset should "
-            + "use the `default` order (which, as the name implies, is the default)."),
+            doc = "The (transitive) set of files to be added to the runfiles."),
         @Param(name = "collect_data", type = Boolean.class, defaultValue = "False",
             doc = "Whether to collect the data "
             + "runfiles from the dependencies in srcs, data and deps attributes."),

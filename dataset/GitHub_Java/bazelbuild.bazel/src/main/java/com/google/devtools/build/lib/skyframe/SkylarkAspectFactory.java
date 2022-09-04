@@ -24,9 +24,9 @@ import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
-import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetUtil;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Environment;
@@ -84,7 +84,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
 
         if (ruleContext.hasErrors()) {
           return null;
-        } else if (!(aspectSkylarkObject instanceof Info)
+        } else if (!(aspectSkylarkObject instanceof SkylarkClassObject)
             && !(aspectSkylarkObject instanceof Iterable)) {
           ruleContext.ruleError(
               String.format(
@@ -114,7 +114,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     if (aspectSkylarkObject instanceof Iterable) {
       addDeclaredProviders(builder, (Iterable) aspectSkylarkObject);
     } else {
-      Info struct = (Info) aspectSkylarkObject;
+      SkylarkClassObject struct = (SkylarkClassObject) aspectSkylarkObject;
       Location loc = struct.getCreationLoc();
       for (String key : struct.getKeys()) {
         if (key.equals("output_groups")) {
@@ -143,21 +143,17 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
 
   private void addDeclaredProviders(ConfiguredAspect.Builder builder, Iterable aspectSkylarkObject)
       throws EvalException {
-    int i = 0;
     for (Object o : aspectSkylarkObject) {
       Location loc = skylarkAspect.getImplementation().getLocation();
-      Info declaredProvider =
+      SkylarkClassObject declaredProvider =
           SkylarkType.cast(
               o,
-              Info.class,
+              SkylarkClassObject.class,
               loc,
               "A return value of an aspect implementation function should be "
-                  + "a sequence of declared providers, instead got a %s at index %d",
-              o.getClass(),
-              i);
+                  + "a sequence of declared providers");
       Location creationLoc = declaredProvider.getCreationLocOrNull();
       builder.addSkylarkDeclaredProvider(declaredProvider, creationLoc != null ? creationLoc : loc);
-      i++;
     }
   }
 
@@ -170,9 +166,8 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     for (String outputGroup : outputGroups.keySet()) {
       SkylarkValue objects = outputGroups.get(outputGroup);
 
-      builder.addOutputGroup(
-          outputGroup,
-          SkylarkRuleConfiguredTargetUtil.convertToOutputGroupValue(loc, outputGroup, objects));
+      builder.addOutputGroup(outputGroup,
+          SkylarkRuleConfiguredTargetBuilder.convertToOutputGroupValue(loc, outputGroup, objects));
     }
   }
 

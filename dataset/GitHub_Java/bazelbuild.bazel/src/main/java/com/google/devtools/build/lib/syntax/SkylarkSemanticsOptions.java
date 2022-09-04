@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.UsesOnlyCoreTypes;
 import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import com.google.devtools.common.options.proto.OptionFilters.OptionMetadataTag;
@@ -41,8 +42,9 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   @Option(
     name = "internal_skylark_flag_test_canary",
     defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.UNKNOWN}
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
   )
   public boolean skylarkFlagTestCanary;
 
@@ -161,19 +163,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleDepsetIsNotIterable;
 
   @Option(
-    name = "incompatible_string_is_not_iterable",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help =
-        "If set to true, iterating over a string will throw an error. String indexing and `len` "
-            + "are still allowed."
-  )
-  public boolean incompatibleStringIsNotIterable;
-
-  @Option(
     name = "incompatible_dict_literal_has_no_duplicates",
     defaultValue = "false",
     category = "incompatible changes",
@@ -191,33 +180,9 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      help = "If set to true, the API to create actions is only available on `ctx.actions`, "
+      help = "If set to true, the API to create actions is only avaliable on `ctx.actions`, "
           + "not on `ctx`."
   )
   public boolean incompatibleNewActionsApi;
 
-  @Option(
-    name = "incompatible_checked_arithmetic",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help = "If set to true, arithmetic operations throw an error in case of overflow/underflow."
-  )
-  public boolean incompatibleCheckedArithmetic;
-
-  @Option(
-    name = "incompatible_descriptive_string_representations",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help =
-        "If set to true, objects are converted to strings by `str` and `repr` functions using the "
-            + "new style representations that are designed to be more descriptive and not to leak "
-            + "information that's not supposed to be exposed."
-  )
-  public boolean incompatibleDescriptiveStringRepresentations;
 }

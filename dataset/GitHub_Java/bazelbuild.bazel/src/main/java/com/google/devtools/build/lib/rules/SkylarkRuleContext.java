@@ -170,8 +170,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
   // after this object has been nullified.
   private final String ruleLabelCanonicalName;
 
-  private final boolean isForAspect;
-
   private final SkylarkActionFactory actionFactory;
 
   // The fields below intended to be final except that they can be cleared by calling `nullify()`
@@ -186,7 +184,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
   private SkylarkRuleAttributesCollection attributesCollection;
   private SkylarkRuleAttributesCollection ruleAttributesCollection;
   private SkylarkClassObject splitAttributes;
-  private SkylarkDict<Label, ToolchainInfo> toolchains;
+  private SkylarkDict<ClassObjectConstructor.Key, ToolchainInfo> toolchains;
 
   // TODO(bazel-team): we only need this because of the css_binary rule.
   private ImmutableMap<Artifact, Label> artifactsLabelMap;
@@ -211,7 +209,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
     this.skylarkSemantics = skylarkSemantics;
 
     if (aspectDescriptor == null) {
-      this.isForAspect = false;
       Collection<Attribute> attributes = ruleContext.getRule().getAttributes();
       HashMap<String, Object> outputsBuilder = new HashMap<>();
       if (ruleContext.getRule().getRuleClassObject().outputsDefaultExecutable()) {
@@ -273,7 +270,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
       this.splitAttributes = buildSplitAttributeInfo(attributes, ruleContext);
       this.ruleAttributesCollection = null;
     } else { // ASPECT
-      this.isForAspect = true;
       this.artifactsLabelMap = ImmutableMap.of();
       this.outputsObject = null;
       this.attributesCollection =
@@ -294,7 +290,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
     makeVariables = ruleContext.getConfigurationMakeVariableContext().collectMakeVariables();
     toolchains =
         ruleContext.getToolchainContext() == null
-            ? SkylarkDict.<Label, ToolchainInfo>of(null)
+            ? SkylarkDict.<ClassObjectConstructor.Key, ToolchainInfo>of(null)
             : ruleContext.getToolchainContext().collectToolchains();
   }
 
@@ -585,13 +581,8 @@ public final class SkylarkRuleContext implements SkylarkValue {
 
     @Override
     public void repr(SkylarkPrinter printer) {
-      printer.append("<rule collection for " + skylarkRuleContext.ruleLabelCanonicalName + ">");
-    }
-
-    @Override
-    public void reprLegacy(SkylarkPrinter printer) {
       printer.append("rule_collection:");
-      printer.repr(skylarkRuleContext);
+      skylarkRuleContext.repr(printer);
     }
   }
 
@@ -610,14 +601,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
 
   @Override
   public void repr(SkylarkPrinter printer) {
-    if (isForAspect) {
-      printer.append("<aspect context for " + ruleLabelCanonicalName + ">");
-    } else {
-      printer.append("<rule context for " + ruleLabelCanonicalName + ">");
-    }
-  }
-  @Override
-  public void reprLegacy(SkylarkPrinter printer) {
     printer.append(ruleLabelCanonicalName);
   }
 
@@ -817,7 +800,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
           + " Only available in aspect implementation functions.")
   public SkylarkRuleAttributesCollection rule() throws EvalException {
     checkMutable("rule");
-    if (!isForAspect) {
+    if (ruleAttributesCollection == null) {
       throw new EvalException(
           Location.BUILTIN, "'rule' is only available in aspect implementations");
     }
@@ -830,7 +813,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
       + " Only available in aspect implementation functions.")
   public ImmutableList<String> aspectIds() throws EvalException {
     checkMutable("aspect_ids");
-    if (!isForAspect) {
+    if (ruleAttributesCollection == null) {
       throw new EvalException(
           Location.BUILTIN, "'aspect_ids' is only available in aspect implementations");
     }
@@ -852,9 +835,9 @@ public final class SkylarkRuleContext implements SkylarkValue {
   }
 
   @SkylarkCallable(structField = true, doc = "Toolchains required for this rule.")
-  public SkylarkDict<Label, ToolchainInfo> toolchains() throws EvalException {
+  public SkylarkDict<ClassObjectConstructor.Key, ToolchainInfo> toolchains() throws EvalException {
     checkMutable("toolchains");
-    if (isForAspect) {
+    if (ruleAttributesCollection != null) {
       // TODO(katre): Support toolchains on aspects.
       throw new EvalException(
           Location.BUILTIN, "'toolchains' is not available in aspect implementations");
@@ -902,7 +885,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
   }
 
   boolean isForAspect() {
-    return isForAspect;
+    return ruleAttributesCollection != null;
   }
 
   @SkylarkCallable(
