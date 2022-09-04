@@ -22,10 +22,9 @@ import org.hibernate.search.engine.cfg.EngineSettings;
 import org.hibernate.search.mapper.orm.Search;
 import org.hibernate.search.mapper.orm.bootstrap.spi.HibernateOrmIntegrationBooter;
 import org.hibernate.search.mapper.orm.cfg.HibernateOrmMapperSettings;
-import org.hibernate.search.mapper.orm.cfg.spi.HibernateOrmMapperSpiSettings;
-import org.hibernate.search.mapper.orm.cfg.spi.HibernateOrmReflectionStrategyName;
 import org.hibernate.search.mapper.orm.mapping.SearchMapping;
 import org.hibernate.search.mapper.orm.session.SearchSession;
+import org.hibernate.search.util.common.reflect.spi.ValueReadHandleFactory;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.hibernate.orm.runtime.PersistenceUnitUtil;
@@ -43,6 +42,10 @@ public class HibernateSearchElasticsearchRecorder {
     public HibernateOrmIntegrationStaticInitListener createStaticInitListener(
             HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit buildTimeConfig) {
         return new HibernateSearchIntegrationStaticInitListener(buildTimeConfig);
+    }
+
+    public HibernateOrmIntegrationStaticInitListener createDisabledListener() {
+        return new HibernateSearchIntegrationDisabledListener();
     }
 
     public HibernateOrmIntegrationRuntimeInitListener createRuntimeInitListener(
@@ -89,6 +92,22 @@ public class HibernateSearchElasticsearchRecorder {
         };
     }
 
+    private static final class HibernateSearchIntegrationDisabledListener
+            implements HibernateOrmIntegrationStaticInitListener {
+        private HibernateSearchIntegrationDisabledListener() {
+        }
+
+        @Override
+        public void contributeBootProperties(BiConsumer<String, Object> propertyCollector) {
+            propertyCollector.accept(HibernateOrmMapperSettings.ENABLED, false);
+        }
+
+        @Override
+        public void onMetadataInitialized(Metadata metadata, BootstrapContext bootstrapContext,
+                BiConsumer<String, Object> propertyCollector) {
+        }
+    }
+
     private static final class HibernateSearchIntegrationStaticInitListener
             implements HibernateOrmIntegrationStaticInitListener {
 
@@ -101,9 +120,6 @@ public class HibernateSearchElasticsearchRecorder {
 
         @Override
         public void contributeBootProperties(BiConsumer<String, Object> propertyCollector) {
-            addConfig(propertyCollector, HibernateOrmMapperSpiSettings.REFLECTION_STRATEGY,
-                    HibernateOrmReflectionStrategyName.JAVA_LANG_REFLECT);
-
             addConfig(propertyCollector,
                     EngineSettings.BACKGROUND_FAILURE_HANDLER,
                     buildTimeConfig.backgroundFailureHandler);
@@ -119,7 +135,10 @@ public class HibernateSearchElasticsearchRecorder {
         @Override
         public void onMetadataInitialized(Metadata metadata, BootstrapContext bootstrapContext,
                 BiConsumer<String, Object> propertyCollector) {
-            HibernateOrmIntegrationBooter booter = HibernateOrmIntegrationBooter.create(metadata, bootstrapContext);
+            HibernateOrmIntegrationBooter booter = HibernateOrmIntegrationBooter.builder(metadata, bootstrapContext)
+                    // MethodHandles don't work at all in GraalVM 20 and below, and seem unreliable on GraalVM 21
+                    .valueReadHandleFactory(ValueReadHandleFactory.usingJavaLangReflect())
+                    .build();
             booter.preBoot(propertyCollector);
         }
 
@@ -131,8 +150,7 @@ public class HibernateSearchElasticsearchRecorder {
                     elasticsearchBackendConfig.version);
             addBackendConfig(propertyCollector, backendName,
                     ElasticsearchBackendSettings.LAYOUT_STRATEGY,
-                    elasticsearchBackendConfig.layout.strategy,
-                    Optional::isPresent, c -> c.get().getName());
+                    elasticsearchBackendConfig.layout.strategy);
 
             // Index defaults at the backend level
             contributeBackendIndexBuildTimeProperties(propertyCollector, backendName, null,
@@ -151,8 +169,7 @@ public class HibernateSearchElasticsearchRecorder {
                 String backendName, String indexName, ElasticsearchIndexBuildTimeConfig indexConfig) {
             addBackendIndexConfig(propertyCollector, backendName, indexName,
                     ElasticsearchIndexSettings.ANALYSIS_CONFIGURER,
-                    indexConfig.analysis.configurer,
-                    Optional::isPresent, c -> c.get().getName());
+                    indexConfig.analysis.configurer);
         }
     }
 
@@ -215,6 +232,8 @@ public class HibernateSearchElasticsearchRecorder {
                     elasticsearchBackendConfig.maxConnectionsPerRoute);
             addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.THREAD_POOL_SIZE,
                     elasticsearchBackendConfig.threadPool.size);
+            addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.VERSION_CHECK_ENABLED,
+                    elasticsearchBackendConfig.versionCheck);
 
             addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.DISCOVERY_ENABLED,
                     elasticsearchBackendConfig.discovery.enabled);
