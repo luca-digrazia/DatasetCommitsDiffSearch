@@ -10,6 +10,7 @@ import org.graylog2.indexer.messages.ChunkedBulkIndexer;
 import org.graylog2.indexer.messages.IndexingRequest;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.plugin.Message;
+import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MessagesAdapterES6Test {
+    private final ObjectMapper objectMapper = new ObjectMapperProvider().get();
     private MessagesAdapterES6 messagesAdapter;
     private JestClient jestClient;
 
@@ -41,7 +43,7 @@ class MessagesAdapterES6Test {
     void setUp() {
         this.jestClient = mock(JestClient.class);
         final MetricRegistry metricRegistry = mock(MetricRegistry.class);
-        this.messagesAdapter = new MessagesAdapterES6(jestClient, true, metricRegistry, new ChunkedBulkIndexer());
+        this.messagesAdapter = new MessagesAdapterES6(jestClient, true, metricRegistry, new ChunkedBulkIndexer(), objectMapper);
     }
 
     public static class MockedBulkResult extends BulkResult {
@@ -112,6 +114,38 @@ class MessagesAdapterES6Test {
         assertThat(result).hasSize(1)
                 .extracting(indexingError -> indexingError.message().getId(), Messages.IndexingError::errorType, Messages.IndexingError::errorMessage)
                 .containsExactly(tuple(messageId, Messages.IndexingError.ErrorType.MappingError, "failed to parse [http_response_code]"));
+    }
+
+    @Test
+    public void bulkIndexingParsesPrimaryShardUnavailableErrors() throws Exception {
+        final String messageId = "BOOMID";
+
+        final BulkResult failedJestResult = mock(BulkResult.class);
+        final BulkResult.BulkResultItem bulkResultItem = new MockedBulkResult().createResultItem(
+                "index",
+                "someindex",
+                "message",
+                messageId,
+                400,
+                "{\"type\":\"unavailable_shards_exception\",\"reason\":\"primary shard is not active\"\"}}",
+                null,
+                "unavailable_shards_exception",
+                "primary shard is not active"
+        );
+        when(failedJestResult.isSucceeded()).thenReturn(false);
+        when(failedJestResult.getFailedItems()).thenReturn(ImmutableList.of(bulkResultItem));
+
+        when(jestClient.execute(any()))
+            .thenReturn(failedJestResult)
+            .thenThrow(new IllegalStateException("JestResult#execute should not be called twice."));
+
+        final List<IndexingRequest> messageList = messageListWith(messageWithId(messageId));
+
+        final List<Messages.IndexingError> result = messagesAdapter.bulkIndex(messageList);
+
+        assertThat(result).hasSize(1)
+                .extracting(indexingError -> indexingError.message().getId(), Messages.IndexingError::errorType, Messages.IndexingError::errorMessage)
+                .containsExactly(tuple(messageId, Messages.IndexingError.ErrorType.IndexBlocked, "primary shard is not active"));
     }
 
     @Test

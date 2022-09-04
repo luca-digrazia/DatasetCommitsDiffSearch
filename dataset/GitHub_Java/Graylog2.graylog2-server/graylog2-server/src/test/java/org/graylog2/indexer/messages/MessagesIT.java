@@ -1,19 +1,20 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.indexer.messages;
 
 import com.codahale.metrics.MetricRegistry;
@@ -50,12 +51,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -97,7 +96,7 @@ public abstract class MessagesIT extends ElasticsearchBaseTest {
 
     @After
     public void tearDown() {
-        client().cleanUp();
+        client().deleteIndices(INDEX_NAME);
     }
 
     protected abstract boolean indexMessage(String index, Map<String, Object> source, @SuppressWarnings("SameParameterValue") String id);
@@ -135,7 +134,7 @@ public abstract class MessagesIT extends ElasticsearchBaseTest {
     public void testIfTooLargeBatchesGetSplitUp() throws Exception {
         // This test assumes that ES is configured with bulk_max_body_size to 100MB
         // Check if we can index about 300MB of messages (once the large batch gets split up)
-        final int MESSAGECOUNT = 101;
+        final int MESSAGECOUNT = 303;
         // Each Message is about 1 MB
         final List<Map.Entry<IndexSet, Message>> largeMessageBatch = createMessageBatch(1024 * 1024, MESSAGECOUNT);
         final List<String> failedItems = this.messages.bulkIndex(largeMessageBatch);
@@ -189,13 +188,9 @@ public abstract class MessagesIT extends ElasticsearchBaseTest {
     @Test
     public void retryIndexingMessagesDuringFloodStage() throws Exception {
         triggerFloodStage(INDEX_NAME);
-        final CountDownLatch countDownLatch = new CountDownLatch(1);
-        final AtomicBoolean succeeded = new AtomicBoolean(false);
-        final List<Map.Entry<IndexSet, Message>> messageBatch = createMessageBatch(1024, 50);
 
-        final Future<List<String>> result = background(() -> this.messages.bulkIndex(messageBatch, createIndexingListener(countDownLatch, succeeded)));
-
-        countDownLatch.await();
+        final List<Map.Entry<IndexSet, Message>> messageBatch = createMessageBatch(1024 * 1024, 50);
+        final Future<List<String>> result = background(() -> this.messages.bulkIndex(messageBatch));
 
         resetFloodStage(INDEX_NAME);
 
@@ -205,52 +200,6 @@ public abstract class MessagesIT extends ElasticsearchBaseTest {
         client().refreshNode();
 
         assertThat(messageCount(INDEX_NAME)).isEqualTo(50);
-        assertThat(succeeded.get()).isTrue();
-    }
-
-    private Messages.IndexingListener createIndexingListener(CountDownLatch retryLatch, AtomicBoolean successionFlag) {
-        return new Messages.IndexingListener() {
-            @Override
-            public void onRetry(long attemptNumber) {
-                retryLatch.countDown();
-            }
-
-            @Override
-            public void onSuccess(long delaySinceFirstAttempt) {
-                if (retryLatch.getCount() > 0) {
-                    retryLatch.countDown();
-                }
-                successionFlag.set(true);
-            }
-        };
-    }
-
-    @Test
-    public void retryIndexingMessagesIfTargetAliasIsInvalid() throws Exception {
-        final String prefix = "multiple_targets";
-        final String index1 = client().createRandomIndex(prefix);
-        final String index2 = client().createRandomIndex(prefix);
-        client().deleteIndices(INDEX_NAME);
-        client().addAliasMapping(index1, INDEX_NAME);
-        client().addAliasMapping(index2, INDEX_NAME);
-
-        final List<Map.Entry<IndexSet, Message>> messageBatch = createMessageBatch(1024, 50);
-        final CountDownLatch countDownLatch = new CountDownLatch(1);
-        final AtomicBoolean succeeded = new AtomicBoolean(false);
-
-        final Future<List<String>> result = background(() -> this.messages.bulkIndex(messageBatch, createIndexingListener(countDownLatch, succeeded)));
-
-        countDownLatch.await();
-
-        client().removeAliasMapping(index2, INDEX_NAME);
-
-        final List<String> failedItems = result.get(3, TimeUnit.MINUTES);
-        assertThat(failedItems).isEmpty();
-
-        client().refreshNode();
-
-        assertThat(messageCount(INDEX_NAME)).isEqualTo(50);
-        assertThat(succeeded.get()).isTrue();
     }
 
     @Test
