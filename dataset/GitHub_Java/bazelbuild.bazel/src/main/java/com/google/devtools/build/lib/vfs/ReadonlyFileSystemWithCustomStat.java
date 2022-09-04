@@ -41,7 +41,7 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
   }
 
   @Override
-  public void setWritable(Path path, boolean writable) throws IOException {
+  protected void setWritable(Path path, boolean writable) throws IOException {
     throw modificationException();
   }
 
@@ -71,7 +71,7 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
   }
 
   @Override
-  public boolean createDirectory(Path path) throws IOException {
+  protected boolean createDirectory(Path path) throws IOException {
     throw modificationException();
   }
 
@@ -92,7 +92,7 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
   }
 
   @Override
-  public boolean delete(Path path) throws IOException {
+  protected boolean delete(Path path) throws IOException {
     throw modificationException();
   }
 
