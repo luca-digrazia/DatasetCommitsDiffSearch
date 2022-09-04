@@ -104,11 +104,6 @@ public abstract class MessageInput {
 
     public Object getAttributesWithMaskedPasswords() {
         Map<String, Object> result = Maps.newHashMap();
-
-        if (getRequestedConfiguration() == null) {
-            return result;
-        }
-
         for(Map.Entry<String, Object> attribute : getAttributes().entrySet()) {
             Object value = attribute.getValue();
 

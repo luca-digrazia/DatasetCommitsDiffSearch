@@ -119,12 +119,10 @@ public class InputsResource extends RestResource {
         MessageInput input = null;
         try {
             input = InputRegistry.factory(lr.type);
-            input.initialize(inputConfig, core);
+            input.configure(inputConfig, core);
             input.setTitle(lr.title);
             input.setCreatorUserId(lr.creatorUserId);
             input.setCreatedAt(createdAt);
-
-            input.checkConfiguration();
         } catch (NoSuchInputTypeException e) {
             LOG.error("There is no such input type registered.", e);
             throw new WebApplicationException(e, Response.Status.NOT_FOUND);
