@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -39,8 +38,6 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.clock.BlazeClock;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.PrintingEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.BinTools;
@@ -49,7 +46,6 @@ import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.RunfilesTreeUpdater;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
-import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
 import com.google.devtools.build.lib.integration.util.IntegrationMock;
@@ -65,7 +61,6 @@ import com.google.devtools.common.options.OptionsParser;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -149,15 +144,7 @@ public class StandaloneSpawnStrategyTest {
                                 execRoot,
                                 localExecutionOptions,
                                 resourceManager,
-                                new LocalEnvProvider() {
-                                  @Override
-                                  public ImmutableMap<String, String> rewriteLocalEnv(
-                                      Map<String, String> env,
-                                      BinTools binTools,
-                                      String fallbackTmpDir) {
-                                    return ImmutableMap.copyOf(env);
-                                  }
-                                },
+                                (env, unusedBinTools, unusedFallbackTempDir) -> env,
                                 BinTools.forIntegrationTesting(directories, ImmutableList.of()),
                                 Mockito.mock(RunfilesTreeUpdater.class)))))),
             ImmutableList.of());
@@ -171,8 +158,8 @@ public class StandaloneSpawnStrategyTest {
         ImmutableList.copyOf(arguments),
         /*environment=*/ ImmutableMap.of(),
         /*executionInfo=*/ ImmutableMap.of(),
-        /*inputs=*/ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-        /*outputs=*/ ImmutableSet.of(),
+        /*inputs=*/ ImmutableList.of(),
+        /*outputs=*/ ImmutableList.of(),
         ResourceSet.ZERO);
   }
 
@@ -253,15 +240,14 @@ public class StandaloneSpawnStrategyTest {
       // down where that env var is coming from.
       return;
     }
-    Spawn spawn =
-        new SimpleSpawn(
-            new ActionsTestUtil.NullAction(),
-            ImmutableList.of("/usr/bin/env"),
-            /*environment=*/ ImmutableMap.of("foo", "bar", "baz", "boo"),
-            /*executionInfo=*/ ImmutableMap.of(),
-            /*inputs=*/ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-            /*outputs=*/ ImmutableSet.of(),
-            ResourceSet.ZERO);
+    Spawn spawn = new SimpleSpawn(
+        new ActionsTestUtil.NullAction(),
+        ImmutableList.of("/usr/bin/env"),
+        /*environment=*/ ImmutableMap.of("foo", "bar", "baz", "boo"),
+        /*executionInfo=*/ ImmutableMap.of(),
+        /*inputs=*/ ImmutableList.of(),
+        /*outputs=*/ ImmutableList.of(),
+        ResourceSet.ZERO);
     run(spawn);
     assertThat(Sets.newHashSet(out().split("\n"))).isEqualTo(Sets.newHashSet("foo=bar", "baz=boo"));
   }

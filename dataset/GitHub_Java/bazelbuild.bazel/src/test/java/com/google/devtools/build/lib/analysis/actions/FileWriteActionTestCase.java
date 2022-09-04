@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
@@ -77,12 +76,11 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
             /*topLevelFilesets=*/ ImmutableMap.of(),
             /*artifactExpander=*/ null,
             /*actionFileSystem=*/ null,
-            /*skyframeDepsResult=*/ null,
-            NestedSetExpander.DEFAULT);
+            /*skyframeDepsResult=*/ null);
   }
 
   protected void checkNoInputsByDefault() {
-    assertThat(action.getInputs().toList()).isEmpty();
+    assertThat(action.getInputs()).isEmpty();
     assertThat(action.getPrimaryInput()).isNull();
   }
 

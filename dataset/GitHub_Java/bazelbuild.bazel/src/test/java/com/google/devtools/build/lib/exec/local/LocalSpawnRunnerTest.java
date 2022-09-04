@@ -29,7 +29,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Files;
-import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.CommandLines.ParamFileActionInput;
@@ -280,11 +279,6 @@ public class LocalSpawnRunnerTest {
 
     @Override
     public void checkForLostInputs() {}
-
-    @Override
-    public <T extends ActionContext> T getContext(Class<T> identifyingType) {
-      throw new UnsupportedOperationException();
-    }
   }
 
   private final MetadataProvider mockFileCache = mock(MetadataProvider.class);

@@ -13,21 +13,20 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import javax.annotation.Nullable;
+import com.google.common.collect.ImmutableSet;
 
 /**
- * Association between {@link ActionInput}s and the {@link Artifact}s, directly depended on by an
- * action, that are responsible for that action's inclusion of those inputs.
+ * Association between {@link ActionInput}s and the {@link Artifact}s, directly or indirectly
+ * depended on by an action, that are responsible for that action's inclusion of those inputs.
+ *
+ * <p>The association is not necessarily comprehensive. Inputs may have other owners not specified
+ * here, or the owners specified here may not be direct dependencies of the action.
  */
 public interface ActionInputDepOwners {
 
-  /** An {@link ActionInputDepOwners} without any ownership associations. */
-  ActionInputDepOwners EMPTY_INSTANCE = input -> null;
-
   /**
-   * Returns the {@link Artifact} associated with {@code input}, or {@code null} if no such
-   * association exists.
+   * Returns the set of {@link Artifact}s associated with {@code input}. The collection is empty if
+   * no such association exists.
    */
-  @Nullable
-  Artifact getDepOwner(ActionInput input);
+  ImmutableSet<Artifact> getDepOwners(ActionInput input);
 }

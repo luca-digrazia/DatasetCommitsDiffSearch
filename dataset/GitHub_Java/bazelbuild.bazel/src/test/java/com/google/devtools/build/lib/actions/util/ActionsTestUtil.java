@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.Output
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -413,70 +412,12 @@ public final class ActionsTestUtil {
   }
 
   /**
-   * A mocked action containing the inputs and outputs of the action and determines whether or not
-   * the action is a middleman. Used for tests that do not need to execute the action.
-   */
-  public static class MockAction extends AbstractAction {
-
-    private final boolean middleman;
-
-    public MockAction(Iterable<Artifact> inputs, ImmutableSet<Artifact> outputs) {
-      this(inputs, outputs, /*middleman=*/ false);
-    }
-
-    public MockAction(
-        Iterable<Artifact> inputs, ImmutableSet<Artifact> outputs, boolean middleman) {
-      super(
-          NULL_ACTION_OWNER,
-          NestedSetBuilder.<Artifact>stableOrder().addAll(inputs).build(),
-          outputs);
-      this.middleman = middleman;
-    }
-
-    @Override
-    public MiddlemanType getActionType() {
-      return middleman ? MiddlemanType.AGGREGATING_MIDDLEMAN : super.getActionType();
-    }
-
-    @Override
-    public String getMnemonic() {
-      return "Mock action";
-    }
-
-    @Override
-    protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-      fp.addString("Mock Action " + getPrimaryOutput());
-    }
-
-    @Override
-    public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-      throw new UnsupportedOperationException();
-    }
-  }
-
-  /**
-   * For a bunch of actions, gets the basenames of the paths and accumulates them in a space
-   * separated string, like <code>foo.o bar.o baz.a</code>.
-   */
-  public static String baseNamesOf(NestedSet<Artifact> artifacts) {
-    return baseNamesOf(artifacts.toList());
-  }
-
-  /**
    * For a bunch of actions, gets the basenames of the paths and accumulates
    * them in a space separated string, like <code>foo.o bar.o baz.a</code>.
    */
   public static String baseNamesOf(Iterable<Artifact> artifacts) {
     List<String> baseNames = baseArtifactNames(artifacts);
     return Joiner.on(' ').join(baseNames);
-  }
-
-  /**
-   * For a bunch of actions, gets the basenames of the paths, sorts them in alphabetical order and
-   * accumulates them in a space separated string, for example <code>bar.o baz.a foo.o</code>.
-   */
-  public static String sortedBaseNamesOf(NestedSet<Artifact> artifacts) {
-    return sortedBaseNamesOf(artifacts.toList());
   }
 
   /**
@@ -490,32 +431,20 @@ public final class ActionsTestUtil {
     return Joiner.on(' ').join(baseNames);
   }
 
-  /** For a bunch of artifacts, gets the basenames and accumulates them in a List. */
-  public static List<String> baseArtifactNames(NestedSet<Artifact> artifacts) {
-    return transform(artifacts.toList(), artifact -> artifact.getExecPath().getBaseName());
-  }
-
-  /** For a bunch of artifacts, gets the basenames and accumulates them in a List. */
+  /**
+   * For a bunch of artifacts, gets the basenames and accumulates them in a
+   * List.
+   */
   public static List<String> baseArtifactNames(Iterable<Artifact> artifacts) {
     return transform(artifacts, artifact -> artifact.getExecPath().getBaseName());
   }
 
-  /** For a bunch of artifacts, gets the exec paths and accumulates them in a List. */
-  public static List<String> execPaths(NestedSet<Artifact> artifacts) {
-    return execPaths(artifacts.toList());
-  }
-
-  /** For a bunch of artifacts, gets the exec paths and accumulates them in a List. */
+  /**
+   * For a bunch of artifacts, gets the exec paths and accumulates them in a
+   * List.
+   */
   public static List<String> execPaths(Iterable<Artifact> artifacts) {
     return transform(artifacts, Artifact::getExecPathString);
-  }
-
-  /**
-   * For a bunch of artifacts, gets the pretty printed names and accumulates them in a List. Note
-   * that this returns the root-relative paths, not the exec paths.
-   */
-  public static List<String> prettyArtifactNames(NestedSet<Artifact> artifacts) {
-    return prettyArtifactNames(artifacts.toList());
   }
 
   /**
@@ -545,14 +474,6 @@ public final class ActionsTestUtil {
    * Returns the closure of the predecessors of any of the given types, joining the basenames of the
    * artifacts into a space-separated string like "libfoo.a libbar.a libbaz.a".
    */
-  public String predecessorClosureOf(NestedSet<Artifact> artifacts, FileType... types) {
-    return predecessorClosureOf(artifacts.toList(), types);
-  }
-
-  /**
-   * Returns the closure of the predecessors of any of the given types, joining the basenames of the
-   * artifacts into a space-separated string like "libfoo.a libbar.a libbaz.a".
-   */
   public String predecessorClosureOf(Iterable<Artifact> artifacts, FileType... types) {
     Set<Artifact> visited = artifactClosureOf(artifacts);
     return baseNamesOf(FileType.filter(visited, types));
@@ -561,12 +482,6 @@ public final class ActionsTestUtil {
   /** Returns the closure of the predecessors of any of the given types. */
   public Collection<String> predecessorClosureAsCollection(Artifact artifact, FileType... types) {
     return predecessorClosureAsCollection(Collections.singleton(artifact), types);
-  }
-
-  /** Returns the closure of the predecessors of any of the given types. */
-  public Collection<String> predecessorClosureAsCollection(
-      NestedSet<Artifact> artifacts, FileType... types) {
-    return predecessorClosureAsCollection(artifacts.toList(), types);
   }
 
   /** Returns the closure of the predecessors of any of the given types. */
@@ -589,17 +504,12 @@ public final class ActionsTestUtil {
    * Returns the closure over the input files of an action.
    */
   public Set<Artifact> inputClosureOf(ActionAnalysisMetadata action) {
-    return artifactClosureOf(action.getInputs().toList());
+    return artifactClosureOf(action.getInputs());
   }
 
   /** Returns the closure over the input files of an artifact. */
   public Set<Artifact> artifactClosureOf(Artifact artifact) {
     return artifactClosureOf(Collections.singleton(artifact));
-  }
-
-  /** Returns the closure over the input files of a set of artifacts. */
-  public Set<Artifact> artifactClosureOf(NestedSet<Artifact> artifacts) {
-    return artifactClosureOf(artifacts.toList());
   }
 
   /** Returns the closure over the input files of a set of artifacts. */
@@ -613,7 +523,7 @@ public final class ActionsTestUtil {
       }
       ActionAnalysisMetadata generatingAction = actionGraph.getGeneratingAction(current);
       if (generatingAction != null) {
-        toVisit.addAll(generatingAction.getInputs().toList());
+        Iterables.addAll(toVisit, generatingAction.getInputs());
       }
     }
     return visited;
@@ -659,8 +569,7 @@ public final class ActionsTestUtil {
       }
       ActionAnalysisMetadata generatingAction = actionGraph.getGeneratingAction(current);
       if (generatingAction != null) {
-        Iterables.addAll(
-            toVisit, Iterables.filter(generatingAction.getInputs().toList(), allowedArtifacts));
+        Iterables.addAll(toVisit, Iterables.filter(generatingAction.getInputs(), allowedArtifacts));
         if (actionClass.isInstance(generatingAction)) {
           actions.add(actionClass.cast(generatingAction));
         }
@@ -678,15 +587,8 @@ public final class ActionsTestUtil {
    * Looks in the given artifacts Iterable for the first Artifact whose path ends with the given
    * suffix and returns its generating Action.
    */
-  public Action getActionForArtifactEndingWith(NestedSet<Artifact> artifacts, String suffix) {
-    return getActionForArtifactEndingWith(artifacts.toList(), suffix);
-  }
-
-  /**
-   * Looks in the given artifacts Iterable for the first Artifact whose path ends with the given
-   * suffix and returns its generating Action.
-   */
-  public Action getActionForArtifactEndingWith(Iterable<Artifact> artifacts, String suffix) {
+  public Action getActionForArtifactEndingWith(
+      Iterable<Artifact> artifacts, String suffix) {
     Artifact a = getFirstArtifactEndingWith(artifacts, suffix);
 
     if (a == null) {
@@ -703,15 +605,6 @@ public final class ActionsTestUtil {
     } else {
       return null;
     }
-  }
-
-  /**
-   * Looks in the given artifacts Iterable for the first Artifact whose path ends with the given
-   * suffix and returns the Artifact.
-   */
-  public static Artifact getFirstArtifactEndingWith(
-      NestedSet<? extends Artifact> artifacts, String suffix) {
-    return getFirstArtifactEndingWith(artifacts.toList(), suffix);
   }
 
   /**
@@ -748,7 +641,7 @@ public final class ActionsTestUtil {
    * specified basename. An assertion error is raised if none is found.
    */
   public static Artifact getInput(ActionAnalysisMetadata action, String basename) {
-    for (Artifact artifact : action.getInputs().toList()) {
+    for (Artifact artifact : action.getInputs()) {
       if (artifact.getExecPath().getBaseName().equals(basename)) {
         return artifact;
       }

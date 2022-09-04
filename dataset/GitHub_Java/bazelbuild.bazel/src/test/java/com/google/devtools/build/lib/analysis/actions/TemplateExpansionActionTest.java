@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
@@ -102,7 +101,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
 
   @Test
   public void testInputsIsEmpty() {
-    assertThat(create().getInputs().toList()).isEmpty();
+    assertThat(create().getInputs()).isEmpty();
   }
 
   @Test
@@ -203,8 +202,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
         /*topLevelFilesets=*/ ImmutableMap.of(),
         /*artifactExpander=*/ null,
         /*actionFileSystem=*/ null,
-        /*skyframeDepsResult=*/ null,
-        NestedSetExpander.DEFAULT);
+        /*skyframeDepsResult=*/ null);
   }
 
   private void executeTemplateExpansion(String expected) throws Exception {
@@ -221,7 +219,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
 
   @Test
   public void testArtifactTemplateHasInput() {
-    assertThat(createWithArtifact().getInputs().toList()).containsExactly(inputArtifact);
+    assertThat(createWithArtifact().getInputs()).containsExactly(inputArtifact);
   }
 
   @Test

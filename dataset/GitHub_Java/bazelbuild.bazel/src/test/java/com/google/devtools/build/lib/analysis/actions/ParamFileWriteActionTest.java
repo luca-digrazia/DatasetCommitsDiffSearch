@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.BinTools;
@@ -86,7 +85,7 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
         createParameterFileWriteAction(
             NestedSetBuilder.create(Order.STABLE_ORDER, treeArtifact),
             createTreeArtifactExpansionCommandLineDefault());
-    assertThat(Artifact.asExecPaths(action.getInputs()))
+    assertThat(Artifact.toExecPaths(action.getInputs()))
         .containsExactly("out/artifact/myTreeFileArtifact");
   }
 
@@ -216,8 +215,7 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
         /*topLevelFilesets=*/ ImmutableMap.of(),
         artifactExpander,
         /*actionFileSystem=*/ null,
-        /*skyframeDepsResult=*/ null,
-        NestedSetExpander.DEFAULT);
+        /*skyframeDepsResult=*/ null);
   }
 
   private enum KeyAttributes {
