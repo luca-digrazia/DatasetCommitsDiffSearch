@@ -281,7 +281,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   /**
    * Tests that if a given crosstool defines action configs for all link actions, that the link
    * action will be configured from the crosstool instead of from hard-coded action_configs in
-   * {@code CppLinkActionConfigs}.
+   * {@code CppActionConfigs}.
    */
   @Test
   public void testUsesCrosstoolIfLinkActionDefined() throws Exception {
@@ -366,8 +366,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
       getConfiguredTarget("//hello:hello");
       fail("Should fail");
     } catch (AssertionError e) {
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .contains("Invalid toolchain configuration: Cannot find variable named 'bad_variable'");
     }
   }

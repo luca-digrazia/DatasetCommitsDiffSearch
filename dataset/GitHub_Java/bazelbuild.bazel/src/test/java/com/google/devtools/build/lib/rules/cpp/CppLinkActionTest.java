@@ -40,7 +40,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariableValue;
-import com.google.devtools.build.lib.rules.cpp.CppLinkActionConfigs.CppLinkPlatform;
+import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
@@ -83,9 +83,10 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
   private final FeatureConfiguration getMockFeatureConfiguration() throws Exception {
     return CcToolchainFeaturesTest.buildFeatures(
-            CppLinkActionConfigs.getCppLinkActionConfigs(
-                CppLinkPlatform.LINUX,
+            CppActionConfigs.getCppActionConfigs(
+                CppPlatform.LINUX,
                 ImmutableSet.<String>of(),
+                "gcc_tool",
                 "dynamic_library_linker_tool",
                 true))
         .getFeatureConfiguration(
@@ -283,8 +284,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     attributesToFlip.contains(NonStaticAttributes.OUTPUT_FILE)
                         ? dynamicOutputFile
                         : staticOutputFile,
-                    CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext),
-                    CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext)) {};
+                    CppHelper.getToolchain(ruleContext, ":cc_toolchain"),
+                    CppHelper.getFdoSupport(ruleContext, ":cc_toolchain")) {};
             builder.addCompilationInputs(
                 attributesToFlip.contains(NonStaticAttributes.COMPILATION_INPUTS)
                     ? ImmutableList.of(oFile)
@@ -344,8 +345,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     attributes.contains(StaticKeyAttributes.OUTPUT_FILE)
                         ? staticOutputFile
                         : dynamicOutputFile,
-                    CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext),
-                    CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext)) {};
+                    CppHelper.getToolchain(ruleContext, ":cc_toolchain"),
+                    CppHelper.getFdoSupport(ruleContext, ":cc_toolchain")) {};
             builder.addCompilationInputs(
                 attributes.contains(StaticKeyAttributes.COMPILATION_INPUTS)
                     ? ImmutableList.of(oFile)
@@ -376,8 +377,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
         new CppLinkActionBuilder(
             ruleContext,
             output,
-            CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext),
-            CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext));
+            CppHelper.getToolchain(ruleContext, ":cc_toolchain"),
+            CppHelper.getFdoSupport(ruleContext, ":cc_toolchain"));
     builder.setLinkType(LinkTargetType.STATIC_LIBRARY);
     assertTrue(builder.canSplitCommandLine());
 
@@ -465,8 +466,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     getTargetConfiguration()
                         .getBinDirectory(ruleContext.getRule().getRepository())),
                 ruleContext.getConfiguration(),
-                CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext),
-                CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext))
+                CppHelper.getToolchain(ruleContext, ":cc_toolchain"),
+                CppHelper.getFdoSupport(ruleContext, ":cc_toolchain"))
             .addObjectFiles(nonLibraryInputs)
             .addLibraries(NestedSetBuilder.wrap(Order.LINK_ORDER, libraryInputs))
             .setLinkType(type)
