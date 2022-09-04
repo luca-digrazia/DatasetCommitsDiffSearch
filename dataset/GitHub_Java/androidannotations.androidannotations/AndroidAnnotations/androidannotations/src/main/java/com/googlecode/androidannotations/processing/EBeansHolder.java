@@ -28,7 +28,7 @@ import javax.lang.model.element.Element;
 import com.googlecode.androidannotations.helper.CanonicalNameConstants;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JType;
 
 public class EBeansHolder {
 
@@ -56,8 +56,6 @@ public class EBeansHolder {
 		public final JClass ACTIVITY = refClass(CanonicalNameConstants.ACTIVITY);
 		public final JClass EDITABLE = refClass(CanonicalNameConstants.EDITABLE);
 		public final JClass TEXT_WATCHER = refClass(CanonicalNameConstants.TEXT_WATCHER);
-		public final JClass SEEKBAR = refClass(CanonicalNameConstants.SEEKBAR);
-		public final JClass ON_SEEKBAR_CHANGE_LISTENER = refClass(CanonicalNameConstants.ON_SEEKBAR_CHANGE_LISTENER);
 		public final JClass TEXT_VIEW = refClass(CanonicalNameConstants.TEXT_VIEW);
 		public final JClass VIEW = refClass(CanonicalNameConstants.VIEW);
 		public final JClass VIEW_ON_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_CLICK_LISTENER);
@@ -140,23 +138,20 @@ public class EBeansHolder {
 
 	private final JCodeModel codeModel;
 
+	private final BufferedJCodeModel bufferedCodeModel;
+
 	private final Map<String, JClass> loadedClasses = new HashMap<String, JClass>();
 
 	private final Classes classes;
 
-	private final Map<String, Element> originatingElementsByGeneratedClassQualifiedName = new HashMap<String, Element>();
-
 	public EBeansHolder(JCodeModel codeModel) {
 		this.codeModel = codeModel;
+		bufferedCodeModel = new BufferedJCodeModel(this, codeModel);
 		classes = new Classes();
 	}
 
-	public EBeanHolder create(Element element, Class<? extends Annotation> eBeanAnnotation, JDefinedClass generatedClass) {
-
-		String qualifiedName = generatedClass.fullName();
-		originatingElementsByGeneratedClassQualifiedName.put(qualifiedName, element);
-
-		EBeanHolder activityHolder = new EBeanHolder(this, eBeanAnnotation, generatedClass);
+	public EBeanHolder create(Element element, Class<? extends Annotation> eBeanAnnotation) {
+		EBeanHolder activityHolder = new EBeanHolder(this, eBeanAnnotation);
 		eBeanHolders.put(element, activityHolder);
 		return activityHolder;
 	}
@@ -173,17 +168,54 @@ public class EBeansHolder {
 			fullyQualifiedClassName = fullyQualifiedClassName.substring(0, fullyQualifiedClassName.length() - 2);
 		}
 
-		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
-
-		if (refClass == null) {
-			refClass = codeModel.directClass(fullyQualifiedClassName);
-			loadedClasses.put(fullyQualifiedClassName, refClass);
-		}
+		JClass refClass = uniqueRefClass(fullyQualifiedClassName);
 
 		for (int i = 0; i < arrayCounter; i++) {
 			refClass = refClass.array();
 		}
 
+		return refClass;
+	}
+
+	/**
+	 * Return a unique JClass reference by using {@link JCodeModel#ref(String)}
+	 * and keeping a buffer.
+	 * 
+	 * @param fullyQualifiedClassName
+	 * @return
+	 */
+	JClass uniqueRefClass(String fullyQualifiedClassName) {
+		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
+		if (refClass == null) {
+			refClass = codeModel.ref(fullyQualifiedClassName);
+			loadedClasses.put(fullyQualifiedClassName, refClass);
+		}
+		return refClass;
+	}
+
+	/**
+	 * Parse the fully qualified class name and return a JClass instance. This
+	 * method support both generics (it'll return a {@link JNarrowedClass}) and
+	 * primitives (it'll autobox it to a {@link JClass})
+	 * 
+	 * @param fullyQualifiedClassName
+	 * @return
+	 */
+	public JClass parseClass(String fullyQualifiedClassName) {
+		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
+		if (refClass == null) {
+			try {
+				JType jType = bufferedCodeModel.parseType(fullyQualifiedClassName);
+				if (jType.isPrimitive()) {
+					refClass = jType.boxify();
+				}
+				refClass = (JClass) jType;
+			} catch (Throwable e) {
+				refClass = refClass(fullyQualifiedClassName);
+			}
+
+			loadedClasses.put(fullyQualifiedClassName, refClass);
+		}
 		return refClass;
 	}
 
@@ -197,10 +229,6 @@ public class EBeansHolder {
 
 	public Classes classes() {
 		return classes;
-	}
-
-	public Map<String, Element> getOriginatingElementsByGeneratedClassQualifiedName() {
-		return originatingElementsByGeneratedClassQualifiedName;
 	}
 
 }
