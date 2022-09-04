@@ -1077,9 +1077,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   protected void getBuildFileTargetsForPackageKeysAndProcessViaCallback(
-      Iterable<SkyKey> packageKeys,
-      QueryExpressionContext<Target> context,
-      Callback<Target> callback)
+      Iterable<SkyKey> packageKeys, Callback<Target> callback)
       throws QueryException, InterruptedException {
     Set<PackageIdentifier> pkgIds =
           Streams.stream(packageKeys)
@@ -1098,20 +1096,17 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   /**
-   * Calculates the set of packages whose evaluation transitively depends on (e.g. via 'load'
-   * statements) the contents of the specified paths. The emitted {@link Target}s are BUILD file
-   * targets.
+   * Calculates the set of packages that transitively depend on, via load statements, the specified
+   * paths. The emitted {@link Target}s are BUILD file targets.
    */
   @ThreadSafe
   QueryTaskFuture<Void> getRBuildFiles(
-      Collection<PathFragment> fileIdentifiers,
-      QueryExpressionContext<Target> context,
-      Callback<Target> callback) {
+      Collection<PathFragment> fileIdentifiers, Callback<Target> callback) {
     return QueryTaskFutureImpl.ofDelegate(
         safeSubmit(
             () -> {
               ParallelSkyQueryUtils.getRBuildFilesParallel(
-                  SkyQueryEnvironment.this, fileIdentifiers, context, callback);
+                  SkyQueryEnvironment.this, fileIdentifiers, callback);
               return null;
             }));
   }
