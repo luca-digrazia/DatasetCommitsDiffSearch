@@ -57,7 +57,7 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import com.google.protobuf.TextFormat;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -100,7 +100,7 @@ public final class PrintActionCommand implements BlazeCommand {
   }
 
   @Override
-  public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
+  public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
     LoadingOptions loadingOptions =
         options.getOptions(LoadingOptions.class);
 
@@ -117,19 +117,15 @@ public final class PrintActionCommand implements BlazeCommand {
    */
   private class PrintActionRunner {
     private final boolean compileOneDependency;
-    private final OptionsParsingResult options;
+    private final OptionsProvider options;
     private final OutErr outErr;
     private final List<String> requestedTargets;
     private final boolean keepGoing;
     private final ExtraActionSummary.Builder summaryBuilder;
     private final Predicate<ActionAnalysisMetadata> actionMnemonicMatcher;
 
-    public PrintActionRunner(
-        boolean compileOneDependency,
-        OptionsParsingResult options,
-        OutErr outErr,
-        List<String> requestedTargets,
-        final Set<String> printActionMnemonics) {
+    public PrintActionRunner(boolean compileOneDependency, OptionsProvider options, OutErr outErr,
+        List<String> requestedTargets, final Set<String> printActionMnemonics) {
       this.compileOneDependency = compileOneDependency;
       this.options = options;
       this.outErr = outErr;
@@ -316,7 +312,7 @@ public final class PrintActionCommand implements BlazeCommand {
    * <p>However, since there is a scheduling dependency on the header files, we can use the system
    * to implement said scheduling dependency to figure them out. Thus, we go a-fishing in the action
    * graph reaching through error propagating middlemen: one of these exists for each {@code
-   * CcCompilationContext} in the transitive closure of the rule.
+   * CcCompilationInfo} in the transitive closure of the rule.
    */
   private static void expandRecursiveHelper(
       ActionGraph actionGraph,

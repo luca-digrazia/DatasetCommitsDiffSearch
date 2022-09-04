@@ -30,7 +30,6 @@ import com.google.devtools.common.options.OptionsBase;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -124,7 +123,7 @@ public final class WriteAdbArgsAction extends AbstractFileWriteAction {
   public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx)
       throws IOException, InterruptedException, ExecException {
     Options options = ctx.getOptions().getOptions(Options.class);
-    final List<String> args = new ArrayList<>(options.adbArgs);
+    final List<String> args = options.adbArgs;
     final String adb = options.adb;
     final String device = options.device;
     final String incrementalInstallVerbosity = options.incrementalInstallVerbosity;

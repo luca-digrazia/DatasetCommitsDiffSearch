@@ -25,10 +25,14 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
-import com.google.devtools.build.lib.skylarkbuildapi.apple.AppleBitcodeModeApi;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -41,7 +45,11 @@ import java.io.IOException;
 import java.util.List;
 
 /** Command-line options for building for Apple platforms. */
+@AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
 public class AppleCommandLineOptions extends FragmentOptions {
+  public static final ObjectCodec<AppleCommandLineOptions> CODEC =
+      new AppleCommandLineOptions_AutoCodec();
+
   @Option(
     name = "experimental_apple_mandatory_minimum_version",
     defaultValue = "false",
@@ -394,8 +402,19 @@ public class AppleCommandLineOptions extends FragmentOptions {
    * <p>This is a build-wide value, as bitcode mode needs to be consistent among a target and its
    * compiled dependencies.
    */
+  @SkylarkModule(
+    name = "apple_bitcode_mode",
+    category = SkylarkModuleCategory.NONE,
+    doc =
+        "The Bitcode mode to use when compiling Objective-C and Swift code on Apple platforms. "
+            + "Possible values are:<br><ul>"
+            + "<li><code>'none'</code></li>"
+            + "<li><code>'embedded'</code></li>"
+            + "<li><code>'embedded_markers'</code></li>"
+            + "</ul>"
+  )
   @Immutable
-  public enum AppleBitcodeMode implements AppleBitcodeModeApi {
+  public enum AppleBitcodeMode implements SkylarkValue {
 
     /** Do not compile bitcode. */
     NONE("none", ImmutableList.<String>of()),

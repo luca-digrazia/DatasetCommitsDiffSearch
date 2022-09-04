@@ -785,19 +785,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel;
 
-    @Option(
-        name = "android_decouple_data_processing",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {
-          OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-          OptionEffectTag.ACTION_COMMAND_LINES
-        },
-        help =
-            "If true, Android data (assets, resources, and manifests) will be processed seperately "
-                + "when possible. Otherwise, they will all be processed together.")
-    public boolean decoupleDataProcessing;
-
     @Override
     public FragmentOptions getHost() {
       Options host = (Options) super.getHost();
@@ -875,7 +862,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean skipParsingAction;
   private final boolean fixedResourceNeverlinking;
   private final AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel;
-  private final boolean decoupleDataProcessing;
 
   AndroidConfiguration(Options options) throws InvalidConfigurationException {
     this.sdk = options.sdk;
@@ -913,7 +899,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.skipParsingAction = options.skipParsingAction;
     this.fixedResourceNeverlinking = options.fixedResourceNeverlinking;
     this.robolectricTestDeprecationLevel = options.robolectricTestDeprecationLevel;
-    this.decoupleDataProcessing = options.decoupleDataProcessing;
 
     if (incrementalDexingShardsAfterProguard < 0) {
       throw new InvalidConfigurationException(
@@ -963,8 +948,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       boolean useParallelDex2Oat,
       boolean skipParsingAction,
       boolean fixedResourceNeverlinking,
-      AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel,
-      boolean decoupleDataProcessing) {
+      AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel) {
     this.sdk = sdk;
     this.cpu = cpu;
     this.useIncrementalNativeLibs = useIncrementalNativeLibs;
@@ -997,7 +981,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.skipParsingAction = skipParsingAction;
     this.fixedResourceNeverlinking = fixedResourceNeverlinking;
     this.robolectricTestDeprecationLevel = robolectricTestDeprecationLevel;
-    this.decoupleDataProcessing = decoupleDataProcessing;
   }
 
   public String getCpu() {
@@ -1143,10 +1126,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public AndroidRobolectricTestDeprecationLevel getRobolectricTestDeprecationLevel() {
     return robolectricTestDeprecationLevel;
-  }
-
-  public boolean decoupleDataProcessing() {
-    return decoupleDataProcessing;
   }
 
   @Override

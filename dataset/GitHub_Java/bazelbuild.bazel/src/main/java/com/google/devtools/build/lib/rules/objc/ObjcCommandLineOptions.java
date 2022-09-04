@@ -179,14 +179,6 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   public boolean appleGenerateDsym;
 
   @Option(
-      name = "apple_enable_auto_dsym_dbg",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES},
-      help = "Whether to force enable generating debug symbol(.dSYM) file(s) for dbg builds.")
-  public boolean appleEnableAutoDsymDbg;
-
-  @Option(
     name = "ios_signing_cert_name",
     defaultValue = "null",
     documentationCategory = OptionDocumentationCategory.SIGNING,
@@ -300,12 +292,10 @@ public class ObjcCommandLineOptions extends FragmentOptions {
 
   @Option(
     name = "incompatible_strict_objc_module_maps",
+    category = "incompatible changes",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-    metadataTags = {
-      OptionMetadataTag.INCOMPATIBLE_CHANGE,
-      OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-    },
+    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
     effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
     help =
         "Propagates Objective-C module maps only to direct dependencies in the 'objc' provider, "

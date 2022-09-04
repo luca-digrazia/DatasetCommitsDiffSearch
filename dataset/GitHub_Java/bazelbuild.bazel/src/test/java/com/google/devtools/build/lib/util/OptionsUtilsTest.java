@@ -14,7 +14,9 @@
 package com.google.devtools.build.lib.util;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.fail;
 
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.util.OptionsUtils.PathFragmentConverter;
 import com.google.devtools.build.lib.util.OptionsUtils.PathFragmentListConverter;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -149,6 +151,10 @@ public class OptionsUtilsTest {
         .inOrder();
   }
 
+  private static List<PathFragment> list(PathFragment... fragments) {
+    return Lists.newArrayList(fragments);
+  }
+
   private PathFragment fragment(String string) {
     return PathFragment.create(string);
   }
@@ -163,7 +169,7 @@ public class OptionsUtilsTest {
 
   @Test
   public void emptyStringYieldsEmptyList() throws Exception {
-    assertThat(convert("")).isEmpty();
+    assertThat(convert("")).isEqualTo(list());
   }
 
   @Test
@@ -193,5 +199,13 @@ public class OptionsUtilsTest {
     assertThat(convertOne("foo")).isEqualTo(fragment("foo"));
     assertThat(convertOne("foo/bar/baz")).isEqualTo(fragment("foo/bar/baz"));
     assertThat(convertOne("~/foo")).isEqualTo(fragment(System.getProperty("user.home") + "/foo"));
+  }
+
+  @Test
+  public void valueisUnmodifiable() throws Exception {
+    try {
+      new PathFragmentListConverter().convert("value").add(PathFragment.create("other"));
+      fail("could modify value");
+    } catch (UnsupportedOperationException expected) {}
   }
 }

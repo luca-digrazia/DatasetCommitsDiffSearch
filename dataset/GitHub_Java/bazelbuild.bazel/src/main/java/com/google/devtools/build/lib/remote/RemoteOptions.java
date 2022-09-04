@@ -36,15 +36,16 @@ public final class RemoteOptions extends OptionsBase {
   public String remoteHttpCache;
 
   @Option(
-      name = "remote_max_connections",
-      defaultValue = "100",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.HOST_MACHINE_RESOURCE_OPTIMIZATIONS},
-      help =
-          "The max. number of concurrent network connections to the remote cache/executor. By "
-              + "default Bazel limits the number of TCP connections to 100. Setting this flag to "
-              + "0 will make Bazel choose the number of connections automatically.")
-  public int remoteMaxConnections;
+    name = "remote_rest_cache_pool_size",
+    defaultValue = "20",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help = "Size of the HTTP pool for making requests to the REST cache.",
+    deprecationWarning =
+        "The value will be ignored and the option will be removed in the next "
+            + "release. Bazel selects the ideal pool size automatically."
+  )
+  public int restCachePoolSize;
 
   @Option(
     name = "remote_executor",
@@ -163,29 +164,36 @@ public final class RemoteOptions extends OptionsBase {
   )
   public double experimentalRemoteRetryJitter;
 
-  @Deprecated
   @Option(
     name = "experimental_remote_spawn_cache",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
+    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Whether to use the experimental spawn cache infrastructure for remote caching. "
             + "Enabling this flag makes Bazel ignore any setting for remote_executor."
   )
   public boolean experimentalRemoteSpawnCache;
 
+  // TODO(davido): Find a better place for this and the next option.
   @Option(
-    name = "disk_cache",
+    name = "experimental_local_disk_cache",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help = "Whether to use the experimental local disk cache."
+  )
+  public boolean experimentalLocalDiskCache;
+
+  @Option(
+    name = "experimental_local_disk_cache_path",
     defaultValue = "null",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     converter = OptionsUtils.PathFragmentConverter.class,
-    help =
-        "A path to a directory where Bazel can read and write actions and action outputs. "
-            + "If the directory does not exist, it will be created."
+    help = "A file path to a local disk cache."
   )
-  public PathFragment diskCache;
+  public PathFragment experimentalLocalDiskCachePath;
 
   @Option(
     name = "experimental_guard_against_concurrent_changes",
@@ -198,35 +206,4 @@ public final class RemoteOptions extends OptionsBase {
             + "writing of files, which could cause false positives."
   )
   public boolean experimentalGuardAgainstConcurrentChanges;
-
-  @Option(
-    name = "experimental_remote_grpc_log",
-    defaultValue = "",
-    category = "remote",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    help =
-        "If specified, a path to a file to log gRPC call related details. This log consists "
-            + "of a sequence of serialized "
-            + "com.google.devtools.build.lib.remote.logging.RemoteExecutionLog.LogEntry "
-            + "protobufs with each message prefixed by a varint denoting the size of the following "
-            + "serialized protobuf message, as performed by the method "
-            + "LogEntry.writeDelimitedTo(OutputStream)."
-  )
-  public String experimentalRemoteGrpcLog;
-
-  @Option(
-    name = "remote_allow_symlink_upload",
-    defaultValue = "true",
-    category = "remote",
-    documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-    effectTags = {OptionEffectTag.EXECUTION},
-    help =
-        "If true, upload action symlink outputs to the remote cache. "
-            + "The remote cache currently doesn't support symlinks, "
-            + "so symlink outputs are converted into regular files. "
-            + "If this option is not enabled, "
-            + "otherwise cachable actions that output symlinks will fail."
-  )
-  public boolean allowSymlinkUpload;
 }

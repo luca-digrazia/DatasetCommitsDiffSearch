@@ -150,8 +150,7 @@ public final class CanonicalizeCommand implements BlazeCommand {
 
       InvocationPolicy policy =
           InvocationPolicyParser.parsePolicy(canonicalizeOptions.invocationPolicy);
-      InvocationPolicyEnforcer invocationPolicyEnforcer =
-          new InvocationPolicyEnforcer(policy, Level.INFO);
+      InvocationPolicyEnforcer invocationPolicyEnforcer = new InvocationPolicyEnforcer(policy);
       invocationPolicyEnforcer.enforce(parser, commandName);
 
       if (canonicalizeOptions.showWarnings) {

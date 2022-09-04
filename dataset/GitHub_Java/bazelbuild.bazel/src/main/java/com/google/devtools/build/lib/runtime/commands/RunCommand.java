@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
-import com.google.devtools.build.lib.analysis.ShellConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
@@ -193,7 +192,7 @@ public class RunCommand implements BlazeCommand  {
   }
 
   private BlazeCommandResult runTargetUnderServer(CommandEnvironment env,
-      ConfiguredTarget targetToRun, PathFragment shellExecutable,
+      ConfiguredTarget targetToRun, BuildConfiguration configuration,
       ConfiguredTarget runUnderTarget, Path workingDir, List<String> commandLineArgs) {
     RunOptions runOptions = env.getOptions().getOptions(RunOptions.class);
     List<String> args = computeArgs(env, targetToRun, commandLineArgs);
@@ -216,7 +215,7 @@ public class RunCommand implements BlazeCommand  {
       cmdLine.add(ProcessWrapperUtil.getProcessWrapper(env).getPathString());
     }
     List<String> prettyCmdLine = new ArrayList<>();
-    constructCommandLine(cmdLine, prettyCmdLine, env, shellExecutable,
+    constructCommandLine(cmdLine, prettyCmdLine, env, configuration.getShellExecutable(),
         targetToRun, runUnderTarget, args);
 
     // Add a newline between the blaze output and the binary's output.
@@ -421,12 +420,9 @@ public class RunCommand implements BlazeCommand  {
     }
 
 
-    PathFragment shellExecutable =
-        configuration.getFragment(ShellConfiguration.class).getShellExecutable();
-
     if (!runOptions.direct) {
-      return runTargetUnderServer(
-          env, targetToRun, shellExecutable, runUnderTarget, runfilesDir, commandLineArgs);
+      return runTargetUnderServer(env, targetToRun, configuration, runUnderTarget,
+          runfilesDir, commandLineArgs);
     }
 
     Map<String, String> runEnvironment = new TreeMap<>();
@@ -465,11 +461,6 @@ public class RunCommand implements BlazeCommand  {
           settings.getRunfilesDir().relativeTo(env.getExecRoot()),
           relativeTmpDir.getRelative(TestStrategy.getTmpDirName(testAction))));
       workingDir = env.getExecRoot();
-
-      if (!prepareTestEnvironment(env, testAction)) {
-        return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
-      }
-
       try {
         cmdLine.addAll(TestStrategy.getArgs(testAction));
         cmdLine.addAll(commandLineArgs);
@@ -482,7 +473,7 @@ public class RunCommand implements BlazeCommand  {
       List<String> prettyCmdLine = new ArrayList<>();
       List<String> args = computeArgs(env, targetToRun, commandLineArgs);
       constructCommandLine(cmdLine, prettyCmdLine, env,
-          shellExecutable, targetToRun, runUnderTarget, args);
+          configuration.getShellExecutable(), targetToRun, runUnderTarget, args);
     }
 
     if (runOptions.scriptPath != null) {
@@ -501,7 +492,7 @@ public class RunCommand implements BlazeCommand  {
             ByteString.copyFrom(workingDir.getPathString(), StandardCharsets.ISO_8859_1));
 
     ImmutableList<String> shellCmdLine = ImmutableList.<String>of(
-        shellExecutable.getPathString(),
+        configuration.getShellExecutable().getPathString(),
         "-c",
         ShellEscaper.escapeJoinAll(cmdLine));
 
@@ -517,16 +508,6 @@ public class RunCommand implements BlazeCommand  {
     }
 
     return BlazeCommandResult.execute(execDescription.build());
-  }
-
-  private boolean prepareTestEnvironment(CommandEnvironment env, TestRunnerAction action) {
-    try {
-      action.prepare(env.getRuntime().getFileSystem(), env.getExecRoot());
-      return true;
-    } catch (IOException e) {
-      env.getReporter().handle(Event.error("Error while setting up test: " + e.getMessage()));
-      return false;
-    }
   }
 
   /**
