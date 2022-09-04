@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.exec.TreeDeleter;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.ProcessWrapper;
+import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.shell.Command;
@@ -70,7 +70,7 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     if (OS.getCurrent() != OS.DARWIN) {
       return false;
     }
-    if (ProcessWrapper.fromCommandEnvironment(cmdEnv) == null) {
+    if (!ProcessWrapperUtil.isSupported(cmdEnv)) {
       return false;
     }
     if (isSupported == null) {
@@ -102,8 +102,9 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   private final SandboxHelpers helpers;
   private final Path execRoot;
   private final boolean allowNetwork;
-  private final ProcessWrapper processWrapper;
+  private final Path processWrapper;
   private final Path sandboxBase;
+  private final Duration timeoutKillDelay;
   @Nullable private final SandboxfsProcess sandboxfsProcess;
   private final boolean sandboxfsMapSymlinkTargets;
   private final TreeDeleter treeDeleter;
@@ -123,6 +124,7 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
    * @param helpers common tools and state across all spawns during sandboxed execution
    * @param cmdEnv the command environment to use
    * @param sandboxBase path to the sandbox base directory
+   * @param timeoutKillDelay additional grace period before killing timing out commands
    * @param sandboxfsProcess instance of the sandboxfs process to use; may be null for none, in
    *     which case the runner uses a symlinked sandbox
    * @param sandboxfsMapSymlinkTargets map the targets of symlinks within the sandbox if true
@@ -131,6 +133,7 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
       SandboxHelpers helpers,
       CommandEnvironment cmdEnv,
       Path sandboxBase,
+      Duration timeoutKillDelay,
       @Nullable SandboxfsProcess sandboxfsProcess,
       boolean sandboxfsMapSymlinkTargets,
       TreeDeleter treeDeleter)
@@ -140,9 +143,10 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     this.execRoot = cmdEnv.getExecRoot();
     this.allowNetwork = helpers.shouldAllowNetwork(cmdEnv.getOptions());
     this.alwaysWritableDirs = getAlwaysWritableDirs(cmdEnv.getRuntime().getFileSystem());
-    this.processWrapper = ProcessWrapper.fromCommandEnvironment(cmdEnv);
+    this.processWrapper = ProcessWrapperUtil.getProcessWrapper(cmdEnv);
     this.localEnvProvider = LocalEnvProvider.forCurrentOs(cmdEnv.getClientEnv());
     this.sandboxBase = sandboxBase;
+    this.timeoutKillDelay = timeoutKillDelay;
     this.sandboxfsProcess = sandboxfsProcess;
     this.sandboxfsMapSymlinkTargets = sandboxfsMapSymlinkTargets;
     this.treeDeleter = treeDeleter;
@@ -242,8 +246,11 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     final Path sandboxConfigPath = sandboxPath.getRelative("sandbox.sb");
     Duration timeout = context.getTimeout();
 
-    ProcessWrapper.CommandLineBuilder processWrapperCommandLineBuilder =
-        processWrapper.commandLineBuilder(spawn.getArguments()).setTimeout(timeout);
+    ProcessWrapperUtil.CommandLineBuilder processWrapperCommandLineBuilder =
+        ProcessWrapperUtil.commandLineBuilder(processWrapper.getPathString(), spawn.getArguments())
+            .setTimeout(timeout);
+
+    processWrapperCommandLineBuilder.setKillDelay(timeoutKillDelay);
 
     final Path statisticsPath;
     if (getSandboxOptions().collectLocalSandboxExecutionStatistics) {
