@@ -21,7 +21,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinPool;
 import smile.sort.QuickSelect;
@@ -97,41 +96,37 @@ public class MathEx {
      * for unconstrained nonlinear optimization problems.
      */
     public static final BFGS BFGS = new BFGS();
-
     /**
-     * This RNG is to generate the seeds for multi-threads.
-     * Each thread will use different seed and unlikely generates
-     * the correlated sequences with other threads.
+     * True when we create the first random number generator.
      */
-    private static Random seedRNG = new Random();
-
-    /**
-     * Used seeds.
-     */
-    private static HashSet<Long> seeds = new HashSet<>();
-
+    private static boolean firstRNG = true;
     /**
      * High quality random number generator.
      */
-    private static ThreadLocal<Random> random = new ThreadLocal<smile.math.Random>() {
-        protected synchronized Random initialValue() {
-            // For the first RNG, we use the default seed so that we can
-            // get repeatable results for random algorithms.
-            // Note that this may or may not be the main thread.
-            long seed = 19650218L;
+    private static ThreadLocal<smile.math.Random> random = new ThreadLocal<smile.math.Random>() {
+        protected synchronized smile.math.Random initialValue() {
+            if (firstRNG) {
+                // For the first RNG, we use the default seed so that we can
+                // get repeatable results for random algorithms.
+                // Note that this may or may not be the main thread.
+                firstRNG = false;
+                return new smile.math.Random();
 
-            // Make sure other threads not to use the same seed.
-            // This is very important for some algorithms such as random forest.
-            // Otherwise, all trees of random forest are same except the main thread one.
-            if (!seeds.isEmpty()) {
-                do {
-                    seed = probablePrime(19650218L, 256, seedRNG);
-                } while (seeds.contains(seed));
+            } else {
+                // Make sure other threads not to use the same seed.
+                // This is very important for some algorithms such as random forest.
+                // Otherwise, all trees of random forest are same except the main thread one.
+
+                java.security.SecureRandom sr = new java.security.SecureRandom();
+                byte[] bytes = sr.generateSeed(Long.BYTES);
+                long seed = 0;
+                for (int i = 0; i < Long.BYTES; i++) {
+                    seed <<= 8;
+                    seed |= (bytes[i] & 0xFF);
+                }
+
+                return new smile.math.Random(seed);
             }
-
-            logger.info(String.format("Set RNG seed %d for thread %s", seed, Thread.currentThread().getName()));
-            seeds.add(seed);
-            return new Random(seed);
         }
     };
 
@@ -293,75 +288,6 @@ public class MathEx {
     }
 
     /**
-     * Returns true if n is probably prime, false if it's definitely composite.
-     * This implements Miller-Rabin primality test.
-     * @param n an odd integer to be tested for primality
-     * @param k a parameter that determines the accuracy of the test
-     */
-    public static boolean isProbablePrime(long n, int k) {
-        return isProbablePrime(n, k, random.get());
-    }
-
-    /**
-     * Returns true if n is probably prime, false if it's definitely composite.
-     * This implements Miller-Rabin primality test.
-     * @param n an odd integer to be tested for primality
-     * @param k a parameter that determines the accuracy of the test
-     * @param rng random number generator
-     */
-    private static boolean isProbablePrime(long n, int k, Random rng) {
-        if (n <= 1 || n == 4)
-            return false;
-        if (n <= 3)
-            return true;
-
-        // Find r such that n = 2^d * r + 1 for some r >= 1
-        int s = 0;
-        long d = n - 1;
-        while (d % 2 == 0) {
-            s++;
-            d = d / 2;
-        }
-
-        for (int i = 0; i < k; i++) {
-            long a = 2 + rng.nextLong() % (n-4);
-            long x = power(a, d, n);
-            if (x == 1 || x == n -1)
-                continue;
-
-            int r = 0;
-            for (; r < s; r++) {
-                x = (x * x) % n;
-                if (x == 1) return false;
-                if (x == n - 1) break;
-            }
-
-            // None of the steps made x equal n-1.
-            if (r == s) return false;
-        }
-        return true;
-    }
-
-    /**
-     * Modular exponentiation (x^y) % p
-     */
-    private static long power(long x, long y, long p)
-    {
-        long res = 1;      // Initialize result
-        x = x % p;  // Update x if it is more than or
-        // equal to p
-        while (y > 0) {
-            // If y is odd, multiply x with result
-            if ((y & 1) == 1) res = (res*x) % p;
-
-            // y must be even now
-            y = y>>1; // y = y/2
-            x = (x*x) % p;
-        }
-        return res;
-    }
-
-    /**
      * Round a double vale to given digits such as 10^n, where n is a positive
      * or negative integer.
      */
@@ -438,51 +364,7 @@ public class MathEx {
      * Initialize the random generator with a seed.
      */
     public static void setSeed(long seed) {
-        if (seeds.isEmpty()) {
-            seedRNG.setSeed(seed);
-            random.get().setSeed(seed);
-            seeds.clear();
-            seeds.add(seed);
-        } else {
-            random.get().setSeed(seed);
-            seeds.add(seed);
-        }
-    }
-
-    /**
-     * Initialize the random generator with a random seed from a
-     * cryptographically strong random number generator.
-     */
-    public static void setSeed() {
-        java.security.SecureRandom sr = new java.security.SecureRandom();
-        byte[] bytes = sr.generateSeed(Long.BYTES);
-        long seed = 0;
-        for (int i = 0; i < Long.BYTES; i++) {
-            seed <<= 8;
-            seed |= (bytes[i] & 0xFF);
-        }
-
-        setSeed(seed);
-    }
-
-    /**
-     * Returns a probably prime number greater than n.
-     * @param n the returned value should be greater than n.
-     * @param k a parameter that determines the accuracy of the primality test
-     */
-    public static long probablePrime(long n, int k) {
-        return probablePrime(n, k, random.get());
-    }
-
-    /** Returns a probably prime number. */
-    private static long probablePrime(long n, int k, Random rng) {
-        long seed = n + rng.nextInt(899999963); // The largest prime less than 9*10^8
-        for (int i = 0; i < 4096; i++) {
-            if (isProbablePrime(seed, k, rng)) break;
-            seed = n + rng.nextInt(899999963);
-        }
-
-        return seed;
+        random.get().setSeed(seed);
     }
 
     /**
@@ -602,13 +484,6 @@ public class MathEx {
     }
 
     /**
-     * Returns a random long integer.
-     */
-    public static long randomLong() {
-        return random.get().nextLong();
-    }
-
-    /**
      * Returns a random integer in [0, n).
      */
     public static int randomInt(int n) {
@@ -659,65 +534,6 @@ public class MathEx {
         random.get().permutate(x);
     }
 
-    /**
-     * The softmax function without overflow. The function takes as
-     * an input vector of K real numbers, and normalizes it into a
-     * probability distribution consisting of K probabilities
-     * proportional to the exponentials of the input numbers.
-     * That is, prior to applying softmax, some vector components
-     * could be negative, or greater than one; and might not sum
-     * to 1; but after applying softmax, each component will be
-     * in the interval (0,1), and the components will add up to 1,
-     * so that they can be interpreted as probabilities. Furthermore,
-     * the larger input components will correspond to larger probabilities.
-     *
-     * @param posteriori the input/output vector.
-     * @return the index of largest component.
-     */
-    public static int softmax(double[] posteriori) {
-        return softmax(posteriori, posteriori.length);
-    }
-
-    /**
-     * The softmax function without overflow. The function takes as
-     * an input vector of K real numbers, and normalizes it into a
-     * probability distribution consisting of K probabilities
-     * proportional to the exponentials of the input numbers.
-     * That is, prior to applying softmax, some vector components
-     * could be negative, or greater than one; and might not sum
-     * to 1; but after applying softmax, each component will be
-     * in the interval (0,1), and the components will add up to 1,
-     * so that they can be interpreted as probabilities. Furthermore,
-     * the larger input components will correspond to larger probabilities.
-     *
-     * @param posteriori the input/output vector.
-     * @param k uses only first k components of input vector.
-     * @return the index of largest component.
-     */
-    public static int softmax(double[] posteriori, int k) {
-        int y = -1;
-        double max = Double.NEGATIVE_INFINITY;
-        for (int i = 0; i < k; i++) {
-            if (posteriori[i] > max) {
-                max = posteriori[i];
-                y = i;
-            }
-        }
-
-        double Z = 0.0;
-        for (int i = 0; i < k; i++) {
-            double out = Math.exp(posteriori[i] - max);
-            posteriori[i] = out;
-            Z += out;
-        }
-
-        for (int i = 0; i < k; i++) {
-            posteriori[i] /= Z;
-        }
-
-        return y;
-    }
-
     /** Combines the arguments to form a vector. */
     public static int[] c(int... x) {
         return x;
@@ -740,8 +556,7 @@ public class MathEx {
 
     /** Merges multiple vectors into one. */
     public static int[] c(int[]... list) {
-        int n = 0;
-        for (int[] x : list) n += x.length;
+        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
         int[] y = new int[n];
         int pos = 0;
         for (int[] x: list) {
@@ -753,8 +568,7 @@ public class MathEx {
 
     /** Merges multiple vectors into one. */
     public static float[] c(float[]... list) {
-        int n = 0;
-        for (float[] x : list) n += x.length;
+        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
         float[] y = new float[n];
         int pos = 0;
         for (float[] x: list) {
@@ -766,8 +580,7 @@ public class MathEx {
 
     /** Merges multiple vectors into one. */
     public static double[] c(double[]... list) {
-        int n = 0;
-        for (double[] x : list) n += x.length;
+        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
         double[] y = new double[n];
         int pos = 0;
         for (double[] x: list) {
@@ -779,8 +592,7 @@ public class MathEx {
 
     /** Concatenates multiple vectors into one array of strings. */
     public static String[] c(String[]... list) {
-        int n = 0;
-        for (String[] x : list) n += x.length;
+        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
         String[] y = new String[n];
         int pos = 0;
         for (String[] x: list) {
@@ -3411,9 +3223,7 @@ public class MathEx {
      * @return x<sup>n</sup>
      */
     public static double[] pow(double[] x, double n) {
-        double[] y = new double[x.length];
-        for (int i = 0; i < x.length; i++) y[i] = Math.pow(x[i], n);
-        return y;
+        return Arrays.stream(x).map(xi -> Math.pow(xi, n)).toArray();
     }
 
     /**
