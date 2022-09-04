@@ -95,7 +95,7 @@ public class HttpSecurityRecorder {
                     }
                 });
 
-                Uni<SecurityIdentity> potentialUser = authenticator.attemptAuthentication(event).cache();
+                Uni<SecurityIdentity> potentialUser = authenticator.attemptAuthentication(event);
                 if (proactiveAuthentication) {
                     potentialUser
                             .subscribe().withSubscriber(new UniSubscriber<SecurityIdentity>() {
@@ -183,7 +183,7 @@ public class HttpSecurityRecorder {
                                         }
                                     }
                                 }
-                            }).cache();
+                            });
                     event.put(QuarkusHttpUser.DEFERRED_IDENTITY_KEY, lazyUser);
                     event.next();
                 }
