@@ -43,7 +43,7 @@ public class SmallerMatcher implements StreamRuleMatcher {
             return false;
         }
 
-		return rule.getInverted() ^ (msgVal < ruleVal);
+		return msgVal < ruleVal;
 	}
 
 }
