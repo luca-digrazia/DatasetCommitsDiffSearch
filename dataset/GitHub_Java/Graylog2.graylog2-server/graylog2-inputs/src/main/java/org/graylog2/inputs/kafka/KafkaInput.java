@@ -17,7 +17,6 @@
 package org.graylog2.inputs.kafka;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.codecs.RadioMessageCodec;
@@ -67,14 +66,14 @@ public class KafkaInput extends MessageInput {
     }
 
     public static class Descriptor extends MessageInput.Descriptor {
-        @Inject
         public Descriptor() {
             super(NAME, false, "http://www.graylog2.org/resources/documentation/sending/kafka");
         }
     }
 
     public static class Config extends MessageInput.Config {
-        @Inject
+        public Config() { /* required by guice */ }
+        @AssistedInject
         public Config(KafkaTransport.Factory transport, RadioMessageCodec.Factory codec) {
             super(transport.getConfig(), codec.getConfig());
         }

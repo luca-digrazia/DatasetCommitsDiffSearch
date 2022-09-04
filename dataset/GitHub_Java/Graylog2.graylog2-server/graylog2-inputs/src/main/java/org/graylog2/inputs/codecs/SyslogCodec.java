@@ -61,7 +61,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -285,7 +284,7 @@ public class SyslogCodec implements Codec {
                 }
             } catch (Exception e) {
                 LOG.debug("Could not extract structured syslog", e);
-                return Collections.emptyMap();
+                return Maps.newHashMap();
             }
 
             return fields;

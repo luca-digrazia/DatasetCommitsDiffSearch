@@ -16,12 +16,13 @@
  */
 package org.graylog2.inputs.transports;
 
-import com.google.common.collect.Maps;
+import com.google.common.collect.Lists;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.ConfigClass;
 import org.graylog2.plugin.FactoryClass;
 import org.graylog2.plugin.LocalMetricRegistry;
+import org.graylog2.plugin.collections.Pair;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.BooleanField;
@@ -38,8 +39,7 @@ import org.jboss.netty.handler.codec.frame.DelimiterBasedFrameDecoder;
 
 import javax.inject.Named;
 import javax.inject.Provider;
-import java.util.LinkedHashMap;
-import java.util.concurrent.Callable;
+import java.util.List;
 import java.util.concurrent.Executor;
 
 import static org.jboss.netty.handler.codec.frame.Delimiters.lineDelimiter;
@@ -72,16 +72,11 @@ public class TcpTransport extends AbstractTcpTransport {
     }
 
     @Override
-    protected LinkedHashMap<String, Callable<? extends ChannelHandler>> getFinalChannelHandlers(MessageInput input) {
-        final LinkedHashMap<String, Callable<? extends ChannelHandler>> finalChannelHandlers = Maps.newLinkedHashMap();
+    protected List<Pair<String, ? extends ChannelHandler>> getFinalChannelHandlers(MessageInput input) {
+        final List<Pair<String, ? extends ChannelHandler>> finalChannelHandlers = Lists.newArrayList();
 
-        finalChannelHandlers.put("framer", new Callable<ChannelHandler>() {
-            @Override
-            public ChannelHandler call() throws Exception {
-                return new DelimiterBasedFrameDecoder(maxFrameLength, delimiter);
-            }
-        });
-        finalChannelHandlers.putAll(super.getFinalChannelHandlers(input));
+        finalChannelHandlers.add(Pair.of("framer", new DelimiterBasedFrameDecoder(maxFrameLength, delimiter)));
+        finalChannelHandlers.addAll(super.getFinalChannelHandlers(input));
 
         return finalChannelHandlers;
     }

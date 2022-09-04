@@ -17,7 +17,6 @@
 package org.graylog2.inputs.amqp;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.codecs.RadioMessageCodec;
@@ -63,14 +62,15 @@ public class AMQPInput extends MessageInput {
     }
 
     public static class Descriptor extends MessageInput.Descriptor {
-        @Inject
+        @AssistedInject
         public Descriptor() {
             super(NAME, false, "");
         }
     }
 
     public static class Config extends MessageInput.Config {
-        @Inject
+        public Config() { /* required by guice */ }
+        @AssistedInject
         public Config(AmqpTransport.Factory transport, RadioMessageCodec.Factory codec) {
             super(transport.getConfig(), codec.getConfig());
         }

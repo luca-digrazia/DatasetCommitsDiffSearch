@@ -21,15 +21,14 @@ import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.jayway.jsonpath.JsonPath;
-import org.graylog2.plugin.inputs.annotations.Codec;
-import org.graylog2.plugin.inputs.annotations.ConfigClass;
-import org.graylog2.plugin.inputs.annotations.FactoryClass;
+import org.graylog2.plugin.ConfigClass;
+import org.graylog2.plugin.FactoryClass;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.TextField;
-import org.graylog2.plugin.inputs.codecs.AbstractCodec;
+import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.graylog2.plugin.journal.RawMessage;
 
@@ -39,8 +38,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-@Codec(name = "jsonpath", displayName = "JSON Path")
-public class JsonPathCodec extends AbstractCodec {
+public class JsonPathCodec implements Codec {
 
     public static final String CK_PATH = "path";
     public static final String CK_SOURCE = "source";
@@ -50,7 +48,6 @@ public class JsonPathCodec extends AbstractCodec {
 
     @AssistedInject
     public JsonPathCodec(@Assisted Configuration configuration) {
-        super(configuration);
         this.configuration = configuration;
         if (configuration.stringIsSet(CK_PATH)) {
             jsonPath = JsonPath.compile(configuration.getString(CK_PATH));
@@ -115,8 +112,13 @@ public class JsonPathCodec extends AbstractCodec {
         return null;
     }
 
+    @Override
+    public String getName() {
+        return "JsonPath";
+    }
+
     @FactoryClass
-    public interface Factory extends AbstractCodec.Factory<JsonPathCodec> {
+    public interface Factory extends Codec.Factory<JsonPathCodec> {
         @Override
         JsonPathCodec create(Configuration configuration);
 
@@ -125,7 +127,7 @@ public class JsonPathCodec extends AbstractCodec {
     }
 
     @ConfigClass
-    public static class Config implements AbstractCodec.Config {
+    public static class Config implements Codec.Config {
         @Override
         public ConfigurationRequest getRequestedConfiguration() {
             final ConfigurationRequest r = new ConfigurationRequest();

@@ -46,11 +46,13 @@ public class GelfCodec implements Codec {
 
     private final GelfChunkAggregator aggregator;
     private final ObjectMapper objectMapper;
+    private final ConfigurationRequest requestedConfiguration;
 
     @Inject
-    public GelfCodec(@Assisted Configuration configuration, GelfChunkAggregator aggregator) {
+    public GelfCodec(@Assisted Configuration configuration, GelfChunkAggregator aggregator, Config config) {
         this.aggregator = aggregator;
         this.objectMapper = new ObjectMapper();
+        requestedConfiguration = config.getRequestedConfiguration();
         objectMapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
     }
 
