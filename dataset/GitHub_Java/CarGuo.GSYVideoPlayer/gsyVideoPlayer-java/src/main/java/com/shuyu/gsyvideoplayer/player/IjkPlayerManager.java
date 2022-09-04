@@ -6,7 +6,6 @@ import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Message;
-import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
 import android.view.Surface;
 
@@ -17,24 +16,20 @@ import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
 import com.shuyu.gsyvideoplayer.utils.RawDataSourceProvider;
 
-import java.io.FileDescriptor;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkLibLoader;
-import tv.danmaku.ijk.media.player.IjkMediaMeta;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
-import tv.danmaku.ijk.media.player.misc.IjkTrackInfo;
 
 /**
  * IJKPLayer
  * Created by guoshuyu on 2018/1/11.
  */
 
-public class IjkPlayerManager extends BasePlayerManager {
+public class IjkPlayerManager implements IPlayerManager {
 
     /**
      * log level
@@ -84,18 +79,9 @@ public class IjkPlayerManager extends BasePlayerManager {
             } else {
                 if (!TextUtils.isEmpty(url)) {
                     Uri uri = Uri.parse(url);
-                    if (uri != null && uri.getScheme() != null && uri.getScheme().equals(ContentResolver.SCHEME_ANDROID_RESOURCE)) {
+                    if (uri.getScheme().equals(ContentResolver.SCHEME_ANDROID_RESOURCE)) {
                         RawDataSourceProvider rawDataSourceProvider = RawDataSourceProvider.create(context, uri);
                         mediaPlayer.setDataSource(rawDataSourceProvider);
-                    } else if (uri != null && uri.getScheme() != null && uri.getScheme().equals(ContentResolver.SCHEME_CONTENT)) {
-                        ParcelFileDescriptor descriptor;
-                        try {
-                            descriptor = context.getContentResolver().openFileDescriptor(uri, "r");
-                            FileDescriptor fileDescriptor = descriptor.getFileDescriptor();
-                            mediaPlayer.setDataSource(fileDescriptor);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
                     } else {
                         mediaPlayer.setDataSource(url, gsyModel.getMapHeadData());
                     }
@@ -113,8 +99,6 @@ public class IjkPlayerManager extends BasePlayerManager {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        initSuccess(gsyModel);
     }
 
     @Override
@@ -167,12 +151,6 @@ public class IjkPlayerManager extends BasePlayerManager {
         }
     }
 
-    @Override
-    public void setVolume(float left, float right) {
-        if (mediaPlayer != null) {
-            mediaPlayer.setVolume(left, right);
-        }
-    }
 
     @Override
     public void releaseSurface() {
@@ -186,7 +164,6 @@ public class IjkPlayerManager extends BasePlayerManager {
     public void release() {
         if (mediaPlayer != null) {
             mediaPlayer.release();
-            mediaPlayer = null;
         }
     }
 
@@ -299,33 +276,6 @@ public class IjkPlayerManager extends BasePlayerManager {
     @Override
     public boolean isSurfaceSupportLockCanvas() {
         return true;
-    }
-
-
-    public IjkTrackInfo[] getTrackInfo() {
-        if (mediaPlayer != null) {
-            return mediaPlayer.getTrackInfo();
-        }
-        return null;
-    }
-
-    public int getSelectedTrack(int trackType) {
-        if (mediaPlayer != null) {
-            return mediaPlayer.getSelectedTrack(trackType);
-        }
-        return -1;
-    }
-
-    public void selectTrack(int track) {
-        if (mediaPlayer != null) {
-            mediaPlayer.selectTrack(track);
-        }
-    }
-
-    public void deselectTrack(int track) {
-        if (mediaPlayer != null) {
-            mediaPlayer.deselectTrack(track);
-        }
     }
 
     private void initIJKOption(IjkMediaPlayer ijkMediaPlayer, List<VideoOptionModel> optionModelList) {
