@@ -5,15 +5,19 @@ import java.net.URISyntaxException;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Optional;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
+import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.CacheControl;
 import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Variant;
 
 import org.jboss.resteasy.reactive.RestResponse;
+import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
+import org.jboss.resteasy.reactive.server.ServerRequestFilter;
 
 import io.smallrye.mutiny.Uni;
 
@@ -59,5 +63,51 @@ public class RestResponseResource {
     @Path("rest-response-uni")
     public RestResponse<Uni<String>> getUniString() {
         return RestResponse.ok(Uni.createFrom().item("Hello"));
+    }
+
+    @GET
+    @Path("rest-response-exception")
+    public String getRestResponseException() {
+        throw new UnknownCheeseException1("Cheddar");
+    }
+
+    @GET
+    @Path("uni-rest-response-exception")
+    public String getUniRestResponseException() {
+        throw new UnknownCheeseException2("Cheddar");
+    }
+
+    @ServerExceptionMapper
+    public RestResponse<String> mapException(UnknownCheeseException1 x) {
+        return RestResponse.status(Response.Status.NOT_FOUND, "Unknown cheese: " + x.name);
+    }
+
+    @ServerExceptionMapper
+    public Uni<RestResponse<String>> mapExceptionAsync(UnknownCheeseException2 x) {
+        return Uni.createFrom().item(RestResponse.status(Response.Status.NOT_FOUND, "Unknown cheese: " + x.name));
+    }
+
+    @ServerRequestFilter(preMatching = true)
+    public RestResponse<String> restResponseRequestFilter(ContainerRequestContext ctx) {
+        if (ctx.getUriInfo().getPath().equals("/rest-response-request-filter")) {
+            return RestResponse.ok("RestResponse request filter");
+        }
+        return null;
+    }
+
+    @ServerRequestFilter(preMatching = true)
+    public Optional<RestResponse<String>> optionalRestResponseRequestFilter(ContainerRequestContext ctx) {
+        if (ctx.getUriInfo().getPath().equals("/optional-rest-response-request-filter")) {
+            return Optional.of(RestResponse.ok("Optional<RestResponse> request filter"));
+        }
+        return Optional.empty();
+    }
+
+    @ServerRequestFilter(preMatching = true)
+    public Uni<RestResponse<String>> uniRestResponseRequestFilter(ContainerRequestContext ctx) {
+        if (ctx.getUriInfo().getPath().equals("/uni-rest-response-request-filter")) {
+            return Uni.createFrom().item(RestResponse.ok("Uni<RestResponse> request filter"));
+        }
+        return null;
     }
 }

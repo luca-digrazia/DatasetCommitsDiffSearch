@@ -1,7 +1,6 @@
 package org.jboss.resteasy.reactive.server;
 
 import io.smallrye.common.annotation.Blocking;
-import io.smallrye.safer.annotations.TargetMethod;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -12,9 +11,7 @@ import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.ResourceInfo;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Request;
-import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
-import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveContainerRequestContext;
 
 /**
  * When used on a method, then an implementation of {@link javax.ws.rs.container.ContainerRequestFilter} is generated
@@ -51,26 +48,27 @@ import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveContainerRequestCo
  * <li>{@link Request}
  * <li>{@link ResourceInfo}
  * <li>{@link SimpleResourceInfo}
- * <li>{@link ResteasyReactiveContainerRequestContext}
- * <li><tt>io.vertx.ext.web.RoutingContext</tt>
- * <li><tt>io.vertx.core.http.HttpServerRequest</tt>
  * </ul>
  *
- * The return type of the method must be either be of type {@code void}, {@code Response}, {@code Optional<Response>},
- * {@code Uni<Void>} or
- * {@code Uni<Response>}.
+ * The return type of the method must be either be of type {@code void}, {@code Response}, {@code RestResponse},
+ * {@code Optional<Response>}, {@code Optional<RestResponse>},
+ * {@code Uni<Void>}, {@code Uni<Response>} or
+ * {@code Uni<RestResponse>}.
  * <ul>
  * <li>{@code void} should be used when filtering does not need to perform any blocking operations and the filter cannot abort
  * processing.
- * <li>{@code Response} should be used when filtering does not need to perform any blocking operations and the filter cannot
+ * <li>{@code Response} or {@code RestResponse} should be used when filtering does not need to perform any blocking operations
+ * and the filter cannot
  * abort
  * processing - in this case the processing will be aborted if the response is not {@code null}.
- * <li>{@code Optional<Response>} should be used when filtering does not need to perform any blocking operations but the filter
+ * <li>{@code Optional<Response>} or {@code Optional<RestResponse>} should be used when filtering does not need to perform any
+ * blocking operations but the filter
  * might abort processing - in this case processing is aborted when the {@code Optional} contains a {@code Response} payload.
  * <li>{@code Uni<Void>} should be used when filtering needs to perform a blocking operations but the filter cannot abort
  * processing.
  * Note that {@code Uni<Void>} can easily be produced using: {@code Uni.createFrom().nullItem()}
- * <li>{@code Uni<Response>} should be used when filtering needs to perform a blocking operations and the filter
+ * <li>{@code Uni<Response>} or {@code Uni<RestResponse>} should be used when filtering needs to perform a blocking operations
+ * and the filter
  * might abort processing - in this case processing is aborted when the {@code Uni} contains a {@code Response} payload.
  * </ul>
  *
@@ -80,10 +78,6 @@ import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveContainerRequestCo
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-@TargetMethod(returnTypes = { void.class, Response.class, UniResponse.class, UniVoid.class,
-        OptionalResponse.class }, parameterTypes = {
-                ContainerRequestContext.class, UriInfo.class, HttpHeaders.class, Request.class,
-                ResourceInfo.class, SimpleResourceInfo.class, ResteasyReactiveContainerRequestContext.class })
 public @interface ServerRequestFilter {
 
     /**
