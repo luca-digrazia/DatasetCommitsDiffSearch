@@ -13,7 +13,6 @@ import javax.ws.rs.ext.MessageBodyReader;
 
 import io.quarkus.rest.runtime.core.Serialisers;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestResponse;
-import io.quarkus.rest.runtime.util.EmptyInputStream;
 
 /**
  * This is the Response class client response
@@ -23,12 +22,16 @@ public class QuarkusRestClientResponse extends QuarkusRestResponse {
 
     InvocationState invocationState;
 
-    @SuppressWarnings({ "unchecked" })
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     protected <T> T readEntity(Class<T> entityType, Type genericType, Annotation[] annotations) {
         // TODO: we probably need better state handling
-        if (entity != null && entityType.isInstance(entity)) {
+        if (hasEntity() && entityType.isInstance(getEntity())) {
             // Note that this works if entityType is InputStream where we return it without closing it, as per spec
-            return (T) entity;
+            return (T) getEntity();
+        }
+        // FIXME: does the spec really tell us to do this? sounds like a workaround for not having a string reader
+        if (hasEntity() && entityType.equals(String.class)) {
+            return (T) getEntity().toString();
         }
 
         checkClosed();
@@ -37,9 +40,8 @@ public class QuarkusRestClientResponse extends QuarkusRestResponse {
         // type
         // Note that this will get us the entity if it's an InputStream because setEntity checks that
         InputStream entityStream = getEntityStream();
-        if (entityStream == null) {
-            entityStream = new EmptyInputStream();
-        }
+        if (entityStream == null)
+            return null;
 
         // Spec says to return the input stream as-is, without closing it, if that's what we want
         if (InputStream.class.isAssignableFrom(entityType)) {
