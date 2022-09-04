@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,7 +16,6 @@
 package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
 import java.util.List;
 
 import javax.lang.model.element.Element;
@@ -53,9 +52,9 @@ public class ClickProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) {
 
-		EBeanHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
+		ActivityHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
 
 		String methodName = element.getSimpleName().toString();
 
@@ -64,7 +63,7 @@ public class ClickProcessor implements ElementProcessor {
 
 		boolean hasViewParameter = parameters.size() == 1;
 
-		List<JFieldRef> idRefs = extractClickQualifiedIds(element, holder);
+		JFieldRef idRef = extractClickQualifiedId(element, holder);
 
 		JDefinedClass onClickListenerClass = codeModel.anonymousClass(holder.refClass("android.view.View.OnClickListener"));
 		JMethod onClickMethod = onClickListenerClass.method(JMod.PUBLIC, codeModel.VOID, "onClick");
@@ -78,50 +77,29 @@ public class ClickProcessor implements ElementProcessor {
 		}
 
 		JBlock block = holder.afterSetContentView.body().block();
-		        
-        for (int i = 0 ; i < idRefs.size() ; i++) {
-        	JFieldRef idRef = idRefs.get(i);
 
-            JInvocation findViewById = JExpr.invoke("findViewById");
-        	JVar view = block.decl(viewClass, "view" + i, findViewById.arg(idRef));
-        	block._if(view.ne(JExpr._null()))._then().invoke(view, "setOnClickListener").arg(JExpr._new(onClickListenerClass));
-        }
+        JInvocation findViewById = JExpr.invoke("findViewById");
+        
+		JVar view = block.decl(viewClass, "view", findViewById.arg(idRef));
+		block._if(view.ne(JExpr._null()))._then().invoke(view, "setOnClickListener").arg(JExpr._new(onClickListenerClass));
 		
 	}
 
-	private List<JFieldRef> extractClickQualifiedIds(Element element, EBeanHolder holder) {
-		
-		List<JFieldRef> idRefs = new ArrayList<JFieldRef>();
+	private JFieldRef extractClickQualifiedId(Element element, ActivityHolder holder) {
 		Click annotation = element.getAnnotation(Click.class);
-		
 		int idValue = annotation.value();
-		int [] idsValues = annotation.ids();
 		IRInnerClass rInnerClass = rClass.get(Res.ID);
-		
-		if (idsValues.length != 0) {
-			
-			for(int id : idsValues) {
-				JFieldRef idRef = rInnerClass.getIdStaticRef(id, holder);
-				idRefs.add(idRef);
-			}
-			
-		} else if (idValue == Id.DEFAULT_VALUE) {
-			
+		if (idValue == Id.DEFAULT_VALUE) {
 			String fieldName = element.getSimpleName().toString();
 			int lastIndex = fieldName.lastIndexOf("Clicked");
-			
 			if (lastIndex != -1) {
 				fieldName = fieldName.substring(0, lastIndex);
 			}
-			
-			idRefs.add(rInnerClass.getIdStaticRef(fieldName, holder));
+			return rInnerClass.getIdStaticRef(fieldName, holder);
 
 		} else {
-
-			idRefs.add(rInnerClass.getIdStaticRef(idValue, holder));
-
+			return rInnerClass.getIdStaticRef(idValue, holder);
 		}
-		return idRefs;
 	}
 
 }
