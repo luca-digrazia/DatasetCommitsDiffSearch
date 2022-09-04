@@ -15,23 +15,20 @@ package net.starlark.java.cmd;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FileOptions;
+import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.SyntaxError;
 import java.io.BufferedReader;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.time.Duration;
-import java.util.List;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Module;
-import net.starlark.java.eval.Mutability;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.syntax.FileOptions;
-import net.starlark.java.syntax.ParserInput;
-import net.starlark.java.syntax.StarlarkFile;
-import net.starlark.java.syntax.Statement;
-import net.starlark.java.syntax.SyntaxError;
 
 /**
  * Main is a standalone interpreter for the core Starlark language. It does not yet support load
@@ -39,7 +36,7 @@ import net.starlark.java.syntax.SyntaxError;
  *
  * <p>The sad class name is due to the linting tool, which forbids lowercase "starlark", and Java's
  * lack of renaming imports, which makes the name "Starlark" impractical due to conflicts with
- * eval.Starlark.
+ * lib.syntax.Starlark.
  */
 class Main {
   private static final String START_PROMPT = ">> ";
@@ -60,45 +57,20 @@ class Main {
     thread.setPrintHandler((th, msg) -> System.out.println(msg));
   }
 
-  // Prompts the user for a chunk of input, and returns it.
   private static String prompt() {
     StringBuilder input = new StringBuilder();
     System.out.print(START_PROMPT);
     try {
       String lineSeparator = "";
-      loop:
       while (true) {
         String line = reader.readLine();
         if (line == null) {
           return null;
         }
         if (line.isEmpty()) {
-          break loop; // a blank line ends the chunk
+          return input.toString();
         }
         input.append(lineSeparator).append(line);
-
-        // Read lines until input produces valid statements, unless the last is if/def/for,
-        // which can be multiline, in which case we must wait for a blank line.
-        // TODO(adonovan): parse a compound statement, like the Python and
-        //   go.starlark.net REPLs. This requires a new grammar production, and
-        //   integration with the lexer so that it consumes new
-        //   lines only until the parse is complete.
-        StarlarkFile file = StarlarkFile.parse(ParserInput.fromString(input.toString(), "<stdin>"));
-        if (file.ok()) {
-          List<Statement> stmts = file.getStatements();
-          if (!stmts.isEmpty()) {
-            Statement last = stmts.get(stmts.size() - 1);
-            switch (last.kind()) {
-              case IF:
-              case DEF:
-              case FOR:
-                break; // keep going until blank line
-              default:
-                break loop;
-            }
-          }
-        }
-
         lineSeparator = "\n";
         System.out.print(CONTINUATION_PROMPT);
       }
@@ -106,7 +78,6 @@ class Main {
       System.err.format("Error reading line: %s\n", e);
       return null;
     }
-    return input.toString();
   }
 
   /** Provide a REPL evaluating Starlark code. */
@@ -114,6 +85,11 @@ class Main {
   private static void readEvalPrintLoop() {
     System.err.println("Welcome to Starlark (java.starlark.net)");
     String line;
+
+    // TODO(adonovan): parse a compound statement, like the Python and
+    // go.starlark.net REPLs. This requires a new grammar production, and
+    // integration with the lexer so that it consumes new
+    // lines only until the parse is complete.
 
     while ((line = prompt()) != null) {
       ParserInput input = ParserInput.fromString(line, "<stdin>");
