@@ -474,7 +474,6 @@ public final class AspectFunction implements SkyFunction {
                 associatedConfiguredTargetAndData.getTarget());
         toolchainContext =
             ResolvedToolchainContext.load(
-                targetPkg.getRepositoryMapping(),
                 unloadedToolchainContext,
                 targetDescription,
                 depValueMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));

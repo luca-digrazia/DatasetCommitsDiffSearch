@@ -197,7 +197,8 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
                 .put(
                     SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
                     new BlacklistedPackagePrefixesFunction(
-                        /*blacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT))
+                        /*hardcodedBlacklistedPackagePrefixes=*/ ImmutableSet.of(),
+                        /*additionalBlacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT))
                 .put(SkyFunctions.RESOLVED_HASH_VALUES, new ResolvedHashesFunction())
                 .build(),
             differencer);
