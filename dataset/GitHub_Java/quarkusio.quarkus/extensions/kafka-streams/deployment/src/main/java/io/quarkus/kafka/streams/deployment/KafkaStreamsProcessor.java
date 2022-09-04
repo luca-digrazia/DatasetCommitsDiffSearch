@@ -13,8 +13,6 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.Status;
 import org.rocksdb.util.Environment;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -25,7 +23,6 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.JniRuntimeAccessBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeReinitializedClassBuildItem;
@@ -44,7 +41,6 @@ class KafkaStreamsProcessor {
     @BuildStep
     void build(BuildProducer<FeatureBuildItem> feature,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
-            BuildProducer<JniRuntimeAccessBuildItem> jniRuntimeAccessibleClasses,
             BuildProducer<RuntimeReinitializedClassBuildItem> reinitialized,
             BuildProducer<NativeImageResourceBuildItem> nativeLibs,
             LaunchModeBuildItem launchMode,
@@ -53,7 +49,6 @@ class KafkaStreamsProcessor {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.KAFKA_STREAMS));
 
         registerClassesThatAreLoadedThroughReflection(reflectiveClasses, launchMode);
-        registerClassesThatAreAccessedViaJni(jniRuntimeAccessibleClasses);
         addSupportForRocksDbLib(nativeLibs, config);
         enableLoadOfNativeLibs(reinitialized);
     }
@@ -108,11 +103,6 @@ class KafkaStreamsProcessor {
         if (!allDefaultSerdesAreDefinedInProperties(defaultKeySerdeClass, defaultValueSerdeClass)) {
             registerDefaultSerde(reflectiveClasses);
         }
-    }
-
-    private void registerClassesThatAreAccessedViaJni(BuildProducer<JniRuntimeAccessBuildItem> jniRuntimeAccessibleClasses) {
-        jniRuntimeAccessibleClasses
-                .produce(new JniRuntimeAccessBuildItem(true, false, false, RocksDBException.class, Status.class));
     }
 
     private void addSupportForRocksDbLib(BuildProducer<NativeImageResourceBuildItem> nativeLibs, NativeConfig nativeConfig) {
