@@ -16,20 +16,14 @@ public class ServerLimitsConfig {
 
     /**
      * The maximum size of a request body.
+     * Default: no limit.
      */
-    @ConfigItem(defaultValue = "10240K")
+    @ConfigItem
     public Optional<MemorySize> maxBodySize;
 
     /**
      * The max HTTP chunk size
      */
-    @ConfigItem(defaultValue = "8192")
-    public MemorySize maxChunkSize;
-
-    /**
-     * The maximum length of the initial line (e.g. {@code "GET / HTTP/1.0"}).
-     */
-    @ConfigItem(defaultValue = "4096")
-    public int maxInitialLineLength;
-
+    @ConfigItem
+    public Optional<MemorySize> maxChunkSize;
 }
