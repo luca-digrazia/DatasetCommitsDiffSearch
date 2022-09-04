@@ -85,8 +85,7 @@ public final class AmazonLambdaProcessor {
         List<AmazonLambdaBuildItem> ret = new ArrayList<>();
         for (AmazonLambdaClassNameBuildItem i : items) {
             ret.add(new AmazonLambdaBuildItem(i.getClassName(),
-                    template.discoverParameterTypes(
-                            (Class<? extends RequestHandler<?, ?>>) context.classProxy(i.getClassName()))));
+                    template.discoverParameterTypes((Class<? extends RequestHandler>) context.classProxy(i.getClassName()))));
         }
         return ret;
     }
@@ -120,8 +119,7 @@ public final class AmazonLambdaProcessor {
         }
         AmazonLambdaBuildItem lambda = lambdas.get(0);
 
-        template.start((Class<? extends RequestHandler<?, ?>>) context.classProxy(lambda.getHandlerClass()),
-                shutdownContextBuildItem,
+        template.start((Class<? extends RequestHandler>) context.classProxy(lambda.getHandlerClass()), shutdownContextBuildItem,
                 lambda.getTargetType(), beanContainerBuildItem.getValue());
 
     }
