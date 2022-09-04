@@ -23,7 +23,6 @@ import java.util.UUID;
 
 import javax.inject.Inject;
 import javax.persistence.EntityManager;
-import javax.persistence.EntityTransaction;
 import javax.persistence.TypedQuery;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
@@ -41,10 +40,10 @@ import javax.transaction.UserTransaction;
 public class JPATestEMInjectionEndpoint extends HttpServlet {
 
     @Inject
-    private EntityManager em;
+    EntityManager em;
 
     @Inject
-    private UserTransaction transaction;
+    UserTransaction transaction;
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -55,7 +54,6 @@ public class JPATestEMInjectionEndpoint extends HttpServlet {
         }
         resp.getWriter().write("OK");
     }
-
 
     public void testStoreLoadOnJPA() throws Exception {
         doStuffWithHibernate();
@@ -99,10 +97,6 @@ public class JPATestEMInjectionEndpoint extends HttpServlet {
 
     private static String randomName() {
         return UUID.randomUUID().toString();
-    }
-
-    private void reportException(final Exception e, final HttpServletResponse resp) throws IOException {
-        reportException(null, e, resp);
     }
 
     private void reportException(String errorMessage, final Exception e, final HttpServletResponse resp) throws IOException {

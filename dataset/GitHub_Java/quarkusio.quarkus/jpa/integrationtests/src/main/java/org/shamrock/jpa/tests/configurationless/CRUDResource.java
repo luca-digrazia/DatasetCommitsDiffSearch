@@ -3,7 +3,6 @@ package org.shamrock.jpa.tests.configurationless;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
 import javax.transaction.Transactional;
 import javax.transaction.UserTransaction;
 import javax.ws.rs.GET;
@@ -21,7 +20,7 @@ import java.util.Map;
 public class CRUDResource {
 
     @Inject
-    private EntityManager em;
+    EntityManager em;
 
     @Inject
     UserTransaction transaction;
