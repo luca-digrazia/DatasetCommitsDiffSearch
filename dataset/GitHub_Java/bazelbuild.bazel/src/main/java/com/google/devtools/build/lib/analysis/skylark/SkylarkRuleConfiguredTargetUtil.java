@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.skylark;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -31,10 +30,9 @@ import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
 import com.google.devtools.build.lib.analysis.Whitelist;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.FunctionSplitTransitionWhitelist;
@@ -260,14 +258,13 @@ public final class SkylarkRuleConfiguredTargetUtil {
         new InstrumentationSpec(fileTypeSet)
             .withSourceAttributes(sourceAttributes.toArray(new String[0]))
             .withDependencyAttributes(dependencyAttributes.toArray(new String[0]));
-    InstrumentedFilesInfo instrumentedFilesProvider =
+    InstrumentedFilesProvider instrumentedFilesProvider =
         InstrumentedFilesCollector.collect(
             ruleContext,
             instrumentationSpec,
             InstrumentedFilesCollector.NO_METADATA_COLLECTOR,
-            /* rootFiles= */ Collections.emptySet(),
-            /* reportedToActualSources= */ NestedSetBuilder.create(Order.STABLE_ORDER));
-    builder.addNativeDeclaredProvider(instrumentedFilesProvider);
+            Collections.<Artifact>emptySet());
+    builder.addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider);
   }
 
   public static NestedSet<Artifact> convertToOutputGroupValue(Location loc, String outputGroup,
@@ -492,16 +489,6 @@ public final class SkylarkRuleConfiguredTargetUtil {
                   executable.getRootRelativePathString())
           );
         }
-    }
-
-    if (context.getRuleContext().getRule().isAnalysisTest()) {
-      // The Starlark Build API should already throw exception if the rule implementation attempts
-      // to register any actions. This is just a sanity check of this invariant.
-      Preconditions.checkState(
-          context.getRuleContext().getAnalysisEnvironment().getRegisteredActions().isEmpty(),
-          "%s", context.getRuleContext().getLabel());
-
-      executable = context.getRuleContext().createOutputArtifactScript();
     }
 
     if (executable == null && context.isExecutable()) {
