@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.cache.Cache;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigurations;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -32,6 +33,7 @@ public interface ConfigurationCollectionFactory {
    * configurations during a build should be accessible from this top-level configuration via
    * configuration transitions.
    *
+   * @param configurationFactory the configuration factory
    * @param cache a cache for BuildConfigurations
    * @param loadedPackageProvider the package provider
    * @param buildOptions top-level build options representing the command-line
@@ -42,6 +44,7 @@ public interface ConfigurationCollectionFactory {
    */
   @Nullable
   BuildConfiguration createConfigurations(
+      ConfigurationFactory configurationFactory,
       Cache<String, BuildConfiguration> cache,
       PackageProviderForConfigurations loadedPackageProvider,
       BuildOptions buildOptions,
