@@ -21,7 +21,6 @@ import org.glassfish.jersey.server.monitoring.ApplicationEvent;
 import org.glassfish.jersey.server.monitoring.ApplicationEventListener;
 import org.glassfish.jersey.server.monitoring.RequestEvent;
 import org.glassfish.jersey.server.monitoring.RequestEventListener;
-import org.glassfish.jersey.server.validation.ValidationFeature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +34,7 @@ public class DropwizardResourceConfig extends ResourceConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(DropwizardResourceConfig.class);
     private static final String NEWLINE = String.format("%n");
 
-    private String urlPattern = "/*";
+    private String urlPattern;
 
     public DropwizardResourceConfig(MetricRegistry metricRegistry) {
         this(false, metricRegistry);
@@ -53,6 +52,8 @@ public class DropwizardResourceConfig extends ResourceConfig {
             metricRegistry = new MetricRegistry();
         }
 
+        urlPattern = "/*";
+
         property(ServerProperties.WADL_FEATURE_DISABLE, Boolean.TRUE);
         if (!testOnly) {
             // create a subclass to pin it to Throwable
@@ -63,7 +64,7 @@ public class DropwizardResourceConfig extends ResourceConfig {
         register(OptionalMessageBodyWriter.class);
         register(OptionalParamFeature.class);
         register(new SessionFactoryProvider.Binder());
-        register(ValidationFeature.class);
+        EncodingFilter.enableFor(this, GZipEncoder.class);
     }
 
     public static DropwizardResourceConfig forTesting(MetricRegistry metricRegistry) {
