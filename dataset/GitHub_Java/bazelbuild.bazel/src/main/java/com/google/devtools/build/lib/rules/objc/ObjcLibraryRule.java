@@ -41,7 +41,6 @@ public class ObjcLibraryRule implements RuleDefinition {
         .setImplicitOutputsFunction(CompilationSupport.FULLY_LINKED_LIB)
         .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
         .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
-        .useToolchainTransition(true)
         .build();
   }
 
@@ -50,11 +49,8 @@ public class ObjcLibraryRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("objc_library")
         .factoryClass(ObjcLibrary.class)
-        .ancestors(
-            BaseRuleClasses.NativeBuildRule.class,
-            ObjcRuleClasses.CompilingRule.class,
-            ObjcRuleClasses.AlwaysLinkRule.class,
-            BaseRuleClasses.MakeVariableExpandingRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.CompilingRule.class,
+            ObjcRuleClasses.AlwaysLinkRule.class, BaseRuleClasses.MakeVariableExpandingRule.class)
         .build();
   }
 }

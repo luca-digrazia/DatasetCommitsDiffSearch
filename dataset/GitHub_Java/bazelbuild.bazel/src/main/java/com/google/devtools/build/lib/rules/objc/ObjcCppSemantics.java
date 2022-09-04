@@ -24,7 +24,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationContextInfo;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
@@ -121,13 +121,13 @@ public class ObjcCppSemantics implements CppSemantics {
   }
 
   @Override
-  public void setupCcCompilationContext(
-      RuleContext ruleContext, CcCompilationContext.Builder ccCompilationContextBuilder) {
+  public void setupCcCompilationContextInfo(
+      RuleContext ruleContext, CcCompilationContextInfo.Builder ccCompilationContextInfoBuilder) {
     // The genfiles root of each child configuration must be added to the compile action so that
     // generated headers can be resolved.
     for (PathFragment iquotePath :
         ObjcCommon.userHeaderSearchPaths(objcProvider, ruleContext.getConfiguration())) {
-      ccCompilationContextBuilder.addQuoteIncludeDir(iquotePath);
+      ccCompilationContextInfoBuilder.addQuoteIncludeDir(iquotePath);
     }
   }
 
@@ -140,7 +140,7 @@ public class ObjcCppSemantics implements CppSemantics {
   public HeadersCheckingMode determineHeadersCheckingMode(RuleContext ruleContext) {
     // Currently, objc builds do not enforce strict deps.  To begin enforcing strict deps in objc,
     // switch this flag to STRICT.
-    return HeadersCheckingMode.LOOSE;
+    return HeadersCheckingMode.WARN;
   }
 
   @Override
@@ -168,12 +168,12 @@ public class ObjcCppSemantics implements CppSemantics {
   }
 
   /**
-   * Gets the purpose for the {@code CcCompilationContext}.
+   * Gets the purpose for the {@code CcCompilationContextInfo}.
    *
-   * @see CcCompilationContext.Builder#setPurpose
+   * @see CcCompilationContextInfo.Builder#setPurpose
    */
   public String getPurpose() {
-    // ProtoSupport creates multiple {@code CcCompilationContext}s for a single rule,
+    // ProtoSupport creates multiple {@code CcCompilationContextInfo}s for a single rule,
     // potentially
     // multiple archives per build configuration. This covers that worst case.
     return "ObjcCppSemantics_build_arch_"

@@ -19,15 +19,16 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.starlarkbuildapi.apple.AppleDebugOutputsApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import java.util.HashMap;
 import java.util.Map;
-import net.starlark.java.eval.Dict;
 
 /**
  * A provider that holds debug outputs of an Apple binary rule.
  *
- * <p>This provider has no native interface and is intended to be read in Starlark code.
+ * <p>This provider has no native interface and is intended to be read in Skylark code.
  *
  * <p>The only field it has is {@code output_map}, which is a dictionary of: { arch: { output_type:
  * Artifact, output_type: Artifact, ... } }
@@ -39,8 +40,12 @@ import net.starlark.java.eval.Dict;
  * <p>Example: { "arm64": { "bitcode_symbols": Artifact, "dsym_binary": Artifact } }
  */
 @Immutable
-public final class AppleDebugOutputsInfo extends NativeInfo
-    implements AppleDebugOutputsApi<Artifact> {
+@SkylarkModule(
+    name = "AppleDebugOutputs",
+    category = SkylarkModuleCategory.PROVIDER,
+    doc = "A provider that holds debug outputs of an apple_binary target."
+)
+public final class AppleDebugOutputsInfo extends NativeInfo {
 
   /** Expected types of debug outputs. */
   enum OutputType {
@@ -60,14 +65,15 @@ public final class AppleDebugOutputsInfo extends NativeInfo
     }
   }
 
-  /** Starlark name for the AppleDebugOutputsInfo. */
-  public static final String STARLARK_NAME = "AppleDebugOutputs";
+  /** Skylark name for the AppleDebugOutputsInfo. */
+  public static final String SKYLARK_NAME = "AppleDebugOutputs";
 
-  /** Starlark constructor and identifier for AppleDebugOutputsInfo. */
-  public static final NativeProvider<AppleDebugOutputsInfo> STARLARK_CONSTRUCTOR =
-      new NativeProvider<AppleDebugOutputsInfo>(AppleDebugOutputsInfo.class, STARLARK_NAME) {};
+  /** Skylark constructor and identifier for AppleDebugOutputsInfo. */
+  public static final NativeProvider<AppleDebugOutputsInfo> SKYLARK_CONSTRUCTOR =
+      new NativeProvider<AppleDebugOutputsInfo>(
+          AppleDebugOutputsInfo.class, SKYLARK_NAME) {};
 
-  private final ImmutableMap<String, Dict<String, Artifact>> outputsMap;
+  private final ImmutableMap<String, ImmutableMap<String, Artifact>> outputsMap;
 
   /**
    * Creates a new provider instance.
@@ -84,14 +90,22 @@ public final class AppleDebugOutputsInfo extends NativeInfo
    *       <li>output_type - an instance of {@link OutputType}
    *     </ul>
    */
-  private AppleDebugOutputsInfo(ImmutableMap<String, Dict<String, Artifact>> map) {
-    super(STARLARK_CONSTRUCTOR);
+  private AppleDebugOutputsInfo(ImmutableMap<String, ImmutableMap<String, Artifact>> map) {
+    super(SKYLARK_CONSTRUCTOR);
     this.outputsMap = map;
   }
 
-  /** Returns the multi-architecture dylib binary that apple_binary created. */
-  @Override
-  public ImmutableMap<String, Dict<String, Artifact>> getOutputsMap() {
+  /**
+   * Returns the multi-architecture dylib binary that apple_binary created.
+   */
+  @SkylarkCallable(name = "outputs_map",
+      structField = true,
+      doc = "A dictionary of: { arch: { output_type: file, output_type: file, ... } }, "
+          + "where 'arch' is any Apple architecture such as 'arm64' or 'armv7', 'output_type' is "
+          + "a string descriptor such as 'bitcode_symbols' or 'dsym_binary', and the file is the "
+          + "file matching that descriptor for that architecture."
+  )
+  public ImmutableMap<String, ImmutableMap<String, Artifact>> getOutputsMap() {
     return outputsMap;
   }
 
@@ -121,10 +135,10 @@ public final class AppleDebugOutputsInfo extends NativeInfo
     }
 
     public AppleDebugOutputsInfo build() {
-      ImmutableMap.Builder<String, Dict<String, Artifact>> builder = ImmutableMap.builder();
+      ImmutableMap.Builder<String, ImmutableMap<String, Artifact>> builder = ImmutableMap.builder();
 
       for (Map.Entry<String, HashMap<String, Artifact>> e : outputsByArch.entrySet()) {
-        builder.put(e.getKey(), Dict.immutableCopyOf(e.getValue()));
+        builder.put(e.getKey(), ImmutableMap.copyOf(e.getValue()));
       }
 
       return new AppleDebugOutputsInfo(builder.build());

@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,48 +15,54 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
-import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.ObjcSdkFrameworksRule;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /**
  * Rule definition for objc_framework.
  */
-@BlazeRule(name = "objc_framework",
-    factoryClass = ObjcFramework.class,
-    ancestors = { BaseRuleClasses.BaseRule.class, ObjcSdkFrameworksRule.class})
 public class ObjcFrameworkRule implements RuleDefinition {
 
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
+        .requiresConfigurationFragments(ObjcConfiguration.class)
         /* <!-- #BLAZE_RULE(objc_framework).ATTRIBUTE(framework_imports) -->
         The list of files under a <code>.framework</code> directory which are
         provided to Objective-C targets that depend on this target.
-        <i>(List of <a href="build-ref.html#labels">labels</a>; required)</i>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("framework_imports", LABEL_LIST)
-            .allowedFileTypes(FileTypeSet.ANY_FILE)
-            .mandatory()
-            .nonEmpty())
+        .add(
+            attr("framework_imports", LABEL_LIST)
+                .allowedFileTypes(FileTypeSet.ANY_FILE)
+                .mandatory()
+                .nonEmpty())
+        /* <!-- #BLAZE_RULE(objc_framework).ATTRIBUTE(is_dynamic) -->
+        Indicates whether this framework is linked dynamically. If this attribute is set, the
+        framework will be copied into the final application bundle.
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("is_dynamic", Type.BOOLEAN).value(false))
+        .build();
+  }
+
+  @Override
+  public Metadata getMetadata() {
+    return RuleDefinition.Metadata.builder()
+        .name("objc_framework")
+        .factoryClass(ObjcFramework.class)
+        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.SdkFrameworksDependerRule.class)
         .build();
   }
 }
 
 /*<!-- #BLAZE_RULE (NAME = objc_framework, TYPE = LIBRARY, FAMILY = Objective-C) -->
 
-${ATTRIBUTE_SIGNATURE}
-
 <p>This rule encapsulates an already-built framework. It is defined by a list
 of files in one or more <code>.framework</code> directories.
-
-${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/

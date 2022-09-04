@@ -78,17 +78,17 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
             attr(PORTABLE_PROTO_FILTERS_ATTR, LABEL_LIST)
                 .legacyAllowAnyFileType()
                 .allowedRuleClasses("filegroup")
-                .cfg(HostTransition.createFactory()))
+                .cfg(HostTransition.INSTANCE))
         .add(
             attr(PROTO_COMPILER_ATTR, LABEL)
                 .allowedFileTypes(FileType.of(".py"), FileType.of(".sh"))
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .singleArtifact()
                 .value(env.getToolsLabel("//tools/objc:protobuf_compiler_wrapper")))
         .add(
             attr(PROTO_COMPILER_SUPPORT_ATTR, LABEL)
                 .legacyAllowAnyFileType()
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(env.getToolsLabel("//tools/objc:protobuf_compiler_support")))
         .add(
             attr(PROTO_LIB_ATTR, LABEL)

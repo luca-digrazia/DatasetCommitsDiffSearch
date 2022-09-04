@@ -18,14 +18,11 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 
 /** Rule definition for apple_stub_binary. */
@@ -34,7 +31,7 @@ public class AppleStubBinaryRule implements RuleDefinition {
   public static final String XCENV_BASED_PATH_ATTR = "xcenv_based_path";
 
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     MultiArchSplitTransitionProvider splitTransitionProvider =
         new MultiArchSplitTransitionProvider();
     return builder
@@ -51,8 +48,7 @@ public class AppleStubBinaryRule implements RuleDefinition {
         .add(
             attr("deps", LABEL_LIST)
                 .direct_compile_time_input()
-                .mandatoryNativeProviders(
-                    ImmutableList.<Class<? extends TransitiveInfoProvider>>of(ObjcProvider.class))
+                .mandatoryProviders(ObjcProvider.SKYLARK_CONSTRUCTOR.id())
                 .allowedFileTypes()
                 .cfg(splitTransitionProvider))
         /*<!-- #BLAZE_RULE(apple_stub_binary).IMPLICIT_OUTPUTS -->

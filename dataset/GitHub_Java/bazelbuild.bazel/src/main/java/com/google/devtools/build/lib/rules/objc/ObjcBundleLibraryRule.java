@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,54 +14,39 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
-
-import com.google.devtools.build.lib.analysis.BlazeRule;
+import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 
 /**
  * Rule definition for objc_bundle_library.
  */
-@BlazeRule(name = "objc_bundle_library",
-    factoryClass = ObjcBundleLibrary.class,
-    ancestors = { ObjcRuleClasses.ObjcBaseResourcesRule.class,
-                  ObjcRuleClasses.ObjcHasInfoplistRule.class })
 public class ObjcBundleLibraryRule implements RuleDefinition {
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     return builder
-        /*<!-- #BLAZE_RULE(objc_bundle_library).IMPLICIT_OUTPUTS -->
-        <ul>
-         <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: An Xcode project file which
-         can be used to develop or build on a Mac.</li>
-        </ul>
-        <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
-        .setImplicitOutputsFunction(ImplicitOutputsFunction.fromFunctions(XcodeSupport.PBXPROJ))
-        /* <!-- #BLAZE_RULE(objc_bundle_library).ATTRIBUTE(bundles) -->
-        The list of bundle targets that this target requires to be included in the final bundle.
-        ${SYNOPSIS}
-        <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("bundles", LABEL_LIST)
-            .direct_compile_time_input()
-            .allowedRuleClasses("objc_bundle", "objc_bundle_library")
-            .allowedFileTypes())
+        .requiresConfigurationFragments(ObjcConfiguration.class, AppleConfiguration.class)
+        .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
+        .build();
+  }
+
+  @Override
+  public Metadata getMetadata() {
+    return RuleDefinition.Metadata.builder()
+        .name("objc_bundle_library")
+        .factoryClass(ObjcBundleLibrary.class)
+        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.ResourcesRule.class,
+            ObjcRuleClasses.BundlingRule.class)
         .build();
   }
 }
 
 /*<!-- #BLAZE_RULE (NAME = objc_bundle_library, TYPE = LIBRARY, FAMILY = Objective-C) -->
 
-${ATTRIBUTE_SIGNATURE}
-
 <p>This rule encapsulates a library which is provided to dependers as a bundle.
 A <code>objc_bundle_library</code>'s resources are put in a nested bundle in
 the final iOS application.
-
-${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/

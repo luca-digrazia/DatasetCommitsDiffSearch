@@ -20,6 +20,7 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
@@ -56,7 +57,10 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
         ImmutableList.of("$(SDKROOT)", "$(PLATFORM_DIR)");
 
     public XcenvBasedPathVariableContext(RuleContext ruleContext, ApplePlatform platform) {
-      super(ruleContext, ruleContext.getRule().getPackage(), ruleContext.getConfiguration());
+      super(
+          ImmutableMap.<String, String>of(),
+          ruleContext.getRule().getPackage(),
+          ruleContext.getConfiguration());
       this.ruleContext = ruleContext;
       this.platform = platform;
     }
