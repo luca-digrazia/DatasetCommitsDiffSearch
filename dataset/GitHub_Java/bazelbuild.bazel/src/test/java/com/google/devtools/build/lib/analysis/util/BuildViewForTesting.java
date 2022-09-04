@@ -85,13 +85,11 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.SkyFunctionEnvironmentForTesting;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.StarlarkBuiltinsValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.skyframe.ToolchainContextKey;
 import com.google.devtools.build.lib.skyframe.ToolchainException;
 import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
-import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException;
 import java.util.Collection;
@@ -105,7 +103,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Mutability;
 
 /**
  * A util class that contains all the helper stuff previously in BuildView that only exists to give
@@ -153,7 +150,6 @@ public class BuildViewForTesting {
       TargetPatternPhaseValue loadingResult,
       BuildOptions targetOptions,
       Set<String> multiCpu,
-      ImmutableSet<String> explicitTargetPatterns,
       List<String> aspects,
       AnalysisOptions viewOptions,
       boolean keepGoing,
@@ -166,7 +162,6 @@ public class BuildViewForTesting {
         loadingResult,
         targetOptions,
         multiCpu,
-        explicitTargetPatterns,
         aspects,
         viewOptions,
         keepGoing,
@@ -336,7 +331,9 @@ public class BuildViewForTesting {
         getConfigurableAttributeKeysForTesting(
             eventHandler,
             ctgNode,
-            toolchainContexts == null ? null : toolchainContexts.getTargetPlatform()),
+            toolchainContexts == null
+                ? null
+                : toolchainContexts.getDefaultToolchainContext().targetPlatform()),
         toolchainContexts,
         DependencyResolver.shouldUseToolchainTransition(configuration, target),
         ruleClassProvider.getTrimmingTransitionFactory());
@@ -474,12 +471,7 @@ public class BuildViewForTesting {
           StarlarkTransition.TransitionException, InvalidExecGroupException {
     BuildConfiguration targetConfig =
         skyframeExecutor.getConfiguration(eventHandler, target.getConfigurationKey());
-    SkyFunction.Environment skyframeEnv =
-        skyframeExecutor.getSkyFunctionEnvironmentForTesting(eventHandler);
-    StarlarkBuiltinsValue starlarkBuiltinsValue =
-        (StarlarkBuiltinsValue)
-            Preconditions.checkNotNull(skyframeEnv.getValue(StarlarkBuiltinsValue.key()));
-    CachingAnalysisEnvironment analysisEnv =
+    CachingAnalysisEnvironment env =
         new CachingAnalysisEnvironment(
             getArtifactFactory(),
             skyframeExecutor.getActionKeyContext(),
@@ -491,9 +483,8 @@ public class BuildViewForTesting {
             targetConfig.extendedSanityChecks(),
             targetConfig.allowAnalysisFailures(),
             eventHandler,
-            skyframeEnv,
-            starlarkBuiltinsValue);
-    return getRuleContextForTesting(eventHandler, target, analysisEnv, configurations);
+            skyframeExecutor.getSkyFunctionEnvironmentForTesting(eventHandler));
+    return getRuleContextForTesting(eventHandler, target, env, configurations);
   }
 
   /**
@@ -528,12 +519,11 @@ public class BuildViewForTesting {
         skyframeExecutor.getSkyFunctionEnvironmentForTesting(eventHandler);
 
     Map<String, ToolchainContextKey> toolchainContextKeys = new HashMap<>();
-    BuildConfigurationValue.Key configurationKey = BuildConfigurationValue.key(targetConfig);
     for (Map.Entry<String, ExecGroup> execGroup : execGroups.entrySet()) {
       toolchainContextKeys.put(
           execGroup.getKey(),
           ToolchainContextKey.key()
-              .configurationKey(configurationKey)
+              .configurationKey(BuildConfigurationValue.key(targetConfig))
               .requiredToolchainTypeLabels(execGroup.getValue().requiredToolchains())
               .build());
     }
@@ -541,7 +531,7 @@ public class BuildViewForTesting {
     toolchainContextKeys.put(
         targetUnloadedToolchainContextKey,
         ToolchainContextKey.key()
-            .configurationKey(configurationKey)
+            .configurationKey(BuildConfigurationValue.key(targetConfig))
             .requiredToolchainTypeLabels(requiredToolchains)
             .build());
 
@@ -599,9 +589,6 @@ public class BuildViewForTesting {
                 .setConfiguredTarget(configuredTarget)
                 .setConfigurationKey(configuredTarget.getConfigurationKey())
                 .build())
-        .setToolsRepository(ruleClassProvider.getToolsRepository())
-        .setStarlarkSemantics(env.getStarlarkSemantics())
-        .setMutability(Mutability.create("configured target"))
         .setVisibility(
             NestedSetBuilder.create(
                 Order.STABLE_ORDER,

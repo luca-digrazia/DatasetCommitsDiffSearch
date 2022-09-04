@@ -1350,7 +1350,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   public void preparePackageLoading(
       PathPackageLocator pkgLocator,
       PackageOptions packageOptions,
-      BuildLanguageOptions buildLanguageOptions,
+      BuildLanguageOptions starlarkSemanticsOptions,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm) {
@@ -1365,7 +1365,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     setShowLoadingProgress(packageOptions.showLoadingProgress);
     setDefaultVisibility(packageOptions.defaultVisibility);
 
-    StarlarkSemantics starlarkSemantics = getEffectiveStarlarkSemantics(buildLanguageOptions);
+    StarlarkSemantics starlarkSemantics = getEffectiveStarlarkSemantics(starlarkSemanticsOptions);
     setStarlarkSemantics(starlarkSemantics);
     setSiblingDirectoryLayout(
         starlarkSemantics.getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
@@ -1399,8 +1399,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   }
 
   public StarlarkSemantics getEffectiveStarlarkSemantics(
-      BuildLanguageOptions buildLanguageOptions) {
-    return buildLanguageOptions.toStarlarkSemantics();
+      BuildLanguageOptions starlarkSemanticsOptions) {
+    return starlarkSemanticsOptions.toStarlarkSemantics();
   }
 
   private void setPackageLocator(PathPackageLocator pkgLocator) {
@@ -2637,7 +2637,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       ExtendedEventHandler eventHandler,
       PackageOptions packageOptions,
       PathPackageLocator pathPackageLocator,
-      BuildLanguageOptions buildLanguageOptions,
+      BuildLanguageOptions starlarkSemanticsOptions,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm,
@@ -2675,7 +2675,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     syncPackageLoading(
         packageOptions,
         pathPackageLocator,
-        buildLanguageOptions,
+        starlarkSemanticsOptions,
         commandId,
         clientEnv,
         tsgm,
@@ -2689,7 +2689,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   protected void syncPackageLoading(
       PackageOptions packageOptions,
       PathPackageLocator pathPackageLocator,
-      BuildLanguageOptions buildLanguageOptions,
+      BuildLanguageOptions starlarkSemanticsOptions,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm,
@@ -2697,7 +2697,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       throws AbruptExitException {
     try (SilentCloseable c = Profiler.instance().profile("preparePackageLoading")) {
       preparePackageLoading(
-          pathPackageLocator, packageOptions, buildLanguageOptions, commandId, clientEnv, tsgm);
+          pathPackageLocator, packageOptions, starlarkSemanticsOptions, commandId, clientEnv, tsgm);
     }
     try (SilentCloseable c = Profiler.instance().profile("setDeletedPackages")) {
       setDeletedPackages(packageOptions.getDeletedPackages());

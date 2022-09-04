@@ -344,9 +344,7 @@ public final class ConfigurationResolver {
           AttributeTransitionData.builder()
               .attributes(
                   ConfiguredAttributeMapper.of(
-                      ctgValue.getTarget().getAssociatedRule(),
-                      configConditions,
-                      ctgValue.getConfiguration().checksum()))
+                      ctgValue.getTarget().getAssociatedRule(), configConditions))
               .build();
       ConfigurationTransition baseTransition = transitionFactory.create(transitionData);
       Map<String, BuildOptions> toOptions;
@@ -513,7 +511,7 @@ public final class ConfigurationResolver {
    * for targets that can't be evaluated (e.g. due to loading phase errors).
    *
    * <p>This is suitable for feeding {@link
-   * com.google.devtools.build.lib.analysis.ConfiguredTargetValue} keys: as general principle {@link
+   * com.google.devtools.build.lib.skyframe.ConfiguredTargetValue} keys: as general principle {@link
    * com.google.devtools.build.lib.analysis.ConfiguredTarget}s should have exactly as much
    * information in their configurations as they need to evaluate and no more (e.g. there's no need
    * for Android settings in a C++ configured target).
