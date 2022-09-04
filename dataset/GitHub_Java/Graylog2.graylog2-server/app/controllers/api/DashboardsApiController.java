@@ -60,6 +60,7 @@ import play.mvc.Result;
 
 import javax.inject.Inject;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -551,7 +552,7 @@ public class DashboardsApiController extends AuthenticatedController {
                             final List requestSeries = (List) requestConfig.get("series");
                             for (Object seriesObject : requestSeries) {
                                 if (seriesObject instanceof Map) {
-                                    ((StackedChartWidget) widget).addSeries((Map<String, Object>) seriesObject);
+                                    widget.addSeries((Map<String, Object>) seriesObject);
                                 }
                             }
                         }
