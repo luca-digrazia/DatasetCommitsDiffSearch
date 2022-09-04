@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Preconditions;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -53,7 +54,7 @@ import javax.annotation.Nullable;
 public class ToolchainContext {
   public static ToolchainContext create(
       String targetDescription,
-      Set<Label> requiredToolchains,
+      List<Label> requiredToolchains,
       ImmutableBiMap<Label, Label> resolvedLabels) {
     ToolchainContext toolchainContext =
         new ToolchainContext(
@@ -75,7 +76,7 @@ public class ToolchainContext {
 
   private ToolchainContext(
       String targetDescription,
-      Set<Label> requiredToolchains,
+      List<Label> requiredToolchains,
       ResolvedToolchainLabels resolvedToolchainLabels) {
     this.targetDescription = targetDescription;
     this.requiredToolchains = ImmutableList.copyOf(requiredToolchains);

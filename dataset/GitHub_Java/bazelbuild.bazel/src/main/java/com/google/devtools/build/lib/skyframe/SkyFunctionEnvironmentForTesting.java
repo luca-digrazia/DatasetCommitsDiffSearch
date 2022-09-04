@@ -14,9 +14,7 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.util.ResourceUsage;
 import com.google.devtools.build.skyframe.AbstractSkyFunctionEnvironment;
@@ -25,6 +23,7 @@ import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import com.google.devtools.build.skyframe.ValueOrExceptionUtils;
 import com.google.devtools.build.skyframe.ValueOrUntypedException;
 import java.util.Map;
 
@@ -34,28 +33,22 @@ public class SkyFunctionEnvironmentForTesting extends AbstractSkyFunctionEnviron
 
   private final BuildDriver buildDriver;
   private final ExtendedEventHandler eventHandler;
-  private final SkyframeExecutor skyframeExecutor;
 
   /** Creates a SkyFunctionEnvironmentForTesting that uses a BuildDriver to evaluate skykeys. */
   public SkyFunctionEnvironmentForTesting(
-      BuildDriver buildDriver,
-      ExtendedEventHandler eventHandler,
-      SkyframeExecutor skyframeExecutor) {
+      BuildDriver buildDriver, ExtendedEventHandler eventHandler) {
     this.buildDriver = buildDriver;
     this.eventHandler = eventHandler;
-    this.skyframeExecutor = skyframeExecutor;
   }
 
   @Override
   protected Map<SkyKey, ValueOrUntypedException> getValueOrUntypedExceptions(
       Iterable<? extends SkyKey> depKeys) throws InterruptedException {
     ImmutableMap.Builder<SkyKey, ValueOrUntypedException> resultMap = ImmutableMap.builder();
-    Iterable<SkyKey> keysToEvaluate = ImmutableList.copyOf(depKeys);
     EvaluationResult<SkyValue> evaluationResult =
-        skyframeExecutor.evaluateSkyKeys(eventHandler, keysToEvaluate, true);
         buildDriver.evaluate(depKeys, true, ResourceUsage.getAvailableProcessors(), eventHandler);
-    for (SkyKey depKey : ImmutableSet.copyOf(depKeys)) {
-      resultMap.put(depKey, ValueOrUntypedException.ofValueUntyped(evaluationResult.get(depKey)));
+    for (SkyKey depKey : depKeys) {
+      resultMap.put(depKey, ValueOrExceptionUtils.ofValue(evaluationResult.get(depKey)));
     }
     return resultMap.build();
   }

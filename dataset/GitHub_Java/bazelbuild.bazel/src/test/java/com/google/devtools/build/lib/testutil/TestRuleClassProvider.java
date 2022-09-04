@@ -22,22 +22,21 @@ import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.MakeVariableInfo;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
+import com.google.devtools.build.lib.analysis.PlatformSemantics;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.syntax.Type;
@@ -115,13 +114,12 @@ public class TestRuleClassProvider {
 
     @Override
     public ConfiguredTarget create(RuleContext ruleContext)
-        throws InterruptedException, RuleErrorException, ActionConflictException {
+        throws InterruptedException, RuleErrorException {
       Map<String, String> variables = ruleContext.attributes().get("variables", Type.STRING_DICT);
       return new RuleConfiguredTargetBuilder(ruleContext)
           .setFilesToBuild(NestedSetBuilder.emptySet(Order.STABLE_ORDER))
           .addProvider(RunfilesProvider.EMPTY)
-          .addNativeDeclaredProvider(
-              new TemplateVariableInfo(ImmutableMap.copyOf(variables), Location.BUILTIN))
+          .addNativeDeclaredProvider(new MakeVariableInfo(ImmutableMap.copyOf(variables)))
           .build();
     }
   }
@@ -133,7 +131,7 @@ public class TestRuleClassProvider {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
       return builder
-          .advertiseProvider(TemplateVariableInfo.class)
+          .advertiseProvider(MakeVariableInfo.class)
           .add(attr("variables", Type.STRING_DICT))
           .build();
     }
@@ -153,7 +151,7 @@ public class TestRuleClassProvider {
   public static class MockToolchainRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
-      return builder
+      return PlatformSemantics.platformAttributes(builder)
           .requiresConfigurationFragments(PlatformConfiguration.class)
           .addRequiredToolchains(
               ImmutableList.of(Label.parseAbsoluteUnchecked("//toolchain:test_toolchain")))

@@ -1253,7 +1253,7 @@ public class BuildView {
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException, ToolchainContextException {
     BuildConfiguration targetConfig = target.getConfiguration();
-    Set<Label> requiredToolchains =
+    List<Label> requiredToolchains =
         target.getTarget().getAssociatedRule().getRuleClassObject().getRequiredToolchains();
     ToolchainContext toolchainContext =
         skyframeExecutor.getToolchainContextForTesting(
