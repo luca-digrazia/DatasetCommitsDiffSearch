@@ -34,7 +34,7 @@ import javax.annotation.Nullable;
  * is visible in the entire file; a variable in a function is visible in the entire function block
  * (even on the lines before its first assignment).
  *
- * <p>Resolution is a mutation of the syntax tree, as it attaches binding information to Identifier
+ * <p>Resolution is a mutation of the syntax tree, as it attaches scope information to Identifier
  * nodes. (In the future, it will attach additional information to functions to support lexical
  * scope, and even compilation of the trees to bytecode.) Resolution errors are reported in the
  * analogous manner to scan/parse errors: for a StarlarkFile, they are appended to {@code
@@ -48,43 +48,25 @@ public final class Resolver extends NodeVisitor {
   // everywhere, including the spec.
 
   enum Scope {
-    // TODO(adonovan): Add UNIVERSAL, FREE, CELL.
-    // (PREDECLARED vs UNIVERSAL allows us to represent the app-dependent and fixed parts of the
+    // TODO(adonovan): use uppercase. Add Predeclared, Free. Rename Module to Global.
+    // (Predeclared vs Universe allows us to represent the app-dependent and fixed parts of the
     // predeclared environment separately, reducing the amount of copying.)
 
-    /** Binding is local to a function, comprehension, or file (e.g. load). */
-    LOCAL,
-    /** Binding occurs outside any function or comprehension. */
-    GLOBAL,
-    /** Binding is predeclared by the core or application. */
-    PREDECLARED;
+    /** Symbols defined inside a function or a comprehension. */
+    Local("local"),
+    /** Symbols defined at a module top-level, e.g. functions, loaded symbols. */
+    Module("global"),
+    /** Predefined symbols (builtins) */
+    Universe("builtin");
 
-    @Override
-    public String toString() {
-      return super.toString().toLowerCase();
-    }
-  }
+    private final String qualifier;
 
-  // A Binding is a static abstraction of a variable.
-  // The Resolver maps each Identifier to a Binding.
-  static final class Binding {
-
-    final Scope scope;
-    @Nullable final Identifier first; // first binding use, if syntactic
-    final int index; // within its block (currently unused)
-
-    private Binding(Scope scope, @Nullable Identifier first, int index) {
-      this.scope = scope;
-      this.first = first;
-      this.index = index;
+    private Scope(String qualifier) {
+      this.qualifier = qualifier;
     }
 
-    @Override
-    public String toString() {
-      return first == null
-          ? scope.toString()
-          : String.format(
-              "%s[%d] %s @ %s", scope, index, first.getName(), first.getStartLocation());
+    String getQualifier() {
+      return qualifier;
     }
   }
 
@@ -166,8 +148,18 @@ public final class Resolver extends NodeVisitor {
     String getUndeclaredNameError(String name);
   }
 
+  private static final Identifier PREDECLARED; // sentinel for predeclared names
+
+  static {
+    try {
+      PREDECLARED = (Identifier) Expression.parse(ParserInput.fromLines("PREDECLARED"));
+    } catch (SyntaxError.Exception ex) {
+      throw new IllegalStateException(ex); // can't happen
+    }
+  }
+
   private static class Block {
-    private final Map<String, Binding> bindings = new HashMap<>();
+    private final Map<String, Identifier> variables = new HashMap<>();
     private final Scope scope;
     @Nullable private final Block parent;
 
@@ -183,17 +175,13 @@ public final class Resolver extends NodeVisitor {
   private Block block;
   private int loopCount;
 
-  // Shared binding for all predeclared names.
-  private static final Binding PREDECLARED = new Binding(Scope.PREDECLARED, null, 0);
-
   private Resolver(List<SyntaxError> errors, Module module, FileOptions options) {
     this.errors = errors;
     this.module = module;
     this.options = options;
-
-    this.block = new Block(Scope.PREDECLARED, null);
+    block = new Block(Scope.Universe, null);
     for (String name : module.getNames()) {
-      block.bindings.put(name, PREDECLARED);
+      block.variables.put(name, PREDECLARED);
     }
   }
 
@@ -210,33 +198,32 @@ public final class Resolver extends NodeVisitor {
   }
 
   /**
-   * First pass: add bindings for all variables to the current block. This is done because symbols
-   * are sometimes used before their definition point (e.g. functions are not necessarily declared
-   * in order).
+   * First pass: add all definitions to the current block. This is done because symbols are
+   * sometimes used before their definition point (e.g. a functions are not necessarily declared in
+   * order).
    */
-  // TODO(adonovan): eliminate this first pass by using go.starlark.net one-pass approach.
-  private void createBindings(Iterable<Statement> stmts) {
+  private void collectDefinitions(Iterable<Statement> stmts) {
     for (Statement stmt : stmts) {
-      createBindings(stmt);
+      collectDefinitions(stmt);
     }
   }
 
-  private void createBindings(Statement stmt) {
+  private void collectDefinitions(Statement stmt) {
     switch (stmt.kind()) {
       case ASSIGNMENT:
-        createBindings(((AssignmentStatement) stmt).getLHS());
+        collectDefinitions(((AssignmentStatement) stmt).getLHS());
         break;
       case IF:
         IfStatement ifStmt = (IfStatement) stmt;
-        createBindings(ifStmt.getThenBlock());
+        collectDefinitions(ifStmt.getThenBlock());
         if (ifStmt.getElseBlock() != null) {
-          createBindings(ifStmt.getElseBlock());
+          collectDefinitions(ifStmt.getElseBlock());
         }
         break;
       case FOR:
         ForStatement forStmt = (ForStatement) stmt;
-        createBindings(forStmt.getVars());
-        createBindings(forStmt.getBody());
+        collectDefinitions(forStmt.getVars());
+        collectDefinitions(forStmt.getBody());
         break;
       case DEF:
         DefStatement def = (DefStatement) stmt;
@@ -264,7 +251,7 @@ public final class Resolver extends NodeVisitor {
         }
 
         // TODO(adonovan): support options.loadBindsGlobally().
-        // Requires that we open a LOCAL block for each file,
+        // Requires that we open a Local block for each file,
         // as well as its Module block, and select which block
         // to declare it in. See go.starlark.net implementation.
 
@@ -279,7 +266,7 @@ public final class Resolver extends NodeVisitor {
     }
   }
 
-  private void createBindings(Expression lhs) {
+  private void collectDefinitions(Expression lhs) {
     for (Identifier id : Identifier.boundIdentifiers(lhs)) {
       bind(id);
     }
@@ -287,10 +274,10 @@ public final class Resolver extends NodeVisitor {
 
   private void assign(Expression lhs) {
     if (lhs instanceof Identifier) {
-      Identifier id = (Identifier) lhs;
-      // Bindings are created by the first pass (createBindings),
-      // so there's nothing to do here.
-      Preconditions.checkNotNull(block.bindings.get(id.getName()));
+      if (options.recordScope()) {
+        ((Identifier) lhs).setScope(block.scope);
+      }
+      // no-op
     } else if (lhs instanceof IndexExpression) {
       visit(lhs);
     } else if (lhs instanceof ListExpression) {
@@ -303,40 +290,58 @@ public final class Resolver extends NodeVisitor {
   }
 
   @Override
-  public void visit(Identifier id) {
-    for (Block b = block; b != null; b = b.parent) {
-      Binding bind = b.bindings.get(id.getName());
-      if (bind != null) {
-        if (options.recordScope()) {
-          id.setBinding(bind);
-        }
-        return;
+  public void visit(Identifier node) {
+    String name = node.getName();
+    @Nullable Block b = blockThatDefines(name);
+    if (b == null) {
+      // The identifier might not exist because it was restricted (hidden) by flags.
+      // If this is the case, output a more helpful error message than 'not found'.
+      String error = module.getUndeclaredNameError(name);
+      if (error == null) {
+        // generic error
+        error = createInvalidIdentifierException(node.getName(), getAllSymbols());
       }
+      errorf(node, "%s", error);
+      return;
     }
-
-    // The identifier might not exist because it was restricted (hidden) by flags.
-    // If this is the case, output a more helpful error message than 'not found'.
-    String error = module.getUndeclaredNameError(id.getName());
-    if (error == null) {
-      // generic error
-      error = createInvalidIdentifierException(id.getName(), getAllSymbols());
+    if (options.recordScope()) {
+      node.setScope(b.scope);
     }
-    errorf(id, "%s", error);
   }
 
   private static String createInvalidIdentifierException(String name, Set<String> candidates) {
     if (!Identifier.isValid(name)) {
       // Identifier was created by Parser.makeErrorExpression and contains misparsed text.
-      return "contains syntax errors";
+      return "contains syntax error(s)";
+    }
+
+    String error = getErrorForObsoleteThreadLocalVars(name);
+    if (error != null) {
+      return error;
     }
 
     String suggestion = SpellChecker.didYouMean(name, candidates);
     return "name '" + name + "' is not defined" + suggestion;
   }
 
+  // TODO(adonovan): delete this. It's been long enough.
+  static String getErrorForObsoleteThreadLocalVars(String name) {
+    if (name.equals("PACKAGE_NAME")) {
+      return "The value 'PACKAGE_NAME' has been removed in favor of 'package_name()', "
+          + "please use the latter ("
+          + "https://docs.bazel.build/versions/master/skylark/lib/native.html#package_name). ";
+    }
+    if (name.equals("REPOSITORY_NAME")) {
+      return "The value 'REPOSITORY_NAME' has been removed in favor of 'repository_name()', please"
+          + " use the latter ("
+          + "https://docs.bazel.build/versions/master/skylark/lib/native.html#repository_name).";
+    }
+    return null;
+  }
+
   @Override
   public void visit(ReturnStatement node) {
-    if (block.scope != Scope.LOCAL) {
+    if (block.scope != Scope.Local) {
       errorf(node, "return statements must be inside a function");
     }
     super.visit(node);
@@ -344,7 +349,7 @@ public final class Resolver extends NodeVisitor {
 
   @Override
   public void visit(ForStatement node) {
-    if (block.scope != Scope.LOCAL) {
+    if (block.scope != Scope.Local) {
       errorf(
           node,
           "for loops are not allowed at the top level. You may move it inside a function "
@@ -360,10 +365,10 @@ public final class Resolver extends NodeVisitor {
 
   @Override
   public void visit(LoadStatement node) {
-    if (block.scope == Scope.LOCAL) {
+    if (block.scope == Scope.Local) {
       errorf(node, "load statement not at top level");
     }
-    // Skip super.visit: don't revisit local Identifier as a use.
+    super.visit(node);
   }
 
   @Override
@@ -382,11 +387,11 @@ public final class Resolver extends NodeVisitor {
 
   @Override
   public void visit(Comprehension node) {
-    openBlock(Scope.LOCAL);
+    openBlock(Scope.Local);
     for (Comprehension.Clause clause : node.getClauses()) {
       if (clause instanceof Comprehension.For) {
         Comprehension.For forClause = (Comprehension.For) clause;
-        createBindings(forClause.getVars());
+        collectDefinitions(forClause.getVars());
       }
     }
     // TODO(adonovan): opt: combine loops
@@ -406,7 +411,7 @@ public final class Resolver extends NodeVisitor {
 
   @Override
   public void visit(DefStatement node) {
-    if (block.scope == Scope.LOCAL) {
+    if (block.scope == Scope.Local) {
       errorf(node, "nested functions are not allowed. Move the function to the top level.");
     }
     node.resolved =
@@ -431,7 +436,7 @@ public final class Resolver extends NodeVisitor {
     }
 
     // Enter function block.
-    openBlock(Scope.LOCAL);
+    openBlock(Scope.Local);
 
     // Check parameter order and convert to run-time order:
     // positionals, keyword-only, *args, **kwargs.
@@ -505,7 +510,7 @@ public final class Resolver extends NodeVisitor {
       bindParam(params, starStar);
     }
 
-    createBindings(body);
+    collectDefinitions(body);
     visitAll(body);
     closeBlock();
 
@@ -528,7 +533,7 @@ public final class Resolver extends NodeVisitor {
 
   @Override
   public void visit(IfStatement node) {
-    if (block.scope != Scope.LOCAL) {
+    if (block.scope != Scope.Local) {
       errorf(
           node,
           "if statements are not allowed at the top level. You may move it inside a function "
@@ -553,47 +558,42 @@ public final class Resolver extends NodeVisitor {
   }
 
   /**
-   * Process a binding use of a name by adding a binding to the current block if not already bound,
-   * and associate the identifier with it. Reports whether the name was already bound in this block.
+   * Declare a variable and add it to the environment. Reports whether the name was already bound in
+   * this block.
    */
   private boolean bind(Identifier id) {
-    Binding bind = block.bindings.get(id.getName());
+    Identifier prev = block.variables.putIfAbsent(id.getName(), id);
 
-    // Already bound in this block?
-    if (bind != null) {
-      // Symbols defined in the module block cannot be reassigned.
-      if (block.scope == Scope.GLOBAL && !options.allowToplevelRebinding()) {
-        errorf(
-            id,
-            "cannot reassign global '%s' (read more at"
-                + " https://bazel.build/versions/master/docs/skylark/errors/read-only-variable.html)",
-            id.getName());
-        if (bind.first != null) {
-          errorf(bind.first, "'%s' previously declared here", id.getName());
-        }
+    // Symbols defined in the module scope cannot be reassigned.
+    if (prev != null && block.scope == Scope.Module && !options.allowToplevelRebinding()) {
+      errorf(
+          id,
+          "cannot reassign global '%s' (read more at"
+              + " https://bazel.build/versions/master/docs/skylark/errors/read-only-variable.html)",
+          id.getName());
+      if (prev != PREDECLARED) {
+        errorf(prev, "'%s' previously declared here", id.getName());
       }
-
-      if (options.recordScope()) {
-        id.setBinding(bind);
-      }
-      return true;
     }
 
-    // new binding
-    // TODO(adonovan): accumulate locals in the enclosing function/file block.
-    bind = new Binding(block.scope, id, block.bindings.size());
-    block.bindings.put(id.getName(), bind);
-    if (options.recordScope()) {
-      id.setBinding(bind);
+    return prev != null;
+  }
+
+  /** Returns the nearest Block that defines a symbol. */
+  private Block blockThatDefines(String varname) {
+    for (Block b = block; b != null; b = b.parent) {
+      if (b.variables.containsKey(varname)) {
+        return b;
+      }
     }
-    return false;
+    return null;
   }
 
   /** Returns the set of all accessible symbols (both local and global) */
   private Set<String> getAllSymbols() {
     Set<String> all = new HashSet<>();
     for (Block b = block; b != null; b = b.parent) {
-      all.addAll(b.bindings.keySet());
+      all.addAll(b.variables.keySet());
     }
     return all;
   }
@@ -629,11 +629,11 @@ public final class Resolver extends NodeVisitor {
       checkLoadAfterStatement(statements);
     }
 
-    openBlock(Scope.GLOBAL);
+    openBlock(Scope.Module);
 
-    // Add a binding for each variable defined by statements, not including definitions that appear
-    // in sub-scopes of the given statements (function bodies and comprehensions).
-    createBindings(statements);
+    // Add each variable defined by statements, not including definitions that appear in
+    // sub-scopes of the given statements (function bodies and comprehensions).
+    collectDefinitions(statements);
 
     // Second pass: ensure that all symbols have been defined.
     visitAll(statements);

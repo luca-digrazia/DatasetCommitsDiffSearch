@@ -145,11 +145,11 @@ public final class StarlarkFunction implements StarlarkCallable {
 
   @Override
   public void repr(Printer printer) {
-    Object clientData = module.getClientData();
+    Object label = module.getLabel();
 
     printer.append("<function " + getName());
-    if (clientData != null) {
-      printer.append(" from " + clientData);
+    if (label != null) {
+      printer.append(" from " + label);
     }
     printer.append(">");
   }
