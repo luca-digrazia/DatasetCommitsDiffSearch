@@ -414,7 +414,7 @@ public final class ConfigurationResolver {
       ConfigurationTransition transition,
       Map<PackageValue.Key, PackageValue> buildSettingPackages,
       ExtendedEventHandler eventHandler)
-      throws TransitionException, InterruptedException {
+      throws TransitionException {
     boolean doesStarlarkTransition = StarlarkTransition.doesStarlarkTransition(transition);
     if (doesStarlarkTransition) {
       fromOptions =
@@ -534,7 +534,7 @@ public final class ConfigurationResolver {
       Multimap<BuildConfiguration, DependencyKey> targetsToEvaluate,
       ExtendedEventHandler eventHandler,
       ConfigurationsCollector configurationsCollector)
-      throws InvalidConfigurationException, InterruptedException {
+      throws InvalidConfigurationException {
 
     Map<Label, Target> labelsToTargets = new HashMap<>();
     for (TargetAndConfiguration targetAndConfig : defaultContext) {

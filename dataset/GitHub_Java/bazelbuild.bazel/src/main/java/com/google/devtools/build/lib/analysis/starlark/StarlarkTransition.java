@@ -405,7 +405,7 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
   public static ImmutableMap<Label, Object> getDefaultValues(
       Map<PackageValue.Key, PackageValue> buildSettingPackages, ConfigurationTransition root)
       throws TransitionException {
-    HashMap<Label, Object> defaultValues = new HashMap<>();
+    ImmutableMap.Builder<Label, Object> defaultValues = new ImmutableMap.Builder<>();
     root.visit(
         (StarlarkTransitionVisitor)
             transition -> {
@@ -413,15 +413,14 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
                   getRelevantStarlarkSettingsFromTransition(
                       transition, Settings.INPUTS_AND_OUTPUTS);
               for (Label setting : settings) {
-                defaultValues.computeIfAbsent(
+                defaultValues.put(
                     setting,
-                    (Label settingLabel) ->
-                        getActual(buildSettingPackages, settingLabel)
-                            .getAssociatedRule()
-                            .getAttr(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME));
+                    getActual(buildSettingPackages, setting)
+                        .getAssociatedRule()
+                        .getAttr(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME));
               }
             });
-    return ImmutableMap.copyOf(defaultValues);
+    return defaultValues.build();
   }
 
   /**
