@@ -27,6 +27,7 @@ public class LoggingFactoryPrintErrorMessagesTest {
     File folderWithWritePermission;
 
     LoggingFactory factory;
+    LoggerContext loggerContext;
 
     @Before
     public void setUp() throws Exception {
@@ -35,19 +36,20 @@ public class LoggingFactoryPrintErrorMessagesTest {
 
         folderWithWritePermission = tempDir.newFolder("folder-with-write-permission");
 
-        factory = new LoggingFactory(new LoggerContext());
+        loggerContext = new LoggerContext();
+        factory = new LoggingFactory(loggerContext);
     }
 
     @After
     public void tearDown() throws Exception {
-        factory.stop();
+        loggerContext.stop();
     }
 
-    private void configureLoggingFactoryWithFileAppender(File file) {
+    private void configureLoggingFactoryWithFileAppender(File file){
         factory.setAppenders(singletonList(newFileAppenderFactory(file)));
     }
 
-    private AppenderFactory newFileAppenderFactory(File file) {
+    private AppenderFactory newFileAppenderFactory(File file){
         FileAppenderFactory fileAppenderFactory = new FileAppenderFactory();
 
         fileAppenderFactory.setCurrentLogFilename(file.toString() + File.separator + "my-log-file.log");
