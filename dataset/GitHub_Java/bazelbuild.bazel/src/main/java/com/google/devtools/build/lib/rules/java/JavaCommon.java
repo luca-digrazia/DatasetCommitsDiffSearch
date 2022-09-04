@@ -502,7 +502,7 @@ public class JavaCommon {
 
     if (!javaExecutable.isAbsolute()) {
       javaExecutable =
-          PathFragment.create(PathFragment.create(ruleContext.getWorkspaceName()), javaExecutable);
+          new PathFragment(new PathFragment(ruleContext.getWorkspaceName()), javaExecutable);
     }
     javaExecutable = javaExecutable.normalize();
 

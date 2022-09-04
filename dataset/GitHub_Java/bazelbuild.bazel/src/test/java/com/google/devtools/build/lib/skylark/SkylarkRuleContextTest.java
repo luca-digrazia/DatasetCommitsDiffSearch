@@ -19,7 +19,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -731,7 +730,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertThat(ruleClassProvider.getRunfilesPrefix()).isNotEmpty();
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.workspace_name");
-    assertEquals(result, ruleClassProvider.getRunfilesPrefix());
+    assertSame(result, ruleClassProvider.getRunfilesPrefix());
   }
 
   @Test
@@ -751,31 +750,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     Object result = evalRuleContextCode(ruleContext, "ruleContext.new_file('a/b.txt')");
     PathFragment fragment = ((Artifact) result).getRootRelativePath();
     assertEquals("foo/a/b.txt", fragment.getPathString());
-  }
-
-  @Test
-  public void testDeriveTreeArtifact() throws Exception {
-    SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
-    Object result =
-        evalRuleContextCode(ruleContext, "ruleContext.experimental_new_directory('a/b')");
-    Artifact artifact = (Artifact) result;
-    PathFragment fragment = artifact.getRootRelativePath();
-    assertEquals("foo/a/b", fragment.getPathString());
-    assertTrue(artifact.isTreeArtifact());
-  }
-
-  @Test
-  public void testDeriveTreeArtifactNextToSibling() throws Exception {
-    SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
-    Object result =
-        evalRuleContextCode(
-            ruleContext,
-            "b = ruleContext.experimental_new_directory('a/b')\n"
-                + "ruleContext.experimental_new_directory('c', sibling=b)");
-    Artifact artifact = (Artifact) result;
-    PathFragment fragment = artifact.getRootRelativePath();
-    assertEquals("foo/a/c", fragment.getPathString());
-    assertTrue(artifact.isTreeArtifact());
   }
 
   @Test
