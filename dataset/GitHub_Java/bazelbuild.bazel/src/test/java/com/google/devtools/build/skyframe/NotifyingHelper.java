@@ -219,7 +219,7 @@ public class NotifyingHelper {
   }
 
   /** {@link NodeEntry} that informs a {@link Listener} of various method calls. */
-  protected class NotifyingNodeEntry extends DelegatingNodeEntry implements TestOnlyNodeEntry {
+  protected class NotifyingNodeEntry extends DelegatingNodeEntry {
     private final SkyKey myKey;
     private final ThinNodeEntry delegate;
 
@@ -229,7 +229,7 @@ public class NotifyingHelper {
     }
 
     @Override
-    public NodeEntry getDelegate() {
+    protected NodeEntry getDelegate() {
       return (NodeEntry) delegate;
     }
 

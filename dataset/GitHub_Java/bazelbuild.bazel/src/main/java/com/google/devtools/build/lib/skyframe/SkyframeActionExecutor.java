@@ -81,7 +81,6 @@ import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
@@ -774,7 +773,7 @@ public final class SkyframeActionExecutor {
    * <p>This method is just a wrapper around {@link Action#discoverInputs} that properly processes
    * any ActionExecutionException thrown before rethrowing it to the caller.
    */
-  NestedSet<Artifact> discoverInputs(
+  Iterable<Artifact> discoverInputs(
       Action action,
       ActionLookupData actionLookupData,
       MetadataProvider metadataProvider,
@@ -805,7 +804,7 @@ public final class SkyframeActionExecutor {
     }
     actionExecutionContext.getEventHandler().post(new ScanningActionEvent(action));
     try {
-      NestedSet<Artifact> artifacts = action.discoverInputs(actionExecutionContext);
+      Iterable<Artifact> artifacts = action.discoverInputs(actionExecutionContext);
 
       // Input discovery may have been affected by lost inputs. If an action filesystem is used, it
       // may know whether inputs were lost. We should fail fast if any were; rewinding may be able
