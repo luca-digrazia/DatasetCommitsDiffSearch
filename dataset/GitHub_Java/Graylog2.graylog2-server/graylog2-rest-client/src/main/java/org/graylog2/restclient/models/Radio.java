@@ -289,22 +289,24 @@ public class Radio extends ClusterEntity {
             }
         }
 
-        final InputLaunchRequest request = new InputLaunchRequest();
+        InputLaunchRequest request = new InputLaunchRequest();
         request.title = title;
         request.type = type;
         request.global = global;
         request.configuration = configuration;
 
+        InputLaunchResponse ilr = null;
         try {
-            return api.path(routes.radio().InputsResource().launch(), InputLaunchResponse.class)
+            ilr = api.path(routes.radio().InputsResource().launch(), InputLaunchResponse.class)
                     .radio(this)
                     .body(request)
                     .expect(Http.Status.ACCEPTED)
                     .execute();
+
         } catch (Exception e) {
             LOG.error("Could not launch input " + title, e);
-            return null;
         }
+        return ilr;
     }
 
     public BufferInfo getBuffers() {

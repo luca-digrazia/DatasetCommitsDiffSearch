@@ -1,6 +1,4 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,27 +13,42 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.shared.rest.resources.system.inputs.requests;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.auto.value.AutoValue;
 
+import javax.annotation.Nullable;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class InputLaunchRequest {
+@JsonAutoDetect
+@AutoValue
+public abstract class InputLaunchRequest {
+    @JsonProperty
+    public abstract String title();
 
-    public String title;
-    public String type;
+    @JsonProperty
+    public abstract String type();
 
     @JsonProperty("creator_user_id")
-    public String creatorUserId;
+    @Nullable
+    public abstract String creatorUserId();
 
-    public Boolean global;
+    @JsonProperty
+    public abstract boolean global();
 
-    public Map<String, Object> configuration;
+    @JsonProperty
+    public abstract Map<String, Object> configuration();
 
+    @JsonCreator
+    public static InputLaunchRequest create(@JsonProperty("title") String title,
+                                            @JsonProperty("type") String type,
+                                            @JsonProperty("creator_user_id") String creatorUserId,
+                                            @JsonProperty("global") boolean global,
+                                            @JsonProperty("configuration") Map<String, Object> configuration) {
+        return new AutoValue_InputLaunchRequest(title, type, creatorUserId, global, configuration);
+    }
 }
