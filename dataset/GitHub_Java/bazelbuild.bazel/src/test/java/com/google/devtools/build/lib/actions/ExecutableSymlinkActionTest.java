@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.actions;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
@@ -63,7 +63,7 @@ public class ExecutableSymlinkActionTest {
         actionKeyContext,
         null,
         outErr,
-        /*eventHandler=*/ null,
+        executor.getEventHandler(),
         ImmutableMap.<String, String>of(),
         ImmutableMap.of(),
         null,
@@ -92,9 +92,12 @@ public class ExecutableSymlinkActionTest {
     Artifact input = new Artifact(dir, inputRoot);
     Artifact output = new Artifact(outputRoot.getRoot().getRelative("some-output"), outputRoot);
     SymlinkAction action = SymlinkAction.toExecutable(NULL_ACTION_OWNER, input, output, "progress");
-    ActionExecutionException e =
-        assertThrows(ActionExecutionException.class, () -> action.execute(createContext()));
-    assertThat(e).hasMessageThat().contains("'some-dir' is not a file");
+    try {
+      action.execute(createContext());
+      fail();
+    } catch (ActionExecutionException e) {
+      assertThat(e).hasMessageThat().contains("'some-dir' is not a file");
+    }
   }
 
   @Test
@@ -105,13 +108,16 @@ public class ExecutableSymlinkActionTest {
     Artifact input = new Artifact(file, inputRoot);
     Artifact output = new Artifact(outputRoot.getRoot().getRelative("some-output"), outputRoot);
     SymlinkAction action = SymlinkAction.toExecutable(NULL_ACTION_OWNER, input, output, "progress");
-    ActionExecutionException e =
-        assertThrows(ActionExecutionException.class, () -> action.execute(createContext()));
-    String want = "'some-file' is not executable";
+    try {
+      action.execute(createContext());
+      fail();
+    } catch (ActionExecutionException e) {
+      String want = "'some-file' is not executable";
       String got = e.getMessage();
-    assertWithMessage(String.format("got %s, want %s", got, want))
-        .that(got.contains(want))
-        .isTrue();
+      assertWithMessage(String.format("got %s, want %s", got, want))
+          .that(got.contains(want))
+          .isTrue();
+    }
   }
 
   @Test

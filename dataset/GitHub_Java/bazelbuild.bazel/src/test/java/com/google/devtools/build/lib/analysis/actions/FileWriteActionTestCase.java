@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
@@ -29,7 +28,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.util.io.FileOutErr;
@@ -65,18 +63,17 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
     context =
         new ActionExecutionContext(
             executor,
-            /*actionInputFileCache=*/ null,
+            null,
             ActionInputPrefetcher.NONE,
             actionKeyContext,
-            /*metadataHandler=*/ null,
-            LostInputsCheck.NONE,
+            null,
             new FileOutErr(),
-            new StoredEventHandler(),
-            /*clientEnv=*/ ImmutableMap.of(),
-            /*topLevelFilesets=*/ ImmutableMap.of(),
-            /*artifactExpander=*/ null,
-            /*actionFileSystem=*/ null,
-            /*skyframeDepsResult=*/ null);
+            executor.getEventHandler(),
+            ImmutableMap.<String, String>of(),
+            ImmutableMap.of(),
+            null,
+            null,
+            null);
   }
 
   protected void checkNoInputsByDefault() {

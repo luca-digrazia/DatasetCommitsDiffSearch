@@ -154,23 +154,6 @@ public final class ActionsTestUtil {
         /*skyframeDepsResult=*/ null);
   }
 
-  public static ActionExecutionContext createContext(ExtendedEventHandler eventHandler) {
-    DummyExecutor dummyExecutor = new DummyExecutor(eventHandler);
-    return new ActionExecutionContext(
-        dummyExecutor,
-        null,
-        ActionInputPrefetcher.NONE,
-        new ActionKeyContext(),
-        null,
-        null,
-        eventHandler,
-        ImmutableMap.of(),
-        ImmutableMap.of(),
-        createDummyArtifactExpander(),
-        /*actionFileSystem=*/ null,
-        /*skyframeDepsResult=*/ null);
-  }
-
   public static ActionExecutionContext createContextForInputDiscovery(
       Executor executor,
       ActionKeyContext actionKeyContext,
@@ -190,6 +173,23 @@ public final class ActionsTestUtil {
         ImmutableMap.of(),
         new BlockingSkyFunctionEnvironment(buildDriver, eventHandler),
         /*actionFileSystem=*/ null);
+  }
+
+  public static ActionExecutionContext createContext(ExtendedEventHandler eventHandler) {
+    DummyExecutor dummyExecutor = new DummyExecutor(eventHandler);
+    return new ActionExecutionContext(
+        dummyExecutor,
+        null,
+        ActionInputPrefetcher.NONE,
+        new ActionKeyContext(),
+        null,
+        null,
+        eventHandler,
+        ImmutableMap.of(),
+        ImmutableMap.of(),
+        createDummyArtifactExpander(),
+        /*actionFileSystem=*/ null,
+        /*skyframeDepsResult=*/ null);
   }
 
   private static ArtifactExpander createDummyArtifactExpander() {
@@ -395,6 +395,13 @@ public final class ActionsTestUtil {
   }
 
   /**
+   * Returns the closure of the predecessors of any of the given types.
+   */
+  public Collection<String> predecessorClosureAsCollection(Artifact artifact, FileType... types) {
+    return predecessorClosureAsCollection(Collections.singleton(artifact), types);
+  }
+
+  /**
    * Returns the closure of the predecessors of any of the given types, joining the basenames of the
    * artifacts into a space-separated string like "libfoo.a libbar.a libbaz.a".
    */
@@ -403,14 +410,11 @@ public final class ActionsTestUtil {
     return baseNamesOf(FileType.filter(visited, types));
   }
 
-  /** Returns the closure of the predecessors of any of the given types. */
-  public Collection<String> predecessorClosureAsCollection(Artifact artifact, FileType... types) {
-    return predecessorClosureAsCollection(Collections.singleton(artifact), types);
-  }
-
-  /** Returns the closure of the predecessors of any of the given types. */
-  public Collection<String> predecessorClosureAsCollection(
-      Iterable<Artifact> artifacts, FileType... types) {
+  /**
+   * Returns the closure of the predecessors of any of the given types.
+   */
+  public Collection<String> predecessorClosureAsCollection(Iterable<Artifact> artifacts,
+      FileType... types) {
     return baseArtifactNames(FileType.filter(artifactClosureOf(artifacts), types));
   }
 
@@ -431,12 +435,23 @@ public final class ActionsTestUtil {
     return artifactClosureOf(action.getInputs());
   }
 
-  /** Returns the closure over the input files of an artifact. */
+  /**
+   * Returns the closure over the input files of an artifact.
+   */
   public Set<Artifact> artifactClosureOf(Artifact artifact) {
     return artifactClosureOf(Collections.singleton(artifact));
   }
 
-  /** Returns the closure over the input files of a set of artifacts. */
+  /**
+   * Returns the closure over the input files of an artifact, filtered by the given matcher.
+   */
+  public Set<Artifact> filteredArtifactClosureOf(Artifact artifact, Predicate<Artifact> matcher) {
+    return ImmutableSet.copyOf(Iterables.filter(artifactClosureOf(artifact), matcher));
+  }
+
+  /**
+   * Returns the closure over the input files of a set of artifacts.
+   */
   public Set<Artifact> artifactClosureOf(Iterable<Artifact> artifacts) {
     Set<Artifact> visited = new LinkedHashSet<>();
     List<Artifact> toVisit = Lists.newArrayList(artifacts);
@@ -453,20 +468,17 @@ public final class ActionsTestUtil {
     return visited;
   }
 
-  /** Returns the closure over the input files of an artifact, filtered by the given matcher. */
-  public Set<Artifact> filteredArtifactClosureOf(Artifact artifact, Predicate<Artifact> matcher) {
-    return ImmutableSet.copyOf(Iterables.filter(artifactClosureOf(artifact), matcher));
-  }
-
   /**
    * Returns the closure over the input files of a set of artifacts, filtered by the given matcher.
    */
-  public Set<Artifact> filteredArtifactClosureOf(
-      Iterable<Artifact> artifacts, Predicate<Artifact> matcher) {
+  public Set<Artifact> filteredArtifactClosureOf(Iterable<Artifact> artifacts,
+      Predicate<Artifact> matcher) {
     return ImmutableSet.copyOf(Iterables.filter(artifactClosureOf(artifacts), matcher));
   }
 
-  /** Returns a predicate to match {@link Artifact}s with the given root-relative path suffix. */
+  /**
+   * Returns a predicate to match {@link Artifact}s with the given root-relative path suffix.
+   */
   public static Predicate<Artifact> getArtifactSuffixMatcher(final String suffix) {
     return new Predicate<Artifact>() {
       @Override

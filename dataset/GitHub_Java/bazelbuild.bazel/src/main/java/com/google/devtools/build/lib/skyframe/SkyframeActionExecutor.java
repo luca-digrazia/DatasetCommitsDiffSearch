@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.Striped;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.actions.Action;
@@ -644,6 +645,11 @@ public final class SkyframeActionExecutor {
               }
 
               @Override
+              public EventBus getEventBus() {
+                return executorEngine.getEventBus();
+              }
+
+              @Override
               public Path getExecRoot() {
                 return executorEngine.getExecRoot();
               }
@@ -729,7 +735,7 @@ public final class SkyframeActionExecutor {
       // streams is sufficient.
       setupActionFsFileOutErr(actionExecutionContext.getFileOutErr(), action);
     }
-    actionExecutionContext.getEventHandler().post(ActionStatusMessage.analysisStrategy(action));
+    actionExecutionContext.getEventBus().post(ActionStatusMessage.analysisStrategy(action));
     try {
       return action.discoverInputs(actionExecutionContext);
     } catch (ActionExecutionException e) {

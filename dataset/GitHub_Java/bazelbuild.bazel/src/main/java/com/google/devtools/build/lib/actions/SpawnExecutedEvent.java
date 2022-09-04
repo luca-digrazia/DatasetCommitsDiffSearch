@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 
 /** This event is fired during the build, when a subprocess is executed. */
@@ -25,8 +24,8 @@ public class SpawnExecutedEvent implements ExtendedEventHandler.ProgressLike {
   public SpawnExecutedEvent(
       Spawn spawn,
       SpawnResult result) {
-    this.spawn = Preconditions.checkNotNull(spawn);
-    this.result = Preconditions.checkNotNull(result);
+    this.spawn = spawn;
+    this.result = result;
   }
 
   /** Returns the Spawn. */

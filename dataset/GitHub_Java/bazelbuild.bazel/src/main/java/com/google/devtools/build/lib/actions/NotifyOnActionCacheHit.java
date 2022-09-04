@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.actions;
 
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.vfs.Path;
 
@@ -30,6 +31,10 @@ public interface NotifyOnActionCacheHit extends Action {
      * ActionExecutionException.
      */
     ExtendedEventHandler getEventHandler();
+
+    /** The EventBus for the current build. */
+    @Deprecated // Use #getEventHandler()#post(Postable) instead.
+    EventBus getEventBus();
 
     /**
      * Returns the execution root. This is the directory underneath which Blaze builds its entire

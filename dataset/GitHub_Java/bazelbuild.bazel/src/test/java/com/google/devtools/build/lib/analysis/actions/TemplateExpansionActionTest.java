@@ -21,16 +21,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
-import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
@@ -88,9 +85,9 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
     outputRoot =
         ArtifactRoot.asDerivedRoot(scratch.dir("/workspace"), scratch.dir("/workspace/out"));
     Path input = scratch.overwriteFile("/workspace/input.txt", StandardCharsets.UTF_8, template);
-    inputArtifact = ActionsTestUtil.createArtifact(workspace, input);
+    inputArtifact = new Artifact(input, workspace);
     output = scratch.resolve("/workspace/out/destination.txt");
-    outputArtifact = ActionsTestUtil.createArtifact(outputRoot, output);
+    outputArtifact = new Artifact(output, outputRoot);
   }
 
   private TemplateExpansionAction create() {
@@ -120,9 +117,8 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
 
   @Test
   public void testKeySameIfSame() throws Exception {
-    Artifact outputArtifact2 =
-        ActionsTestUtil.createArtifact(
-            outputRoot, scratch.resolve("/workspace/out/destination.txt"));
+    Artifact outputArtifact2 = new Artifact(scratch.resolve("/workspace/out/destination.txt"),
+        outputRoot);
     TemplateExpansionAction a = new TemplateExpansionAction(NULL_ACTION_OWNER,
          outputArtifact, Template.forString(TEMPLATE),
          ImmutableList.of(Substitution.of("%key%", "foo")), false);
@@ -135,9 +131,8 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
 
   @Test
   public void testKeyDiffersForSubstitution() throws Exception {
-    Artifact outputArtifact2 =
-        ActionsTestUtil.createArtifact(
-            outputRoot, scratch.resolve("/workspace/out/destination.txt"));
+    Artifact outputArtifact2 = new Artifact(scratch.resolve("/workspace/out/destination.txt"),
+        outputRoot);
     TemplateExpansionAction a = new TemplateExpansionAction(NULL_ACTION_OWNER,
          outputArtifact, Template.forString(TEMPLATE),
          ImmutableList.of(Substitution.of("%key%", "foo")), false);
@@ -150,9 +145,8 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
 
   @Test
   public void testKeyDiffersForExecutable() throws Exception {
-    Artifact outputArtifact2 =
-        ActionsTestUtil.createArtifact(
-            outputRoot, scratch.resolve("/workspace/out/destination.txt"));
+    Artifact outputArtifact2 = new Artifact(scratch.resolve("/workspace/out/destination.txt"),
+        outputRoot);
     TemplateExpansionAction a = new TemplateExpansionAction(NULL_ACTION_OWNER,
          outputArtifact, Template.forString(TEMPLATE),
          ImmutableList.of(Substitution.of("%key%", "foo")), false);
@@ -165,9 +159,8 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
 
   @Test
   public void testKeyDiffersForTemplates() throws Exception {
-    Artifact outputArtifact2 =
-        ActionsTestUtil.createArtifact(
-            outputRoot, scratch.resolve("/workspace/out/destination.txt"));
+    Artifact outputArtifact2 = new Artifact(scratch.resolve("/workspace/out/destination.txt"),
+        outputRoot);
     TemplateExpansionAction a = new TemplateExpansionAction(NULL_ACTION_OWNER,
          outputArtifact, Template.forString(TEMPLATE),
          ImmutableList.of(Substitution.of("%key%", "foo")), false);
@@ -191,16 +184,15 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
   private ActionExecutionContext createContext(Executor executor) {
     return new ActionExecutionContext(
         executor,
-        /*actionInputFileCache=*/ null,
+        null,
         ActionInputPrefetcher.NONE,
         actionKeyContext,
-        /*metadataHandler=*/ null,
-        LostInputsCheck.NONE,
+        null,
         new FileOutErr(),
-        new StoredEventHandler(),
-        /*clientEnv=*/ ImmutableMap.of(),
-        /*topLevelFilesets=*/ ImmutableMap.of(),
-        /*artifactExpander=*/ null,
+        executor.getEventHandler(),
+        ImmutableMap.of(),
+        ImmutableMap.of(),
+        null,
         /*actionFileSystem=*/ null,
         /*skyframeDepsResult=*/ null);
   }

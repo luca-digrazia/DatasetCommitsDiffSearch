@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -218,8 +217,4 @@ class ProgressEventSuppressingEnvironment implements SkyFunction.Environment {
     return delegate.inErrorBubblingForTesting();
   }
 
-  @Override
-  public void dependOnFuture(ListenableFuture<?> future) {
-    delegate.dependOnFuture(future);
-  }
 }
