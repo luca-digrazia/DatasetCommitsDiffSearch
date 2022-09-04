@@ -20,9 +20,10 @@ import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authc.UsernamePasswordToken;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.subject.Subject;
+import org.apache.shiro.util.ThreadContext;
 import org.glassfish.grizzly.http.server.Request;
 import org.graylog2.rest.RestTools;
-import org.jboss.netty.handler.ipfilter.IpSubnet;
+import org.graylog2.utilities.IpSubnet;
 
 import javax.annotation.Priority;
 import javax.inject.Inject;
@@ -42,8 +43,10 @@ import java.util.Set;
 
 import static java.util.Objects.requireNonNull;
 
-@Priority(Priorities.AUTHENTICATION)
+// Give this a higher priority so it's run before the authentication filter
+@Priority(Priorities.AUTHENTICATION - 10)
 public class ShiroSecurityContextFilter implements ContainerRequestFilter {
+    public static final String REQUEST_HEADERS = "REQUEST_HEADERS";
     private final DefaultSecurityManager securityManager;
     private Provider<Request> grizzlyRequestProvider;
     private final Set<IpSubnet> trustedProxies;
@@ -66,20 +69,31 @@ public class ShiroSecurityContextFilter implements ContainerRequestFilter {
         final String host = RestTools.getRemoteAddrFromRequest(grizzlyRequest, trustedProxies);
         final String authHeader = headers.getFirst(HttpHeaders.AUTHORIZATION);
 
+        // make headers available to authenticators, which otherwise have no access to them
+        ThreadContext.put(REQUEST_HEADERS, headers);
+
         final SecurityContext securityContext;
         if (authHeader != null && authHeader.startsWith("Basic")) {
             final String base64UserPass = authHeader.substring(authHeader.indexOf(' ') + 1);
             final String userPass = decodeBase64(base64UserPass);
-            final String[] split = userPass.split(":");
+            final String[] split = userPass.split(":", 2);
 
             if (split.length != 2) {
                 throw new BadRequestException("Invalid credentials in Authorization header");
             }
 
-            securityContext = createSecurityContext(split[0], split[1], secure, SecurityContext.BASIC_AUTH, host, headers);
+            securityContext = createSecurityContext(split[0],
+                                                    split[1],
+                                                    secure,
+                                                    SecurityContext.BASIC_AUTH,
+                                                    host,
+                                                    grizzlyRequest.getRemoteAddr(),
+                                                    headers);
 
         } else {
-            securityContext = createSecurityContext(null, null, secure, null, host, headers);
+            securityContext = createSecurityContext(null, null, secure, null, host,
+                                                    grizzlyRequest.getRemoteAddr(),
+                                                    headers);
         }
 
         requestContext.setSecurityContext(securityContext);
@@ -93,21 +107,26 @@ public class ShiroSecurityContextFilter implements ContainerRequestFilter {
         }
     }
 
-    private SecurityContext createSecurityContext(String userName, String credential, boolean isSecure, String authcScheme, String host,
+    private SecurityContext createSecurityContext(String userName,
+                                                  String credential,
+                                                  boolean isSecure,
+                                                  String authcScheme,
+                                                  String host,
+                                                  String remoteAddr,
                                                   MultivaluedMap<String, String> headers) {
         final AuthenticationToken authToken;
         if ("session".equalsIgnoreCase(credential)) {
             // Basic auth: undefined:session is sent when the UI doesn't have a valid session id,
             // we don't want to create a SessionIdToken in that case but fall back to looking at the headers instead
             if ("undefined".equalsIgnoreCase(userName)) {
-                authToken = new HttpHeadersToken(headers, host);
+                authToken = new HttpHeadersToken(headers, host, remoteAddr);
             } else {
                 authToken = new SessionIdToken(userName, host);
             }
         } else if ("token".equalsIgnoreCase(credential)) {
             authToken = new AccessTokenAuthToken(userName, host);
         } else if (userName == null) { // without a username we default to using the header environment as potentially containing tokens used by plugins
-            authToken = new HttpHeadersToken(headers, host);
+            authToken = new HttpHeadersToken(headers, host, remoteAddr);
         } else { // otherwise we use the "standard" username/password combination
             authToken = new UsernamePasswordToken(userName, credential, host);
         }

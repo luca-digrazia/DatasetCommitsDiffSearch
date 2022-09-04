@@ -35,7 +35,6 @@ import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.server.model.Resource;
-import org.graylog2.Configuration;
 import org.graylog2.audit.PluginAuditEventTypes;
 import org.graylog2.audit.jersey.AuditEventModelProcessor;
 import org.graylog2.configuration.HttpConfiguration;
@@ -54,7 +53,6 @@ import org.graylog2.shared.rest.exceptionmappers.AnyExceptionClassMapper;
 import org.graylog2.shared.rest.exceptionmappers.BadRequestExceptionMapper;
 import org.graylog2.shared.rest.exceptionmappers.JacksonPropertyExceptionMapper;
 import org.graylog2.shared.rest.exceptionmappers.JsonProcessingExceptionMapper;
-import org.graylog2.shared.rest.exceptionmappers.MissingStreamPermissionExceptionMapper;
 import org.graylog2.shared.rest.exceptionmappers.WebApplicationExceptionMapper;
 import org.graylog2.shared.security.ShiroSecurityContextFilter;
 import org.graylog2.shared.security.tls.KeyStoreUtils;
@@ -98,7 +96,6 @@ public class JerseyService extends AbstractIdleService {
     private static final String RESOURCE_PACKAGE_WEB = "org.graylog2.web.resources";
 
     private final HttpConfiguration configuration;
-    private final Configuration graylogConfiguration;
     private final Map<String, Set<Class<? extends PluginRestResource>>> pluginRestResources;
     private final Set<RestControllerPackage> restControllerPackages;
 
@@ -115,7 +112,7 @@ public class JerseyService extends AbstractIdleService {
 
     @Inject
     public JerseyService(final HttpConfiguration configuration,
-                         Configuration graylogConfiguration, Set<Class<? extends DynamicFeature>> dynamicFeatures,
+                         Set<Class<? extends DynamicFeature>> dynamicFeatures,
                          Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
                          Set<Class<? extends ExceptionMapper>> exceptionMappers,
                          @Named("additionalJerseyComponents") final Set<Class> additionalComponents,
@@ -126,7 +123,6 @@ public class JerseyService extends AbstractIdleService {
                          MetricRegistry metricRegistry,
                          ErrorPageGenerator errorPageGenerator) {
         this.configuration = requireNonNull(configuration, "configuration");
-        this.graylogConfiguration = graylogConfiguration;
         this.dynamicFeatures = requireNonNull(dynamicFeatures, "dynamicFeatures");
         this.containerResponseFilters = requireNonNull(containerResponseFilters, "containerResponseFilters");
         this.exceptionMappers = requireNonNull(exceptionMappers, "exceptionMappers");
@@ -251,7 +247,6 @@ public class JerseyService extends AbstractIdleService {
                         JsonProcessingExceptionMapper.class,
                         JacksonPropertyExceptionMapper.class,
                         AnyExceptionClassMapper.class,
-                        MissingStreamPermissionExceptionMapper.class,
                         WebApplicationExceptionMapper.class,
                         BadRequestExceptionMapper.class,
                         RestAccessLogFilter.class,
@@ -351,11 +346,7 @@ public class JerseyService extends AbstractIdleService {
         sslContextConfigurator.setKeyStoreBytes(KeyStoreUtils.getBytes(keyStore, password));
 
         final SSLContext sslContext = sslContextConfigurator.createSSLContext(true);
-        final SSLEngineConfigurator sslEngineConfigurator = new SSLEngineConfigurator(sslContext, false, false, false);
-        if (!graylogConfiguration.getEnabledTlsProtocols().isEmpty()) {
-            sslEngineConfigurator.setEnabledProtocols(graylogConfiguration.getEnabledTlsProtocols().toArray(new String[0]));
-        }
-        return sslEngineConfigurator;
+        return new SSLEngineConfigurator(sslContext, false, false, false);
     }
 
     private ExecutorService instrumentedExecutor(final String executorName,
