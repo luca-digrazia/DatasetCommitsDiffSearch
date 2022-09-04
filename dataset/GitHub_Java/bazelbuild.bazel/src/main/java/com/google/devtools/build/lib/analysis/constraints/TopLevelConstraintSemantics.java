@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -94,23 +93,18 @@ public class TopLevelConstraintSemantics {
     Multimap<ConfiguredTarget, Label> exceptionInducingTargets = ArrayListMultimap.create();
     for (ConfiguredTarget topLevelTarget : topLevelTargets) {
       BuildConfiguration config = topLevelTarget.getConfiguration();
-      Target target = null;
-      try {
-        target = packageManager.getTarget(eventHandler, topLevelTarget.getLabel());
-      } catch (NoSuchPackageException | NoSuchTargetException e) {
-        eventHandler.handle(
-            Event.error(
-                "Unable to get target from package when checking environment restrictions. " + e));
-        continue;
-      }
       if (config == null) {
         // TODO(bazel-team): support file targets (they should apply package-default constraints).
         continue;
       } else if (!config.enforceConstraints()) {
         continue;  // Constraint checking is disabled for all targets.
-      } else if (target.getAssociatedRule() == null) {
+      } else if (topLevelTarget.getTarget().getAssociatedRule() == null) {
         continue;
-      } else if (!target.getAssociatedRule().getRuleClassObject().supportsConstraintChecking()) {
+      } else if (!topLevelTarget
+          .getTarget()
+          .getAssociatedRule()
+          .getRuleClassObject()
+          .supportsConstraintChecking()) {
         continue; // This target doesn't participate in constraints.
       }
 
