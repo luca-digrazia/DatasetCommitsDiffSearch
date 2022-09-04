@@ -1,7 +1,5 @@
 package io.quarkus.netty.deployment;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -19,11 +17,10 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeReinitializedClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.UnsafeAccessedFieldBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.RuntimeReinitializedClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
 import io.quarkus.netty.BossEventLoopGroup;
 import io.quarkus.netty.MainEventLoopGroup;
 import io.quarkus.netty.runtime.NettyRecorder;
@@ -40,10 +37,10 @@ class NettyProcessor {
     }
 
     @BuildStep
-    public NativeImageSystemPropertyBuildItem limitMem() {
+    public SubstrateSystemPropertyBuildItem limitMem() {
         //in native mode we limit the size of the epoll array
         //if the array overflows the selector just moves the overflow to a map
-        return new NativeImageSystemPropertyBuildItem("sun.nio.ch.maxUpdateArraySize", "100");
+        return new SubstrateSystemPropertyBuildItem("sun.nio.ch.maxUpdateArraySize", "100");
     }
 
     @BuildStep
@@ -54,7 +51,7 @@ class NettyProcessor {
     }
 
     @BuildStep
-    NativeImageConfigBuildItem build(BuildProducer<JniBuildItem> jni) {
+    SubstrateConfigBuildItem build(BuildProducer<JniBuildItem> jni) {
         boolean enableJni = false;
 
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
@@ -63,13 +60,12 @@ class NettyProcessor {
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "java.util.LinkedHashMap"));
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, "sun.nio.ch.SelectorImpl"));
 
-        NativeImageConfigBuildItem.Builder builder = NativeImageConfigBuildItem.builder()
+        SubstrateConfigBuildItem.Builder builder = SubstrateConfigBuildItem.builder()
                 //.addNativeImageSystemProperty("io.netty.noUnsafe", "true")
                 // Use small chunks to avoid a lot of wasted space. Default is 16mb * arenas (derived from core count)
                 // Since buffers are cached to threads, the malloc overhead is temporary anyway
                 .addNativeImageSystemProperty("io.netty.allocator.maxOrder", "1")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.JdkNpnApplicationProtocolNegotiator")
-                .addRuntimeInitializedClass("io.netty.handler.ssl.ConscryptAlpnSslEngine")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslEngine")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslContext")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslClientContext")
@@ -78,17 +74,15 @@ class NettyProcessor {
                 .addRuntimeInitializedClass("io.netty.buffer.PooledByteBufAllocator")
                 .addRuntimeInitializedClass("io.netty.buffer.ByteBufAllocator")
                 .addRuntimeInitializedClass("io.netty.buffer.ByteBufUtil")
+                .addRuntimeInitializedClass("io.netty.handler.ssl.ConscryptAlpnSslEngine")
+                .addRuntimeInitializedClass("io.netty.handler.codec.http.websocketx.extensions.compression.DeflateDecoder")
+                .addRuntimeInitializedClass("io.netty.handler.codec.http2.Http2ConnectionHandler")
                 .addNativeImageSystemProperty("io.netty.leakDetection.level", "DISABLED");
-
         try {
             Class.forName("io.netty.handler.codec.http.HttpObjectEncoder");
-            builder
+            builder.addRuntimeInitializedClass("io.netty.handler.codec.http2.Http2CodecUtil")
                     .addRuntimeInitializedClass("io.netty.handler.codec.http.HttpObjectEncoder")
-                    .addRuntimeInitializedClass("io.netty.handler.codec.http2.Http2CodecUtil")
-                    .addRuntimeInitializedClass("io.netty.handler.codec.http2.Http2ClientUpgradeCodec")
                     .addRuntimeInitializedClass("io.netty.handler.codec.http2.DefaultHttp2FrameWriter")
-                    .addRuntimeInitializedClass("io.netty.handler.codec.http2.Http2ConnectionHandler")
-                    .addRuntimeInitializedClass("io.netty.handler.codec.http.websocketx.extensions.compression.DeflateDecoder")
                     .addRuntimeInitializedClass("io.netty.handler.codec.http.websocketx.WebSocket00FrameEncoder");
         } catch (ClassNotFoundException e) {
             //ignore
@@ -181,11 +175,4 @@ class NettyProcessor {
                 "io.quarkus.netty.runtime.graal.Holder_io_netty_util_concurrent_ScheduledFutureTask");
     }
 
-    // TODO: Remove this when netty.version is 4.1.43.Final or greater.
-    @BuildStep
-    public List<UnsafeAccessedFieldBuildItem> unsafeAccessedFields() {
-        return Arrays.asList(
-                new UnsafeAccessedFieldBuildItem("sun.nio.ch.SelectorImpl", "selectedKeys"),
-                new UnsafeAccessedFieldBuildItem("sun.nio.ch.SelectorImpl", "publicSelectedKeys"));
-    }
 }
