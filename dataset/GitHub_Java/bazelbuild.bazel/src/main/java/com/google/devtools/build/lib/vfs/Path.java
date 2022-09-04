@@ -13,11 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrintable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.FileSystem.HashFunction;
 import java.io.File;
@@ -39,20 +37,21 @@ import java.util.IdentityHashMap;
 import java.util.Objects;
 
 /**
- * Instances of this class represent pathnames, forming a tree structure to implement sharing of
- * common prefixes (parent directory names). A node in these trees is something like foo, bar, ..,
- * ., or /. If the instance is not a root path, it will have a parent path. A path can also have
- * children, which are indexed by name in a map.
+ * <p>Instances of this class represent pathnames, forming a tree
+ * structure to implement sharing of common prefixes (parent directory names).
+ * A node in these trees is something like foo, bar, .., ., or /. If the
+ * instance is not a root path, it will have a parent path. A path can also
+ * have children, which are indexed by name in a map.
  *
- * <p>There is some limited support for Windows-style paths. Most importantly, drive identifiers in
- * front of a path (c:/abc) are supported. However, Windows-style backslash separators
+ * <p>There is some limited support for Windows-style paths. Most importantly, drive identifiers
+ * in front of a path (c:/abc) are supported. However, Windows-style backslash separators
  * (C:\\foo\\bar) and drive-relative paths ("C:foo") are explicitly not supported, same with
  * advanced features like \\\\network\\paths and \\\\?\\unc\\paths.
  *
  * <p>{@link FileSystem} implementations maintain pointers into this graph.
  */
 @ThreadSafe
-public class Path implements Comparable<Path>, Serializable, SkylarkPrintable {
+public class Path implements Comparable<Path>, Serializable {
 
   /** Filesystem-specific factory for {@link Path} objects. */
   public static interface PathFactory {
@@ -78,6 +77,11 @@ public class Path implements Comparable<Path>, Serializable, SkylarkPrintable {
     /**
      * Makes the proper invocation of {@link FileSystem#getCachedChildPathInternal}, doing
      * filesystem-specific logic if necessary.
+     *
+     * <p>On Unix filesystems this method merely calls through to {@code
+     * FileSystem.getCachedChildPathInternal(parent, child)}, but on Windows this can be used to
+     * handle the translatation of absolute Unix paths to absolute Windows paths, e.g. "/c" to "C:/"
+     * or "/usr" to "C:/tools/msys64/usr".
      */
     Path getCachedChildPathInternal(Path path, String childName);
   }
@@ -421,11 +425,6 @@ public class Path implements Comparable<Path>, Serializable, SkylarkPrintable {
     StringBuilder builder = new StringBuilder(depth * 20);
     buildPathString(builder);
     return builder.toString();
-  }
-
-  @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.append(getPathString());
   }
 
   /**
