@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.feature;
 
@@ -31,9 +31,9 @@ import smile.data.Segment;
 import smile.data.USPS;
 import smile.gap.BitString;
 import smile.regression.RegressionTree;
-import smile.validation.Accuracy;
 import smile.math.MathEx;
-import smile.validation.RMSE;
+import smile.validation.metric.Accuracy;
+import smile.validation.metric.RMSE;
 
 /**
  *
@@ -67,14 +67,14 @@ public class GAFETest {
         MathEx.setSeed(19650218); // to get repeatable results.
 
         GAFE selection = new GAFE();
-        BitString[] result = selection.apply(100, 20, 256,
-                GAFE.fitness(USPS.x, USPS.y, USPS.testx, USPS.testy, new Accuracy(), (x, y) -> LDA.fit(x, y)));
+        BitString[] result = selection.apply(50, 10, 256,
+                GAFE.fitness(USPS.x, USPS.y, USPS.testx, USPS.testy, new Accuracy(), LDA::fit));
             
         for (BitString bits : result) {
             System.out.format("%.2f%% %s%n", 100*bits.fitness(), bits);
         }
 
-        assertEquals(0.8874, result[result.length-1].fitness(), 1E-4);
+        assertEquals(0.8789, result[result.length-1].fitness(), 1E-4);
     }
 
     @Test
@@ -84,14 +84,14 @@ public class GAFETest {
         MathEx.setSeed(19650218); // to get repeatable results.
 
         GAFE selection = new GAFE();
-        BitString[] result = selection.apply(100, 20, Segment.train.ncols()-1,
-                GAFE.fitness("class", Segment.train, Segment.test, new Accuracy(), (formula, data) -> DecisionTree.fit(formula, data)));
+        BitString[] result = selection.apply(50, 10, Segment.train.ncols()-1,
+                GAFE.fitness("class", Segment.train, Segment.test, new Accuracy(), DecisionTree::fit));
 
         for (BitString bits : result) {
             System.out.format("%.2f%% %s%n", 100*bits.fitness(), bits);
         }
 
-        assertEquals(0.8049, result[result.length-1].fitness(), 1E-4);
+        assertEquals(0.9654, result[result.length-1].fitness(), 1E-4);
     }
 
     @Test
@@ -101,13 +101,13 @@ public class GAFETest {
         MathEx.setSeed(19650218); // to get repeatable results.
 
         GAFE selection = new GAFE();
-        BitString[] result = selection.apply(100, 20, Abalone.train.ncols()-1,
-                GAFE.fitness("rings", Abalone.train, Abalone.test, new RMSE(), (formula, data) -> RegressionTree.fit(formula, data)));
+        BitString[] result = selection.apply(50, 10, Abalone.train.ncols()-1,
+                GAFE.fitness("rings", Abalone.train, Abalone.test, new RMSE(), RegressionTree::fit));
 
         for (BitString bits : result) {
             System.out.format("%.4f %s%n", -bits.fitness(), bits);
         }
 
-        assertEquals(2.4075, -result[result.length-1].fitness(), 1E-4);
+        assertEquals(2.3840, -result[result.length-1].fitness(), 1E-4);
     }
 }
