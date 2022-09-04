@@ -107,8 +107,10 @@ public class RolesResource extends RestResource {
     @RequiresPermissions(RestPermissions.ROLES_CREATE)
     @ApiOperation(value = "Create a new role", notes = "")
     public Response create(@ApiParam(name = "JSON body", value = "The new role to create", required = true) @Valid @NotNull RoleResponse roleResponse) {
-        if (roleService.exists(roleResponse.name())) {
+        try {
+            roleService.load(roleResponse.name());
             throw new BadRequestException("Role " + roleResponse.name() + " already exists.");
+        } catch (NotFoundException ignored) {
         }
 
         Role role = new RoleImpl();
