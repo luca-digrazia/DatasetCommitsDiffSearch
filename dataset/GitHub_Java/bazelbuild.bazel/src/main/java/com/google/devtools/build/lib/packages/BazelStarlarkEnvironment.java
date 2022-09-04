@@ -157,7 +157,8 @@ public final class BazelStarlarkEnvironment {
 
   private static ImmutableMap<String, Object> createUninjectedBuildBzlEnv(
       RuleClassProvider ruleClassProvider, Map<String, Object> uninjectedBuildBzlNativeBindings) {
-    Map<String, Object> env = new HashMap<>(ruleClassProvider.getEnvironment());
+    Map<String, Object> env = new HashMap<>();
+    env.putAll(ruleClassProvider.getEnvironment());
 
     // Determine the "native" module.
     // TODO(#11954): Use the same "native" object for both BUILD- and WORKSPACE-loaded .bzls, and
@@ -185,7 +186,8 @@ public final class BazelStarlarkEnvironment {
 
   private static ImmutableMap<String, Object> createWorkspaceBzlEnv(
       RuleClassProvider ruleClassProvider, Map<String, Object> workspaceBzlNativeBindings) {
-    Map<String, Object> env = new HashMap<>(ruleClassProvider.getEnvironment());
+    Map<String, Object> env = new HashMap<>();
+    env.putAll(ruleClassProvider.getEnvironment());
 
     // See above comments for native in BUILD bzls.
     env.put("native", createNativeModule(workspaceBzlNativeBindings));
@@ -197,7 +199,8 @@ public final class BazelStarlarkEnvironment {
       RuleClassProvider ruleClassProvider,
       ImmutableMap<String, Object> uninjectedBuildBzlNativeBindings,
       ImmutableMap<String, Object> uninjectedBuildBzlEnv) {
-    Map<String, Object> env = new HashMap<>(ruleClassProvider.getEnvironment());
+    Map<String, Object> env = new HashMap<>();
+    env.putAll(ruleClassProvider.getEnvironment());
 
     // Clear out rule-specific symbols like CcInfo.
     env.keySet().removeAll(ruleClassProvider.getNativeRuleSpecificBindings().keySet());
@@ -336,7 +339,8 @@ public final class BazelStarlarkEnvironment {
     Map<String, Boolean> overridesMap = parseInjectionOverridesList(overridesList);
 
     // Determine top-level symbols.
-    Map<String, Object> env = new HashMap<>(uninjectedBuildBzlEnv);
+    Map<String, Object> env = new HashMap<>();
+    env.putAll(uninjectedBuildBzlEnv);
     for (Map.Entry<String, Object> entry : exportedToplevels.entrySet()) {
       String key = entry.getKey();
       String name = getKeySuffix(key);
@@ -352,7 +356,8 @@ public final class BazelStarlarkEnvironment {
 
     // Determine "native" bindings.
     // TODO(#11954): See above comment in createUninjectedBuildBzlEnv.
-    Map<String, Object> nativeBindings = new HashMap<>(uninjectedBuildBzlNativeBindings);
+    Map<String, Object> nativeBindings = new HashMap<>();
+    nativeBindings.putAll(uninjectedBuildBzlNativeBindings);
     for (Map.Entry<String, Object> entry : exportedRules.entrySet()) {
       String key = entry.getKey();
       String name = getKeySuffix(key);
@@ -402,7 +407,7 @@ public final class BazelStarlarkEnvironment {
 
   /** Indicates a problem performing builtins injection. */
   public static final class InjectionException extends Exception {
-    InjectionException(String message) {
+    public InjectionException(String message) {
       super(message);
     }
   }
