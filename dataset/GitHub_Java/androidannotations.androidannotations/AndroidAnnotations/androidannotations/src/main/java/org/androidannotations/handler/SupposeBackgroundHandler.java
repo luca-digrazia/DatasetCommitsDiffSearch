@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,24 +15,27 @@
  */
 package org.androidannotations.handler;
 
-import static com.sun.codemodel.JExpr.lit;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-
-import org.androidannotations.annotations.SupposeBackground;
-import org.androidannotations.api.BackgroundExecutor;
-import org.androidannotations.holder.EComponentHolder;
-
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 
+import org.androidannotations.annotations.SupposeBackground;
+import org.androidannotations.api.BackgroundExecutor;
+import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.holder.EComponentHolder;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+
+import static com.sun.codemodel.JExpr.lit;
+
 public class SupposeBackgroundHandler extends SupposeThreadHandler {
 
 	private static final String METHOD_CHECK_BG_THREAD = "checkBgThread";
+
+	private final APTCodeModelHelper helper = new APTCodeModelHelper();
 
 	public SupposeBackgroundHandler(ProcessingEnvironment processingEnvironment) {
 		super(SupposeBackground.class, processingEnvironment);
@@ -42,7 +45,7 @@ public class SupposeBackgroundHandler extends SupposeThreadHandler {
 	public void process(Element element, EComponentHolder holder) throws Exception {
 		ExecutableElement executableElement = (ExecutableElement) element;
 
-		JMethod delegatingMethod = codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
+		JMethod delegatingMethod = helper.overrideAnnotatedMethod(executableElement, holder);
 
 		JClass bgExecutor = refClass(BackgroundExecutor.class);
 
