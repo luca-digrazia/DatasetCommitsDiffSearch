@@ -135,7 +135,7 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "false")
     private boolean enableFallbackImages;
 
-    @Parameter(defaultValue = "true")
+    @Parameter(defaultValue = "false")
     private boolean reportExceptionStackTraces;
 
     public NativeImageMojo() {
