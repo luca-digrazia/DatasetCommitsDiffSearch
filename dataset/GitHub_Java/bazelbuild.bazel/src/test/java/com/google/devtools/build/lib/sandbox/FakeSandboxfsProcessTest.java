@@ -17,7 +17,9 @@ package com.google.devtools.build.lib.sandbox;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.IOException;
@@ -44,9 +46,44 @@ public class FakeSandboxfsProcessTest extends BaseSandboxfsProcessTest {
 
   @Test
   public void testMount_NotADirectory() throws IOException {
-    tmpDir.getRelative("file").getOutputStream().close();
+    FileSystemUtils.createEmptyFile(tmpDir.getRelative("file"));
     IOException expected = assertThrows(
         IOException.class, () -> mount(tmpDir.getRelative("file")));
     assertThat(expected).hasMessageThat().matches(".*/file.*not a directory");
+  }
+
+  @Test
+  public void testSandboxCreate_EnforcesNonRepeatedNames() throws IOException {
+    Path mountPoint = tmpDir.getRelative("mnt");
+    mountPoint.createDirectory();
+    SandboxfsProcess process = mount(mountPoint);
+
+    process.createSandbox("first", ImmutableList.of());
+    process.createSandbox("second", ImmutableList.of());
+    assertThrows(
+        IllegalArgumentException.class, () -> process.createSandbox("first", ImmutableList.of()));
+  }
+
+  @Test
+  public void testSandboxDestroy_EnforcesExistingName() throws IOException {
+    Path mountPoint = tmpDir.getRelative("mnt");
+    mountPoint.createDirectory();
+    SandboxfsProcess process = mount(mountPoint);
+
+    process.createSandbox("first", ImmutableList.of());
+    process.destroySandbox("first");
+    assertThrows(IllegalArgumentException.class, () -> process.destroySandbox("first"));
+  }
+
+  @Test
+  public void testCreateAndDestroySandbox_ReuseName() throws IOException {
+    Path mountPoint = tmpDir.getRelative("mnt");
+    mountPoint.createDirectory();
+    SandboxfsProcess process = mount(mountPoint);
+
+    process.createSandbox("first", ImmutableList.of());
+    process.destroySandbox("first");
+    process.createSandbox("first", ImmutableList.of());
+    process.destroySandbox("first");
   }
 }
