@@ -1,7 +1,5 @@
 package io.quarkus.arc.processor;
 
-import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
-
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -130,7 +128,7 @@ public class Injection {
         }
 
         if (!classInfo.superName().equals(DotNames.OBJECT)) {
-            ClassInfo info = getClassByName(beanDeployment.getIndex(), classInfo.superName());
+            ClassInfo info = beanDeployment.getIndex().getClassByName(classInfo.superName());
             if (info != null) {
                 forClassBean(beanClass, info, beanDeployment, injections, transformer, true);
             }

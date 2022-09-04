@@ -15,7 +15,6 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import javax.enterprise.inject.spi.DefinitionException;
 import javax.enterprise.inject.spi.InterceptionType;
@@ -55,9 +54,9 @@ public class BeanInfo implements InjectionTargetInfo {
 
     private final DisposerInfo disposer;
 
-    private final Map<MethodInfo, InterceptionInfo> interceptedMethods;
+    private Map<MethodInfo, InterceptionInfo> interceptedMethods;
 
-    private final Map<InterceptionType, InterceptionInfo> lifecycleInterceptors;
+    private Map<InterceptionType, InterceptionInfo> lifecycleInterceptors;
 
     private final Integer alternativePriority;
 
@@ -128,8 +127,6 @@ public class BeanInfo implements InjectionTargetInfo {
         this.params = params;
         // Identifier must be unique for a specific deployment
         this.identifier = Hashes.sha1(toString());
-        this.interceptedMethods = new ConcurrentHashMap<>();
-        this.lifecycleInterceptors = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -185,7 +182,7 @@ public class BeanInfo implements InjectionTargetInfo {
         return false;
     }
 
-    public BeanInfo getDeclaringBean() {
+    BeanInfo getDeclaringBean() {
         return declaringBean;
     }
 
@@ -374,8 +371,8 @@ public class BeanInfo implements InjectionTargetInfo {
         if (disposer != null) {
             disposer.init(errors);
         }
-        interceptedMethods.putAll(initInterceptedMethods());
-        lifecycleInterceptors.putAll(initLifecycleInterceptors());
+        interceptedMethods = initInterceptedMethods();
+        lifecycleInterceptors = initLifecycleInterceptors();
     }
 
     protected String getType() {
@@ -422,13 +419,10 @@ public class BeanInfo implements InjectionTargetInfo {
         if (!isInterceptor() && isClassBean()) {
             Map<InterceptionType, InterceptionInfo> lifecycleInterceptors = new HashMap<>();
             Set<AnnotationInstance> classLevelBindings = new HashSet<>();
-            Set<AnnotationInstance> constructorLevelBindings = new HashSet<>();
             addClassLevelBindings(target.get().asClass(), classLevelBindings);
-            addConstructorLevelBindings(target.get().asClass(), constructorLevelBindings);
             putLifecycleInterceptors(lifecycleInterceptors, classLevelBindings, InterceptionType.POST_CONSTRUCT);
             putLifecycleInterceptors(lifecycleInterceptors, classLevelBindings, InterceptionType.PRE_DESTROY);
-            constructorLevelBindings.addAll(classLevelBindings);
-            putLifecycleInterceptors(lifecycleInterceptors, constructorLevelBindings, InterceptionType.AROUND_CONSTRUCT);
+            putLifecycleInterceptors(lifecycleInterceptors, classLevelBindings, InterceptionType.AROUND_CONSTRUCT);
             return lifecycleInterceptors;
         } else {
             return Collections.emptyMap();
@@ -455,22 +449,6 @@ public class BeanInfo implements InjectionTargetInfo {
             if (superClass != null) {
                 addClassLevelBindings(superClass, bindings);
             }
-        }
-    }
-
-    private void addConstructorLevelBindings(ClassInfo classInfo, Collection<AnnotationInstance> bindings) {
-        MethodInfo constructor;
-        Optional<Injection> constructorWithInject = getConstructorInjection();
-        if (constructorWithInject.isPresent()) {
-            constructor = constructorWithInject.get().target.asMethod();
-        } else {
-            constructor = classInfo.method(Methods.INIT);
-        }
-        if (constructor != null) {
-            beanDeployment.getAnnotations(constructor).stream()
-                    .filter(a -> beanDeployment.getInterceptorBinding(a.name()) != null
-                            && bindings.stream().noneMatch(e -> e.name().equals(a.name())))
-                    .forEach(a -> bindings.add(a));
         }
     }
 
