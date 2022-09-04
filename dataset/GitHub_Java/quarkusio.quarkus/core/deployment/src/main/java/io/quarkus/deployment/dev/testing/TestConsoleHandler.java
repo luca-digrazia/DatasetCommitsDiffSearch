@@ -36,16 +36,9 @@ public class TestConsoleHandler implements TestListener {
 
     public static final String PAUSED_PROMPT = "Tests paused, press [" + BLUE + "r" + RESET + "] to resume, [" + BLUE + "h"
             + RESET + "] for more options>" + RESET;
-    public static final String PAUSED_PROMPT_NO_HTTP = "Tests paused, press [" + BLUE + "r" + RESET + "] to resume, [" + BLUE
-            + "s" + RESET + "] to restart with changes, [" + BLUE + "h"
-            + RESET + "] for more options>" + RESET;
     public static final String FIRST_RUN_PROMPT = BLUE + "Running Tests for the first time" + RESET;
     public static final String RUNNING_PROMPT = "Press [" + BLUE + "r" + RESET + "] to re-run, [" + BLUE
             + "v" + RESET + "] to view full results, [" + BLUE + "p" + RESET + "] to pause, [" + BLUE
-            + "h" + RESET + "] for more options>";
-    public static final String RUNNING_PROMPT_NO_HTTP = "Press [" + BLUE + "r" + RESET + "] to re-run, [" + BLUE
-            + "v" + RESET + "] to view full results, [" + BLUE + "p" + RESET + "] to pause, [" + BLUE + "s" + RESET
-            + "] to restart with changes, [" + BLUE
             + "h" + RESET + "] for more options>";
 
     final DevModeType devModeType;
@@ -57,15 +50,8 @@ public class TestConsoleHandler implements TestListener {
     volatile TestController testController;
     private String lastResults;
 
-    /**
-     * If HTTP is not present we add the 'press s to reload' option to the prompt
-     * to make it clear to users they can restart their apps.
-     */
-    private final boolean hasHttp;
-
-    public TestConsoleHandler(DevModeType devModeType, boolean hasHttp) {
+    public TestConsoleHandler(DevModeType devModeType) {
         this.devModeType = devModeType;
-        this.hasHttp = hasHttp;
     }
 
     public void install() {
@@ -106,15 +92,13 @@ public class TestConsoleHandler implements TestListener {
                             System.exit(0);
                         }
                     }, "Quarkus exit thread").run();
-                } else if (k == 'o' && devModeType != DevModeType.TEST_ONLY) {
-                    testController.toggleTestOutput();
                 } else {
                     if (disabled) {
                         if (k == 'r') {
                             promptHandler.setStatus(BLUE + "Starting tests" + RESET);
                             TestSupport.instance().get().start();
                         }
-                    } else {
+                    } else if (!firstRun) {
                         //TODO: some of this is a bit yuck, this needs some work
                         if (k == 'r') {
                             testController.runAllTests();
@@ -122,6 +106,8 @@ public class TestConsoleHandler implements TestListener {
                             testController.runFailedTests();
                         } else if (k == 'v') {
                             testController.printFullResults();
+                        } else if (k == 'o' && devModeType != DevModeType.TEST_ONLY) {
+                            testController.toggleTestOutput();
                         } else if (k == 'p') {
                             TestSupport.instance().get().stop();
                         } else if (k == 'b') {
@@ -141,8 +127,7 @@ public class TestConsoleHandler implements TestListener {
     @Override
     public void listenerRegistered(TestController testController) {
         this.testController = testController;
-        promptHandler.setPrompt(hasHttp ? PAUSED_PROMPT : PAUSED_PROMPT_NO_HTTP);
-
+        promptHandler.setPrompt(PAUSED_PROMPT);
     }
 
     public void printUsage() {
@@ -155,14 +140,16 @@ public class TestConsoleHandler implements TestListener {
             System.out.println(helpOption("b", "Toggle 'broken only' mode, where only failing tests are run",
                     testController.isBrokenOnlyMode()));
             System.out.println(helpOption("v", "Print failures from the last test run"));
+            if (devModeType != DevModeType.TEST_ONLY) {
+                System.out.println(helpOption("o", "Toggle test output", testController.isDisplayTestOutput()));
+            }
             System.out.println(helpOption("p", "Pause tests"));
         }
         if (devModeType != DevModeType.TEST_ONLY) {
-            System.out.println(helpOption("o", "Toggle test output", testController.isDisplayTestOutput()));
             System.out
                     .println(helpOption("i", "Toggle instrumentation based reload", testController.isInstrumentationEnabled()));
             System.out.println(helpOption("l", "Toggle live reload", testController.isLiveReloadEnabled()));
-            System.out.println(helpOption("s", "Force restart with any changes"));
+            System.out.println(helpOption("s", "Force live reload scan"));
         }
         System.out.println(helpOption("h", "Display this help"));
         System.out.println(helpOption("q", "Quit"));
@@ -173,18 +160,19 @@ public class TestConsoleHandler implements TestListener {
         disabled = false;
         if (firstRun) {
             promptHandler.setStatus(null);
-            promptHandler.setResults(FIRST_RUN_PROMPT);
+            promptHandler.setResults(null);
+            promptHandler.setPrompt(FIRST_RUN_PROMPT);
         } else {
+            promptHandler.setPrompt(RUNNING_PROMPT);
             promptHandler.setResults(lastResults);
             promptHandler.setStatus(null);
         }
-        promptHandler.setPrompt(hasHttp ? RUNNING_PROMPT : RUNNING_PROMPT_NO_HTTP);
     }
 
     @Override
     public void testsDisabled() {
         disabled = true;
-        promptHandler.setPrompt(hasHttp ? PAUSED_PROMPT : PAUSED_PROMPT_NO_HTTP);
+        promptHandler.setPrompt(PAUSED_PROMPT);
         promptHandler.setStatus(null);
         promptHandler.setResults(null);
     }
@@ -282,7 +270,7 @@ public class TestConsoleHandler implements TestListener {
                 }
                 //this will re-print when using the basic console
                 if (!disabled) {
-                    promptHandler.setPrompt(hasHttp ? RUNNING_PROMPT : RUNNING_PROMPT_NO_HTTP);
+                    promptHandler.setPrompt(RUNNING_PROMPT);
                     promptHandler.setResults(lastResults);
                     promptHandler.setStatus(null);
                 }
