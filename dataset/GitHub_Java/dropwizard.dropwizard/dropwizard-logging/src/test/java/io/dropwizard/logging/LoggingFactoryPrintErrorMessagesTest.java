@@ -75,13 +75,12 @@ public class LoggingFactoryPrintErrorMessagesTest {
     @Test
     public void testWhenFileAppenderDoesNotHaveWritePermissionToFolder_PrintsErrorMessageToConsole() throws Exception {
         File folderWithoutWritePermission = tempDir.newFolder("folder-without-write-permission");
-        // setWritable isn't guaranteed to succeed.
-        if (folderWithoutWritePermission.setWritable(false)) {
-            configureLoggingFactoryWithFileAppender(folderWithoutWritePermission);
+        folderWithoutWritePermission.setWritable(false);
 
-            assertThat(folderWithoutWritePermission.canWrite()).isFalse();
-            assertThat(configureAndGetOutputWrittenToErrorStream()).contains(folderWithoutWritePermission.toString());
-        }
+        configureLoggingFactoryWithFileAppender(folderWithoutWritePermission);
+
+        assertThat(folderWithoutWritePermission.canWrite()).isFalse();
+        assertThat(configureAndGetOutputWrittenToErrorStream()).contains(folderWithoutWritePermission.toString());
     }
 
     @Test
