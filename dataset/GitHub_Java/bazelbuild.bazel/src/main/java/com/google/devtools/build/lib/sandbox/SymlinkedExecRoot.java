@@ -16,9 +16,11 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.io.Files;
 import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Symlinks;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
@@ -30,7 +32,7 @@ import java.util.Set;
  * Creates an execRoot for a Spawn that contains input files as symlinks to their original
  * destination.
  */
-final class SymlinkedExecRoot implements SandboxExecRoot {
+public final class SymlinkedExecRoot implements SandboxExecRoot {
 
   private final Path sandboxExecRoot;
 
@@ -43,11 +45,35 @@ final class SymlinkedExecRoot implements SandboxExecRoot {
       Map<PathFragment, Path> inputs, Collection<PathFragment> outputs, Set<Path> writableDirs)
       throws IOException {
     Set<Path> createdDirs = new HashSet<>();
+    cleanFileSystem(inputs.keySet());
     FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, sandboxExecRoot);
     createParentDirectoriesForInputs(createdDirs, inputs.keySet());
-    createSymlinksForInputs(inputs);
+    createInputs(inputs);
     createWritableDirectories(createdDirs, writableDirs);
     createDirectoriesForOutputs(createdDirs, outputs);
+  }
+
+  private void cleanFileSystem(Set<PathFragment> allowedFiles) throws IOException {
+    if (sandboxExecRoot.exists(Symlinks.NOFOLLOW)) {
+      deleteExceptAllowedFiles(sandboxExecRoot, allowedFiles);
+    }
+  }
+
+  private void deleteExceptAllowedFiles(Path root, Set<PathFragment> allowedFiles)
+      throws IOException {
+    for (Path p : root.getDirectoryEntries()) {
+      FileStatus stat = p.stat(Symlinks.NOFOLLOW);
+      if (!stat.isDirectory()) {
+        if (!allowedFiles.contains(p.relativeTo(sandboxExecRoot))) {
+          p.delete();
+        }
+      } else {
+        deleteExceptAllowedFiles(p, allowedFiles);
+        if (p.readdir(Symlinks.NOFOLLOW).isEmpty()) {
+          p.delete();
+        }
+      }
+    }
   }
 
   /**
@@ -66,16 +92,31 @@ final class SymlinkedExecRoot implements SandboxExecRoot {
       throws IOException {
     for (PathFragment inputPath : inputs) {
       Path dir = sandboxExecRoot.getRelative(inputPath).getParentDirectory();
-      Preconditions.checkArgument(dir.startsWith(sandboxExecRoot));
+      Preconditions.checkArgument(
+          dir.startsWith(sandboxExecRoot), "Bad relative path: '%s'", inputPath);
       FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, dir);
     }
   }
 
-  private void createSymlinksForInputs(Map<PathFragment, Path> inputs) throws IOException {
+  private void createInputs(Map<PathFragment, Path> inputs) throws IOException {
     // All input files are relative to the execroot.
     for (Entry<PathFragment, Path> entry : inputs.entrySet()) {
       Path key = sandboxExecRoot.getRelative(entry.getKey());
-      key.createSymbolicLink(entry.getValue());
+      FileStatus keyStat = key.statNullable(Symlinks.NOFOLLOW);
+      if (keyStat != null) {
+        if (keyStat.isSymbolicLink()
+            && entry.getValue() != null
+            && key.readSymbolicLink().equals(entry.getValue().asFragment())) {
+          continue;
+        }
+        key.delete();
+      }
+      // A null value means that we're supposed to create an empty file as the input.
+      if (entry.getValue() != null) {
+        key.createSymbolicLink(entry.getValue());
+      } else {
+        FileSystemUtils.createEmptyFile(key);
+      }
     }
   }
 
@@ -100,15 +141,19 @@ final class SymlinkedExecRoot implements SandboxExecRoot {
   /** Moves all {@code outputs} to {@code execRoot}. */
   @Override
   public void copyOutputs(Path execRoot, Collection<PathFragment> outputs) throws IOException {
-    Set<Path> createdDirs = new HashSet<>();
     for (PathFragment output : outputs) {
       Path source = sandboxExecRoot.getRelative(output);
+      Path target = execRoot.getRelative(output);
       if (source.isFile() || source.isSymbolicLink()) {
-        FileSystemUtils.createDirectoryAndParentsWithCache(
-            createdDirs, execRoot.getRelative(output.getParentDirectory()));
-
-        Path target = execRoot.getRelative(output);
         Files.move(source.getPathFile(), target.getPathFile());
+      } else if (source.isDirectory()) {
+        try {
+          source.renameTo(target);
+        } catch (IOException e) {
+          // Failed to move directory directly, thus move it recursively.
+          target.createDirectory();
+          FileSystemUtils.moveTreesBelow(source, target);
+        }
       }
     }
   }

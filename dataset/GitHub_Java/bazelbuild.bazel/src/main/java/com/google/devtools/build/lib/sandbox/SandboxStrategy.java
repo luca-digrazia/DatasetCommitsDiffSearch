@@ -177,10 +177,7 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
 
       Map<PathFragment, Path> mounts = new TreeMap<>();
       for (Map.Entry<PathFragment, ActionInput> e : inputMap.entrySet()) {
-        Path inputPath = e.getValue() == SpawnInputExpander.EMPTY_FILE
-            ? null
-            : execRoot.getRelative(e.getValue().getExecPath());
-        mounts.put(e.getKey(), inputPath);
+        mounts.put(e.getKey(), execRoot.getRelative(e.getValue().getExecPath()));
       }
       return mounts;
     } catch (IOException e) {
