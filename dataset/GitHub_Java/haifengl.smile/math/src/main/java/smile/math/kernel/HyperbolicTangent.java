@@ -17,6 +17,8 @@
 
 package smile.math.kernel;
 
+import smile.math.MathEx;
+
 /**
  * The hyperbolic tangent kernel.
  * <p>
@@ -71,7 +73,7 @@ public class HyperbolicTangent implements DotProductKernel {
 
     @Override
     public String toString() {
-        return String.format("HyperbolicTangentKernel(%.4f, %.4f)", scale, offset);
+        return String.format("HyperbolicTangent(%.4f, %.4f)", scale, offset);
     }
 
     @Override
