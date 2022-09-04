@@ -524,10 +524,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
    */
   void commit(NodeEntry primaryEntry, EnqueueParentBehavior enqueueParents)
       throws InterruptedException {
-    for (ExtendedEventHandler.Postable post : eventHandler.getPosts()) {
-      evaluatorContext.getReporter().post(post);
-    }
-
     // Construct the definitive error info, if there is one.
     finalizeErrorInfo();
 
