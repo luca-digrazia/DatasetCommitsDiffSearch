@@ -14,21 +14,21 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog.plugins.views.search.errors;
+package org.graylog.plugins.views.search;
 
-import com.google.common.collect.ImmutableMap;
+import org.graylog.plugins.views.search.views.PluginMetadataSummary;
 
-import javax.ws.rs.core.Response;
-import javax.ws.rs.ext.ExceptionMapper;
+import java.net.URI;
+import java.util.HashMap;
 import java.util.Map;
 
-public class MissingCapabilitiesExceptionMapper implements ExceptionMapper<MissingCapabilitiesException> {
-    @Override
-    public Response toResponse(MissingCapabilitiesException exception) {
-        final Map<String, Object> error = ImmutableMap.of(
-                "error", "Unable to execute this search, the following capabilities are missing:",
-                "missing", exception.getMissingRequirements()
-        );
-        return Response.status(Response.Status.CONFLICT).entity(error).build();
+public class TestData {
+    public static Map<String, PluginMetadataSummary> requirementsMap(String... requirementNames) {
+        final Map<String, PluginMetadataSummary> requirements = new HashMap<>();
+
+        for (String req : requirementNames)
+            requirements.put(req, PluginMetadataSummary.create("", req, "", URI.create("www.affenmann.info"), "6.6.6", ""));
+
+        return requirements;
     }
 }

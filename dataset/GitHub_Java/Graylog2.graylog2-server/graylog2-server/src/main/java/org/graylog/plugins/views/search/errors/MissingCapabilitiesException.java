@@ -16,19 +16,20 @@
  */
 package org.graylog.plugins.views.search.errors;
 
-import com.google.common.collect.ImmutableMap;
+import org.graylog.plugins.views.search.views.PluginMetadataSummary;
 
-import javax.ws.rs.core.Response;
-import javax.ws.rs.ext.ExceptionMapper;
 import java.util.Map;
 
-public class MissingCapabilitiesExceptionMapper implements ExceptionMapper<MissingCapabilitiesException> {
-    @Override
-    public Response toResponse(MissingCapabilitiesException exception) {
-        final Map<String, Object> error = ImmutableMap.of(
-                "error", "Unable to execute this search, the following capabilities are missing:",
-                "missing", exception.getMissingRequirements()
-        );
-        return Response.status(Response.Status.CONFLICT).entity(error).build();
+public class MissingCapabilitiesException extends RuntimeException {
+
+    private final Map<String, PluginMetadataSummary> missingRequirements;
+
+    public MissingCapabilitiesException(Map<String, PluginMetadataSummary> missingRequirements) {
+        super();
+        this.missingRequirements = missingRequirements;
+    }
+
+    public Map<String, PluginMetadataSummary> getMissingRequirements() {
+        return missingRequirements;
     }
 }

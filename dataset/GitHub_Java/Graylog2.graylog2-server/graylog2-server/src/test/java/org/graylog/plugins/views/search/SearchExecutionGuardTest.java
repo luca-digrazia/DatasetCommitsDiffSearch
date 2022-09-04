@@ -72,10 +72,12 @@ public class SearchExecutionGuardTest {
     }
 
     @Test
-    public void allowsSearchesWithNoStreams() {
+    public void cantAuthorizeASearchWithNoStreams() {
         final Search search = searchWithStreamIds();
 
-        assertSucceeds(search, id -> true);
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> sut.check(search, id -> true))
+                .withMessageContaining("no streams");
     }
 
     @Test

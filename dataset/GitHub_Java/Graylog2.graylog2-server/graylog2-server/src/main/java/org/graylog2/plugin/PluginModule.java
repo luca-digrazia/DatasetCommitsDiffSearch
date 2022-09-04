@@ -28,14 +28,10 @@ import org.graylog.events.processor.EventProcessor;
 import org.graylog.events.processor.EventProcessorConfig;
 import org.graylog.events.processor.EventProcessorParameters;
 import org.graylog.events.processor.storage.EventStorageHandler;
-import org.graylog.grn.GRNDescriptorProvider;
-import org.graylog.grn.GRNType;
 import org.graylog.scheduler.Job;
 import org.graylog.scheduler.JobDefinitionConfig;
 import org.graylog.scheduler.JobSchedule;
 import org.graylog.scheduler.JobTriggerData;
-import org.graylog.security.authservice.AuthServiceBackend;
-import org.graylog.security.authservice.AuthServiceBackendConfig;
 import org.graylog2.audit.AuditEventType;
 import org.graylog2.audit.PluginAuditEventTypes;
 import org.graylog2.audit.formatter.AuditEventFormatter;
@@ -45,6 +41,7 @@ import org.graylog2.contentpacks.model.ModelType;
 import org.graylog2.migrations.Migration;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
+import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.indexer.retention.RetentionStrategy;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
@@ -188,6 +185,10 @@ public abstract class PluginModule extends Graylog2Module {
         processorDescriptorBinder().addBinding().to(descriptorClass);
     }
 
+    protected <T extends WidgetStrategy> void addWidgetStrategy(Class<T> widgetStrategyClass, Class<? extends WidgetStrategy.Factory<T>> factory) {
+        installWidgetStrategy(widgetStrategyBinder(), widgetStrategyClass, factory);
+    }
+
     protected void addPermissions(Class<? extends PluginPermissions> permissionsClass) {
         installPermissions(permissionsBinder(), permissionsClass);
     }
@@ -300,27 +301,5 @@ public abstract class PluginModule extends Graylog2Module {
         install(new FactoryModuleBuilder().implement(EventNotification.class, handlerClass).build(factoryClass));
         eventNotificationBinder().addBinding(name).to(factoryClass);
         registerJacksonSubtype(notificationClass, name);
-    }
-
-    protected void addGRNType(GRNType type, Class<? extends GRNDescriptorProvider> descriptorProvider) {
-        final MapBinder<GRNType, GRNDescriptorProvider> mapBinder = MapBinder.newMapBinder(binder(), GRNType.class, GRNDescriptorProvider.class);
-        mapBinder.addBinding(type).to(descriptorProvider);
-    }
-
-    protected MapBinder<String, AuthServiceBackend.Factory<? extends AuthServiceBackend>> authServiceBackendBinder() {
-        return MapBinder.newMapBinder(
-                binder(),
-                TypeLiteral.get(String.class),
-                new TypeLiteral<AuthServiceBackend.Factory<? extends AuthServiceBackend>>() {}
-        );
-    }
-
-    protected void addAuthServiceBackend(String name,
-            Class<? extends AuthServiceBackend> backendClass,
-            Class<? extends AuthServiceBackend.Factory<? extends AuthServiceBackend>> factoryClass,
-            Class<? extends AuthServiceBackendConfig> configClass) {
-        install(new FactoryModuleBuilder().implement(AuthServiceBackend.class, backendClass).build(factoryClass));
-        authServiceBackendBinder().addBinding(name).to(factoryClass);
-        registerJacksonSubtype(configClass, name);
     }
 }
