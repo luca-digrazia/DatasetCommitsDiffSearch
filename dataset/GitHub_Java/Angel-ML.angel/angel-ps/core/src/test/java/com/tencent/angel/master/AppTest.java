@@ -104,7 +104,7 @@ public class AppTest {
 
       angelClient.startPSServer();
       angelClient.runTask(DummyTask.class);
-      Thread.sleep(5000);
+      Thread.sleep(2000);
       task0Id = new TaskId(0);
       task1Id = new TaskId(1);
     } catch (Exception x) {

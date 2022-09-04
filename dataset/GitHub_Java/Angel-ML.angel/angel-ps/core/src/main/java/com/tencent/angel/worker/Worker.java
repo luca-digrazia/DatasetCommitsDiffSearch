@@ -41,6 +41,7 @@ import com.tencent.angel.worker.task.TaskManager;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.web.JsonUtil;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
@@ -49,6 +50,9 @@ import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -68,7 +72,7 @@ public class Worker implements Executor {
 
   private static final Log LOG = LogFactory.getLog(Worker.class);
 
-  private volatile WorkerGroup workerGroup;
+  private WorkerGroup workerGroup;
 
   private final Configuration conf;
 
@@ -90,33 +94,33 @@ public class Worker implements Executor {
 
   private final Map<String, String> workerMetrics;
 
-  private volatile TaskManager taskManager;
+  private TaskManager taskManager;
 
-  private volatile DataBlockManager dataBlockManager;
+  private DataBlockManager dataBlockManager;
 
-  private volatile boolean test = false;
+  private boolean test = false;
 
-  private volatile int initMinClock;
+  private int initMinClock;
 
-  private volatile Lock readLockForTaskNum;
+  private Lock readLockForTaskNum;
 
-  private volatile Lock writeLockForTaskNum;
+  private Lock writeLockForTaskNum;
 
-  private volatile int activeTaskNum;
+  private int activeTaskNum;
 
   private final AtomicBoolean workerInitFinishedFlag;
 
-  private volatile Thread heartbeatThread;
+  private Thread heartbeatThread;
 
-  private volatile CounterUpdater counterUpdater;
+  private CounterUpdater counterUpdater;
 
-  private volatile PSAgent psAgent;
+  private PSAgent psAgent;
 
-  private volatile MasterClient masterClient;
+  private MasterClient masterClient;
 
   private final AtomicBoolean exitedFlag;
 
-  private volatile WorkerService workerService;
+  private WorkerService workerService;
 
   /**
    * Instantiates a new Worker.
