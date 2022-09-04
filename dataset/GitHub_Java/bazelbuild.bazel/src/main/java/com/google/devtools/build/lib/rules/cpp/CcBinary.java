@@ -22,9 +22,10 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
-import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
+import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -34,10 +35,7 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.ExecutionInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -237,14 +235,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       ruleContext.attributeError("linkshared", "'linkshared' used in non-shared library");
       return null;
     }
-
-    CcLinkParams linkParams =
-        collectCcLinkParams(
-            ruleContext,
-            linkStaticness != LinkStaticness.DYNAMIC,
-            isLinkShared(ruleContext),
-            linkopts);
-
     CppLinkActionBuilder linkActionBuilder =
         determineLinkerArguments(
             ruleContext,
@@ -257,7 +247,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             cppCompilationContext.getTransitiveCompilationPrerequisites(),
             fake,
             binary,
-            linkParams,
+            linkStaticness,
+            linkopts,
             linkCompileOutputSeparately);
     linkActionBuilder.setUseTestOnlyFlags(ruleContext.isTestTarget());
     if (linkStaticness == LinkStaticness.DYNAMIC) {
@@ -371,17 +362,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       }
     }
 
-    // If the binary is linked dynamically and COPY_DYNAMIC_LIBRARIES_TO_BINARY is enabled, collect
-    // all the dynamic libraries we need at runtime. Then copy these libraries next to the binary.
-    if (featureConfiguration.isEnabled(CppRuleClasses.COPY_DYNAMIC_LIBRARIES_TO_BINARY)) {
-      filesToBuild =
-          NestedSetBuilder.fromNestedSet(filesToBuild)
-              .addAll(
-                  createDynamicLibrariesCopyActions(
-                      ruleContext, linkParams.getExecutionDynamicLibraries()))
-              .build();
-    }
-
     // TODO(bazel-team): Do we need to put original shared libraries (along with
     // mangled symlinks) into the RunfilesSupport object? It does not seem
     // logical since all symlinked libraries will be linked anyway and would
@@ -481,7 +461,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       ImmutableSet<Artifact> compilationPrerequisites,
       boolean fake,
       Artifact binary,
-      CcLinkParams linkParams,
+      LinkStaticness linkStaticness,
+      List<String> linkopts,
       boolean linkCompileOutputSeparately)
       throws InterruptedException {
     CppLinkActionBuilder builder =
@@ -530,8 +511,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
 
     // Then the link params from the closure of deps.
+    CcLinkParams linkParams = collectCcLinkParams(
+        context, linkStaticness != LinkStaticness.DYNAMIC, isLinkShared(context), linkopts);
     builder.addLinkParams(linkParams, context);
-
     return builder;
   }
 
@@ -645,8 +627,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
 
     Action[] build(RuleContext context) {
-      spawnAction.addCommandLine(
-          commandLine.build(), ParamFileInfo.builder(ParameterFileType.UNQUOTED).build());
+      spawnAction.setCommandLine(commandLine.build());
       return spawnAction.build(context);
     }
   }
@@ -706,29 +687,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Create the actions to symlink/copy execution dynamic libraries to binary directory so that they
-   * are available at runtime.
-   *
-   * @param executionDynamicLibraries The libraries to be copied.
-   * @return The result artifacts of the copies.
-   */
-  private static ImmutableList<Artifact> createDynamicLibrariesCopyActions(
-      RuleContext ruleContext, NestedSet<Artifact> executionDynamicLibraries) {
-    ImmutableList.Builder<Artifact> result = ImmutableList.builder();
-    for (Artifact target : executionDynamicLibraries) {
-      if (!ruleContext.getLabel().getPackageName().equals(target.getOwner().getPackageName())) {
-        // SymlinkAction on file is actually copy on Windows.
-        Artifact copy = ruleContext.getBinArtifact(target.getFilename());
-        ruleContext.registerAction(
-            new SymlinkAction(
-                ruleContext.getActionOwner(), target, copy, "Copying Execution Dynamic Library"));
-        result.add(copy);
-      }
-    }
-    return result.build();
-  }
-
-  /**
    * Returns a new SpawnAction builder for generating dwp files, pre-initialized with standard
    * settings.
    */
@@ -738,7 +696,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     packager
         .spawnAction
         .addTransitiveInputs(dwpTools)
-        .setExecutable(cppConfiguration.getDwpExecutable());
+        .setExecutable(cppConfiguration.getDwpExecutable())
+        .useParameterFile(ParameterFile.ParameterFileType.UNQUOTED);
     return packager;
   }
 
@@ -762,11 +721,16 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       boolean linkingStatically, boolean linkShared, List<String> linkopts) {
     CcLinkParams.Builder builder = CcLinkParams.builder(linkingStatically, linkShared);
 
-    builder.addCcLibrary(context);
-    if (!isLinkShared(context)) {
+    if (isLinkShared(context)) {
+      // CcLinkingOutputs is empty because this target is not configured yet
+      builder.addCcLibrary(context, false, linkopts, CcLinkingOutputs.EMPTY);
+    } else {
+      builder.addTransitiveTargets(
+          context.getPrerequisites("deps", Mode.TARGET),
+          CcLinkParamsInfo.TO_LINK_PARAMS, CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
       builder.addTransitiveTarget(CppHelper.mallocForTarget(context));
+      builder.addLinkOpts(linkopts);
     }
-    builder.addLinkOpts(linkopts);
     return builder.build();
   }
 
