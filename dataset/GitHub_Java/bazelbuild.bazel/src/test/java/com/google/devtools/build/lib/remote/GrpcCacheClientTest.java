@@ -61,9 +61,6 @@ import com.google.devtools.build.lib.authandtls.GoogleAuthUtils;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.remote.RemoteRetrier.ExponentialBackoff;
 import com.google.devtools.build.lib.remote.Retrier.Backoff;
-import com.google.devtools.build.lib.remote.common.NetworkTime;
-import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
-import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContextImpl;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.merkletree.MerkleTree;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
@@ -132,7 +129,6 @@ public class GrpcCacheClientTest {
   private final String fakeServerName = "fake server for " + getClass();
   private Server fakeServer;
   private Context withEmptyMetadata;
-  private RemoteActionExecutionContext remoteActionExecutionContext;
   private Context prevContext;
   private ListeningScheduledExecutorService retryService;
 
@@ -156,13 +152,9 @@ public class GrpcCacheClientTest {
     FileSystemUtils.createDirectoryAndParents(stdout.getParentDirectory());
     FileSystemUtils.createDirectoryAndParents(stderr.getParentDirectory());
     outErr = new FileOutErr(stdout, stderr);
-    remoteActionExecutionContext =
-        new RemoteActionExecutionContextImpl(
-            TracingMetadataUtils.buildMetadata(
-                "none", "none", Digest.getDefaultInstance().getHash()),
-            new NetworkTime());
     withEmptyMetadata =
-        TracingMetadataUtils.contextWithMetadata(remoteActionExecutionContext.getRequestMetadata());
+        TracingMetadataUtils.contextWithMetadata(
+            "none", "none", DIGEST_UTIL.asActionKey(Digest.getDefaultInstance()));
     retryService = MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
 
     prevContext = withEmptyMetadata.attach();
@@ -700,8 +692,7 @@ public class GrpcCacheClientTest {
     Action action = Action.getDefaultInstance();
     ActionKey actionKey = DIGEST_UTIL.computeActionKey(action);
     Command cmd = Command.getDefaultInstance();
-    return remoteCache.upload(
-        remoteActionExecutionContext, actionKey, action, cmd, execRoot, outputs, outErr);
+    return remoteCache.upload(actionKey, action, cmd, execRoot, outputs, outErr);
   }
 
   @Test
@@ -770,9 +761,7 @@ public class GrpcCacheClientTest {
     GrpcCacheClient client = newClient(remoteOptions);
     RemoteCache remoteCache = new RemoteCache(client, remoteOptions, DIGEST_UTIL);
     remoteCache.downloadActionResult(
-        remoteActionExecutionContext,
-        DIGEST_UTIL.asActionKey(DIGEST_UTIL.computeAsUtf8("key")),
-        /* inlineOutErr= */ false);
+        DIGEST_UTIL.asActionKey(DIGEST_UTIL.computeAsUtf8("key")), /* inlineOutErr= */ false);
   }
 
   @Test
@@ -827,7 +816,6 @@ public class GrpcCacheClientTest {
 
     ActionResult result =
         remoteCache.upload(
-            remoteActionExecutionContext,
             DIGEST_UTIL.asActionKey(actionDigest),
             action,
             command,
@@ -890,7 +878,6 @@ public class GrpcCacheClientTest {
 
     ActionResult result =
         remoteCache.upload(
-            remoteActionExecutionContext,
             DIGEST_UTIL.asActionKey(actionDigest),
             action,
             command,
@@ -1039,7 +1026,6 @@ public class GrpcCacheClientTest {
         .when(mockByteStreamImpl)
         .queryWriteStatus(any(), any());
     remoteCache.upload(
-        remoteActionExecutionContext,
         actionKey,
         Action.getDefaultInstance(),
         Command.getDefaultInstance(),
@@ -1066,10 +1052,7 @@ public class GrpcCacheClientTest {
                 (numErrors-- <= 0 ? Status.NOT_FOUND : Status.UNAVAILABLE).asRuntimeException());
           }
         });
-    assertThat(
-            getFromFuture(
-                client.downloadActionResult(
-                    remoteActionExecutionContext, actionKey, /* inlineOutErr= */ false)))
+    assertThat(getFromFuture(client.downloadActionResult(actionKey, /* inlineOutErr= */ false)))
         .isNull();
   }
 
@@ -1100,13 +1083,13 @@ public class GrpcCacheClientTest {
           }
         });
     assertThat(new String(downloadBlob(client, digest), UTF_8)).isEqualTo("abcdefg");
-    Mockito.verify(mockBackoff, Mockito.never()).nextDelayMillis(any(Exception.class));
+    Mockito.verify(mockBackoff, Mockito.never()).nextDelayMillis();
   }
 
   @Test
   public void downloadBlobPassesThroughDeadlineExceededWithoutProgress() throws IOException {
     Backoff mockBackoff = Mockito.mock(Backoff.class);
-    Mockito.when(mockBackoff.nextDelayMillis(any(Exception.class))).thenReturn(-1L);
+    Mockito.when(mockBackoff.nextDelayMillis()).thenReturn(-1L);
     final GrpcCacheClient client =
         newClient(Options.getDefaults(RemoteOptions.class), () -> mockBackoff);
     final Digest digest = DIGEST_UTIL.computeAsUtf8("abcdefg");
@@ -1126,7 +1109,7 @@ public class GrpcCacheClientTest {
     IOException e = assertThrows(IOException.class, () -> downloadBlob(client, digest));
     Status st = Status.fromThrowable(e);
     assertThat(st.getCode()).isEqualTo(Status.Code.DEADLINE_EXCEEDED);
-    Mockito.verify(mockBackoff, Mockito.times(1)).nextDelayMillis(any(Exception.class));
+    Mockito.verify(mockBackoff, Mockito.times(1)).nextDelayMillis();
   }
 
   @Test

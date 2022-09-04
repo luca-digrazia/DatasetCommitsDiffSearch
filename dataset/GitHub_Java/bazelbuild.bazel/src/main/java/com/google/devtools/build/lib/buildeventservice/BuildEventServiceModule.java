@@ -30,7 +30,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceOptions.BesUploadMode;
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceClient;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
@@ -59,7 +58,6 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.CommonCommandOptions;
 import com.google.devtools.build.lib.runtime.CountingArtifactGroupNamer;
 import com.google.devtools.build.lib.runtime.SynchronizedOutputStream;
-import com.google.devtools.build.lib.runtime.TargetSummaryPublisher;
 import com.google.devtools.build.lib.server.FailureDetails.BuildProgress;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -361,10 +359,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       return;
     }
 
-    if (bepOptions.publishTargetSummary) {
-      cmdEnv.getEventBus().register(new TargetSummaryPublisher(cmdEnv.getEventBus()));
-    }
-
     streamer =
         new BuildEventStreamer.Builder()
             .buildEventTransports(bepTransports)
@@ -592,11 +586,8 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       }
     }
 
-    // besStreamOptions can be null if we are crashing. Don't crash here too.
-    if (besStreamOptions != null && !besStreamOptions.keepBackendConnections) {
+    if (!besStreamOptions.keepBackendConnections) {
       clearBesClient();
-    } else if (besStreamOptions == null) {
-      BugReport.sendBugReport(new NullPointerException("besStreamOptions null: in a crash?"));
     }
   }
 
@@ -858,8 +849,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     }
 
     BuildEventArtifactUploader get() throws IOException {
-      boolean needsInitialization = memoizedValue == null;
-      if (needsInitialization && exception == null) {
+      if (memoizedValue == null && exception == null) {
         try {
           memoizedValue = callable.call();
         } catch (IOException e) {
@@ -870,9 +860,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         }
       }
       if (memoizedValue != null) {
-        if (!needsInitialization) {
-          memoizedValue.retain();
-        }
         return memoizedValue;
       }
       throw exception;

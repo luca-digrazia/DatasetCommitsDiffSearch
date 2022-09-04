@@ -355,12 +355,6 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    protected List<ValueOrUntypedException> getOrderedValueOrUntypedExceptions(
-        Iterable<? extends SkyKey> depKeys) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public ExtendedEventHandler getListener() {
       return null;
     }
