@@ -12,6 +12,7 @@ import java.util.Map;
  */
 public class Output {
     private final ApiClient api;
+    private final UserService userService;
 
     public interface Factory {
         Output fromSummaryResponse(OutputSummaryResponse outputSummaryResponse);
@@ -21,17 +22,22 @@ public class Output {
     private final String creatorUserId;
     private final Map<String, Object> configuration;
     private final String type;
+    private final String createdAt;
 
     @AssistedInject
 
-    public Output(ApiClient api, @Assisted OutputSummaryResponse outputSummaryResponse) {
+    public Output(ApiClient api,
+                  UserService userService,
+                  @Assisted OutputSummaryResponse outputSummaryResponse) {
         this.api = api;
+        this.userService = userService;
 
         this.title = outputSummaryResponse.title;
         this._id = outputSummaryResponse._id;
         this.creatorUserId = outputSummaryResponse.creatorUserId;
         this.configuration = outputSummaryResponse.configuration;
         this.type = outputSummaryResponse.type;
+        this.createdAt = outputSummaryResponse.createdAt;
     }
 
     public ApiClient getApi() {
@@ -50,11 +56,36 @@ public class Output {
         return creatorUserId;
     }
 
+    public User getCreatorUser() {
+        return userService.load(getCreatorUserId());
+    }
+
     public Map<String, Object> getConfiguration() {
         return configuration;
     }
 
     public String getType() {
         return type;
+    }
+
+    public String getCreatedAt() {
+        return createdAt;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Output)) return false;
+
+        Output output = (Output) o;
+
+        if (!_id.equals(output._id)) return false;
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        return _id.hashCode();
     }
 }

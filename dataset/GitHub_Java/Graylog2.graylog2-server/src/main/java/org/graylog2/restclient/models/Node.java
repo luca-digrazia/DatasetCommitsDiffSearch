@@ -30,17 +30,10 @@ import org.graylog2.restclient.lib.metrics.Metric;
 import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
 import org.graylog2.restclient.models.api.responses.BufferClassesResponse;
 import org.graylog2.restclient.models.api.responses.BuffersResponse;
-import org.graylog2.restclient.models.api.responses.SystemOverviewResponse;
 import org.graylog2.restclient.models.api.responses.cluster.NodeSummaryResponse;
+import org.graylog2.restclient.models.api.responses.SystemOverviewResponse;
 import org.graylog2.restclient.models.api.responses.metrics.MetricsListResponse;
-import org.graylog2.restclient.models.api.responses.system.ClusterEntityJVMStatsResponse;
-import org.graylog2.restclient.models.api.responses.system.InputLaunchResponse;
-import org.graylog2.restclient.models.api.responses.system.InputStateSummaryResponse;
-import org.graylog2.restclient.models.api.responses.system.InputSummaryResponse;
-import org.graylog2.restclient.models.api.responses.system.InputTypeSummaryResponse;
-import org.graylog2.restclient.models.api.responses.system.InputTypesResponse;
-import org.graylog2.restclient.models.api.responses.system.InputsResponse;
-import org.graylog2.restclient.models.api.responses.system.NodeThroughputResponse;
+import org.graylog2.restclient.models.api.responses.system.*;
 import org.graylog2.restclient.models.api.responses.system.loggers.LoggerSubsystemSummary;
 import org.graylog2.restclient.models.api.responses.system.loggers.LoggerSubsystemsResponse;
 import org.graylog2.restclient.models.api.responses.system.loggers.LoggerSummary;
@@ -48,8 +41,8 @@ import org.graylog2.restclient.models.api.responses.system.loggers.LoggersRespon
 import org.graylog2.restroutes.generated.routes;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import play.Logger;
 import play.mvc.Http;
 
 import java.io.IOException;
@@ -59,21 +52,22 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class Node extends ClusterEntity {
 
     public interface Factory {
         Node fromSummaryResponse(NodeSummaryResponse r);
-
         Node fromTransportAddress(URI transportAddress);
     }
-
-    private static final Logger LOG = LoggerFactory.getLogger(Node.class);
-
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(Node.class);
     private final ApiClient api;
+
     private final Input.Factory inputFactory;
     private final InputState.Factory inputStateFactory;
-    private final URI transportAddress;
 
+    private final URI transportAddress;
     private DateTime lastSeen;
     private DateTime lastContact;
     private String nodeId;
@@ -130,12 +124,12 @@ public class Node extends ClusterEntity {
         try {
             return new BufferInfo(
                     api.path(routes.BufferResource().utilization(), BuffersResponse.class)
-                            .node(this)
-                            .execute());
+                    .node(this)
+                    .execute());
         } catch (APIException e) {
-            LOG.error("Unable to read buffer info from node " + this, e);
+            log.error("Unable to read buffer info from node " + this, e);
         } catch (IOException e) {
-            LOG.error("Unexpected exception", e);
+            log.error("Unexpected exception", e);
         }
         return null;
     }
@@ -144,9 +138,9 @@ public class Node extends ClusterEntity {
         try {
             return api.path(routes.BufferResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
         } catch (APIException e) {
-            LOG.error("Unable to read buffer class names from node " + this, e);
+            log.error("Unable to read buffer class names from node " + this, e);
         } catch (IOException e) {
-            LOG.error("Unexpected exception", e);
+            log.error("Unexpected exception", e);
         }
         return null;
     }
@@ -165,8 +159,10 @@ public class Node extends ClusterEntity {
                         ss.getValue().levelSyslog
                 ));
             }
-        } catch (APIException|IOException e) {
-            LOG.error("Unable to load subsystems for node " + this, e);
+        } catch (APIException e) {
+            log.error("Unable to load subsystems for node " + this, e);
+        } catch (IOException e) {
+            log.error("Unable to load subsystems for node " + this, e);
         }
         return subsystems;
     }
@@ -181,8 +177,10 @@ public class Node extends ClusterEntity {
             for (Map.Entry<String, LoggerSummary> logger : response.loggers.entrySet()) {
                 loggers.add(new InternalLogger(logger.getKey(), logger.getValue().level, logger.getValue().syslogLevel));
             }
-        } catch (APIException|IOException e) {
-            LOG.error("Unable to load loggers for node " + this, e);
+        } catch (APIException e) {
+            log.error("Unable to load loggers for node " + this, e);
+        } catch (IOException e) {
+            log.error("Unable to load loggers for node " + this, e);
         }
         return loggers;
     }
@@ -251,8 +249,10 @@ public class Node extends ClusterEntity {
                     .body(request)
                     .expect(Http.Status.ACCEPTED)
                     .execute();
-        } catch (APIException|IOException e) {
-            LOG.error("Could not launch input " + title, e);
+        } catch (APIException e) {
+            log.error("Could not launch input " + title, e);
+        } catch (IOException e) {
+            log.error("Could not launch input " + title, e);
         }
         return ilr;
     }
@@ -264,8 +264,10 @@ public class Node extends ClusterEntity {
                     .expect(Http.Status.ACCEPTED)
                     .execute();
             return true;
-        } catch (APIException|IOException e) {
-            LOG.error("Could not launch input " + inputId, e);
+        } catch (APIException e) {
+            log.error("Could not launch input " + inputId, e);
+        } catch (IOException e) {
+            log.error("Could not launch input " + inputId, e);
         }
 
         return false;
@@ -279,8 +281,10 @@ public class Node extends ClusterEntity {
                     .expect(Http.Status.ACCEPTED)
                     .execute();
             return true;
-        } catch (APIException|IOException e) {
-            LOG.error("Could not terminate input " + inputId, e);
+        } catch (APIException e) {
+            log.error("Could not terminate input " + inputId, e);
+        } catch (IOException e) {
+            log.error("Could not terminate input " + inputId, e);
         }
 
         return false;
@@ -311,8 +315,10 @@ public class Node extends ClusterEntity {
             this.systemInfo = api.path(routes.SystemResource().system(), SystemOverviewResponse.class)
                     .node(this)
                     .execute();
-        } catch (APIException | IOException e) {
-            LOG.error("Unable to load system information for node " + this, e);
+        } catch (APIException e) {
+            log.error("Unable to load system information for node " + this, e);
+        } catch (IOException e) {
+            log.error("Unable to load system information for node " + this, e);
         }
     }
 
@@ -323,8 +329,10 @@ public class Node extends ClusterEntity {
                             .node(this)
                             .execute()
             );
-        } catch (APIException | IOException e) {
-            LOG.error("Unable to load JVM information for node " + this, e);
+        } catch (APIException e) {
+            log.error("Unable to load JVM information for node " + this, e);
+        } catch (IOException e) {
+            log.error("Unable to load JVM information for node " + this, e);
         }
     }
 
@@ -422,27 +430,29 @@ public class Node extends ClusterEntity {
 
     public void pause() throws IOException, APIException {
         api.path(routes.SystemResource().pauseProcessing())
-                .node(this)
-                .execute();
+            .node(this)
+            .execute();
     }
 
     public void resume() throws IOException, APIException {
         api.path(routes.SystemResource().resumeProcessing())
-                .node(this)
-                .execute();
+            .node(this)
+            .execute();
     }
 
     public void overrideLbStatus(String override) throws APIException, IOException {
         api.path(routes.LoadBalancerStatusResource().override(override))
-                .node(this)
-                .execute();
+            .node(this)
+            .execute();
     }
 
     public int getThroughput() {
         try {
             return api.path(routes.ThroughputResource().total(), NodeThroughputResponse.class).node(this).execute().throughput;
-        } catch (APIException | IOException e) {
-            LOG.error("Could not load throughput for node " + this, e);
+        } catch (APIException e) {
+            log.error("Could not load throughput for node " + this, e);
+        } catch (IOException e) {
+            log.error("Could not load throughput for node " + this, e);
         }
         return 0;
     }
@@ -456,11 +466,10 @@ public class Node extends ClusterEntity {
         try {
             return api.path(routes.InputsResource().list(), InputsResponse.class).node(this).execute();
         } catch (Exception e) {
-            LOG.error("Could not get inputs.", e);
+            Logger.error("Could not get inputs.", e);
             throw new RuntimeException("Could not get inputs.", e);
         }
     }
-
     public boolean isFromConfiguration() {
         return fromConfiguration;
     }
@@ -469,7 +478,7 @@ public class Node extends ClusterEntity {
     public void markFailure() {
         failureCount.incrementAndGet();
         setActive(false);
-        LOG.info("{} failed, marking as inactive.", this);
+        log.info("{} failed, marking as inactive.", this);
     }
 
     public int getFailureCount() {
@@ -481,7 +490,7 @@ public class Node extends ClusterEntity {
     }
 
     public void merge(Node updatedNode) {
-        LOG.debug("Merging node {} in this node {}", updatedNode, this);
+        log.debug("Merging node {} in this node {}", updatedNode, this);
         this.lastSeen = updatedNode.lastSeen;
         this.isMaster = updatedNode.isMaster;
         this.nodeId = updatedNode.nodeId;
@@ -567,7 +576,6 @@ public class Node extends ClusterEntity {
     public void requireSystemInfo() {
         loadSystemInformation();
     }
-
     public void requireJVMInfo() {
         loadJVMInformation();
     }
