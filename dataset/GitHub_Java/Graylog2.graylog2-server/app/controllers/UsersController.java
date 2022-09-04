@@ -107,9 +107,6 @@ public class UsersController extends AuthenticatedController {
     }
 
     public Result newUserForm() {
-        if (!Permissions.isPermitted(RestPermissions.USERS_CREATE)) {
-            return redirect(routes.StartpageController.redirect());
-        }
         BreadcrumbList bc = breadcrumbs();
         bc.addCrumb("New", routes.UsersController.newUserForm());
 
@@ -133,9 +130,6 @@ public class UsersController extends AuthenticatedController {
     }
 
     public Result editUserForm(String username) {
-        if (!Permissions.isPermitted(RestPermissions.USERS_EDIT, username)) {
-            return redirect(routes.StartpageController.redirect());
-        }
         BreadcrumbList bc = breadcrumbs();
         bc.addCrumb("Edit " + username, routes.UsersController.editUserForm(username));
 
@@ -179,8 +173,7 @@ public class UsersController extends AuthenticatedController {
     @BodyParser.Of(BodyParser.Json.class)
     public Result saveUserPreferences(String username) throws IOException {
         Map<String, Object> preferences = Json.fromJson(request().body().asJson(), Map.class);
-        Map<String, Object> normalizedPreferences = normalizePreferences(preferences);
-        if (userService.savePreferences(username, normalizedPreferences)) {
+        if (userService.savePreferences(username, normalizePreferences(preferences))) {
             return ok();
         } else {
             // TODO: Really?
@@ -190,10 +183,8 @@ public class UsersController extends AuthenticatedController {
 
     private Map<String, Object> initDefaultPreferences(Map<String, Object> preferences) {
         Map<String, Object> effectivePreferences = Maps.newHashMap();
-        // TODO: Move defaults into a static map once we have more preferences
+        // TODO: Move defaults into a static map once we at least have a second preference
         effectivePreferences.put("updateUnfocussed", false);
-        effectivePreferences.put("disableExpensiveUpdates", false);
-        effectivePreferences.put("enableSmartSearch", false);
         if (preferences != null) {
             effectivePreferences.putAll(preferences);
         }
@@ -202,27 +193,20 @@ public class UsersController extends AuthenticatedController {
 
     private Map<String, Object> normalizePreferences(Map<String, Object> preferences) {
         Map<String, Object> normalizedPreferences = Maps.newHashMap();
-        // TODO: Move types into a static map once we have more preferences
+        // TODO: Move types into a static map once we at least have a second preference
         for (Map.Entry<String, Object> preference : preferences.entrySet()) {
             if (preference.getKey().equals("updateUnfocussed")) {
-                normalizedPreferences.put(preference.getKey(), asBoolean(preference.getValue()));
-            } else if (preference.getKey().equals("disableExpensiveUpdates")) {
-                normalizedPreferences.put(preference.getKey(), asBoolean(preference.getValue()));
-            } else if (preference.getKey().equals("enableSmartSearch")) {
-                normalizedPreferences.put(preference.getKey(), asBoolean(preference.getValue()));
+                final Object value = preference.getValue();
+                final Object normalizedValue;
+                if (value instanceof Boolean) {
+                    normalizedValue = value;
+                } else {
+                    normalizedValue = Boolean.valueOf(value.toString());
+                }
+                normalizedPreferences.put(preference.getKey(), normalizedValue);
             }
         }
         return normalizedPreferences;
-    }
-
-    private static Boolean asBoolean(Object value) {
-        final Boolean normalizedValue;
-        if (value instanceof Boolean) {
-            normalizedValue = (Boolean) value;
-        } else {
-            normalizedValue = Boolean.valueOf(value.toString());
-        }
-        return normalizedValue;
     }
 
     public Result create() {

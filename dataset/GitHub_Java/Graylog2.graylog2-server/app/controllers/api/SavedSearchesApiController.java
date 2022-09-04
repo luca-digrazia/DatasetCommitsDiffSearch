@@ -1,33 +1,32 @@
 /**
- * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 package controllers.api;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.net.MediaType;
 import controllers.AuthenticatedController;
-import lib.json.Json;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.models.SavedSearch;
 import org.graylog2.restclient.models.SavedSearchService;
 import org.graylog2.restclient.models.api.requests.searches.CreateSavedSearchRequest;
+import play.libs.Json;
 import play.mvc.BodyParser;
 import play.mvc.Result;
 
@@ -56,7 +55,7 @@ public class SavedSearchesApiController extends AuthenticatedController {
                 response.add(search);
             }
 
-            return ok(Json.toJsonString(response)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(response));
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -64,9 +63,11 @@ public class SavedSearchesApiController extends AuthenticatedController {
         }
     }
 
-    @BodyParser.Of(BodyParser.Json.class)
+    @BodyParser.Of(BodyParser.FormUrlEncoded.class)
     public Result create() {
-        CreateSavedSearchRequest request = Json.fromJson(request().body().asJson(), CreateSavedSearchRequest.class);
+        Map<String, String> params = flattenFormUrlEncoded(request().body().asFormUrlEncoded());
+
+        CreateSavedSearchRequest request = Json.fromJson(Json.parse(params.get("params")), CreateSavedSearchRequest.class);
 
         try {
             savedSearchService.create(request);
@@ -77,20 +78,6 @@ public class SavedSearchesApiController extends AuthenticatedController {
         }
 
         return status(202);
-    }
-
-    @BodyParser.Of(BodyParser.Json.class)
-    public Result update(String searchId) {
-        CreateSavedSearchRequest request = Json.fromJson(request().body().asJson(), CreateSavedSearchRequest.class);
-
-        try {
-            savedSearchService.update(searchId, request);
-            return ok();
-        } catch (IOException e) {
-            return internalServerError("io exception");
-        } catch (APIException e) {
-            return internalServerError("api exception " + e);
-        }
     }
 
 }

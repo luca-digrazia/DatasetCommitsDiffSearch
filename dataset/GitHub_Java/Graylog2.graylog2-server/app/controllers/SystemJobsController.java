@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,31 +15,31 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package controllers;
 
-import lib.APIException;
-import lib.Api;
-import models.SystemJob;
+import com.google.inject.Inject;
+import org.graylog2.restclient.lib.APIException;
+import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.models.ClusterService;
+import org.graylog2.restclient.models.SystemJob;
 import play.Logger;
+import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
 
 import java.io.IOException;
 
-import static controllers.AuthenticatedController.currentUser;
-import static play.mvc.Controller.request;
-import static play.mvc.Results.forbidden;
-import static play.mvc.Results.redirect;
-import static play.mvc.Results.status;
-
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class SystemJobsController {
+public class SystemJobsController extends AuthenticatedController {
 
-    public static Result trigger() {
+    @Inject
+    private ClusterService clusterService;
+
+    @BodyParser.Of(BodyParser.FormUrlEncoded.class)
+    public Result trigger() {
         Http.RequestBody body = request().body();
 
         if (body.asFormUrlEncoded().get("job") == null) {
@@ -48,10 +48,11 @@ public class SystemJobsController {
         }
 
         try {
-            SystemJob.trigger(SystemJob.Type.valueOf(body.asFormUrlEncoded().get("job")[0]), currentUser());
+            final String jobType = body.asFormUrlEncoded().get("job")[0];
+            clusterService.triggerSystemJob(SystemJob.Type.fromString(jobType), currentUser());
             return redirect(routes.SystemController.index(1));
         } catch (IOException e) {
-            return status(504, views.html.errors.error.render(Api.ERROR_MSG_IO, e, request()));
+            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
             String message = "Could not trigger system job. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));

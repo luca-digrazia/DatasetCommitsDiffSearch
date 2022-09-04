@@ -1,28 +1,26 @@
 /*
- * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ * Copyright 2013 TORCH UG
  *
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package controllers.api;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.net.MediaType;
 import controllers.AuthenticatedController;
-import lib.json.Json;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.metrics.Meter;
 import org.graylog2.restclient.models.BufferInfo;
@@ -36,8 +34,8 @@ import org.graylog2.restclient.models.Radio;
 import org.graylog2.restclient.models.Stream;
 import org.graylog2.restclient.models.StreamService;
 import org.graylog2.restclient.models.SystemJob;
-import org.graylog2.restclient.models.api.responses.JournalInfo;
 import play.libs.F;
+import play.libs.Json;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -68,7 +66,7 @@ public class SystemApiController extends AuthenticatedController {
         Map<String, Set<String>> result = Maps.newHashMap();
         result.put("fields", fields);
 
-        return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+        return ok(Json.toJson(result));
     }
 
     public Result jobs() {
@@ -86,7 +84,7 @@ public class SystemApiController extends AuthenticatedController {
             Map<String, Object> result = Maps.newHashMap();
             result.put("jobs", jobs);
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -100,7 +98,7 @@ public class SystemApiController extends AuthenticatedController {
             result.put("count", clusterService.allNotifications().size());*/
             List<Notification> notifications = clusterService.allNotifications();
 
-            return ok(Json.toJsonString(notifications)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(notifications));
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -127,7 +125,7 @@ public class SystemApiController extends AuthenticatedController {
         result.put("throughput", throughputPerNodes._1);
         result.put("nodecount", throughputPerNodes._2);
 
-        return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+        return ok(Json.toJson(result));
     }
 
     public Result nodeThroughput(String nodeId) {
@@ -136,7 +134,7 @@ public class SystemApiController extends AuthenticatedController {
             final Node node = nodeService.loadNode(nodeId);
             result.put("throughput", node.getThroughput());
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (NodeService.NodeNotFoundException e) {
             return status(404, "node not found");
         }
@@ -148,7 +146,7 @@ public class SystemApiController extends AuthenticatedController {
             final Radio radio = nodeService.loadRadio(radioId);
             result.put("throughput", radio.getThroughput());
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (NodeService.NodeNotFoundException e) {
             return status(404, "node not found");
         }
@@ -160,7 +158,7 @@ public class SystemApiController extends AuthenticatedController {
             final Stream stream = streamService.get(streamId);
             long throughput = stream.getThroughput();
             result.put("throughput", throughput);
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (APIException e) {
             return status(504, "Could not load stream " + streamId);
         } catch (IOException e) {
@@ -173,21 +171,7 @@ public class SystemApiController extends AuthenticatedController {
             Map<String, Object> result = Maps.newHashMap();
             Node node = nodeService.loadNode(nodeId);
 
-            return ok(Json.toJsonString(jvmMap(node.jvm(), node.getBufferInfo()))).as(MediaType.JSON_UTF_8.toString());
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, "node not found");
-        }
-    }
-
-    public Result journal(String nodeId) {
-        try {
-            final Map<String, Object> result = Maps.newHashMap();
-            final Node node = nodeService.loadNode(nodeId);
-            final JournalInfo journalInfo = node.getJournalInfo();
-
-            result.put("uncommitted_entries", journalInfo.uncommittedJournalEntries);
-
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(jvmMap(node.jvm(), node.getBufferInfo())));
         } catch (NodeService.NodeNotFoundException e) {
             return status(404, "node not found");
         }
@@ -196,7 +180,7 @@ public class SystemApiController extends AuthenticatedController {
     public Result radioHeap(String radioId) {
         try {
             Radio radio = nodeService.loadRadio(radioId);
-            return ok(Json.toJsonString(jvmMap(radio.jvm(), radio.getBuffers()))).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(jvmMap(radio.jvm(), radio.getBuffers())));
         } catch (NodeService.NodeNotFoundException e) {
             return status(404, "radio not found");
         }
@@ -243,7 +227,7 @@ public class SystemApiController extends AuthenticatedController {
             Meter meter = (Meter) node.getSingleMetric("org.apache.log4j.Appender.all");
             result.put("total", meter.getTotal());
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (NodeService.NodeNotFoundException e) {
             return status(404, "node not found");
         } catch (IOException e) {
@@ -280,7 +264,7 @@ public class SystemApiController extends AuthenticatedController {
                 result.put(shortName, meterMap);
             }
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (NodeService.NodeNotFoundException e) {
             return status(404, "node not found");
         } catch (IOException e) {
@@ -299,6 +283,8 @@ public class SystemApiController extends AuthenticatedController {
         result.put("used", jvm.getUsedMemory().getMegabytes());
         result.put("used_percentage", jvm.usedMemoryPercentage());
         result.put("total_percentage", jvm.totalMemoryPercentage());
+        result.put("input_master_cache", bufferInfo.getInputMasterCache().size);
+        result.put("output_master_cache", bufferInfo.getOutputMasterCache().size);
 
         return result;
     }

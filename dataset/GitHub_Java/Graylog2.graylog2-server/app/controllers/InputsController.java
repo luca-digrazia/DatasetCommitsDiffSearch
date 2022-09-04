@@ -35,7 +35,6 @@ import org.graylog2.restclient.models.Node;
 import org.graylog2.restclient.models.NodeService;
 import org.graylog2.restclient.models.Radio;
 import org.graylog2.restclient.models.api.requests.inputs.LaunchInputRequest;
-import org.graylog2.restclient.models.api.responses.system.InputLaunchResponse;
 import org.graylog2.restclient.models.api.responses.system.InputTypeSummaryResponse;
 import play.data.Form;
 import play.mvc.BodyParser;
@@ -249,23 +248,48 @@ public class InputsController extends AuthenticatedController {
         final LaunchInputRequest request = form.get();
 
         try {
-            final InputTypeSummaryResponse inputInfo = getInputInfo(nodeIdParam, request);
+            ClusterEntity node = null;
+            InputTypeSummaryResponse inputInfo = null;
+
+            String nodeId = null;
+            if (nodeIdParam != null && !nodeIdParam.isEmpty()) {
+                nodeId = nodeIdParam;
+            } else {
+                if (request.node != null && !request.node.isEmpty()) {
+                    nodeId = request.node;
+                }
+            }
+
+            if (nodeId != null) {
+                try {
+                    node = nodeService.loadNode(nodeId);
+                } catch (NodeService.NodeNotFoundException e) {
+                    node = nodeService.loadRadio(nodeId);
+                }
+            }
+
+            if (request.global)
+                node = nodeService.loadMasterNode();
+
+            if (node == null)
+                return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, new RuntimeException("Could not find Node to launch input on!"), request()));
+
+            inputInfo = node.getInputTypeInformation(request.type);
 
             final Map<String, Object> configuration;
 
             try {
                 configuration = extractConfiguration(request.configuration, inputInfo);
             } catch (IllegalArgumentException e) {
-                throw new RuntimeException("Invalid configuration for input " + request.title, e);
+                return status(400, views.html.errors.error.render("Invalid input configuration", new RuntimeException("Invalid configuration for input " + request.title, e), request()));
             }
 
             try {
-                final ClusterEntity node = getClusterEntity(nodeIdParam, request);
-                final Boolean result;
+                Boolean result;
                 if (request.global) {
-                    result = (inputService.launchGlobal(request.title, request.type, configuration, inputInfo.isExclusive) != null);
+                    result = (inputService.launchGlobal(request.title, request.type, configuration, currentUser(), inputInfo.isExclusive) != null);
                 } else {
-                    result = (node.launchInput(request.title, request.type, request.global, configuration, inputInfo.isExclusive) != null);
+                    result = (node.launchInput(request.title, request.type, request.global, configuration, currentUser(), inputInfo.isExclusive) != null);
                 }
 
                 if (!result) {
@@ -287,42 +311,6 @@ public class InputsController extends AuthenticatedController {
         }
     }
 
-    private InputTypeSummaryResponse getInputInfo(String nodeIdParam, LaunchInputRequest request) throws NodeService.NodeNotFoundException, APIException, IOException {
-        InputTypeSummaryResponse inputInfo = null;
-
-        final ClusterEntity node = getClusterEntity(nodeIdParam, request);
-
-        if (node == null)
-            throw new RuntimeException("Could not find Node to launch input on!");
-
-        return node.getInputTypeInformation(request.type);
-    }
-
-    private ClusterEntity getClusterEntity(String nodeIdParam, LaunchInputRequest request) throws NodeService.NodeNotFoundException, APIException, IOException {
-        ClusterEntity node = null;
-        String nodeId = null;
-        if (nodeIdParam != null && !nodeIdParam.isEmpty()) {
-            nodeId = nodeIdParam;
-        } else {
-            if (request.node != null && !request.node.isEmpty()) {
-                nodeId = request.node;
-            }
-        }
-
-        if (request.global)
-            node = nodeService.loadMasterNode();
-        else
-            if (nodeId != null) {
-                try {
-                    node = nodeService.loadNode(nodeId);
-                } catch (NodeService.NodeNotFoundException e) {
-                    node = nodeService.loadRadio(nodeId);
-                }
-            }
-
-        return node;
-    }
-
     public Result launchRadio(String radioId) {
         if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT)) {
             return redirect(routes.StartpageController.redirect());
@@ -342,7 +330,7 @@ public class InputsController extends AuthenticatedController {
             }
 
             try {
-                if (radio.launchInput(request.title, request.type, false, configuration, inputInfo.isExclusive) == null) {
+                if (radio.launchInput(request.title, request.type, false, configuration, currentUser(), inputInfo.isExclusive) == null) {
                     return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, new RuntimeException("Could not launch input " + request.title), request()));
                 }
             } catch (ExclusiveInputException e) {
@@ -359,41 +347,6 @@ public class InputsController extends AuthenticatedController {
         } catch (NodeService.NodeNotFoundException e) {
             return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
-    }
-
-    public Result update(String inputId) throws APIException, NodeService.NodeNotFoundException, IOException {
-        if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT)) {
-            return redirect(routes.StartpageController.redirect());
-        }
-
-        final Form<LaunchInputRequest> form = launchInputRequestForm.bindFromRequest();
-        final LaunchInputRequest request = form.get();
-
-        final String nodeIdParam;
-        if (request.global)
-            nodeIdParam = nodeService.loadMasterNode().getNodeId();
-        else
-            nodeIdParam = request.node;
-
-        final InputTypeSummaryResponse inputInfo = getInputInfo(nodeIdParam, request);
-
-        final Map<String, Object> configuration;
-
-        try {
-            configuration = extractConfiguration(request.configuration, inputInfo);
-        } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Invalid configuration for input " + request.title, e);
-        }
-
-        try {
-            final Node node = nodeService.loadMasterNode();
-            final InputLaunchResponse response = node.updateInput(inputId, request.title, request.type, request.global, configuration);
-            inputService.restart(inputId);
-        } catch (APIException | IOException e) {
-            e.printStackTrace();
-        }
-
-        return redirect(routes.InputsController.index());
     }
 
     public Result terminate(String nodeId, String inputId) {
