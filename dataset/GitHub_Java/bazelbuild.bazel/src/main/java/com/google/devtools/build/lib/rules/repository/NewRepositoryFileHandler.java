@@ -19,7 +19,9 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
+import com.google.devtools.build.lib.skyframe.FileSymlinkException;
 import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
@@ -30,7 +32,6 @@ import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * Encapsulates the 2-step behavior of creating workspace and build files for the new_*_repository
@@ -58,10 +59,9 @@ public class NewRepositoryFileHandler {
     return true;
   }
 
-  public void finishFile(Rule rule, Path outputDirectory, Map<String, String> markerData)
-      throws RepositoryFunctionException {
-    this.workspaceFileHandler.finishFile(rule, outputDirectory, markerData);
-    this.buildFileHandler.finishFile(rule, outputDirectory, markerData);
+  public void finishFile(Path outputDirectory) throws RepositoryFunctionException {
+    this.workspaceFileHandler.finishFile(outputDirectory);
+    this.buildFileHandler.finishFile(outputDirectory);
   }
 
   /**
@@ -142,24 +142,10 @@ public class NewRepositoryFileHandler {
      * @throws IllegalStateException if {@link #prepareFile} was not called before this, or if
      *     {@link #prepareFile} failed and this was called.
      */
-    public void finishFile(Rule rule, Path outputDirectory, Map<String, String> markerData)
-        throws RepositoryFunctionException {
+    public void finishFile(Path outputDirectory) throws RepositoryFunctionException {
       if (fileValue != null) {
         // Link x/FILENAME to <build_root>/x.FILENAME.
         symlinkFile(fileValue, filename, outputDirectory);
-        String fileAttribute = getFileAttributeValue(rule);
-        String fileKey;
-        if (LabelValidator.isAbsolute(fileAttribute)) {
-          fileKey = getFileAttributeAsLabel(rule).toString();
-        } else {
-          // TODO(pcloudy): Don't add absolute path into markerData once it's not supported
-          fileKey = fileValue.realRootedPath().asPath().getPathString();
-        }
-        try {
-          markerData.put("FILE:" + fileKey, RepositoryFunction.fileValueToMarkerValue(fileValue));
-        } catch (IOException e) {
-          throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-        }
       } else if (fileContent != null) {
         RepositoryFunction.writeFile(outputDirectory, filename, fileContent);
       } else {
@@ -167,7 +153,8 @@ public class NewRepositoryFileHandler {
       }
     }
 
-    private String getFileAttributeValue(Rule rule) throws RepositoryFunctionException {
+    private FileValue getFileValue(Rule rule, Environment env)
+        throws RepositoryFunctionException, InterruptedException {
       WorkspaceAttributeMapper mapper = WorkspaceAttributeMapper.of(rule);
       String fileAttribute;
       try {
@@ -175,49 +162,37 @@ public class NewRepositoryFileHandler {
       } catch (EvalException e) {
         throw new RepositoryFunctionException(e, Transience.PERSISTENT);
       }
-      return fileAttribute;
-    }
-
-    private Label getFileAttributeAsLabel(Rule rule) throws RepositoryFunctionException {
-      Label label;
-      try {
-        // Parse a label
-        label = Label.parseAbsolute(getFileAttributeValue(rule));
-      } catch (LabelSyntaxException ex) {
-        throw new RepositoryFunctionException(
-            new EvalException(
-                rule.getLocation(),
-                String.format(
-                    "In %s the '%s' attribute does not specify a valid label: %s",
-                    rule, getFileAttrName(), ex.getMessage())),
-            Transience.PERSISTENT);
-      }
-      return label;
-    }
-
-    private FileValue getFileValue(Rule rule, Environment env)
-        throws RepositoryFunctionException, InterruptedException {
-      String fileAttribute = getFileAttributeValue(rule);
       RootedPath rootedFile;
 
       if (LabelValidator.isAbsolute(fileAttribute)) {
-        Label label = getFileAttributeAsLabel(rule);
-        SkyKey pkgSkyKey = PackageLookupValue.key(label.getPackageIdentifier());
-        PackageLookupValue pkgLookupValue = (PackageLookupValue) env.getValue(pkgSkyKey);
-        if (pkgLookupValue == null) {
-          return null;
-        }
-        if (!pkgLookupValue.packageExists()) {
+        try {
+          // Parse a label
+          Label label = Label.parseAbsolute(fileAttribute);
+          SkyKey pkgSkyKey = PackageLookupValue.key(label.getPackageIdentifier());
+          PackageLookupValue pkgLookupValue = (PackageLookupValue) env.getValue(pkgSkyKey);
+          if (pkgLookupValue == null) {
+            return null;
+          }
+          if (!pkgLookupValue.packageExists()) {
+            throw new RepositoryFunctionException(
+                new EvalException(
+                    rule.getLocation(),
+                    "Unable to load package for " + fileAttribute + ": not found."),
+                Transience.PERSISTENT);
+          }
+
+          // And now for the file
+          Path packageRoot = pkgLookupValue.getRoot();
+          rootedFile = RootedPath.toRootedPath(packageRoot, label.toPathFragment());
+        } catch (LabelSyntaxException ex) {
           throw new RepositoryFunctionException(
               new EvalException(
                   rule.getLocation(),
-                  "Unable to load package for " + fileAttribute + ": not found."),
+                  String.format(
+                      "In %s the '%s' attribute does not specify a valid label: %s",
+                      rule, getFileAttrName(), ex.getMessage())),
               Transience.PERSISTENT);
         }
-
-        // And now for the file
-        Path packageRoot = pkgLookupValue.getRoot();
-        rootedFile = RootedPath.toRootedPath(packageRoot, label.toPathFragment());
       } else {
         // TODO(dmarting): deprecate using a path for the workspace_file attribute.
         PathFragment file = PathFragment.create(fileAttribute);
@@ -250,21 +225,20 @@ public class NewRepositoryFileHandler {
         // don't write to things in the file system this FileValue depends on. In theory, the latter
         // is possible if the file referenced by workspace_file is a symlink to somewhere under the
         // external/ directory, but if you do that, you are really asking for trouble.
-        fileValue = (FileValue) env.getValueOrThrow(fileKey, IOException.class);
+        fileValue =
+            (FileValue)
+                env.getValueOrThrow(
+                    fileKey,
+                    IOException.class,
+                    FileSymlinkException.class,
+                    InconsistentFilesystemException.class);
         if (fileValue == null) {
           return null;
         }
-      } catch (IOException e) {
+      } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
         throw new RepositoryFunctionException(
             new IOException("Cannot lookup " + fileAttribute + ": " + e.getMessage()),
             Transience.TRANSIENT);
-      }
-
-      if (!fileValue.isFile() || fileValue.isSpecialFile()) {
-        throw new RepositoryFunctionException(
-            new EvalException(
-                rule.getLocation(), String.format("%s is not a regular file", rootedFile.asPath())),
-            Transience.PERSISTENT);
       }
 
       return fileValue;

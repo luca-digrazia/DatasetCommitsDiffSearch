@@ -40,7 +40,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariableValue;
-import com.google.devtools.build.lib.rules.cpp.CppLinkActionConfigs.CppLinkPlatform;
+import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
@@ -83,9 +83,10 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
   private final FeatureConfiguration getMockFeatureConfiguration() throws Exception {
     return CcToolchainFeaturesTest.buildFeatures(
-            CppLinkActionConfigs.getCppLinkActionConfigs(
-                CppLinkPlatform.LINUX,
+            CppActionConfigs.getCppActionConfigs(
+                CppPlatform.LINUX,
                 ImmutableSet.<String>of(),
+                "gcc_tool",
                 "dynamic_library_linker_tool",
                 true))
         .getFeatureConfiguration(
@@ -246,15 +247,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
     assertThat(linkAction.getEnvironment()).containsEntry("foo", "bar");
   }
 
-  private enum NonStaticAttributes {
-    OUTPUT_FILE,
-    COMPILATION_INPUTS,
-    NATIVE_DEPS,
-    USE_TEST_ONLY_FLAGS,
-    FAKE,
-    RUNTIME_SOLIB_DIR
-  }
-
   /**
    * This mainly checks that non-static links don't have identical keys. Many options are only
    * allowed on non-static links, and we test several of them here.
@@ -271,49 +263,35 @@ public class CppLinkActionTest extends BuildViewTestCase {
     final FeatureConfiguration featureConfiguration = getMockFeatureConfiguration();
 
     ActionTester.runTest(
-        NonStaticAttributes.class,
-        new ActionCombinationFactory<NonStaticAttributes>() {
+        64,
+        new ActionCombinationFactory() {
 
           @Override
-          public Action generate(ImmutableSet<NonStaticAttributes> attributesToFlip)
-              throws InterruptedException {
+          public Action generate(int i) throws InterruptedException {
             CppLinkActionBuilder builder =
                 new CppLinkActionBuilder(
                     ruleContext,
-                    attributesToFlip.contains(NonStaticAttributes.OUTPUT_FILE)
-                        ? dynamicOutputFile
-                        : staticOutputFile,
+                    (i & 2) == 0 ? dynamicOutputFile : staticOutputFile,
                     CppHelper.getToolchain(ruleContext, ":cc_toolchain"),
                     CppHelper.getFdoSupport(ruleContext, ":cc_toolchain")) {};
             builder.addCompilationInputs(
-                attributesToFlip.contains(NonStaticAttributes.COMPILATION_INPUTS)
-                    ? ImmutableList.of(oFile)
-                    : ImmutableList.of(oFile2));
-            if (attributesToFlip.contains(NonStaticAttributes.OUTPUT_FILE)) {
+                (i & 1) == 0 ? ImmutableList.of(oFile) : ImmutableList.of(oFile2));
+            if ((i & 2) == 0) {
               builder.setLinkType(LinkTargetType.DYNAMIC_LIBRARY);
               builder.setLibraryIdentifier("foo");
             } else {
               builder.setLinkType(LinkTargetType.EXECUTABLE);
             }
             builder.setLinkStaticness(LinkStaticness.DYNAMIC);
-            builder.setNativeDeps(attributesToFlip.contains(NonStaticAttributes.NATIVE_DEPS));
-            builder.setUseTestOnlyFlags(
-                attributesToFlip.contains(NonStaticAttributes.USE_TEST_ONLY_FLAGS));
-            builder.setFake(attributesToFlip.contains(NonStaticAttributes.FAKE));
-            builder.setRuntimeSolibDir(
-                attributesToFlip.contains(NonStaticAttributes.RUNTIME_SOLIB_DIR)
-                    ? null
-                    : PathFragment.create("so1"));
+            builder.setNativeDeps((i & 4) == 0);
+            builder.setUseTestOnlyFlags((i & 8) == 0);
+            builder.setFake((i & 16) == 0);
+            builder.setRuntimeSolibDir((i & 32) == 0 ? null : PathFragment.create("so1"));
             builder.setFeatureConfiguration(featureConfiguration);
 
             return builder.build();
           }
         });
-  }
-
-  private enum StaticKeyAttributes {
-    OUTPUT_FILE,
-    COMPILATION_INPUTS
   }
 
   /**
@@ -332,28 +310,21 @@ public class CppLinkActionTest extends BuildViewTestCase {
     final FeatureConfiguration featureConfiguration = getMockFeatureConfiguration();
 
     ActionTester.runTest(
-        StaticKeyAttributes.class,
-        new ActionCombinationFactory<StaticKeyAttributes>() {
+        4,
+        new ActionCombinationFactory() {
 
           @Override
-          public Action generate(ImmutableSet<StaticKeyAttributes> attributes)
-              throws InterruptedException {
+          public Action generate(int i) throws InterruptedException {
             CppLinkActionBuilder builder =
                 new CppLinkActionBuilder(
                     ruleContext,
-                    attributes.contains(StaticKeyAttributes.OUTPUT_FILE)
-                        ? staticOutputFile
-                        : dynamicOutputFile,
+                    (i & 2) == 0 ? staticOutputFile : dynamicOutputFile,
                     CppHelper.getToolchain(ruleContext, ":cc_toolchain"),
                     CppHelper.getFdoSupport(ruleContext, ":cc_toolchain")) {};
             builder.addCompilationInputs(
-                attributes.contains(StaticKeyAttributes.COMPILATION_INPUTS)
-                    ? ImmutableList.of(oFile)
-                    : ImmutableList.of(oFile2));
+                (i & 1) == 0 ? ImmutableList.of(oFile) : ImmutableList.of(oFile2));
             builder.setLinkType(
-                attributes.contains(StaticKeyAttributes.OUTPUT_FILE)
-                    ? LinkTargetType.STATIC_LIBRARY
-                    : LinkTargetType.DYNAMIC_LIBRARY);
+                (i & 2) == 0 ? LinkTargetType.STATIC_LIBRARY : LinkTargetType.DYNAMIC_LIBRARY);
             builder.setLibraryIdentifier("foo");
             builder.setFeatureConfiguration(featureConfiguration);
             return builder.build();

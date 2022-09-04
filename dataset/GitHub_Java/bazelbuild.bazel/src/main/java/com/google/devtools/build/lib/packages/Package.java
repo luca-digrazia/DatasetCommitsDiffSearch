@@ -114,8 +114,10 @@ public class Package {
    */
   private MakeEnvironment makeEnv;
 
-  /** The collection of all targets defined in this package, indexed by name. */
-  protected ImmutableSortedKeyMap<String, Target> targets;
+  /**
+   * The collection of all targets defined in this package, indexed by name.
+   */
+  protected Map<String, Target> targets;
 
   /**
    * Default visibility for rules that do not specify it.
@@ -434,13 +436,16 @@ public class Package {
     return events;
   }
 
-  /** Returns an (immutable, unordered) view of all the targets belonging to this package. */
-  public ImmutableSortedKeyMap<String, Target> getTargets() {
-    return targets;
+  /**
+   * Returns an (immutable, unordered) view of all the targets belonging to this package.
+   */
+  public Collection<Target> getTargets() {
+    return getTargets(targets);
   }
 
   /**
-   * Common getTargets implementation, accessible by {@link Package.Builder}.
+   * Common getTargets implementation, accessible by both {@link Package} and
+   * {@link Package.Builder}.
    */
   private static Collection<Target> getTargets(Map<String, Target> targetMap) {
     return Collections.unmodifiableCollection(targetMap.values());

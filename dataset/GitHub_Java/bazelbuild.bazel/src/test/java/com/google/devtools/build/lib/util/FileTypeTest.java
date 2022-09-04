@@ -14,6 +14,9 @@
 package com.google.devtools.build.lib.util;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
@@ -23,12 +26,16 @@ import com.google.devtools.build.lib.util.FileType.HasFilename;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
-import java.util.List;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Test for {@link FileType} and {@link FileTypeSet}. */
+import java.util.List;
+
+/**
+ * Test for {@link FileType} and {@link FileTypeSet}.
+ */
 @RunWith(JUnit4.class)
 public class FileTypeTest {
   private static final FileType CFG = FileType.of(".cfg");
@@ -58,48 +65,48 @@ public class FileTypeTest {
 
   @Test
   public void simpleDotMatch() {
-    assertThat(TEXT.matches("readme.txt")).isTrue();
+    assertTrue(TEXT.matches("readme.txt"));
   }
 
   @Test
   public void doubleDotMatches() {
-    assertThat(TEXT.matches("read.me.txt")).isTrue();
+    assertTrue(TEXT.matches("read.me.txt"));
   }
 
   @Test
   public void noExtensionMatches() {
-    assertThat(FileType.NO_EXTENSION.matches("hello")).isTrue();
-    assertThat(FileType.NO_EXTENSION.matches("/path/to/hello")).isTrue();
+    assertTrue(FileType.NO_EXTENSION.matches("hello"));
+    assertTrue(FileType.NO_EXTENSION.matches("/path/to/hello"));
   }
 
   @Test
   public void picksLastExtension() {
-    assertThat(TEXT.matches("server.cfg.txt")).isTrue();
+    assertTrue(TEXT.matches("server.cfg.txt"));
   }
 
   @Test
   public void onlyExtensionStillMatches() {
-    assertThat(TEXT.matches(".txt")).isTrue();
+    assertTrue(TEXT.matches(".txt"));
   }
 
   @Test
   public void handlesPathObjects() {
     Path readme = new InMemoryFileSystem().getPath("/readme.txt");
-    assertThat(TEXT.matches(readme)).isTrue();
+    assertTrue(TEXT.matches(readme));
   }
 
   @Test
   public void handlesPathFragmentObjects() {
     PathFragment readme = PathFragment.create("some/where/readme.txt");
-    assertThat(TEXT.matches(readme)).isTrue();
+    assertTrue(TEXT.matches(readme));
   }
 
   @Test
   public void fileTypeSetContains() {
     FileTypeSet allowedTypes = FileTypeSet.of(TEXT, HTML);
 
-    assertThat(allowedTypes.matches("readme.txt")).isTrue();
-    assertThat(allowedTypes.matches("style.css")).isFalse();
+    assertTrue(allowedTypes.matches("readme.txt"));
+    assertFalse(allowedTypes.matches("style.css"));
   }
 
   private List<HasFilename> getArtifacts() {
@@ -115,18 +122,17 @@ public class FileTypeTest {
 
   @Test
   public void justJava() {
-    assertThat(filterAll(JAVA_SOURCE)).isEqualTo("Foo.java");
+    assertEquals("Foo.java", filterAll(JAVA_SOURCE));
   }
 
   @Test
   public void javaAndCpp() {
-    assertThat(filterAll(JAVA_SOURCE, CPP_SOURCE)).isEqualTo("Foo.java bar.cc");
+    assertEquals("Foo.java bar.cc", filterAll(JAVA_SOURCE, CPP_SOURCE));
   }
 
   @Test
   public void allThree() {
-    assertThat(filterAll(JAVA_SOURCE, CPP_SOURCE, PYTHON_SOURCE))
-        .isEqualTo("Foo.java bar.cc baz.py");
+    assertEquals("Foo.java bar.cc baz.py", filterAll(JAVA_SOURCE, CPP_SOURCE, PYTHON_SOURCE));
   }
 
   private HasFilename filename(final String name) {
@@ -142,8 +148,8 @@ public class FileTypeTest {
   public void checkingSingleWithTypePredicate() throws Exception {
     FileType.HasFilename item = filename("config.txt");
 
-    assertThat(FileType.contains(item, TEXT)).isTrue();
-    assertThat(FileType.contains(item, CFG)).isFalse();
+    assertTrue(FileType.contains(item, TEXT));
+    assertFalse(FileType.contains(item, CFG));
   }
 
   @Test
@@ -153,8 +159,8 @@ public class FileTypeTest {
         filename("index.html"),
         filename("README.txt"));
 
-    assertThat(FileType.contains(unfiltered, TEXT)).isTrue();
-    assertThat(FileType.contains(unfiltered, CFG)).isFalse();
+    assertTrue(FileType.contains(unfiltered, TEXT));
+    assertFalse(FileType.contains(unfiltered, CFG));
   }
 
   @Test

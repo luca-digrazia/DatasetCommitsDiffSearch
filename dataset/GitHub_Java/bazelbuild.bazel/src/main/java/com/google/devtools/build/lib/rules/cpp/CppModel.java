@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
@@ -110,11 +109,6 @@ public final class CppModel {
 
   private Artifact getDwoFile(Artifact outputFile) {
     return ruleContext.getRelatedArtifact(outputFile.getRootRelativePath(), ".dwo");
-  }
-
-  private Artifact getLTOIndexingFile(Artifact outputFile) {
-    String ext = Iterables.getOnlyElement(CppFileTypes.LTO_INDEXING_OBJECT_FILE.getExtensions());
-    return ruleContext.getRelatedArtifact(outputFile.getRootRelativePath(), ext);
   }
 
   /**
@@ -377,7 +371,6 @@ public final class CppModel {
       PathFragment autoFdoImportPath,
       Artifact gcnoFile,
       Artifact dwoFile,
-      Artifact ltoIndexingFile,
       CppModuleMap cppModuleMap,
       Map<String, String> sourceSpecificBuildVariables) {
     CcToolchainFeatures.Variables.Builder buildVariables =
@@ -478,11 +471,6 @@ public final class CppModel {
 
     if (dwoFile != null) {
       buildVariables.addStringVariable("per_object_debug_info_file", dwoFile.getExecPathString());
-    }
-
-    if (ltoIndexingFile != null) {
-      buildVariables.addStringVariable(
-          "lto_indexing_bitcode_file", ltoIndexingFile.getExecPathString());
     }
 
     buildVariables.addAllStringVariables(ccToolchain.getBuildVariables());
@@ -606,7 +594,6 @@ public final class CppModel {
         /*autoFdoImportPath=*/ null,
         /*gcnoFile=*/ null,
         /*dwoFile=*/ null,
-        /*ltoIndexingFile=*/ null,
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
@@ -652,11 +639,6 @@ public final class CppModel {
 
     boolean generateDwo = cppConfiguration.useFission();
     Artifact dwoFile = generateDwo ? getDwoFile(builder.getOutputFile()) : null;
-    // TODO(tejohnson): Add support for ThinLTO if needed.
-    boolean bitcodeOutput =
-        featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
-            && CppFileTypes.LTO_SOURCE.matches(module.getFilename());
-    Preconditions.checkState(!bitcodeOutput);
 
     setupCompileBuildVariables(
         builder,
@@ -665,7 +647,6 @@ public final class CppModel {
         module.getExecPath(),
         gcnoFile,
         dwoFile,
-        /*ltoIndexingFile=*/ null,
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
 
@@ -728,7 +709,6 @@ public final class CppModel {
         /*autoFdoImportPath=*/ null,
         /*gcnoFile=*/ null,
         /*dwoFile=*/ null,
-        /*ltoIndexingFile=*/ null,
         builder.getContext().getCppModuleMap(),
         /*sourceSpecificBuildVariables=*/ ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
@@ -769,10 +749,6 @@ public final class CppModel {
       createFakeSourceAction(outputName, result, env, builder, outputCategory, addObject,
           ccRelativeName, sourceArtifact.getExecPath(), usePic, generateDotd);
     } else {
-      boolean bitcodeOutput =
-          featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
-              && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename());
-
       // Create PIC compile actions (same as non-PIC, but use -fPIC and
       // generate .pic.o, .pic.d, .pic.gcno instead of .o, .d, .gcno.)
       if (generatePicAction) {
@@ -786,8 +762,6 @@ public final class CppModel {
             ? CppHelper.getCompileOutputArtifact(ruleContext, gcnoFileName, configuration)
             : null;
         Artifact dwoFile = generateDwo ? getDwoFile(picBuilder.getOutputFile()) : null;
-        Artifact ltoIndexingFile =
-            bitcodeOutput ? getLTOIndexingFile(picBuilder.getOutputFile()) : null;
 
         setupCompileBuildVariables(
             picBuilder,
@@ -796,7 +770,6 @@ public final class CppModel {
             sourceArtifact.getExecPath(),
             gcnoFile,
             dwoFile,
-            ltoIndexingFile,
             cppModuleMap,
             sourceSpecificBuildVariables);
 
@@ -808,7 +781,6 @@ public final class CppModel {
 
         picBuilder.setGcnoFile(gcnoFile);
         picBuilder.setDwoFile(dwoFile);
-        picBuilder.setLTOIndexingFile(ltoIndexingFile);
 
         semantics.finalizeCompileActionBuilder(ruleContext, picBuilder);
         CppCompileAction picAction = picBuilder.buildAndValidate(ruleContext);
@@ -817,8 +789,9 @@ public final class CppModel {
         if (addObject) {
           result.addPicObjectFile(picAction.getOutputFile());
 
-          if (bitcodeOutput) {
-            result.addLTOBitcodeFile(picAction.getOutputFile(), ltoIndexingFile);
+          if (featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
+              && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename())) {
+            result.addLTOBitcodeFile(picAction.getOutputFile());
           }
         }
         if (dwoFile != null) {
@@ -847,8 +820,6 @@ public final class CppModel {
                 : null;
 
         Artifact noPicDwoFile = generateDwo ? getDwoFile(noPicOutputFile) : null;
-        Artifact ltoIndexingFile =
-            bitcodeOutput ? getLTOIndexingFile(builder.getOutputFile()) : null;
 
         setupCompileBuildVariables(
             builder,
@@ -857,7 +828,6 @@ public final class CppModel {
             sourceArtifact.getExecPath(),
             gcnoFile,
             noPicDwoFile,
-            ltoIndexingFile,
             cppModuleMap,
             sourceSpecificBuildVariables);
 
@@ -874,7 +844,6 @@ public final class CppModel {
 
         builder.setGcnoFile(gcnoFile);
         builder.setDwoFile(noPicDwoFile);
-        builder.setLTOIndexingFile(ltoIndexingFile);
 
         semantics.finalizeCompileActionBuilder(ruleContext, builder);
         CppCompileAction compileAction = builder.buildAndValidate(ruleContext);
@@ -883,8 +852,9 @@ public final class CppModel {
         directOutputs.add(objectFile);
         if (addObject) {
           result.addObjectFile(objectFile);
-          if (bitcodeOutput) {
-            result.addLTOBitcodeFile(objectFile, ltoIndexingFile);
+          if (featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
+              && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename())) {
+            result.addLTOBitcodeFile(objectFile);
           }
         }
         if (noPicDwoFile != null) {
@@ -913,7 +883,6 @@ public final class CppModel {
         /*autoFdoImportPath=*/ null,
         /*gcnoFile=*/ null,
         /*dwoFile=*/ null,
-        /*ltoIndexingFile=*/ null,
         builder.getContext().getCppModuleMap(),
         source.getBuildVariables());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
@@ -959,7 +928,6 @@ public final class CppModel {
         execPath,
         /*gcnoFile=*/ null,
         /*dwoFile=*/ null,
-        /*ltoIndexingFile=*/ null,
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
@@ -1295,7 +1263,6 @@ public final class CppModel {
         source.getExecPath(),
         null,
         null,
-        /*ltoIndexingFile=*/ null,
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, dBuilder);
@@ -1312,7 +1279,6 @@ public final class CppModel {
         source.getExecPath(),
         null,
         null,
-        /*ltoIndexingFile=*/ null,
         builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, sdBuilder);

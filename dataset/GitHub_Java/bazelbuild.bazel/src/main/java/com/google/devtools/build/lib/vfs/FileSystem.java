@@ -65,10 +65,10 @@ public abstract class FileSystem {
   }
 
   // This is effectively final, should be changed only in unit-tests!
-  private static HashFunction digestFunction;
+  private static HashFunction DIGEST_FUNCTION;
   static {
     try {
-      digestFunction = new HashFunction.Converter().convert(
+      DIGEST_FUNCTION = new HashFunction.Converter().convert(
           System.getProperty("bazel.DigestFunction", "MD5"));
     } catch (OptionsParsingException e) {
       throw new IllegalStateException(e);
@@ -77,11 +77,11 @@ public abstract class FileSystem {
 
   @VisibleForTesting
   public static void setDigestFunctionForTesting(HashFunction value) {
-    digestFunction = value;
+    DIGEST_FUNCTION = value;
   }
 
   public static HashFunction getDigestFunction() {
-    return digestFunction;
+    return DIGEST_FUNCTION;
   }
 
   private enum UnixPathFactory implements PathFactory {
@@ -320,14 +320,14 @@ public abstract class FileSystem {
    * file.
    */
   protected final byte[] getFastDigest(Path path) throws IOException {
-    return getFastDigest(path, digestFunction);
+    return getFastDigest(path, DIGEST_FUNCTION);
   }
 
   /**
    * Returns whether the given digest is a valid digest for the default digest function.
    */
   public boolean isValidDigest(byte[] digest) {
-    return digestFunction.isValidDigest(digest);
+    return DIGEST_FUNCTION.isValidDigest(digest);
   }
 
   /**
@@ -355,7 +355,7 @@ public abstract class FileSystem {
    * @throws IOException if the digest could not be computed for any reason
    */
   protected byte[] getDigest(final Path path) throws IOException {
-    return getDigest(path, digestFunction);
+    return getDigest(path, DIGEST_FUNCTION);
   }
 
   /**

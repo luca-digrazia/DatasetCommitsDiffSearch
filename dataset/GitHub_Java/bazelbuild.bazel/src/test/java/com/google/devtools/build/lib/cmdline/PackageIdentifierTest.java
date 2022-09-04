@@ -15,12 +15,16 @@
 package com.google.devtools.build.lib.cmdline;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -39,11 +43,11 @@ public class PackageIdentifierTest {
         PathFragment.create("external/foo"));
 
     PackageIdentifier absoluteA = PackageIdentifier.parse("//a");
-    assertThat(absoluteA.getRepository().strippedName()).isEmpty();
+    assertThat(absoluteA.getRepository().strippedName()).isEqualTo("");
     assertThat(absoluteA.getPackageFragment().getPathString()).isEqualTo("a");
 
     PackageIdentifier plainA = PackageIdentifier.parse("a");
-    assertThat(plainA.getRepository().strippedName()).isEmpty();
+    assertThat(plainA.getRepository().strippedName()).isEqualTo("");
     assertThat(plainA.getPackageFragment().getPathString()).isEqualTo("a");
 
     PackageIdentifier mainA = PackageIdentifier.parse("@//a");
@@ -55,9 +59,9 @@ public class PackageIdentifierTest {
   @Test
   public void testToString() throws Exception {
     PackageIdentifier local = PackageIdentifier.create("", PathFragment.create("bar/baz"));
-    assertThat(local.toString()).isEqualTo("bar/baz");
+    assertEquals("bar/baz", local.toString());
     PackageIdentifier external = PackageIdentifier.create("@foo", PathFragment.create("bar/baz"));
-    assertThat(external.toString()).isEqualTo("@foo//bar/baz");
+    assertEquals("@foo//bar/baz", external.toString());
   }
 
   @Test
@@ -66,7 +70,7 @@ public class PackageIdentifierTest {
     PackageIdentifier foo2 = PackageIdentifier.create("@foo", PathFragment.create("bar/baz"));
     PackageIdentifier foo3 = PackageIdentifier.create("@foo", PathFragment.create("bar/bz"));
     PackageIdentifier bar = PackageIdentifier.create("@bar", PathFragment.create("bar/baz"));
-    assertThat(foo1.compareTo(foo2)).isEqualTo(0);
+    assertEquals(0, foo1.compareTo(foo2));
     assertThat(foo1.compareTo(foo3)).isLessThan(0);
     assertThat(foo1.compareTo(bar)).isGreaterThan(0);
   }
@@ -85,7 +89,7 @@ public class PackageIdentifierTest {
     out.writeObject(inId);
     ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(data.toByteArray()));
     PackageIdentifier outId = (PackageIdentifier) in.readObject();
-    assertThat(outId).isEqualTo(inId);
+    assertEquals(inId, outId);
   }
 
   @Test
@@ -93,7 +97,7 @@ public class PackageIdentifierTest {
     // Make sure package fragments are canonicalized.
     PackageIdentifier p1 = PackageIdentifier.create("@whatever", PathFragment.create("foo/bar"));
     PackageIdentifier p2 = PackageIdentifier.create("@whatever", PathFragment.create("foo/bar"));
-    assertThat(p1.getPackageFragment()).isSameInstanceAs(p2.getPackageFragment());
+    assertSame(p2.getPackageFragment(), p1.getPackageFragment());
   }
 
   @Test

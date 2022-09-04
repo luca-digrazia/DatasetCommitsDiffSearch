@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
-import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
@@ -57,6 +56,7 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
@@ -76,7 +76,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Nullable;
@@ -293,7 +292,6 @@ public class CppCompileAction extends AbstractAction
       DotdFile dotdFile,
       @Nullable Artifact gcnoFile,
       @Nullable Artifact dwoFile,
-      @Nullable Artifact ltoIndexingFile,
       Artifact optionalSourceFile,
       ImmutableMap<String, String> localShellEnvironment,
       CppConfiguration cppConfiguration,
@@ -314,11 +312,7 @@ public class CppCompileAction extends AbstractAction
         owner,
         allInputs,
         CollectionUtils.asListWithoutNulls(
-            outputFile,
-            (dotdFile == null ? null : dotdFile.artifact()),
-            gcnoFile,
-            dwoFile,
-            ltoIndexingFile));
+            outputFile, (dotdFile == null ? null : dotdFile.artifact()), gcnoFile, dwoFile));
     this.localShellEnvironment = localShellEnvironment;
     this.sourceLabel = sourceLabel;
     this.sourceFile = sourceFile;
@@ -714,6 +708,19 @@ public class CppCompileAction extends AbstractAction
     environment.putAll(this.environment);
     environment.putAll(cppCompileCommandLine.getEnvironment());
 
+    // TODO(bazel-team): Check (crosstool) host system name instead of using OS.getCurrent.
+    if (OS.getCurrent() == OS.WINDOWS) {
+      // TODO(bazel-team): Both GCC and clang rely on their execution directories being on
+      // PATH, otherwise they fail to find dependent DLLs (and they fail silently...). On
+      // the other hand, Windows documentation says that the directory of the executable
+      // is always searched for DLLs first. Not sure what to make of it.
+      // Other options are to forward the system path (brittle), or to add a PATH field to
+      // the crosstool file.
+      //
+      // @see com.google.devtools.build.lib.rules.cpp.CppLinkAction#getEnvironment
+      environment.put("PATH", cppConfiguration.getToolPathFragment(Tool.GCC).getParentDirectory()
+          .getPathString());
+   }
     return ImmutableMap.copyOf(environment);
   }
 
@@ -762,13 +769,6 @@ public class CppCompileAction extends AbstractAction
       info.addSourcesAndHeaders(getSourceFile().getExecPathString());
       info.addAllSourcesAndHeaders(
           Artifact.toExecPaths(context.getDeclaredIncludeSrcs()));
-    }
-    for (Entry<String, String> envVariable : getEnvironment().entrySet()) {
-      info.addVariable(
-          EnvironmentVariable.newBuilder()
-              .setName(envVariable.getKey())
-              .setValue(envVariable.getValue())
-              .build());
     }
 
     return super.getExtraActionInfo()

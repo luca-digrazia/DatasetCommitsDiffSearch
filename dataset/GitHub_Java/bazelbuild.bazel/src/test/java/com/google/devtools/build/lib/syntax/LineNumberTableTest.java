@@ -1,4 +1,4 @@
-// Copyright 2006 Google Inc.  All Rights Reserved.
+// Copyright 2006 The Bazel Authors.  All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ import static org.junit.Assert.assertEquals;
 
 import com.google.devtools.build.lib.events.Location.LineAndColumn;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.util.FsApparatus;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -28,11 +28,8 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class LineNumberTableTest {
-  private FsApparatus scratch = FsApparatus.newInMemory();
-
   private LineNumberTable create(String buffer) {
-    return LineNumberTable.create(buffer.toCharArray(),
-        scratch.path("/fake/file"));
+    return LineNumberTable.create(buffer.toCharArray(), PathFragment.create("/fake/file"));
   }
 
   @Test

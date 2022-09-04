@@ -285,7 +285,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
   }
 
   private static final class RecordingEvaluationProgressReceiver
-      extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
+      implements EvaluationProgressReceiver {
     Set<SkyKey> invalidations;
     Set<SkyValue> evaluations;
 
@@ -302,6 +302,12 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     public void invalidated(SkyKey skyKey, InvalidationState state) {
       invalidations.add(skyKey);
     }
+
+    @Override
+    public void enqueueing(SkyKey skyKey) {}
+
+    @Override
+    public void computed(SkyKey skyKey, long elapsedTimeNanos) {}
 
     @Override
     public void evaluated(

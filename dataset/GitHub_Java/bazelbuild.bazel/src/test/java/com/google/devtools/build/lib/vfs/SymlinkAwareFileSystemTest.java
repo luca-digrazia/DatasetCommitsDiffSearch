@@ -22,11 +22,13 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.vfs.FileSystem.NotASymlinkException;
+
+import org.junit.Before;
+import org.junit.Test;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collection;
-import org.junit.Before;
-import org.junit.Test;
 
 /**
  * This class handles the generic tests that any filesystem must pass.
@@ -473,10 +475,10 @@ public abstract class SymlinkAwareFileSystemTest extends FileSystemTest {
     FileSystemUtils.createEmptyFile(newPath);
     createSymbolicLink(someLink, newPath);
 
-    assertEquals(2, xEmptyDirectory.getDirectoryEntries().size());
+    assertEquals(xEmptyDirectory.getDirectoryEntries().size(), 2);
 
     assertTrue(someLink.delete());
-    assertEquals(1, xEmptyDirectory.getDirectoryEntries().size());
+    assertEquals(xEmptyDirectory.getDirectoryEntries().size(), 1);
 
     assertThat(xEmptyDirectory.getDirectoryEntries()).containsExactly(newPath);
   }

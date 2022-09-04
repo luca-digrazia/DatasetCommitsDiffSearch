@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
+import com.google.common.base.Predicate;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path.PathFactory;
@@ -204,14 +205,15 @@ public class ZipFileSystem extends ReadonlyFileSystem implements Closeable {
     Preconditions.checkState(open);
     zipEntryNonNull(path);
     final Collection<Path> result = new ArrayList<>();
-    ((ZipPath) path)
-        .applyToChildren(
-            child -> {
-              if (zipEntry(child) != null) {
-                result.add(child);
-              }
-              return true;
-            });
+    ((ZipPath) path).applyToChildren(new Predicate<Path>() {
+        @Override
+        public boolean apply(Path child) {
+          if (zipEntry(child) != null) {
+            result.add(child);
+          }
+          return true;
+        }
+      });
     return result;
   }
 

@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.remote;
 
+import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -23,16 +24,14 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.TreeTraverser;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
-import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.exec.SpawnInputExpander;
+import com.google.devtools.build.lib.remote.RemoteProtocol.ContentDigest;
+import com.google.devtools.build.lib.remote.RemoteProtocol.FileNode;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.remoteexecution.v1test.Digest;
-import com.google.devtools.remoteexecution.v1test.Directory;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -67,7 +66,6 @@ public final class TreeNodeRepository extends TreeTraverser<TreeNodeRepository.T
     /** A pair of path segment, TreeNode. */
     @Immutable
     public static final class ChildEntry {
-
       private final String segment;
       private final TreeNode child;
 
@@ -176,19 +174,15 @@ public final class TreeNodeRepository extends TreeTraverser<TreeNodeRepository.T
     }
   }
 
-  private static final TreeNode EMPTY_NODE = new TreeNode(ImmutableList.<TreeNode.ChildEntry>of());
-
   // Keep only one canonical instance of every TreeNode in the repository.
   private final Interner<TreeNode> interner = BlazeInterners.newWeakInterner();
   // Merkle hashes are computed and cached by the repository, therefore execRoot must
   // be part of the state.
   private final Path execRoot;
   private final ActionInputFileCache inputFileCache;
-  private final Map<TreeNode, Digest> treeNodeDigestCache = new HashMap<>();
-  private final Map<Digest, TreeNode> digestTreeNodeCache = new HashMap<>();
-  private final Map<TreeNode, Directory> directoryCache = new HashMap<>();
-  private final Map<VirtualActionInput, Digest> virtualInputDigestCache = new HashMap<>();
-  private final Map<Digest, VirtualActionInput> digestVirtualInputCache = new HashMap<>();
+  private final Map<TreeNode, ContentDigest> treeNodeDigestCache = new HashMap<>();
+  private final Map<ContentDigest, TreeNode> digestTreeNodeCache = new HashMap<>();
+  private final Map<TreeNode, FileNode> fileNodeCache = new HashMap<>();
 
   public TreeNodeRepository(Path execRoot, ActionInputFileCache inputFileCache) {
     this.execRoot = execRoot;
@@ -201,7 +195,14 @@ public final class TreeNodeRepository extends TreeTraverser<TreeNodeRepository.T
 
   @Override
   public Iterable<TreeNode> children(TreeNode node) {
-    return Iterables.transform(node.getChildEntries(), TreeNode.ChildEntry::getChild);
+    return Iterables.transform(
+        node.getChildEntries(),
+        new Function<TreeNode.ChildEntry, TreeNode>() {
+          @Override
+          public TreeNode apply(TreeNode.ChildEntry entry) {
+            return entry.getChild();
+          }
+        });
   }
 
   /** Traverse the directory structure in order (pre-order tree traversal). */
@@ -241,30 +242,17 @@ public final class TreeNodeRepository extends TreeTraverser<TreeNodeRepository.T
     for (PathFragment path : sortedMap.keySet()) {
       segments.add(path.getSegments());
     }
-    List<ActionInput> inputs = new ArrayList<>();
-    for (Map.Entry<PathFragment, ActionInput> e : sortedMap.entrySet()) {
-      if (e.getValue() == SpawnInputExpander.EMPTY_FILE) {
-        inputs.add(new EmptyActionInput(e.getKey()));
-      } else {
-        inputs.add(e.getValue());
-      }
-    }
+    ImmutableList<ActionInput> inputs = ImmutableList.copyOf(sortedMap.values());
     return buildParentNode(inputs, segments.build(), 0, inputs.size(), 0);
   }
 
   @SuppressWarnings("ReferenceEquality") // Segments are interned.
   private TreeNode buildParentNode(
-      List<ActionInput> inputs,
+      ImmutableList<ActionInput> inputs,
       ImmutableList<ImmutableList<String>> segments,
       int inputsStart,
       int inputsEnd,
       int segmentIndex) {
-    if (segments.isEmpty()) {
-      // We sometimes have actions with no inputs (e.g., echo "xyz" > $@), so we need to handle that
-      // case here.
-      Preconditions.checkState(inputs.isEmpty());
-      return EMPTY_NODE;
-    }
     if (segmentIndex == segments.get(inputsStart).size()) {
       // Leaf node reached. Must be unique.
       Preconditions.checkArgument(
@@ -290,131 +278,103 @@ public final class TreeNodeRepository extends TreeTraverser<TreeNodeRepository.T
     return interner.intern(new TreeNode(entries));
   }
 
-  private synchronized Directory getOrComputeDirectory(TreeNode node) throws IOException {
+  private synchronized FileNode getOrComputeFileNode(TreeNode node) throws IOException {
     // Assumes all child digests have already been computed!
-    Preconditions.checkArgument(!node.isLeaf());
-    Directory directory = directoryCache.get(node);
-    if (directory == null) {
-      Directory.Builder b = Directory.newBuilder();
-      for (TreeNode.ChildEntry entry : node.getChildEntries()) {
-        TreeNode child = entry.getChild();
-        if (child.isLeaf()) {
-          ActionInput input = child.getActionInput();
-          if (input instanceof VirtualActionInput) {
-            VirtualActionInput virtualInput = (VirtualActionInput) input;
-            Digest digest = Digests.computeDigest(virtualInput);
-            virtualInputDigestCache.put(virtualInput, digest);
-            // There may be multiple inputs with the same digest. In that case, we don't care which
-            // one we get back from the digestVirtualInputCache later.
-            digestVirtualInputCache.put(digest, virtualInput);
-            b.addFilesBuilder()
-                .setName(entry.getSegment())
-                .setDigest(digest)
-                .setIsExecutable(false);
-          } else {
-            b.addFilesBuilder()
-                .setName(entry.getSegment())
-                .setDigest(Digests.getDigestFromInputCache(input, inputFileCache))
-                .setIsExecutable(execRoot.getRelative(input.getExecPathString()).isExecutable());
-          }
-        } else {
-          Digest childDigest = Preconditions.checkNotNull(treeNodeDigestCache.get(child));
-          b.addDirectoriesBuilder().setName(entry.getSegment()).setDigest(childDigest);
+    FileNode fileNode = fileNodeCache.get(node);
+    if (fileNode == null) {
+      FileNode.Builder b = FileNode.newBuilder();
+      if (node.isLeaf()) {
+        ActionInput input = node.getActionInput();
+        b.getFileMetadataBuilder()
+            .setDigest(ContentDigests.getDigestFromInputCache(input, inputFileCache))
+            .setExecutable(execRoot.getRelative(input.getExecPathString()).isExecutable());
+      } else {
+        for (TreeNode.ChildEntry entry : node.getChildEntries()) {
+          ContentDigest childDigest = treeNodeDigestCache.get(entry.getChild());
+          Preconditions.checkState(childDigest != null);
+          b.addChildBuilder().setPath(entry.getSegment()).setDigest(childDigest);
         }
       }
-      directory = b.build();
-      directoryCache.put(node, directory);
-      Digest digest = Digests.computeDigest(directory);
+      fileNode = b.build();
+      fileNodeCache.put(node, fileNode);
+      ContentDigest digest = ContentDigests.computeDigest(fileNode);
       treeNodeDigestCache.put(node, digest);
       digestTreeNodeCache.put(digest, node);
     }
-    return directory;
+    return fileNode;
   }
 
   // Recursively traverses the tree, expanding and computing Merkle digests for nodes for which
   // they have not yet been computed and cached.
   public void computeMerkleDigests(TreeNode root) throws IOException {
     synchronized (this) {
-      if (directoryCache.get(root) != null) {
+      if (fileNodeCache.get(root) != null) {
         // Strong assumption: the cache is valid, i.e. parent present implies children present.
         return;
       }
     }
-    if (!root.isLeaf()) {
+    if (root.isLeaf()) {
+      // Load the digest into the ActionInputFileCache.
+      inputFileCache.getDigest(root.getActionInput());
+    } else {
       for (TreeNode child : children(root)) {
         computeMerkleDigests(child);
       }
-      getOrComputeDirectory(root);
     }
+    getOrComputeFileNode(root);
   }
 
   /**
    * Should only be used after computeMerkleDigests has been called on one of the node ancestors.
    * Returns the precomputed digest.
    */
-  public Digest getMerkleDigest(TreeNode node) throws IOException {
-    return node.isLeaf()
-        ? actionInputToDigest(node.getActionInput())
-        : treeNodeDigestCache.get(node);
+  public ContentDigest getMerkleDigest(TreeNode node) {
+    return treeNodeDigestCache.get(node);
   }
 
   /**
    * Returns the precomputed digests for both data and metadata. Should only be used after
    * computeMerkleDigests has been called on one of the node ancestors.
    */
-  public ImmutableCollection<Digest> getAllDigests(TreeNode root) throws IOException {
-    ImmutableSet.Builder<Digest> digests = ImmutableSet.builder();
+  public ImmutableCollection<ContentDigest> getAllDigests(TreeNode root) throws IOException {
+    ImmutableSet.Builder<ContentDigest> digests = ImmutableSet.builder();
     for (TreeNode node : descendants(root)) {
-      digests.add(
-          node.isLeaf()
-              ? actionInputToDigest(node.getActionInput())
-              : Preconditions.checkNotNull(treeNodeDigestCache.get(node)));
+      digests.add(Preconditions.checkNotNull(treeNodeDigestCache.get(node)));
+      if (node.isLeaf()) {
+        digests.add(ContentDigests.getDigestFromInputCache(node.getActionInput(), inputFileCache));
+      }
     }
     return digests.build();
   }
 
-  private Digest actionInputToDigest(ActionInput input) throws IOException {
-    if (input instanceof VirtualActionInput) {
-      return Preconditions.checkNotNull(virtualInputDigestCache.get(input));
-    }
-    return Digests.getDigestFromInputCache(input, inputFileCache);
-  }
-
   /**
-   * Serializes all of the subtree to a Directory list. TODO(olaola): add a version that only copies
-   * a part of the tree that we are interested in. Should only be used after computeMerkleDigests
-   * has been called on one of the node ancestors.
+   * Serializes all of the subtree to the file node list. TODO(olaola): add a version that only
+   * copies a part of the tree that we are interested in. Should only be used after
+   * computeMerkleDigests has been called on one of the node ancestors.
    */
   // Note: this is not, strictly speaking, thread safe. If someone is deleting cached Merkle hashes
   // while this is executing, it will trigger an exception. But I think this is WAI.
-  public ImmutableList<Directory> treeToDirectories(TreeNode root) {
-    ImmutableList.Builder<Directory> directories = ImmutableList.builder();
+  public ImmutableList<FileNode> treeToFileNodes(TreeNode root) throws IOException {
+    ImmutableList.Builder<FileNode> fileNodes = ImmutableList.builder();
     for (TreeNode node : descendants(root)) {
-      if (!node.isLeaf()) {
-        directories.add(Preconditions.checkNotNull(directoryCache.get(node)));
-      }
+      fileNodes.add(Preconditions.checkNotNull(fileNodeCache.get(node)));
     }
-    return directories.build();
+    return fileNodes.build();
   }
 
   /**
    * Should only be used on digests created by a call to computeMerkleDigests. Looks up ActionInputs
-   * or Directory messages by cached digests and adds them to the lists.
+   * or FileNodes by cached digests and adds them to the lists.
    */
   public void getDataFromDigests(
-      Iterable<Digest> digests, List<ActionInput> actionInputs, List<Directory> nodes) {
-    for (Digest digest : digests) {
+      Iterable<ContentDigest> digests, List<ActionInput> actionInputs, List<FileNode> nodes) {
+    for (ContentDigest digest : digests) {
       TreeNode treeNode = digestTreeNodeCache.get(digest);
       if (treeNode != null) {
-        nodes.add(Preconditions.checkNotNull(directoryCache.get(treeNode)));
+        nodes.add(Preconditions.checkNotNull(fileNodeCache.get(treeNode)));
       } else { // If not there, it must be an ActionInput.
-        ByteString hexDigest = ByteString.copyFromUtf8(digest.getHash());
-        ActionInput input = inputFileCache.getInputFromDigest(hexDigest);
-        if (input == null) {
-          // ... or a VirtualActionInput.
-          input = digestVirtualInputCache.get(digest);
-        }
-        actionInputs.add(Preconditions.checkNotNull(input));
+        ByteString hexDigest = ByteString.copyFromUtf8(ContentDigests.toHexString(digest));
+        actionInputs.add(Preconditions.checkNotNull(inputFileCache.getInputFromDigest(hexDigest)));
       }
     }
   }

@@ -282,10 +282,16 @@ public final class TestActionBuilder {
           coverageArtifacts.add(coverageArtifact);
         }
 
+        Artifact microCoverageArtifact = null;
+        if (collectCodeCoverage && config.isMicroCoverageEnabled()) {
+          microCoverageArtifact = ruleContext.getPackageRelativeArtifact(
+              targetName.getRelative(shardRunDir + "coverage.micro.dat"), root);
+        }
+
         env.registerAction(new TestRunnerAction(
             ruleContext.getActionOwner(), inputs, testRuntime,
             testLog, cacheStatus,
-            coverageArtifact,
+            coverageArtifact, microCoverageArtifact,
             testProperties, testEnv, executionSettings,
             shard, run, config, ruleContext.getWorkspaceName(),
             useTestRunner));

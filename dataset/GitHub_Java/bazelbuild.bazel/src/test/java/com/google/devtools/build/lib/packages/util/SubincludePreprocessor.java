@@ -147,7 +147,9 @@ public class SubincludePreprocessor implements Preprocessor {
       throw new IOException("transient error requested in " + buildFilePath.asFragment());
     }
 
-    return Preprocessor.Result.noPreprocessing(
-        ParserInputSource.create(content, buildFilePath.asFragment()));
+    return Preprocessor.Result.success(
+        ParserInputSource.create(content, buildFilePath.asFragment()),
+        eventHandler.hasErrors(),
+        eventHandler.getEvents());
   }
 }

@@ -14,9 +14,11 @@
 package com.google.devtools.build.lib.cmdline;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.regex.Pattern;
@@ -38,24 +40,24 @@ public class LabelTest {
   public void testAbsolute() throws Exception {
     {
       Label l = Label.parseAbsolute("//foo/bar:baz");
-      assertThat(l.getPackageName()).isEqualTo("foo/bar");
-      assertThat(l.getName()).isEqualTo("baz");
+      assertEquals("foo/bar", l.getPackageName());
+      assertEquals("baz", l.getName());
     }
     {
       Label l = Label.parseAbsolute("//foo/bar");
-      assertThat(l.getPackageName()).isEqualTo("foo/bar");
-      assertThat(l.getName()).isEqualTo("bar");
+      assertEquals("foo/bar", l.getPackageName());
+      assertEquals("bar", l.getName());
     }
     {
       Label l = Label.parseAbsolute("//:bar");
-      assertThat(l.getPackageName()).isEmpty();
-      assertThat(l.getName()).isEqualTo("bar");
+      assertEquals("", l.getPackageName());
+      assertEquals("bar", l.getName());
     }
     {
       Label l = Label.parseAbsolute("@foo");
-      assertThat(l.getPackageIdentifier().getRepository().getName()).isEqualTo("@foo");
-      assertThat(l.getPackageName()).isEmpty();
-      assertThat(l.getName()).isEqualTo("foo");
+      assertEquals("@foo", l.getPackageIdentifier().getRepository().getName());
+      assertEquals("", l.getPackageName());
+      assertEquals("foo", l.getName());
     }
   }
 
@@ -65,15 +67,14 @@ public class LabelTest {
 
   @Test
   public void testLabelResolution() throws Exception {
-    assertThat(parseCommandLine("//absolute:label", "")).isEqualTo("//absolute:label");
-    assertThat(parseCommandLine("//absolute:label", "absolute")).isEqualTo("//absolute:label");
-    assertThat(parseCommandLine(":label", "absolute")).isEqualTo("//absolute:label");
-    assertThat(parseCommandLine("label", "absolute")).isEqualTo("//absolute:label");
-    assertThat(parseCommandLine("absolute:label", "")).isEqualTo("//absolute:label");
-    assertThat(parseCommandLine("path:label", "absolute")).isEqualTo("//absolute/path:label");
-    assertThat(parseCommandLine("path:label/path", "absolute"))
-        .isEqualTo("//absolute/path:label/path");
-    assertThat(parseCommandLine("label/path", "absolute")).isEqualTo("//absolute:label/path");
+    assertEquals("//absolute:label", parseCommandLine("//absolute:label", ""));
+    assertEquals("//absolute:label", parseCommandLine("//absolute:label", "absolute"));
+    assertEquals("//absolute:label", parseCommandLine(":label", "absolute"));
+    assertEquals("//absolute:label", parseCommandLine("label", "absolute"));
+    assertEquals("//absolute:label", parseCommandLine("absolute:label", ""));
+    assertEquals("//absolute/path:label", parseCommandLine("path:label", "absolute"));
+    assertEquals("//absolute/path:label/path", parseCommandLine("path:label/path", "absolute"));
+    assertEquals("//absolute:label/path", parseCommandLine("label/path", "absolute"));
   }
 
   @Test
@@ -100,16 +101,16 @@ public class LabelTest {
   public void testGetRelativeWithAbsoluteLabel() throws Exception {
     Label base = Label.parseAbsolute("//foo/bar:baz");
     Label l = base.getRelative("//p1/p2:target");
-    assertThat(l.getPackageName()).isEqualTo("p1/p2");
-    assertThat(l.getName()).isEqualTo("target");
+    assertEquals("p1/p2", l.getPackageName());
+    assertEquals("target", l.getName());
   }
 
   @Test
   public void testGetRelativeWithRelativeLabel() throws Exception {
     Label base = Label.parseAbsolute("//foo/bar:baz");
     Label l = base.getRelative(":quux");
-    assertThat(l.getPackageName()).isEqualTo("foo/bar");
-    assertThat(l.getName()).isEqualTo("quux");
+    assertEquals("foo/bar", l.getPackageName());
+    assertEquals("quux", l.getName());
   }
 
   @Test
@@ -148,10 +149,9 @@ public class LabelTest {
 
     Label relative = base.getRelative("@remote//x:y");
 
-    assertThat(relative.getPackageIdentifier().getRepository())
-        .isEqualTo(RepositoryName.create("@remote"));
-    assertThat(relative.getPackageFragment()).isEqualTo(PathFragment.create("x"));
-    assertThat(relative.getName()).isEqualTo("y");
+    assertEquals(RepositoryName.create("@remote"), relative.getPackageIdentifier().getRepository());
+    assertEquals(PathFragment.create("x"), relative.getPackageFragment());
+    assertEquals("y", relative.getName());
   }
 
   @Test
@@ -161,10 +161,9 @@ public class LabelTest {
 
     Label relative = base.getRelative("//x:y");
 
-    assertThat(relative.getPackageIdentifier().getRepository())
-        .isEqualTo(packageId.getRepository());
-    assertThat(relative.getPackageFragment()).isEqualTo(PathFragment.create("x"));
-    assertThat(relative.getName()).isEqualTo("y");
+    assertEquals(packageId.getRepository(), relative.getPackageIdentifier().getRepository());
+    assertEquals(PathFragment.create("x"), relative.getPackageFragment());
+    assertEquals("y", relative.getName());
   }
 
   @Test
@@ -174,10 +173,9 @@ public class LabelTest {
 
     Label relative = base.getRelative(":y");
 
-    assertThat(relative.getPackageIdentifier().getRepository())
-        .isEqualTo(packageId.getRepository());
-    assertThat(relative.getPackageFragment()).isEqualTo(PathFragment.create("foo"));
-    assertThat(relative.getName()).isEqualTo("y");
+    assertEquals(packageId.getRepository(), relative.getPackageIdentifier().getRepository());
+    assertEquals(PathFragment.create("foo"), relative.getPackageFragment());
+    assertEquals("y", relative.getName());
   }
 
   @Test
@@ -188,9 +186,9 @@ public class LabelTest {
     Label relative = base.getRelative("//conditions:default");
 
     PackageIdentifier expected = PackageIdentifier.createInMainRepo("conditions");
-    assertThat(relative.getPackageIdentifier().getRepository()).isEqualTo(expected.getRepository());
-    assertThat(relative.getPackageFragment()).isEqualTo(expected.getPackageFragment());
-    assertThat(relative.getName()).isEqualTo("default");
+    assertEquals(expected.getRepository(), relative.getPackageIdentifier().getRepository());
+    assertEquals(expected.getPackageFragment(), relative.getPackageFragment());
+    assertEquals("default", relative.getName());
   }
 
   @Test
@@ -200,10 +198,9 @@ public class LabelTest {
 
     Label relative = base.getRelative("@//x:y");
 
-    assertThat(relative.getPackageIdentifier().getRepository())
-        .isEqualTo(RepositoryName.create("@"));
-    assertThat(relative.getPackageFragment()).isEqualTo(PathFragment.create("x"));
-    assertThat(relative.getName()).isEqualTo("y");
+    assertEquals(RepositoryName.create("@"), relative.getPackageIdentifier().getRepository());
+    assertEquals(PathFragment.create("x"), relative.getPackageFragment());
+    assertEquals("y", relative.getName());
   }
 
   @Test
@@ -213,18 +210,18 @@ public class LabelTest {
     Label mainBase = Label.parseAbsolute("@//foo/bar:baz");
     Label externalTarget = Label.parseAbsolute("//external:target");
     Label l = defaultBase.resolveRepositoryRelative(externalTarget);
-    assertThat(l.getPackageIdentifier().getRepository().isMain()).isTrue();
-    assertThat(l.getPackageName()).isEqualTo("external");
-    assertThat(l.getName()).isEqualTo("target");
-    assertThat(repoBase.resolveRepositoryRelative(externalTarget)).isEqualTo(l);
-    assertThat(mainBase.resolveRepositoryRelative(externalTarget)).isEqualTo(l);
+    assertTrue(l.getPackageIdentifier().getRepository().isMain());
+    assertEquals("external", l.getPackageName());
+    assertEquals("target", l.getName());
+    assertEquals(l, repoBase.resolveRepositoryRelative(externalTarget));
+    assertEquals(l, mainBase.resolveRepositoryRelative(externalTarget));
   }
 
   @Test
   public void testFactory() throws Exception {
     Label l = Label.create("foo/bar", "quux");
-    assertThat(l.getPackageName()).isEqualTo("foo/bar");
-    assertThat(l.getName()).isEqualTo("quux");
+    assertEquals("foo/bar", l.getPackageName());
+    assertEquals("quux", l.getName());
   }
 
   @Test
@@ -234,10 +231,15 @@ public class LabelTest {
     Label l2 = Label.parseAbsolute("//foo/bar:baz");
     Label l3 = Label.parseAbsolute("//foo/bar:quux");
 
-    new EqualsTester()
-        .addEqualityGroup(l1, l2)
-        .addEqualityGroup(l3)
-        .testEquals();
+    assertEquals(l1, l1);
+    assertEquals(l1, l2);
+    assertEquals(l2, l1);
+    assertEquals(l1, l2);
+
+    assertFalse(l3.equals(l1));
+    assertFalse(l1.equals(l3));
+
+    assertEquals(l1.hashCode(), l2.hashCode());
   }
 
   @Test
@@ -245,15 +247,15 @@ public class LabelTest {
     {
       String s = "@//foo/bar:baz";
       Label l = Label.parseAbsolute(s);
-      assertThat(l.toString()).isEqualTo("//foo/bar:baz");
+      assertEquals("//foo/bar:baz", l.toString());
     }
     {
       Label l = Label.parseAbsolute("//foo/bar");
-      assertThat(l.toString()).isEqualTo("//foo/bar:bar");
+      assertEquals("//foo/bar:bar", l.toString());
     }
     {
       Label l = Label.parseAbsolute("@foo");
-      assertThat(l.toString()).isEqualTo("@foo//:foo");
+      assertEquals("@foo//:foo", l.toString());
     }
   }
 
@@ -291,7 +293,7 @@ public class LabelTest {
       Label.parseAbsolute(label);
       fail("Label '" + label + "' did not contain a syntax error");
     } catch (LabelSyntaxException e) {
-      assertThat(e).hasMessageThat().containsMatch(Pattern.quote(expectedError));
+      assertThat(e.getMessage()).containsMatch(Pattern.quote(expectedError));
     }
   }
 
@@ -340,7 +342,9 @@ public class LabelTest {
 
   @Test
   public void testTrailingDotSegment() throws Exception {
-    assertThat(Label.parseAbsolute("//foo:dir")).isEqualTo(Label.parseAbsolute("//foo:dir/."));
+    assertEquals(Label
+        .parseAbsolute("//foo:dir/."), Label
+        .parseAbsolute("//foo:dir"));
   }
 
   @Test
@@ -423,22 +427,22 @@ public class LabelTest {
   private void checkSerialization(String labelString, int expectedSize) throws Exception {
     Label a = Label.parseAbsolute(labelString);
     byte[] sa = TestUtils.serializeObject(a);
-    assertThat(sa).hasLength(expectedSize);
+    assertEquals(expectedSize, sa.length);
 
     Label a2 = (Label) TestUtils.deserializeObject(sa);
-    assertThat(a2).isEqualTo(a);
+    assertEquals(a, a2);
   }
 
   @Test
   public void testRepoLabel() throws Exception {
     Label label = Label.parseAbsolute("@foo//bar/baz:bat/boo");
-    assertThat(label.toString()).isEqualTo("@foo//bar/baz:bat/boo");
+    assertEquals("@foo//bar/baz:bat/boo", label.toString());
   }
 
   @Test
   public void testNoRepo() throws Exception {
     Label label = Label.parseAbsolute("//bar/baz:bat/boo");
-    assertThat(label.toString()).isEqualTo("//bar/baz:bat/boo");
+    assertEquals("//bar/baz:bat/boo", label.toString());
   }
 
   @Test

@@ -13,7 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.events.Event;
@@ -131,47 +133,46 @@ public class LexerTest {
 
   @Test
   public void testBasics1() throws Exception {
-    assertThat(names(tokens("wiz) "))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
-    assertThat(names(tokens("wiz )"))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
-    assertThat(names(tokens(" wiz)"))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
-    assertThat(names(tokens(" wiz ) "))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
-    assertThat(names(tokens("wiz\t)"))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
+    assertEquals("IDENTIFIER RPAREN NEWLINE EOF", names(tokens("wiz) ")));
+    assertEquals("IDENTIFIER RPAREN NEWLINE EOF", names(tokens("wiz )")));
+    assertEquals("IDENTIFIER RPAREN NEWLINE EOF", names(tokens(" wiz)")));
+    assertEquals("IDENTIFIER RPAREN NEWLINE EOF", names(tokens(" wiz ) ")));
+    assertEquals("IDENTIFIER RPAREN NEWLINE EOF", names(tokens("wiz\t)")));
   }
 
   @Test
   public void testBasics2() throws Exception {
-    assertThat(names(tokens(")"))).isEqualTo("RPAREN NEWLINE EOF");
-    assertThat(names(tokens(" )"))).isEqualTo("RPAREN NEWLINE EOF");
-    assertThat(names(tokens(" ) "))).isEqualTo("RPAREN NEWLINE EOF");
-    assertThat(names(tokens(") "))).isEqualTo("RPAREN NEWLINE EOF");
+    assertEquals("RPAREN NEWLINE EOF", names(tokens(")")));
+    assertEquals("RPAREN NEWLINE EOF", names(tokens(" )")));
+    assertEquals("RPAREN NEWLINE EOF", names(tokens(" ) ")));
+    assertEquals("RPAREN NEWLINE EOF", names(tokens(") ")));
   }
 
   @Test
   public void testBasics3() throws Exception {
-    assertThat(names(tokens("123#456\n789"))).isEqualTo("INT COMMENT NEWLINE INT NEWLINE EOF");
-    assertThat(names(tokens("123 #456\n789"))).isEqualTo("INT COMMENT NEWLINE INT NEWLINE EOF");
-    assertThat(names(tokens("123#456 \n789"))).isEqualTo("INT COMMENT NEWLINE INT NEWLINE EOF");
-    assertThat(names(tokens("123#456\n 789")))
-        .isEqualTo("INT COMMENT NEWLINE INDENT INT NEWLINE OUTDENT NEWLINE EOF");
-    assertThat(names(tokens("123#456\n789 "))).isEqualTo("INT COMMENT NEWLINE INT NEWLINE EOF");
+    assertEquals("INT COMMENT NEWLINE INT NEWLINE EOF", names(tokens("123#456\n789")));
+    assertEquals("INT COMMENT NEWLINE INT NEWLINE EOF", names(tokens("123 #456\n789")));
+    assertEquals("INT COMMENT NEWLINE INT NEWLINE EOF", names(tokens("123#456 \n789")));
+    assertEquals("INT COMMENT NEWLINE INDENT INT NEWLINE OUTDENT NEWLINE EOF",
+                 names(tokens("123#456\n 789")));
+    assertEquals("INT COMMENT NEWLINE INT NEWLINE EOF", names(tokens("123#456\n789 ")));
   }
 
   @Test
   public void testBasics4() throws Exception {
-    assertThat(names(tokens(""))).isEqualTo("NEWLINE EOF");
-    assertThat(names(tokens("# foo"))).isEqualTo("COMMENT NEWLINE EOF");
-    assertThat(names(tokens("1 2 3 4"))).isEqualTo("INT INT INT INT NEWLINE EOF");
-    assertThat(names(tokens("1.234"))).isEqualTo("INT DOT INT NEWLINE EOF");
-    assertThat(names(tokens("foo(bar, wiz)")))
-        .isEqualTo("IDENTIFIER LPAREN IDENTIFIER COMMA IDENTIFIER RPAREN " + "NEWLINE EOF");
+    assertEquals("NEWLINE EOF", names(tokens("")));
+    assertEquals("COMMENT NEWLINE EOF", names(tokens("# foo")));
+    assertEquals("INT INT INT INT NEWLINE EOF", names(tokens("1 2 3 4")));
+    assertEquals("INT DOT INT NEWLINE EOF", names(tokens("1.234")));
+    assertEquals("IDENTIFIER LPAREN IDENTIFIER COMMA IDENTIFIER RPAREN "
+                 + "NEWLINE EOF", names(tokens("foo(bar, wiz)")));
   }
 
   @Test
   public void testCrLf() throws Exception {
-    assertThat(names(tokens("\r\n\r\n"))).isEqualTo("NEWLINE EOF");
-    assertThat(names(tokens("\r\n\r1\r\r\n"))).isEqualTo("NEWLINE INT NEWLINE EOF");
-    assertThat(names(tokens("# foo\r\n# bar\r\n")))
-        .isEqualTo("COMMENT NEWLINE COMMENT NEWLINE EOF");
+    assertEquals("NEWLINE EOF", names(tokens("\r\n\r\n")));
+    assertEquals("NEWLINE INT NEWLINE EOF", names(tokens("\r\n\r1\r\r\n")));
+    assertEquals("COMMENT NEWLINE COMMENT NEWLINE EOF", names(tokens("# foo\r\n# bar\r\n")));
   }
 
   @Test
@@ -180,296 +181,312 @@ public class LexerTest {
     // don't consume too many chars.
 
     // decimal
-    assertThat(values(tokens("12345-"))).isEqualTo("INT(12345) MINUS NEWLINE EOF");
+    assertEquals("INT(12345) MINUS NEWLINE EOF", values(tokens("12345-")));
 
     // octal
-    assertThat(values(tokens("012345-"))).isEqualTo("INT(5349) MINUS NEWLINE EOF");
-    assertThat(values(tokens("0o12345-"))).isEqualTo("INT(5349) MINUS NEWLINE EOF");
-    assertThat(values(tokens("0O77"))).isEqualTo("INT(63) NEWLINE EOF");
+    assertEquals("INT(5349) MINUS NEWLINE EOF", values(tokens("012345-")));
 
     // octal (bad)
-    assertThat(values(tokens("012349-"))).isEqualTo("INT(0) MINUS NEWLINE EOF");
-    assertThat(lastError.toString())
-        .isEqualTo("/some/path.txt:1: invalid base-8 integer constant: 012349");
-
-    assertThat(values(tokens("0o"))).isEqualTo("INT(0) NEWLINE EOF");
-    assertThat(lastError.toString())
-        .isEqualTo("/some/path.txt:1: invalid base-8 integer constant: 0o");
+    assertEquals("INT(0) MINUS NEWLINE EOF", values(tokens("012349-")));
+    assertEquals("/some/path.txt:1: invalid base-8 integer constant: 012349",
+                 lastError.toString());
 
     // hexadecimal (uppercase)
-    assertThat(values(tokens("0X12345F-"))).isEqualTo("INT(1193055) MINUS NEWLINE EOF");
+    assertEquals("INT(1193055) MINUS NEWLINE EOF", values(tokens("0X12345F-")));
 
     // hexadecimal (lowercase)
-    assertThat(values(tokens("0x12345f-"))).isEqualTo("INT(1193055) MINUS NEWLINE EOF");
+    assertEquals("INT(1193055) MINUS NEWLINE EOF", values(tokens("0x12345f-")));
 
     // hexadecimal (lowercase) [note: "g" cause termination of token]
-    assertThat(values(tokens("0x12345g-"))).isEqualTo("INT(74565) IDENTIFIER(g) MINUS NEWLINE EOF");
+    assertEquals("INT(74565) IDENTIFIER(g) MINUS NEWLINE EOF",
+                 values(tokens("0x12345g-")));
   }
 
   @Test
   public void testIntegersAndDot() throws Exception {
-    assertThat(values(tokens("1.2345"))).isEqualTo("INT(1) DOT INT(2345) NEWLINE EOF");
+    assertEquals("INT(1) DOT INT(2345) NEWLINE EOF", values(tokens("1.2345")));
 
-    assertThat(values(tokens("1.2.345"))).isEqualTo("INT(1) DOT INT(2) DOT INT(345) NEWLINE EOF");
+    assertEquals("INT(1) DOT INT(2) DOT INT(345) NEWLINE EOF",
+                 values(tokens("1.2.345")));
 
-    assertThat(values(tokens("1.23E10"))).isEqualTo("INT(1) DOT INT(0) NEWLINE EOF");
-    assertThat(lastError.toString())
-        .isEqualTo("/some/path.txt:1: invalid base-10 integer constant: 23E10");
+    assertEquals("INT(1) DOT INT(0) NEWLINE EOF", values(tokens("1.23E10")));
+    assertEquals("/some/path.txt:1: invalid base-10 integer constant: 23E10",
+                 lastError.toString());
 
-    assertThat(values(tokens("1.23E-10"))).isEqualTo("INT(1) DOT INT(0) MINUS INT(10) NEWLINE EOF");
-    assertThat(lastError.toString())
-        .isEqualTo("/some/path.txt:1: invalid base-10 integer constant: 23E");
+    assertEquals("INT(1) DOT INT(0) MINUS INT(10) NEWLINE EOF",
+                 values(tokens("1.23E-10")));
+    assertEquals("/some/path.txt:1: invalid base-10 integer constant: 23E",
+                 lastError.toString());
 
-    assertThat(values(tokens(". 123"))).isEqualTo("DOT INT(123) NEWLINE EOF");
-    assertThat(values(tokens(".123"))).isEqualTo("DOT INT(123) NEWLINE EOF");
-    assertThat(values(tokens(".abc"))).isEqualTo("DOT IDENTIFIER(abc) NEWLINE EOF");
+    assertEquals("DOT INT(123) NEWLINE EOF", values(tokens(". 123")));
+    assertEquals("DOT INT(123) NEWLINE EOF", values(tokens(".123")));
+    assertEquals("DOT IDENTIFIER(abc) NEWLINE EOF", values(tokens(".abc")));
 
-    assertThat(values(tokens("foo.123"))).isEqualTo("IDENTIFIER(foo) DOT INT(123) NEWLINE EOF");
-    assertThat(values(tokens("foo.bcd")))
-        .isEqualTo("IDENTIFIER(foo) DOT IDENTIFIER(bcd) NEWLINE EOF"); // 'b' are hex chars
-    assertThat(values(tokens("foo.xyz")))
-        .isEqualTo("IDENTIFIER(foo) DOT IDENTIFIER(xyz) NEWLINE EOF");
+    assertEquals("IDENTIFIER(foo) DOT INT(123) NEWLINE EOF",
+                 values(tokens("foo.123")));
+    assertEquals("IDENTIFIER(foo) DOT IDENTIFIER(bcd) NEWLINE EOF",
+                 values(tokens("foo.bcd"))); // 'b' are hex chars
+    assertEquals("IDENTIFIER(foo) DOT IDENTIFIER(xyz) NEWLINE EOF",
+                 values(tokens("foo.xyz")));
   }
 
   @Test
   public void testStringDelimiters() throws Exception {
-    assertThat(values(tokens("\"foo\""))).isEqualTo("STRING(foo) NEWLINE EOF");
-    assertThat(values(tokens("'foo'"))).isEqualTo("STRING(foo) NEWLINE EOF");
+    assertEquals("STRING(foo) NEWLINE EOF", values(tokens("\"foo\"")));
+    assertEquals("STRING(foo) NEWLINE EOF", values(tokens("'foo'")));
   }
 
   @Test
   public void testQuotesInStrings() throws Exception {
-    assertThat(values(tokens("'foo\\'bar'"))).isEqualTo("STRING(foo'bar) NEWLINE EOF");
-    assertThat(values(tokens("\"foo'bar\""))).isEqualTo("STRING(foo'bar) NEWLINE EOF");
-    assertThat(values(tokens("'foo\"bar'"))).isEqualTo("STRING(foo\"bar) NEWLINE EOF");
-    assertThat(values(tokens("\"foo\\\"bar\""))).isEqualTo("STRING(foo\"bar) NEWLINE EOF");
+    assertEquals("STRING(foo'bar) NEWLINE EOF", values(tokens("'foo\\'bar'")));
+    assertEquals("STRING(foo'bar) NEWLINE EOF", values(tokens("\"foo'bar\"")));
+    assertEquals("STRING(foo\"bar) NEWLINE EOF", values(tokens("'foo\"bar'")));
+    assertEquals("STRING(foo\"bar) NEWLINE EOF",
+                 values(tokens("\"foo\\\"bar\"")));
   }
 
   @Test
   public void testStringEscapes() throws Exception {
-    assertThat(values(tokens("'a\\tb\\nc\\rd'")))
-        .isEqualTo("STRING(a\tb\nc\rd) NEWLINE EOF"); // \t \r \n
-    assertThat(values(tokens("'x\\hx'")))
-        .isEqualTo("STRING(x\\hx) NEWLINE EOF"); // \h is unknown => "\h"
-    assertThat(values(tokens("'\\$$'"))).isEqualTo("STRING(\\$$) NEWLINE EOF");
-    assertThat(values(tokens("'a\\\nb'")))
-        .isEqualTo("STRING(ab) NEWLINE EOF"); // escape end of line
-    assertThat(values(tokens("\"ab\\ucd\""))).isEqualTo("STRING(abcd) NEWLINE EOF");
-    assertThat(lastError.toString())
-        .isEqualTo("/some/path.txt:1: escape sequence not implemented: \\u");
+    assertEquals("STRING(a\tb\nc\rd) NEWLINE EOF",
+                 values(tokens("'a\\tb\\nc\\rd'"))); // \t \r \n
+    assertEquals("STRING(x\\hx) NEWLINE EOF",
+                 values(tokens("'x\\hx'"))); // \h is unknown => "\h"
+    assertEquals("STRING(\\$$) NEWLINE EOF", values(tokens("'\\$$'")));
+    assertEquals("STRING(ab) NEWLINE EOF",
+                 values(tokens("'a\\\nb'"))); // escape end of line
+    assertEquals("STRING(abcd) NEWLINE EOF",
+                 values(tokens("\"ab\\ucd\"")));
+    assertEquals("/some/path.txt:1: escape sequence not implemented: \\u",
+                 lastError.toString());
   }
 
   @Test
   public void testEscapedCrlfInString() throws Exception {
-    assertThat(values(tokens("'a\\\r\nb'"))).isEqualTo("STRING(ab) NEWLINE EOF");
-    assertThat(values(tokens("\"a\\\r\nb\""))).isEqualTo("STRING(ab) NEWLINE EOF");
-    assertThat(values(tokens("\"\"\"a\\\r\nb\"\"\""))).isEqualTo("STRING(ab) NEWLINE EOF");
-    assertThat(values(tokens("'''a\\\r\nb'''"))).isEqualTo("STRING(ab) NEWLINE EOF");
-    assertThat(values(tokens("r'a\\\r\nb'"))).isEqualTo("STRING(a\\\nb) NEWLINE EOF");
-    assertThat(values(tokens("r\"a\\\r\nb\""))).isEqualTo("STRING(a\\\nb) NEWLINE EOF");
-    assertThat(values(tokens("r\"a\\\r\n\\\nb\""))).isEqualTo("STRING(a\\\n\\\nb) NEWLINE EOF");
+    assertEquals("STRING(ab) NEWLINE EOF",
+                 values(tokens("'a\\\r\nb'")));
+    assertEquals("STRING(ab) NEWLINE EOF",
+                 values(tokens("\"a\\\r\nb\"")));
+    assertEquals("STRING(ab) NEWLINE EOF",
+                 values(tokens("\"\"\"a\\\r\nb\"\"\"")));
+    assertEquals("STRING(ab) NEWLINE EOF",
+                 values(tokens("'''a\\\r\nb'''")));
+    assertEquals("STRING(a\\\nb) NEWLINE EOF",
+                 values(tokens("r'a\\\r\nb'")));
+    assertEquals("STRING(a\\\nb) NEWLINE EOF",
+                 values(tokens("r\"a\\\r\nb\"")));
+    assertEquals("STRING(a\\\n\\\nb) NEWLINE EOF",
+                 values(tokens("r\"a\\\r\n\\\nb\"")));
   }
 
   @Test
   public void testRawString() throws Exception {
-    assertThat(values(tokens("r'abcd'"))).isEqualTo("STRING(abcd) NEWLINE EOF");
-    assertThat(values(tokens("r\"abcd\""))).isEqualTo("STRING(abcd) NEWLINE EOF");
-    assertThat(values(tokens("r'a\\tb\\nc\\rd'")))
-        .isEqualTo("STRING(a\\tb\\nc\\rd) NEWLINE EOF"); // r'a\tb\nc\rd'
-    assertThat(values(tokens("r\"a\\\"\""))).isEqualTo("STRING(a\\\") NEWLINE EOF"); // r"a\""
-    assertThat(values(tokens("r'a\\\\b'"))).isEqualTo("STRING(a\\\\b) NEWLINE EOF"); // r'a\\b'
-    assertThat(values(tokens("r'ab'r"))).isEqualTo("STRING(ab) IDENTIFIER(r) NEWLINE EOF");
+    assertEquals("STRING(abcd) NEWLINE EOF",
+                 values(tokens("r'abcd'")));
+    assertEquals("STRING(abcd) NEWLINE EOF",
+                 values(tokens("r\"abcd\"")));
+    assertEquals("STRING(a\\tb\\nc\\rd) NEWLINE EOF",
+                 values(tokens("r'a\\tb\\nc\\rd'"))); // r'a\tb\nc\rd'
+    assertEquals("STRING(a\\\") NEWLINE EOF",
+                 values(tokens("r\"a\\\"\""))); // r"a\""
+    assertEquals("STRING(a\\\\b) NEWLINE EOF",
+                 values(tokens("r'a\\\\b'"))); // r'a\\b'
+    assertEquals("STRING(ab) IDENTIFIER(r) NEWLINE EOF",
+                 values(tokens("r'ab'r")));
 
     // Unterminated raw string
     values(tokens("r'\\'")); // r'\'
-    assertThat(lastError.toString())
-        .isEqualTo("/some/path.txt:1: unterminated string literal at eof");
+    assertEquals("/some/path.txt:1: unterminated string literal at eof",
+                 lastError.toString());
   }
 
   @Test
   public void testTripleRawString() throws Exception {
     // r'''a\ncd'''
-    assertThat(values(tokens("r'''ab\\ncd'''"))).isEqualTo("STRING(ab\\ncd) NEWLINE EOF");
+    assertEquals("STRING(ab\\ncd) NEWLINE EOF",
+                 values(tokens("r'''ab\\ncd'''")));
     // r"""ab
     // cd"""
-    assertThat(values(tokens("\"\"\"ab\ncd\"\"\""))).isEqualTo("STRING(ab\ncd) NEWLINE EOF");
+    assertEquals(
+        "STRING(ab\ncd) NEWLINE EOF",
+        values(tokens("\"\"\"ab\ncd\"\"\"")));
 
     // Unterminated raw string
     values(tokens("r'''\\'''")); // r'''\'''
-    assertThat(lastError.toString())
-        .isEqualTo("/some/path.txt:1: unterminated string literal at eof");
+    assertEquals("/some/path.txt:1: unterminated string literal at eof",
+                 lastError.toString());
   }
 
   @Test
   public void testOctalEscapes() throws Exception {
     // Regression test for a bug.
-    assertThat(values(tokens("'\\0 \\1 \\11 \\77 \\111 \\1111 \\377 \\777 \\776'")))
-        .isEqualTo("STRING(\0 \1 \t \u003f I I1 \u00ff \u00ff \u00fe) NEWLINE EOF");
+    assertEquals("STRING(\0 \1 \t \u003f I I1 \u00ff \u00ff \u00fe) NEWLINE EOF",
+                 values(tokens("'\\0 \\1 \\11 \\77 \\111 \\1111 \\377 \\777 \\776'")));
     // Test boundaries (non-octal char, EOF).
-    assertThat(values(tokens("'\\1b \\1'"))).isEqualTo("STRING(\1b \1) NEWLINE EOF");
+    assertEquals("STRING(\1b \1) NEWLINE EOF", values(tokens("'\\1b \\1'")));
   }
 
   @Test
   public void testTripleQuotedStrings() throws Exception {
-    assertThat(values(tokens("\"\"\"a\"b'c \n d\"\"e\"\"\"")))
-        .isEqualTo("STRING(a\"b'c \n d\"\"e) NEWLINE EOF");
-    assertThat(values(tokens("'''a\"b'c \n d\"\"e'''")))
-        .isEqualTo("STRING(a\"b'c \n d\"\"e) NEWLINE EOF");
+    assertEquals("STRING(a\"b'c \n d\"\"e) NEWLINE EOF",
+                 values(tokens("\"\"\"a\"b'c \n d\"\"e\"\"\"")));
+    assertEquals("STRING(a\"b'c \n d\"\"e) NEWLINE EOF",
+                 values(tokens("'''a\"b'c \n d\"\"e'''")));
   }
 
   @Test
   public void testBadChar() throws Exception {
-    assertThat(values(tokens("a$b"))).isEqualTo("IDENTIFIER(a) IDENTIFIER(b) NEWLINE EOF");
-    assertThat(lastError.toString()).isEqualTo("/some/path.txt:1: invalid character: '$'");
+    assertEquals("IDENTIFIER(a) IDENTIFIER(b) NEWLINE EOF",
+                 values(tokens("a$b")));
+    assertEquals("/some/path.txt:1: invalid character: '$'",
+                 lastError.toString());
   }
 
   @Test
   public void testIndentation() throws Exception {
-    assertThat(values(tokens("1\n2\n3")))
-        .isEqualTo("INT(1) NEWLINE INT(2) NEWLINE INT(3) NEWLINE EOF");
-    assertThat(values(tokens("1\n  2\n  3\n4 ")))
-        .isEqualTo(
-            "INT(1) NEWLINE INDENT INT(2) NEWLINE INT(3) NEWLINE OUTDENT " + "INT(4) NEWLINE EOF");
-    assertThat(values(tokens("1\n  2\n  3")))
-        .isEqualTo("INT(1) NEWLINE INDENT INT(2) NEWLINE INT(3) NEWLINE OUTDENT " + "NEWLINE EOF");
-    assertThat(values(tokens("1\n  2\n    3")))
-        .isEqualTo(
-            "INT(1) NEWLINE INDENT INT(2) NEWLINE INDENT INT(3) NEWLINE "
-                + "OUTDENT OUTDENT NEWLINE EOF");
-    assertThat(values(tokens("1\n  2\n    3\n  4\n5")))
-        .isEqualTo(
-            "INT(1) NEWLINE INDENT INT(2) NEWLINE INDENT INT(3) NEWLINE "
-                + "OUTDENT INT(4) NEWLINE OUTDENT INT(5) NEWLINE EOF");
+    assertEquals("INT(1) NEWLINE INT(2) NEWLINE INT(3) NEWLINE EOF",
+                 values(tokens("1\n2\n3")));
+    assertEquals("INT(1) NEWLINE INDENT INT(2) NEWLINE INT(3) NEWLINE OUTDENT "
+                 + "INT(4) NEWLINE EOF", values(tokens("1\n  2\n  3\n4 ")));
+    assertEquals("INT(1) NEWLINE INDENT INT(2) NEWLINE INT(3) NEWLINE OUTDENT "
+                 + "NEWLINE EOF", values(tokens("1\n  2\n  3")));
+    assertEquals("INT(1) NEWLINE INDENT INT(2) NEWLINE INDENT INT(3) NEWLINE "
+                 + "OUTDENT OUTDENT NEWLINE EOF",
+                 values(tokens("1\n  2\n    3")));
+    assertEquals("INT(1) NEWLINE INDENT INT(2) NEWLINE INDENT INT(3) NEWLINE "
+                 + "OUTDENT INT(4) NEWLINE OUTDENT INT(5) NEWLINE EOF",
+                 values(tokens("1\n  2\n    3\n  4\n5")));
 
-    assertThat(values(tokens("1\n  2\n    3\n   4\n5")))
-        .isEqualTo(
-            "INT(1) NEWLINE INDENT INT(2) NEWLINE INDENT INT(3) NEWLINE "
-                + "OUTDENT INT(4) NEWLINE OUTDENT INT(5) NEWLINE EOF");
-    assertThat(lastError.toString()).isEqualTo("/some/path.txt:4: indentation error");
+    assertEquals("INT(1) NEWLINE INDENT INT(2) NEWLINE INDENT INT(3) NEWLINE "
+                 + "OUTDENT INT(4) NEWLINE OUTDENT INT(5) NEWLINE EOF",
+                 values(tokens("1\n  2\n    3\n   4\n5")));
+    assertEquals("/some/path.txt:4: indentation error", lastError.toString());
   }
 
   @Test
   public void testIndentationWithCrLf() throws Exception {
-    assertThat(values(tokens("1\r\n  2\r\n")))
-        .isEqualTo("INT(1) NEWLINE INDENT INT(2) NEWLINE OUTDENT NEWLINE EOF");
-    assertThat(values(tokens("1\r\n  2\r\n\r\n")))
-        .isEqualTo("INT(1) NEWLINE INDENT INT(2) NEWLINE OUTDENT NEWLINE EOF");
-    assertThat(values(tokens("1\r\n  2\r\n    3\r\n  4\r\n5")))
-        .isEqualTo(
-            "INT(1) NEWLINE INDENT INT(2) NEWLINE INDENT INT(3) NEWLINE OUTDENT INT(4) "
-                + "NEWLINE OUTDENT INT(5) NEWLINE EOF");
-    assertThat(values(tokens("1\r\n  2\r\n\r\n  3\r\n4")))
-        .isEqualTo(
-            "INT(1) NEWLINE INDENT INT(2) NEWLINE INT(3) NEWLINE OUTDENT INT(4) NEWLINE EOF");
+    assertEquals("INT(1) NEWLINE INDENT INT(2) NEWLINE OUTDENT NEWLINE EOF",
+        values(tokens("1\r\n  2\r\n")));
+    assertEquals("INT(1) NEWLINE INDENT INT(2) NEWLINE OUTDENT NEWLINE EOF",
+        values(tokens("1\r\n  2\r\n\r\n")));
+    assertEquals("INT(1) NEWLINE INDENT INT(2) NEWLINE INDENT INT(3) NEWLINE OUTDENT INT(4) "
+        + "NEWLINE OUTDENT INT(5) NEWLINE EOF",
+        values(tokens("1\r\n  2\r\n    3\r\n  4\r\n5")));
+    assertEquals(
+        "INT(1) NEWLINE INDENT INT(2) NEWLINE INT(3) NEWLINE OUTDENT INT(4) NEWLINE EOF",
+        values(tokens("1\r\n  2\r\n\r\n  3\r\n4")));
   }
 
   @Test
   public void testIndentationInsideParens() throws Exception {
     // Indentation is ignored inside parens:
-    assertThat(values(tokens("1 (\n  2\n    3\n  4\n5")))
-        .isEqualTo("INT(1) LPAREN INT(2) INT(3) INT(4) INT(5) NEWLINE EOF");
-    assertThat(values(tokens("1 {\n  2\n    3\n  4\n5")))
-        .isEqualTo("INT(1) LBRACE INT(2) INT(3) INT(4) INT(5) NEWLINE EOF");
-    assertThat(values(tokens("1 [\n  2\n    3\n  4\n5")))
-        .isEqualTo("INT(1) LBRACKET INT(2) INT(3) INT(4) INT(5) NEWLINE EOF");
-    assertThat(values(tokens("1 [\n  2]\n    3\n    4\n5")))
-        .isEqualTo(
-            "INT(1) LBRACKET INT(2) RBRACKET NEWLINE INDENT INT(3) "
-                + "NEWLINE INT(4) NEWLINE OUTDENT INT(5) NEWLINE EOF");
+    assertEquals("INT(1) LPAREN INT(2) INT(3) INT(4) INT(5) NEWLINE EOF",
+                 values(tokens("1 (\n  2\n    3\n  4\n5")));
+    assertEquals("INT(1) LBRACE INT(2) INT(3) INT(4) INT(5) NEWLINE EOF",
+                 values(tokens("1 {\n  2\n    3\n  4\n5")));
+    assertEquals("INT(1) LBRACKET INT(2) INT(3) INT(4) INT(5) NEWLINE EOF",
+                 values(tokens("1 [\n  2\n    3\n  4\n5")));
+    assertEquals("INT(1) LBRACKET INT(2) RBRACKET NEWLINE INDENT INT(3) "
+                 + "NEWLINE INT(4) NEWLINE OUTDENT INT(5) NEWLINE EOF",
+                 values(tokens("1 [\n  2]\n    3\n    4\n5")));
   }
 
   @Test
   public void testIndentationAtEOF() throws Exception {
     // Matching OUTDENTS are created at EOF:
-    assertThat(values(tokens("\n  1"))).isEqualTo("INDENT INT(1) NEWLINE OUTDENT NEWLINE EOF");
+    assertEquals("INDENT INT(1) NEWLINE OUTDENT NEWLINE EOF",
+                 values(tokens("\n  1")));
   }
 
   @Test
   public void testBlankLineIndentation() throws Exception {
     // Blank lines and comment lines should not generate any newlines indents
     // (but note that every input ends with NEWLINE EOF).
-    assertThat(names(tokens("\n      #\n"))).isEqualTo("COMMENT NEWLINE EOF");
-    assertThat(names(tokens("      #"))).isEqualTo("COMMENT NEWLINE EOF");
-    assertThat(names(tokens("      #\n"))).isEqualTo("COMMENT NEWLINE EOF");
-    assertThat(names(tokens("      #comment\n"))).isEqualTo("COMMENT NEWLINE EOF");
-    assertThat(names(tokens("def f(x):\n" + "  # comment\n" + "\n" + "  \n" + "  return x\n")))
-        .isEqualTo(
-            "DEF IDENTIFIER LPAREN IDENTIFIER RPAREN COLON NEWLINE "
-                + "COMMENT INDENT RETURN IDENTIFIER NEWLINE "
-                + "OUTDENT NEWLINE EOF");
+    assertEquals("COMMENT NEWLINE EOF", names(tokens("\n      #\n")));
+    assertEquals("COMMENT NEWLINE EOF", names(tokens("      #")));
+    assertEquals("COMMENT NEWLINE EOF", names(tokens("      #\n")));
+    assertEquals("COMMENT NEWLINE EOF", names(tokens("      #comment\n")));
+    assertEquals("DEF IDENTIFIER LPAREN IDENTIFIER RPAREN COLON NEWLINE "
+                 + "COMMENT INDENT RETURN IDENTIFIER NEWLINE "
+                 + "OUTDENT NEWLINE EOF",
+                 names(tokens("def f(x):\n"
+                              + "  # comment\n"
+                              + "\n"
+                              + "  \n"
+                              + "  return x\n")));
   }
 
   @Test
   public void testMultipleCommentLines() throws Exception {
-    assertThat(
-            names(
-                tokens(
-                    "# Copyright\n"
-                        + "#\n"
-                        + "# A comment line\n"
-                        + "# An adjoining line\n"
-                        + "def f(x):\n"
-                        + "  return x\n")))
-        .isEqualTo(
-            "COMMENT NEWLINE COMMENT COMMENT COMMENT "
-                + "DEF IDENTIFIER LPAREN IDENTIFIER RPAREN COLON NEWLINE "
-                + "INDENT RETURN IDENTIFIER NEWLINE OUTDENT NEWLINE EOF");
+    assertEquals("COMMENT NEWLINE COMMENT COMMENT COMMENT "
+                 + "DEF IDENTIFIER LPAREN IDENTIFIER RPAREN COLON NEWLINE "
+                 + "INDENT RETURN IDENTIFIER NEWLINE OUTDENT NEWLINE EOF",
+                 names(tokens("# Copyright\n"
+                              + "#\n"
+                              + "# A comment line\n"
+                              + "# An adjoining line\n"
+                              + "def f(x):\n"
+                              + "  return x\n")));
   }
 
   @Test
   public void testBackslash() throws Exception {
-    assertThat(names(tokens("a\\\nb"))).isEqualTo("IDENTIFIER IDENTIFIER NEWLINE EOF");
-    assertThat(names(tokens("a\\\r\nb"))).isEqualTo("IDENTIFIER IDENTIFIER NEWLINE EOF");
-    assertThat(names(tokens("a\\ b"))).isEqualTo("IDENTIFIER ILLEGAL IDENTIFIER NEWLINE EOF");
-    assertThat(names(tokens("a(\\\n2)"))).isEqualTo("IDENTIFIER LPAREN INT RPAREN NEWLINE EOF");
+    assertEquals("IDENTIFIER IDENTIFIER NEWLINE EOF",
+                 names(tokens("a\\\nb")));
+    assertEquals("IDENTIFIER IDENTIFIER NEWLINE EOF", names(tokens("a\\\r\nb")));
+    assertEquals("IDENTIFIER ILLEGAL IDENTIFIER NEWLINE EOF",
+                 names(tokens("a\\ b")));
+    assertEquals("IDENTIFIER LPAREN INT RPAREN NEWLINE EOF",
+                 names(tokens("a(\\\n2)")));
   }
 
   @Test
   public void testTokenPositions() throws Exception {
-    assertThat(positions(tokens("foo(bar, {1: 'quux'})"))).isEqualTo(
-    //   foo   (     bar   ,     {      1       :
-        "[0,3) [3,4) [4,7) [7,8) [9,10) [10,11) [11,12)"
-    //      'quux'  }       )       NEWLINE EOF
-        + " [13,19) [19,20) [20,21) [20,21) [21,21)");
+    //            foo   (     bar   ,     {      1       :
+    assertEquals("[0,3) [3,4) [4,7) [7,8) [9,10) [10,11) [11,12)"
+             //      'quux'  }       )       NEWLINE EOF
+                 + " [13,19) [19,20) [20,21) [20,21) [21,21)",
+                 positions(tokens("foo(bar, {1: 'quux'})")));
   }
 
   @Test
   public void testLineNumbers() throws Exception {
-    assertThat(linenums("foo = 1\nbar = 2\n\nwiz = 3")).isEqualTo("1 1 1 1 2 2 2 2 4 4 4 4 4");
+    assertEquals("1 1 1 1 2 2 2 2 4 4 4 4 4",
+                 linenums("foo = 1\nbar = 2\n\nwiz = 3"));
 
-    assertThat(values(tokens("foo = 1\nbar = 2\n\nwiz = $\nbar = 2")))
-        .isEqualTo(
-            "IDENTIFIER(foo) EQUALS INT(1) NEWLINE "
-                + "IDENTIFIER(bar) EQUALS INT(2) NEWLINE "
-                + "IDENTIFIER(wiz) EQUALS NEWLINE "
-                + "IDENTIFIER(bar) EQUALS INT(2) NEWLINE EOF");
-    assertThat(lastError.toString()).isEqualTo("/some/path.txt:4: invalid character: '$'");
+    assertEquals("IDENTIFIER(foo) EQUALS INT(1) NEWLINE "
+                 + "IDENTIFIER(bar) EQUALS INT(2) NEWLINE "
+                 + "IDENTIFIER(wiz) EQUALS NEWLINE "
+                 + "IDENTIFIER(bar) EQUALS INT(2) NEWLINE EOF",
+                 values(tokens("foo = 1\nbar = 2\n\nwiz = $\nbar = 2")));
+    assertEquals("/some/path.txt:4: invalid character: '$'",
+                 lastError.toString());
 
     // '\\n' in string should not increment linenum:
     String s = "1\n'foo\\nbar'\3";
-    assertThat(values(tokens(s))).isEqualTo("INT(1) NEWLINE STRING(foo\nbar) NEWLINE EOF");
-    assertThat(linenums(s)).isEqualTo("1 1 2 2 2");
+    assertEquals("INT(1) NEWLINE STRING(foo\nbar) NEWLINE EOF",
+                 values(tokens(s)));
+    assertEquals("1 1 2 2 2", linenums(s));
   }
 
   @Test
   public void testContainsErrors() throws Exception {
     Lexer lexerSuccess = createLexer("foo");
-    assertThat(lexerSuccess.containsErrors()).isFalse();
+    assertFalse(lexerSuccess.containsErrors());
 
     Lexer lexerFail = createLexer("f$o");
-    assertThat(lexerFail.containsErrors()).isTrue();
+    assertTrue(lexerFail.containsErrors());
 
     String s = "'unterminated";
     lexerFail = createLexer(s);
-    assertThat(lexerFail.containsErrors()).isTrue();
-    assertThat(lastErrorLocation.getStartOffset()).isEqualTo(0);
-    assertThat(lastErrorLocation.getEndOffset()).isEqualTo(s.length());
-    assertThat(values(tokens(s))).isEqualTo("STRING(unterminated) NEWLINE EOF");
+    assertTrue(lexerFail.containsErrors());
+    assertEquals(0, lastErrorLocation.getStartOffset());
+    assertEquals(s.length(), lastErrorLocation.getEndOffset());
+    assertEquals("STRING(unterminated) NEWLINE EOF", values(tokens(s)));
   }
 
   @Test
   public void testUnterminatedRawStringWithEscapingError() throws Exception {
-    assertThat(names(tokens("r'\\"))).isEqualTo("STRING NEWLINE EOF");
-    assertThat(lastError).isEqualTo("/some/path.txt:1: unterminated string literal at eof");
+    assertEquals("STRING NEWLINE EOF", names(tokens("r'\\")));
+    assertEquals("/some/path.txt:1: unterminated string literal at eof", lastError);
   }
 }

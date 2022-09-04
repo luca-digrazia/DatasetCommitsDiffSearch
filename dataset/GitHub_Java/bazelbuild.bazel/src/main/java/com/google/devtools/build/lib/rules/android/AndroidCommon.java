@@ -529,7 +529,7 @@ public class AndroidCommon {
                 androidSemantics.getJavacArguments(ruleContext))
             .setBootClassPath(bootclasspath);
     if (DataBinding.isEnabled(ruleContext)) {
-      DataBinding.addAnnotationProcessor(ruleContext, attributes, isBinary);
+      DataBinding.addAnnotationProcessor(ruleContext, attributes);
     }
 
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
@@ -589,7 +589,7 @@ public class AndroidCommon {
     JavaCompilationHelper helper = new JavaCompilationHelper(ruleContext, semantics,
         javaCommon.getJavacOpts(), attributes,
         DataBinding.isEnabled(ruleContext)
-            ? DataBinding.processDeps(ruleContext) : ImmutableList.<Artifact>of());
+            ? DataBinding.processDeps(ruleContext, attributes) : ImmutableList.<Artifact>of());
 
     helper.addLibrariesToAttributes(javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
     attributes.setRuleKind(ruleContext.getRule().getRuleClass());
@@ -905,11 +905,8 @@ public class AndroidCommon {
       // Add this rule's annotation processor input if this rule has direct resources. If it
       // doesn't have direct resources, it doesn't produce data binding output so there's no
       // input for the annotation processor.
-      Artifact annotationFile = DataBinding.createAnnotationFile(ruleContext, isLibrary);
-      if (annotationFile != null) {
-        srcs = ImmutableList.<Artifact>builder().addAll(srcs)
-            .add(DataBinding.createAnnotationFile(ruleContext, isLibrary)).build();
-      }
+      srcs = ImmutableList.<Artifact>builder().addAll(srcs)
+          .add(DataBinding.createAnnotationFile(ruleContext, isLibrary)).build();
     }
 
     ImmutableList<TransitiveInfoCollection> compileDeps;
@@ -918,13 +915,19 @@ public class AndroidCommon {
 
     if (isLibrary) {
       compileDeps = JavaCommon.defaultDeps(ruleContext, semantics, ClasspathType.COMPILE_ONLY);
+      if (useDataBinding) {
+        compileDeps = DataBinding.addSupportLibs(ruleContext, compileDeps);
+      }
       compileDeps = AndroidIdlHelper.maybeAddSupportLibs(ruleContext, compileDeps);
       runtimeDeps = JavaCommon.defaultDeps(ruleContext, semantics, ClasspathType.RUNTIME_ONLY);
       bothDeps = JavaCommon.defaultDeps(ruleContext, semantics, ClasspathType.BOTH);
     } else {
       // Binary:
-      compileDeps = ImmutableList.copyOf(
-          ruleContext.getPrerequisites("deps", RuleConfiguredTarget.Mode.TARGET));
+      List<? extends TransitiveInfoCollection> ruleDeps =
+          ruleContext.getPrerequisites("deps", RuleConfiguredTarget.Mode.TARGET);
+      compileDeps = useDataBinding
+          ? DataBinding.addSupportLibs(ruleContext, ruleDeps)
+          : ImmutableList.<TransitiveInfoCollection>copyOf(ruleDeps);
       runtimeDeps = compileDeps;
       bothDeps = compileDeps;
     }

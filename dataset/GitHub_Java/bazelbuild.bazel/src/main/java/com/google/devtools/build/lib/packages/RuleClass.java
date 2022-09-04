@@ -106,8 +106,6 @@ import javax.annotation.concurrent.Immutable;
 public class RuleClass {
   static final Function<? super Rule, Map<String, Label>> NO_EXTERNAL_BINDINGS =
       Functions.<Map<String, Label>>constant(ImmutableMap.<String, Label>of());
-  static final Function<? super Rule, Set<String>> NO_OPTION_REFERENCE =
-      Functions.<Set<String>>constant(ImmutableSet.<String>of());
 
   public static final PathFragment THIRD_PARTY_PREFIX = PathFragment.create("third_party");
 
@@ -498,8 +496,6 @@ public class RuleClass {
     private BaseFunction configuredTargetFunction = null;
     private Function<? super Rule, Map<String, Label>> externalBindingsFunction =
         NO_EXTERNAL_BINDINGS;
-    private Function<? super Rule, ? extends Set<String>> optionReferenceFunction =
-        NO_OPTION_REFERENCE;
     @Nullable private Environment ruleDefinitionEnvironment = null;
     @Nullable private String ruleDefinitionEnvironmentHashCode = null;
     private ConfigurationFragmentPolicy.Builder configurationFragmentPolicy =
@@ -613,7 +609,6 @@ public class RuleClass {
           advertisedProviders.build(),
           configuredTargetFunction,
           externalBindingsFunction,
-          optionReferenceFunction,
           ruleDefinitionEnvironment,
           ruleDefinitionEnvironmentHashCode,
           configurationFragmentPolicy.build(),
@@ -987,18 +982,6 @@ public class RuleClass {
     }
 
     /**
-     * Causes rules of this type to implicitly reference the configuration fragments associated with
-     * the options its attributes reference.
-     *
-     * <p>This is only intended for use by {@code config_setting} - other rules should not use this!
-     */
-    public Builder setOptionReferenceFunctionForConfigSettingOnly(
-        Function<? super Rule, ? extends Set<String>> optionReferenceFunction) {
-      this.optionReferenceFunction = Preconditions.checkNotNull(optionReferenceFunction);
-      return this;
-    }
-
-    /**
      * Returns an Attribute.Builder object which contains a replica of the
      * same attribute in the parent rule if exists.
      *
@@ -1095,11 +1078,6 @@ public class RuleClass {
   private final Function<? super Rule, Map<String, Label>> externalBindingsFunction;
 
   /**
-   * Returns the options referenced by this rule's attributes.
-   */
-  private final Function<? super Rule, ? extends Set<String>> optionReferenceFunction;
-
-  /**
    * The Skylark rule definition environment of this RuleClass.
    * Null for non Skylark executable RuleClasses.
    */
@@ -1160,7 +1138,6 @@ public class RuleClass {
       AdvertisedProviderSet advertisedProviders,
       @Nullable BaseFunction configuredTargetFunction,
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
-      Function<? super Rule, ? extends Set<String>> optionReferenceFunction,
       @Nullable Environment ruleDefinitionEnvironment,
       String ruleDefinitionEnvironmentHashCode,
       ConfigurationFragmentPolicy configurationFragmentPolicy,
@@ -1184,7 +1161,6 @@ public class RuleClass {
     this.advertisedProviders = advertisedProviders;
     this.configuredTargetFunction = configuredTargetFunction;
     this.externalBindingsFunction = externalBindingsFunction;
-    this.optionReferenceFunction = optionReferenceFunction;
     this.ruleDefinitionEnvironment = ruleDefinitionEnvironment;
     this.ruleDefinitionEnvironmentHashCode = ruleDefinitionEnvironmentHashCode;
     validateNoClashInPublicNames(attributes);
@@ -1945,13 +1921,6 @@ public class RuleClass {
    */
   public Function<? super Rule, Map<String, Label>> getExternalBindingsFunction() {
     return externalBindingsFunction;
-  }
-
-  /**
-   * Returns a function that computes the options referenced by a rule.
-   */
-  public Function<? super Rule, ? extends Set<String>> getOptionReferenceFunction() {
-    return optionReferenceFunction;
   }
 
   /**

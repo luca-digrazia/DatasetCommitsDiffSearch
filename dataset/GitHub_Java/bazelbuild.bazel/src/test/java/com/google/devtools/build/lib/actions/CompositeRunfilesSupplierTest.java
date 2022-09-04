@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.List;
@@ -39,14 +38,12 @@ public class CompositeRunfilesSupplierTest {
   private RunfilesSupplier mockFirst;
   private RunfilesSupplier mockSecond;
 
-  private Path execRoot;
   private Root rootDir;
 
   @Before
   public final void createMocks() throws IOException {
     Scratch scratch = new Scratch();
-    execRoot = scratch.getFileSystem().getPath("/");
-    rootDir = Root.asDerivedRoot(execRoot, scratch.dir("/fake/root/dont/matter"));
+    rootDir = Root.asDerivedRoot(scratch.dir("/fake/root/dont/matter"));
 
     mockFirst = mock(RunfilesSupplier.class);
     mockSecond = mock(RunfilesSupplier.class);
@@ -72,7 +69,8 @@ public class CompositeRunfilesSupplierTest {
     when(mockSecond.getRunfilesDirs()).thenReturn(ImmutableSet.of(second, shared));
 
     CompositeRunfilesSupplier underTest = new CompositeRunfilesSupplier(mockFirst, mockSecond);
-    assertThat(underTest.getRunfilesDirs()).containsExactly(first, second, shared);
+    assertThat(underTest.getRunfilesDirs()).containsExactlyElementsIn(
+        ImmutableSet.of(first, second, shared));
   }
 
   @Test

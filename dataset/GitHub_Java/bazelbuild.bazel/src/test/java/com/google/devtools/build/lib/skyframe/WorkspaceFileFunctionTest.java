@@ -14,12 +14,11 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -28,12 +27,10 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -127,14 +124,13 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     Path workspacePath = scratch.overwriteFile("WORKSPACE", contents);
     fakeWorkspaceFileValue.setSize(workspacePath.getFileSize());
     return RootedPath.toRootedPath(
-        Root.fromPath(workspacePath.getParentDirectory()),
-        PathFragment.create(workspacePath.getBaseName()));
+        workspacePath.getParentDirectory(), PathFragment.create(workspacePath.getBaseName()));
   }
 
   // Dummy harmcrest matcher that match the function name of a skykey
   static class SkyKeyMatchers extends BaseMatcher<SkyKey> {
     private final SkyFunctionName functionName;
-
+    
     public SkyKeyMatchers(SkyFunctionName functionName) {
       this.functionName = functionName;
     }
@@ -145,14 +141,14 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
       }
       return false;
     }
-
+    
     @Override
     public void describeTo(Description description) {}
   }
 
   private SkyFunction.Environment getEnv() throws InterruptedException {
     SkyFunction.Environment env = Mockito.mock(SkyFunction.Environment.class);
-    Mockito.when(env.getValue(Matchers.argThat(new SkyKeyMatchers(FileValue.FILE))))
+    Mockito.when(env.getValue(Matchers.argThat(new SkyKeyMatchers(SkyFunctions.FILE))))
         .thenReturn(fakeWorkspaceFileValue);
     Mockito.when(env.getValue(Matchers.argThat(new SkyKeyMatchers(SkyFunctions.WORKSPACE_FILE))))
         .then(
@@ -172,19 +168,6 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
                 return astSkyFunc.compute(key, getEnv());
               }
             });
-    Mockito.when(env.getValue(Matchers.argThat(new SkyKeyMatchers(SkyFunctions.PRECOMPUTED))))
-        .then(
-            new Answer<SkyValue>() {
-              @Override
-              public SkyValue answer(InvocationOnMock invocation) throws Throwable {
-                SkyKey key = (SkyKey) invocation.getArguments()[0];
-                if (key.equals(PrecomputedValue.SKYLARK_SEMANTICS.getKeyForTesting())) {
-                  return new PrecomputedValue(SkylarkSemantics.DEFAULT_SEMANTICS);
-                } else {
-                  return null;
-                }
-              }
-            });
     return env;
   }
 
@@ -195,7 +178,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
         (PackageValue) externalSkyFunc
             .compute(ExternalPackageFunction.key(workspacePath), getEnv());
     Package pkg = value.getPackage();
-    assertThat(pkg.containsErrors()).isTrue();
+    assertTrue(pkg.containsErrors());
     MoreAsserts.assertContainsEvent(pkg.getEvents(), "foo$ is not a legal workspace name");
   }
 
@@ -207,8 +190,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     SkyKey key = ExternalPackageFunction.key(workspacePath);
     PackageValue value = (PackageValue) externalSkyFunc.compute(key, getEnv());
     Package pkg = value.getPackage();
-    assertThat(getLabelMapping(pkg, "foo/bar"))
-        .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
+    assertEquals(Label.parseAbsolute("//foo:bar"), getLabelMapping(pkg, "foo/bar"));
     MoreAsserts.assertNoEvents(pkg.getEvents());
   }
 
@@ -220,8 +202,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     SkyKey key = ExternalPackageFunction.key(workspacePath);
     PackageValue value = (PackageValue) externalSkyFunc.compute(key, getEnv());
     Package pkg = value.getPackage();
-    assertThat(getLabelMapping(pkg, "foo/bar"))
-        .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
+    assertEquals(Label.parseAbsolute("//foo:bar"), getLabelMapping(pkg, "foo/bar"));
     MoreAsserts.assertNoEvents(pkg.getEvents());
   }
 
@@ -235,7 +216,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
         (PackageValue) externalSkyFunc
             .compute(ExternalPackageFunction.key(workspacePath), getEnv());
     Package pkg = value.getPackage();
-    assertThat(pkg.containsErrors()).isTrue();
+    assertTrue(pkg.containsErrors());
     MoreAsserts.assertContainsEvent(pkg.getEvents(), "target names may not contain ':'");
   }
 
@@ -249,7 +230,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
         (PackageValue) externalSkyFunc
             .compute(ExternalPackageFunction.key(workspacePath), getEnv());
     Package pkg = value.getPackage();
-    assertThat(pkg.containsErrors()).isTrue();
+    assertTrue(pkg.containsErrors());
     MoreAsserts.assertContainsEvent(pkg.getEvents(), "target names may not contain ':'");
   }
 
@@ -264,7 +245,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
         (PackageValue) externalSkyFunc
             .compute(ExternalPackageFunction.key(workspacePath), getEnv());
     Package pkg = value.getPackage();
-    assertThat(pkg.containsErrors()).isFalse();
+    assertFalse(pkg.containsErrors());
     MoreAsserts.assertNoEvents(pkg.getEvents());
   }
 
@@ -277,8 +258,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     SkyKey key = ExternalPackageFunction.key(workspacePath);
     PackageValue value = (PackageValue) externalSkyFunc.compute(key, getEnv());
     Package pkg = value.getPackage();
-    assertThat(getLabelMapping(pkg, "foo/bar"))
-        .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
+    assertEquals(Label.parseAbsolute("//foo:bar"), getLabelMapping(pkg, "foo/bar"));
     MoreAsserts.assertNoEvents(pkg.getEvents());
   }
 }

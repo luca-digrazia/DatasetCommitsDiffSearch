@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -29,8 +28,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * An {@link ActionTemplate} that expands into {@link CppCompileAction}s at execution time.
@@ -39,7 +36,7 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
   private final CppCompileActionBuilder cppCompileActionBuilder;
   private final Artifact sourceTreeArtifact;
   private final Artifact outputTreeArtifact;
-  private final CcToolchainProvider toolchain;
+  private final CppConfiguration cppConfiguration;
   private final Iterable<ArtifactCategory> categories;
   private final ActionOwner actionOwner;
   private final NestedSet<Artifact> mandatoryInputs;
@@ -49,25 +46,25 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
    * Creates an CppCompileActionTemplate.
    * @param sourceTreeArtifact the TreeArtifact that contains source files to compile.
    * @param outputTreeArtifact the TreeArtifact that contains compilation outputs.
-   * @param cppCompileActionBuilder An almost completely configured {@link CppCompileActionBuilder}
+   * @param cppCompileActionBuilder An almost completely configured  {@link CppCompileActionBuilder}
    *     without the input and output files set. It is used as a template to instantiate expanded
    *     {CppCompileAction}s.
-   * @param toolchain the CcToolchainProvider representing the c++ toolchain for this action
-   * @param categories A list of {@link ArtifactCategory} used to calculate output file name from a
-   *     source file name.
+   * @param cppConfiguration configuration for cpp.
+   * @param categories A list of {@link ArtifactCategory} used to calculate output file name from
+   *     a source file name.
    * @param actionOwner the owner of this {@link ActionTemplate}.
    */
   CppCompileActionTemplate(
       Artifact sourceTreeArtifact,
       Artifact outputTreeArtifact,
       CppCompileActionBuilder cppCompileActionBuilder,
-      CcToolchainProvider toolchain,
+      CppConfiguration cppConfiguration,
       Iterable<ArtifactCategory> categories,
       ActionOwner actionOwner) {
     this.cppCompileActionBuilder = cppCompileActionBuilder;
     this.sourceTreeArtifact = sourceTreeArtifact;
     this.outputTreeArtifact = outputTreeArtifact;
-    this.toolchain = toolchain;
+    this.cppConfiguration = cppConfiguration;
     this.categories = categories;
     this.actionOwner = actionOwner;
     this.mandatoryInputs = cppCompileActionBuilder.buildMandatoryInputs();
@@ -76,8 +73,7 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
 
   @Override
   public Iterable<CppCompileAction> generateActionForInputArtifacts(
-      Iterable<TreeFileArtifact> inputTreeFileArtifacts, ArtifactOwner artifactOwner)
-      throws ActionTemplateExpansionException {
+      Iterable<TreeFileArtifact> inputTreeFileArtifacts, ArtifactOwner artifactOwner) {
     ImmutableList.Builder<CppCompileAction> expandedActions = new ImmutableList.Builder<>();
     for (TreeFileArtifact inputTreeFileArtifact : inputTreeFileArtifacts) {
       String outputName = outputTreeFileArtifactName(inputTreeFileArtifact);
@@ -93,8 +89,7 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
   }
 
   private CppCompileAction createAction(
-      Artifact sourceTreeFileArtifact, Artifact outputTreeFileArtifact)
-      throws ActionTemplateExpansionException {
+      Artifact sourceTreeFileArtifact, Artifact outputTreeFileArtifact) {
     CppCompileActionBuilder builder = new CppCompileActionBuilder(cppCompileActionBuilder);
     builder.setSourceFile(sourceTreeFileArtifact);
     builder.setOutputs(outputTreeFileArtifact, null);
@@ -110,21 +105,14 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
 
     builder.setVariables(buildVariables.build());
 
-    List<String> errors = new ArrayList<>();
-    CppCompileAction result =
-        builder.buildAndVerify((String errorMessage) -> errors.add(errorMessage));
-    if (!errors.isEmpty()) {
-      throw new ActionTemplateExpansionException(Joiner.on(".\n").join(errors));
-    }
-
-    return result;
+    return builder.build();
   }
 
   private String outputTreeFileArtifactName(TreeFileArtifact inputTreeFileArtifact) {
     String outputName = FileSystemUtils.removeExtension(
         inputTreeFileArtifact.getParentRelativePath().getPathString());
     for (ArtifactCategory category : categories) {
-      outputName = toolchain.getFeatures().getArtifactNameForCategory(category, outputName);
+      outputName = cppConfiguration.getFeatures().getArtifactNameForCategory(category, outputName);
     }
     return outputName;
   }

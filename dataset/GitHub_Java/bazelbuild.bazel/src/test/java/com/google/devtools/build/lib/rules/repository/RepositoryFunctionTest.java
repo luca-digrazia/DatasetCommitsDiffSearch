@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.repository;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -68,8 +69,8 @@ public class RepositoryFunctionTest extends BuildViewTestCase {
             "    name = 'z',",
             "    path = 'a/b/c',",
             ")");
-    assertThat(TestingRepositoryFunction.getTargetPath(rule, rootDirectory))
-        .isEqualTo(rootDirectory.getRelative("a/b/c").asFragment());
+    assertEquals(rootDirectory.getRelative("a/b/c").asFragment(),
+        TestingRepositoryFunction.getTargetPath(rule, rootDirectory));
   }
 
   @Test
@@ -78,8 +79,8 @@ public class RepositoryFunctionTest extends BuildViewTestCase {
         "    name = 'w',",
         "    path = '/a/b/c',",
         ")");
-    assertThat(TestingRepositoryFunction.getTargetPath(rule, rootDirectory))
-        .isEqualTo(PathFragment.create("/a/b/c"));
+    assertEquals(PathFragment.create("/a/b/c"),
+        TestingRepositoryFunction.getTargetPath(rule, rootDirectory));
   }
 
   @Test

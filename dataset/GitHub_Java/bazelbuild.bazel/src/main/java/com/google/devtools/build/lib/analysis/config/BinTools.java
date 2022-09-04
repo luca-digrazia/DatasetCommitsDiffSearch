@@ -17,6 +17,8 @@ package com.google.devtools.build.lib.analysis.config;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -35,14 +37,12 @@ import java.io.IOException;
  */
 public final class BinTools {
   private final BlazeDirectories directories;
-  private final Path execrootParent;
+  private final Path binDir;  // the working bin directory under execRoot
   private final ImmutableList<String> embeddedTools;
-
-  private Path binDir;  // the working bin directory under execRoot
 
   private BinTools(BlazeDirectories directories, ImmutableList<String> tools) {
     this.directories = directories;
-    this.execrootParent = directories.getExecRoot().getParentDirectory();
+    this.binDir = directories.getExecRoot().getRelative("_bin");
     ImmutableList.Builder<String> builder = ImmutableList.builder();
     // Files under embedded_tools shouldn't be copied to under _bin dir
     // They won't be used during action execution time.
@@ -52,7 +52,6 @@ public final class BinTools {
       }
     }
     this.embeddedTools = builder.build();
-    this.binDir = null;
   }
 
   /**
@@ -70,8 +69,7 @@ public final class BinTools {
    */
   @VisibleForTesting
   public static BinTools empty(BlazeDirectories directories) {
-    return new BinTools(directories, ImmutableList.<String>of()).setBinDir(
-        directories.getWorkspace().getBaseName());
+    return new BinTools(directories, ImmutableList.<String>of());
   }
 
   /**
@@ -81,8 +79,7 @@ public final class BinTools {
    */
   @VisibleForTesting
   public static BinTools forUnitTesting(BlazeDirectories directories, Iterable<String> tools) {
-    return new BinTools(directories, ImmutableList.copyOf(tools)).setBinDir(
-        directories.getWorkspace().getBaseName());
+    return new BinTools(directories, ImmutableList.copyOf(tools));
   }
 
   /**
@@ -91,7 +88,7 @@ public final class BinTools {
    */
   @VisibleForTesting
   public static BinTools forIntegrationTesting(
-      BlazeDirectories directories, String srcDir, Iterable<String> tools, String repositoryName)
+      BlazeDirectories directories, String srcDir, Iterable<String> tools)
       throws IOException {
     Path srcPath = directories.getOutputBase().getFileSystem().getPath(srcDir);
     for (String embedded : tools) {
@@ -104,7 +101,7 @@ public final class BinTools {
         // much point in creating a symlink to a non-existent binary here.
         continue;
       }
-      Path outputPath = directories.getExecRoot(repositoryName).getChild("_bin").getChild(embedded);
+      Path outputPath = directories.getExecRoot().getChild("_bin").getChild(embedded);
       if (outputPath.exists()) {
         outputPath.delete();
       }
@@ -112,7 +109,7 @@ public final class BinTools {
       outputPath.createSymbolicLink(runfilesPath);
     }
 
-    return new BinTools(directories, ImmutableList.copyOf(tools)).setBinDir(repositoryName);
+    return new BinTools(directories, ImmutableList.copyOf(tools));
   }
 
   private static void scanDirectoryRecursively(
@@ -145,17 +142,25 @@ public final class BinTools {
     return PathFragment.create("_bin").getRelative(PathFragment.create(embedPath).getBaseName());
   }
 
-  private BinTools setBinDir(String workspaceName) {
-    binDir = execrootParent.getRelative(workspaceName).getRelative("_bin");
-    return this;
+  public Artifact getEmbeddedArtifact(String embedPath, ArtifactFactory artifactFactory) {
+    PathFragment path = getExecPath(embedPath);
+    Preconditions.checkNotNull(path, embedPath + " not found in embedded tools");
+    return artifactFactory.getDerivedArtifact(path, binDir.getParentDirectory());
+  }
+
+  public ImmutableList<Artifact> getAllEmbeddedArtifacts(ArtifactFactory artifactFactory) {
+    ImmutableList.Builder<Artifact> builder = ImmutableList.builder();
+    for (String embeddedTool : embeddedTools) {
+      builder.add(getEmbeddedArtifact(embeddedTool, artifactFactory));
+    }
+    return builder.build();
   }
 
   /**
    * Initializes the build tools not available at absolute paths. Note that
    * these must be constant across all configurations.
    */
-  public void setupBuildTools(String workspaceName) throws ExecException {
-    setBinDir(workspaceName);
+  public void setupBuildTools() throws ExecException {
     try {
       FileSystemUtils.createDirectoryAndParents(binDir);
     } catch (IOException e) {
@@ -168,7 +173,6 @@ public final class BinTools {
   }
 
   private void setupTool(String embeddedPath) throws ExecException {
-    Preconditions.checkNotNull(binDir);
     Path sourcePath = directories.getEmbeddedBinariesRoot().getRelative(embeddedPath);
     Path linkPath = binDir.getRelative(PathFragment.create(embeddedPath).getBaseName());
     linkTool(sourcePath, linkPath);

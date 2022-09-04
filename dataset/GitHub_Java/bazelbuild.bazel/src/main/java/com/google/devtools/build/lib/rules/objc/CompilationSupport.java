@@ -309,7 +309,6 @@ public abstract class CompilationSupport {
   protected final AppleConfiguration appleConfiguration;
   protected final CompilationAttributes attributes;
   protected final IntermediateArtifacts intermediateArtifacts;
-  protected final boolean useDeps;
 
   /**
    * Creates a new compilation support for the given rule and build configuration.
@@ -328,15 +327,13 @@ public abstract class CompilationSupport {
       RuleContext ruleContext,
       BuildConfiguration buildConfiguration,
       IntermediateArtifacts intermediateArtifacts,
-      CompilationAttributes compilationAttributes,
-      boolean useDeps) {
+      CompilationAttributes compilationAttributes) {
     this.ruleContext = ruleContext;
     this.buildConfiguration = buildConfiguration;
     this.objcConfiguration = buildConfiguration.getFragment(ObjcConfiguration.class);
     this.appleConfiguration = buildConfiguration.getFragment(AppleConfiguration.class);
     this.attributes = compilationAttributes;
     this.intermediateArtifacts = intermediateArtifacts;
-    this.useDeps = useDeps;
   }
 
   /**
@@ -346,18 +343,7 @@ public abstract class CompilationSupport {
    * @param ruleContext the RuleContext for the calling target
    */
   public static CompilationSupport create(RuleContext ruleContext) {
-    return createForConfig(ruleContext, ruleContext.getConfiguration(), /*useDeps=*/true);
-  }
-
-  /**
-   * Returns a CompilationSupport instance, the type of which is determined from the
-   * --experimental_objc_crosstool flag.  If this is an instance of
-   * {@link CrosstoolCompilationSupport}, dependencies will not be used.
-   */
-  public static CompilationSupport createWithoutDeps(RuleContext ruleContext) {
-    CompilationSupport result = createForConfig(ruleContext, ruleContext.getConfiguration(),
-        /*useDeps=*/false);
-    return result;
+    return createForConfig(ruleContext, ruleContext.getConfiguration());
   }
 
    /**
@@ -370,24 +356,10 @@ public abstract class CompilationSupport {
    */
    public static CompilationSupport createForConfig(RuleContext ruleContext,
        BuildConfiguration buildConfiguration) {
-     return createForConfig(ruleContext, buildConfiguration, /*useDeps=*/true);
-   }
-
-  /**
-   * Returns a CompilationSupport instance, the type of which is determined from the
-   * --experimental_objc_crosstool flag.  The result can be either {@link LegacyCompilationSupport}
-   * or {@link CrosstoolCompilationSupport}.
-   *
-   * @param ruleContext the RuleContext for the calling target
-   * @param buildConfiguration the configuration for the calling target
-   * @param useDeps true if deps should be used
-   */
-   public static CompilationSupport createForConfig(RuleContext ruleContext,
-       BuildConfiguration buildConfiguration, boolean useDeps) {
      return createWithSelectedImplementation(ruleContext,
          buildConfiguration,
          ObjcRuleClasses.intermediateArtifacts(ruleContext, buildConfiguration),
-         CompilationAttributes.Builder.fromRuleContext(ruleContext).build(), useDeps);
+         CompilationAttributes.Builder.fromRuleContext(ruleContext).build());
    }
 
   /**
@@ -403,11 +375,10 @@ public abstract class CompilationSupport {
     return createWithSelectedImplementation(ruleContext,
         config,
         ObjcRuleClasses.intermediateArtifacts(ruleContext, config),
-        compilationAttributes,
-        /*useDeps=*/true);
+        compilationAttributes);
   }
 
-   /**
+  /**
    * Returns a CompilationSupport instance, the type of which is determined from the
    * --experimental_objc_crosstool flag.
    *
@@ -421,36 +392,12 @@ public abstract class CompilationSupport {
       BuildConfiguration buildConfiguration,
       IntermediateArtifacts intermediateArtifacts,
       CompilationAttributes compilationAttributes) {
-     return createWithSelectedImplementation(
-         ruleContext,
-         buildConfiguration,
-         intermediateArtifacts,
-         compilationAttributes,
-         /*useDeps=*/true);
-  }
-
-  /**
-   * Returns a CompilationSupport instance, the type of which is determined from the
-   * --experimental_objc_crosstool flag.
-   *
-   * @param ruleContext the RuleContext for the calling target
-   * @param buildConfiguration the configuration for the calling target
-   * @param intermediateArtifacts IntermediateArtifacts for deriving artifact paths
-   * @param compilationAttributes attributes of the calling target
-   * @param useDeps true if deps should be used
-   */
-   static CompilationSupport createWithSelectedImplementation(
-      RuleContext ruleContext,
-      BuildConfiguration buildConfiguration,
-      IntermediateArtifacts intermediateArtifacts,
-      CompilationAttributes compilationAttributes,
-       boolean useDeps) {
     return buildConfiguration.getFragment(ObjcConfiguration.class).getObjcCrosstoolMode()
         == ObjcCrosstoolMode.ALL
         ? new CrosstoolCompilationSupport(ruleContext, buildConfiguration, intermediateArtifacts,
-            compilationAttributes, useDeps)
+            compilationAttributes)
         : new LegacyCompilationSupport(ruleContext, buildConfiguration, intermediateArtifacts,
-            compilationAttributes, useDeps);
+            compilationAttributes);
   }
 
  /**

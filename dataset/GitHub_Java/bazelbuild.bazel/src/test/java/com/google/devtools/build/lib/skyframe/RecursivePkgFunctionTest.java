@@ -108,11 +108,11 @@ public class RecursivePkgFunctionTest extends BuildViewTestCase {
 
     RecursivePkgValue valueForRoot1 = buildRecursivePkgValue(root1, PathFragment.create("a"));
     String root1Pkg = Iterables.getOnlyElement(valueForRoot1.getPackages());
-    assertEquals("a", root1Pkg);
+    assertEquals(root1Pkg, "a");
 
     RecursivePkgValue valueForRoot2 = buildRecursivePkgValue(root2, PathFragment.create("a"));
     String root2Pkg = Iterables.getOnlyElement(valueForRoot2.getPackages());
-    assertEquals("a/b", root2Pkg);
+    assertEquals(root2Pkg, "a/b");
   }
 
   @Test

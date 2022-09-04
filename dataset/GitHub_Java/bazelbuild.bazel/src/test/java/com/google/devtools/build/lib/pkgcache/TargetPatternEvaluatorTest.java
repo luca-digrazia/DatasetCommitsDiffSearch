@@ -15,6 +15,10 @@ package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.pkgcache.FilteringPolicies.FILTER_TESTS;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -32,12 +36,14 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.Arrays;
-import java.util.Set;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Arrays;
+import java.util.Set;
 
 /** Tests for {@link TargetPatternEvaluator}. */
 @RunWith(JUnit4.class)
@@ -164,7 +170,7 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
       throws TargetParsingException, InterruptedException {
     ResolvedTargets<Target> result =
         parseTargetPatternList(parser, parsingListener, Arrays.asList(patterns), true);
-    assertThat(result.hasError()).isTrue();
+    assertTrue(result.hasError());
     return targetsToLabels(result.getTargets());
   }
 
@@ -182,7 +188,7 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
   }
 
   private static Set<Target> getFailFast(ResolvedTargets<Target> result) {
-    assertThat(result.hasError()).isFalse();
+    assertFalse(result.hasError());
     return result.getTargets();
   }
 
@@ -192,7 +198,7 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
       parser.parseTargetPattern(parsingListener, target, false);
       fail("target='" + target + "', expected error: " + expectedError);
     } catch (TargetParsingException e) {
-      assertThat(e).hasMessageThat().contains(expectedError);
+      assertThat(e.getMessage()).contains(expectedError);
     }
   }
 
@@ -218,13 +224,14 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
 
   @Test
   public void testParsingStandardLabel() throws Exception {
-    assertThat(parseIndividualTarget("//foo:foo1").toString()).isEqualTo("//foo:foo1");
+    assertEquals("//foo:foo1",
+        parseIndividualTarget("//foo:foo1").toString());
   }
 
   @Test
   public void testAbsolutePatternEndsWithSlashAll() throws Exception {
     scratch.file("foo/all/BUILD", "cc_library(name = 'all')");
-    assertThat(parseIndividualTarget("//foo/all").toString()).isEqualTo("//foo/all:all");
+    assertEquals("//foo/all:all", parseIndividualTarget("//foo/all").toString());
     assertNoEvents();
   }
 
@@ -242,8 +249,8 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
   }
 
   private void assertWildcardConflict(String label, String suffix) throws Exception {
-    assertThat(parseIndividualTarget(label).toString()).isEqualTo(label);
-    assertThat(eventCollector.count()).isSameAs(1);
+    assertEquals(label, parseIndividualTarget(label).toString());
+    assertSame(1, eventCollector.count());
     assertContainsEvent(String.format("The target pattern '%s' is ambiguous: '%s' is both "
         + "a wildcard, and the name of an existing cc_library rule; "
         + "using the latter interpretation", label, suffix));
@@ -255,13 +262,13 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
       parseIndividualTarget("//missing:foo1");
       fail("TargetParsingException expected");
     } catch (TargetParsingException e) {
-      assertThat(e).hasMessageThat().startsWith("no such package");
+      assertThat(e.getMessage()).startsWith("no such package");
     }
   }
 
   @Test
   public void testParsingStandardLabelWithRelativeParser() throws Exception {
-    assertThat(parseIndividualTargetRelative("//foo:foo1").toString()).isEqualTo("//foo:foo1");
+    assertEquals("//foo:foo1", parseIndividualTargetRelative("//foo:foo1").toString());
   }
 
   @Test
@@ -270,18 +277,19 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
       parseIndividualTarget("//foo:missing");
       fail("TargetParsingException expected");
     } catch (TargetParsingException e) {
-      assertThat(e).hasMessageThat().startsWith("no such target");
+      assertThat(e.getMessage()).startsWith("no such target");
     }
   }
 
   @Test
   public void testParsingStandardLabelShorthand() throws Exception {
-    assertThat(parseIndividualTarget("foo:foo1").toString()).isEqualTo("//foo:foo1");
+    assertEquals("//foo:foo1",
+                 parseIndividualTarget("foo:foo1").toString());
   }
 
   @Test
   public void testParsingStandardLabelShorthandRelative() throws Exception {
-    assertThat(parseIndividualTargetRelative(":foo1").toString()).isEqualTo("//foo:foo1");
+    assertEquals("//foo:foo1", parseIndividualTargetRelative(":foo1").toString());
   }
 
   @Test
@@ -469,10 +477,8 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
   public void testDefaultPackage() throws Exception {
     scratch.file("experimental/BUILD",
                 "cc_library(name = 'experimental', srcs = [ 'experimental.cc' ])");
-    assertThat(parseIndividualTarget("//experimental").toString())
-        .isEqualTo("//experimental:experimental");
-    assertThat(parseIndividualTarget("experimental").toString())
-        .isEqualTo("//experimental:experimental");
+    assertEquals("//experimental:experimental", parseIndividualTarget("//experimental").toString());
+    assertEquals("//experimental:experimental", parseIndividualTarget("experimental").toString());
     assertNoEvents();
   }
 
@@ -485,26 +491,28 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
     scratch.file("sub/dir/BUILD", "exports_files(['dir2'])");
     scratch.file("sub/dir/dir/BUILD", "exports_files(['dir'])");
     // sub/dir/dir is a package
-    assertThat(parseIndividualTarget("sub/dir/dir").toString()).isEqualTo("//sub/dir/dir:dir");
+    assertEquals("//sub/dir/dir:dir", parseIndividualTarget("sub/dir/dir").toString());
     // sub/dir is a package but not sub/dir/dir2
-    assertThat(parseIndividualTarget("sub/dir/dir2").toString()).isEqualTo("//sub/dir:dir2");
+    assertEquals("//sub/dir:dir2", parseIndividualTarget("sub/dir/dir2").toString());
     // sub is a package but not sub/dir2
-    assertThat(parseIndividualTarget("sub/dir2/dir2").toString()).isEqualTo("//sub:dir2/dir2");
+    assertEquals("//sub:dir2/dir2", parseIndividualTarget("sub/dir2/dir2").toString());
   }
 
   @Test
   public void testFindsLongestPlausiblePackageName() throws Exception {
-    assertThat(parseIndividualTarget("foo/bar/baz").toString()).isEqualTo("//foo/bar:baz");
-    assertThat(parseIndividualTarget("foo/bar/baz/bang").toString())
-        .isEqualTo("//foo/bar:baz/bang");
-    assertThat(parseIndividualTarget("foo/baz/bang").toString()).isEqualTo("//foo:baz/bang");
+    assertEquals("//foo/bar:baz",
+                 parseIndividualTarget("foo/bar/baz").toString());
+    assertEquals("//foo/bar:baz/bang",
+                 parseIndividualTarget("foo/bar/baz/bang").toString());
+    assertEquals("//foo:baz/bang",
+        parseIndividualTarget("foo/baz/bang").toString());
   }
 
   @Test
   public void testParsesIterableOfLabels() throws Exception {
     Set<Label> labels = Sets.newHashSet(Label.parseAbsolute("//foo/bar:bar1"),
         Label.parseAbsolute("//foo:foo1"));
-    assertThat(parseList("//foo/bar:bar1", "//foo:foo1")).isEqualTo(labels);
+    assertEquals(labels, parseList("//foo/bar:bar1", "//foo:foo1"));
     parsingListener.assertEmpty();
   }
 
@@ -512,23 +520,24 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
   public void testParseAbsoluteWithRelativeParser() throws Exception {
     Set<Label> labels = Sets.newHashSet(Label.parseAbsolute("//foo/bar:bar1"),
         Label.parseAbsolute("//foo:foo1"));
-    assertThat(parseListRelative("//foo/bar:bar1", "//foo:foo1")).isEqualTo(labels);
+    assertEquals(labels, parseListRelative("//foo/bar:bar1", "//foo:foo1"));
     parsingListener.assertEmpty();
   }
 
   @Test
   public void testMultisegmentLabelsWithNoSlashSlash() throws Exception {
-    assertThat(parseIndividualTarget("foo/bar:wiz/bang").toString())
-        .isEqualTo("//foo/bar:wiz/bang");
-    assertThat(parseIndividualTarget("foo/bar:wiz/all").toString()).isEqualTo("//foo/bar:wiz/all");
+    assertEquals("//foo/bar:wiz/bang",
+        parseIndividualTarget("foo/bar:wiz/bang").toString());
+    assertEquals("//foo/bar:wiz/all",
+        parseIndividualTarget("foo/bar:wiz/all").toString());
   }
 
   @Test
   public void testMultisegmentLabelsWithNoSlashSlashRelative() throws Exception {
-    assertThat(parseIndividualTargetRelative("bar:wiz/bang").toString())
-        .isEqualTo("//foo/bar:wiz/bang");
-    assertThat(parseIndividualTargetRelative("bar:wiz/all").toString())
-        .isEqualTo("//foo/bar:wiz/all");
+    assertEquals("//foo/bar:wiz/bang",
+        parseIndividualTargetRelative("bar:wiz/bang").toString());
+    assertEquals("//foo/bar:wiz/all",
+        parseIndividualTargetRelative("bar:wiz/all").toString());
   }
 
   /** Regression test for a bug. */
@@ -537,7 +546,8 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
     scratch.file("x/y/BUILD", "cc_library(name='y')");
     scratch.file("x/z/BUILD", "cc_library(name='z')");
     setDeletedPackages(Sets.newHashSet(PackageIdentifier.createInMainRepo("x/y")));
-    assertThat(parseList("x/...")).isEqualTo(Sets.newHashSet(Label.parseAbsolute("//x/z")));
+    assertEquals(Sets.newHashSet(Label.parseAbsolute("//x/z")),
+        parseList("x/..."));
   }
 
   @Test
@@ -547,9 +557,8 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
     setDeletedPackages(Sets.newHashSet(PackageIdentifier.createInMainRepo("x/y")));
 
     parser.updateOffset(PathFragment.create("x"));
-    assertThat(
-            targetsToLabels(getFailFast(parser.parseTargetPattern(parsingListener, "...", false))))
-        .isEqualTo(Sets.newHashSet(Label.parseAbsolute("//x/z")));
+    assertEquals(Sets.newHashSet(Label.parseAbsolute("//x/z")),
+        targetsToLabels(getFailFast(parser.parseTargetPattern(parsingListener, "...", false))));
   }
 
   @Test
@@ -557,15 +566,15 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
     scratch.file("x/y/BUILD", "cc_library(name='y')");
     scratch.file("x/z/BUILD", "cc_library(name='z')");
 
-    assertThat(parseList("x/...")).containsExactly(
-        Label.parseAbsolute("//x/y"), Label.parseAbsolute("//x/z"));
+    assertEquals(Sets.newHashSet(Label.parseAbsolute("//x/y"), Label.parseAbsolute("//x/z")),
+        parseList("x/..."));
 
     setDeletedPackages(Sets.newHashSet(PackageIdentifier.createInMainRepo("x/y")));
-    assertThat(parseList("x/...")).containsExactly(Label.parseAbsolute("//x/z"));
+    assertEquals(Sets.newHashSet(Label.parseAbsolute("//x/z")), parseList("x/..."));
 
     setDeletedPackages(ImmutableSet.<PackageIdentifier>of());
-    assertThat(parseList("x/...")).containsExactly(
-        Label.parseAbsolute("//x/y"), Label.parseAbsolute("//x/z"));
+    assertEquals(Sets.newHashSet(Label.parseAbsolute("//x/y"), Label.parseAbsolute("//x/z")),
+        parseList("x/..."));
   }
 
   @Test
@@ -775,10 +784,10 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
 
   @Test
   public void testSetOffset() throws Exception {
-    assertThat(parseIndividualTarget("foo:foo1").toString()).isEqualTo("//foo:foo1");
+    assertEquals("//foo:foo1", parseIndividualTarget("foo:foo1").toString());
 
     parser.updateOffset(PathFragment.create("foo"));
-    assertThat(parseIndividualTarget(":foo1").toString()).isEqualTo("//foo:foo1");
+    assertEquals("//foo:foo1", parseIndividualTarget(":foo1").toString());
   }
 
   @Test
@@ -803,19 +812,6 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
         .containsExactlyElementsIn(allTestRules);
     assertThat(parseList(FILTER_TESTS, "test:all", "test/manual_test"))
         .containsExactlyElementsIn(allTestRules);
-  }
-
-  @Test
-  public void testTestSuiteExclusion() throws Exception {
-    // This step doesn't do test_suite expansion of the individual target patterns. Doing so
-    // would cause an exclusion of the targets in a package to exclude all tests referred to in test
-    // suites in that package.
-    scratch.file(
-        "parent/excluded/BUILD",
-        "test_suite(name = 'test_suite', tests = ['//parent/other:specific_test'])");
-    scratch.file("parent/other/BUILD", "cc_test(name = 'specific_test')");
-    assertThat(parseList("parent/...", "-parent/excluded/...")).containsExactlyElementsIn(
-        labels("//parent/other:specific_test"));
   }
 
   /** Regression test for bug: "blaze test "no targets found" warning now fatal" */
@@ -851,7 +847,7 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
     assertThat(result.first)
         .containsExactlyElementsIn(
             Sets.newHashSet(Label.parseAbsolute("//x/y:a"), Label.parseAbsolute("//x/y:b")));
-    assertThat(result.second).isFalse();
+    assertFalse(result.second);
   }
 
   @Test
@@ -887,7 +883,7 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
 
     // Even though there was a loading error in the package, parsing the target pattern was
     // successful.
-    assertThat(result.second).isFalse();
+    assertFalse(result.second);
   }
 
   @Test
@@ -905,7 +901,7 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
           /*keepGoing=*/false);
       fail();
     } catch (TargetParsingException e) {
-      assertThat(e).hasMessageThat().contains("no such target");
+      assertThat(e.getMessage()).contains("no such target");
     }
   }
 
@@ -914,12 +910,13 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
     ResolvedTargets<Target> result = parseTargetPatternList(parser, parsingListener,
         Arrays.asList("//foo/bar/BUILD"), false);
 
-    assertThat(result.hasError()).isFalse();
+    assertFalse(result.hasError());
     assertThat(result.getTargets()).hasSize(1);
 
     Label label = Iterables.getOnlyElement(result.getTargets()).getLabel();
-    assertThat(label.getName()).isEqualTo("BUILD");
-    assertThat(label.getPackageName()).isEqualTo("foo/bar");
+    assertEquals("BUILD", label.getName());
+    assertEquals("foo/bar", label.getPackageName());
+
   }
 
   /**
@@ -936,9 +933,9 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
         "genrule(name='c', outs=['c.out'])");
 
     Pair<Set<Label>, Boolean> result = parseListKeepGoing("//loading:y");
-    assertThat(result.first).containsExactly(Label.parseAbsolute("//loading:y"));
+    assertEquals(Label.parseAbsolute("//loading:y"), Iterables.getOnlyElement(result.first));
     assertContainsEvent("missing value for mandatory attribute");
-    assertThat(result.second).isFalse();
+    assertFalse(result.second);
   }
 
   private void assertKeepGoing(Set<Label> expectedLabels, String expectedEvent, String... toParse)

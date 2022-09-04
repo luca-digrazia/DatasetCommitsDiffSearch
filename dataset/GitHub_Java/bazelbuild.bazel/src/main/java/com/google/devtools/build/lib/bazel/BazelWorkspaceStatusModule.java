@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildInfo;
-import com.google.devtools.build.lib.analysis.BuildInfoEvent;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.KeyType;
@@ -220,11 +219,6 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
         }
         volatileMap.put(BuildInfo.BUILD_TIMESTAMP, Long.toString(System.currentTimeMillis()));
 
-        Map<String, String> overallMap = new TreeMap<>();
-        overallMap.putAll(volatileMap);
-        overallMap.putAll(stableMap);
-        actionExecutionContext.getExecutor().getEventBus().post(new BuildInfoEvent(overallMap));
-
         // Only update the stableStatus contents if they are different than what we have on disk.
         // This is to preserve the old file's mtime so that we do not generate an unnecessary dirty
         // file on each incremental build.
@@ -370,7 +364,7 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
   private WorkspaceStatusAction.Options options;
 
   @Override
-  public void beforeCommand(CommandEnvironment env) {
+  public void beforeCommand(Command command, CommandEnvironment env) {
     this.env = env;
     env.getEventBus().register(this);
   }

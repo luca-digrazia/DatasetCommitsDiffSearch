@@ -19,8 +19,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.rules.ExternalPackageUtil;
+import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
+import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryNotFoundException;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
@@ -62,13 +63,12 @@ public class MavenServerFunction implements SkyFunction {
   @Nullable
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
-      throws InterruptedException, RepositoryFunctionException,
-          ExternalPackageUtil.ExternalPackageException {
+      throws InterruptedException, RepositoryFunctionException {
     String repository = (String) skyKey.argument();
     Rule repositoryRule = null;
     try {
-      repositoryRule = ExternalPackageUtil.getRule(repository, env);
-    } catch (ExternalPackageUtil.ExternalRuleNotFoundException ex) {
+      repositoryRule = RepositoryFunction.getRule(repository, env);
+    } catch (RepositoryNotFoundException ex) {
       // Ignored. We throw a new one below.
     }
     BlazeDirectories directories = PrecomputedValue.BLAZE_DIRECTORIES.get(env);

@@ -17,6 +17,8 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -99,9 +101,9 @@ public class CreateIncSymlinkActionTest extends FoundationTestCase {
         ImmutableMap.of(a, b), outputDir);
     action.execute(null);
     symlink.stat(Symlinks.NOFOLLOW);
-    assertThat(symlink.isSymbolicLink()).isTrue();
+    assertTrue(symlink.isSymbolicLink());
     assertEquals(symlink.readSymbolicLink(), b.getPath().asFragment());
-    assertThat(rootDirectory.getRelative("a").exists()).isFalse();
+    assertFalse(rootDirectory.getRelative("a").exists());
   }
 
   @Test
@@ -116,8 +118,8 @@ public class CreateIncSymlinkActionTest extends FoundationTestCase {
         new CreateIncSymlinkAction(NULL_ACTION_OWNER, ImmutableMap.of(a, b), outputDir);
     Path extra = rootDirectory.getRelative("out/extra");
     extra.getOutputStream().close();
-    assertThat(extra.exists()).isTrue();
+    assertTrue(extra.exists());
     action.prepare(rootDirectory);
-    assertThat(extra.exists()).isFalse();
+    assertFalse(extra.exists());
   }
 }

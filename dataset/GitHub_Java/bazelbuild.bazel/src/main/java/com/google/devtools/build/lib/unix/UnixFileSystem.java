@@ -282,17 +282,17 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public boolean supportsModifications(Path path) {
+  public boolean supportsModifications() {
     return true;
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively(Path path) {
+  public boolean supportsSymbolicLinksNatively() {
     return true;
   }
 
   @Override
-  public boolean supportsHardLinksNatively(Path path) {
+  public boolean supportsHardLinksNatively() {
     return true;
   }
 
@@ -402,14 +402,11 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected byte[] getDigest(Path path, HashFunction hashFunction) throws IOException {
+  protected byte[] getMD5Digest(Path path) throws IOException {
     String name = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      if (hashFunction == HashFunction.MD5) {
-        return NativePosixFiles.md5sum(name).asBytes();
-      }
-      return super.getDigest(path, hashFunction);
+      return NativePosixFiles.md5sum(name).asBytes();
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_MD5, name);
     }

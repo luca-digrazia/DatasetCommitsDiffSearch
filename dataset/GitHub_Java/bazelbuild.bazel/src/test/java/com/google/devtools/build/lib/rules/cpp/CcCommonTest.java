@@ -17,6 +17,8 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.baseArtifactNames;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.baseNamesOf;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -112,16 +114,15 @@ public class CcCommonTest extends BuildViewTestCase {
     // But we avoid creating .so files for empty libraries,
     // because those have a potentially significant run-time startup cost.
     if (emptyShouldOutputStaticLibrary()) {
-      assertThat(baseNamesOf(getFilesToBuild(emptylib))).isEqualTo("libemptylib.a");
+      assertEquals("libemptylib.a", baseNamesOf(getFilesToBuild(emptylib)));
     } else {
       assertThat(getFilesToBuild(emptylib)).isEmpty();
     }
-    assertThat(
-            emptylib
-                .getProvider(CcExecutionDynamicLibrariesProvider.class)
-                .getExecutionDynamicLibraryArtifacts()
-                .isEmpty())
-        .isTrue();
+    assertTrue(
+        emptylib
+            .getProvider(CcExecutionDynamicLibrariesProvider.class)
+            .getExecutionDynamicLibraryArtifacts()
+            .isEmpty());
   }
 
   protected boolean emptyShouldOutputStaticLibrary() {
@@ -131,8 +132,8 @@ public class CcCommonTest extends BuildViewTestCase {
   @Test
   public void testEmptyBinary() throws Exception {
     ConfiguredTarget emptybin = getConfiguredTarget("//empty:emptybinary");
-    assertThat(baseNamesOf(getFilesToBuild(emptybin)))
-        .isEqualTo("emptybinary" + OsUtils.executableExtension());
+    assertEquals(
+        "emptybinary" + OsUtils.executableExtension(), baseNamesOf(getFilesToBuild(emptybin)));
   }
 
   private List<String> getCopts(String target) throws Exception {
@@ -228,12 +229,11 @@ public class CcCommonTest extends BuildViewTestCase {
             "cc_library(name = 'statically',",
             "           srcs = ['statically.cc'],",
             "           linkstatic=1)");
-    assertThat(
-            statically
-                .getProvider(CcExecutionDynamicLibrariesProvider.class)
-                .getExecutionDynamicLibraryArtifacts()
-                .isEmpty())
-        .isTrue();
+    assertTrue(
+        statically
+            .getProvider(CcExecutionDynamicLibrariesProvider.class)
+            .getExecutionDynamicLibraryArtifacts()
+            .isEmpty());
     Artifact staticallyDotA = getOnlyElement(getFilesToBuild(statically));
     assertThat(getGeneratingAction(staticallyDotA)).isInstanceOf(CppLinkAction.class);
     PathFragment dotAPath = staticallyDotA.getExecPath();
@@ -272,8 +272,7 @@ public class CcCommonTest extends BuildViewTestCase {
     CppLinkAction action = (CppLinkAction) getGeneratingAction(getExecutable(target));
     for (Artifact input : action.getInputs()) {
       String name = input.getFilename();
-      assertThat(!CppFileTypes.ARCHIVE.matches(name) && !CppFileTypes.PIC_ARCHIVE.matches(name))
-          .isTrue();
+      assertTrue(!CppFileTypes.ARCHIVE.matches(name) && !CppFileTypes.PIC_ARCHIVE.matches(name));
     }
   }
 
@@ -626,7 +625,7 @@ public class CcCommonTest extends BuildViewTestCase {
     // make sure the binary is dependent on the static lib
     Action linkAction = getGeneratingAction(getOnlyElement(getFilesToBuild(theApp)));
     ImmutableList<Artifact> filesToBuild = ImmutableList.copyOf(getFilesToBuild(theLib));
-    assertThat(ImmutableSet.copyOf(linkAction.getInputs()).containsAll(filesToBuild)).isTrue();
+    assertTrue(ImmutableSet.copyOf(linkAction.getInputs()).containsAll(filesToBuild));
   }
 
   @Test
@@ -700,8 +699,8 @@ public class CcCommonTest extends BuildViewTestCase {
   }
 
   private void assertStamping(boolean enabled, String label) throws Exception {
-    assertThat(AnalysisUtils.isStampingEnabled(getRuleContext(getConfiguredTarget(label))))
-        .isEqualTo(enabled);
+    assertEquals(
+        enabled, AnalysisUtils.isStampingEnabled(getRuleContext(getConfiguredTarget(label))));
   }
 
   @Test
@@ -769,7 +768,7 @@ public class CcCommonTest extends BuildViewTestCase {
         FileType.filterList(
             LinkerInputs.toLibraryArtifacts(linkingOutputs.getPreferredLibraries(true, true)),
             CppFileTypes.SHARED_LIBRARY);
-    assertThat(sharedLibraries2).isEqualTo(sharedLibraries1);
+    assertEquals(sharedLibraries1, sharedLibraries2);
   }
 
   /** Tests that shared libraries of the form "libfoo.so.1.2" are permitted within "srcs". */

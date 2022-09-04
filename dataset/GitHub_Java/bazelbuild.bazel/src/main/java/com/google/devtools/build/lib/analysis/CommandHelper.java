@@ -115,7 +115,7 @@ public final class CommandHelper {
         continue;
       }
 
-      Iterable<Artifact> files = tool.getFilesToRun();
+      Collection<Artifact> files = tool.getFilesToRun();
       resolvedToolsBuilder.addAll(files);
       Artifact executableArtifact = tool.getExecutable();
       // If the label has an executable artifact add that to the multimaps.
@@ -125,7 +125,7 @@ public final class CommandHelper {
         toolsRunfilesBuilder.add(tool.getRunfilesSupplier());
       } else {
         // Map all depArtifacts to the respective label using the multimaps.
-        Iterables.addAll(mapGet(tempLabelMap, label), files);
+        mapGet(tempLabelMap, label).addAll(files);
       }
     }
 

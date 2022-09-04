@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.bazel.rules;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -24,7 +25,6 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
@@ -78,8 +78,7 @@ public class BazelConfiguration extends Fragment {
   }
 
   @Override
-  public void setupActionEnvironment(Map<String, String> builder) {
-    // TODO(ulfjack): Avoid using System.getenv; it's the wrong environment!
+  public void setupShellEnvironment(ImmutableMap.Builder<String, String> builder) {
     builder.put("PATH", pathOrDefault(System.getenv("PATH"), getShellExecutable()));
 
     String ldLibraryPath = System.getenv("LD_LIBRARY_PATH");

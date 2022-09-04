@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
@@ -65,7 +65,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
   private boolean visitTransitively(Label label) throws InterruptedException {
     SkyKey key = TransitiveTargetValue.key(label);
     EvaluationResult<SkyValue> result =
-        skyframeExecutor.prepareAndGet(ImmutableSet.of(key), /*numThreads=*/ 5, reporter);
+        skyframeExecutor.prepareAndGet(key, /*numThreads=*/5, reporter);
     TransitiveTargetValue value = (TransitiveTargetValue) result.get(key);
     System.out.println(value);
     boolean hasTransitiveError = (value == null) || value.getTransitiveRootCauses() != null;
@@ -105,7 +105,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertThat(visitTransitively(Label.parseAbsolute("//pkg:x"))).isFalse();
+    assertFalse(visitTransitively(Label.parseAbsolute("//pkg:x")));
     scratch.overwriteFile("pkg/BUILD",
         "# another comment to force reload",
         "sh_library(name = 'x')");
@@ -113,7 +113,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
     syncPackages();
     eventCollector.clear();
     reporter.addHandler(failFastHandler);
-    assertThat(visitTransitively(Label.parseAbsolute("//pkg:x"))).isTrue();
+    assertTrue(visitTransitively(Label.parseAbsolute("//pkg:x")));
     assertNoEvents();
   }
 
@@ -134,7 +134,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertThat(visitTransitively(Label.parseAbsolute("//top:top"))).isFalse();
+    assertFalse(visitTransitively(Label.parseAbsolute("//top:top")));
     assertContainsEvent("no such package 'pkg'");
     // The traditional label visitor does not propagate the original IOException message.
     // assertContainsEvent("custom crash");
@@ -148,7 +148,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
     syncPackages();
     eventCollector.clear();
     reporter.addHandler(failFastHandler);
-    assertThat(visitTransitively(Label.parseAbsolute("//top:top"))).isTrue();
+    assertTrue(visitTransitively(Label.parseAbsolute("//top:top")));
     assertNoEvents();
   }
 
@@ -167,6 +167,6 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertThat(visitTransitively(Label.parseAbsolute("//top/pkg:x"))).isFalse();
+    assertFalse(visitTransitively(Label.parseAbsolute("//top/pkg:x")));
   }
 }

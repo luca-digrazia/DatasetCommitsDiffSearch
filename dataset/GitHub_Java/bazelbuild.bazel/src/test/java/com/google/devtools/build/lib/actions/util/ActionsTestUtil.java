@@ -91,20 +91,12 @@ public final class ActionsTestUtil {
 
   public static ActionExecutionContext createContext(Executor executor, FileOutErr fileOutErr,
       Path execRoot, MetadataHandler metadataHandler, @Nullable ActionGraph actionGraph) {
-    return createContext(
-        executor, fileOutErr, execRoot, metadataHandler, ImmutableMap.<String, String>of(),
-        actionGraph);
-  }
-
-  public static ActionExecutionContext createContext(Executor executor, FileOutErr fileOutErr,
-      Path execRoot, MetadataHandler metadataHandler, Map<String, String> clientEnv,
-      @Nullable ActionGraph actionGraph) {
     return new ActionExecutionContext(
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
         metadataHandler,
         fileOutErr,
-        ImmutableMap.<String, String>copyOf(clientEnv),
+        ImmutableMap.<String, String>of(),
         actionGraph == null
             ? createDummyArtifactExpander()
             : ActionInputHelper.actionGraphArtifactExpander(actionGraph));

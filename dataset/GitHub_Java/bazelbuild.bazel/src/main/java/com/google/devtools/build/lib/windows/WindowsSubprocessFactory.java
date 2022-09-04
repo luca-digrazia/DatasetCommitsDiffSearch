@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.shell.SubprocessBuilder;
 import com.google.devtools.build.lib.shell.SubprocessBuilder.StreamAction;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.windows.jni.WindowsProcesses;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -37,15 +36,12 @@ public class WindowsSubprocessFactory implements Subprocess.Factory {
   }
 
   @Override
-  public boolean supportsTimeout() {
-    return true;
-  }
-
-  @Override
   public Subprocess create(SubprocessBuilder builder) throws IOException {
+    WindowsJniLoader.loadJni();
+
     List<String> argv = builder.getArgv();
 
-    // DO NOT quote argv0, createProcess will do it for us.
+    // DO NOT quote argv0, nativeCreateProcess will do it for us.
     String argv0 = processArgv0(argv.get(0));
     String argvRest =
         argv.size() > 1 ? WindowsProcesses.quoteCommandLine(argv.subList(1, argv.size())) : "";
@@ -55,11 +51,11 @@ public class WindowsSubprocessFactory implements Subprocess.Factory {
     String stderrPath = getRedirectPath(builder.getStderr(), builder.getStderrFile());
 
     long nativeProcess =
-        WindowsProcesses.createProcess(
+        WindowsProcesses.nativeCreateProcess(
             argv0, argvRest, env, builder.getWorkingDirectory().getPath(), stdoutPath, stderrPath);
-    String error = WindowsProcesses.processGetLastError(nativeProcess);
+    String error = WindowsProcesses.nativeProcessGetLastError(nativeProcess);
     if (!error.isEmpty()) {
-      WindowsProcesses.deleteProcess(nativeProcess);
+      WindowsProcesses.nativeDeleteProcess(nativeProcess);
       throw new IOException(error);
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -61,7 +62,7 @@ public class RootTest {
     Path rootDir = scratch.dir("/exec/root");
     Root root = Root.asDerivedRoot(execRoot, rootDir);
     assertFalse(root.isSourceRoot());
-    assertEquals(new PathFragment("root"), root.getExecPath());
+    assertEquals(PathFragment.create("root"), root.getExecPath());
     assertEquals(rootDir, root.getPath());
     assertEquals("/exec/root[derived]", root.toString());
   }
@@ -122,8 +123,7 @@ public class RootTest {
 
   public void assertEqualsAndHashCode(boolean expected, Object a, Object b) {
     if (expected) {
-      assertTrue(a.equals(b));
-      assertTrue(a.hashCode() == b.hashCode());
+      new EqualsTester().addEqualityGroup(b, a).testEquals();
     } else {
       assertFalse(a.equals(b));
       assertFalse(a.hashCode() == b.hashCode());

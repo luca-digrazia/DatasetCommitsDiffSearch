@@ -14,16 +14,19 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
+import com.google.devtools.build.lib.util.BlazeClock;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
@@ -33,17 +36,19 @@ import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
-import java.io.IOException;
-import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.IOException;
+import java.util.Map;
+
 /**
  * Tests for {@link TargetMarkerFunction}. Unfortunately, we can't directly test
- * TargetMarkerFunction as it uses PackageValues, and PackageFunction uses legacy stuff that isn't
- * easily mockable. So our testing strategy is to make hacky calls to SkyframeExecutor.
+ * TargetMarkerFunction as it uses PackageValues, and PackageFunction uses legacy stuff
+ * that isn't easily mockable. So our testing strategy is to make hacky calls to SkyframeExecutor.
  */
 @RunWith(JUnit4.class)
 public class TargetMarkerFunctionTest extends BuildViewTestCase {
@@ -75,7 +80,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     reporter.addHandler(failFastHandler);
     ErrorInfo errorInfo = evaluationResult.getError(skyKey(labelName));
     // Ensures that TargetFunction rethrows all transitive exceptions.
-    assertThat(errorInfo.getRootCauses()).containsExactly(targetKey);
+    assertEquals(targetKey, Iterables.getOnlyElement(errorInfo.getRootCauses()));
     return errorInfo.getException();
   }
 
@@ -95,8 +100,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     NoSuchTargetException exn = (NoSuchTargetException) getErrorFromTargetValue(labelName);
     // In the presence of b/12545745, the error message is different and comes from the
     // PackageFunction.
-    assertThat(exn)
-        .hasMessageThat()
+    assertThat(exn.getMessage())
         .contains("Label '//a:b/c/foo.sh' crosses boundary of subpackage 'a/b'");
   }
 
@@ -105,7 +109,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     String labelName = "//no/such/package:target/withslash";
     BuildFileNotFoundException exn =
         (BuildFileNotFoundException) getErrorFromTargetValue(labelName);
-    assertThat(exn.getPackageId()).isEqualTo(PackageIdentifier.createInMainRepo("no/such/package"));
+    assertEquals(PackageIdentifier.createInMainRepo("no/such/package"), exn.getPackageId());
     String expectedMessage =
         "no such package 'no/such/package': BUILD file not found on "
             + "package path for 'no/such/package'";
@@ -120,11 +124,10 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
         "genrule(name = 'conflict1', cmd = '', srcs = [], outs = ['conflict'])",
         "genrule(name = 'conflict2', cmd = '', srcs = [], outs = ['conflict'])");
     NoSuchTargetException exn = (NoSuchTargetException) getErrorFromTargetValue("@//a:conflict1");
-    assertThat(exn)
-        .hasMessageThat()
+    assertThat(exn.getMessage())
         .contains("Target '//a:conflict1' contains an error and its package is in error");
-    assertThat(exn.getLabel().toString()).isEqualTo("//a:conflict1");
-    assertThat(exn.hasTarget()).isTrue();
+    assertEquals("//a:conflict1", exn.getLabel().toString());
+    assertTrue(exn.hasTarget());
   }
 
   @Test
@@ -135,7 +138,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     fs.stubStatIOException(subpackageBuildFile, new IOException("nope"));
     BuildFileNotFoundException exn =
         (BuildFileNotFoundException) getErrorFromTargetValue("//a:b/c");
-    assertThat(exn).hasMessageThat().contains("nope");
+    assertThat(exn.getMessage()).contains("nope");
   }
 
   private static class CustomInMemoryFs extends InMemoryFileSystem {

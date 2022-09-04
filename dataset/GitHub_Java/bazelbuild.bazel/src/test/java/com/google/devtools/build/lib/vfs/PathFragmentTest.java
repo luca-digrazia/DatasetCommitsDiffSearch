@@ -73,8 +73,7 @@ public class PathFragmentTest {
         .addEqualityGroup(
             PathFragment.create("../relative/path"),
             PathFragment.create("..").getRelative("relative").getRelative("path"),
-            PathFragment.createAlreadyInterned(
-                '\0', false, new String[] {"..", "relative", "path"}),
+            PathFragment.createNoClone('\0', false, new String[] {"..", "relative", "path"}),
             PathFragment.create(new File("../relative/path")))
         .addEqualityGroup(PathFragment.create("something/else"))
         .addEqualityGroup(PathFragment.create("/something/else"))

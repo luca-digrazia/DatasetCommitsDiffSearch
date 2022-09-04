@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.OutputPathMapper;
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import org.junit.Before;
@@ -53,8 +52,7 @@ public class SpawnActionTemplateTest {
   @Before
   public void setRootDir() throws Exception  {
     Scratch scratch = new Scratch();
-    Path execRoot = scratch.getFileSystem().getPath("/");
-    root = Root.asDerivedRoot(execRoot, scratch.dir("/exec/root"));
+    root = Root.asDerivedRoot(scratch.dir("/exec/root"));
   }
 
   @Test

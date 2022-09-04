@@ -71,7 +71,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
   }
 
   private static final class TrackingEvaluationProgressReceiver
-      extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
+      implements EvaluationProgressReceiver {
 
     public static final class InvalidatedKey {
       public final SkyKey skyKey;
@@ -157,6 +157,9 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     public void enqueueing(SkyKey skyKey) {
       enqueued.add(skyKey);
     }
+
+    @Override
+    public void computed(SkyKey skyKey, long elapsedTimeNanos) {}
 
     @Override
     public void evaluated(

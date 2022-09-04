@@ -14,8 +14,9 @@
 package com.google.devtools.build.lib.vfs;
 
 import com.google.common.testing.EqualsTester;
-import com.google.devtools.build.lib.clock.BlazeClock;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,26 +32,22 @@ public class RootedPathTest {
 
   @Before
   public final void initializeFileSystem() throws Exception  {
-    filesystem = new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.MD5);
-    root = filesystem.getPath("/");
+    filesystem = new InMemoryFileSystem(BlazeClock.instance());
+    root = filesystem.getRootDirectory();
   }
 
   @Test
   public void testEqualsAndHashCodeContract() throws Exception {
     Path pkgRoot1 = root.getRelative("pkgroot1");
     Path pkgRoot2 = root.getRelative("pkgroot2");
-    RootedPath rootedPathA1 =
-        RootedPath.toRootedPath(Root.fromPath(pkgRoot1), PathFragment.create("foo/bar"));
-    RootedPath rootedPathA2 =
-        RootedPath.toRootedPath(Root.fromPath(pkgRoot1), PathFragment.create("foo/bar"));
+    RootedPath rootedPathA1 = RootedPath.toRootedPath(pkgRoot1, PathFragment.create("foo/bar"));
+    RootedPath rootedPathA2 = RootedPath.toRootedPath(pkgRoot1, PathFragment.create("foo/bar"));
     RootedPath absolutePath1 =
-        RootedPath.toRootedPath(Root.fromPath(root), PathFragment.create("pkgroot1/foo/bar"));
-    RootedPath rootedPathB1 =
-        RootedPath.toRootedPath(Root.fromPath(pkgRoot2), PathFragment.create("foo/bar"));
-    RootedPath rootedPathB2 =
-        RootedPath.toRootedPath(Root.fromPath(pkgRoot2), PathFragment.create("foo/bar"));
+        RootedPath.toRootedPath(root, PathFragment.create("pkgroot1/foo/bar"));
+    RootedPath rootedPathB1 = RootedPath.toRootedPath(pkgRoot2, PathFragment.create("foo/bar"));
+    RootedPath rootedPathB2 = RootedPath.toRootedPath(pkgRoot2, PathFragment.create("foo/bar"));
     RootedPath absolutePath2 =
-        RootedPath.toRootedPath(Root.fromPath(root), PathFragment.create("pkgroot2/foo/bar"));
+        RootedPath.toRootedPath(root, PathFragment.create("pkgroot2/foo/bar"));
     new EqualsTester()
       .addEqualityGroup(rootedPathA1, rootedPathA2)
       .addEqualityGroup(rootedPathB1, rootedPathB2)

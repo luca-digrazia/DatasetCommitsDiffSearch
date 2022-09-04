@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.lib.vfs.UnixGlob;
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -112,14 +111,10 @@ public class PathPackageLocator implements Serializable {
       // invocation in Parser#include().
       Path buildFile = outputBase.getRelative(
           packageIdentifier.getSourceRoot()).getRelative("BUILD");
-      try {
-        FileStatus stat = cache.get().statIfFound(buildFile, Symlinks.FOLLOW);
-        if (stat != null && stat.isFile()) {
-          return buildFile;
-        } else {
-          return null;
-        }
-      } catch (IOException e) {
+      FileStatus stat = cache.get().statNullable(buildFile, Symlinks.FOLLOW);
+      if (stat != null && stat.isFile()) {
+        return buildFile;
+      } else {
         return null;
       }
     }
@@ -230,13 +225,9 @@ public class PathPackageLocator implements Serializable {
       AtomicReference<? extends UnixGlob.FilesystemCalls> cache) {
     for (Path pathEntry : pathEntries) {
       Path buildFile = pathEntry.getRelative(suffix);
-      try {
-        FileStatus stat = cache.get().statIfFound(buildFile, Symlinks.FOLLOW);
-        if (stat != null && stat.isFile()) {
-          return buildFile;
-        }
-      } catch (IOException ignored) {
-        // Treat IOException as a missing file.
+      FileStatus stat = cache.get().statNullable(buildFile, Symlinks.FOLLOW);
+      if (stat != null && stat.isFile()) {
+        return buildFile;
       }
     }
     return null;

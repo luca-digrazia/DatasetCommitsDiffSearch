@@ -59,8 +59,7 @@ public abstract class CcIncLibrary implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(final RuleContext ruleContext)
       throws RuleErrorException, InterruptedException {
-    CcToolchainProvider ccToolchain =
-        CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
+    CcToolchainProvider ccToolchain = CppHelper.getToolchain(ruleContext, ":cc_toolchain");
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeatures(ruleContext, ccToolchain);
     PathFragment packageFragment = ruleContext.getPackageDirectory();
@@ -127,8 +126,7 @@ public abstract class CcIncLibrary implements RuleConfiguredTargetFactory {
     ImmutableSortedMap<Artifact, Artifact> virtualArtifactMap = virtualArtifactMapBuilder.build();
     ruleContext.registerAction(
         new CreateIncSymlinkAction(ruleContext.getActionOwner(), virtualArtifactMap, includeRoot));
-    FdoSupportProvider fdoSupport =
-        CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext);
+    FdoSupportProvider fdoSupport = CppHelper.getFdoSupport(ruleContext, ":cc_toolchain");
     CcLibraryHelper.Info info =
         new CcLibraryHelper(ruleContext, semantics, featureConfiguration, ccToolchain, fdoSupport)
             .addIncludeDirs(Arrays.asList(includePath))

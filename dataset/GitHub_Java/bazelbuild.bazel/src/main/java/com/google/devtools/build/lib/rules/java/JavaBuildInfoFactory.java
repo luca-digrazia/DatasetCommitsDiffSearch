@@ -17,20 +17,19 @@ package com.google.devtools.build.lib.rules.java;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.rules.java.WriteBuildInfoPropertiesAction.TimestampFormatter;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 
 /**
  * Java build info creation - generates properties file that contain the corresponding build-info
@@ -47,22 +46,16 @@ public abstract class JavaBuildInfoFactory implements BuildInfoFactory {
       PathFragment.create("build-info-redacted.properties");
 
   private static final DateTimeFormatter DEFAULT_TIME_FORMAT =
-      DateTimeFormatter.ofPattern("EEE MMM d HH:mm:ss yyyy");
+      DateTimeFormat.forPattern("EEE MMM d HH:mm:ss yyyy");
 
   // A default formatter that returns a date in UTC format.
-  @AutoCodec
-  @VisibleForSerialization
-  static class DefaultTimestampFormatter implements TimestampFormatter {
+  private static final TimestampFormatter DEFAULT_FORMATTER = new TimestampFormatter() {
     @Override
     public String format(long timestamp) {
-      return Instant.ofEpochMilli(timestamp).atZone(ZoneOffset.UTC).format(DEFAULT_TIME_FORMAT)
-          + " ("
-          + timestamp / 1000
-          + ')';
+      return new DateTime(timestamp, DateTimeZone.UTC).toString(DEFAULT_TIME_FORMAT) + " ("
+          + timestamp / 1000 + ')';
     }
-  }
-
-  private static final TimestampFormatter DEFAULT_FORMATTER = new DefaultTimestampFormatter();
+  };
 
   @Override
   public final BuildInfoCollection create(BuildInfoContext context, BuildConfiguration config,
@@ -131,7 +124,7 @@ public abstract class JavaBuildInfoFactory implements BuildInfoFactory {
       boolean includeVolatile,
       boolean includeNonVolatile,
       RepositoryName repositoryName) {
-    ArtifactRoot outputPath = config.getIncludeDirectory(repositoryName);
+    Root outputPath = config.getIncludeDirectory(repositoryName);
     final Artifact output = context.getBuildInfoArtifact(propertyFileName, outputPath,
         includeVolatile && !inputs.isEmpty() ? BuildInfoType.NO_REBUILD
             : BuildInfoType.FORCE_REBUILD_IF_CHANGED);

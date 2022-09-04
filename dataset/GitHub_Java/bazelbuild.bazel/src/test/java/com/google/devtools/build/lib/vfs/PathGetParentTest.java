@@ -13,7 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.util.FileSystems;
@@ -42,7 +43,7 @@ public class PathGetParentTest {
 
   @After
   public final void deleteTestRoot() throws Exception  {
-    testRoot.deleteTree(); // (comment out during debugging)
+    FileSystemUtils.deleteTree(testRoot); // (comment out during debugging)
   }
 
   private Path getParent(String path) {
@@ -51,17 +52,17 @@ public class PathGetParentTest {
 
   @Test
   public void testAbsoluteRootHasNoParent() {
-    assertThat(getParent("/")).isNull();
+    assertNull(getParent("/"));
   }
 
   @Test
   public void testParentOfSimpleDirectory() {
-    assertThat(getParent("/foo/bar").getPathString()).isEqualTo("/foo");
+    assertEquals("/foo", getParent("/foo/bar").getPathString());
   }
 
   @Test
   public void testParentOfDotDotInMiddleOfPathname() {
-    assertThat(getParent("/foo/../bar").getPathString()).isEqualTo("/");
+    assertEquals("/", getParent("/foo/../bar").getPathString());
   }
 
   @Test
@@ -74,12 +75,12 @@ public class PathGetParentTest {
     // ln -sf /tmp /tmp/wiz
     tmpWiz.createSymbolicLink(tmp);
 
-    assertThat(tmp.getParentDirectory()).isEqualTo(testRoot);
+    assertEquals(testRoot, tmp.getParentDirectory());
 
-    assertThat(tmpWiz.getParentDirectory()).isEqualTo(tmp);
+    assertEquals(tmp, tmpWiz.getParentDirectory());
 
     // Under UNIX, inode(/tmp/wiz/..) == inode(/).  However getPath() does not
     // perform I/O, only string operations, so it disagrees:
-    assertThat(tmp.getRelative(PathFragment.create("wiz/.."))).isEqualTo(tmp);
+    assertEquals(tmp, tmp.getRelative(PathFragment.create("wiz/..")));
   }
 }

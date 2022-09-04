@@ -15,19 +15,23 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.util.StringUtilities.joinLines;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** A test case for {@link ParserInputSource}. */
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * A test case for {@link ParserInputSource}.
+ */
 @RunWith(JUnit4.class)
 public class ParserInputSourceTest {
 
@@ -37,10 +41,9 @@ public class ParserInputSourceTest {
   public void testCreateFromFile() throws IOException {
     String content = joinLines("Line 1", "Line 2", "Line 3", "");
     Path file = scratch.file("/tmp/my/file.txt", content.getBytes(StandardCharsets.UTF_8));
-    byte[] bytes = FileSystemUtils.readWithKnownFileSize(file, file.getFileSize());
-    ParserInputSource input = ParserInputSource.create(bytes, file.asFragment());
-    assertThat(new String(input.getContent())).isEqualTo(content);
-    assertThat(input.getPath().toString()).isEqualTo("/tmp/my/file.txt");
+    ParserInputSource input = ParserInputSource.create(file);
+    assertEquals(content, new String(input.getContent()));
+    assertEquals("/tmp/my/file.txt", input.getPath().toString());
   }
 
   @Test
@@ -48,8 +51,8 @@ public class ParserInputSourceTest {
     String content = "Content provided as a string.";
     String pathName = "/the/name/of/the/content.txt";
     ParserInputSource input = ParserInputSource.create(content, PathFragment.create(pathName));
-    assertThat(new String(input.getContent())).isEqualTo(content);
-    assertThat(input.getPath().toString()).isEqualTo(pathName);
+    assertEquals(content, new String(input.getContent()));
+    assertEquals(pathName, input.getPath().toString());
   }
 
   @Test
@@ -58,8 +61,8 @@ public class ParserInputSourceTest {
     String pathName = "/the/name/of/the/content.txt";
     char[] contentChars = content.toCharArray();
     ParserInputSource input = ParserInputSource.create(contentChars, PathFragment.create(pathName));
-    assertThat(new String(input.getContent())).isEqualTo(content);
-    assertThat(input.getPath().toString()).isEqualTo(pathName);
+    assertEquals(content, new String(input.getContent()));
+    assertEquals(pathName, input.getPath().toString());
   }
 
 
@@ -67,12 +70,11 @@ public class ParserInputSourceTest {
   public void testIOExceptionIfInputFileDoesNotExistForSingleArgConstructor() {
     try {
       Path path = scratch.resolve("/does/not/exist");
-      byte[] bytes = FileSystemUtils.readWithKnownFileSize(path, path.getFileSize());
-      ParserInputSource.create(bytes, path.asFragment());
+      ParserInputSource.create(path);
       fail();
     } catch (IOException e) {
       String expected = "/does/not/exist (No such file or directory)";
-      assertThat(e).hasMessageThat().isEqualTo(expected);
+      assertThat(e).hasMessage(expected);
     }
   }
 

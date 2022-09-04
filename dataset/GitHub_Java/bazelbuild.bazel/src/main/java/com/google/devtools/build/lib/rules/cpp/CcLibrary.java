@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -235,14 +236,15 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     helper.addStaticLibraries(alwayslinkLibrariesFromSrcs);
     helper.addPicStaticLibraries(picStaticLibrariesFromSrcs);
     helper.addPicStaticLibraries(picAlwayslinkLibrariesFromSrcs);
-    helper.addDynamicLibraries(
-        Iterables.transform(
-            precompiledFiles.getSharedLibraries(),
-            library ->
-                LinkerInputs.solibLibraryToLink(
-                    common.getDynamicLibrarySymlink(library, true),
-                    library,
-                    CcLinkingOutputs.libraryIdentifierOf(library))));
+    helper.addDynamicLibraries(Iterables.transform(precompiledFiles.getSharedLibraries(),
+        new Function<Artifact, LibraryToLink>() {
+      @Override
+      public LibraryToLink apply(Artifact library) {
+        return LinkerInputs.solibLibraryToLink(
+            common.getDynamicLibrarySymlink(library, true), library,
+            CcLinkingOutputs.libraryIdentifierOf(library));
+      }
+    }));
     CcLibraryHelper.Info info = helper.build();
 
     /*
@@ -312,9 +314,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         ccCompilationOutputs.getFilesToCompile(
             isLipoCollector, processHeadersInDependencies, usePic));
     for (OutputGroupProvider dep :
-        ruleContext.getPrerequisites("deps", Mode.TARGET,
-            OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey(),
-            OutputGroupProvider.class)) {
+        ruleContext.getPrerequisites("deps", Mode.TARGET, OutputGroupProvider.class)) {
       artifactsToForceBuilder.addTransitive(
           dep.getOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL));
     }

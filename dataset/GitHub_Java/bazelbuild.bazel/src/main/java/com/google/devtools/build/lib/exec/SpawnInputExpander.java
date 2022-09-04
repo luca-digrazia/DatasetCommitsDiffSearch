@@ -113,8 +113,7 @@ public class SpawnInputExpander {
       Map<PathFragment, ActionInput> inputMappings, Artifact manifest, String workspaceName)
           throws IOException {
     Path file = manifest.getRoot().getPath().getRelative(
-        AnalysisUtils.getManifestPathFromFilesetPath(
-            manifest.getRootRelativePath()).getPathString());
+        AnalysisUtils.getManifestPathFromFilesetPath(manifest.getExecPath()).getPathString());
     FileSystemUtils.asByteSource(file).asCharSource(UTF_8)
         .readLines(new ManifestLineProcessor(inputMappings, workspaceName, manifest.getExecPath()));
   }

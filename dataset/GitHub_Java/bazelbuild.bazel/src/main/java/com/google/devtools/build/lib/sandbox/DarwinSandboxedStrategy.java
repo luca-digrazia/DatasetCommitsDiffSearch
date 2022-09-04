@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
+import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
@@ -53,6 +54,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Strategy that uses sandboxing to execute a process, for Darwin */
@@ -71,11 +74,13 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
   private final ImmutableList<Path> confPaths;
   private final SpawnHelpers spawnHelpers;
 
+  private final UUID uuid = UUID.randomUUID();
+  private final AtomicInteger execCounter = new AtomicInteger();
+
   private DarwinSandboxedStrategy(
       BuildRequest buildRequest,
       Map<String, String> clientEnv,
       BlazeDirectories blazeDirs,
-      Path sandboxBase,
       boolean verboseFailures,
       String productName,
       ImmutableList<Path> confPaths,
@@ -83,7 +88,6 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     super(
         buildRequest,
         blazeDirs,
-        sandboxBase,
         verboseFailures,
         buildRequest.getOptions(SandboxOptions.class));
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
@@ -100,7 +104,6 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
       BuildRequest buildRequest,
       Map<String, String> clientEnv,
       BlazeDirectories blazeDirs,
-      Path sandboxBase,
       boolean verboseFailures,
       String productName)
       throws IOException {
@@ -119,7 +122,6 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
         buildRequest,
         clientEnv,
         blazeDirs,
-        sandboxBase,
         verboseFailures,
         productName,
         writablePaths.build(),
@@ -148,7 +150,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
-      throws ExecException, InterruptedException, IOException {
+      throws ExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
     executor
         .getEventBus()
@@ -165,7 +167,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     }
 
     // Each invocation of "exec" gets its own sandbox.
-    Path sandboxPath = getSandboxRoot();
+    Path sandboxPath = SandboxHelpers.getSandboxRoot(blazeDirs, productName, uuid, execCounter);
     Path sandboxExecRoot = sandboxPath.getRelative("execroot").getRelative(execRoot.getBaseName());
 
     if (errWriter != null) {
@@ -176,13 +178,18 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     ImmutableMap<String, String> spawnEnvironment =
         StandaloneSpawnStrategy.locallyDeterminedEnv(execRoot, productName, spawn.getEnvironment());
 
-    Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
+    Set<Path> writableDirs;
     Path runUnderPath = getRunUnderPath(spawn);
     HardlinkedExecRoot hardlinkedExecRoot =
         new HardlinkedExecRoot(execRoot, sandboxPath, sandboxExecRoot, errWriter);
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
-    hardlinkedExecRoot.createFileSystem(
-        getMounts(spawn, actionExecutionContext), outputs, writableDirs);
+    try {
+      writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
+      hardlinkedExecRoot.createFileSystem(
+          getMounts(spawn, actionExecutionContext), outputs, writableDirs);
+    } catch (IOException e) {
+      throw new UserExecException("Could not prepare sandbox directory", e);
+    }
 
     // Flush our logs before executing the spawn, otherwise they might get overwritten.
     if (errWriter != null) {
@@ -297,7 +304,8 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
   }
 
   private void finalizeLinksPath(
-      Map<PathFragment, Path> finalizedMounts, PathFragment target, Path source, FileStatus stat) {
+      Map<PathFragment, Path> finalizedMounts, PathFragment target, Path source, FileStatus stat)
+      throws IOException {
     // The source must exist.
     Preconditions.checkArgument(stat != null, "%s does not exist", source.toString());
     finalizedMounts.put(target, source);

@@ -41,7 +41,7 @@ public final class TargetPatternResolverUtil {
   public static ResolvedTargets<Target> resolvePackageTargets(Package pkg,
                                                               FilteringPolicy policy) {
     ResolvedTargets.Builder<Target> builder = ResolvedTargets.builder();
-    for (Target target : pkg.getTargets().values()) {
+    for (Target target : pkg.getTargets()) {
       if (policy.shouldRetain(target, false)) {
         builder.add(target);
       }

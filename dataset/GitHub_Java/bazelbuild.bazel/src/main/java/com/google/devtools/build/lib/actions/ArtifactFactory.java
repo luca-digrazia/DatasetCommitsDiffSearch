@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -44,10 +45,10 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
   private final SourceArtifactCache sourceArtifactCache = new SourceArtifactCache();
 
   /**
-   * Map of package names to source root paths so that we can create source artifact paths given
-   * execPaths in the symlink forest.
+   * Map of package names to source root paths so that we can create source
+   * artifact paths given execPaths in the symlink forest.
    */
-  private PackageRoots.PackageRootLookup packageRoots;
+  private ImmutableMap<PackageIdentifier, Root> packageRoots;
 
   private ArtifactIdRegistry artifactIdRegistry = new ArtifactIdRegistry();
 
@@ -139,13 +140,14 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
   }
 
   /**
-   * Set the set of known packages and their corresponding source artifact roots. Must be called
-   * exactly once after construction or clear().
+   * Set the set of known packages and their corresponding source artifact
+   * roots. Must be called exactly once after construction or clear().
    *
-   * @param packageRoots provider of a source root given a package identifier.
+   * @param packageRoots the map of package names to source artifact roots to
+   *        use.
    */
-  public synchronized void setPackageRoots(PackageRoots.PackageRootLookup packageRoots) {
-    this.packageRoots = packageRoots;
+  public synchronized void setPackageRoots(Map<PackageIdentifier, Root> packageRoots) {
+    this.packageRoots = ImmutableMap.copyOf(packageRoots);
     sourceArtifactCache.newBuild();
   }
 
@@ -310,13 +312,7 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
     Root sourceRoot = findSourceRoot(execPath, baseExecPath, baseRoot, repositoryName);
     Artifact artifact = sourceArtifactCache.getArtifactIfValid(execPath);
     if (artifact != null) {
-      Root artifactRoot = artifact.getRoot();
-      Preconditions.checkState(
-          sourceRoot == null || sourceRoot.equals(artifactRoot),
-          "roots mismatch: %s %s %s",
-          sourceRoot,
-          artifactRoot,
-          artifact);
+      Preconditions.checkState(sourceRoot == null || sourceRoot.equals(artifact.getRoot()));
       return artifact;
     }
     return createArtifactIfNotValid(sourceRoot, execPath);
@@ -342,8 +338,7 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
     }
 
     while (dir != null && !dir.equals(baseExecPath)) {
-      Root sourceRoot =
-          packageRoots.getRootForPackage(PackageIdentifier.create(repositoryName, dir));
+      Root sourceRoot = packageRoots.get(PackageIdentifier.create(repositoryName, dir));
       if (sourceRoot != null) {
         return sourceRoot;
       }
@@ -361,7 +356,8 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
 
   @Override
   public synchronized Map<PathFragment, Artifact> resolveSourceArtifacts(
-      Iterable<PathFragment> execPaths, PackageRootResolver resolver) throws InterruptedException {
+      Iterable<PathFragment> execPaths, PackageRootResolver resolver)
+      throws PackageRootResolutionException, InterruptedException {
     Map<PathFragment, Artifact> result = new HashMap<>();
     ArrayList<PathFragment> unresolvedPaths = new ArrayList<>();
 

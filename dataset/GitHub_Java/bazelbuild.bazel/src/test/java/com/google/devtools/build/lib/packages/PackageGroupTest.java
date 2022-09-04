@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.packages.util.PackageFactoryApparatus;
 import com.google.devtools.build.lib.testutil.Scratch;
@@ -62,8 +64,8 @@ public class PackageGroupTest {
     scratch.file("fruits/vegetables/BUILD");
 
     PackageGroup grp = getPackageGroup("fruits", "apple");
-    assertThat(grp.contains(getPackage("vegetables"))).isTrue();
-    assertThat(grp.contains(getPackage("fruits/vegetables"))).isFalse();
+    assertTrue(grp.contains(getPackage("vegetables")));
+    assertFalse(grp.contains(getPackage("fruits/vegetables")));
   }
 
   @Test
@@ -147,9 +149,8 @@ public class PackageGroupTest {
   public void testEverythingSpecificationWorks() throws Exception {
     scratch.file("fruits/BUILD", "package_group(name = 'mango', packages = ['//...'])");
     PackageGroup packageGroup = getPackageGroup("fruits", "mango");
-    assertThat(
-            packageGroup.getPackageSpecifications().containedPackages().collect(toImmutableList()))
-        .containsExactly(PackageSpecification.everything().toString());
+    assertThat(packageGroup.getPackageSpecifications())
+        .containsExactlyElementsIn(ImmutableList.of(PackageSpecification.everything()));
   }
 
   private Package getPackage(String packageName) throws Exception {

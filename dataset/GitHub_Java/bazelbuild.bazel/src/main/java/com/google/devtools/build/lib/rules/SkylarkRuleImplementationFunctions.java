@@ -102,10 +102,7 @@ public class SkylarkRuleImplementationFunctions {
       ),
       @Param(
         name = "inputs",
-        allowedTypes = {
-          @ParamType(type = SkylarkList.class),
-          @ParamType(type = SkylarkNestedSet.class),
-        },
+        type = SkylarkList.class,
         generic1 = Artifact.class,
         defaultValue = "[]",
         named = true,
@@ -220,7 +217,7 @@ public class SkylarkRuleImplementationFunctions {
         public Runtime.NoneType invoke(
             SkylarkRuleContext ctx,
             SkylarkList outputs,
-            Object inputs,
+            SkylarkList inputs,
             Object executableUnchecked,
             SkylarkList arguments,
             Object mnemonicUnchecked,
@@ -236,14 +233,8 @@ public class SkylarkRuleImplementationFunctions {
           SpawnAction.Builder builder = new SpawnAction.Builder();
           // TODO(bazel-team): builder still makes unnecessary copies of inputs, outputs and args.
           boolean hasCommand = commandUnchecked != Runtime.NONE;
-          Iterable<Artifact> inputArtifacts;
-          if (inputs instanceof SkylarkList) {
-            inputArtifacts = ((SkylarkList) inputs).getContents(Artifact.class, "inputs");
-            builder.addInputs(inputArtifacts);
-          } else {
-            inputArtifacts = ((SkylarkNestedSet) inputs).toCollection(Artifact.class);
-            builder.addInputs(((SkylarkNestedSet) inputs).getSet(Artifact.class));
-          }
+          Iterable<Artifact> inputArtifacts = inputs.getContents(Artifact.class, "inputs");
+          builder.addInputs(inputArtifacts);
           builder.addOutputs(outputs.getContents(Artifact.class, "outputs"));
           if (hasCommand && arguments.size() > 0) {
             // When we use a shell command, add an empty argument before other arguments.

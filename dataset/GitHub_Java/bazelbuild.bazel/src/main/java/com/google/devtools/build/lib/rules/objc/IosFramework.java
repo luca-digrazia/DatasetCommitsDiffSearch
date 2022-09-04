@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,23 +16,27 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.rules.objc.ObjcCommon.uniqueContainers;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FLAG;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_FILE;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_FRAMEWORKS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_DIR;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_FILE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
+import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
-import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -40,7 +44,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  */
 public class IosFramework extends ReleaseBundlingTargetFactory {
 
-  @VisibleForTesting static final String MINIMUM_OS_VERSION = "8.0";
+  @VisibleForTesting
+  static final DottedVersion MINIMUM_OS_VERSION = DottedVersion.fromString("8.0");
 
   public IosFramework() {
     super(
@@ -64,11 +69,14 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
   }
 
   @Override
-  protected String bundleMinimumOsVersion(RuleContext ruleContext) {
-    String flagValue = ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs();
-
-    return String.valueOf(
-        Math.max(Double.parseDouble(MINIMUM_OS_VERSION), Double.parseDouble(flagValue)));
+  protected DottedVersion bundleMinimumOsVersion(RuleContext ruleContext) {
+    // Frameworks are not accepted by Apple below version 8.0. While applications built with a
+    // minimum iOS version of less than 8.0 may contain frameworks in their bundle, the framework
+    // itself needs to be built with 8.0 or higher. This logic overrides (if necessary) any
+    // flag-set minimum iOS version for framework only so that this requirement is not violated.
+    DottedVersion fromFlag = ruleContext.getFragment(AppleConfiguration.class)
+        .getMinimumOsForPlatformType(PlatformType.IOS);
+    return Ordering.natural().max(fromFlag, MINIMUM_OS_VERSION);
   }
 
   /**
@@ -79,28 +87,31 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
 
-    ImmutableList<Artifact> headers = ImmutableList.copyOf(CcCommon.getHeaders(ruleContext));
+    ImmutableList<Pair<Artifact, Label>> headers =
+        ImmutableList.copyOf(CcCommon.getHeaders(ruleContext));
 
     ImmutableMap.Builder<Artifact, Artifact> builder = new ImmutableMap.Builder<>();
 
     // Create framework binary
     Artifact frameworkBinary =
-        outputArtifact(ruleContext, new PathFragment(bundleName(ruleContext)));
+        outputArtifact(ruleContext, PathFragment.create(bundleName(ruleContext)));
     builder.put(intermediateArtifacts.combinedArchitectureBinary(), frameworkBinary);
 
     // Create framework headers
-    for (Artifact header : headers) {
+    for (Pair<Artifact, Label> header : headers) {
       Artifact frameworkHeader =
-          outputArtifact(ruleContext, new PathFragment("Headers/" + header.getFilename()));
+          outputArtifact(ruleContext, PathFragment.create("Headers/" + header.first.getFilename()));
 
-      builder.put(header, frameworkHeader);
+      builder.put(header.first, frameworkHeader);
     }
 
     return builder.build();
   }
 
   @Override
-  protected ObjcProvider exposedObjcProvider(RuleContext ruleContext) {
+  protected ObjcProvider exposedObjcProvider(
+      RuleContext ruleContext, ReleaseBundlingSupport releaseBundlingSupport)
+      throws InterruptedException {
     // Assemble framework binary and headers in the label-scoped location, so that it's possible to
     // pass -F X.framework to the compiler and -framework X to the linker. This mimics usage of
     // frameworks when built from Xcode.
@@ -113,10 +124,15 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
     ObjcProvider frameworkProvider =
         new ObjcProvider.Builder()
             .add(MERGE_ZIP, ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA))
-            .add(FLAG, USES_FRAMEWORKS)
-            .addAll(FRAMEWORK_FILE, frameworkImports)
+            // TODO(dmishe): The framework returned by this rule is dynamic, not static. But because
+            // this rule (incorrectly?) propagates its contents as a bundle (see "IPA" above) we
+            // cannot declare its files as dynamic framework files because they would then be copied
+            // into the final IPA, conflicting with the exported bundle. Instead we propagate using
+            // the static frameworks key which will see the files correctly added to compile and
+            // linker actions but not added to the final bundle.
+            .addAll(STATIC_FRAMEWORK_FILE, frameworkImports)
             .addAll(
-                FRAMEWORK_DIR,
+                STATIC_FRAMEWORK_DIR,
                 uniqueContainers(frameworkImports, ObjcCommon.FRAMEWORK_CONTAINER_TYPE))
             .build();
 
@@ -144,9 +160,9 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
    */
   private Artifact outputArtifact(RuleContext ruleContext, PathFragment path) {
     PathFragment frameworkRoot =
-        new PathFragment(
-            new PathFragment("_frameworks"),
-            new PathFragment(bundleName(ruleContext) + ".framework"),
+        PathFragment.create(
+            PathFragment.create("_frameworks"),
+            PathFragment.create(bundleName(ruleContext) + ".framework"),
             path);
 
     return ruleContext.getPackageRelativeArtifact(

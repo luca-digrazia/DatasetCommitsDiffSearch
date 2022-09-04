@@ -210,12 +210,12 @@ public class EnvironmentTest extends EvaluationTestCase {
               .setEventHandler(Environment.FAIL_FAST_HANDLER)
               .build();
       env.update("x", 1);
-      assertEquals(1, env.lookup("x"));
+      assertEquals(env.lookup("x"), 1);
       env.update("y", 2);
-      assertEquals(2, env.lookup("y"));
-      assertEquals(1, env.lookup("x"));
+      assertEquals(env.lookup("y"), 2);
+      assertEquals(env.lookup("x"), 1);
       env.update("x", 3);
-      assertEquals(3, env.lookup("x"));
+      assertEquals(env.lookup("x"), 3);
     }
     try {
       // This update to an existing variable should fail because the environment was frozen.

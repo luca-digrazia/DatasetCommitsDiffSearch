@@ -14,20 +14,21 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
-import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.util.SubincludePreprocessor;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -73,7 +74,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
     scratch.file("unrelated/BUILD", "sh_library(name = 'unrelated')");
     assertLabelsVisited(
         ImmutableSet.of("//bar:foo"), ImmutableSet.of("//bar:foo"), !EXPECT_ERROR, !KEEP_GOING);
-    assertThat(sym1.delete()).isTrue();
+    assertTrue(sym1.delete());
     FileSystemUtils.ensureSymbolicLink(sym1, sym2);
     syncPackages();
     assertLabelsVisited(
@@ -81,9 +82,9 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
         ImmutableSet.of("//unrelated:unrelated"),
         !EXPECT_ERROR,
         !KEEP_GOING);
-    assertThat(sym1.delete()).isTrue();
+    assertTrue(sym1.delete());
     FileSystemUtils.ensureSymbolicLink(sym1, path);
-    assertThat(symlink.delete()).isTrue();
+    assertTrue(symlink.delete());
     symlink = scratch.file("bar/BUILD", "sh_library(name = 'bar')");
     syncPackages();
     assertLabelsVisited(
@@ -348,7 +349,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
       // This is expected for legacy blaze.
     } catch (RuntimeException re) {
       // This is expected for Skyframe blaze.
-      assertThat(re).hasCauseThat().isInstanceOf(NullPointerException.class);
+      assertThat(re.getCause()).isInstanceOf(NullPointerException.class);
     }
   }
 
@@ -399,18 +400,18 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
 
   @Test
   public void testWithNoSubincludes() throws Exception {
+    // This test uses the preprocessor.
+    preprocessorFactorySupplier.inject(
+        new SubincludePreprocessor(
+            scratch.getFileSystem(), getSkyframeExecutor().getPackageManager()));
     PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
     packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PRIVATE;
     packageCacheOptions.showLoadingProgress = true;
     packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
-            new PathPackageLocator(
-                outputBase,
-                ImmutableList.of(rootDirectory),
-                BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
+            new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
             packageCacheOptions,
-            Options.getDefaults(SkylarkSemanticsOptions.class),
             loadingMock.getDefaultsPackageContent(),
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
@@ -429,15 +430,61 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
         !EXPECT_ERROR,
         !KEEP_GOING);
 
-    scratch.file("hassub/BUILD", "load('//sub:sub.bzl', 'fct')", "fct()");
+    scratch.file("hassub/BUILD", "subinclude('//sub:sub')");
     scratch.file("sub/BUILD", "exports_files(['sub'])");
-    scratch.file("sub/sub.bzl", "def fct(): native.sh_library(name='zzz')");
+    scratch.file("sub/sub", "sh_library(name='zzz')");
 
     assertLabelsVisited(
         ImmutableSet.of("//hassub:zzz"),
         ImmutableSet.of("//hassub:zzz"),
         !EXPECT_ERROR,
         !KEEP_GOING);
+  }
+
+  // Regression test for: "package loading ignores subincludes for purposes of checking for
+  // subpackages cutting of labels"
+  //
+  // Indirectly tests that there are dependencies between a package and other packages that could
+  // potentially cutoff its subincludes.
+  @Test
+  public void testSubpackageBoundarySubincludes() throws Exception {
+    // This test uses the python preprocessor.
+    preprocessorFactorySupplier.inject(
+        new SubincludePreprocessor(
+            scratch.getFileSystem(), getSkyframeExecutor().getPackageManager()));
+    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
+    packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PRIVATE;
+    packageCacheOptions.showLoadingProgress = true;
+    packageCacheOptions.globbingThreads = 7;
+    getSkyframeExecutor()
+        .preparePackageLoading(
+            new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
+            packageCacheOptions,
+            loadingMock.getDefaultsPackageContent(),
+            UUID.randomUUID(),
+            ImmutableMap.<String, String>of(),
+            ImmutableMap.<String, String>of(),
+            new TimestampGranularityMonitor(BlazeClock.instance()));
+    this.visitor = getSkyframeExecutor().pkgLoader();
+    scratch.file("a/BUILD", "subinclude('//b:c/d/foo')");
+    scratch.file("b/BUILD", "exports_files(['c/d/foo'])");
+    scratch.file("b/c/d/foo", "sh_library(name = 'a')");
+
+    assertLabelsVisited(
+        ImmutableSet.of("//a:a"), ImmutableSet.of("//a:a"), !EXPECT_ERROR, !KEEP_GOING);
+
+    Path subpackageBuildFile = scratch.file("b/c/BUILD", "exports_files(['foo'])");
+    syncPackages(ModifiedFileSet.builder().modify(PathFragment.create("b/c/BUILD")).build());
+
+    reporter.removeHandler(failFastHandler); // expect errors
+    assertLabelsVisitedWithErrors(ImmutableSet.of("//a:a"), ImmutableSet.of("//a:a"));
+    assertContainsEvent("Label '//b:c/d/foo' crosses boundary of subpackage 'b/c'");
+
+    subpackageBuildFile.delete();
+    syncPackages(ModifiedFileSet.builder().modify(PathFragment.create("b/c/BUILD")).build());
+
+    assertLabelsVisited(
+        ImmutableSet.of("//a:a"), ImmutableSet.of("//a:a"), !EXPECT_ERROR, !KEEP_GOING);
   }
 
   // Regression test for: "ClassCastException in SkyframeLabelVisitor.sync()"

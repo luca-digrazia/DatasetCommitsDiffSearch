@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertFalse;
 
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -22,10 +22,7 @@ import com.google.devtools.build.lib.packages.util.PackageFactoryApparatus;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
 import java.util.concurrent.SynchronousQueue;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -41,12 +38,6 @@ public class PackageGroupStaticInitializationTest {
   private Scratch scratch = new Scratch("/workspace");
   private EventCollectionApparatus events = new EventCollectionApparatus();
   private PackageFactoryApparatus packages = new PackageFactoryApparatus(events.reporter());
-  private Root root;
-
-  @Before
-  public void setUp() throws Exception {
-    root = Root.fromPath(scratch.dir(""));
-  }
 
   @Test
   public void testNoDeadlockOnPackageGroupCreation() throws Exception {
@@ -92,14 +83,14 @@ public class PackageGroupStaticInitializationTest {
     producingThread.start();
     producingThread.join(3000);
     consumingThread.join(3000);
-    assertThat(producingThread.isAlive()).isFalse();
-    assertThat(consumingThread.isAlive()).isFalse();
+    assertFalse(producingThread.isAlive());
+    assertFalse(consumingThread.isAlive());
   }
 
   private Package getPackage(String packageName) throws Exception {
     PathFragment buildFileFragment = PathFragment.create(packageName).getRelative("BUILD");
     Path buildFile = scratch.resolve(buildFileFragment.getPathString());
-    return packages.createPackage(packageName, RootedPath.toRootedPath(root, buildFile));
+    return packages.createPackage(packageName, buildFile);
   }
 
   private PackageGroup getPackageGroup(String pkg, String name) throws Exception {

@@ -86,7 +86,6 @@ public final class MiddlemanFactory {
   public Artifact createRunfilesMiddleman(
       ActionOwner owner, @Nullable Artifact owningArtifact, Iterable<Artifact> inputs,
       Root middlemanDir, String tag) {
-    Preconditions.checkArgument(middlemanDir.isMiddlemanRoot());
     if (hasExactlyOneInput(inputs)) { // Optimization: No middleman for just one input.
       return Iterables.getOnlyElement(inputs);
     }

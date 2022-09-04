@@ -352,8 +352,7 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
         SkyKey key = FilesetEntryValue.key(params);
         EvaluationResult<SkyValue> result = eval(key);
         assertThat(result.hasError()).isTrue();
-        assertThat(result.getError(key).getException())
-            .hasMessageThat()
+        assertThat(result.getError(key).getException().getMessage())
             .contains("'foo/dir' crosses package boundary into package rooted at foo/dir/subpkg");
         break;
       default:
@@ -439,8 +438,7 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
         SkyKey key = FilesetEntryValue.key(params);
         EvaluationResult<SkyValue> result = eval(key);
         assertThat(result.hasError()).isTrue();
-        assertThat(result.getError(key).getException())
-            .hasMessageThat()
+        assertThat(result.getError(key).getException().getMessage())
             .contains(
                 "'foo/dir_sym' crosses package boundary into package rooted at foo/dir_sym/subpkg");
         break;
@@ -532,8 +530,7 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
         SkyKey key = FilesetEntryValue.key(params);
         EvaluationResult<SkyValue> result = eval(key);
         assertThat(result.hasError()).isTrue();
-        assertThat(result.getError(key).getException())
-            .hasMessageThat()
+        assertThat(result.getError(key).getException().getMessage())
             .contains("'foo' crosses package boundary into package rooted at foo/subpkg");
         break;
       default:
@@ -704,43 +701,6 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
   @Test
   public void testExclusionOfDanglingSymlinkWithSymlinkModeDereference() throws Exception {
     assertExclusionOfDanglingSymlink(SymlinkBehavior.DEREFERENCE);
-  }
-
-  @Test
-  public void testExcludes() throws Exception {
-    Artifact buildFile = getSourceArtifact("foo/BUILD");
-    createFile(buildFile);
-    Artifact outerFile = getSourceArtifact("foo/outerfile.txt");
-    createFile(outerFile);
-    Artifact innerFile = getSourceArtifact("foo/dir/innerfile.txt");
-    createFile(innerFile);
-
-    FilesetTraversalParams params =
-        FilesetTraversalParamsFactory.recursiveTraversalOfPackage(
-            /* ownerLabel */ label("//foo"),
-            /* buildFile */ buildFile,
-            PathFragment.create("output-name"),
-            /* excludes */ ImmutableSet.of(),
-            /* symlinkBehaviorMode */ SymlinkBehavior.COPY,
-            /* pkgBoundaryMode */ PackageBoundaryMode.DONT_CROSS);
-    assertSymlinksInOrder(
-        params,
-        symlink("output-name/BUILD", buildFile),
-        symlink("output-name/outerfile.txt", outerFile),
-        symlink("output-name/dir/innerfile.txt", innerFile));
-
-    // Make sure the file within the excluded directory is no longer present.
-    params = FilesetTraversalParamsFactory.recursiveTraversalOfPackage(
-            /* ownerLabel */ label("//foo"),
-            /* buildFile */ buildFile,
-            PathFragment.create("output-name"),
-            /* excludes */ ImmutableSet.of("dir"),
-            /* symlinkBehaviorMode */ SymlinkBehavior.COPY,
-            /* pkgBoundaryMode */ PackageBoundaryMode.DONT_CROSS);
-    assertSymlinksInOrder(
-        params,
-        symlink("output-name/BUILD", buildFile),
-        symlink("output-name/outerfile.txt", outerFile));
   }
 
   @Test

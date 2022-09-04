@@ -131,15 +131,14 @@ public class ActionCacheChecker {
    *
    * @return true if at least one artifact has changed, false - otherwise.
    */
-  private boolean validateArtifacts(
-      Entry entry, Action action, Iterable<Artifact> actionInputs, MetadataHandler metadataHandler,
-      boolean checkOutput) {
+  private boolean validateArtifacts(Entry entry, Action action,
+      Iterable<Artifact> actionInputs, MetadataHandler metadataHandler, boolean checkOutput) {
     Iterable<Artifact> artifacts = checkOutput
         ? Iterables.concat(action.getOutputs(), actionInputs)
         : actionInputs;
     Map<String, Metadata> mdMap = new HashMap<>();
     for (Artifact artifact : artifacts) {
-      mdMap.put(artifact.getExecPathString(), getMetadataMaybe(metadataHandler, artifact));
+      mdMap.put(artifact.getExecPathString(), metadataHandler.getMetadataMaybe(artifact));
     }
     return !DigestUtils.fromMetadata(mdMap).equals(entry.getFileDigest());
   }
@@ -291,27 +290,6 @@ public class ActionCacheChecker {
     return false; // cache hit
   }
 
-  private static Metadata getMetadataOrConstant(MetadataHandler metadataHandler, Artifact artifact)
-      throws IOException {
-    if (artifact.isConstantMetadata()) {
-      return Metadata.CONSTANT_METADATA;
-    } else {
-      return metadataHandler.getMetadata(artifact);
-    }
-  }
-
-  // TODO(ulfjack): It's unclear to me why we're ignoring all IOExceptions. In some cases, we want
-  // to trigger a re-execution, so we should catch the IOException explicitly there. In others, we
-  // should propagate the exception, because it is unexpected (e.g., bad file system state).
-  @Nullable
-  private static Metadata getMetadataMaybe(MetadataHandler metadataHandler, Artifact artifact) {
-    try {
-      return getMetadataOrConstant(metadataHandler, artifact);
-    } catch (IOException e) {
-      return null;
-    }
-  }
-
   public void afterExecution(
       Action action, Token token, MetadataHandler metadataHandler, Map<String, String> clientEnv)
       throws IOException {
@@ -335,17 +313,14 @@ public class ActionCacheChecker {
         actionCache.remove(execPath);
       }
       if (!metadataHandler.artifactOmitted(output)) {
-        // Output files *must* exist and be accessible after successful action execution. We use the
-        // 'constant' metadata for the volatile workspace status output. The volatile output
-        // contains information such as timestamps, and even when --stamp is enabled, we don't want
-        // to rebuild everything if only that file changes.
-        Metadata metadata = getMetadataOrConstant(metadataHandler, output);
+        // Output files *must* exist and be accessible after successful action execution.
+        Metadata metadata = metadataHandler.getMetadata(output);
         Preconditions.checkState(metadata != null);
         entry.addFile(output.getExecPath(), metadata);
       }
     }
     for (Artifact input : action.getInputs()) {
-      entry.addFile(input.getExecPath(), getMetadataMaybe(metadataHandler, input));
+      entry.addFile(input.getExecPath(), metadataHandler.getMetadataMaybe(input));
     }
     entry.getFileDigest();
     actionCache.put(key, entry);
@@ -353,7 +328,7 @@ public class ActionCacheChecker {
 
   @Nullable
   public Iterable<Artifact> getCachedInputs(Action action, PackageRootResolver resolver)
-      throws InterruptedException {
+      throws PackageRootResolutionException, InterruptedException {
     ActionCache.Entry entry = getCacheEntry(action);
     if (entry == null || entry.isCorrupted()) {
       return ImmutableList.of();
@@ -417,16 +392,18 @@ public class ActionCacheChecker {
   }
 
   /**
-   * Special handling for the MiddlemanAction. Since MiddlemanAction output artifacts are purely
-   * fictional and used only to stay within dependency graph model limitations (action has to depend
-   * on artifacts, not on other actions), we do not need to validate metadata for the outputs - only
-   * for inputs. We also do not need to validate MiddlemanAction key, since action cache entry key
-   * already incorporates that information for the middlemen and we will experience a cache miss
-   * when it is different. Whenever it encounters middleman artifacts as input artifacts for other
-   * actions, it consults with the aggregated middleman digest computed here.
+   * Special handling for the MiddlemanAction. Since MiddlemanAction output
+   * artifacts are purely fictional and used only to stay within dependency
+   * graph model limitations (action has to depend on artifacts, not on other
+   * actions), we do not need to validate metadata for the outputs - only for
+   * inputs. We also do not need to validate MiddlemanAction key, since action
+   * cache entry key already incorporates that information for the middlemen
+   * and we will experience a cache miss when it is different. Whenever it
+   * encounters middleman artifacts as input artifacts for other actions, it
+   * consults with the aggregated middleman digest computed here.
    */
-  protected void checkMiddlemanAction(
-      Action action, EventHandler handler, MetadataHandler metadataHandler) {
+  protected void checkMiddlemanAction(Action action, EventHandler handler,
+      MetadataHandler metadataHandler) {
     if (!cacheConfig.enabled()) {
       // Action cache is disabled, don't generate digests.
       return;
@@ -453,7 +430,7 @@ public class ActionCacheChecker {
       // it in the cache entry and just use empty string instead.
       entry = new ActionCache.Entry("", ImmutableMap.<String, String>of(), false);
       for (Artifact input : action.getInputs()) {
-        entry.addFile(input.getExecPath(), getMetadataMaybe(metadataHandler, input));
+        entry.addFile(input.getExecPath(), metadataHandler.getMetadataMaybe(input));
       }
     }
 

@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import org.junit.Test;
@@ -35,11 +34,10 @@ public class WorkspaceNameFunctionTest extends BuildViewTestCase {
   private final SkyKey key = WorkspaceNameValue.key();
 
   private EvaluationResult<WorkspaceNameValue> eval() throws InterruptedException {
-    getSkyframeExecutor()
-        .invalidateFilesUnderPathForTesting(
-            reporter,
-            ModifiedFileSet.builder().modify(PathFragment.create("WORKSPACE")).build(),
-            Root.fromPath(rootDirectory));
+    getSkyframeExecutor().invalidateFilesUnderPathForTesting(
+        reporter,
+        ModifiedFileSet.builder().modify(PathFragment.create("WORKSPACE")).build(),
+        rootDirectory);
     return SkyframeExecutorTestUtils.evaluate(
         getSkyframeExecutor(), key, /*keepGoing=*/ false, reporter);
   }
@@ -57,9 +55,8 @@ public class WorkspaceNameFunctionTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     scratch.overwriteFile("WORKSPACE", "workspace(bad)");
     assertThatEvaluationResult(eval())
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
-        .isInstanceOf(NoSuchPackageException.class);
+        .hasEntryThat(key)
+        .isEqualTo(WorkspaceNameValue.withError());
     assertContainsEvent("name 'bad' is not defined");
   }
 
@@ -77,10 +74,16 @@ public class WorkspaceNameFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testEqualsAndHashCode() {
+  public void testEqualsAndHashCode(){
     new EqualsTester()
-        .addEqualityGroup(WorkspaceNameValue.withName("foo"), WorkspaceNameValue.withName("foo"))
-        .addEqualityGroup(WorkspaceNameValue.withName("bar"), WorkspaceNameValue.withName("bar"))
-        .testEquals();
+        .addEqualityGroup(
+            WorkspaceNameValue.withError(),
+            WorkspaceNameValue.withError())
+        .addEqualityGroup(
+            WorkspaceNameValue.withName("foo"),
+            WorkspaceNameValue.withName("foo"))
+        .addEqualityGroup(
+            WorkspaceNameValue.withName("bar"),
+            WorkspaceNameValue.withName("bar"));
   }
 }

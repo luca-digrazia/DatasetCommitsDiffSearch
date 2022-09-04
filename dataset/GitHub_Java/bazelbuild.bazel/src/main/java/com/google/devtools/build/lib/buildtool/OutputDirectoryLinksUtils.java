@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.buildtool;
 
 import static com.google.common.base.Preconditions.checkArgument;
-
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -25,9 +24,11 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -77,16 +78,15 @@ public class OutputDirectoryLinksUtils {
     }
 
     // Points to execroot
-    createLink(workspace, execRootSymlink(
-        symlinkPrefix, workspace.getBaseName()), execRoot, failures);
-    RepositoryName repositoryName = RepositoryName.createFromValidStrippedName(workspaceName);
+    createLink(workspace, execRootSymlink(symlinkPrefix, workspaceName), execRoot, failures);
+
     if (targetConfig != null) {
       createLink(workspace, symlinkPrefix + "bin",
-          targetConfig.getBinDirectory(repositoryName).getPath(), failures);
+          targetConfig.getBinDirectory(RepositoryName.MAIN).getPath(), failures);
       createLink(workspace, symlinkPrefix + "testlogs",
-          targetConfig.getTestLogsDirectory(repositoryName).getPath(), failures);
+          targetConfig.getTestLogsDirectory(RepositoryName.MAIN).getPath(), failures);
       createLink(workspace, symlinkPrefix + "genfiles",
-          targetConfig.getGenfilesDirectory(repositoryName).getPath(), failures);
+          targetConfig.getGenfilesDirectory(RepositoryName.MAIN).getPath(), failures);
     }
 
     if (!failures.isEmpty()) {
@@ -168,7 +168,6 @@ public class OutputDirectoryLinksUtils {
       removeLink(workspace, outputSymlinkName, failures);
     }
     removeLink(workspace, execRootSymlink(symlinkPrefix, workspaceName), failures);
-    removeLink(workspace, execRootSymlink(symlinkPrefix, workspace.getBaseName()), failures);
     removeLink(workspace, symlinkPrefix + "bin", failures);
     removeLink(workspace, symlinkPrefix + "testlogs", failures);
     removeLink(workspace, symlinkPrefix + "genfiles", failures);
@@ -209,7 +208,7 @@ public class OutputDirectoryLinksUtils {
     Path link = base.getRelative(name);
     try {
       if (link.exists(Symlinks.NOFOLLOW)) {
-        ExecutionTool.logger.finest("Removing " + link);
+        ExecutionTool.log.finest("Removing " + link);
         link.delete();
       }
       return true;

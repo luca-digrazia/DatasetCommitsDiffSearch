@@ -18,10 +18,17 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.TestConstants.GENRULE_SETUP;
 import static com.google.devtools.build.lib.testutil.TestConstants.GENRULE_SETUP_PATH;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -99,7 +106,7 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
     createFiles();
     ConfiguredTarget z = getConfiguredTarget("//hello:z");
     Artifact y = getOnlyElement(getFilesToBuild(z));
-    assertThat(y.getRootRelativePath()).isEqualTo(PathFragment.create("hello/x/y"));
+    assertEquals(PathFragment.create("hello/x/y"), y.getRootRelativePath());
   }
 
   @Test
@@ -108,8 +115,8 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget z = getConfiguredTarget("//hello:w");
     List<Artifact> files = getFilesToBuild(z).toList();
     assertThat(files).hasSize(2);
-    assertThat(files.get(0).getRootRelativePath()).isEqualTo(PathFragment.create("hello/a/b"));
-    assertThat(files.get(1).getRootRelativePath()).isEqualTo(PathFragment.create("hello/c/d"));
+    assertEquals(PathFragment.create("hello/a/b"), files.get(0).getRootRelativePath());
+    assertEquals(PathFragment.create("hello/c/d"), files.get(1).getRootRelativePath());
   }
 
   @Test
@@ -154,14 +161,16 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
     Artifact ignoreMeArtifact = getFileConfiguredTarget("//genrule1:ignore_me.txt").getArtifact();
     Artifact genruleSetupArtifact = getFileConfiguredTarget(GENRULE_SETUP).getArtifact();
 
-    assertThat(shellAction).isNotNull();
-    assertThat(shellAction.getInputs()).containsExactly(ignoreMeArtifact, genruleSetupArtifact);
-    assertThat(shellAction.getOutputs()).containsExactly(messageArtifact);
+    assertNotNull(shellAction);
+    assertEquals(
+        Sets.newHashSet(ignoreMeArtifact, genruleSetupArtifact),
+        Sets.newHashSet(shellAction.getInputs()));
+    assertEquals(Sets.newHashSet(messageArtifact), Sets.newHashSet(shellAction.getOutputs()));
 
     String expected = "echo \"Hello, world.\" >" + messageArtifact.getExecPathString();
-    assertThat(shellAction.getArguments().get(0))
-        .isEqualTo(targetConfig.getShellExecutable().getPathString());
-    assertThat(shellAction.getArguments().get(1)).isEqualTo("-c");
+    assertEquals(
+        targetConfig.getShellExecutable().getPathString(), shellAction.getArguments().get(0));
+    assertEquals("-c", shellAction.getArguments().get(1));
     assertCommandEquals(expected, shellAction.getArguments().get(2));
   }
 
@@ -190,11 +199,12 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
     SpawnAction shellAction = (SpawnAction) getGeneratingAction(farewellArtifact);
 
     // inputs = { "goodbye.txt", "//genrule1:message.txt" }
-    assertThat(shellAction.getInputs())
-        .containsExactly(goodbyeArtifact, messageArtifact, genruleSetupArtifact);
+    assertEquals(
+        Sets.newHashSet(goodbyeArtifact, messageArtifact, genruleSetupArtifact),
+        Sets.newHashSet(shellAction.getInputs()));
 
     // outputs = { "farewell.txt" }
-    assertThat(shellAction.getOutputs()).containsExactly(farewellArtifact);
+    assertEquals(Sets.newHashSet(farewellArtifact), Sets.newHashSet(shellAction.getOutputs()));
 
     String expected =
         "echo "
@@ -226,10 +236,10 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
     FileConfiguredTarget bazOutTarget = getFileConfiguredTarget("//foo:baz_out.txt");
     Action bazAction = getGeneratingAction(bazOutTarget.getArtifact());
     Artifact barOut = bazAction.getInputs().iterator().next();
-    assertThat(barOut.getExecPath().endsWith(PathFragment.create("foo/bar_out.txt"))).isTrue();
+    assertTrue(barOut.getExecPath().endsWith(PathFragment.create("foo/bar_out.txt")));
     Action barAction = getGeneratingAction(barOut);
     Artifact barIn = barAction.getInputs().iterator().next();
-    assertThat(barIn.getExecPath().endsWith(PathFragment.create("foo/bar_in.txt"))).isTrue();
+    assertTrue(barIn.getExecPath().endsWith(PathFragment.create("foo/bar_in.txt")));
   }
 
   /** Ensure that variable $(@D) gets expanded correctly in the genrule cmd. */
@@ -269,11 +279,11 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
     getConfiguredTarget("//foo:bar");
 
     Artifact barOut = bazAction.getInputs().iterator().next();
-    assertThat(barOut.getExecPath().endsWith(PathFragment.create("foo/bar/bar_out.txt"))).isTrue();
+    assertTrue(barOut.getExecPath().endsWith(PathFragment.create("foo/bar/bar_out.txt")));
     SpawnAction barAction = (SpawnAction) getGeneratingAction(barOut);
     String barExpected = "touch " + barOut.getExecPath().getParentDirectory().getPathString();
     assertCommandEquals(barExpected, barAction.getArguments().get(2));
-    assertThat(bazExpected.equals(barExpected)).isFalse();
+    assertFalse(bazExpected.equals(barExpected));
   }
 
   /** Ensure that variable $(CC) gets expanded correctly in the genrule cmd. */
@@ -373,10 +383,12 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
         "    outs = ['goodbye.txt'],",
         "    message = 'Generating message',",
         "    cmd  = 'echo \"Goodbye, world.\" >goodbye.txt')");
-    assertThat(getSpawnAction("//genrule3:hello_world").getProgressMessage())
-        .isEqualTo("Executing genrule //genrule3:hello_world");
-    assertThat(getSpawnAction("//genrule3:goodbye_world").getProgressMessage())
-        .isEqualTo("Generating message //genrule3:goodbye_world");
+    assertEquals(
+        "Executing genrule //genrule3:hello_world",
+        getSpawnAction("//genrule3:hello_world").getProgressMessage());
+    assertEquals(
+        "Generating message //genrule3:goodbye_world",
+        getSpawnAction("//genrule3:goodbye_world").getProgressMessage());
   }
 
   /** Ensure that labels from binary targets expand to the executable */
@@ -408,10 +420,11 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
         "        cmd=':',",
         "        output_to_bindir=0)");
 
-    assertThat(getFileConfiguredTarget("//x:bin.out").getArtifact())
-        .isEqualTo(getBinArtifact("bin.out", "//x:bin"));
-    assertThat(getFileConfiguredTarget("//x:genfiles.out").getArtifact())
-        .isEqualTo(getGenfilesArtifact("genfiles.out", "//x:genfiles"));
+    assertEquals(
+        getBinArtifact("bin.out", "//x:bin"), getFileConfiguredTarget("//x:bin.out").getArtifact());
+    assertEquals(
+        getGenfilesArtifact("genfiles.out", "//x:genfiles"),
+        getFileConfiguredTarget("//x:genfiles.out").getArtifact());
   }
 
   @Test
@@ -427,14 +440,18 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
         "        cmd=':',",
         "        output_to_bindir=0)");
 
-    assertThat(getFileConfiguredTarget("//x:bin_a.out").getArtifact())
-        .isEqualTo(getBinArtifact("bin_a.out", "//x:bin"));
-    assertThat(getFileConfiguredTarget("//x:bin_b.out").getArtifact())
-        .isEqualTo(getBinArtifact("bin_b.out", "//x:bin"));
-    assertThat(getFileConfiguredTarget("//x:genfiles_a.out").getArtifact())
-        .isEqualTo(getGenfilesArtifact("genfiles_a.out", "//x:genfiles"));
-    assertThat(getFileConfiguredTarget("//x:genfiles_b.out").getArtifact())
-        .isEqualTo(getGenfilesArtifact("genfiles_b.out", "//x:genfiles"));
+    assertEquals(
+        getBinArtifact("bin_a.out", "//x:bin"),
+        getFileConfiguredTarget("//x:bin_a.out").getArtifact());
+    assertEquals(
+        getBinArtifact("bin_b.out", "//x:bin"),
+        getFileConfiguredTarget("//x:bin_b.out").getArtifact());
+    assertEquals(
+        getGenfilesArtifact("genfiles_a.out", "//x:genfiles"),
+        getFileConfiguredTarget("//x:genfiles_a.out").getArtifact());
+    assertEquals(
+        getGenfilesArtifact("genfiles_b.out", "//x:genfiles"),
+        getFileConfiguredTarget("//x:genfiles_b.out").getArtifact());
   }
 
   @Test
@@ -472,7 +489,7 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
     boolean foundSetup = false;
     for (ConfiguredTarget prereq : prereqs) {
       String name = prereq.getLabel().getName();
-      if (name.contains("cc-") || name.contains("jdk")) {
+      if (name.startsWith("cc-") || name.startsWith("jdk-")) {
           // Ignore these, they are present due to the implied genrule dependency on crosstool and
           // JDK.
         continue;
@@ -483,12 +500,11 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
           foundSrc = true;
           break;
         case "tool":
-          assertThat(getHostConfiguration().equalsOrIsSupersetOf(prereq.getConfiguration()))
-              .isTrue();
+          assertTrue(getHostConfiguration().equalsOrIsSupersetOf(prereq.getConfiguration()));
           foundTool = true;
           break;
         case GENRULE_SETUP_PATH:
-          assertThat(prereq.getConfiguration()).isNull();
+          assertNull(prereq.getConfiguration());
           foundSetup = true;
           break;
         default:
@@ -524,7 +540,7 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
             "    outs = ['turtle'],",
             "    executable = 1,",
             "    cmd = 'touch $(OUTS)')");
-    assertThat(getExecutable(turtle).getExecPath().getBaseName()).isEqualTo("turtle");
+    assertEquals("turtle", getExecutable(turtle).getExecPath().getBaseName());
   }
 
   @Test
@@ -537,7 +553,7 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
             "    srcs = ['Turtle.java'],",
             "    outs = ['debugdata.txt'],",
             "    cmd = 'touch $(OUTS)')");
-    assertThat(getExecutable(turtle)).isNull();
+    assertNull(getExecutable(turtle));
   }
 
   @Test
@@ -550,7 +566,7 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
             "    srcs = ['Turtle.java'],",
             "    outs = ['turtle', 'debugdata.txt'],",
             "    cmd = 'touch $(OUTS)')");
-    assertThat(getExecutable(turtle)).isNull();
+    assertNull(getExecutable(turtle));
   }
 
   @Test
@@ -608,7 +624,7 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
   private void assertStamped(ConfiguredTarget target) throws Exception {
     Artifact out = Iterables.getFirst(getFilesToBuild(target), null);
     List<String> inputs = ActionsTestUtil.baseArtifactNames(getGeneratingAction(out).getInputs());
-    assertThat(inputs).containsAllOf("build-info.txt", "build-changelist.txt");
+    assertThat(inputs).containsAllIn(ImmutableList.of("build-info.txt", "build-changelist.txt"));
   }
 
   private void assertNotStamped(ConfiguredTarget target) throws Exception {

@@ -107,6 +107,7 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
+import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
@@ -226,6 +227,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
+            getPreprocessorFactorySupplier(),
             analysisMock.getSkyFunctions(),
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
@@ -272,6 +274,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected ImmutableList<PrecomputedValue.Injected> getPrecomputedValues() {
     return ImmutableList.of();
+  }
+
+  protected Preprocessor.Factory.Supplier getPreprocessorFactorySupplier() {
+    return Preprocessor.Factory.Supplier.NullSupplier.INSTANCE;
   }
 
   protected ResourceSet getStartingResources() {

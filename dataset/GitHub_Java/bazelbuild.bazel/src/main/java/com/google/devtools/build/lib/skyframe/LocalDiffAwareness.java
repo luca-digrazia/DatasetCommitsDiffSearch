@@ -16,17 +16,14 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -48,13 +45,11 @@ public abstract class LocalDiffAwareness implements DiffAwareness {
    */
   public static final class Options extends OptionsBase {
     @Option(
-      name = "watchfs",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "If true, %{product} tries to use the operating system's file watch service for "
-              + "local changes instead of scanning every file for a change."
+        name = "watchfs",
+        defaultValue = "false",
+        category = "server startup",
+        help = "If true, %{product} tries to use the operating system's file watch service for "
+            + "local changes instead of scanning every file for a change."
     )
     public boolean watchFS;
   }
@@ -73,10 +68,10 @@ public abstract class LocalDiffAwareness implements DiffAwareness {
     }
 
     @Override
-    public DiffAwareness maybeCreate(Root pathEntry) {
+    public DiffAwareness maybeCreate(com.google.devtools.build.lib.vfs.Path pathEntry) {
       com.google.devtools.build.lib.vfs.Path resolvedPathEntry;
       try {
-        resolvedPathEntry = pathEntry.asPath().resolveSymbolicLinks();
+        resolvedPathEntry = pathEntry.resolveSymbolicLinks();
       } catch (IOException e) {
         return null;
       }

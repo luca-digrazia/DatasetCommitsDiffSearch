@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -42,6 +43,7 @@ import java.io.IOException;
  */
 @Immutable
 public final class SolibSymlinkAction extends AbstractAction {
+  private final Artifact library;
   private final Path target;
   private final Artifact symlink;
 
@@ -49,8 +51,17 @@ public final class SolibSymlinkAction extends AbstractAction {
     super(owner, ImmutableList.of(library), ImmutableList.of(symlink));
 
     Preconditions.checkArgument(Link.SHARED_LIBRARY_FILETYPES.matches(library.getFilename()));
+    this.library = Preconditions.checkNotNull(library);
     this.symlink = Preconditions.checkNotNull(symlink);
     this.target = library.getPath();
+  }
+
+  @Override
+  protected void deleteOutputs(Path execRoot) throws IOException {
+    // Do not delete outputs if action does not intend to do anything.
+    if (target != null) {
+      super.deleteOutputs(execRoot);
+    }
   }
 
   @Override
@@ -58,6 +69,7 @@ public final class SolibSymlinkAction extends AbstractAction {
       ActionExecutionContext actionExecutionContext) throws ActionExecutionException {
     Path mangledPath = symlink.getPath();
     try {
+      FileSystemUtils.createDirectoryAndParents(mangledPath.getParentDirectory());
       mangledPath.createSymbolicLink(target);
     } catch (IOException e) {
       throw new ActionExecutionException("failed to create _solib symbolic link '"
@@ -65,12 +77,23 @@ public final class SolibSymlinkAction extends AbstractAction {
     }
   }
 
+  @Override
+  public Artifact getPrimaryInput() {
+    return library;
+  }
+
+  @Override
+  public Artifact getPrimaryOutput() {
+    return symlink;
+  }
 
   @Override
   protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addPath(symlink.getPath());
-    f.addPath(target);
+    if (target != null) {
+      f.addPath(target);
+    }
     return f.hexDigestAndReset();
   }
 
