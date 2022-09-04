@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,6 +15,11 @@
  */
 package org.androidannotations.test15.roboguice;
 
+import java.util.List;
+
+import roboguice.application.RoboApplication;
+
+import com.google.inject.Module;
 import org.androidannotations.annotations.Bean;
 import org.androidannotations.annotations.EApplication;
 import org.androidannotations.annotations.OrmLiteDao;
@@ -23,15 +28,23 @@ import org.androidannotations.test15.ormlite.DatabaseHelper;
 import org.androidannotations.test15.ormlite.User;
 import org.androidannotations.test15.ormlite.UserDao;
 
-import android.app.Application;
-
 @EApplication
-public class SampleRoboApplication extends Application {
+public class SampleRoboApplication extends RoboApplication {
 	
 	@Bean
 	public EmptyDependency someDependency;
 
-	@OrmLiteDao(helper = DatabaseHelper.class)
+	@OrmLiteDao(helper = DatabaseHelper.class, model = User.class)
 	UserDao userDao;
 
+	private Module module = new RobolectricSampleModule();
+
+	@Override
+	protected void addApplicationModules(List<Module> modules) {
+		modules.add(module);
+	}
+
+	public void setModule(Module module) {
+		this.module = module;
+	}
 }
