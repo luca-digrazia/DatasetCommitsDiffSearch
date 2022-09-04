@@ -16,6 +16,7 @@
 
 package io.quarkus.hibernate.orm.runtime.boot;
 
+import static org.hibernate.cfg.AvailableSettings.DATASOURCE;
 import static org.hibernate.cfg.AvailableSettings.DRIVER;
 import static org.hibernate.cfg.AvailableSettings.JACC_ENABLED;
 import static org.hibernate.cfg.AvailableSettings.JACC_PREFIX;
@@ -208,6 +209,10 @@ public class FastBootMetadataBuilder {
         // first, apply persistence.xml-defined settings
         if (persistenceUnit.getProperties() != null) {
             mergedSettings.configurationValues.putAll(persistenceUnit.getProperties());
+        }
+
+        if (persistenceUnit.getJtaDataSource() != null) {
+            mergedSettings.configurationValues.put(DATASOURCE, persistenceUnit.getJtaDataSource());
         }
 
         mergedSettings.configurationValues.put(PERSISTENCE_UNIT_NAME, persistenceUnit.getName());
