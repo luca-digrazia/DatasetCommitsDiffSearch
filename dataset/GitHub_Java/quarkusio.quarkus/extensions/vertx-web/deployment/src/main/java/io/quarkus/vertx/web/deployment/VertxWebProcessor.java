@@ -32,7 +32,6 @@ import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
-import io.quarkus.arc.deployment.CustomScopeAnnotationsBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
@@ -296,7 +295,7 @@ class VertxWebProcessor {
     }
 
     @BuildStep
-    AnnotationsTransformerBuildItem annotationTransformer(CustomScopeAnnotationsBuildItem scopes) {
+    AnnotationsTransformerBuildItem annotationTransformer() {
         return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
 
             @Override
@@ -306,7 +305,7 @@ class VertxWebProcessor {
 
             @Override
             public void transform(TransformationContext context) {
-                if (!scopes.isScopeIn(context.getAnnotations())) {
+                if (context.getAnnotations().isEmpty() || !BuiltinScope.isIn(context.getAnnotations())) {
                     // Class with no scope annotation but with a method annotated with @Route, @RouteFilter
                     ClassInfo target = context.getTarget().asClass();
                     if (target.annotations().containsKey(ROUTE) || target.annotations().containsKey(ROUTES)
