@@ -210,7 +210,9 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
         if (uberJar) {
             try {
                 Path originalFile = outputDir.resolve(finalName + ".jar.original");
-                Files.deleteIfExists(originalFile);
+                if (Files.exists(originalFile)) {
+                    Files.delete(originalFile);
+                }
                 Files.move(outputDir.resolve(finalName + ".jar"), originalFile);
             } catch (IOException e) {
                 throw new AppCreatorException("Unable to build uberjar", e);
