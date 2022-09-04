@@ -341,7 +341,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Function<Artifact, Artifact> derivedJarFunction =
         collectDesugaredJars(ruleContext, androidCommon, androidSemantics, resourceClasses);
     Artifact deployJar = createDeployJar(ruleContext, javaSemantics, androidCommon, resourceClasses,
-        AndroidCommon.getAndroidConfig(ruleContext).checkDesugarDeps(), derivedJarFunction);
+        derivedJarFunction);
 
     OneVersionEnforcementLevel oneVersionEnforcementLevel =
         ruleContext.getFragment(JavaConfiguration.class).oneVersionEnforcementLevel();
@@ -760,7 +760,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       JavaSemantics javaSemantics,
       AndroidCommon common,
       JavaTargetAttributes attributes,
-      boolean checkDesugarDeps,
       Function<Artifact, Artifact> derivedJarFunction)
       throws InterruptedException {
     Artifact deployJar =
@@ -770,7 +769,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .setAttributes(attributes)
         .addRuntimeJars(common.getRuntimeJars())
         .setDerivedJarFunction(derivedJarFunction)
-        .setCheckDesugarDeps(checkDesugarDeps)
+        .setCheckDesugarDeps(AndroidCommon.getAndroidConfig(ruleContext).checkDesugarDeps())
         .build();
     return deployJar;
   }
