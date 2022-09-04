@@ -64,7 +64,7 @@ public class SimpleRouteTest {
             context.response().setStatusCode(200).end("Hello " + (name != null ? name : "world") + "!");
         }
 
-        @Route // path is derived from the method name
+        @Route(path = "/bzuk")
         void bzuk(RoutingExchange exchange) {
             exchange.ok("Hello " + exchange.getParam("name").orElse("world") + "!");
         }
