@@ -16,6 +16,7 @@
 
 package org.jboss.shamrock.narayana.jta;
 
+import static org.jboss.shamrock.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
 
 import java.util.Properties;
@@ -30,6 +31,7 @@ import org.jboss.shamrock.deployment.Capabilities;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
+import org.jboss.shamrock.deployment.logging.LogCleanupFilterBuildItem;
 import org.jboss.shamrock.narayana.jta.runtime.NarayanaJtaConfiguration;
 import org.jboss.shamrock.narayana.jta.runtime.NarayanaJtaProducers;
 import org.jboss.shamrock.narayana.jta.runtime.NarayanaJtaTemplate;
@@ -64,7 +66,7 @@ class NarayanaJtaProcessor {
     NarayanaJtaConfiguration transactions;
 
     @BuildStep(providesCapabilities = Capabilities.TRANSACTIONS)
-    @Record(STATIC_INIT)
+    @Record(RUNTIME_INIT)
     public void build(NarayanaJtaTemplate tt, BuildProducer<FeatureBuildItem> feature) {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.NARAYANA_JTA));
         additionalBeans.produce(new AdditionalBeanBuildItem(NarayanaJtaProducers.class));
@@ -85,7 +87,12 @@ class NarayanaJtaProcessor {
         //we want to force Arjuna to init at static init time
         Properties defaultProperties = PropertiesFactory.getDefaultProperties();
         tt.setDefaultProperties(defaultProperties);
-        tt.initialize(transactions);
+        tt.setNodeName(transactions);
 
+    }
+    
+    @BuildStep
+    void setupLogFilters(BuildProducer<LogCleanupFilterBuildItem> filters) {
+        filters.produce(new LogCleanupFilterBuildItem("com.arjuna.ats.arjuna", "ARJUNA012170"));
     }
 }
