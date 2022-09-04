@@ -59,14 +59,8 @@ abstract class DataHandler extends LitePalBase {
 	 */
 	private DataSupport tempEmptyModel;
 
-	/**
-	 * Holds the AssociationsInfo which foreign keys in the current model.
-	 */
 	private List<AssociationsInfo> fkInCurrentModel;
 
-	/**
-	 * Holds the AssociationsInfo which foreign keys in other models.
-	 */
 	private List<AssociationsInfo> fkInOtherModel;
 
 	/**
@@ -609,15 +603,6 @@ abstract class DataHandler extends LitePalBase {
 		}
 	}
 
-	/**
-	 * Get the foreign key associations of the specified class.
-	 * 
-	 * @param className
-	 *            The full class name.
-	 * @param isEager
-	 *            True to load the associated models, false not.
-	 * @return The foreign key associations of the specified class
-	 */
 	protected List<AssociationsInfo> getForeignKeyAssociations(String className, boolean isEager) {
 		if (isEager) {
 			analyzeAssociations(className);
@@ -948,12 +933,6 @@ abstract class DataHandler extends LitePalBase {
 		return null;
 	}
 
-	/**
-	 * Analyze the associations for the specified class.
-	 * 
-	 * @param className
-	 *            The full class name.
-	 */
 	private void analyzeAssociations(String className) {
 		Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
 		if (fkInCurrentModel == null) {
@@ -980,12 +959,6 @@ abstract class DataHandler extends LitePalBase {
 		}
 	}
 
-	/**
-	 * Finds the associated models of baseObj, then set them into baseObj.
-	 * 
-	 * @param baseObj
-	 *            The class of base object.
-	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	private void setAssociatedModel(DataSupport baseObj) {
 		if (fkInOtherModel == null) {
