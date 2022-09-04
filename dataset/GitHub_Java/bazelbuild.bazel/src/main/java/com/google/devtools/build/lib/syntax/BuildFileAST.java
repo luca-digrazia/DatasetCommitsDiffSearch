@@ -28,11 +28,13 @@ import java.io.IOException;
 import java.util.List;
 import javax.annotation.Nullable;
 
-/** Abstract syntax node for an entire BUILD file. */
-// TODO(bazel-team): Consider breaking this up into two classes: One that extends Node and does
+/**
+ * Abstract syntax node for an entire BUILD file.
+ */
+// TODO(bazel-team): Consider breaking this up into two classes: One that extends ASTNode and does
 // not include import info; and one that wraps that object with additional import info but that
-// does not itself extend Node. This would help keep the AST minimalistic.
-public class BuildFileAST extends Node {
+// does not itself extend ASTNode. This would help keep the AST minimalistic.
+public class BuildFileAST extends ASTNode {
 
   private final ImmutableList<Statement> statements;
 
@@ -216,19 +218,19 @@ public class BuildFileAST extends Node {
   /**
    * Executes this build file in a given Environment.
    *
-   * <p>If, for any reason, execution of a statement cannot be completed, exec throws an {@link
-   * EvalException}. This exception is caught here and reported through reporter and execution
-   * continues on the next statement. In effect, there is a "try/except" block around every top
-   * level statement. Such exceptions are not ignored, though: they are visible via the return
-   * value. Rules declared in a package containing any error (including loading-phase semantical
-   * errors that cannot be checked here) must also be considered "in error".
+   * <p>If, for any reason, execution of a statement cannot be completed, an {@link EvalException}
+   * is thrown by {@link Eval#exec(Statement)}. This exception is caught here and reported through
+   * the event handler and execution continues on the next statement. In effect, there is a
+   * "try/except" block around every top level statement. Such exceptions are not ignored, though:
+   * they are visible via the return value. Rules declared in a package containing any error
+   * (including loading-phase semantical errors that cannot be checked here) must also be considered
+   * "in error".
    *
    * <p>Note that this method will not affect the value of {@link #containsErrors()}; that refers
    * only to lexer/parser errors.
    *
    * @return true if no error occurred during execution.
    */
-  // TODO(adonovan): move to EvalUtils.
   public boolean exec(Environment env, EventHandler eventHandler) throws InterruptedException {
     boolean ok = true;
     for (Statement stmt : statements) {
@@ -240,14 +242,14 @@ public class BuildFileAST extends Node {
   }
 
   /**
-   * Executes top-level statement of this build file in a given Environment.
+   * Executes tol-level statement of this build file in a given Environment.
    *
-   * <p>If, for any reason, execution of a statement cannot be completed, exec throws an {@link
-   * EvalException}. This exception is caught here and reported through reporter. In effect, there
-   * is a "try/except" block around every top level statement. Such exceptions are not ignored,
-   * though: they are visible via the return value. Rules declared in a package containing any error
-   * (including loading-phase semantical errors that cannot be checked here) must also be considered
-   * "in error".
+   * <p>If, for any reason, execution of a statement cannot be completed, an {@link EvalException}
+   * is thrown by {@link Eval#exec(Statement)}. This exception is caught here and reported through
+   * the event handler. In effect, there is a "try/except" block around every top level statement.
+   * Such exceptions are not ignored, though: they are visible via the return value. Rules declared
+   * in a package containing any error (including loading-phase semantical errors that cannot be
+   * checked here) must also be considered "in error".
    *
    * <p>Note that this method will not affect the value of {@link #containsErrors()}; that refers
    * only to lexer/parser errors.
@@ -257,7 +259,7 @@ public class BuildFileAST extends Node {
   public boolean execTopLevelStatement(Statement stmt, Environment env, EventHandler eventHandler)
       throws InterruptedException {
     try {
-      Eval.execToplevelStatement(env, stmt);
+      Eval.fromEnvironment(env).exec(stmt);
       return true;
     } catch (EvalException e) {
       // Do not report errors caused by a previous parsing error, as it has already been
@@ -290,7 +292,7 @@ public class BuildFileAST extends Node {
   }
 
   @Override
-  public void accept(NodeVisitor visitor) {
+  public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
 
@@ -300,7 +302,7 @@ public class BuildFileAST extends Node {
    * event handler.
    */
   public static BuildFileAST parseWithPrelude(
-      ParserInput input,
+      ParserInputSource input,
       List<Statement> preludeStatements,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       EventHandler eventHandler) {
@@ -315,7 +317,7 @@ public class BuildFileAST extends Node {
    * the event handler.
    */
   public static BuildFileAST parseVirtualBuildFile(
-      ParserInput input,
+      ParserInputSource input,
       List<Statement> preludeStatements,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       EventHandler eventHandler) {
@@ -330,7 +332,7 @@ public class BuildFileAST extends Node {
   }
 
   public static BuildFileAST parseWithDigest(
-      ParserInput input, byte[] digest, EventHandler eventHandler) throws IOException {
+      ParserInputSource input, byte[] digest, EventHandler eventHandler) throws IOException {
     Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return create(
         /* preludeStatements= */ ImmutableList.of(),
@@ -340,7 +342,7 @@ public class BuildFileAST extends Node {
         eventHandler);
   }
 
-  public static BuildFileAST parse(ParserInput input, EventHandler eventHandler) {
+  public static BuildFileAST parse(ParserInputSource input, EventHandler eventHandler) {
     Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return create(
         /* preludeStatements= */ ImmutableList.<Statement>of(),
@@ -354,7 +356,8 @@ public class BuildFileAST extends Node {
    * Parse the specified file but avoid the validation of the imports, returning its AST. All errors
    * during scanning or parsing will be reported to the event handler.
    */
-  public static BuildFileAST parseWithoutImports(ParserInput input, EventHandler eventHandler) {
+  public static BuildFileAST parseWithoutImports(
+      ParserInputSource input, EventHandler eventHandler) {
     ParseResult result = Parser.parseFile(input, eventHandler);
     return new BuildFileAST(
         ImmutableList.copyOf(result.statements),
@@ -402,29 +405,30 @@ public class BuildFileAST extends Node {
    */
   // TODO(adonovan): move to EvalUtils. Split into two APIs, eval(expr) and exec(file).
   // (Abolish "statement" and "file+expr" as primary API concepts.)
-  // Make callers decide whether they want to execute a file or evaluate an expression.
-  @Nullable
+  @Nullable // why?
   public Object eval(Environment env) throws EvalException, InterruptedException {
-    List<Statement> stmts = statements;
-    Expression expr = null;
-    int n = statements.size();
-    if (n > 0 && statements.get(n - 1) instanceof ExpressionStatement) {
-      stmts = statements.subList(0, n - 1);
-      expr = ((ExpressionStatement) statements.get(n - 1)).getExpression();
+    Object last = null;
+    Eval evaluator = Eval.fromEnvironment(env);
+    for (Statement statement : statements) {
+      if (statement instanceof ExpressionStatement) {
+        last = ((ExpressionStatement) statement).getExpression().eval(env);
+      } else {
+        evaluator.exec(statement);
+        last = null;
+      }
     }
-    Eval.execStatements(env, stmts);
-    return expr == null ? null : Eval.eval(env, expr);
+    return last;
   }
 
   /**
    * Parses, resolves and evaluates the input and returns the value of the last statement if it's an
    * Expression or else null. In case of error (either during validation or evaluation), it throws
-   * an EvalException. The return value is as for eval(Environment).
+   * an EvalException.
    */
   // Note: uses Starlark (not BUILD) validation semantics.
   // TODO(adonovan): move to EvalUtils; see other eval function.
-  @Nullable
-  public static Object eval(ParserInput input, Environment env)
+  @Nullable // why?
+  public static Object eval(ParserInputSource input, Environment env)
       throws EvalException, InterruptedException {
     BuildFileAST ast = parseAndValidateSkylark(input, env);
     return ast.eval(env);
@@ -435,7 +439,7 @@ public class BuildFileAST extends Node {
    * it throws an EvalException. Uses Starlark (not BUILD) validation semantics.
    */
   // TODO(adonovan): move to EvalUtils; see above.
-  public static BuildFileAST parseAndValidateSkylark(ParserInput input, Environment env)
+  public static BuildFileAST parseAndValidateSkylark(ParserInputSource input, Environment env)
       throws EvalException {
     BuildFileAST file = parse(input, env.getEventHandler());
     file.replayLexerEvents(env, env.getEventHandler());
