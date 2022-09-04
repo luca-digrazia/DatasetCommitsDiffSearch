@@ -25,6 +25,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
 import com.google.devtools.build.lib.actions.ActionGraph;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
@@ -33,14 +34,13 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics;
-import com.google.devtools.build.lib.analysis.AnalysisResult;
+import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.exec.ActionContextConsumer;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.CheckUpToDateFilter;
@@ -67,7 +68,6 @@ import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -117,7 +117,7 @@ public class ExecutionTool {
   private final BlazeRuntime runtime;
   private final BuildRequest request;
   private BlazeExecutor executor;
-  private final MetadataProvider fileCache;
+  private final ActionInputFileCache fileCache;
   private final ActionInputPrefetcher prefetcher;
   private final ImmutableList<ActionContextProvider> actionContextProviders;
   private SpawnActionContextMaps spawnActionContextMaps;
@@ -140,9 +140,12 @@ public class ExecutionTool {
     // TODO(philwo) - the ExecutionTool should not add arbitrary dependencies on its own, instead
     // these dependencies should be added to the ActionContextConsumer of the module that actually
     // depends on them.
-    builder
-        .addStrategyByContext(WorkspaceStatusAction.Context.class, "")
-        .addStrategyByContext(SymlinkTreeActionContext.class, "");
+    builder.addActionContextConsumer(
+        b -> {
+          b.strategyByContextMap()
+              .put(WorkspaceStatusAction.Context.class, "")
+              .put(SymlinkTreeActionContext.class, "");
+        });
 
     // Unfortunately, the exec root cache is not shared with caches in the remote execution client.
     this.fileCache =
@@ -159,8 +162,13 @@ public class ExecutionTool {
     // independently from each other, for example, to run genrules locally and Java compile action
     // in prod. Thus, for SpawnActions, we decide the action context to use not only based on the
     // context class, but also the mnemonic of the action.
+    SpawnActionContextMaps.Builder spawnActionContextMapsBuilder =
+        new SpawnActionContextMaps.Builder();
+    for (ActionContextConsumer consumer : builder.getActionContextConsumers()) {
+      consumer.populate(spawnActionContextMapsBuilder);
+    }
     spawnActionContextMaps =
-        builder.getSpawnActionContextMapsBuilder().build(
+        spawnActionContextMapsBuilder.build(
             actionContextProviders, request.getOptions(ExecutionOptions.class).testStrategy);
   }
 
@@ -370,7 +378,7 @@ public class ExecutionTool {
       env.getEventBus()
           .post(new ExecutionPhaseCompleteEvent(timer.stop().elapsed(TimeUnit.MILLISECONDS)));
 
-      try (SilentCloseable c = Profiler.instance().profile("Show results")) {
+      try (AutoProfiler p = AutoProfiler.profiled("Show results", ProfilerTask.INFO)) {
         buildResult.setSuccessfulTargets(
             determineSuccessfulTargets(configuredTargets, builtTargets));
         buildResult.setSuccessfulAspects(determineSuccessfulAspects(aspects, builtAspects));
@@ -380,7 +388,7 @@ public class ExecutionTool {
             analysisResult.getTargetsToSkip(), analysisResult.getAspects());
       }
 
-      try (SilentCloseable c = Profiler.instance().profile("Show artifacts")) {
+      try (AutoProfiler p = AutoProfiler.profiled("Show artifacts", ProfilerTask.INFO)) {
         if (request.getBuildOptions().showArtifacts) {
           BuildResultPrinter buildResultPrinter = new BuildResultPrinter(env);
           buildResultPrinter.showArtifacts(
@@ -445,7 +453,7 @@ public class ExecutionTool {
    * Prepare for a local output build.
    */
   private void startLocalOutputBuild() throws ExecutorInitException {
-    try (SilentCloseable c = Profiler.instance().profile("Starting local output build")) {
+    try (AutoProfiler p = AutoProfiler.profiled("Starting local output build", ProfilerTask.INFO)) {
       Path outputPath = env.getDirectories().getOutputPath(env.getWorkspaceName());
       Path localOutputPath = env.getDirectories().getLocalOutputPath();
 

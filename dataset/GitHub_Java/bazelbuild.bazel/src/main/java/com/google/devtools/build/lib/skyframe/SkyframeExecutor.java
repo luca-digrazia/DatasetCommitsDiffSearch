@@ -530,7 +530,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         SkyFunctions.REGISTERED_EXECUTION_PLATFORMS, new RegisteredExecutionPlatformsFunction());
     map.put(SkyFunctions.REGISTERED_TOOLCHAINS, new RegisteredToolchainsFunction());
     map.put(SkyFunctions.TOOLCHAIN_RESOLUTION, new ToolchainResolutionFunction());
-    map.put(SkyFunctions.REPOSITORY_MAPPING, new RepositoryMappingFunction());
     map.putAll(extraSkyFunctions);
     return map.build();
   }
@@ -968,11 +967,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     SkyFunctionEnvironmentForTesting env =
         new SkyFunctionEnvironmentForTesting(buildDriver, eventHandler, this);
     return ToolchainUtil.createToolchainContext(
-        env,
-        "",
-        requiredToolchains,
-        /* execConstraintLabels= */ ImmutableSet.of(),
-        config == null ? null : BuildConfigurationValue.key(config));
+        env, "", requiredToolchains, config == null ? null : BuildConfigurationValue.key(config));
   }
 
   /**

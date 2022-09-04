@@ -14,19 +14,59 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.collect.ImmutableList;
+import java.util.function.Supplier;
 
 /**
- * An {@link EvaluationProgressReceiver} that delegates to a bunch of other {@link
- * EvaluationProgressReceiver}s.
+ * An {@link EvaluationProgressReceiver} that delegates to a bunch of other
+ * {@link EvaluationProgressReceiver}s.
  */
-public final class CompoundEvaluationProgressReceiver
-    extends CompoundEvaluationProgressReceiverBase {
-  private CompoundEvaluationProgressReceiver(
+public class CompoundEvaluationProgressReceiver implements EvaluationProgressReceiver {
+  protected final ImmutableList<? extends EvaluationProgressReceiver> receivers;
+
+  protected CompoundEvaluationProgressReceiver(
       ImmutableList<? extends EvaluationProgressReceiver> receivers) {
-    super(receivers);
+    this.receivers = receivers;
   }
 
   public static EvaluationProgressReceiver of(EvaluationProgressReceiver... receivers) {
     return new CompoundEvaluationProgressReceiver(ImmutableList.copyOf(receivers));
+  }
+
+  @Override
+  public void invalidated(SkyKey skyKey, InvalidationState state) {
+    for (EvaluationProgressReceiver receiver : receivers) {
+      receiver.invalidated(skyKey, state);
+    }
+  }
+
+  @Override
+  public void enqueueing(SkyKey skyKey) {
+    for (EvaluationProgressReceiver receiver : receivers) {
+      receiver.enqueueing(skyKey);
+    }
+  }
+
+  @Override
+  public void stateStarting(SkyKey skyKey, NodeState state) {
+    for (EvaluationProgressReceiver receiver : receivers) {
+      receiver.stateStarting(skyKey, state);
+    }
+  }
+
+  @Override
+  public void stateEnding(SkyKey skyKey, NodeState state, long elapsedTimeNanos) {
+    for (EvaluationProgressReceiver receiver : receivers) {
+      receiver.stateEnding(skyKey, state, elapsedTimeNanos);
+    }
+  }
+
+  @Override
+  public void evaluated(
+      SkyKey skyKey,
+      Supplier<EvaluationSuccessState> evaluationSuccessState,
+      EvaluationState state) {
+    for (EvaluationProgressReceiver receiver : receivers) {
+      receiver.evaluated(skyKey, evaluationSuccessState, state);
+    }
   }
 }

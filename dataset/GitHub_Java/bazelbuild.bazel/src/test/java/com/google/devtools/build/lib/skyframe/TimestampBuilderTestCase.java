@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.actions.ActionCacheChecker;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
@@ -39,14 +40,10 @@ import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -199,16 +196,16 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     skyframeActionExecutor.setActionLogBufferPathGenerator(
         new ActionLogBufferPathGenerator(actionOutputBase));
 
-    MetadataProvider cache =
-        new SingleBuildFileCache(rootDirectory.getPathString(), scratch.getFileSystem());
+    ActionInputFileCache cache = new SingleBuildFileCache(
+        rootDirectory.getPathString(), scratch.getFileSystem());
     skyframeActionExecutor.configure(cache, ActionInputPrefetcher.NONE);
 
     final InMemoryMemoizingEvaluator evaluator =
         new InMemoryMemoizingEvaluator(
             ImmutableMap.<SkyFunctionName, SkyFunction>builder()
-                .put(FileStateValue.FILE_STATE, new FileStateFunction(tsgmRef, externalFilesHelper))
-                .put(FileValue.FILE, new FileFunction(pkgLocator))
-                .put(Artifact.ARTIFACT, new ArtifactFunction())
+                .put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgmRef, externalFilesHelper))
+                .put(SkyFunctions.FILE, new FileFunction(pkgLocator))
+                .put(SkyFunctions.ARTIFACT, new ArtifactFunction())
                 .put(
                     SkyFunctions.ACTION_EXECUTION,
                     new ActionExecutionFunction(skyframeActionExecutor, tsgmRef))
@@ -344,12 +341,9 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     return createSourceArtifact(scratch.getFileSystem(), name);
   }
 
-  private static Artifact createSourceArtifact(FileSystem fs, String name) {
+  Artifact createSourceArtifact(FileSystem fs, String name) {
     Path root = fs.getPath(TestUtils.tmpDir());
-    return new Artifact.SourceArtifact(
-        ArtifactRoot.asSourceRoot(Root.fromPath(root)),
-        PathFragment.create(name),
-        ArtifactOwner.NullArtifactOwner.INSTANCE);
+    return new Artifact(PathFragment.create(name), ArtifactRoot.asSourceRoot(Root.fromPath(root)));
   }
 
   protected Artifact createDerivedArtifact(String name) {

@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
+import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationSuccessState;
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
@@ -152,19 +152,16 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
       // retrieve them, but top-level nodes are presumably of more interest.
       // If valueVersion is not equal to graphVersion, it must be less than it (by the
       // Preconditions check above), and so the node is clean.
-      EvaluationState evaluationState =
-          valueVersion.equals(evaluatorContext.getGraphVersion())
-              ? EvaluationState.BUILT
-              : EvaluationState.CLEAN;
       evaluatorContext
           .getProgressReceiver()
           .evaluated(
               key,
-              evaluationState == EvaluationState.BUILT ? value : null,
               value != null
                   ? EvaluationSuccessState.SUCCESS.supplier()
                   : EvaluationSuccessState.FAILURE.supplier(),
-              evaluationState);
+              valueVersion.equals(evaluatorContext.getGraphVersion())
+                  ? EvaluationState.BUILT
+                  : EvaluationState.CLEAN);
     }
   }
 
@@ -214,9 +211,11 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
       }
     }
 
-    try (SilentCloseable c =
-        Profiler.instance().profile(ProfilerTask.SKYFRAME_EVAL, "Parallel Evaluator evaluation")) {
+    Profiler.instance().startTask(ProfilerTask.SKYFRAME_EVAL, "Parallel Evaluator evaluation");
+    try {
       return doMutatingEvaluation(skyKeySet);
+    } finally {
+      Profiler.instance().completeTask(ProfilerTask.SKYFRAME_EVAL);
     }
   }
 
@@ -477,7 +476,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
       SkyFunctionEnvironment env =
           new SkyFunctionEnvironment(
               parent,
-              parentEntry.getTemporaryDirectDeps(),
+              new GroupedList<SkyKey>(),
               bubbleErrorInfo,
               ImmutableSet.<SkyKey>of(),
               evaluatorContext);
@@ -503,8 +502,8 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
               errorKey,
               ValueWithMetadata.error(
                   ErrorInfo.fromChildErrors(errorKey, ImmutableSet.of(error)),
-                  env.buildEvents(parentEntry, /*expectDoneDeps=*/ false),
-                  env.buildPosts(parentEntry, /*expectDoneDeps=*/ false)));
+                  env.buildEvents(parentEntry, /*missingChildren=*/ true),
+                  env.buildPosts(parentEntry)));
           continue;
         }
       } finally {
@@ -516,8 +515,8 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
           errorKey,
           ValueWithMetadata.error(
               ErrorInfo.fromChildErrors(errorKey, ImmutableSet.of(error)),
-              env.buildEvents(parentEntry, /*expectDoneDeps=*/ false),
-              env.buildPosts(parentEntry, /*expectDoneDeps=*/ false)));
+              env.buildEvents(parentEntry, /*missingChildren=*/ true),
+              env.buildPosts(parentEntry)));
     }
 
     // Reset the interrupt bit if there was an interrupt from outside this evaluator interrupt.
