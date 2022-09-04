@@ -20,13 +20,11 @@
 
 package org.graylog2.initializers;
 
-import org.graylog2.plugin.initializers.Initializer;
 import org.graylog2.Configuration;
 import org.graylog2.Core;
 import org.graylog2.HostSystem;
 import org.graylog2.ServerValue;
 import org.graylog2.Tools;
-import org.graylog2.plugins.PluginRegistry;
 import org.graylog2.periodical.ServerValueWriterThread;
 
 /**
@@ -53,13 +51,6 @@ public class ServerValueWriterInitializer extends SimpleFixedRateScheduleInitial
         serverValue.setLocalHostname(Tools.getLocalCanonicalHostname());
         serverValue.setIsMaster(graylogServer.isMaster());
 
-        if (graylogServer.isMaster()) {
-            PluginRegistry.setActiveTransports(graylogServer, graylogServer.getTransports());
-            PluginRegistry.setActiveAlarmCallbacks(graylogServer, graylogServer.getAlarmCallbacks());
-            PluginRegistry.setActiveMessageOutputs(graylogServer, graylogServer.getOutputs());
-            PluginRegistry.setActiveMessageInputs(graylogServer, graylogServer.getInputs());
-        }
-        
         configureScheduler(
                 new ServerValueWriterThread(graylogServer),
                 ServerValueWriterThread.INITIAL_DELAY,

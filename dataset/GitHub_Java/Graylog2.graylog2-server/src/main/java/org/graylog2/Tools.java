@@ -30,14 +30,11 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import java.util.Calendar;
 import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 import org.drools.util.codec.Base64;
-import org.joda.time.DateTime;
 
 /**
  * Utilty class for various tool/helper functions.
@@ -174,8 +171,7 @@ public final class Tools {
      * @return The current UTC UNIX timestamp.
      */
     public static int getUTCTimestamp() {
-       DateTime dateTime = new DateTime();
-       return (int) (dateTime.getMillis()/1000);
+       return (int) (Calendar.getInstance().getTimeInMillis()/1000);
     }
 
     /**
@@ -184,8 +180,8 @@ public final class Tools {
      * @return The current UTC UNIX timestamp with milliseconds.
      */
     public static double getUTCTimestampWithMilliseconds() {
-        DateTime dateTime = new DateTime();
-        return getUTCTimestampWithMilliseconds(dateTime.getMillis());
+
+        return getUTCTimestampWithMilliseconds(Calendar.getInstance().getTimeInMillis());
     }
 
     /**
@@ -241,12 +237,6 @@ public final class Tools {
         UUID id = UUID.randomUUID();
         
         return getLocalHostname() + "-" + id.toString();
-    }
-    
-    public static <T extends Comparable<? super T>> List<T> asSortedList(Collection<T> c) {
-      List<T> list = new ArrayList<T>(c);
-      java.util.Collections.sort(list);
-      return list;
     }
  
 }
