@@ -235,12 +235,12 @@ public class OptionsParser implements OptionsProvider {
 
     private final OptionDefinition optionDefinition;
     private final OptionsData.ExpansionData expansionData;
-    private final ImmutableList<UnparsedOptionValueDescription> implicitRequirements;
+    private final ImmutableList<OptionValueDescription> implicitRequirements;
 
     OptionDescription(
         OptionDefinition definition,
         OptionsData.ExpansionData expansionData,
-        ImmutableList<UnparsedOptionValueDescription> implicitRequirements) {
+        ImmutableList<OptionValueDescription> implicitRequirements) {
       this.optionDefinition = definition;
       this.expansionData = expansionData;
       this.implicitRequirements = implicitRequirements;
@@ -250,7 +250,7 @@ public class OptionsParser implements OptionsProvider {
       return optionDefinition;
     }
 
-    public ImmutableList<UnparsedOptionValueDescription> getImplicitRequirements() {
+    public ImmutableList<OptionValueDescription> getImplicitRequirements() {
       return implicitRequirements;
     }
 
@@ -417,7 +417,7 @@ public class OptionsParser implements OptionsProvider {
    * @return The {@link com.google.devtools.common.options.OptionValueDescription>} for the option,
    *     or null if there is no option by the given name.
    */
-  ImmutableList<UnparsedOptionValueDescription> getExpansionOptionValueDescriptions(
+  ImmutableList<OptionValueDescription> getExpansionOptionValueDescriptions(
       OptionDefinition option, @Nullable String optionValue, OptionPriority priority, String source)
       throws OptionsParsingException {
     return impl.getExpansionOptionValueDescriptions(option, optionValue, priority, source);

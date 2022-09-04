@@ -161,11 +161,6 @@ public class OptionDefinition {
     return optionAnnotation.wrapperOption();
   }
 
-  /** Returns whether an option --foo has a negative equivalent --nofoo. */
-  public boolean hasNegativeOption() {
-    return getType().equals(boolean.class) || getType().equals(TriState.class);
-  }
-
   /** The type of the optionDefinition. */
   public Class<?> getType() {
     return field.getType();
@@ -183,11 +178,6 @@ public class OptionDefinition {
   /** Returns whether the arg is an expansion option. */
   public boolean isExpansionOption() {
     return (getOptionExpansion().length > 0 || usesExpansionFunction());
-  }
-
-  /** Returns whether the arg is an expansion option. */
-  public boolean hasImplicitRequirements() {
-    return (getImplicitRequirements().length > 0);
   }
 
   /**

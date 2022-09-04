@@ -146,7 +146,7 @@ class OptionsUsage {
       usage.append(paragraphFill(expandsMsg.toString(), /*indent=*/ 6, /*width=*/ 80));
       usage.append('\n');
     }
-    if (optionDefinition.hasImplicitRequirements()) {
+    if (optionDefinition.getImplicitRequirements().length > 0) {
       StringBuilder requiredMsg = new StringBuilder("Using this option will also add: ");
       for (String req : optionDefinition.getImplicitRequirements()) {
         requiredMsg.append(req).append(" ");
