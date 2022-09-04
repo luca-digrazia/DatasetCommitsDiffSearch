@@ -193,7 +193,8 @@ public class AutoCodecProcessor extends AbstractProcessor {
     MethodSpec.Builder deserializeBuilder =
         AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, startMemoizing, env);
     buildDeserializeBody(deserializeBuilder, fields);
-    addReturnNew(deserializeBuilder, encodedType, constructor, /*builderVar=*/ null, env);
+    addReturnNew(
+        deserializeBuilder, encodedType, constructor, /*builderVar=*/ null, startMemoizing, env);
     codecClassBuilder.addMethod(deserializeBuilder.build());
 
     return codecClassBuilder;
@@ -222,7 +223,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
     String builderVarName =
         buildDeserializeBodyWithBuilder(
             encodedType, builderType, deserializeBuilder, getters, builderCreationMethod);
-    addReturnNew(deserializeBuilder, encodedType, buildMethod, builderVarName, env);
+    addReturnNew(deserializeBuilder, encodedType, buildMethod, builderVarName, startMemoizing, env);
     codecClassBuilder.addMethod(deserializeBuilder.build());
 
     return codecClassBuilder;
@@ -694,7 +695,13 @@ public class AutoCodecProcessor extends AbstractProcessor {
       TypeElement type,
       ExecutableElement instantiator,
       Object builderVar,
+      boolean startMemoizing,
       ProcessingEnvironment env) {
+    // TODO(janakr): When injection of additional data and memoizing are separated, rework this so
+    // that mutability isn't deeply embedded in AutoCodec.
+    if (startMemoizing) {
+      builder.addStatement("$L.close()", AutoCodecUtil.MUTABILITY_VARIABLE_NAME);
+    }
     List<? extends TypeMirror> allThrown = instantiator.getThrownTypes();
     if (!allThrown.isEmpty()) {
       builder.beginControlFlow("try");
