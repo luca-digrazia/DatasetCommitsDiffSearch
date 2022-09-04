@@ -1,8 +1,8 @@
 package io.quarkus.hibernate.orm.runtime.recording;
 
 import java.util.Collection;
+import java.util.Optional;
 
-import org.hibernate.MultiTenancyStrategy;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.service.internal.ProvidedService;
@@ -14,19 +14,21 @@ import io.quarkus.hibernate.orm.runtime.proxies.ProxyDefinitions;
 public final class RecordedState {
 
     private final Dialect dialect;
+    private final Optional<String> dataSource;
     private final PrevalidatedQuarkusMetadata metadata;
     private final BuildTimeSettings settings;
     private final Collection<Integrator> integrators;
     private final Collection<ProvidedService> providedServices;
     private final IntegrationSettings integrationSettings;
     private final ProxyDefinitions proxyClassDefinitions;
-    private final MultiTenancyStrategy multiTenancyStrategy;
-    private final boolean jtaPresent;
+    private final boolean isReactive;
+    private final boolean fromPersistenceXml;
 
     public RecordedState(Dialect dialect, PrevalidatedQuarkusMetadata metadata,
             BuildTimeSettings settings, Collection<Integrator> integrators,
             Collection<ProvidedService> providedServices, IntegrationSettings integrationSettings,
-            ProxyDefinitions classDefinitions, MultiTenancyStrategy strategy, boolean jtaPresent) {
+            ProxyDefinitions classDefinitions, Optional<String> dataSource, boolean isReactive,
+            boolean fromPersistenceXml) {
         this.dialect = dialect;
         this.metadata = metadata;
         this.settings = settings;
@@ -34,8 +36,9 @@ public final class RecordedState {
         this.providedServices = providedServices;
         this.integrationSettings = integrationSettings;
         this.proxyClassDefinitions = classDefinitions;
-        this.multiTenancyStrategy = strategy;
-        this.jtaPresent = jtaPresent;
+        this.dataSource = dataSource;
+        this.isReactive = isReactive;
+        this.fromPersistenceXml = fromPersistenceXml;
     }
 
     public Dialect getDialect() {
@@ -62,15 +65,19 @@ public final class RecordedState {
         return integrationSettings;
     }
 
-    public boolean isJtaPresent() {
-        return jtaPresent;
-    }
-
     public ProxyDefinitions getProxyClassDefinitions() {
         return proxyClassDefinitions;
     }
 
-    public MultiTenancyStrategy getMultiTenancyStrategy() {
-        return multiTenancyStrategy;
+    public Optional<String> getDataSource() {
+        return dataSource;
+    }
+
+    public boolean isReactive() {
+        return isReactive;
+    }
+
+    public boolean isFromPersistenceXml() {
+        return fromPersistenceXml;
     }
 }

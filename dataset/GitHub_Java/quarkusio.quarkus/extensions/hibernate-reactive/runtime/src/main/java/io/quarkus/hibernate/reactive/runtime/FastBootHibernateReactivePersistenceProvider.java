@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.PersistenceException;
@@ -16,8 +17,7 @@ import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
-import org.hibernate.reactive.boot.service.ReactiveGenerationTarget;
-import org.hibernate.reactive.jpa.impl.DelegatorPersistenceUnitInfo;
+import org.hibernate.reactive.provider.service.ReactiveGenerationTarget;
 import org.hibernate.service.internal.ProvidedService;
 import org.hibernate.tool.schema.spi.SchemaManagementTool;
 import org.jboss.logging.Logger;
@@ -26,15 +26,21 @@ import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.hibernate.orm.runtime.BuildTimeSettings;
 import io.quarkus.hibernate.orm.runtime.FastBootHibernatePersistenceProvider;
+import io.quarkus.hibernate.orm.runtime.HibernateOrmRuntimeConfig;
+import io.quarkus.hibernate.orm.runtime.HibernateOrmRuntimeConfigPersistenceUnit;
 import io.quarkus.hibernate.orm.runtime.IntegrationSettings;
 import io.quarkus.hibernate.orm.runtime.PersistenceUnitsHolder;
 import io.quarkus.hibernate.orm.runtime.RuntimeSettings;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrations;
+import io.quarkus.hibernate.orm.runtime.RuntimeSettings.Builder;
+import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationRuntimeDescriptor;
+import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationRuntimeInitListener;
 import io.quarkus.hibernate.orm.runtime.recording.PrevalidatedQuarkusMetadata;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 import io.quarkus.hibernate.reactive.runtime.boot.FastBootReactiveEntityManagerFactoryBuilder;
 import io.quarkus.hibernate.reactive.runtime.boot.registry.PreconfiguredReactiveServiceRegistryBuilder;
 import io.quarkus.hibernate.reactive.runtime.customized.QuarkusReactiveConnectionPoolInitiator;
+import io.quarkus.hibernate.reactive.runtime.customized.VertxInstanceInitiator;
+import io.vertx.core.Vertx;
 import io.vertx.sqlclient.Pool;
 
 /**
@@ -42,13 +48,24 @@ import io.vertx.sqlclient.Pool;
  * and that would trigger the native-image tool to include all code which could be triggered from using
  * that: we need to be able to fully exclude HibernatePersistenceProvider from the native image.
  */
-final class FastBootHibernateReactivePersistenceProvider implements PersistenceProvider {
+public final class FastBootHibernateReactivePersistenceProvider implements PersistenceProvider {
 
     private static final Logger log = Logger.getLogger(FastBootHibernateReactivePersistenceProvider.class);
 
-    private static final String IMPLEMENTATION_NAME = "org.hibernate.reactive.jpa.impl.ReactivePersistenceProvider";
+    public static final String IMPLEMENTATION_NAME = "org.hibernate.reactive.provider.ReactivePersistenceProvider";
 
-    private final FastBootHibernatePersistenceProvider delegate = new FastBootHibernatePersistenceProvider();
+    private final ProviderUtil providerUtil = new io.quarkus.hibernate.orm.runtime.ProviderUtil();
+
+    private volatile FastBootHibernatePersistenceProvider delegate;
+
+    private final HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig;
+    private final Map<String, List<HibernateOrmIntegrationRuntimeDescriptor>> integrationRuntimeDescriptors;
+
+    public FastBootHibernateReactivePersistenceProvider(HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig,
+            Map<String, List<HibernateOrmIntegrationRuntimeDescriptor>> integrationRuntimeDescriptors) {
+        this.hibernateOrmRuntimeConfig = hibernateOrmRuntimeConfig;
+        this.integrationRuntimeDescriptors = integrationRuntimeDescriptors;
+    }
 
     @Override
     public EntityManagerFactory createEntityManagerFactory(String emName, Map properties) {
@@ -113,7 +130,7 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
                 continue;
             }
 
-            RecordedState recordedState = PersistenceUnitsHolder.getRecordedState(persistenceUnitName);
+            RecordedState recordedState = PersistenceUnitsHolder.popRecordedState(persistenceUnitName);
 
             final PrevalidatedQuarkusMetadata metadata = recordedState.getMetadata();
             final BuildTimeSettings buildTimeSettings = recordedState.getBuildTimeSettings();
@@ -121,7 +138,18 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
             RuntimeSettings.Builder runtimeSettingsBuilder = new RuntimeSettings.Builder(buildTimeSettings,
                     integrationSettings);
 
-            HibernateOrmIntegrations.contributeRuntimeProperties((k, v) -> runtimeSettingsBuilder.put(k, v));
+            // Inject runtime configuration if the persistence unit was defined by Quarkus configuration
+            if (!recordedState.isFromPersistenceXml()) {
+                injectRuntimeConfiguration(persistenceUnitName, hibernateOrmRuntimeConfig, runtimeSettingsBuilder);
+            }
+
+            for (HibernateOrmIntegrationRuntimeDescriptor descriptor : integrationRuntimeDescriptors
+                    .getOrDefault(persistenceUnitName, Collections.emptyList())) {
+                Optional<HibernateOrmIntegrationRuntimeInitListener> listenerOptional = descriptor.getInitListener();
+                if (listenerOptional.isPresent()) {
+                    listenerOptional.get().contributeRuntimeProperties(runtimeSettingsBuilder::put);
+                }
+            }
 
             RuntimeSettings runtimeSettings = runtimeSettingsBuilder.build();
 
@@ -136,7 +164,7 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
                     persistenceUnitName,
                     standardServiceRegistry /* Mostly ignored! (yet needs to match) */,
                     runtimeSettings,
-                    validatorFactory, cdiBeanManager, recordedState.getMultiTenancyStrategy());
+                    validatorFactory, cdiBeanManager);
         }
 
         log.debug("Found no matching persistence units");
@@ -149,7 +177,7 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
         PreconfiguredReactiveServiceRegistryBuilder serviceRegistryBuilder = new PreconfiguredReactiveServiceRegistryBuilder(
                 rs);
 
-        registerVertxPool(persistenceUnitName, runtimeSettings, serviceRegistryBuilder);
+        registerVertxAndPool(persistenceUnitName, runtimeSettings, serviceRegistryBuilder);
 
         runtimeSettings.getSettings().forEach((key, value) -> {
             serviceRegistryBuilder.applySetting(key, value);
@@ -191,7 +219,7 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
                 || "org.hibernate.jpa.HibernatePersistenceProvider".equals(requestedProviderName);
     }
 
-    private void registerVertxPool(String persistenceUnitName,
+    private void registerVertxAndPool(String persistenceUnitName,
             RuntimeSettings runtimeSettings,
             PreconfiguredReactiveServiceRegistryBuilder serviceRegistry) {
         if (runtimeSettings.isConfigured(AvailableSettings.URL)) {
@@ -206,34 +234,78 @@ final class FastBootHibernateReactivePersistenceProvider implements PersistenceP
         }
 
         serviceRegistry.addInitiator(new QuarkusReactiveConnectionPoolInitiator(poolHandle.get()));
+
+        InstanceHandle<Vertx> vertxHandle = Arc.container().instance(Vertx.class);
+        if (!vertxHandle.isAvailable()) {
+            throw new IllegalStateException("No Vert.x instance has been registered in ArC ?");
+        }
+        serviceRegistry.addInitiator(new VertxInstanceInitiator(vertxHandle.get()));
     }
 
-    @Override
-    public EntityManagerFactory createContainerEntityManagerFactory(PersistenceUnitInfo info, Map map) {
-        final String persistenceProviderClassName = info.getPersistenceProviderClassName();
-        if (persistenceProviderClassName == null || IMPLEMENTATION_NAME.equals(persistenceProviderClassName)) {
-            Map<Object, Object> protectiveCopy = map != null ? new HashMap<Object, Object>(map) : new HashMap<Object, Object>();
-            return delegate.createContainerEntityManagerFactory(
-                    new DelegatorPersistenceUnitInfo(info),
-                    protectiveCopy);
+    private static void injectRuntimeConfiguration(String persistenceUnitName,
+            HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig, Builder runtimeSettingsBuilder) {
+        HibernateOrmRuntimeConfigPersistenceUnit persistenceUnitConfig = hibernateOrmRuntimeConfig.defaultPersistenceUnit;
+
+        // Database
+        runtimeSettingsBuilder.put(AvailableSettings.HBM2DDL_DATABASE_ACTION,
+                persistenceUnitConfig.database.generation.generation);
+
+        runtimeSettingsBuilder.put(AvailableSettings.HBM2DDL_CREATE_SCHEMAS,
+                String.valueOf(persistenceUnitConfig.database.generation.createSchemas));
+
+        if (persistenceUnitConfig.database.generation.haltOnError) {
+            runtimeSettingsBuilder.put(AvailableSettings.HBM2DDL_HALT_ON_ERROR, "true");
         }
-        //not the right provider
-        return null;
+
+        // Logging
+        if (persistenceUnitConfig.log.sql) {
+            runtimeSettingsBuilder.put(AvailableSettings.SHOW_SQL, "true");
+
+            if (persistenceUnitConfig.log.formatSql) {
+                runtimeSettingsBuilder.put(AvailableSettings.FORMAT_SQL, "true");
+            }
+        }
+
+        if (persistenceUnitConfig.log.jdbcWarnings.isPresent()) {
+            runtimeSettingsBuilder.put(AvailableSettings.LOG_JDBC_WARNINGS,
+                    persistenceUnitConfig.log.jdbcWarnings.get().toString());
+        }
     }
 
     @Override
     public ProviderUtil getProviderUtil() {
-        return delegate.getProviderUtil();
+        return providerUtil;
+    }
+
+    @Override
+    public EntityManagerFactory createContainerEntityManagerFactory(PersistenceUnitInfo info, Map map) {
+        //Not supported by Hibernate Reactive: this should always delegate to Hibernate ORM, which will do its own
+        //persistence provider name checks and possibly reject if it's not a suitable.
+        return getJdbcHibernatePersistenceProviderDelegate().createContainerEntityManagerFactory(info, map);
     }
 
     @Override
     public void generateSchema(PersistenceUnitInfo info, Map map) {
-        throw new IllegalStateException("Hibernate Reactive does not support schema generation");
+        getJdbcHibernatePersistenceProviderDelegate().generateSchema(info, map);
     }
 
     @Override
     public boolean generateSchema(String persistenceUnitName, Map map) {
-        throw new IllegalStateException("Hibernate Reactive does not support schema generation");
+        return getJdbcHibernatePersistenceProviderDelegate().generateSchema(persistenceUnitName, map);
+    }
+
+    private FastBootHibernatePersistenceProvider getJdbcHibernatePersistenceProviderDelegate() {
+        FastBootHibernatePersistenceProvider localDelegate = this.delegate;
+        if (localDelegate == null) {
+            synchronized (this) {
+                localDelegate = this.delegate;
+                if (localDelegate == null) {
+                    this.delegate = localDelegate = new FastBootHibernatePersistenceProvider(hibernateOrmRuntimeConfig,
+                            integrationRuntimeDescriptors);
+                }
+            }
+        }
+        return localDelegate;
     }
 
 }
