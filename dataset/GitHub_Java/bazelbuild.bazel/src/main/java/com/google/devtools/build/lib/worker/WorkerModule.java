@@ -203,20 +203,12 @@ public class WorkerModule extends BlazeModule {
     }
   }
 
-  /**
-   * Stops any workers that are still executing.
-   *
-   * <p>This currently kills off some amount of workers, losing the warmed-up state.
-   * TODO(b/119701157): Cancel running workers instead (requires some way to reach each worker).
-   */
+  // Kill workers on Ctrl-C to quickly end the interrupted build.
+  // TODO(philwo) - make sure that this actually *kills* the workers and not just politely waits
+  // for them to finish.
   @Subscribe
   public void buildInterrupted(BuildInterruptedEvent event) {
-    if (workerPool != null) {
-      if ((options != null && options.workerVerbose)) {
-        env.getReporter().handle(Event.info("Build interrupted, stopping active workers..."));
-      }
-      workerPool.stopWork();
-    }
+    shutdownPool("Build interrupted, shutting down worker pool...");
   }
 
   /** Shuts down the worker pool and sets {#code workerPool} to null. */

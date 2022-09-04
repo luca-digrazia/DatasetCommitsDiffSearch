@@ -124,7 +124,7 @@ class SingleplexWorker extends Worker {
   }
 
   @Override
-  public void finishExecution(Path execRoot, SandboxOutputs outputs) throws IOException {}
+  public void finishExecution(Path execRoot) throws IOException {}
 
   @Override
   void destroy() {
