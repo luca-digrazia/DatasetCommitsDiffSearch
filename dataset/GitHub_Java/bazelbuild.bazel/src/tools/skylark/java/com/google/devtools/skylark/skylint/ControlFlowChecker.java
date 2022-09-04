@@ -166,7 +166,6 @@ public class ControlFlowChecker extends SyntaxTreeVisitor {
               "some but not all execution paths of '"
                   + node.getIdentifier()
                   + "' return a value."
-                  + " If it is intentional, make it explicit using 'return None'."
                   + " If you know these cannot happen,"
                   + " add the statement `fail('unreachable')` to them."
                   + " For more details, have a look at the documentation.",
