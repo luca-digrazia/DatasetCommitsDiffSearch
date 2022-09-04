@@ -147,7 +147,20 @@ public class BootstrapMavenContext {
             currentProject = resolveCurrentProject();
             this.workspace = currentProject == null ? null : currentProject.getWorkspace();
         }
-        userSettings = config.userSettings;
+        userSettings = config.userSettings == null
+                ? resolveSettingsFile(getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_USER_SETTINGS),
+                        () -> {
+                            final String quarkusMavenSettings = PropertyUtils.getProperty(MAVEN_SETTINGS);
+                            return quarkusMavenSettings == null ? new File(userMavenConfigurationHome, SETTINGS_XML)
+                                    : new File(quarkusMavenSettings);
+                        })
+                : config.userSettings;
+        globalSettings = resolveSettingsFile(getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_GLOBAL_SETTINGS),
+                () -> {
+                    final String envM2Home = System.getenv(MAVEN_HOME);
+                    return new File(PropertyUtils.getProperty(MAVEN_DOT_HOME, envM2Home != null ? envM2Home : ""),
+                            "conf/settings.xml");
+                });
     }
 
     public AppArtifact getCurrentProjectArtifact(String extension) throws BootstrapMavenException {
@@ -175,27 +188,11 @@ public class BootstrapMavenContext {
     }
 
     public File getUserSettings() {
-        return userSettings == null
-                ? userSettings = resolveSettingsFile(
-                        getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_USER_SETTINGS),
-                        () -> {
-                            final String quarkusMavenSettings = PropertyUtils.getProperty(MAVEN_SETTINGS);
-                            return quarkusMavenSettings == null ? new File(userMavenConfigurationHome, SETTINGS_XML)
-                                    : new File(quarkusMavenSettings);
-                        })
-                : userSettings;
+        return userSettings;
     }
 
     public File getGlobalSettings() {
-        return globalSettings == null
-                ? globalSettings = resolveSettingsFile(
-                        getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_GLOBAL_SETTINGS),
-                        () -> {
-                            final String envM2Home = System.getenv(MAVEN_HOME);
-                            return new File(PropertyUtils.getProperty(MAVEN_DOT_HOME, envM2Home != null ? envM2Home : ""),
-                                    "conf/settings.xml");
-                        })
-                : globalSettings;
+        return globalSettings;
     }
 
     public boolean isOffline() throws BootstrapMavenException {
@@ -273,42 +270,26 @@ public class BootstrapMavenContext {
         return localRepo == null ? new File(userMavenConfigurationHome, "repository").getAbsolutePath() : localRepo;
     }
 
-    private File resolveSettingsFile(String settingsArg, Supplier<File> supplier) {
+    private static File resolveSettingsFile(String settingsArg, Supplier<File> supplier) {
         File userSettings;
         if (settingsArg != null) {
             userSettings = new File(settingsArg);
             if (userSettings.exists()) {
                 return userSettings;
             }
-            if (userSettings.isAbsolute()) {
-                return null;
-            }
-
-            // in case the settings path is a relative one we check whether the pom path is also a relative one
-            // in which case we can resolve the settings path relative to the project directory
-            // otherwise, we don't have a clue what the settings path is relative to
-            String alternatePomDir = getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_POM_FILE);
-            if (alternatePomDir != null) {
-                File tmp = new File(alternatePomDir);
-                if (tmp.isAbsolute()) {
-                    alternatePomDir = null;
-                } else {
-                    if (!tmp.isDirectory()) {
-                        tmp = tmp.getParentFile();
-                    }
-                    alternatePomDir = tmp.toString();
+            String base = System.getenv("MAVEN_PROJECTBASEDIR"); // Root project base dir
+            if (base != null) {
+                userSettings = new File(base, settingsArg);
+                if (userSettings.exists()) {
+                    return userSettings;
                 }
             }
-
-            // Root project base dir
-            userSettings = resolveSettingsFile(settingsArg, alternatePomDir, System.getenv("MAVEN_PROJECTBASEDIR"));
-            if (userSettings != null) {
-                return userSettings;
-            }
-            // current module project base dir
-            userSettings = resolveSettingsFile(settingsArg, alternatePomDir, PropertyUtils.getProperty(BASEDIR));
-            if (userSettings != null) {
-                return userSettings;
+            base = PropertyUtils.getProperty(BASEDIR); // current module project base dir
+            if (base != null) {
+                userSettings = new File(base, settingsArg);
+                if (userSettings.exists()) {
+                    return userSettings;
+                }
             }
             userSettings = new File(PropertyUtils.getUserHome(), settingsArg);
             if (userSettings.exists()) {
@@ -317,25 +298,6 @@ public class BootstrapMavenContext {
         }
         userSettings = supplier.get();
         return userSettings.exists() ? userSettings : null;
-    }
-
-    private File resolveSettingsFile(String settingsArg, String alternatePomDir, String projectBaseDir) {
-        if (projectBaseDir == null) {
-            return null;
-        }
-        File userSettings;
-        if (alternatePomDir != null && projectBaseDir.endsWith(alternatePomDir)) {
-            userSettings = new File(projectBaseDir.substring(0, projectBaseDir.length() - alternatePomDir.length()),
-                    settingsArg);
-            if (userSettings.exists()) {
-                return userSettings;
-            }
-        }
-        userSettings = new File(projectBaseDir, settingsArg);
-        if (userSettings.exists()) {
-            return userSettings;
-        }
-        return null;
     }
 
     private DefaultRepositorySystemSession newRepositorySystemSession() throws BootstrapMavenException {
