@@ -30,8 +30,6 @@ import org.graylog2.audit.NullAuditEventSender;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.Deflector;
-import org.graylog2.indexer.LegacyDeflectorIndexSet;
-import org.graylog2.indexer.LegacyDeflectorRegistry;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.messages.Messages;
@@ -96,7 +94,7 @@ public class EsIndexRangeServiceTest {
         indices = new Indices(client, ELASTICSEARCH_CONFIGURATION, new IndexMapping(), messages, mock(NodeId.class), new NullAuditEventSender());
         final Deflector deflector = new Deflector(null, ELASTICSEARCH_CONFIGURATION.getIndexPrefix(), new NullActivityWriter(),
             indices, null, auditEventSender, nodeId, null);
-        indexRangeService = new EsIndexRangeService(client, new LegacyDeflectorRegistry(new LegacyDeflectorIndexSet(deflector)), localEventBus, new MetricRegistry());
+        indexRangeService = new EsIndexRangeService(client, deflector, localEventBus, new MetricRegistry());
     }
 
     @Test

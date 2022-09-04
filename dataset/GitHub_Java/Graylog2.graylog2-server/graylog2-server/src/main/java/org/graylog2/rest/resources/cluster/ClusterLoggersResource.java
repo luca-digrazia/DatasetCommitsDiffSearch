@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.resources.cluster;
 
@@ -32,10 +32,9 @@ import org.graylog2.rest.models.system.loggers.responses.LoggersSummary;
 import org.graylog2.rest.models.system.loggers.responses.SubsystemSummary;
 import org.graylog2.rest.resources.system.logs.RemoteLoggersResource;
 import org.graylog2.shared.rest.resources.ProxiedResource;
+import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.inject.Inject;
-import javax.inject.Named;
-import javax.validation.constraints.NotEmpty;
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -47,7 +46,6 @@ import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
 
 @RequiresAuthentication
 @Api(value = "Cluster/System/Loggers", description = "Cluster-wide access to internal Graylog loggers")
@@ -56,9 +54,8 @@ public class ClusterLoggersResource extends ProxiedResource {
     @Inject
     public ClusterLoggersResource(NodeService nodeService,
                                     RemoteInterfaceProvider remoteInterfaceProvider,
-                                    @Context HttpHeaders httpHeaders,
-                                    @Named("proxiedRequestsExecutorService") ExecutorService executorService) throws NodeNotFoundException {
-        super(httpHeaders, nodeService, remoteInterfaceProvider, executorService);
+                                    @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
+        super(httpHeaders, nodeService, remoteInterfaceProvider);
     }
 
     @GET
@@ -95,17 +92,5 @@ public class ClusterLoggersResource extends ProxiedResource {
         final RemoteLoggersResource remoteLoggersResource = this.remoteInterfaceProvider.get(node, this.authenticationToken, RemoteLoggersResource.class);
 
         remoteLoggersResource.setSubsystemLoggerLevel(subsystemTitle, level).execute();
-    }
-
-    @PUT
-    @Timed
-    @Path("/{loggerName}/level/{level}")
-    @ApiOperation(value = "Set the loglevel of a single logger",
-            notes = "Provided level is falling back to DEBUG if it does not exist")
-    @NoAuditEvent("proxy resource, audit event will be emitted on target nodes")
-    public Map<String, CallResult<Void>> setClusterSingleLoggerLevel(
-            @ApiParam(name = "loggerName", required = true) @PathParam("loggerName") @NotEmpty String loggerName,
-            @ApiParam(name = "level", required = true) @PathParam("level") @NotEmpty String level) throws NodeNotFoundException, IOException {
-        return requestOnAllNodes(createRemoteInterfaceProvider(RemoteLoggersResource.class), client -> client.setSingleLoggerLevel(loggerName, level));
     }
 }

@@ -24,8 +24,7 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.audit.AuditEventTypes;
 import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.configuration.ElasticsearchConfiguration;
-import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.indices.TooManyAliasesException;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
@@ -41,13 +40,11 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
-import java.util.stream.StreamSupport;
 
 @RequiresAuthentication
 @Api(value = "System/Deflector", description = "Index deflector management")
@@ -56,19 +53,19 @@ public class DeflectorResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(DeflectorResource.class);
 
-    private final IndexSetRegistry indexSetRegistry;
+    private final Deflector deflector;
     private final ActivityWriter activityWriter;
     private final Map<String, Provider<RotationStrategy>> rotationStrategies;
     private final ClusterConfigService clusterConfigService;
     private final ElasticsearchConfiguration configuration;
 
     @Inject
-    public DeflectorResource(IndexSetRegistry indexSetRegistry,
+    public DeflectorResource(Deflector deflector,
                              ActivityWriter activityWriter,
                              Map<String, Provider<RotationStrategy>> rotationStrategies,
                              ClusterConfigService clusterConfigService,
                              ElasticsearchConfiguration configuration) {
-        this.indexSetRegistry = indexSetRegistry;
+        this.deflector = deflector;
         this.activityWriter = activityWriter;
         this.rotationStrategies = rotationStrategies;
         this.clusterConfigService = clusterConfigService;
@@ -81,12 +78,7 @@ public class DeflectorResource extends RestResource {
     @RequiresPermissions(RestPermissions.DEFLECTOR_READ)
     @Produces(MediaType.APPLICATION_JSON)
     public DeflectorSummary deflector() throws TooManyAliasesException {
-        // TODO 2.2: Resource needs to be adjusted to support multiple write targets
-        final IndexSet indexSet = indexSetRegistry.getAllIndexSets().stream()
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Unable to find current deflector alias"));
-
-        return DeflectorSummary.create(indexSet.isUp(), indexSet.getCurrentActualTargetIndex());
+        return DeflectorSummary.create(deflector.isUp(), deflector.getCurrentActualTargetIndex());
     }
 
     @POST
@@ -101,7 +93,6 @@ public class DeflectorResource extends RestResource {
         LOG.info(msg);
         activityWriter.write(new Activity(msg, DeflectorResource.class));
 
-        // TODO 2.2: Resource needs to be adjusted to support multiple write targets
-        indexSetRegistry.getAllIndexSets().forEach(IndexSet::cycle);
+        deflector.cycle();
     }
 }

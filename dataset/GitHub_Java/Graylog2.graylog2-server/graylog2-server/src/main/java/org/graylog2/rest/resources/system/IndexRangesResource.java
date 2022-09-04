@@ -28,7 +28,7 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.audit.AuditEventTypes;
 import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.ranges.CreateNewSingleIndexRangeJob;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
@@ -66,19 +66,19 @@ public class IndexRangesResource extends RestResource {
     private final IndexRangeService indexRangeService;
     private final RebuildIndexRangesJob.Factory rebuildIndexRangesJobFactory;
     private final CreateNewSingleIndexRangeJob.Factory singleIndexRangeJobFactory;
-    private final IndexSetRegistry indexSetRegistry;
+    private final Deflector deflector;
     private final SystemJobManager systemJobManager;
 
     @Inject
     public IndexRangesResource(IndexRangeService indexRangeService,
                                RebuildIndexRangesJob.Factory rebuildIndexRangesJobFactory,
                                CreateNewSingleIndexRangeJob.Factory singleIndexRangeJobFactory,
-                               IndexSetRegistry indexSetRegistry,
+                               Deflector deflector,
                                SystemJobManager systemJobManager) {
         this.indexRangeService = indexRangeService;
         this.rebuildIndexRangesJobFactory = rebuildIndexRangesJobFactory;
         this.singleIndexRangeJobFactory = singleIndexRangeJobFactory;
-        this.indexSetRegistry = indexSetRegistry;
+        this.deflector = deflector;
         this.systemJobManager = systemJobManager;
     }
 
@@ -114,7 +114,7 @@ public class IndexRangesResource extends RestResource {
     public IndexRangeSummary show(
             @ApiParam(name = "index", value = "The name of the Graylog-managed Elasticsearch index", required = true)
             @PathParam("index") @NotEmpty String index) throws NotFoundException {
-        if (!indexSetRegistry.isManagedIndex(index)) {
+        if (!deflector.isGraylogIndex(index)) {
             throw new BadRequestException(index + " is not a Graylog-managed Elasticsearch index.");
         }
         checkPermission(RestPermissions.INDEXRANGES_READ, index);
@@ -143,7 +143,7 @@ public class IndexRangesResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     @AuditEvent(type = AuditEventTypes.ES_INDEX_RANGE_UPDATE_JOB)
     public Response rebuild() {
-        final SystemJob rebuildJob = rebuildIndexRangesJobFactory.create(indexSetRegistry);
+        final SystemJob rebuildJob = rebuildIndexRangesJobFactory.create(this.deflector);
         try {
             this.systemJobManager.submit(rebuildJob);
         } catch (SystemJobConcurrencyException e) {
@@ -170,12 +170,12 @@ public class IndexRangesResource extends RestResource {
     public Response rebuildIndex(
             @ApiParam(name = "index", value = "The name of the Graylog-managed Elasticsearch index", required = true)
             @PathParam("index") @NotEmpty String index) {
-        if (!indexSetRegistry.isManagedIndex(index)) {
+        if (!deflector.isGraylogIndex(index)) {
             throw new BadRequestException(index + " is not a Graylog-managed Elasticsearch index.");
         }
         checkPermission(RestPermissions.INDEXRANGES_REBUILD, index);
 
-        final SystemJob rebuildJob = singleIndexRangeJobFactory.create(indexSetRegistry, index);
+        final SystemJob rebuildJob = singleIndexRangeJobFactory.create(deflector, index);
         try {
             this.systemJobManager.submit(rebuildJob);
         } catch (SystemJobConcurrencyException e) {

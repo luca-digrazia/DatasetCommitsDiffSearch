@@ -16,12 +16,12 @@
  */
 package org.graylog2.bootstrap;
 
-import com.github.rvesse.airline.annotations.Option;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.ProvisionException;
+import io.airlift.airline.Option;
 import org.graylog2.audit.AuditActor;
 import org.graylog2.audit.AuditEventSender;
 import org.graylog2.plugin.BaseConfiguration;
@@ -31,6 +31,7 @@ import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.bindings.GenericBindings;
 import org.graylog2.shared.bindings.GenericInitializerBindings;
+import org.graylog2.shared.bindings.MessageInputBindings;
 import org.graylog2.shared.bindings.SchedulerBindings;
 import org.graylog2.shared.bindings.ServerStatusBindings;
 import org.graylog2.shared.bindings.SharedPeriodicalBindings;
@@ -55,7 +56,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.graylog2.audit.AuditEventTypes.NODE_STARTUP_COMPLETE;
 import static org.graylog2.audit.AuditEventTypes.NODE_STARTUP_INITIATE;
 
@@ -91,29 +91,15 @@ public abstract class ServerBootstrap extends CmdLineTool {
         if (!isNoPidFile()) {
             savePidFile(getPidFile());
         }
-        // Set these early in the startup because netty's NativeLibraryUtil uses a static initializer
-        setNettyNativeDefaults();
-    }
-
-    private void setNettyNativeDefaults() {
-        // Give netty a better spot than /tmp to unpack its tcnative libraries
-        if (System.getProperty("io.netty.native.workdir") == null) {
-            System.setProperty("io.netty.native.workdir", configuration.getNativeLibDir().toAbsolutePath().toString());
-        }
-        // Don't delete the native lib after unpacking, as this confuses needrestart(1) on some distributions
-        if (System.getProperty("io.netty.native.deleteLibAfterLoading") == null) {
-            System.setProperty("io.netty.native.deleteLibAfterLoading", "false");
-        }
     }
 
     @Override
     protected void startCommand() {
         final AuditEventSender auditEventSender = injector.getInstance(AuditEventSender.class);
         final NodeId nodeId = injector.getInstance(NodeId.class);
-        final String systemInformation = Tools.getSystemInformation();
         final Map<String, Object> auditEventContext = ImmutableMap.of(
             "version", version.toString(),
-            "java", systemInformation,
+            "java", Tools.getSystemInformation(),
             "node_id", nodeId.toString()
         );
         auditEventSender.success(AuditActor.system(nodeId), NODE_STARTUP_INITIATE, auditEventContext);
@@ -121,7 +107,7 @@ public abstract class ServerBootstrap extends CmdLineTool {
         final OS os = OS.getOs();
 
         LOG.info("Graylog {} {} starting up", commandName, version);
-        LOG.info("JRE: {}", systemInformation);
+        LOG.info("JRE: {}", Tools.getSystemInformation());
         LOG.info("Deployment: {}", configuration.getInstallationSource());
         LOG.info("OS: {}", os.getPlatformName());
         LOG.info("Arch: {}", os.getArch());
@@ -189,7 +175,7 @@ public abstract class ServerBootstrap extends CmdLineTool {
         pidFilePath.toFile().deleteOnExit();
 
         try {
-            if (isNullOrEmpty(pid) || "unknown".equals(pid)) {
+            if (pid == null || pid.isEmpty() || pid.equals("unknown")) {
                 throw new Exception("Could not determine PID.");
             }
 
@@ -211,6 +197,7 @@ public abstract class ServerBootstrap extends CmdLineTool {
         result.add(new SharedPeriodicalBindings());
         result.add(new SchedulerBindings());
         result.add(new GenericInitializerBindings());
+        result.add(new MessageInputBindings());
         result.add(new SystemStatsModule(configuration.isDisableSigar()));
 
         return result;

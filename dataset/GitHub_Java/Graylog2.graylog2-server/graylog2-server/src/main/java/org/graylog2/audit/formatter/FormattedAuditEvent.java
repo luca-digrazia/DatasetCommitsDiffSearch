@@ -75,7 +75,7 @@ public interface FormattedAuditEvent {
     String action();
 
     /**
-     * The message template string that will be used to present the audit event to humans.
+     * The format string that will be used to present the audit event to humans.
      *
      * All data in {@link #attributes()} as well as the following fields can be used as variables.
      *
@@ -92,12 +92,12 @@ public interface FormattedAuditEvent {
      *
      * @return
      */
-    String messageTemplate();
+    String formatString();
 
     /**
      * The audit event attributes that will be stored in the database.
      *
-     * All information that is needed by the {@link #messageTemplate()} should be in here.
+     * All information that is needed by the {@link #formatString()} should be in here.
      *
      * Make sure you do not store any sensitive information like passwords and API tokens!
      *
