@@ -37,7 +37,6 @@ import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.MemorySize;
-import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.undertow.httpcore.BufferAllocator;
 import io.undertow.httpcore.StatusCodes;
@@ -65,15 +64,11 @@ import io.undertow.servlet.api.InstanceFactory;
 import io.undertow.servlet.api.InstanceHandle;
 import io.undertow.servlet.api.ListenerInfo;
 import io.undertow.servlet.api.LoginConfig;
-import io.undertow.servlet.api.SecurityConstraint;
-import io.undertow.servlet.api.SecurityInfo;
 import io.undertow.servlet.api.ServletContainer;
 import io.undertow.servlet.api.ServletContainerInitializerInfo;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ServletSecurityInfo;
 import io.undertow.servlet.api.ThreadSetupHandler;
-import io.undertow.servlet.api.TransportGuaranteeType;
-import io.undertow.servlet.api.WebResourceCollection;
 import io.undertow.servlet.handlers.DefaultServlet;
 import io.undertow.servlet.handlers.ServletPathMatches;
 import io.undertow.servlet.handlers.ServletRequestContext;
@@ -137,21 +132,12 @@ public class UndertowDeploymentRecorder {
     }
 
     public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories,
-            LaunchMode launchMode, ShutdownContext context, String contextPath, String httpRootPath) {
-        String realMountPoint;
-        if (contextPath.equals("/")) {
-            realMountPoint = httpRootPath;
-        } else if (httpRootPath.equals("/")) {
-            realMountPoint = contextPath;
-        } else {
-            realMountPoint = httpRootPath + contextPath;
-        }
-
+            LaunchMode launchMode, ShutdownContext context, String contextPath) {
         DeploymentInfo d = new DeploymentInfo();
         d.setSessionIdGenerator(new QuarkusSessionIdGenerator());
         d.setClassLoader(getClass().getClassLoader());
         d.setDeploymentName(name);
-        d.setContextPath(realMountPoint);
+        d.setContextPath(contextPath);
         d.setEagerFilterInit(true);
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) {
@@ -207,7 +193,6 @@ public class UndertowDeploymentRecorder {
                 }
             }
         });
-
         return new RuntimeValue<>(d);
     }
 
@@ -312,11 +297,6 @@ public class UndertowDeploymentRecorder {
 
     public void addServletInitParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
         info.getValue().addInitParameter(name, value);
-    }
-
-    public void setupSecurity(DeploymentManager manager) {
-
-        CDI.current().select(ServletHttpSecurityPolicy.class).get().setDeployment(manager.getDeployment());
     }
 
     public Handler<RoutingContext> startUndertow(ShutdownContext shutdown, ExecutorService executorService,
@@ -449,7 +429,6 @@ public class UndertowDeploymentRecorder {
         return new ServletExtension() {
             @Override
             public void handleDeployment(DeploymentInfo deploymentInfo, ServletContext servletContext) {
-                CurrentVertxRequest currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
                 deploymentInfo.addThreadSetupAction(new ThreadSetupHandler() {
                     @Override
                     public <T, C> ThreadSetupHandler.Action<T, C> create(Action<T, C> action) {
@@ -460,7 +439,6 @@ public class UndertowDeploymentRecorder {
                                 if (exchange == null) {
                                     return action.call(exchange, context);
                                 }
-                                boolean vertxFirst = false;
                                 ManagedContext requestContext = beanContainer.requestContext();
                                 if (requestContext.isActive()) {
                                     return action.call(exchange, context);
@@ -469,19 +447,11 @@ public class UndertowDeploymentRecorder {
                                             .getAttachment(REQUEST_CONTEXT);
                                     try {
                                         requestContext.activate(existingRequestContext);
-                                        vertxFirst = existingRequestContext == null;
-
-                                        VertxHttpExchange delegate = (VertxHttpExchange) exchange.getDelegate();
-                                        RoutingContext rc = (RoutingContext) delegate.getContext();
-                                        currentVertxRequest.setCurrent(rc);
                                         return action.call(exchange, context);
                                     } finally {
                                         ServletRequestContext src = exchange
                                                 .getAttachment(ServletRequestContext.ATTACHMENT_KEY);
                                         HttpServletRequestImpl req = src.getOriginalRequest();
-                                        if (vertxFirst) {
-                                            currentVertxRequest.initialInvocationComplete(req.isAsyncStarted());
-                                        }
                                         if (req.isAsyncStarted()) {
                                             exchange.putAttachment(REQUEST_CONTEXT, requestContext.getState());
                                             requestContext.deactivate();
@@ -530,27 +500,6 @@ public class UndertowDeploymentRecorder {
 
     public void addContextParam(RuntimeValue<DeploymentInfo> deployment, String paramName, String paramValue) {
         deployment.getValue().addInitParameter(paramName, paramValue);
-    }
-
-    public void setDenyUncoveredHttpMethods(RuntimeValue<DeploymentInfo> deployment, boolean denyUncoveredHttpMethods) {
-        deployment.getValue().setDenyUncoveredHttpMethods(denyUncoveredHttpMethods);
-    }
-
-    public void addSecurityConstraint(RuntimeValue<DeploymentInfo> deployment, SecurityConstraint securityConstraint) {
-        deployment.getValue().addSecurityConstraint(securityConstraint);
-    }
-
-    public void addSecurityConstraint(RuntimeValue<DeploymentInfo> deployment, SecurityInfo.EmptyRoleSemantic emptyRoleSemantic,
-            TransportGuaranteeType transportGuaranteeType,
-            Set<String> rolesAllowed, Set<WebResourceCollection> webResourceCollections) {
-
-        SecurityConstraint securityConstraint = new SecurityConstraint()
-                .setEmptyRoleSemantic(emptyRoleSemantic)
-                .addRolesAllowed(rolesAllowed)
-                .setTransportGuaranteeType(transportGuaranteeType)
-                .addWebResourceCollections(webResourceCollections.toArray(new WebResourceCollection[0]));
-        deployment.getValue().addSecurityConstraint(securityConstraint);
-
     }
 
     /**
