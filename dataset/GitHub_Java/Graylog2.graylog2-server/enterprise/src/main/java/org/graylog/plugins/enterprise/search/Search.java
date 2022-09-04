@@ -28,7 +28,6 @@ import static com.google.common.collect.ImmutableSet.of;
 @JsonDeserialize(builder = Search.Builder.class)
 public abstract class Search {
     private static final String FIELD_CREATED_AT = "created_at";
-    public static final String FIELD_OWNER = "owner";
 
     // generated during build to help quickly find a query by id.
     private ImmutableMap<String, Query> queryIndex;
@@ -47,9 +46,6 @@ public abstract class Search {
 
     @JsonProperty
     public abstract ImmutableSet<Parameter> parameters();
-
-    @JsonProperty(FIELD_OWNER)
-    public abstract Optional<String> owner();
 
     @JsonProperty(FIELD_CREATED_AT)
     public abstract DateTime createdAt();
@@ -102,10 +98,6 @@ public abstract class Search {
 
         @JsonProperty
         public abstract Builder parameters(ImmutableSet<Parameter> parameters);
-
-        @JsonProperty(FIELD_OWNER)
-        @Nullable
-        public abstract Builder owner(String owner);
 
         @JsonProperty(FIELD_CREATED_AT)
         public abstract Builder createdAt(DateTime createdAt);
