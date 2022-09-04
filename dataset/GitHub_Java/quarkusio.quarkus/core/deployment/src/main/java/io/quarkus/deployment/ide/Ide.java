@@ -8,22 +8,19 @@ import java.util.concurrent.TimeUnit;
 
 public enum Ide {
 
-    // see for cli syntax of idea https://www.jetbrains.com/help/idea/opening-files-from-command-line.html
-    IDEA("idea", "--line %s", "--help"),
-    ECLIPSE("eclipse", null, (String[]) null),
-    VSCODE("code", null, "--version"),
-    NETBEANS("netbeans", null, "--help");
+    IDEA("idea", "--help"),
+    ECLIPSE("eclipse", (String[]) null),
+    VSCODE("code", "--version"),
+    NETBEANS("netbeans", "--help");
 
     private final String defaultCommand;
     private final List<String> markerArgs;
-    private final String lineNumberArg;
     private String machineSpecificCommand;
 
     private String effectiveCommand;
 
-    Ide(String defaultCommand, String lineNumberArg, String... markerArgs) {
+    Ide(String defaultCommand, String... markerArgs) {
         this.defaultCommand = defaultCommand;
-        this.lineNumberArg = lineNumberArg;
         this.markerArgs = markerArgs != null ? Arrays.asList(markerArgs) : Collections.emptyList();
     }
 
@@ -64,20 +61,6 @@ public enum Ide {
             // from inspecting the running processes
             return machineSpecificCommand;
         }
-    }
-
-    public List<String> createFileOpeningArgs(String fileName, String line) {
-        if (line == null || line.isEmpty()) {
-            return Collections.singletonList(fileName);
-        }
-
-        if (lineNumberArg == null) {
-            return Collections.singletonList(fileName + ":" + line);
-        }
-
-        String formattedLineArg = String.format(lineNumberArg, line);
-
-        return List.of(formattedLineArg, fileName);
     }
 
     public void setMachineSpecificCommand(String machineSpecificCommand) {
