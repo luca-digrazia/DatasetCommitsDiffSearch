@@ -1531,7 +1531,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     assertThat(e)
         .hasMessageThat()
         .contains(
-            "invalid Starlark value: class"
+            "cannot expose internal type to Starlark: class"
                 + " com.google.devtools.build.lib.collect.nestedset.NestedSet");
   }
 

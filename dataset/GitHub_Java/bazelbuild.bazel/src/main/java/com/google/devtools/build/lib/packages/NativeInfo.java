@@ -14,9 +14,9 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableCollection;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.CallUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 
 /**
@@ -35,7 +35,7 @@ public abstract class NativeInfo extends StructImpl {
 
   // TODO(adonovan): logically this should be a parameter of getValue
   // and getFieldNames or an instance field of this object.
-  private static final StarlarkSemantics SEMANTICS = StarlarkSemantics.DEFAULT;
+  private static final StarlarkSemantics SEMANTICS = StarlarkSemantics.DEFAULT_SEMANTICS;
 
   @Override
   public Object getValue(String name) throws EvalException {

@@ -35,10 +35,9 @@ import com.google.devtools.build.lib.skylarkbuildapi.OutputGroupInfoApi;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkIterable;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -241,22 +240,25 @@ public final class OutputGroupInfo extends StructImpl
   }
 
   @Override
-  public Object getIndex(StarlarkSemantics semantics, Object key) throws EvalException {
+  public Object getIndex(Object key, Location loc) throws EvalException {
     if (!(key instanceof String)) {
-      throw Starlark.errorf(
-          "Output group names must be strings, got %s instead", Starlark.type(key));
+      throw new EvalException(loc, String.format(
+          "Output grout names must be strings, got %s instead",
+          EvalUtils.getDataTypeName(key)));
     }
 
     NestedSet<Artifact> result = outputGroups.get(key);
     if (result != null) {
       return Depset.of(Artifact.TYPE, result);
     } else {
-      throw Starlark.errorf("Output group %s not present", key);
+      throw new EvalException(loc, String.format(
+          "Output group %s not present", key
+      ));
     }
   }
 
   @Override
-  public boolean containsKey(StarlarkSemantics semantics, Object key) throws EvalException {
+  public boolean containsKey(Object key, Location loc) throws EvalException {
     return outputGroups.containsKey(key);
   }
 
@@ -289,7 +291,7 @@ public final class OutputGroupInfo extends StructImpl
     }
 
     @Override
-    public OutputGroupInfoApi constructor(Dict<?, ?> kwargs) throws EvalException {
+    public OutputGroupInfoApi constructor(Dict<?, ?> kwargs, Location loc) throws EvalException {
       Map<String, Object> kwargsMap = kwargs.getContents(String.class, Object.class, "kwargs");
 
       ImmutableMap.Builder<String, NestedSet<Artifact>> builder = ImmutableMap.builder();
@@ -297,7 +299,7 @@ public final class OutputGroupInfo extends StructImpl
         builder.put(
             entry.getKey(),
             SkylarkRuleConfiguredTargetUtil.convertToOutputGroupValue(
-                entry.getKey(), entry.getValue()));
+                loc, entry.getKey(), entry.getValue()));
       }
       return new OutputGroupInfo(builder.build());
     }

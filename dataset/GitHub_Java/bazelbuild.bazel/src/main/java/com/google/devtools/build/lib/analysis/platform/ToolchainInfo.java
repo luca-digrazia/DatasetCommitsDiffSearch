@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.platform.ToolchainInfoApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Map;
 
 /**
@@ -55,8 +54,10 @@ public class ToolchainInfo extends NativeInfo implements ToolchainInfoApi {
     }
 
     @Override
-    public ToolchainInfo toolchainInfo(Dict<String, Object> kwargs, StarlarkThread thread) {
-      return new ToolchainInfo(kwargs, thread.getCallerLocation());
+    public ToolchainInfo toolchainInfo(Dict<?, ?> kwargs, Location loc) throws EvalException {
+      Map<String, Object> data =
+          Dict.castSkylarkDictOrNoneToDict(kwargs, String.class, Object.class, "kwargs");
+      return new ToolchainInfo(data, loc);
     }
   }
 
