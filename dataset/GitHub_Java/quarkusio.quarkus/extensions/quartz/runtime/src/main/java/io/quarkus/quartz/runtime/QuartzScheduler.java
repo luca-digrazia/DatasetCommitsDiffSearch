@@ -281,11 +281,10 @@ public class QuartzScheduler implements Scheduler {
      *
      * @param event ignored
      */
-    void destroy(@Observes @BeforeDestroyed(ApplicationScoped.class) Object event) {
+    void destroy(@BeforeDestroyed(ApplicationScoped.class) Object event) { //
         if (scheduler != null) {
             try {
-                // Note that this method does not return until all currently executing jobs have completed
-                scheduler.shutdown(true);
+                scheduler.shutdown(true); // gracefully shutdown
             } catch (SchedulerException e) {
                 LOGGER.warnf("Unable to gracefully shutdown the scheduler", e);
             }
