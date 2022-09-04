@@ -36,7 +36,6 @@ import javax.interceptor.InvocationContext;
 
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
-import org.jboss.protean.arc.processor.BeanProcessor.PrivateMembersCollector;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.jboss.protean.arc.processor.types.Baz;
 import org.junit.Test;
@@ -51,7 +50,7 @@ public class SubclassGeneratorTest {
         deployment.init();
 
         AnnotationLiteralProcessor annotationLiteralProcessor = new AnnotationLiteralProcessor(true, TruePredicate.INSTANCE);
-        BeanGenerator beanGenerator = new BeanGenerator(annotationLiteralProcessor, TruePredicate.INSTANCE, new PrivateMembersCollector());
+        BeanGenerator beanGenerator = new BeanGenerator(annotationLiteralProcessor, TruePredicate.INSTANCE);
         SubclassGenerator generator = new SubclassGenerator(annotationLiteralProcessor, TruePredicate.INSTANCE);
         BeanInfo simpleBean = deployment.getBeans().stream()
                 .filter(b -> b.getTarget().get().asClass().name().equals(DotName.createSimple(SimpleBean.class.getName()))).findAny().get();

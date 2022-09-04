@@ -16,7 +16,7 @@
 
 package org.jboss.shamrock.arc.deployment;
 
-import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
+import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -28,11 +28,10 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import javax.enterprise.context.Dependent;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 
-import org.jboss.jandex.AnnotationTarget;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
@@ -42,17 +41,15 @@ import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.Logger;
 import org.jboss.protean.arc.ArcContainer;
-import org.jboss.protean.arc.processor.AnnotationsTransformer;
 import org.jboss.protean.arc.processor.BeanDefiningAnnotation;
-import org.jboss.protean.arc.processor.BeanDeployment;
 import org.jboss.protean.arc.processor.BeanProcessor;
 import org.jboss.protean.arc.processor.BeanProcessor.Builder;
 import org.jboss.protean.arc.processor.DotNames;
 import org.jboss.protean.arc.processor.ReflectionRegistration;
 import org.jboss.protean.arc.processor.ResourceOutput;
-import org.jboss.shamrock.deployment.annotations.BuildProducer;
-import org.jboss.shamrock.deployment.annotations.BuildStep;
-import org.jboss.shamrock.deployment.annotations.Record;
+import org.jboss.shamrock.annotations.BuildProducer;
+import org.jboss.shamrock.annotations.BuildStep;
+import org.jboss.shamrock.annotations.Record;
 import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem.BeanClassNameExclusion;
 import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
 import org.jboss.shamrock.arc.runtime.ArcDeploymentTemplate;
@@ -68,7 +65,6 @@ import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveFieldBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveMethodBuildItem;
-import org.jboss.shamrock.deployment.index.IndexingUtil;
 
 public class ArcAnnotationProcessor {
 
@@ -109,11 +105,9 @@ public class ArcAnnotationProcessor {
     
     @Inject
     List<UnremovableBeanBuildItem> removalExclusions;
-
-    /**
-     * The configuration for ArC, the CDI-based injection facility.
-     */
-    ArcConfig arc;
+    
+    @ConfigProperty(name = "shamrock.arc")
+    ArcConfig config;
     
     @BuildStep(providesCapabilities = Capabilities.CDI_ARC, applicationArchiveMarkers = { "META-INF/beans.xml",
             "META-INF/services/javax.enterprise.inject.spi.Extension" })
@@ -138,16 +132,13 @@ public class ArcAnnotationProcessor {
         Indexer indexer = new Indexer();
         Set<DotName> additionalIndex = new HashSet<>();
         for (String beanClass : additionalBeans) {
-            IndexingUtil.indexClass(beanClass, indexer, beanArchiveIndex.getIndex(), additionalIndex, 
-                                    ArcAnnotationProcessor.class.getClassLoader());
+            indexBeanClass(beanClass, indexer, beanArchiveIndex.getIndex(), additionalIndex);
         }
         Set<DotName> generatedClassNames = new HashSet<>();
         for (GeneratedBeanBuildItem beanClass : generatedBeans) {
-            IndexingUtil.indexClass(beanClass.getName(), indexer, beanArchiveIndex.getIndex(), additionalIndex, 
-                                    ArcAnnotationProcessor.class.getClassLoader(), beanClass.getData());
+            indexBeanClass(beanClass.getName(), indexer, beanArchiveIndex.getIndex(), additionalIndex, beanClass.getData());
             generatedClassNames.add(DotName.createSimple(beanClass.getName()));
         }
-
         CompositeIndex index = CompositeIndex.create(indexer.complete(), beanArchiveIndex.getIndex());
         Builder builder = BeanProcessor.builder();
         builder.setApplicationClassPredicate(new Predicate<DotName>() {
@@ -162,21 +153,7 @@ public class ArcAnnotationProcessor {
                 return false;
             }
         });
-        builder.addAnnotationTransformer(new AnnotationsTransformer() {
-
-            @Override
-            public boolean appliesTo(AnnotationTarget.Kind kind) {
-                return AnnotationTarget.Kind.CLASS == kind;
-            }
-            @Override
-            public void transform(TransformationContext transformationContext) {
-                if (additionalBeans.contains(transformationContext.getTarget().asClass().name().toString())) {
-                    transformationContext.transform().add(Dependent.class).done();
-                }
-            }
-        });
         builder.setIndex(index);
-
         builder.setAdditionalBeanDefiningAnnotations(additionalBeanDefiningAnnotations.stream()
                 .map((s) -> new BeanDefiningAnnotation(s.getName(), s.getDefaultScope()))
                 .collect(Collectors.toList()));
@@ -220,7 +197,7 @@ public class ArcAnnotationProcessor {
         for (BeanDeploymentValidatorBuildItem item : beanDeploymentValidators) {
             builder.addBeanDeploymentValidator(item.getBeanDeploymentValidator());
         }
-        builder.setRemoveUnusedBeans(arc.removeUnusedBeans);
+        builder.setRemoveUnusedBeans(config.removeUnusedBeans);
         builder.addRemovalExclusion(new BeanClassNameExclusion(LifecycleEventRunner.class.getName()));
         for (AdditionalBeanBuildItem additionalBean : this.additionalBeans) {
             if (!additionalBean.isRemovable()) {
@@ -239,24 +216,80 @@ public class ArcAnnotationProcessor {
         }
 
         BeanProcessor beanProcessor = builder.build();
-        BeanDeployment beanDeployment = beanProcessor.process();
-    
-        ArcContainer container = arcTemplate.getContainer(shutdown);
-        BeanContainer beanContainer =
-            arcTemplate.initBeanContainer(
-                container,
-                beanContainerListenerBuildItems
-                    .stream()
-                    .map(BeanContainerListenerBuildItem::getBeanContainerListener)
-                    .collect(Collectors.toList()),
-                beanDeployment
-                    .getRemovedBeans()
-                    .stream()
-                    .flatMap(b -> b.getTypes().stream())
-                    .map(t -> t.name().toString())
-                    .collect(Collectors.toSet()));
-            injectionProvider.produce(new InjectionProviderBuildItem(arcTemplate.setupInjection(container)));
+        beanProcessor.process();
 
-        return new BeanContainerBuildItem(beanContainer);
+        ArcContainer container = arcTemplate.getContainer(shutdown);
+        BeanContainer bc = arcTemplate.initBeanContainer(container,
+                beanContainerListenerBuildItems.stream().map(BeanContainerListenerBuildItem::getBeanContainerListener).collect(Collectors.toList()));
+        injectionProvider.produce(new InjectionProviderBuildItem(arcTemplate.setupInjection(container)));
+
+        return new BeanContainerBuildItem(bc);
+    }
+
+    private void indexBeanClass(String beanClass, Indexer indexer, IndexView shamrockIndex, Set<DotName> additionalIndex) {
+        DotName beanClassName = DotName.createSimple(beanClass);
+        if (additionalIndex.contains(beanClassName)) {
+            return;
+        }
+        ClassInfo beanInfo = shamrockIndex.getClassByName(beanClassName);
+        if (beanInfo == null) {
+            log.debugf("Index bean class: %s", beanClass);
+            try (InputStream stream = ArcAnnotationProcessor.class.getClassLoader().getResourceAsStream(beanClass.replace('.', '/') + ".class")) {
+                beanInfo = indexer.index(stream);
+                additionalIndex.add(beanInfo.name());
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to index: " + beanClass);
+            }
+        } else {
+            // The class could be indexed by shamrock - we still need to distinguish framework classes
+            additionalIndex.add(beanClassName);
+        }
+        for (DotName annotationName : beanInfo.annotations().keySet()) {
+            if (!additionalIndex.contains(annotationName) && shamrockIndex.getClassByName(annotationName) == null) {
+                try (InputStream annotationStream = ArcAnnotationProcessor.class.getClassLoader()
+                        .getResourceAsStream(annotationName.toString().replace('.', '/') + ".class")) {
+                    log.debugf("Index annotation: %s", annotationName);
+                    indexer.index(annotationStream);
+                    additionalIndex.add(annotationName);
+                } catch (IOException e) {
+                    throw new IllegalStateException("Failed to index: " + beanClass);
+                }
+            }
+        }
+        if (!beanInfo.superName().equals(DotNames.OBJECT)) {
+            indexBeanClass(beanInfo.superName().toString(), indexer, shamrockIndex, additionalIndex);
+        }
+    }
+
+    private void indexBeanClass(String beanClass, Indexer indexer, IndexView shamrockIndex, Set<DotName> additionalIndex, byte[] beanData) {
+        DotName beanClassName = DotName.createSimple(beanClass);
+        if (additionalIndex.contains(beanClassName)) {
+            return;
+        }
+        ClassInfo beanInfo = shamrockIndex.getClassByName(beanClassName);
+        if (beanInfo == null) {
+            log.debugf("Index bean class: %s", beanClass);
+            try (InputStream stream = new ByteArrayInputStream(beanData)) {
+                beanInfo = indexer.index(stream);
+                additionalIndex.add(beanInfo.name());
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to index: " + beanClass);
+            }
+        } else {
+            // The class could be indexed by shamrock - we still need to distinguish framework classes
+            additionalIndex.add(beanClassName);
+        }
+        for (DotName annotationName : beanInfo.annotations().keySet()) {
+            if (!additionalIndex.contains(annotationName) && shamrockIndex.getClassByName(annotationName) == null) {
+                try (InputStream annotationStream = ArcAnnotationProcessor.class.getClassLoader()
+                        .getResourceAsStream(annotationName.toString().replace('.', '/') + ".class")) {
+                    log.debugf("Index annotation: %s", annotationName);
+                    indexer.index(annotationStream);
+                    additionalIndex.add(annotationName);
+                } catch (IOException e) {
+                    throw new IllegalStateException("Failed to index: " + beanClass);
+                }
+            }
+        }
     }
 }

@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -41,11 +42,14 @@ import org.jboss.protean.gizmo.ResultHandle;
  */
 class AnnotationLiteralProcessor {
 
+    private final AtomicInteger index;
+
     private final ComputingCache<Key, Literal> cache;
 
     AnnotationLiteralProcessor(boolean shared, Predicate<DotName> applicationClassPredicate) {
+        this.index = new AtomicInteger(1);
         this.cache = shared ? new ComputingCache<>(key -> {
-            return new Literal(AnnotationLiteralGenerator.generatedSharedName(key.annotationName), applicationClassPredicate.test(key.annotationName), 
+            return new Literal(AnnotationLiteralGenerator.generatedSharedName(key.annotationName, index), applicationClassPredicate.test(key.annotationName), 
                     key.annotationClass.methods()
                     .stream()
                     .filter(m -> !m.name().equals(Methods.CLINIT) && !m.name().equals(Methods.INIT))
@@ -68,7 +72,7 @@ class AnnotationLiteralProcessor {
      * @param annotationClass
      * @param annotationInstance
      * @param targetPackage
-     * @return an annotation literal result handle
+     * @return an annotation literal class name
      */
     ResultHandle process(BytecodeCreator bytecode, ClassOutput classOutput, ClassInfo annotationClass, AnnotationInstance annotationInstance,
             String targetPackage) {
@@ -95,9 +99,9 @@ class AnnotationLiteralProcessor {
             return bytecode
                     .newInstance(MethodDescriptor.ofConstructor(literal.className,
                             literal.constructorParams.stream().map(m -> m.returnType().name().toString()).toArray()), constructorParams);
+
         } else {
-            String literalClassName = AnnotationLiteralGenerator.generatedLocalName(targetPackage, DotNames.simpleName(annotationClass.name()),
-                    Hashes.sha1(annotationInstance.toString()));
+            String literalClassName = AnnotationLiteralGenerator.generatedLocalName(targetPackage, DotNames.simpleName(annotationClass.name()), index);
             AnnotationLiteralGenerator.createAnnotationLiteral(classOutput, annotationClass, annotationInstance, literalClassName);
             return bytecode.newInstance(MethodDescriptor.ofConstructor(literalClassName));
         }

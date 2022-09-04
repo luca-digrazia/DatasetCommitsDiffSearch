@@ -351,7 +351,7 @@ public class BeanProcessor {
          * <li>does not declare any producer which is eligible for injection to any injection point,</li>
          * <li>is not directly eligible for injection into any {@link javax.enterprise.inject.Instance} injection point</li>
          * </ul>
-         *
+         * 
          * @param removeUnusedBeans
          * @return
          */
@@ -361,7 +361,7 @@ public class BeanProcessor {
         }
 
         /**
-         *
+         * 
          * @param exclusion
          * @return self
          * @see #setRemoveUnusedBeans(boolean)
@@ -379,14 +379,14 @@ public class BeanProcessor {
 
     }
 
-    private static <E extends BuildExtension> List<E> initAndSort(List<E> extensions, BuildContext buildContext) {
-        for (Iterator<E> iterator = extensions.iterator(); iterator.hasNext();) {
+    private static <E extends BuildExtension> List<E> initAndSort(List<E> extentions, BuildContext buildContext) {
+        for (Iterator<E> iterator = extentions.iterator(); iterator.hasNext();) {
             if (!iterator.next().initialize(buildContext)) {
                 iterator.remove();
             }
         }
-        extensions.sort(BuildExtension::compare);
-        return extensions;
+        extentions.sort(BuildExtension::compare);
+        return extentions;
     }
 
     /**
