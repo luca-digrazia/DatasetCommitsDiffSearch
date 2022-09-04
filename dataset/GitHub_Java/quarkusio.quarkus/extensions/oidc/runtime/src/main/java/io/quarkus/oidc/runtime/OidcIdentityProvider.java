@@ -149,7 +149,8 @@ public class OidcIdentityProvider implements IdentityProvider<TokenAuthenticatio
                                 JsonObject rolesJson = getRolesJson(vertxContext, resolvedContext, tokenCred, tokenJson,
                                         userInfo);
                                 SecurityIdentity securityIdentity = validateAndCreateIdentity(vertxContext, tokenCred,
-                                        resolvedContext, tokenJson, rolesJson, userInfo);
+                                        resolvedContext.oidcConfig,
+                                        tokenJson, rolesJson, userInfo);
                                 if (tokenAutoRefreshPrepared(tokenJson, vertxContext, resolvedContext.oidcConfig)) {
                                     return Uni.createFrom().failure(new TokenAutoRefreshException(securityIdentity));
                                 } else {
@@ -168,22 +169,19 @@ public class OidcIdentityProvider implements IdentityProvider<TokenAuthenticatio
                             QuarkusSecurityIdentity.Builder builder = QuarkusSecurityIdentity.builder();
                             builder.addCredential(tokenCred);
                             OidcUtils.setSecurityIdentityUserInfo(builder, userInfo);
-                            OidcUtils.setSecurityIdentityConfigMetadata(builder, resolvedContext);
-                            String principalMember = "";
+
+                            // getRolesJson: make sure the introspection is picked up correctly
+                            // OidcRuntimeClient.verifyCodeToken - set the introspection there - which may be ambiguous
                             if (result.introspectionResult.containsKey(OidcConstants.INTROSPECTION_TOKEN_USERNAME)) {
-                                principalMember = OidcConstants.INTROSPECTION_TOKEN_USERNAME;
-                            } else if (result.introspectionResult.containsKey(OidcConstants.INTROSPECTION_TOKEN_SUB)) {
-                                // fallback to "sub", if "username" is not present
-                                principalMember = OidcConstants.INTROSPECTION_TOKEN_SUB;
+                                final String userName = result.introspectionResult
+                                        .getString(OidcConstants.INTROSPECTION_TOKEN_USERNAME);
+                                builder.setPrincipal(new Principal() {
+                                    @Override
+                                    public String getName() {
+                                        return userName;
+                                    }
+                                });
                             }
-                            final String userName = principalMember.isEmpty() ? ""
-                                    : result.introspectionResult.getString(principalMember);
-                            builder.setPrincipal(new Principal() {
-                                @Override
-                                public String getName() {
-                                    return userName;
-                                }
-                            });
                             if (result.introspectionResult.containsKey(OidcConstants.TOKEN_SCOPE)) {
                                 for (String role : result.introspectionResult.getString(OidcConstants.TOKEN_SCOPE).split(" ")) {
                                     builder.addRole(role.trim());
@@ -291,7 +289,7 @@ public class OidcIdentityProvider implements IdentityProvider<TokenAuthenticatio
         try {
             TokenVerificationResult result = resolvedContext.provider.verifyJwtToken(request.getToken().getToken());
             return Uni.createFrom()
-                    .item(validateAndCreateIdentity(null, request.getToken(), resolvedContext,
+                    .item(validateAndCreateIdentity(null, request.getToken(), resolvedContext.oidcConfig,
                             result.localVerificationResult, result.localVerificationResult, null));
         } catch (Throwable t) {
             return Uni.createFrom().failure(new AuthenticationFailedException(t));
