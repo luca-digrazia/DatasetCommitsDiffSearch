@@ -2160,9 +2160,10 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .containsExactlyElementsIn(
             new Builder()
                 .add(MOCK_IBTOOLWRAPPER_PATH)
-                .add(storyboardZip)
-                .addDynamicString(archiveRoot) // archive root
-                .add("--minimum-deployment-target", minimumOsVersion.toString())
+                .add(storyboardZip.getExecPathString())
+                .add(archiveRoot) // archive root
+                .add("--minimum-deployment-target")
+                .add(minimumOsVersion.toString())
                 .add("--module")
                 .add("x")
                 .add(VectorArg.of(targetDevices).beforeEach("--target-device"))
@@ -2183,9 +2184,10 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .containsExactlyElementsIn(
             new Builder()
                 .add(MOCK_IBTOOLWRAPPER_PATH)
-                .add(storyboardZip)
-                .addDynamicString(archiveRoot) // archive root
-                .add("--minimum-deployment-target", minimumOsVersion.toString())
+                .add(storyboardZip.getExecPathString())
+                .add(archiveRoot) // archive root
+                .add("--minimum-deployment-target")
+                .add(minimumOsVersion.toString())
                 .add("--module")
                 .add("x")
                 .add(VectorArg.of(targetDevices).beforeEach("--target-device"))
@@ -2216,14 +2218,18 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         CustomCommandLine.builder().add(MOCK_SWIFTSTDLIBTOOLWRAPPER_PATH);
 
     if (toolchain != null) {
-      expectedCommandLine.add("--toolchain", toolchain);
+      expectedCommandLine.add("--toolchain").add(toolchain);
     }
 
     expectedCommandLine
-        .add("--output_zip_path", swiftLibsZip)
-        .add("--bundle_path", bundlePath)
-        .add("--platform", platformName)
-        .add("--scan-executable", binary);
+        .add("--output_zip_path")
+        .add(swiftLibsZip.getExecPathString())
+        .add("--bundle_path")
+        .add(bundlePath)
+        .add("--platform")
+        .add(platformName)
+        .add("--scan-executable")
+        .add(binary.getExecPathString());
 
     assertThat(toolAction.getArguments()).isEqualTo(expectedCommandLine.build().arguments());
   }
@@ -3873,7 +3879,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .isEqualTo(
             new CustomCommandLine.Builder()
                 .add(MOCK_IBTOOLWRAPPER_PATH)
-                .add(storyboardZip)
+                .add(storyboardZip.getExecPathString())
                 .add("launch.storyboardc")
                 .add("--minimum-deployment-target")
                 .add("8.1")

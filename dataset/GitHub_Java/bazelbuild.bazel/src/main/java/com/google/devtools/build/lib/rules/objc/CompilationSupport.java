@@ -34,6 +34,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.util.stream.Collectors.toCollection;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -1086,7 +1087,7 @@ public abstract class CompilationSupport {
                   "--archive_source_mapping_files",
                   VectorArg.of(j2ObjcArchiveSourceMappingFiles).joinWith(","))
               .add("--entry_classes")
-              .add(VectorArg.of(entryClasses).joinWith(","))
+              .add(Joiner.on(",").join(entryClasses))
               .build();
 
       ruleContext.registerAction(
@@ -1384,16 +1385,16 @@ public abstract class CompilationSupport {
                     .list());
     CustomCommandLine.Builder cmdLine =
         CustomCommandLine.builder()
-            .add("--arch", appleConfiguration.getSingleArchitecture().toLowerCase())
-            .add("--platform", appleConfiguration.getSingleArchPlatform().getLowerCaseNameInPlist())
-            .add(
-                "--sdk_version",
-                XcodeConfig.getSdkVersionForPlatform(
-                        ruleContext, appleConfiguration.getSingleArchPlatform())
+            .add("--arch")
+            .add(appleConfiguration.getSingleArchitecture().toLowerCase())
+            .add("--platform")
+            .add(appleConfiguration.getSingleArchPlatform().getLowerCaseNameInPlist())
+            .add("--sdk_version")
+            .add(XcodeConfig.getSdkVersionForPlatform(
+                ruleContext, appleConfiguration.getSingleArchPlatform())
                     .toStringWithMinimumComponents(2))
-            .add(
-                "--xcode_version",
-                XcodeConfig.getXcodeVersion(ruleContext).toStringWithMinimumComponents(2))
+            .add("--xcode_version")
+            .add(XcodeConfig.getXcodeVersion(ruleContext).toStringWithMinimumComponents(2))
             .add("--");
     for (ObjcHeaderThinningInfo info : infos) {
       cmdLine.add(

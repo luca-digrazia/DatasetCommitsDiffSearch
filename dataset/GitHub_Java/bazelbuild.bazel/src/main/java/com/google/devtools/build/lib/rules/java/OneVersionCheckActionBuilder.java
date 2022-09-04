@@ -89,12 +89,12 @@ public final class OneVersionCheckActionBuilder {
 
     CustomCommandLine.Builder oneVersionArgsBuilder =
         CustomCommandLine.builder()
-            .addExecPath("--output", outputArtifact)
-            .addExecPath("--whitelist", oneVersionWhitelist);
+            .add("--output", outputArtifact)
+            .add("--whitelist", oneVersionWhitelist);
     if (enforcementLevel == OneVersionEnforcementLevel.WARNING) {
       oneVersionArgsBuilder.add("--succeed_on_found_violations");
     }
-    oneVersionArgsBuilder.addCustomMultiArgv(new OneVersionJarMapArgv(jarsToCheck));
+    oneVersionArgsBuilder.add(new OneVersionJarMapArgv(jarsToCheck));
     CustomCommandLine oneVersionArgs = oneVersionArgsBuilder.build();
     ruleContext.registerAction(
         new SpawnAction.Builder()

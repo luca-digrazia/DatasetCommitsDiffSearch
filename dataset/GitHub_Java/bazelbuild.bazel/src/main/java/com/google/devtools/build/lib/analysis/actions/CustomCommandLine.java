@@ -362,6 +362,38 @@ public final class CustomCommandLine extends CommandLine {
     }
   }
 
+  private static final class JoinExpandedTreeArtifactExecPathsArg
+      extends TreeArtifactExpansionArgvFragment {
+
+    private final String delimiter;
+    private final Artifact treeArtifact;
+
+    private JoinExpandedTreeArtifactExecPathsArg(String delimiter, Artifact treeArtifact) {
+      Preconditions.checkArgument(
+          treeArtifact.isTreeArtifact(), "%s is not a TreeArtifact", treeArtifact);
+      this.delimiter = delimiter;
+      this.treeArtifact = treeArtifact;
+    }
+
+    @Override
+    void eval(ImmutableList.Builder<String> builder, ArtifactExpander artifactExpander) {
+      Set<Artifact> expandedArtifacts = new TreeSet<>();
+      artifactExpander.expand(treeArtifact, expandedArtifacts);
+
+      if (!expandedArtifacts.isEmpty()) {
+        builder.add(Artifact.joinExecPaths(delimiter, expandedArtifacts));
+      }
+    }
+
+    @Override
+    public String describe() {
+      return String.format(
+          "JoinExpandedTreeArtifactExecPathsArg{ delimiter: %s, treeArtifact: %s}",
+          delimiter,
+          treeArtifact.getExecPathString());
+    }
+  }
+
   private static final class ExpandedTreeArtifactExecPathsArg
       extends TreeArtifactExpansionArgvFragment {
     private final Artifact treeArtifact;
@@ -387,6 +419,32 @@ public final class CustomCommandLine extends CommandLine {
       return String.format(
           "ExpandedTreeArtifactExecPathsArg{ treeArtifact: %s}",
           treeArtifact.getExecPathString());
+    }
+  }
+
+  /**
+   * An argument object that evaluates to a formatted string for {@link TreeFileArtifact} exec
+   * paths, enclosing the associated string format template and {@link TreeFileArtifact}s.
+   */
+  private static final class TreeFileArtifactExecPathWithTemplateArg
+      extends TreeFileArtifactArgvFragment {
+
+    private final String template;
+    private final Artifact placeHolderTreeArtifact;
+
+    private TreeFileArtifactExecPathWithTemplateArg(String template, Artifact artifact) {
+      Preconditions.checkArgument(artifact.isTreeArtifact(), "%s must be a TreeArtifact",
+          artifact);
+      this.template = template;
+      this.placeHolderTreeArtifact = artifact;
+    }
+
+    @Override
+    Object substituteTreeArtifact(Map<Artifact, TreeFileArtifact> substitutionMap) {
+      Artifact treeFileArtifact = substitutionMap.get(placeHolderTreeArtifact);
+      Preconditions.checkNotNull(treeFileArtifact, "Artifact to substitute: %s",
+          placeHolderTreeArtifact);
+      return String.format(template, treeFileArtifact.getExecPath());
     }
   }
 
@@ -557,6 +615,24 @@ public final class CustomCommandLine extends CommandLine {
     }
 
     /**
+     * Adds a flag with the exec path of a placeholder TreeArtifact. When the command line is used
+     * in an action template, the placeholder will be replaced by the exec path of a {@link
+     * TreeFileArtifact} inside the TreeArtifact at execution time for each expanded action.
+     *
+     * @param arg the name of the argument
+     * @param treeArtifact the TreeArtifact that will be evaluated to one of its child {@link
+     *     TreeFileArtifact} at execution time
+     */
+    public Builder addPlaceholderTreeArtifactExecPath(String arg, @Nullable Artifact treeArtifact) {
+      Preconditions.checkNotNull(arg);
+      if (treeArtifact != null) {
+        arguments.add(arg);
+        arguments.add(new TreeFileArtifactExecPathArg(treeArtifact));
+      }
+      return this;
+    }
+
+    /**
      * Adds a placeholder TreeArtifact exec path. When the command line is used in an action
      * template, the placeholder will be replaced by the exec path of a {@link TreeFileArtifact}
      * inside the TreeArtifact at execution time for each expanded action.
@@ -572,20 +648,36 @@ public final class CustomCommandLine extends CommandLine {
     }
 
     /**
-     * Adds a flag with the exec path of a placeholder TreeArtifact. When the command line is used
-     * in an action template, the placeholder will be replaced by the exec path of a {@link
-     * TreeFileArtifact} inside the TreeArtifact at execution time for each expanded action.
+     * Adds a formatted string containing the exec path of a placeholder TreeArtifact. When the
+     * command line is used in an action template, the placeholder will be replaced by the exec path
+     * of a {@link TreeFileArtifact} inside the TreeArtifact at execution time for each expanded
+     * action.
      *
-     * @param arg the name of the argument
-     * @param treeArtifact the TreeArtifact that will be evaluated to one of its child {@link
+     * @param template the string format template containing a single string format specifier (%s)
+     *     to be replaced by the artifact exec path string.
+     * @param treeArtifact the TreeArtifact that will be evaluated to one of their child {@link
      *     TreeFileArtifact} at execution time
      */
-    public Builder addPlaceholderTreeArtifactExecPath(String arg, @Nullable Artifact treeArtifact) {
-      Preconditions.checkNotNull(arg);
+    public Builder addPlaceholderTreeArtifactFormattedExecPath(
+        String template, @Nullable Artifact treeArtifact) {
+      Preconditions.checkNotNull(template);
       if (treeArtifact != null) {
-        arguments.add(arg);
-        arguments.add(new TreeFileArtifactExecPathArg(treeArtifact));
+        arguments.add(new TreeFileArtifactExecPathWithTemplateArg(template, treeArtifact));
       }
+      return this;
+    }
+
+    /**
+     * Adds a string joined together by the exec paths of all {@link TreeFileArtifact}s under
+     * {@code treeArtifact}.
+     *
+     * @param delimiter the delimiter used to join the artifact exec paths.
+     * @param treeArtifact the TreeArtifact containing the {@link TreeFileArtifact}s to join.
+     */
+    public Builder addJoinExpandedTreeArtifactExecPath(String delimiter, Artifact treeArtifact) {
+      Preconditions.checkNotNull(delimiter);
+      Preconditions.checkNotNull(treeArtifact);
+      arguments.add(new JoinExpandedTreeArtifactExecPathsArg(delimiter, treeArtifact));
       return this;
     }
 

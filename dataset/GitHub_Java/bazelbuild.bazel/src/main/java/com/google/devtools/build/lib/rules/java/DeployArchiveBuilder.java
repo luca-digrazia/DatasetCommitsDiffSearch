@@ -176,7 +176,8 @@ public class DeployArchiveBuilder {
     }
     args.add("--normalize");
     if (javaMainClass != null) {
-      args.add("--main_class", javaMainClass);
+      args.add("--main_class");
+      args.add(javaMainClass);
     }
 
     if (!deployManifestLines.isEmpty()) {
@@ -193,7 +194,8 @@ public class DeployArchiveBuilder {
       args.add("--exclude_build_data");
     }
     if (launcher != null) {
-      args.add("--java_launcher", launcher);
+      args.add("--java_launcher");
+      args.add(launcher.getExecPathString());
     }
 
     args.add("--classpath_resources", classpathResources);

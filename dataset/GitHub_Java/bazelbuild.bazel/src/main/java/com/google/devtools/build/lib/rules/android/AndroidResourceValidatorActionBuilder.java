@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.FluentIterable;
@@ -23,7 +24,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import java.util.ArrayList;
 import java.util.List;
@@ -159,9 +159,7 @@ public class AndroidResourceValidatorActionBuilder {
 
     builder
         .add("--libraries")
-        .add(
-            VectorArg.of(ImmutableList.copyOf(libraries))
-                .joinWithDynamicString(context.getConfiguration().getHostPathSeparator()));
+        .add(libraries.join(Joiner.on(context.getConfiguration().getHostPathSeparator())));
     inputs.addAll(libraries);
 
     builder.add("--compiled", compiledSymbols);
@@ -173,7 +171,7 @@ public class AndroidResourceValidatorActionBuilder {
     if (!Strings.isNullOrEmpty(customJavaPackage)) {
       // Sets an alternative java package for the generated R.java
       // this allows android rules to generate resources outside of the java{,tests} tree.
-      builder.add("--packageForR", customJavaPackage);
+      builder.add("--packageForR").add(customJavaPackage);
     }
 
     builder.add("--sourceJarOut", aapt2SourceJarOut);
@@ -216,7 +214,7 @@ public class AndroidResourceValidatorActionBuilder {
     builder.add("--tool").add("VALIDATE").add("--");
 
     if (!Strings.isNullOrEmpty(sdk.getBuildToolsVersion())) {
-      builder.add("--buildToolsVersion", sdk.getBuildToolsVersion());
+      builder.add("--buildToolsVersion").add(sdk.getBuildToolsVersion());
     }
 
     builder.add("--aapt", sdk.getAapt().getExecutable());
@@ -243,7 +241,7 @@ public class AndroidResourceValidatorActionBuilder {
     if (!Strings.isNullOrEmpty(customJavaPackage)) {
       // Sets an alternative java package for the generated R.java
       // this allows android rules to generate resources outside of the java{,tests} tree.
-      builder.add("--packageForR", customJavaPackage);
+      builder.add("--packageForR").add(customJavaPackage);
     }
     List<Artifact> outs = new ArrayList<>();
     Preconditions.checkNotNull(rTxtOut);

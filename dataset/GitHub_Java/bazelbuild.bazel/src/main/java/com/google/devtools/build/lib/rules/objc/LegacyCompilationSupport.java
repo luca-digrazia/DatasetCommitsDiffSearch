@@ -348,8 +348,8 @@ public class LegacyCompilationSupport extends CompilationSupport {
       // TODO(bazel-team): Use -fmodule-map-file when Xcode 6 support is dropped.
       commandLine
           .add("-iquote")
-          .add(moduleMap.get().getArtifact().getExecPath().getParentDirectory())
-          .addFormatted("-fmodule-name=%s", moduleMap.get().getName());
+          .add(moduleMap.get().getArtifact().getExecPath().getParentDirectory().toString())
+          .add("-fmodule-name=" + moduleMap.get().getName());
     }
 
     return commandLine.build();
@@ -502,18 +502,16 @@ public class LegacyCompilationSupport extends CompilationSupport {
       Iterable<Artifact> objFiles,
       Artifact archive) {
     Artifact objList = intermediateArtifacts.archiveObjList();
-    ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(
+    ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(
                 appleConfiguration, appleConfiguration.getSingleArchPlatform())
             .setMnemonic("ObjcLink")
             .setExecutable(libtool(ruleContext))
-            .setCommandLine(
-                new CustomCommandLine.Builder()
+            .setCommandLine(new CustomCommandLine.Builder()
                     .add("-static")
-                    .add("-filelist", objList)
-                    .add("-arch_only", appleConfiguration.getSingleArchitecture())
-                    .add("-syslibroot", AppleToolchain.sdkDir())
-                    .add("-o", archive)
+                    .add("-filelist").add(objList.getExecPathString())
+                    .add("-arch_only").add(appleConfiguration.getSingleArchitecture())
+                    .add("-syslibroot").add(AppleToolchain.sdkDir())
+                    .add("-o").add(archive.getExecPathString())
                     .build())
             .addInputs(objFiles)
             .addInput(objList)
@@ -533,9 +531,12 @@ public class LegacyCompilationSupport extends CompilationSupport {
             .setCommandLine(
                 new CustomCommandLine.Builder()
                     .add("-static")
-                    .add("-arch_only", appleConfiguration.getSingleArchitecture())
-                    .add("-syslibroot", AppleToolchain.sdkDir())
-                    .add("-o", outputArchive)
+                    .add("-arch_only")
+                    .add(appleConfiguration.getSingleArchitecture())
+                    .add("-syslibroot")
+                    .add(AppleToolchain.sdkDir())
+                    .add("-o")
+                    .add(outputArchive.getExecPathString())
                     .add(ImmutableList.copyOf(inputArtifacts))
                     .build())
             .addInputs(inputArtifacts)
@@ -699,7 +700,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
 
     registerObjFilelistAction(objFiles, inputFileList);
 
-    commandLine.add("-filelist", inputFileList.getExecPathString());
+    commandLine.add("-filelist").add(inputFileList.getExecPathString());
 
     AppleBitcodeMode bitcodeMode = appleConfiguration.getBitcodeMode();
     commandLine.add(bitcodeMode.getCompileAndLinkFlags());
@@ -711,7 +712,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
           .add("-Xlinker")
           .add("-bitcode_symbol_map")
           .add("-Xlinker")
-          .add(bitcodeSymbolMap.get());
+          .add(bitcodeSymbolMap.get().getExecPathString());
     }
 
     commandLine
@@ -749,11 +750,13 @@ public class LegacyCompilationSupport extends CompilationSupport {
     }
 
     for (String linkopt : attributes.linkopts()) {
-      commandLine.addFormatted("-Wl,%s", linkopt);
+      commandLine.add("-Wl," + linkopt);
     }
 
     if (linkmap.isPresent()) {
-      commandLine.add("-Xlinker -map").add("-Xlinker ", linkmap.get().getExecPath());
+      commandLine
+        .add("-Xlinker -map")
+        .add("-Xlinker " + linkmap.get().getExecPath());
     }
 
     // Call to dsymutil for debug symbol generation must happen in the link action.
@@ -766,11 +769,10 @@ public class LegacyCompilationSupport extends CompilationSupport {
           .add("&&")
           .add(xcrunwrapper(ruleContext).getExecutable().getExecPath())
           .add(DSYMUTIL)
-          .add(linkedBinary)
-          .add("-o", dsymPath)
-          .addDynamicString(
-              "&& zipped_bundle=${PWD}/" + dsymBundleZip.get().getShellEscapedExecPathString())
-          .addDynamicString("&& cd " + dsymPath)
+          .add(linkedBinary.getExecPathString())
+          .add("-o " + dsymPath)
+          .add("&& zipped_bundle=${PWD}/" + dsymBundleZip.get().getShellEscapedExecPathString())
+          .add("&& cd " + dsymPath)
           .add("&& /usr/bin/zip -q -r \"${zipped_bundle}\" .");
     }
 

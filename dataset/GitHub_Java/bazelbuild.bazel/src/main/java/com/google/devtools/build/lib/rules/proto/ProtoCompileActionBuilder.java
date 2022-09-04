@@ -283,7 +283,7 @@ public class ProtoCompileActionBuilder {
 
     if (langPluginName == null) {
       if (langParameter != null) {
-        result.addDynamicString(langParameter);
+        result.add(langParameter);
       }
     } else {
       FilesToRunProvider langPluginTarget = getLangPluginTarget();

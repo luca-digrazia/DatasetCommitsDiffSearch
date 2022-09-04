@@ -33,13 +33,13 @@ public class CustomCommandLineTest extends BuildViewTestCase {
     CustomCommandLine commandLine =
         new Builder()
             .add("foo")
-            .addPaths(
+            .add(
                 VectorArg.of(
                         ImmutableList.of(
                             PathFragment.create("/path1"), PathFragment.create("/path2")))
                     .beforeEach("-I"))
             .add("bar")
-            .addPaths(VectorArg.of(ImmutableList.<PathFragment>of()).beforeEach("-I"))
+            .add(VectorArg.of(ImmutableList.<PathFragment>of()).beforeEach("-I"))
             .add("baz")
             .build();
     assertThat(commandLine.arguments())
@@ -70,13 +70,13 @@ public class CustomCommandLineTest extends BuildViewTestCase {
     CustomCommandLine commandLine =
         new Builder()
             .add("foo")
-            .addExecPaths(
+            .add(
                 VectorArg.of(
                         ImmutableList.of(
                             getSourceArtifact("pkg/util.a"), getSourceArtifact("pkg2/extra.a")))
                     .beforeEach("-l"))
             .add("bar")
-            .addExecPaths(VectorArg.of(ImmutableList.<Artifact>of()).beforeEach("-l"))
+            .add(VectorArg.of(ImmutableList.<Artifact>of()).beforeEach("-l"))
             .add("baz")
             .build();
     assertThat(commandLine.arguments())

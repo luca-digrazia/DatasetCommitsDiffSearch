@@ -56,8 +56,8 @@ public class LipoSupport {
               .setCommandLine(
                   CustomCommandLine.builder()
                       .add(ObjcRuleClasses.LIPO)
-                      .addExecPaths("-create", inputBinaries)
-                      .addExecPath("-o", outputBinary)
+                      .add("-create", inputBinaries)
+                      .add("-o", outputBinary)
                       .build())
               .build(ruleContext));
     } else {

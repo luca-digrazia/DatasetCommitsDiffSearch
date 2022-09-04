@@ -1024,7 +1024,7 @@ public final class ReleaseBundlingSupport {
 
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
     if (appleConfiguration.getXcodeToolchain() != null) {
-      commandLine.add("--toolchain", appleConfiguration.getXcodeToolchain());
+      commandLine.add("--toolchain").add(appleConfiguration.getXcodeToolchain());
     }
 
     commandLine
@@ -1033,7 +1033,7 @@ public final class ReleaseBundlingSupport {
         .add("--bundle_path")
         .add("Frameworks")
         .add("--platform")
-        .addDynamicString(platform.getLowerCaseNameInPlist())
+        .add(platform.getLowerCaseNameInPlist())
         .add("--scan-executable", combinedArchBinary);
 
     ruleContext.registerAction(
@@ -1056,16 +1056,16 @@ public final class ReleaseBundlingSupport {
 
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
     if (configuration.getXcodeToolchain() != null) {
-      commandLine.add("--toolchain", configuration.getXcodeToolchain());
+      commandLine.add("--toolchain").add(configuration.getXcodeToolchain());
     }
 
     commandLine
         .add("--output_zip_path")
         .add(intermediateArtifacts.swiftSupportZip().getExecPath())
         .add("--bundle_path")
-        .addDynamicString("SwiftSupport/" + platform.getLowerCaseNameInPlist())
+        .add("SwiftSupport/" + platform.getLowerCaseNameInPlist())
         .add("--platform")
-        .addDynamicString(platform.getLowerCaseNameInPlist())
+        .add(platform.getLowerCaseNameInPlist())
         .add("--scan-executable", combinedArchBinary);
 
     ruleContext.registerAction(
