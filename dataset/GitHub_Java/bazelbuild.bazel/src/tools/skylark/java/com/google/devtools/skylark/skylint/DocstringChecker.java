@@ -17,13 +17,11 @@ package com.google.devtools.skylark.skylint;
 import static com.google.devtools.skylark.skylint.DocstringUtils.extractDocstring;
 
 import com.google.devtools.build.lib.events.Location.LineAndColumn;
-import com.google.devtools.build.lib.syntax.ASTNode;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.FunctionDefStatement;
 import com.google.devtools.build.lib.syntax.Parameter;
 import com.google.devtools.build.lib.syntax.ReturnStatement;
-import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.StringLiteral;
 import com.google.devtools.build.lib.syntax.SyntaxTreeVisitor;
 import com.google.devtools.skylark.skylint.DocstringUtils.DocstringInfo;
@@ -36,13 +34,9 @@ import java.util.List;
 
 /** Checks the existence of docstrings. */
 public class DocstringChecker extends SyntaxTreeVisitor {
-  private static final String MISSING_MODULE_DOCSTRING_CATEGORY = "missing-module-docstring";
-  private static final String MISSING_FUNCTION_DOCSTRING_CATEGORY = "missing-function-docstring";
+  private static final String MISSING_DOCSTRING_CATEGORY = "missing-docstring";
   private static final String INCONSISTENT_DOCSTRING_CATEGORY = "inconsistent-docstring";
   private static final String BAD_DOCSTRING_FORMAT_CATEGORY = "bad-docstring-format";
-  private static final String ARGS_ARGUMENTS_DOCSTRING_CATEGORY = "args-arguments-docstring";
-  /** If a function is at least this many statements long, a docstring is required. */
-  private static final int FUNCTION_LENGTH_DOCSTRING_THRESHOLD = 5;
 
   private final List<Issue> issues = new ArrayList<>();
   private boolean containsReturnWithValue = false;
@@ -62,8 +56,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       // This location is invalid if the file is empty but this edge case is not worth the trouble.
       Location end = new Location(2, 1);
       LocationRange range = new LocationRange(start, end);
-      issues.add(
-          new Issue(MISSING_MODULE_DOCSTRING_CATEGORY, "file has no module docstring", range));
+      issues.add(new Issue(MISSING_DOCSTRING_CATEGORY, "file has no module docstring", range));
     } else {
       List<DocstringParseError> errors = new ArrayList<>();
       DocstringUtils.parseDocstring(moduleDocstring, errors);
@@ -86,9 +79,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
     containsReturnWithValue = false;
     super.visit(node);
     StringLiteral functionDocstring = extractDocstring(node.getStatements());
-    if (functionDocstring == null
-        && !node.getIdentifier().getName().startsWith("_")
-        && countNestedStatements(node) >= FUNCTION_LENGTH_DOCSTRING_THRESHOLD) {
+    if (functionDocstring == null && !node.getIdentifier().getName().startsWith("_")) {
       Location start = Location.from(node.getLocation().getStartLineAndColumn());
       Location end;
       if (node.getStatements().isEmpty()) {
@@ -101,7 +92,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       String name = node.getIdentifier().getName();
       issues.add(
           new Issue(
-              MISSING_FUNCTION_DOCSTRING_CATEGORY,
+              MISSING_DOCSTRING_CATEGORY,
               "function '"
                   + name
                   + "' has no docstring"
@@ -123,35 +114,6 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       checkMultilineFunctionDocstring(
           node, functionDocstring, info, containsReturnWithValue, issues);
     }
-    if (info.argumentsLocation != null) {
-      int lineOffset = functionDocstring.getLocation().getStartLine() - 1;
-      issues.add(
-          new Issue(
-              ARGS_ARGUMENTS_DOCSTRING_CATEGORY,
-              "Prefer 'Args:' to 'Arguments:' when documenting function arguments.",
-              new LocationRange(
-                  new Location(
-                      info.argumentsLocation.start.line + lineOffset,
-                      info.argumentsLocation.start.column),
-                  new Location(
-                      info.argumentsLocation.end.line + lineOffset,
-                      info.argumentsLocation.end.column))));
-    }
-  }
-
-  private static class StatementCounter extends SyntaxTreeVisitor {
-    public int count = 0;
-
-    @Override
-    public void visitBlock(List<Statement> statements) {
-      count += statements.size();
-    }
-  }
-
-  private static int countNestedStatements(ASTNode node) {
-    StatementCounter counter = new StatementCounter();
-    counter.visit(node);
-    return counter.count;
   }
 
   private static void checkMultilineFunctionDocstring(

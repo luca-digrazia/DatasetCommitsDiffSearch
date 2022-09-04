@@ -16,11 +16,11 @@ package com.google.devtools.build.lib.runtime;
 
 import static com.google.devtools.build.lib.profiler.AutoProfiler.profiled;
 
-import com.google.common.base.Preconditions;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.SkyframePackageRootResolver;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -150,15 +151,14 @@ public final class CommandEnvironment {
 
     workspace.getSkyframeExecutor().setEventBus(eventBus);
 
-    ClientOptions clientOptions =
-        Preconditions.checkNotNull(
-            options.getOptions(ClientOptions.class),
-            "CommandEnvironment needs its options provider to have ClientOptions loaded.");
-
     CommonCommandOptions commandOptions =
         Preconditions.checkNotNull(
             options.getOptions(CommonCommandOptions.class),
             "CommandEnvironment needs its options provider to have CommonCommandOptions loaded.");
+    ClientOptions clientOptions =
+        Preconditions.checkNotNull(
+            options.getOptions(ClientOptions.class),
+            "CommandEnvironment needs its options provider to have ClientOptions loaded.");
     this.commandId = commandOptions.invocationId;
     this.buildRequestId = commandOptions.buildRequestId;
     updateClientEnv(clientOptions.clientEnv, warnings);
@@ -612,7 +612,7 @@ public final class CommandEnvironment {
     if (inWorkspace()) {
       workingDirectory = workspace.getRelative(commonOptions.clientCwd);
     } else {
-      workspace = FileSystemUtils.getWorkingDirectory(getRuntime().getFileSystem());
+      workspace = FileSystemUtils.getWorkingDirectory(getDirectories().getFileSystem());
       workingDirectory = workspace;
     }
     this.relativeWorkingDirectory = workingDirectory.relativeTo(workspace);
@@ -621,10 +621,9 @@ public final class CommandEnvironment {
     // Fail fast in the case where a Blaze command forgets to install the package path correctly.
     skyframeExecutor.setActive(false);
     // Let skyframe figure out if it needs to store graph edges for this build.
-    skyframeExecutor.decideKeepIncrementalState(
+    skyframeExecutor.decideKeepIncrementalStateAndResetEvaluatorIfNecessary(
         runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class).batch,
-        options,
-        reporter);
+        options.getOptions(BuildView.Options.class));
 
     // Start the performance and memory profilers.
     runtime.beforeCommand(this, commonOptions, execStartTimeNanos);
