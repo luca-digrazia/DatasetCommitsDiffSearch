@@ -9,7 +9,6 @@ import io.netty.buffer.ByteBuf;
 import io.vertx.core.Context;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.core.http.HttpConnection;
 import io.vertx.core.http.HttpServerRequest;
 
 public class VertxBlockingOutput implements VertxOutput {
@@ -112,10 +111,7 @@ public class VertxBlockingOutput implements VertxOutput {
                     @Override
                     public void handle(Void event) {
                         if (waitingForDrain) {
-                            HttpConnection connection = request.connection();
-                            synchronized (connection) {
-                                connection.notifyAll();
-                            }
+                            request.connection().notifyAll();
                         }
                     }
                 };
