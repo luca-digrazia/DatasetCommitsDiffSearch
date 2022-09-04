@@ -22,10 +22,9 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 /** Wrapper for every C++ linking provider. */
 @SkylarkModule(
     name = "LinkingContext",
+    documented = false,
     category = SkylarkModuleCategory.BUILTIN,
-    doc =
-        "Immutable store of information needed for C++ linking that is aggregated across "
-            + "dependencies.")
+    doc = "")
 public interface CcLinkingContextApi {
   @SkylarkCallable(
       name = "user_link_flags",
