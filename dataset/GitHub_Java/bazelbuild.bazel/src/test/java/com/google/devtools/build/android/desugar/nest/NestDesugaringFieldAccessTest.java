@@ -16,19 +16,17 @@
 package com.google.devtools.build.android.desugar.nest;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth8.assertThat;
 
-import com.google.devtools.build.android.desugar.testing.junit.AsmNode;
 import com.google.devtools.build.android.desugar.testing.junit.DesugarRule;
-import com.google.devtools.build.android.desugar.testing.junit.DesugarRunner;
 import com.google.devtools.build.android.desugar.testing.junit.DynamicClassLiteral;
-import com.google.devtools.build.android.desugar.testing.junit.JdkSuppress;
-import com.google.devtools.build.android.desugar.testing.junit.JdkVersion;
 import com.google.devtools.build.android.desugar.testing.junit.RuntimeMethodHandle;
+import com.google.testing.testsize.MediumTest;
+import com.google.testing.testsize.MediumTestAttribute;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,23 +35,19 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.MethodNode;
+import org.junit.runners.JUnit4;
 
 /** Tests for accessing private fields from another class within a nest. */
-@RunWith(DesugarRunner.class)
-@JdkSuppress(minJdkVersion = JdkVersion.V11)
+@RunWith(JUnit4.class)
+@MediumTest(MediumTestAttribute.FILE)
 public final class NestDesugaringFieldAccessTest {
 
   @Rule
   public final DesugarRule desugarRule =
       DesugarRule.builder(this, MethodHandles.lookup())
-          .addSourceInputsFromJvmFlag("input_srcs")
+          .addInputs(Paths.get(System.getProperty("input_jar")))
           .setWorkingJavaPackage(
               "com.google.devtools.build.android.desugar.nest.testsrc.simpleunit.field")
-          .addJavacOptions("-source 11", "-target 11")
           .addCommandOptions("desugar_nest_based_private_access", "true")
           .build();
 
@@ -69,15 +63,7 @@ public final class NestDesugaringFieldAccessTest {
   }
 
   @Test
-  public void inputClassFileMajorVersions(
-      @AsmNode(className = "FieldNest", round = 0) ClassNode beforeDesugarClassNode,
-      @AsmNode(className = "FieldNest", round = 1) ClassNode afterDesugarClassNode) {
-    assertThat(beforeDesugarClassNode.version).isEqualTo(JdkVersion.V11);
-    assertThat(afterDesugarClassNode.version).isEqualTo(JdkVersion.V1_7);
-  }
-
-  @Test
-  public void bridgeMethodGeneration() {
+  public void bridgeMethodGeneration() throws Exception {
     List<String> bridgeMethodNames =
         Arrays.stream(mate.getDeclaredMethods())
             .map(Method::getName)
@@ -89,7 +75,6 @@ public final class NestDesugaringFieldAccessTest {
             "privateStaticField$bridge_setter",
             "privateInstanceField$bridge_getter",
             "privateInstanceField$bridge_setter",
-            "privateInstanceWideField$bridge_setter",
             "getPrivateStaticFieldInBoundary",
             "getPrivateInstanceFieldInBoundary",
             "privateStaticFieldReadOnly$bridge_getter",
@@ -98,38 +83,42 @@ public final class NestDesugaringFieldAccessTest {
             "privateInstanceArrayField$bridge_getter");
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getStaticField")
+  private MethodHandle getStaticField;
+
   @Test
-  public void getStaticField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "getStaticField")
-          MethodHandle getStaticField)
-      throws Throwable {
+  public void getStaticField() throws Throwable {
     long result = (long) getStaticField.invoke();
     assertThat(result).isEqualTo(10L);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getInstanceField")
+  private MethodHandle getInstanceField;
+
   @Test
-  public void getInstanceField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "getInstanceField")
-          MethodHandle getInstanceField)
-      throws Throwable {
+  public void getInstanceField() throws Throwable {
     long result = (long) getInstanceField.invoke(mateInstance);
     assertThat(result).isEqualTo(20);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateStaticField")
+  private MethodHandle getPrivateStaticField;
+
   @Test
-  public void getPrivateStaticField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateStaticField")
-          MethodHandle getPrivateStaticField)
-      throws Throwable {
+  public void getPrivateStaticField() throws Throwable {
     long result = (long) getPrivateStaticField.invoke();
     assertThat(result).isEqualTo(30L);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "setPrivateStaticField")
+  private MethodHandle setPrivateStaticField;
+
   @Test
-  public void setPrivateStaticField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "setPrivateStaticField")
-          MethodHandle setPrivateStaticField)
-      throws Throwable {
+  public void setPrivateStaticField() throws Throwable {
     long result = (long) setPrivateStaticField.invoke((long) 35L);
     assertThat(result).isEqualTo(35L);
 
@@ -138,20 +127,22 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(privateStaticField.get(null)).isEqualTo(35L);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateInstanceField")
+  private MethodHandle getPrivateInstanceField;
+
   @Test
-  public void getPrivateInstanceField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateInstanceField")
-          MethodHandle getPrivateInstanceField)
-      throws Throwable {
+  public void getPrivateInstanceField() throws Throwable {
     int result = (int) getPrivateInstanceField.invoke(mateInstance);
     assertThat(result).isEqualTo(40);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "setPrivateInstanceField")
+  private MethodHandle setPrivateInstanceField;
+
   @Test
-  public void setPrivateInstanceField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "setPrivateInstanceField")
-          MethodHandle setPrivateInstanceField)
-      throws Throwable {
+  public void setPrivateInstanceField() throws Throwable {
     int result = (int) setPrivateInstanceField.invoke(mateInstance, (int) 45);
     assertThat(result).isEqualTo(45);
 
@@ -160,90 +151,58 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(privateInstanceField.get(mateInstance)).isEqualTo(45);
   }
 
-  @Test
-  public void setPrivateInstanceWideField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "setPrivateInstanceWideField")
-          MethodHandle setPrivateInstanceWideField)
-      throws Throwable {
-    long result = (long) setPrivateInstanceWideField.invoke(mateInstance, 47L);
-    assertThat(result).isEqualTo(47L);
-
-    Field privateInstanceField = mate.getDeclaredField("privateInstanceWideField");
-    privateInstanceField.setAccessible(true);
-    assertThat(privateInstanceField.get(mateInstance)).isEqualTo(47L);
-  }
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateStaticFieldReadOnly")
+  private MethodHandle getPrivateStaticFieldReadOnly;
 
   @Test
-  public void setPrivateInstanceWideField_opcodes(
-      @AsmNode(className = "FieldNest", memberName = "setPrivateInstanceWideField")
-          MethodNode setPrivateInstanceWideField)
-      throws Throwable {
-    AbstractInsnNode[] instructions = setPrivateInstanceWideField.instructions.toArray();
-    assertThat(Arrays.stream(instructions).map(AbstractInsnNode::getOpcode))
-        .containsAtLeast(
-            Opcodes.ALOAD,
-            Opcodes.LLOAD,
-            Opcodes.DUP2_X1,
-            Opcodes.INVOKESTATIC,
-            Opcodes.POP2,
-            Opcodes.LRETURN)
-        .inOrder();
-  }
-
-  @Test
-  public void getPrivateStaticFieldReadOnly(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateStaticFieldReadOnly")
-          MethodHandle getPrivateStaticFieldReadOnly)
-      throws Throwable {
+  public void getPrivateStaticFieldReadOnly() throws Throwable {
     long result = (long) getPrivateStaticFieldReadOnly.invoke();
     assertThat(result).isEqualTo(50L);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateInstanceFieldReadOnly")
+  private MethodHandle getPrivateInstanceFieldReadOnly;
+
   @Test
-  public void getPrivateInstanceFieldReadOnly(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateInstanceFieldReadOnly")
-          MethodHandle getPrivateInstanceFieldReadOnly)
-      throws Throwable {
+  public void getPrivateInstanceFieldReadOnly() throws Throwable {
     long result = (long) getPrivateInstanceFieldReadOnly.invoke(mateInstance);
     assertThat(result).isEqualTo(60L);
   }
 
   @Test
-  public void getPrivateInstanceFieldReadOnly_trace(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateInstanceFieldReadOnly")
-          MethodHandle getPrivateInstanceFieldReadOnly)
-      throws Throwable {
+  public void getPrivateInstanceFieldReadOnly_trace() throws Throwable {
     long result = (long) getPrivateInstanceFieldReadOnly.invoke(mateInstance);
     assertThat(result).isEqualTo(60L);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateStaticFieldInBoundary")
+  private MethodHandle getPrivateStaticFieldInBoundary;
+
   @Test
-  public void getPrivateStaticFieldInBoundary(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateStaticFieldInBoundary")
-          MethodHandle getPrivateStaticFieldInBoundary)
-      throws Throwable {
+  public void getPrivateStaticFieldInBoundary() throws Throwable {
     long result = (long) getPrivateStaticFieldInBoundary.invoke();
     assertThat(result).isEqualTo(70L);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateInstanceFieldInBoundary")
+  private MethodHandle getPrivateInstanceFieldInBoundary;
+
   @Test
-  public void getPrivateInstanceFieldInBoundary(
-      @RuntimeMethodHandle(
-              className = "FieldNest",
-              memberName = "getPrivateInstanceFieldInBoundary")
-          MethodHandle getPrivateInstanceFieldInBoundary)
-      throws Throwable {
+  public void getPrivateInstanceFieldInBoundary() throws Throwable {
     int result = (int) getPrivateInstanceFieldInBoundary.invoke(mateInstance);
     assertThat(result).isEqualTo(80);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateStaticArrayFieldElement")
+  private MethodHandle getPrivateStaticArrayFieldElement;
+
   @Test
-  public void getPrivateStaticArrayFieldElement(
-      @RuntimeMethodHandle(
-              className = "FieldNest",
-              memberName = "getPrivateStaticArrayFieldElement")
-          MethodHandle getPrivateStaticArrayFieldElement)
-      throws Throwable {
+  public void getPrivateStaticArrayFieldElement() throws Throwable {
     long[] arrayFieldInitialValue = {100L, 200L, 300L};
 
     Field field = mate.getDeclaredField("privateStaticArrayField");
@@ -254,13 +213,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(result).isEqualTo(200L);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "setPrivateStaticArrayFieldElement")
+  private MethodHandle setPrivateStaticArrayFieldElement;
+
   @Test
-  public void setPrivateStaticArrayFieldElement(
-      @RuntimeMethodHandle(
-              className = "FieldNest",
-              memberName = "setPrivateStaticArrayFieldElement")
-          MethodHandle setPrivateStaticArrayFieldElement)
-      throws Throwable {
+  public void setPrivateStaticArrayFieldElement() throws Throwable {
     long[] arrayFieldInitialValue = {200L, 300L, 400L};
     long overriddenValue = 3000L;
 
@@ -275,13 +233,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(actual).asList().containsExactly(200L, 3000L, 400L).inOrder();
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "getPrivateInstanceArrayFieldElement")
+  private MethodHandle getPrivateInstanceArrayFieldElement;
+
   @Test
-  public void getPrivateInstanceArrayFieldElement(
-      @RuntimeMethodHandle(
-              className = "FieldNest",
-              memberName = "getPrivateInstanceArrayFieldElement")
-          MethodHandle getPrivateInstanceArrayFieldElement)
-      throws Throwable {
+  public void getPrivateInstanceArrayFieldElement() throws Throwable {
     int[] arrayFieldInitialValue = {300, 400, 500};
 
     Field field = mate.getDeclaredField("privateInstanceArrayField");
@@ -292,13 +249,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(result).isEqualTo(400);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "setPrivateInstanceArrayFieldElement")
+  private MethodHandle setPrivateInstanceArrayFieldElement;
+
   @Test
-  public void setPrivateInstanceArrayFieldElement(
-      @RuntimeMethodHandle(
-              className = "FieldNest",
-              memberName = "setPrivateInstanceArrayFieldElement")
-          MethodHandle setPrivateInstanceArrayFieldElement)
-      throws Throwable {
+  public void setPrivateInstanceArrayFieldElement() throws Throwable {
     int[] arrayFieldInitialValue = {400, 500, 600};
     int overriddenValue = 5000;
 
@@ -315,11 +271,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(actual).asList().containsExactly(400, 5000, 600).inOrder();
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "compoundSetPrivateStaticField")
+  private MethodHandle compoundSetPrivateStaticField;
+
   @Test
-  public void compoundSetPrivateStaticField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "compoundSetPrivateStaticField")
-          MethodHandle compoundSetPrivateStaticField)
-      throws Throwable {
+  public void compoundSetPrivateStaticField() throws Throwable {
     long fieldInitialValue = 100;
     long fieldValueDelta = 20;
 
@@ -333,11 +290,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(field.get(null)).isEqualTo(fieldInitialValue + fieldValueDelta);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "preIncrementPrivateStaticField")
+  private MethodHandle preIncrementPrivateStaticField;
+
   @Test
-  public void preIncrementPrivateStaticField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "preIncrementPrivateStaticField")
-          MethodHandle preIncrementPrivateStaticField)
-      throws Throwable {
+  public void preIncrementPrivateStaticField() throws Throwable {
     long fieldInitialValue = 200;
 
     Field field = mate.getDeclaredField("privateStaticField");
@@ -350,11 +308,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(field.get(null)).isEqualTo(fieldInitialValue + 1);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "postIncrementPrivateStaticField")
+  private MethodHandle postIncrementPrivateStaticField;
+
   @Test
-  public void postIncrementPrivateStaticField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "postIncrementPrivateStaticField")
-          MethodHandle postIncrementPrivateStaticField)
-      throws Throwable {
+  public void postIncrementPrivateStaticField() throws Throwable {
     long fieldInitialValue = 300;
 
     Field field = mate.getDeclaredField("privateStaticField");
@@ -367,11 +326,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(field.get(null)).isEqualTo(fieldInitialValue + 1);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "compoundSetPrivateInstanceField")
+  private MethodHandle compoundSetPrivateInstanceField;
+
   @Test
-  public void compoundSetPrivateInstanceField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "compoundSetPrivateInstanceField")
-          MethodHandle compoundSetPrivateInstanceField)
-      throws Throwable {
+  public void compoundSetPrivateInstanceField() throws Throwable {
     int fieldInitialValue = 400;
     int fieldDelta = 10;
 
@@ -385,11 +345,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(field.get(mateInstance)).isEqualTo(fieldInitialValue + fieldDelta);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "preIncrementPrivateInstanceField")
+  private MethodHandle preIncrementPrivateInstanceField;
+
   @Test
-  public void preIncrementPrivateInstanceField(
-      @RuntimeMethodHandle(className = "FieldNest", memberName = "preIncrementPrivateInstanceField")
-          MethodHandle preIncrementPrivateInstanceField)
-      throws Throwable {
+  public void preIncrementPrivateInstanceField() throws Throwable {
     int fieldInitialValue = 500;
 
     Field field = mate.getDeclaredField("privateInstanceField");
@@ -402,13 +363,12 @@ public final class NestDesugaringFieldAccessTest {
     assertThat(field.get(mateInstance)).isEqualTo(fieldInitialValue + 1);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "FieldNest", memberName = "postIncrementPrivateInstanceField")
+  private MethodHandle postIncrementPrivateInstanceField;
+
   @Test
-  public void postIncrementPrivateInstanceField(
-      @RuntimeMethodHandle(
-              className = "FieldNest",
-              memberName = "postIncrementPrivateInstanceField")
-          MethodHandle postIncrementPrivateInstanceField)
-      throws Throwable {
+  public void postIncrementPrivateInstanceField() throws Throwable {
     int fieldInitialValue = 600;
 
     Field field = mate.getDeclaredField("privateInstanceField");

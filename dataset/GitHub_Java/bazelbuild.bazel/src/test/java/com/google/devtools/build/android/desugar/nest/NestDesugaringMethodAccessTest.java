@@ -18,17 +18,16 @@ package com.google.devtools.build.android.desugar.nest;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.devtools.build.android.desugar.testing.junit.AsmNode;
 import com.google.devtools.build.android.desugar.testing.junit.DesugarRule;
-import com.google.devtools.build.android.desugar.testing.junit.DesugarRunner;
 import com.google.devtools.build.android.desugar.testing.junit.DynamicClassLiteral;
-import com.google.devtools.build.android.desugar.testing.junit.JdkSuppress;
-import com.google.devtools.build.android.desugar.testing.junit.JdkVersion;
 import com.google.devtools.build.android.desugar.testing.junit.RuntimeMethodHandle;
 import com.google.devtools.build.android.desugar.testing.junit.RuntimeMethodHandle.MemberUseContext;
+import com.google.testing.testsize.MediumTest;
+import com.google.testing.testsize.MediumTestAttribute;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,18 +36,17 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.objectweb.asm.tree.ClassNode;
+import org.junit.runners.JUnit4;
 
 /** Tests for accessing private methods from another class within a nest. */
-@RunWith(DesugarRunner.class)
-@JdkSuppress(minJdkVersion = JdkVersion.V11)
+@RunWith(JUnit4.class)
+@MediumTest(MediumTestAttribute.FILE)
 public final class NestDesugaringMethodAccessTest {
 
   @Rule
   public final DesugarRule desugarRule =
       DesugarRule.builder(this, MethodHandles.lookup())
-          .addSourceInputsFromJvmFlag("input_srcs")
-          .addJavacOptions("-source 11", "-target 11")
+          .addInputs(Paths.get(System.getProperty("input_jar")))
           .setWorkingJavaPackage(
               "com.google.devtools.build.android.desugar.nest.testsrc.simpleunit.method")
           .addCommandOptions("desugar_nest_based_private_access", "true")
@@ -76,14 +74,6 @@ public final class NestDesugaringMethodAccessTest {
   }
 
   @Test
-  public void inputClassFileMajorVersions(
-      @AsmNode(className = "MethodNest", round = 0) ClassNode beforeDesugarClassNode,
-      @AsmNode(className = "MethodNest", round = 1) ClassNode afterDesugarClassNode) {
-    assertThat(beforeDesugarClassNode.version).isEqualTo(JdkVersion.V11);
-    assertThat(afterDesugarClassNode.version).isEqualTo(JdkVersion.V1_7);
-  }
-
-  @Test
   public void methodBridgeGeneration() throws Exception {
     List<String> bridgeMethodNames =
         Arrays.stream(mate.getDeclaredMethods())
@@ -102,53 +92,58 @@ public final class NestDesugaringMethodAccessTest {
             "privateInstanceMethod$bridge");
   }
 
+  @Inject
+  @RuntimeMethodHandle(
+      className = "MethodNest",
+      memberName = "populatedFromInvokePrivateStaticMethod",
+      usage = MemberUseContext.FIELD_GETTER)
+  private MethodHandle populatedFromInvokePrivateStaticMethod;
+
   @Test
-  public void invokePrivateStaticMethod_staticInitializer(
-      @RuntimeMethodHandle(
-              className = "MethodNest",
-              memberName = "populatedFromInvokePrivateStaticMethod",
-              usage = MemberUseContext.FIELD_GETTER)
-          MethodHandle populatedFromInvokePrivateStaticMethod)
-      throws Throwable {
+  public void invokePrivateStaticMethod_staticInitializer() throws Throwable {
     long result = (long) populatedFromInvokePrivateStaticMethod.invoke();
     assertThat(result).isEqualTo(385L); // 128L + 256 + 1
   }
 
+  @Inject
+  @RuntimeMethodHandle(
+      className = "MethodNest",
+      memberName = "populatedFromInvokePrivateInstanceMethod",
+      usage = MemberUseContext.FIELD_GETTER)
+  private MethodHandle populatedFromInvokePrivateInstanceMethod;
+
   @Test
-  public void invokePrivateInstanceMethod_instanceInitializer(
-      @RuntimeMethodHandle(
-              className = "MethodNest",
-              memberName = "populatedFromInvokePrivateInstanceMethod",
-              usage = MemberUseContext.FIELD_GETTER)
-          MethodHandle populatedFromInvokePrivateInstanceMethod)
-      throws Throwable {
+  public void invokePrivateInstanceMethod_instanceInitializer() throws Throwable {
     long result = (long) populatedFromInvokePrivateInstanceMethod.invoke(invokerInstance);
     assertThat(result).isEqualTo(768L); // 128L + 256 + 1
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "MethodNest", memberName = "invokePrivateStaticMethod")
+  private MethodHandle invokePrivateStaticMethod;
+
   @Test
-  public void invokePrivateStaticMethod(
-      @RuntimeMethodHandle(className = "MethodNest", memberName = "invokePrivateStaticMethod")
-          MethodHandle invokePrivateStaticMethod)
-      throws Throwable {
+  public void invokePrivateStaticMethod() throws Throwable {
     long result = (long) invokePrivateStaticMethod.invokeExact((long) 1L, (int) 2);
     assertThat(result).isEqualTo(1L + 2);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "MethodNest", memberName = "invokePrivateInstanceMethod")
+  private MethodHandle invokePrivateInstanceMethod;
+
   @Test
-  public void invokePrivateInstanceMethod(
-      @RuntimeMethodHandle(className = "MethodNest", memberName = "invokePrivateInstanceMethod")
-          MethodHandle invokePrivateInstanceMethod)
-      throws Throwable {
+  public void invokePrivateInstanceMethod() throws Throwable {
     long result = (long) invokePrivateInstanceMethod.invoke(mateInstance, 2L, 3);
     assertThat(result).isEqualTo(2L + 3);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "MethodNest", memberName = "invokeStaticMethod")
+  private MethodHandle invokeStaticMethod;
+
   @Test
-  public void invokeStaticMethod(
-      @RuntimeMethodHandle(className = "MethodNest", memberName = "invokeStaticMethod")
-          MethodHandle invokeStaticMethod)
-      throws Throwable {
+  public void invokeStaticMethod() throws Throwable {
     long x = 3L;
     int y = 4;
 
@@ -156,11 +151,12 @@ public final class NestDesugaringMethodAccessTest {
     assertThat(result).isEqualTo(x + y);
   }
 
+  @Inject
+  @RuntimeMethodHandle(className = "MethodNest", memberName = "invokeInstanceMethod")
+  private MethodHandle invokeInstanceMethod;
+
   @Test
-  public void invokeInstanceMethod(
-      @RuntimeMethodHandle(className = "MethodNest", memberName = "invokeInstanceMethod")
-          MethodHandle invokeInstanceMethod)
-      throws Throwable {
+  public void invokeInstanceMethod() throws Throwable {
     long x = 4L;
     int y = 5;
 
@@ -168,26 +164,28 @@ public final class NestDesugaringMethodAccessTest {
     assertThat(result).isEqualTo(x + y);
   }
 
+  @Inject
+  @RuntimeMethodHandle(
+      className = "MethodNest",
+      memberName = "invokeSuperAccessPrivateInstanceMethod")
+  private MethodHandle invokeSuperAccessPrivateInstanceMethod;
+
   @Test
-  public void invokeSuperAccessPrivateInstanceMethod(
-      @RuntimeMethodHandle(
-              className = "MethodNest",
-              memberName = "invokeSuperAccessPrivateInstanceMethod")
-          MethodHandle invokeSuperAccessPrivateInstanceMethod)
-      throws Throwable {
+  public void invokeSuperAccessPrivateInstanceMethod() throws Throwable {
     assertThat(
             invokeSuperAccessPrivateInstanceMethod.invoke(
                 subClassMate.getConstructor().newInstance(), 7L, 8))
         .isEqualTo(16L); // 15 + 1
   }
 
+  @Inject
+  @RuntimeMethodHandle(
+      className = "MethodNest",
+      memberName = "invokeCastAccessPrivateInstanceMethod")
+  private MethodHandle invokeCastAccessPrivateInstanceMethod;
+
   @Test
-  public void invokeCastAccessPrivateInstanceMethod(
-      @RuntimeMethodHandle(
-              className = "MethodNest",
-              memberName = "invokeCastAccessPrivateInstanceMethod")
-          MethodHandle invokeCastAccessPrivateInstanceMethod)
-      throws Throwable {
+  public void invokeCastAccessPrivateInstanceMethod() throws Throwable {
     long result =
         (long)
             invokeCastAccessPrivateInstanceMethod.invoke(
