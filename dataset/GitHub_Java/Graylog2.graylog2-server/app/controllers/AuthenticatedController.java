@@ -1,14 +1,14 @@
 package controllers;
 
+import lib.security.RedirectAuthenticator;
 import models.User;
-import play.mvc.Controller;
 import play.mvc.Security.Authenticated;
 
-@Authenticated
-public class AuthenticatedController extends Controller {
+@Authenticated(RedirectAuthenticator.class)
+public class AuthenticatedController extends BaseController {
 
 	protected static User currentUser() {
-		return User.load(session("username"));
+        return User.current();
 	}
 	
 }
