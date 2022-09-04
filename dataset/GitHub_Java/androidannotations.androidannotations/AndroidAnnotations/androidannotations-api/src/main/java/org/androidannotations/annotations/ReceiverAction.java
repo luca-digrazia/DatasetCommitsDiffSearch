@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,60 +23,100 @@ import java.lang.annotation.Target;
 /**
  * <p>
  * Should be used on a method that must respond to a specific action in an
- * {@link EReceiver} annotated class. The method name will be used as action
- * name unless the {@link #value()} field is set.
- * </p>
- * <p>
- * The method could contain any type or parameters.
+ * {@link EReceiver} annotated class.
  * </p>
  * <p>
  * The class MAY contain several {@link ReceiverAction} annotated methods.
  * </p>
  * <p>
- * You MAY use the {@link ReceiverAction.Extra} annotation on parameters to
- * define a different extra name.
+ * The method annotated with {@link ReceiverAction} may have as parameters :
  * </p>
+ * <ul>
+ * <li>A {@link android.content.Context} which will be the context given in
+ * {@code void onReceive(Context context, Intent intent)}</li>
+ * <li>A {@link android.content.Intent} which will be the intent given in
+ * {@code void onReceive(Context context, Intent intent)}</li>
+ * <li>Any native, {@link android.os.Parcelable} or {@link java.io.Serializable}
+ * parameters annotated with {@link ReceiverAction.Extra} which will be the
+ * extra put in the intent. The key of this extra is the value of the annotation
+ * {@link ReceiverAction.Extra} if set or the name of the parameter.</li>
+ * </ul>
+ *
  * <blockquote>
  * 
  * Example :
  * 
  * <pre>
  * &#064;EReceiver
- * public class MyIntentService extends BroadcastReceiver {
+ * public class MyReceiver extends BroadcastReceiver {
  * 
  * 	&#064;ReceiverAction
- * 	void mySimpleAction() {
+ * 	void mySimpleAction(Intent intent) {
  * 		// ...
  * 	}
  * 
  * 	&#064;ReceiverAction
- * 	void myAction(String valueString, long valueLong) {
+ * 	void myAction(@ReceiverAction.Extra String valueString, Context context) {
  * 		// ...
  * 	}
  * 
  * 	&#064;ReceiverAction
- * 	void anotherAction(@ReceiverAction.Extra(&quot;specialExtraName&quot;) String valueString, long valueLong) {
+ * 	void anotherAction(@ReceiverAction.Extra(&quot;specialExtraName&quot;) String valueString, @ReceiverAction.Extra long valueLong) {
  * 		// ...
+ * 	}
+ * 
+ * 	&#064;Override
+ * 	public void onReceive(Context context, Intent intent) {
+ * 		// empty, will be overridden in generated subclass
  * 	}
  * }
  * </pre>
  * 
  * </blockquote>
  * 
- * @see EIntentService
+ * <p>
+ * Note: Since
+ * {@link android.content.BroadcastReceiver#onReceive(android.content.Context, android.content.Intent)
+ * BroadcastReceiver#onReceive} is abstract, you have to add an empty
+ * implementation. For convenience, we provide the
+ * {@link org.androidannotations.api.support.content.AbstractBroadcastReceiver
+ * AbstractBroadcastReceiver} class, which implements that method, so you do not
+ * have to do in your actual class if you derive it.
+ * </p>
+ * 
+ * @see EReceiver
+ * @see org.androidannotations.api.support.content.AbstractBroadcastReceiver
+ *      AbstractBroadcastReceiver
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface ReceiverAction {
 
 	/**
-	 * Define the action's name. If this field isn't set the annotated method
-	 * name will be used.
-	 *
-	 * @return the action's name
+	 * Define a set of actions this method should handle.
+	 * 
+	 * @return the actions
 	 */
-	String value() default "";
+	String[] actions();
 
+	/**
+	 * Define a set of data schemes to filter the Intent. If this field isn't
+	 * all schemes are allowed
+	 *
+	 * @return the data schemes to filter
+	 */
+	String[] dataSchemes() default {};
+
+	/**
+	 * <p>
+	 * Should be used on any native, {@link android.os.Parcelable} or
+	 * {@link java.io.Serializable} parameter of a method annotated with
+	 * {@link ReceiverAction} to inject the extra put in the intent parameter of
+	 * {@code void onReceive(Context context, Intent intent)}. The key of this
+	 * extra is the value of the annotation {@link ReceiverAction.Extra} if it
+	 * is set or the name of the parameter.
+	 * </p>
+	 */
 	@Retention(RetentionPolicy.CLASS)
 	@Target(ElementType.PARAMETER)
 	public @interface Extra {
