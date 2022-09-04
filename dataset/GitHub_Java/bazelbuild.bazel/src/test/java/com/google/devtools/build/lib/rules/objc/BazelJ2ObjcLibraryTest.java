@@ -530,7 +530,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
       throws Exception {
     CommandAction compileAction = getObjcCompileAction(archiveFile, objFileName);
     assertThat(Artifact.toRootRelativePaths(compileAction.getPossibleInputsForTesting()))
-        .containsAtLeastElementsIn(compilationInputExecPaths);
+        .containsAllIn(compilationInputExecPaths);
   }
 
   protected CommandAction getObjcCompileAction(Artifact archiveFile, String objFileName)
@@ -951,7 +951,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
         "examples/fake_rule.bzl",
         "def _fake_rule_impl(ctx):",
         "  myProvider = ctx.attr.deps[0][JavaInfo]",
-        "  return myProvider",
+        "  return struct(providers = [myProvider])",
         "",
         "fake_rule = rule(",
         "  implementation = _fake_rule_impl,",

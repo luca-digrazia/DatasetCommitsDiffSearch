@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2017 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,43 +11,115 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.rules.apple;
 
-import com.google.common.base.Optional;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.skylarkbuildapi.apple.XcodeConfigProviderApi;
+import javax.annotation.Nullable;
 
 /**
- * Provides a version of xcode based on a combination of the {@code --xcode_version} build flag
- * and a {@code xcode_config} target. This version of xcode should be used for selecting apple
- * toolchains and SDKs.
+ * The set of Apple versions computed from command line options and the {@code xcode_config} rule.
  */
 @Immutable
-public final class XcodeConfigProvider implements TransitiveInfoProvider {
-  private final Optional<DottedVersion> xcodeVersion;
-  
-  XcodeConfigProvider(DottedVersion xcodeVersion) {
-    this.xcodeVersion = Optional.of(xcodeVersion);
-  }
-  
-  private XcodeConfigProvider() {
-    this.xcodeVersion = Optional.absent();
-  }
-  
-  /**
-   * Returns a {@link XcodeConfigProvider} with no xcode version specified. The host system
-   * default xcode should be used. See {@link #getXcodeVersion}.
-   */
-  static XcodeConfigProvider hostSystemDefault() {
-    return new XcodeConfigProvider();
+public class XcodeConfigProvider extends NativeInfo
+    implements XcodeConfigProviderApi<ApplePlatform, ApplePlatform.PlatformType> {
+  /** Skylark name for this provider. */
+  public static final String SKYLARK_NAME = "XcodeVersionConfig";
+
+  /** Provider identifier for {@link XcodeConfigProvider}. */
+  public static final NativeProvider<XcodeConfigProvider> PROVIDER =
+      new NativeProvider<XcodeConfigProvider>(XcodeConfigProvider.class, SKYLARK_NAME) {};
+
+  private final DottedVersion iosSdkVersion;
+  private final DottedVersion iosMinimumOsVersion;
+  private final DottedVersion watchosSdkVersion;
+  private final DottedVersion watchosMinimumOsVersion;
+  private final DottedVersion tvosSdkVersion;
+  private final DottedVersion tvosMinimumOsVersion;
+  private final DottedVersion macosSdkVersion;
+  private final DottedVersion macosMinimumOsVersion;
+  @Nullable private final DottedVersion xcodeVersion;
+
+  public XcodeConfigProvider(
+      DottedVersion iosSdkVersion, DottedVersion iosMinimumOsVersion,
+      DottedVersion watchosSdkVersion, DottedVersion watchosMinimumOsVersion,
+      DottedVersion tvosSdkVersion, DottedVersion tvosMinimumOsVersion,
+      DottedVersion macosSdkVersion, DottedVersion macosMinimumOsVersion,
+      DottedVersion xcodeVersion) {
+    super(PROVIDER);
+    this.iosSdkVersion = Preconditions.checkNotNull(iosSdkVersion);
+    this.iosMinimumOsVersion = Preconditions.checkNotNull(iosMinimumOsVersion);
+    this.watchosSdkVersion = Preconditions.checkNotNull(watchosSdkVersion);
+    this.watchosMinimumOsVersion = Preconditions.checkNotNull(watchosMinimumOsVersion);
+    this.tvosSdkVersion = Preconditions.checkNotNull(tvosSdkVersion);
+    this.tvosMinimumOsVersion = Preconditions.checkNotNull(tvosMinimumOsVersion);
+    this.macosSdkVersion = Preconditions.checkNotNull(macosSdkVersion);
+    this.macosMinimumOsVersion = Preconditions.checkNotNull(macosMinimumOsVersion);
+    this.xcodeVersion = xcodeVersion;
   }
 
   /**
-   * Returns either an explicit xcode version which should be used in actions which require an
-   * apple toolchain, or {@link Optional#absent} if the host system default should be used.
+   * Returns the value of the xcode version, if available. This is determined based on a combination
+   * of the {@code --xcode_version} build flag and the {@code xcode_config} target defined in the
+   * {@code --xcode_version_config} flag. Returns null if no xcode is available.
    */
-  public Optional<DottedVersion> getXcodeVersion() {
+  @Override
+  public DottedVersion getXcodeVersion() {
     return xcodeVersion;
+  }
+
+  /**
+   * Returns the minimum compatible OS version for target simulator and devices for a particular
+   * platform type.
+   */
+  @Override
+  public DottedVersion getMinimumOsForPlatformType(ApplePlatform.PlatformType platformType) {
+    // TODO(b/37240784): Look into using only a single minimum OS flag tied to the current
+    // apple_platform_type.
+    switch (platformType) {
+      case IOS:
+        return iosMinimumOsVersion;
+      case TVOS:
+        return tvosMinimumOsVersion;
+      case WATCHOS:
+        return watchosMinimumOsVersion;
+      case MACOS:
+        return macosMinimumOsVersion;
+      default:
+        throw new IllegalArgumentException("Unhandled platform type: " + platformType);
+    }
+  }
+
+  /**
+   * Returns the SDK version for a platform (whether they be for simulator or device). This is
+   * directly derived from command line args.
+   */
+  @Override
+  public DottedVersion getSdkVersionForPlatform(ApplePlatform platform) {
+    switch (platform) {
+      case IOS_DEVICE:
+      case IOS_SIMULATOR:
+        return iosSdkVersion;
+      case TVOS_DEVICE:
+      case TVOS_SIMULATOR:
+        return tvosSdkVersion;
+      case WATCHOS_DEVICE:
+      case WATCHOS_SIMULATOR:
+        return watchosSdkVersion;
+      case MACOS:
+        return macosSdkVersion;
+      default:
+        throw new IllegalArgumentException("Unhandled platform: " + platform);
+    }
+  }
+
+  public static XcodeConfigProvider fromRuleContext(RuleContext ruleContext) {
+    return ruleContext.getPrerequisite(
+        XcodeConfigRule.XCODE_CONFIG_ATTR_NAME, Mode.TARGET, XcodeConfigProvider.PROVIDER);
   }
 }
