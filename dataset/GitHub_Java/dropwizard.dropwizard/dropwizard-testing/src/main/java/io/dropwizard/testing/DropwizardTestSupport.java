@@ -5,8 +5,6 @@ import io.dropwizard.Application;
 import io.dropwizard.Configuration;
 import io.dropwizard.cli.Command;
 import io.dropwizard.cli.ServerCommand;
-import io.dropwizard.configuration.ConfigurationSourceProvider;
-import io.dropwizard.configuration.FileConfigurationSourceProvider;
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Bootstrap;
@@ -19,7 +17,6 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 
 import javax.annotation.Nullable;
-import javax.validation.constraints.NotNull;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,10 +43,8 @@ public class DropwizardTestSupport<C extends Configuration> {
 
     @Nullable
     protected final String configPath;
-    protected final ConfigurationSourceProvider configSourceProvider;
     protected final Set<ConfigOverride> configOverrides;
-    @Nullable
-    protected final String customPropertyPrefix;
+    protected final Optional<String> customPropertyPrefix;
     protected final Function<Application<C>, Command> commandInstantiator;
 
     /**
@@ -73,76 +68,25 @@ public class DropwizardTestSupport<C extends Configuration> {
     protected List<ServiceListener<C>> listeners = new ArrayList<>();
 
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable String configPath,
-                                 ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, (String) null, configOverrides);
+                             @Nullable String configPath,
+                             ConfigOverride... configOverrides) {
+        this(applicationClass, configPath, Optional.empty(), configOverrides);
     }
 
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable String configPath,
-                                 ConfigurationSourceProvider configSourceProvider,
-                                 ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, configSourceProvider, null, configOverrides);
-    }
-
-    /**
-     * @deprecated Use {@link #DropwizardTestSupport(Class, String, String, ConfigOverride...)} instead.
-     */
-    @Deprecated
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable String configPath,
-                                 Optional<String> customPropertyPrefix,
-                                 ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, customPropertyPrefix.orElse(null), ServerCommand::new, configOverrides);
-    }
-
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable String configPath,
-                                 ConfigurationSourceProvider configSourceProvider,
-                                 @Nullable String customPropertyPrefix,
-                                 ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, configSourceProvider, customPropertyPrefix, ServerCommand::new, configOverrides);
-    }
-
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable String configPath,
-                                 @Nullable String customPropertyPrefix,
-                                 ConfigOverride... configOverrides) {
+    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass, @Nullable String configPath,
+                                 Optional<String> customPropertyPrefix, ConfigOverride... configOverrides) {
         this(applicationClass, configPath, customPropertyPrefix, ServerCommand::new, configOverrides);
     }
 
-    /**
-     * @deprecated Use {@link #DropwizardTestSupport(Class, String, String, Function, ConfigOverride...)} instead.
-     */
-    @Deprecated
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable String configPath,
+    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass, @Nullable String configPath,
                                  Optional<String> customPropertyPrefix,
-                                 Function<Application<C>, Command> commandInstantiator,
-                                 ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, customPropertyPrefix.orElse(null), commandInstantiator, configOverrides);
-    }
-
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable String configPath,
-                                 @Nullable String customPropertyPrefix,
-                                 Function<Application<C>, Command> commandInstantiator,
-                                 ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, new FileConfigurationSourceProvider(), customPropertyPrefix, commandInstantiator, configOverrides);
-    }
-
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable String configPath,
-                                 ConfigurationSourceProvider configSourceProvider,
-                                 @Nullable String customPropertyPrefix,
                                  Function<Application<C>, Command> commandInstantiator,
                                  ConfigOverride... configOverrides) {
         this.applicationClass = applicationClass;
         this.configPath = configPath;
-        this.configSourceProvider = configSourceProvider;
         this.configOverrides = configOverrides == null ? Collections.emptySet() : Sets.of(configOverrides);
         this.customPropertyPrefix = customPropertyPrefix;
-        this.explicitConfig = false;
+        explicitConfig = false;
         this.commandInstantiator = commandInstantiator;
     }
 
@@ -173,18 +117,17 @@ public class DropwizardTestSupport<C extends Configuration> {
      *   start the Application
      */
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 @Nullable C configuration,
-                                 Function<Application<C>, Command> commandInstantiator) {
+                                 C configuration, Function<Application<C>,
+                                 Command> commandInstantiator) {
         if (configuration == null) {
             throw new IllegalArgumentException("Can not pass null configuration for explicitly configured instance");
         }
         this.applicationClass = applicationClass;
-        this.configPath = "";
-        this.configSourceProvider = new FileConfigurationSourceProvider();
-        this.configOverrides = Collections.emptySet();
-        this.customPropertyPrefix = null;
+        configPath = "";
+        configOverrides = Collections.emptySet();
+        customPropertyPrefix = Optional.empty();
         this.configuration = configuration;
-        this.explicitConfig = true;
+        explicitConfig = true;
         this.commandInstantiator = commandInstantiator;
     }
 
@@ -202,7 +145,7 @@ public class DropwizardTestSupport<C extends Configuration> {
         });
     }
 
-    public void before() throws Exception {
+    public void before() {
         applyConfigOverrides();
         try {
             startIfRequired();
@@ -212,7 +155,6 @@ public class DropwizardTestSupport<C extends Configuration> {
             // manually call after as junit does not call the after method if
             // the `before` method throws.
             after();
-
             throw e;
         }
     }
@@ -245,10 +187,8 @@ public class DropwizardTestSupport<C extends Configuration> {
             }
         }
 
-        // Don't leak logging appenders into other test cases
-        if (configuration != null) {
-            configuration.getLoggingFactory().reset();
-        }
+        // Don't leak appenders into other test cases
+        requireNonNull(configuration).getLoggingFactory().reset();
     }
 
     private void applyConfigOverrides() {
@@ -263,54 +203,58 @@ public class DropwizardTestSupport<C extends Configuration> {
         }
     }
 
-    private void startIfRequired() throws Exception {
+    private void startIfRequired() {
         if (jettyServer != null) {
             return;
         }
 
-        application = newApplication();
+        try {
+            application = newApplication();
 
-        final Bootstrap<C> bootstrap = new Bootstrap<C>(getApplication()) {
-            @Override
-            public void run(C configuration, Environment environment) throws Exception {
-                environment.lifecycle().addServerLifecycleListener(server -> jettyServer = server);
-                DropwizardTestSupport.this.configuration = configuration;
-                DropwizardTestSupport.this.environment = environment;
-                super.run(configuration, environment);
-                for (ServiceListener<C> listener : listeners) {
-                    try {
-                        listener.onRun(configuration, environment, DropwizardTestSupport.this);
-                    } catch (Exception ex) {
-                        throw new RuntimeException("Error running app rule start listener", ex);
+            final Bootstrap<C> bootstrap = new Bootstrap<C>(getApplication()) {
+                @Override
+                public void run(C configuration, Environment environment) throws Exception {
+                    environment.lifecycle().addServerLifecycleListener(server -> jettyServer = server);
+                    DropwizardTestSupport.this.configuration = configuration;
+                    DropwizardTestSupport.this.environment = environment;
+                    super.run(configuration, environment);
+                    for (ServiceListener<C> listener : listeners) {
+                        try {
+                            listener.onRun(configuration, environment, DropwizardTestSupport.this);
+                        } catch (Exception ex) {
+                            throw new RuntimeException("Error running app rule start listener", ex);
+                        }
                     }
                 }
+            };
+
+            getApplication().initialize(bootstrap);
+
+            if (explicitConfig) {
+                bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
+                    new POJOConfigurationFactory<>(getConfiguration()));
+            } else if (customPropertyPrefix.isPresent()) {
+                bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
+                    new YamlConfigurationFactory<>(klass, validator, objectMapper, customPropertyPrefix.get()));
             }
-        };
 
-        getApplication().initialize(bootstrap);
-        bootstrap.setConfigurationSourceProvider(configSourceProvider);
+            final Command command = commandInstantiator.apply(application);
 
-        if (explicitConfig) {
-            bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
-                new POJOConfigurationFactory<>(getConfiguration()));
-        } else if (customPropertyPrefix != null) {
-            @NotNull
-            final String prefix = customPropertyPrefix;
-            bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
-                new YamlConfigurationFactory<>(klass, validator, objectMapper, prefix));
+            final Map<String, Object> file;
+            if (!Strings.isNullOrEmpty(configPath)) {
+                file = Collections.singletonMap("file", configPath);
+            } else {
+                file = Collections.emptyMap();
+            }
+            final Namespace namespace = new Namespace(file);
+
+            command.run(bootstrap, namespace);
+        } catch (Exception e) {
+            if (e instanceof RuntimeException) {
+              throw (RuntimeException) e;
+            }
+            throw new RuntimeException(e);
         }
-
-
-        final Map<String, Object> namespaceAttributes;
-        if (!Strings.isNullOrEmpty(configPath)) {
-            namespaceAttributes = Collections.singletonMap("file", configPath);
-        } else {
-            namespaceAttributes = Collections.emptyMap();
-        }
-
-        final Namespace namespace = new Namespace(namespaceAttributes);
-        final Command command = commandInstantiator.apply(application);
-        command.run(bootstrap, namespace);
     }
 
     public C getConfiguration() {
