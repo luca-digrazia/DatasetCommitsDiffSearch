@@ -14,9 +14,17 @@ import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 
+/**
+ * Replaces the ClassLoaderService in Hibernate ORM with one which should work in Substrate.
+ */
 public class FlatClassLoaderService implements ClassLoaderService {
 
 	private static final CoreMessageLogger log = CoreLogging.messageLogger( ClassLoaderServiceImpl.class );
+	public static final ClassLoaderService INSTANCE = new FlatClassLoaderService();
+
+	private FlatClassLoaderService() {
+		//use #INSTANCE when you need one
+	}
 
 	@Override
 	public <T> Class<T> classForName(String className) {
@@ -24,7 +32,7 @@ public class FlatClassLoaderService implements ClassLoaderService {
 			return (Class<T>) Class.forName( className );
 		}
 		catch (ClassNotFoundException e) {
-			log.error( "Could not load class '%s' using Class.forName(String)" );
+			log.errorf( "Could not load class '%s' using Class.forName(String)", className );
 		}
 		return null;
 	}
@@ -69,7 +77,7 @@ public class FlatClassLoaderService implements ClassLoaderService {
 		return services;
 	}
 
-	@Override
+	//@Override : not present on all tested branches!
 	public <T> T generateProxy(InvocationHandler handler, Class... interfaces) {
 		log.error( "Not implemented! generateProxy(InvocationHandler handler, Class... interfaces)" );
 		return null;

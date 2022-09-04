@@ -1,7 +1,6 @@
 package org.hibernate.protean.impl;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -29,8 +28,6 @@ import org.hibernate.cfg.Environment;
 import org.hibernate.cfg.beanvalidation.BeanValidationIntegrator;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.jdbc.dialect.spi.DialectFactory;
-import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
-import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatformResolver;
 import org.hibernate.id.factory.spi.MutableIdentifierGeneratorFactory;
 import org.hibernate.internal.EntityManagerMessageLogger;
 import org.hibernate.internal.util.StringHelper;
@@ -48,7 +45,6 @@ import org.hibernate.protean.recording.RecordingDialectFactory;
 import org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorBuilderImpl;
 import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoordinatorBuilderImpl;
 import org.hibernate.service.internal.AbstractServiceRegistryImpl;
-import org.hibernate.service.spi.ServiceRegistryImplementor;
 
 import static org.hibernate.cfg.AvailableSettings.DATASOURCE;
 import static org.hibernate.cfg.AvailableSettings.DRIVER;
@@ -220,16 +216,10 @@ class FastBootMetadataBuilder {
 
 		);
 		Dialect dialect = extractDialect();
-		JtaPlatform jtaPlatform = extractJtaPlatform();
 		final AbstractServiceRegistryImpl serviceRegistry = (AbstractServiceRegistryImpl) metamodelBuilder.getBootstrapContext().getServiceRegistry();
 		serviceRegistry.close();
 		serviceRegistry.resetParent( null );
-		return new RecordedState( dialect, jtaPlatform, fullMeta, configurationValues );
-	}
-
-	private JtaPlatform extractJtaPlatform() {
-		JtaPlatformResolver service = standardServiceRegistry.getService( JtaPlatformResolver.class );
-		return service.resolveJtaPlatform( this.configurationValues, (ServiceRegistryImplementor) standardServiceRegistry );
+		return new RecordedState( dialect, fullMeta, configurationValues );
 	}
 
 	private Dialect extractDialect() {
