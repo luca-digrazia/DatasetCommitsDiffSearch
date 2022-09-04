@@ -20,7 +20,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.math.MathEx;
+import smile.math.Math;
 
 import static org.junit.Assert.*;
 
@@ -169,8 +169,8 @@ public class NDMatrixTest {
         NDMatrix a = new NDMatrix(A);
         NDMatrix b = new NDMatrix(B);
         System.out.println(a.atbmm(b));
-        assertTrue(MathEx.equals(a.abmm(b).array(), C, 1E-7));
-        assertTrue(MathEx.equals(a.abtmm(b).array(), D, 1E-7));
-        assertTrue(MathEx.equals(a.atbmm(b).array(), E, 1E-5));
+        assertTrue(Math.equals(a.abmm(b).array(), C, 1E-7));
+        assertTrue(Math.equals(a.abtmm(b).array(), D, 1E-7));
+        assertTrue(Math.equals(a.atbmm(b).array(), E, 1E-5));
     }
 }

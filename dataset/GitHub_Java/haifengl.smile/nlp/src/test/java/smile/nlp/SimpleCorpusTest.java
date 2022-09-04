@@ -1,22 +1,22 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.nlp;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
@@ -37,13 +37,16 @@ public class SimpleCorpusTest {
     SimpleCorpus corpus = new SimpleCorpus();
 
     public SimpleCorpusTest() {
-        try {
-            smile.util.Paths.getTestDataLines("text/plot.tok.gt9.5000")
-                    .map(String::trim)
-                    .filter(line -> !line.isEmpty())
-                    .forEach(line -> corpus.add(new Text(line)));
+        try (BufferedReader input = smile.data.parser.IOUtils.getTestDataReader("text/quote.tok.gt9.5000")) {
+            String line = null;
+            int id = 0;
+            while ((line = input.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty()) {
+                    corpus.add(String.valueOf(id++), null, line);
+                }
+            }
         } catch (IOException ex) {
-            ex.printStackTrace();
         }
     }
 
@@ -69,7 +72,7 @@ public class SimpleCorpusTest {
     @Test
     public void testSize() {
         System.out.println("size");
-        assertEquals(58064, corpus.size());
+        assertEquals(51797, corpus.size());
     }
 
     /**
@@ -87,7 +90,7 @@ public class SimpleCorpusTest {
     @Test
     public void testGetNumTerms() {
         System.out.println("getNumTerms");
-        assertEquals(15077, corpus.getNumTerms());
+        assertEquals(14335, corpus.getNumTerms());
     }
 
     /**
@@ -96,7 +99,7 @@ public class SimpleCorpusTest {
     @Test
     public void testGetNumBigrams() {
         System.out.println("getNumBigrams");
-        assertEquals(18303, corpus.getNumBigrams());
+        assertEquals(17121, corpus.getNumBigrams());
     }
 
     /**
@@ -105,7 +108,7 @@ public class SimpleCorpusTest {
     @Test
     public void testGetAverageDocumentSize() {
         System.out.println("getAverageDocumentSize");
-        assertEquals(11, corpus.getAverageDocumentSize());
+        assertEquals(10, corpus.getAverageDocumentSize());
     }
 
     /**
@@ -114,7 +117,7 @@ public class SimpleCorpusTest {
     @Test
     public void testGetTermFrequency() {
         System.out.println("getTermFrequency");
-        assertEquals(27, corpus.getTermFrequency("romantic"));
+        assertEquals(50, corpus.getTermFrequency("romantic"));
     }
 
     /**
@@ -124,23 +127,20 @@ public class SimpleCorpusTest {
     public void testGetBigramFrequency() {
         System.out.println("getBigramFrequency");
         Bigram bigram = new Bigram("romantic", "comedy");
-        assertEquals(9, corpus.getBigramFrequency(bigram));
+        assertEquals(29, corpus.getBigramFrequency(bigram));
     }
 
     /**
      * Test of search method, of class SimpleCorpus.
      */
     @Test
-    public void testSearchRomantic() {
+    public void testSearch() {
         System.out.println("search 'romantic'");
         Iterator<Relevance> hits = corpus.search(new BM25(), "romantic");
-        int n = 0;
         while (hits.hasNext()) {
-            n++;
             Relevance hit = hits.next();
-            System.out.println(hit.text + "\t" + hit.score);
+            System.out.println(hit.doc() + "\t" + hit.score());
         }
-        assertEquals(27, n);
     }
 
     /**
@@ -158,24 +158,21 @@ public class SimpleCorpusTest {
      * Test of search method, of class SimpleCorpus.
      */
     @Test
-    public void testSearchRomanticComedy() {
+    public void testSearch2() {
         System.out.println("search 'romantic comedy'");
         String[] terms = {"romantic", "comedy"};
         Iterator<Relevance> hits = corpus.search(new BM25(), terms);
-        int n = 0;
         while (hits.hasNext()) {
-            n++;
             Relevance hit = hits.next();
-            System.out.println(hit.text + "\t" + hit.score);
+            System.out.println(hit.doc() + "\t" + hit.score());
         }
-        assertEquals(78, n);
     }
 
     /**
      * Test of search method, of class SimpleCorpus.
      */
     @Test
-    public void testSearchNoHits() {
+    public void testSearch2WithNoHits() {
         System.out.println("search 'no hits'");
         String[] terms = {"thisisnotaword"};
         Iterator<Relevance> hits = corpus.search(new BM25(), terms);
