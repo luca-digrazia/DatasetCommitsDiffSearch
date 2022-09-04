@@ -184,8 +184,7 @@ public class CompatDexBuilder {
         .setProgramConsumer(consumer)
         .setMode(noLocals ? CompilationMode.RELEASE : CompilationMode.DEBUG)
         .setMinApiLevel(13) // H_MR2.
-        .setDisableDesugaring(true)
-        .setIntermediate(true);
+        .setDisableDesugaring(true);
     try (InputStream stream = zipFile.getInputStream(classEntry)) {
       builder.addClassProgramData(
           ByteStreams.toByteArray(stream),
