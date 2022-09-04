@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,19 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionContextMarker;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.Executor.ActionContext;
-import com.google.devtools.build.lib.actions.ResourceSet;
-
 import java.io.IOException;
-import java.util.Collection;
-
-import javax.annotation.Nullable;
 
 /**
  * Context for compiling plain C++.
@@ -42,43 +34,12 @@ public interface CppCompileActionContext extends ActionContext {
     byte[] getContents() throws IOException;
   }
 
-  /** Does include scanning to find the list of files needed to execute the action. */
-  public Collection<? extends ActionInput> findAdditionalInputs(CppCompileAction action,
-      ActionExecutionContext actionExecutionContext)
-      throws ExecException, InterruptedException, ActionExecutionException;
-
   /**
    * Executes the given action and return the reply of the executor.
+   *
+   * @return a CppCompileActionResult with information resulting from the action's execution
    */
-  Reply execWithReply(CppCompileAction action,
-      ActionExecutionContext actionExecutionContext) throws ExecException, InterruptedException;
-
-  /**
-   * Returns the executor reply from an exec exception, if available.
-   */
-  @Nullable Reply getReplyFromException(
-      ExecException e, CppCompileAction action);
-
-  /**
-   * Returns the estimated resource consumption of the action.
-   */
-  ResourceSet estimateResourceConsumption(CppCompileAction action);
-
-  /**
-   * Returns where the action actually runs.
-   */
-  String strategyLocality();
-
-  /**
-   * Returns whether include scanning needs to be run.
-   */
-  boolean needsIncludeScanning();
-
-  /**
-   * Returns the include files that should be shipped to the executor in addition the ones that
-   * were declared.
-   */
-  Collection<Artifact> getScannedIncludeFiles(
+  CppCompileActionResult execWithReply(
       CppCompileAction action, ActionExecutionContext actionExecutionContext)
-          throws ActionExecutionException, InterruptedException;
+      throws ExecException, InterruptedException;
 }
