@@ -30,14 +30,12 @@ import java.util.zip.ZipOutputStream;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
-import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.DependencySet;
 import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.artifacts.ResolvedDependency;
 import org.gradle.api.plugins.Convention;
-import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
@@ -45,7 +43,6 @@ import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskAction;
-import org.gradle.api.tasks.compile.JavaCompile;
 import org.gradle.api.tasks.options.Option;
 
 import io.quarkus.bootstrap.model.AppArtifact;
@@ -53,6 +50,7 @@ import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
+import io.quarkus.deployment.ApplicationInfoUtil;
 import io.quarkus.dev.DevModeContext;
 import io.quarkus.dev.DevModeMain;
 import io.quarkus.gradle.QuarkusPluginExtension;
@@ -65,6 +63,8 @@ public class QuarkusDev extends QuarkusTask {
 
     private Set<File> filesIncludedInClasspath = new HashSet<>();
 
+    private String debug;
+
     private File buildDir;
 
     private String sourceDir;
@@ -75,6 +75,23 @@ public class QuarkusDev extends QuarkusTask {
 
     public QuarkusDev() {
         super("Development mode: enables hot deployment with background compilation");
+    }
+
+    @Optional
+    @Input
+    public String getDebug() {
+        return debug;
+    }
+
+    @Option(description = "If this server should be started in debug mode. " +
+            "The default is to start in debug mode without suspending and listen on port 5005." +
+            " It supports the following options:\n" +
+            " \"false\" - The JVM is not started in debug mode\n" +
+            " \"true\" - The JVM is started in debug mode and suspends until a debugger is attached to port 5005\n" +
+            " \"client\" - The JVM is started in client mode, and attempts to connect to localhost:5005\n" +
+            "\"{port}\" - The JVM is started in debug mode and suspends until a debugger is attached to {port}", option = "debug")
+    public void setDebug(String debug) {
+        this.debug = debug;
     }
 
     @InputDirectory
@@ -140,15 +157,13 @@ public class QuarkusDev extends QuarkusTask {
         if (!extension().outputDirectory().isDirectory()) {
             throw new GradleException("The project has no output yet, " +
                     "this should not happen as build should have been executed first. " +
-                    "Does the project have any source files?");
+                    "Do the project have any source files?");
         }
         DevModeContext context = new DevModeContext();
-        context.setSourceEncoding(getSourceEncoding());
         try {
             List<String> args = new ArrayList<>();
             args.add(JavaBinFinder.findBin());
-            String debug = System.getProperty("debug");
-            if (debug == null) {
+            if (getDebug() == null) {
                 // debug mode not specified
                 // make sure 5005 is not used, we don't want to just fail if something else is using it
                 try (Socket socket = new Socket(InetAddress.getByAddress(new byte[] { 127, 0, 0, 1 }), 5005)) {
@@ -157,15 +172,15 @@ public class QuarkusDev extends QuarkusTask {
                     args.add("-Xdebug");
                     args.add("-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=n");
                 }
-            } else if (debug.toLowerCase().equals("client")) {
+            } else if (getDebug().toLowerCase().equals("client")) {
                 args.add("-Xdebug");
                 args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=n");
-            } else if (debug.toLowerCase().equals("true") || debug.isEmpty()) {
+            } else if (getDebug().toLowerCase().equals("true")) {
                 args.add("-Xdebug");
                 args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=y,suspend=y");
-            } else if (!debug.toLowerCase().equals("false")) {
+            } else if (!getDebug().toLowerCase().equals("false")) {
                 try {
-                    int port = Integer.parseInt(debug);
+                    int port = Integer.parseInt(getDebug());
                     if (port <= 0) {
                         throw new GradleException("The specified debug port must be greater than 0");
                     }
@@ -173,7 +188,7 @@ public class QuarkusDev extends QuarkusTask {
                     args.add("-Xrunjdwp:transport=dt_socket,address=" + port + ",server=y,suspend=y");
                 } catch (NumberFormatException e) {
                     throw new GradleException(
-                            "Invalid value for debug parameter: " + debug + " must be true|false|client|{port}");
+                            "Invalid value for debug parameter: " + getDebug() + " must be true|false|client|{port}");
                 }
             }
             if (getJvmArgs() != null) {
@@ -274,15 +289,6 @@ public class QuarkusDev extends QuarkusTask {
                     res);
             context.getModules().add(moduleInfo);
 
-            final String outputClassDirectory = extension.outputDirectory().getAbsolutePath();
-            final String outputResourcesDirectory = extension.outputConfigDirectory().getAbsolutePath();
-            context.getClassesRoots().add(extension.outputDirectory().getAbsoluteFile());
-            if (!outputClassDirectory.equals(outputResourcesDirectory)) {
-                context.getClassesRoots().add(extension.outputConfigDirectory().getAbsoluteFile());
-            }
-            context.setFrameworkClassesDir(wiringClassesDirectory.getAbsoluteFile());
-            context.setCacheDir(new File(getBuildDir(), "transformer-cache").getAbsoluteFile());
-
             try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(tempFile))) {
                 out.putNextEntry(new ZipEntry("META-INF/"));
                 Manifest manifest = new Manifest();
@@ -301,9 +307,13 @@ public class QuarkusDev extends QuarkusTask {
             }
 
             extension.outputDirectory().mkdirs();
+            ApplicationInfoUtil.writeApplicationInfoProperties(appModel.getAppArtifact(), extension.outputDirectory().toPath());
 
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
+            args.add(extension.outputDirectory().getAbsolutePath());
+            args.add(wiringClassesDirectory.getAbsolutePath());
+            args.add(new File(getBuildDir(), "transformer-cache").getAbsolutePath());
             ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
             pb.redirectErrorStream(true);
             pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
@@ -333,14 +343,6 @@ public class QuarkusDev extends QuarkusTask {
         } catch (Exception e) {
             throw new GradleException("Failed to run", e);
         }
-    }
-
-    private String getSourceEncoding() {
-        Task javaCompile = getProject().getTasks().getByName(JavaPlugin.COMPILE_JAVA_TASK_NAME);
-        if (javaCompile != null) {
-            return ((JavaCompile) javaCompile).getOptions().getEncoding();
-        }
-        return null;
     }
 
     private void copyOutputToConsole(InputStream is) {
