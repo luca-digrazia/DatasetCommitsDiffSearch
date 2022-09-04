@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Range;
@@ -39,12 +38,12 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.Builder;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.ErrorInfo;
@@ -104,7 +103,6 @@ public class SkyframeBuilder implements Builder {
       Collection<AspectValue> aspects,
       Executor executor,
       Set<ConfiguredTarget> builtTargets,
-      Set<AspectKey> builtAspects,
       boolean explain,
       @Nullable Range<Long> lastExecutionTimeRange,
       TopLevelArtifactContext topLevelArtifactContext)
@@ -116,8 +114,13 @@ public class SkyframeBuilder implements Builder {
     ExecutionProgressReceiver executionProgressReceiver =
         new ExecutionProgressReceiver(
             Preconditions.checkNotNull(builtTargets),
-            Preconditions.checkNotNull(builtAspects),
-            countTestActions(exclusiveTests));
+            countTestActions(exclusiveTests),
+            ImmutableSet.<ConfiguredTarget>builder()
+                .addAll(parallelTests)
+                .addAll(exclusiveTests)
+                .build(),
+            topLevelArtifactContext,
+            skyframeExecutor.getEventBus());
     skyframeExecutor
         .getEventBus()
         .post(new ExecutionProgressReceiverAvailableEvent(executionProgressReceiver));
