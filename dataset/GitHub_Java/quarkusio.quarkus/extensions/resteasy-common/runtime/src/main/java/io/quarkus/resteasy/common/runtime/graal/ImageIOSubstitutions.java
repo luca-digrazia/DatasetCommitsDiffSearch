@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.resteasy.common.runtime.graal;
 
 import java.awt.image.BufferedImage;
@@ -35,9 +19,8 @@ import javax.imageio.stream.ImageOutputStream;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 
-
 @TargetClass(className = "javax.imageio.ImageIO")
-final class ImageIOSubstitutions {
+final class Target_javax_imageio_ImageIO {
 
     @Substitute
     public static void scanForPlugins() {
@@ -54,7 +37,6 @@ final class ImageIOSubstitutions {
             throws IOException {
         throw new IOException("Not Implemented yet on substrate");
     }
-
 
     @Substitute
     public static String[] getReaderFormatNames() {
@@ -77,21 +59,17 @@ final class ImageIOSubstitutions {
     }
 
     @Substitute
-    public static Iterator<ImageReader>
-    getImageReadersByFormatName(String formatName) {
+    public static Iterator<ImageReader> getImageReadersByFormatName(String formatName) {
         throw new RuntimeException("Not Implemented yet on substrate");
     }
 
     @Substitute
-    public static Iterator<ImageReader>
-    getImageReadersBySuffix(String fileSuffix) {
+    public static Iterator<ImageReader> getImageReadersBySuffix(String fileSuffix) {
         throw new RuntimeException("Not Implemented yet on substrate");
     }
 
-
     @Substitute
-    public static Iterator<ImageReader>
-    getImageReadersByMIMEType(String MIMEType) {
+    public static Iterator<ImageReader> getImageReadersByMIMEType(String MIMEType) {
         throw new RuntimeException("Not Implemented yet on substrate");
     }
 
@@ -127,20 +105,17 @@ final class ImageIOSubstitutions {
     }
 
     @Substitute
-    public static Iterator<ImageWriter>
-    getImageWritersByFormatName(String formatName) {
+    public static Iterator<ImageWriter> getImageWritersByFormatName(String formatName) {
         throw new RuntimeException("Not Implemented yet on substrate");
     }
 
     @Substitute
-    public static Iterator<ImageWriter>
-    getImageWritersBySuffix(String fileSuffix) {
+    public static Iterator<ImageWriter> getImageWritersBySuffix(String fileSuffix) {
         throw new RuntimeException("Not Implemented yet on substrate");
     }
 
     @Substitute
-    public static Iterator<ImageWriter>
-    getImageWritersByMIMEType(String MIMEType) {
+    public static Iterator<ImageWriter> getImageWritersByMIMEType(String MIMEType) {
         throw new RuntimeException("Not Implemented yet on substrate");
     }
 
@@ -155,14 +130,12 @@ final class ImageIOSubstitutions {
     }
 
     @Substitute
-    public static Iterator<ImageWriter>
-    getImageWriters(ImageTypeSpecifier type, String formatName) {
+    public static Iterator<ImageWriter> getImageWriters(ImageTypeSpecifier type, String formatName) {
         throw new RuntimeException("Not Implemented yet on substrate");
     }
 
     @Substitute
-    public static Iterator<ImageTranscoder>
-    getImageTranscoders(ImageReader reader, ImageWriter writer) {
+    public static Iterator<ImageTranscoder> getImageTranscoders(ImageReader reader, ImageWriter writer) {
         throw new RuntimeException("Not Implemented yet on substrate");
     }
 
@@ -189,22 +162,22 @@ final class ImageIOSubstitutions {
 
     @Substitute
     public static boolean write(RenderedImage im,
-                                String formatName,
-                                ImageOutputStream output) throws IOException {
+            String formatName,
+            ImageOutputStream output) throws IOException {
         throw new IOException("Not Implemented yet on substrate");
     }
 
     @Substitute
     public static boolean write(RenderedImage im,
-                                String formatName,
-                                File output) throws IOException {
+            String formatName,
+            File output) throws IOException {
         throw new IOException("Not Implemented yet on substrate");
     }
 
     @Substitute
     public static boolean write(RenderedImage im,
-                                String formatName,
-                                OutputStream output) throws IOException {
+            String formatName,
+            OutputStream output) throws IOException {
         throw new IOException("Not Implemented yet on substrate");
     }
 }
