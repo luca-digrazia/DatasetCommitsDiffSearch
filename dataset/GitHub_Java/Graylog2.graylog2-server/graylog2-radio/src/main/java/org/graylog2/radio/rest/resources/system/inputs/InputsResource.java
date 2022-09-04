@@ -80,7 +80,7 @@ public class InputsResource extends RestResource {
 
     @GET
     @Timed
-    public Map<String, Object> list() {
+    public String list() {
         final List<IOState<MessageInput>> inputStates = Lists.newArrayList();
 
         for (IOState<MessageInput> inputState : inputRegistry.getInputStates()) {
@@ -91,7 +91,7 @@ public class InputsResource extends RestResource {
                 "inputs", inputStates,
                 "total", inputStates.size());
 
-        return result;
+        return json(result);
     }
 
     @GET
@@ -154,7 +154,7 @@ public class InputsResource extends RestResource {
         input.initialize();
 
         // Launch input. (this will run async and clean up itself in case of an error.)
-        inputLauncher.launch(input);
+        inputLauncher.launch(input, inputId, true);
 
         final Map<String, String> result = ImmutableMap.of(
                 "input_id", inputId,
@@ -239,7 +239,11 @@ public class InputsResource extends RestResource {
 
         LOG.info("Launching existing input [" + input.getName() + "]. Reason: REST request.");
         input.initialize();
-        inputLauncher.launch(input);
+        if (inputState != null) {
+            inputLauncher.launch(inputState);
+        } else {
+            inputLauncher.launchPersisted(input);
+        }
         LOG.info("Launched existing input [" + input.getName() + "]. Reason: REST request.");
 
         final Map<String, String> result = ImmutableMap.of(

@@ -214,7 +214,7 @@ public class BundleImporter {
             createdInputs.put(messageInput.getId(), messageInput);
 
             // Launch input. (this will run async and clean up itself in case of an error.)
-            inputLauncher.launch(messageInput);
+            inputLauncher.launch(messageInput, messageInput.getId());
         }
     }
 
@@ -350,6 +350,7 @@ public class BundleImporter {
             final DateTime createdAt,
             final String bundleId) {
         final ImmutableMap.Builder<String, Object> inputData = ImmutableMap.builder();
+        inputData.put(MessageInput.FIELD_INPUT_ID, inputId.toString());
         inputData.put(MessageInput.FIELD_TITLE, input.getTitle());
         inputData.put(MessageInput.FIELD_TYPE, input.getType());
         inputData.put(MessageInput.FIELD_CREATOR_USER_ID, userName);
