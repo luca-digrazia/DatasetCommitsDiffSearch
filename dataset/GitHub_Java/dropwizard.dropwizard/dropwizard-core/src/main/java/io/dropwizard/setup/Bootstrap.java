@@ -19,18 +19,13 @@ import java.lang.management.ManagementFactory;
 import java.util.List;
 
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.JvmAttributeGaugeSet;
 import com.codahale.metrics.jvm.BufferPoolMetricSet;
-import com.codahale.metrics.jvm.ClassLoadingGaugeSet;
-import com.codahale.metrics.jvm.FileDescriptorRatioGauge;
 import com.codahale.metrics.jvm.GarbageCollectorMetricSet;
 import com.codahale.metrics.jvm.MemoryUsageGaugeSet;
 import com.codahale.metrics.jvm.ThreadStatesGaugeSet;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import io.dropwizard.validation.valuehandling.OptionalValidatedValueUnwrapper;
-import org.hibernate.validator.HibernateValidator;
 
 import javax.validation.Validation;
 import javax.validation.ValidatorFactory;
@@ -48,11 +43,11 @@ public class Bootstrap<T extends Configuration> {
     private final List<ConfiguredBundle<? super T>> configuredBundles;
     private final List<Command> commands;
     private final MetricRegistry metricRegistry;
+    private final ValidatorFactory validatorFactory;
 
     private ConfigurationSourceProvider configurationSourceProvider;
     private ClassLoader classLoader;
     private ConfigurationFactoryFactory<T> configurationFactoryFactory;
-    private ValidatorFactory validatorFactory;
 
     /**
      * Creates a new {@link Bootstrap} for the given application.
@@ -66,20 +61,12 @@ public class Bootstrap<T extends Configuration> {
         this.configuredBundles = Lists.newArrayList();
         this.commands = Lists.newArrayList();
         this.metricRegistry = new MetricRegistry();
-        this.validatorFactory = Validation
-                .byProvider(HibernateValidator.class)
-                .configure()
-                .addValidatedValueHandler(new OptionalValidatedValueUnwrapper())
-                .buildValidatorFactory();
-
-        getMetricRegistry().register("jvm.attribute", new JvmAttributeGaugeSet());
-        getMetricRegistry().register("jvm.buffers", new BufferPoolMetricSet(ManagementFactory
+        this.validatorFactory = Validation.buildDefaultValidatorFactory();
+        metricRegistry.register("jvm.buffers", new BufferPoolMetricSet(ManagementFactory
                                                                                .getPlatformMBeanServer()));
-        getMetricRegistry().register("jvm.classloader", new ClassLoadingGaugeSet());
-        getMetricRegistry().register("jvm.filedescriptor", new FileDescriptorRatioGauge());
-        getMetricRegistry().register("jvm.gc", new GarbageCollectorMetricSet());
-        getMetricRegistry().register("jvm.memory", new MemoryUsageGaugeSet());
-        getMetricRegistry().register("jvm.threads", new ThreadStatesGaugeSet());
+        metricRegistry.register("jvm.gc", new GarbageCollectorMetricSet());
+        metricRegistry.register("jvm.memory", new MemoryUsageGaugeSet());
+        metricRegistry.register("jvm.threads", new ThreadStatesGaugeSet());
 
         JmxReporter.forRegistry(metricRegistry).build().start();
 
@@ -203,10 +190,6 @@ public class Bootstrap<T extends Configuration> {
      */
     public ValidatorFactory getValidatorFactory() {
         return validatorFactory;
-    }
-
-    public void setValidatorFactory(ValidatorFactory validatorFactory) {
-        this.validatorFactory = validatorFactory;
     }
 
     public ConfigurationFactoryFactory<T> getConfigurationFactoryFactory() {
