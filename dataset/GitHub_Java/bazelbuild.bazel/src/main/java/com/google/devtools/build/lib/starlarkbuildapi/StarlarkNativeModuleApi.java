@@ -118,7 +118,8 @@ public interface StarlarkNativeModuleApi extends StarlarkValue {
               + " used by computed defaults, the other used by <code>ctx.attr.foo</code>.",
       parameters = {@Param(name = "name", doc = "The name of the target.")},
       useStarlarkThread = true)
-  Object existingRule(String name, StarlarkThread thread) throws EvalException;
+  Object existingRule(String name, StarlarkThread thread)
+      throws EvalException, InterruptedException;
 
   @StarlarkMethod(
       name = "existing_rules",
@@ -129,7 +130,8 @@ public interface StarlarkNativeModuleApi extends StarlarkValue {
               + " avoid using this function. It makes BUILD files brittle and order-dependent, and"
               + " it may be expensive especially if called within a loop.</i>",
       useStarlarkThread = true)
-  Dict<String, Dict<String, Object>> existingRules(StarlarkThread thread) throws EvalException;
+  Dict<String, Dict<String, Object>> existingRules(StarlarkThread thread)
+      throws EvalException, InterruptedException;
 
   @StarlarkMethod(
       name = "package_group",
