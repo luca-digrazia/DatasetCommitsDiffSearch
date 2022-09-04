@@ -21,37 +21,46 @@
 package org.graylog2.streams;
 
 import org.graylog2.streams.matchers.*;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 /**
- * StreamRuleMatcherFactory.java: Mar 27, 2011 4:49:32 PM
- *
- * [description]
- *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class StreamRuleMatcherFactory {
 
-    public static StreamRuleMatcherIF build(int ruleType) throws InvalidStreamRuleTypeException {
-        StreamRuleMatcherIF matcher = null;
+    public static StreamRuleMatcher build(int ruleType) throws InvalidStreamRuleTypeException {
+        StreamRuleMatcher matcher = null;
 
+        // IMPORTANT: Also add every new rule type to the unit test.
         switch (ruleType) {
-            case StreamRule.TYPE_MESSAGE:
+            case StreamRuleImpl.TYPE_MESSAGE:
                 matcher = new MessageMatcher();
                 break;
-            case StreamRule.TYPE_HOST:
+            case StreamRuleImpl.TYPE_FULL_MESSAGE:
+                matcher = new FullMessageMatcher();
+                break;
+            case StreamRuleImpl.TYPE_HOST:
                 matcher = new HostMatcher();
                 break;
-            case StreamRule.TYPE_SEVERITY:
+            case StreamRuleImpl.TYPE_SEVERITY:
                 matcher = new SeverityMatcher();
                 break;
-            case StreamRule.TYPE_FACILITY:
+            case StreamRuleImpl.TYPE_FACILITY:
                 matcher = new FacilityMatcher();
                 break;
-            case StreamRule.TYPE_TIMEFRAME:
-                throw new NotImplementedException();
-            case StreamRule.TYPE_ADDITIONAL:
+            case StreamRuleImpl.TYPE_ADDITIONAL:
                 matcher = new AdditionalFieldMatcher();
+                break;
+            case StreamRuleImpl.TYPE_SEVERITY_OR_HIGHER:
+                matcher = new SeverityOrHigherMatcher();
+                break;
+            case StreamRuleImpl.TYPE_HOST_REGEX:
+                matcher = new HostRegexMatcher();
+                break;
+            case StreamRuleImpl.TYPE_FILENAME_LINE:
+                matcher = new FileNameAndLineMatcher();
+                break;
+            case StreamRuleImpl.TYPE_FACILITY_REGEX:
+                matcher = new FacilityRegexMatcher();
                 break;
             default:
                 throw new InvalidStreamRuleTypeException();
