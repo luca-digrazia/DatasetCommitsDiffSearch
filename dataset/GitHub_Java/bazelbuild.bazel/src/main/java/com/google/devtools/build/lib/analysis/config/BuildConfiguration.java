@@ -537,7 +537,7 @@ public final class BuildConfiguration implements BuildEvent {
     // used only for building plugins.
     @Option(
       name = "plugin",
-      converter = LabelListConverter.class,
+      converter = LabelConverter.class,
       allowMultiple = true,
       defaultValue = "",
       category = "flags",
@@ -916,7 +916,7 @@ public final class BuildConfiguration implements BuildEvent {
       allowMultiple = true,
       defaultValue = "",
       category = "experimental",
-      converter = LabelListConverter.class,
+      converter = LabelConverter.class,
       help = "Use action_listener to attach an extra_action to existing build actions."
     )
     public List<Label> actionListeners;
@@ -958,7 +958,7 @@ public final class BuildConfiguration implements BuildEvent {
 
     @Option(
       name = "target_environment",
-      converter = LabelListConverter.class,
+      converter = LabelConverter.class,
       allowMultiple = true,
       defaultValue = "",
       category = "flags",
