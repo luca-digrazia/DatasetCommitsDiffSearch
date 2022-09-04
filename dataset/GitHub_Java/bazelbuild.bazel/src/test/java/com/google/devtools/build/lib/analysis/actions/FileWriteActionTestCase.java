@@ -15,13 +15,16 @@ package com.google.devtools.build.lib.analysis.actions;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
@@ -53,8 +56,8 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
   @Before
   public final void createExecutorAndContext() throws Exception {
     executor = new TestExecutorBuilder(directories, binTools).build();
-    context = new ActionExecutionContext(executor, null, ActionInputPrefetcher.NONE, null,
-        new FileOutErr(), ImmutableMap.<String, String>of(), null);
+    context = new ActionExecutionContext(executor, null, null, new FileOutErr(),
+          ImmutableMap.<String, String>of(), null);
   }
 
   protected abstract Action createAction(
@@ -62,20 +65,20 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
 
   protected void checkNoInputsByDefault() {
     assertThat(action.getInputs()).isEmpty();
-    assertThat(action.getPrimaryInput()).isNull();
+    assertNull(action.getPrimaryInput());
   }
 
   protected void checkDestinationArtifactIsOutput() {
     Collection<Artifact> outputs = action.getOutputs();
-    assertThat(Sets.newHashSet(outputs)).isEqualTo(Sets.newHashSet(outputArtifact));
-    assertThat(action.getPrimaryOutput()).isEqualTo(outputArtifact);
+    assertEquals(Sets.newHashSet(outputArtifact), Sets.newHashSet(outputs));
+    assertEquals(outputArtifact, action.getPrimaryOutput());
   }
 
   protected void checkCanWriteNonExecutableFile() throws Exception {
     action.execute(context);
     String content = new String(FileSystemUtils.readContentAsLatin1(output));
-    assertThat(content).isEqualTo("Hello World");
-    assertThat(output.isExecutable()).isFalse();
+    assertEquals("Hello World", content);
+    assertFalse(output.isExecutable());
   }
 
   protected void checkCanWriteExecutableFile() throws Exception {
@@ -84,8 +87,8 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
     Action action = createAction(NULL_ACTION_OWNER, outputArtifact, "echo 'Hello World'", true);
     action.execute(context);
     String content = new String(FileSystemUtils.readContentAsLatin1(output));
-    assertThat(content).isEqualTo("echo 'Hello World'");
-    assertThat(output.isExecutable()).isTrue();
+    assertEquals("echo 'Hello World'", content);
+    assertTrue(output.isExecutable());
   }
 
   private enum KeyAttributes {
