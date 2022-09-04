@@ -30,35 +30,42 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 
-public class ConfigArrayConverterTest {
+public class ConfigImplicitConverterTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(Configured.class)
-                    .addAsResource(new StringAsset("foos=1,2,bar"), "application.properties"));
+                    .addAsResource(new StringAsset("foo=1"), "application.properties"));
 
     @Inject
     Configured configured;
 
     @Test
     public void testFoo() {
-        assertEquals(3, configured.getFoos().length);
-        assertEquals("1", configured.getFoos()[0]);
-        assertEquals("2", configured.getFoos()[1]);
-        assertEquals("bar", configured.getFoos()[2]);
+        assertEquals("1", configured.getFooValue());
     }
 
     @ApplicationScoped
     static class Configured {
 
         @Inject
-        @ConfigProperty(name = "foos")
-        String[] foos;
+        @ConfigProperty(name = "foo")
+        Foo foo;
 
-        String[] getFoos() {
-            return foos;
+        String getFooValue() {
+            return foo != null ? foo.value : null;
         }
+    }
+
+    public static class Foo {
+
+        String value;
+
+        public Foo(String value) {
+            this.value = value;
+        }
+
     }
 
 }

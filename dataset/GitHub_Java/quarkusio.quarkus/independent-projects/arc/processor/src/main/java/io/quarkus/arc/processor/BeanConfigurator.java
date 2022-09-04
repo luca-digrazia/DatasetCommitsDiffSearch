@@ -1,6 +1,20 @@
-package io.quarkus.arc.processor;
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
+package io.quarkus.arc.processor;
 
 import io.quarkus.arc.BeanCreator;
 import io.quarkus.arc.BeanDestroyer;
@@ -14,7 +28,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import javax.enterprise.context.spi.CreationalContext;
 import org.jboss.jandex.AnnotationInstance;
@@ -32,8 +45,6 @@ import org.jboss.jandex.Type.Kind;
  * @param <T>
  */
 public final class BeanConfigurator<T> {
-
-    private final AtomicBoolean consumed;
 
     private final Consumer<BeanInfo> beanConsumer;
 
@@ -59,8 +70,6 @@ public final class BeanConfigurator<T> {
 
     private final Map<String, Object> params;
 
-    private boolean isDefaultBean;
-
     /**
      *
      * @param implClassName
@@ -68,8 +77,7 @@ public final class BeanConfigurator<T> {
      * @param beanConsumer
      */
     BeanConfigurator(DotName implClassName, BeanDeployment beanDeployment, Consumer<BeanInfo> beanConsumer) {
-        this.consumed = new AtomicBoolean(false);
-        this.implClass = getClassByName(beanDeployment.getIndex(), Objects.requireNonNull(implClassName));
+        this.implClass = beanDeployment.getIndex().getClassByName(Objects.requireNonNull(implClassName));
         this.beanDeployment = beanDeployment;
         this.beanConsumer = beanConsumer;
         this.types = new HashSet<>();
@@ -146,11 +154,6 @@ public final class BeanConfigurator<T> {
         return this;
     }
 
-    public BeanConfigurator<T> defaultBean() {
-        this.isDefaultBean = true;
-        return this;
-    }
-
     public BeanConfigurator<T> alternativePriority(int priority) {
         this.alternativePriority = priority;
         return this;
@@ -206,13 +209,12 @@ public final class BeanConfigurator<T> {
      * Perform sanity checks and register the bean.
      */
     public void done() {
-        if (consumed.compareAndSet(false, true)) {
-            beanConsumer.accept(new BeanInfo.Builder().implClazz(implClass).providerType(providerType)
-                    .beanDeployment(beanDeployment).scope(scope).types(types)
-                    .qualifiers(qualifiers)
-                    .alternativePriority(alternativePriority).name(name).creator(creatorConsumer).destroyer(destroyerConsumer)
-                    .params(params).defaultBean(isDefaultBean).build());
-        }
+        // TODO sanity checks
+        beanConsumer.accept(new BeanInfo.Builder().implClazz(implClass).providerType(providerType)
+                .beanDeployment(beanDeployment).scope(scope).types(types)
+                .qualifiers(qualifiers)
+                .alternativePriority(alternativePriority).name(name).creator(creatorConsumer).destroyer(destroyerConsumer)
+                .params(params).build());
     }
 
     @SuppressWarnings("unchecked")

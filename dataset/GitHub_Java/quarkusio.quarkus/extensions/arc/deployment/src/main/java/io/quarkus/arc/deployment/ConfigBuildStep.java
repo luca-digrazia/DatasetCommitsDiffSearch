@@ -83,13 +83,12 @@ public class ConfigBuildStep {
                             }
                         }
 
-                        // Register a custom bean for injection points that are not handled by ConfigProducer
-                        Type requiredType = injectionPoint.getRequiredType();
-                        if (!isHandledByProducers(requiredType)) {
-                            customBeanTypes.add(requiredType);
+                        // Register a custom bean for 
+                        if (!isHandledByProducers(injectionPoint.getRequiredType())) {
+                            customBeanTypes.add(injectionPoint.getRequiredType());
                         }
 
-                        if (DotNames.OPTIONAL.equals(requiredType.name())) {
+                        if (DotNames.OPTIONAL.equals(injectionPoint.getRequiredType().name())) {
                             // Never validate Optional values
                             continue;
                         }
@@ -97,10 +96,7 @@ public class ConfigBuildStep {
                             // No need to validate properties with default values
                             continue;
                         }
-                        String propertyType = requiredType.name().toString();
-                        if (requiredType.kind() != Kind.ARRAY && requiredType.kind() != Kind.PRIMITIVE) {
-                            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, propertyType));
-                        }
+                        String propertyType = injectionPoint.getRequiredType().name().toString();
                         configProperties.produce(new ConfigPropertyBuildItem(propertyName, propertyType));
                     }
                 }
