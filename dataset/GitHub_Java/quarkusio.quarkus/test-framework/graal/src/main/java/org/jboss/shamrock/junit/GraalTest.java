@@ -81,7 +81,6 @@ public class GraalTest extends BlockJUnit4ClassRunner {
                 if(debugSymbols) {
                     command.add("-g");
                 }
-                command.add("--no-server");
                 Process process = Runtime.getRuntime().exec(command.toArray(new String[0]), new String[]{}, new File(path.substring(0, path.lastIndexOf(File.separator))));
                 new Thread(new ProcessReader(process.getInputStream())).start();
                 new Thread(new ProcessReader(process.getErrorStream())).start();
