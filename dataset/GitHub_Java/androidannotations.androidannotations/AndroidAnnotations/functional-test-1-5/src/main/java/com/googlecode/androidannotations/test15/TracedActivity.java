@@ -27,7 +27,6 @@ import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.UiThread;
-import com.googlecode.androidannotations.test15.instancestate.MySerializableBean;
 
 @EActivity
 public class TracedActivity extends Activity {
@@ -103,13 +102,6 @@ public class TracedActivity extends Activity {
 	@Trace
 	@Background
 	void mixedBackgroundMethod() {
-
-	}
-
-	@Trace
-	void tracedUsingArrayParameters(//
-			MySerializableBean[] array,
-			MySerializableBean[][] multiDimArray) {
 
 	}
 }
