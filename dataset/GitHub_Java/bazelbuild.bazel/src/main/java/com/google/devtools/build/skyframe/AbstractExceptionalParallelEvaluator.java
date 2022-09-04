@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -76,8 +75,6 @@ import javax.annotation.Nullable;
  */
 public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
     extends AbstractParallelEvaluator {
-  private static final Logger logger =
-      Logger.getLogger(AbstractExceptionalParallelEvaluator.class.getName());
 
   AbstractExceptionalParallelEvaluator(
       ProcessableGraph graph,
@@ -399,19 +396,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
       }
       SkyKey parent = Preconditions.checkNotNull(Iterables.getFirst(reverseDeps, null));
       if (bubbleErrorInfo.containsKey(parent)) {
-        logger.info(
-            "Bubbled into a cycle. Don't try to bubble anything up. Cycle detection will kick in. "
-                + parent
-                + ": "
-                + errorEntry
-                + ", "
-                + bubbleErrorInfo
-                + ", "
-                + leafFailure
-                + ", "
-                + roots
-                + ", "
-                + rdepsToBubbleUpTo);
+        // We are in a cycle. Don't try to bubble anything up -- cycle detection will kick in.
         return null;
       }
       NodeEntry parentEntry =
@@ -561,10 +546,11 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
       boolean catastrophe)
       throws InterruptedException {
     Preconditions.checkState(
-        !catastrophe || evaluatorContext.keepGoing(),
-        "Catastrophe not consistent with keepGoing mode: %s %s %s",
+        catastrophe == (evaluatorContext.keepGoing() && bubbleErrorInfo != null),
+        "Catastrophe not consistent with keepGoing mode and bubbleErrorInfo: %s %s %s %s",
         skyKeys,
         catastrophe,
+        evaluatorContext.keepGoing(),
         bubbleErrorInfo);
     EvaluationResult.Builder<T> result = EvaluationResult.builder();
     List<SkyKey> cycleRoots = new ArrayList<>();
@@ -605,7 +591,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
     if (!cycleRoots.isEmpty()) {
       cycleDetector.checkForCycles(cycleRoots, result, evaluatorContext);
     }
-    if (catastrophe && bubbleErrorInfo != null) {
+    if (catastrophe) {
       // We may not have a top-level node completed. Inform the caller of at least one catastrophic
       // exception that shut down the evaluation so that it has some context.
       for (ValueWithMetadata valueWithMetadata : bubbleErrorInfo.values()) {

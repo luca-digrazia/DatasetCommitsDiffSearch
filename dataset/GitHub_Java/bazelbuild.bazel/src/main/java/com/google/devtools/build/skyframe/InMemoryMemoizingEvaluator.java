@@ -23,6 +23,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.skyframe.Differencer.Diff;
@@ -36,7 +37,9 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
@@ -151,7 +154,27 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
 
   @Override
   public <T extends SkyValue> EvaluationResult<T> evaluate(
-      Iterable<? extends SkyKey> roots, Version version, EvaluationContext evaluationContext)
+      Iterable<? extends SkyKey> roots,
+      Version version,
+      boolean keepGoing,
+      int numThreads,
+      ExtendedEventHandler eventHandler)
+      throws InterruptedException {
+    return evaluate(
+        roots,
+        version,
+        keepGoing,
+        () -> AbstractQueueVisitor.createExecutorService(numThreads),
+        eventHandler);
+  }
+
+  @Override
+  public <T extends SkyValue> EvaluationResult<T> evaluate(
+      Iterable<? extends SkyKey> roots,
+      Version version,
+      boolean keepGoing,
+      Supplier<ExecutorService> executorService,
+      ExtendedEventHandler eventHandler)
       throws InterruptedException {
     // NOTE: Performance critical code. See bug "Null build performance parity".
     IntVersion intVersion = (IntVersion) version;
@@ -187,18 +210,14 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
                 graph,
                 version,
                 skyFunctions,
-                evaluationContext.getEventHandler(),
+                eventHandler,
                 emittedEventState,
                 eventFilter,
                 ErrorInfoManager.UseChildErrorInfoIfNecessary.INSTANCE,
-                evaluationContext.getKeepGoing(),
+                keepGoing,
                 progressReceiver,
                 graphInconsistencyReceiver,
-                evaluationContext.getExecutorService() == null
-                    ? () ->
-                        AbstractQueueVisitor.createExecutorService(
-                            evaluationContext.getNumThreads())
-                    : evaluationContext.getExecutorService(),
+                executorService,
                 new SimpleCycleDetector(),
                 EvaluationVersionBehavior.MAX_CHILD_VERSIONS);
         result = evaluator.eval(roots);

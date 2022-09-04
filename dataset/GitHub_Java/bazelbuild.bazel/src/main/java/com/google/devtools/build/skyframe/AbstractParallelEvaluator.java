@@ -64,7 +64,7 @@ public abstract class AbstractParallelEvaluator {
   final ProcessableGraph graph;
   final ParallelEvaluatorContext evaluatorContext;
   protected final CycleDetector cycleDetector;
-  private final AtomicInteger globalEnqueuedIndex;
+  @Nullable private final AtomicInteger globalEnqueuedIndex;
 
   AbstractParallelEvaluator(
       ProcessableGraph graph,
@@ -103,7 +103,7 @@ public abstract class AbstractParallelEvaluator {
                     progressReceiver,
                     (skyKey, evaluationPriority) -> new Evaluate(evaluationPriority, skyKey)),
             evaluationVersionBehavior);
-    this.globalEnqueuedIndex = new AtomicInteger();
+    this.globalEnqueuedIndex = null;
   }
 
   /**
@@ -292,7 +292,9 @@ public abstract class AbstractParallelEvaluator {
           continue;
         }
         handleKnownChildrenForDirtyNode(
-            unknownStatusDeps, state, globalEnqueuedIndex.incrementAndGet());
+            unknownStatusDeps,
+            state,
+            globalEnqueuedIndex != null ? globalEnqueuedIndex.incrementAndGet() : 0);
         return DirtyOutcome.ALREADY_PROCESSED;
       }
       switch (state.getDirtyState()) {
@@ -632,7 +634,8 @@ public abstract class AbstractParallelEvaluator {
         Set<SkyKey> newDepsThatWereInTheLastEvaluation =
             Sets.difference(uniqueNewDeps, newDepsThatWerentInTheLastEvaluation);
 
-        int childEvaluationPriority = globalEnqueuedIndex.incrementAndGet();
+        int childEvaluationPriority =
+            globalEnqueuedIndex != null ? globalEnqueuedIndex.incrementAndGet() : 0;
         InterruptibleSupplier<Map<SkyKey, ? extends NodeEntry>>
             newDepsThatWerentInTheLastEvaluationNodes =
                 graph.createIfAbsentBatchAsync(

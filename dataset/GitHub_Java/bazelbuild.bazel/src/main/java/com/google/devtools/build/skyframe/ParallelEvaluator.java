@@ -24,23 +24,19 @@ import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
- * An {@link AbstractExceptionalParallelEvaluator}, for when the only checked exception throwable by
- * evaluation is {@link InterruptedException}.
+ * An {@link AbstractExceptionalParallelEvaluator} implementing {@link Evaluator}, for when the only
+ * checked exception throwable by evaluation is {@link InterruptedException}.
  *
  * <p>This class is not intended for direct use, and is only exposed as public for use in evaluation
  * implementations outside of this package.
- *
- * <p>Note on naming: there used to be an {@code Evaluator} interface this class (and likely some
- * others) implemented, but as of 2020-01-15 this was the only implementation so we deleted that
- * interface. Now {@code ParallelEvaluator} could be called just {@code Evaluator}, but renaming it
- * is not worth the effort.
  */
-public class ParallelEvaluator extends AbstractExceptionalParallelEvaluator<RuntimeException> {
+public class ParallelEvaluator extends AbstractExceptionalParallelEvaluator<RuntimeException>
+    implements Evaluator {
 
   public ParallelEvaluator(
       ProcessableGraph graph,
       Version graphVersion,
-      ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions,
+      ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
       final ExtendedEventHandler reporter,
       EmittedEventState emittedEventState,
       EventFilter storedEventFilter,
@@ -67,10 +63,7 @@ public class ParallelEvaluator extends AbstractExceptionalParallelEvaluator<Runt
         evaluationVersionBehavior);
   }
 
-  /**
-   * Evaluates a set of values. Returns an {@link EvaluationResult}. All elements of skyKeys must be
-   * keys for Values of subtype T.
-   */
+  @Override
   @ThreadCompatible
   public <T extends SkyValue> EvaluationResult<T> eval(Iterable<? extends SkyKey> skyKeys)
       throws InterruptedException {
