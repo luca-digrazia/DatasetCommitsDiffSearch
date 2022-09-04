@@ -26,7 +26,6 @@ import com.mongodb.MongoClientURI;
 import com.mongodb.MongoCommandException;
 import com.mongodb.MongoException;
 import com.mongodb.WriteConcern;
-import com.mongodb.client.MongoDatabase;
 import org.graylog2.configuration.MongoDbConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +49,6 @@ public class MongoConnectionImpl implements MongoConnection {
 
     private MongoClient m = null;
     private DB db = null;
-    private MongoDatabase mongoDatabase = null;
 
     @Inject
     public MongoConnectionImpl(final MongoDbConfiguration configuration) {
@@ -75,9 +73,7 @@ public class MongoConnectionImpl implements MongoConnection {
 
             m = new MongoClient(mongoClientURI);
             db = m.getDB(dbName);
-            db.setWriteConcern(WriteConcern.ACKNOWLEDGED);
-
-            mongoDatabase = m.getDatabase(dbName).withWriteConcern(WriteConcern.ACKNOWLEDGED);
+            db.setWriteConcern(WriteConcern.SAFE);
         }
 
         try {
@@ -127,10 +123,5 @@ public class MongoConnectionImpl implements MongoConnection {
     @Override
     public DB getDatabase() {
         return db;
-    }
-
-    @Override
-    public MongoDatabase getMongoDatabase() {
-        return mongoDatabase;
     }
 }
