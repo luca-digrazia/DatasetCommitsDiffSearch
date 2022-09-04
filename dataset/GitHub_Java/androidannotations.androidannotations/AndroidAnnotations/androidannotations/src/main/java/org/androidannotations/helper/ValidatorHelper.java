@@ -53,7 +53,7 @@ public class ValidatorHelper {
 
 	private static final String METHOD_NAME_GET_ROOT_URL = "getRootUrl";
 
-	private static final List<String> VALID_PREF_RETURN_TYPES = Arrays.asList("int", "boolean", "float", "long", CanonicalNameConstants.STRING, CanonicalNameConstants.STRING_SET);
+	private static final List<String> VALID_PREF_RETURN_TYPES = Arrays.asList("int", "boolean", "float", "long", CanonicalNameConstants.STRING);
 
 	private static final List<String> INVALID_PREF_METHOD_NAMES = Arrays.asList("edit", "getSharedPreferences", "clear", "getEditor", "apply");
 
@@ -673,7 +673,6 @@ public class ValidatorHelper {
 			} else {
 
 				String returnType = executableElement.getReturnType().toString();
-
 				if (!VALID_PREF_RETURN_TYPES.contains(returnType)) {
 					annotationHelper.printError(element, "Method " + methodName + " should only return preference simple types in an " + annotationHelper.annotationName() + " annotated interface");
 				} else {
@@ -882,29 +881,6 @@ public class ValidatorHelper {
 							annotationHelper.printAnnotationError(element, "%s annotated element should have a constructor with one parameter max, of type " + CanonicalNameConstants.CONTEXT);
 							valid.invalidate();
 						}
-					}
-				} else {
-					annotationHelper.printAnnotationError(element, "%s annotated element should not have a private constructor");
-					valid.invalidate();
-				}
-			} else {
-				annotationHelper.printAnnotationError(element, "%s annotated element should have only one constructor");
-				valid.invalidate();
-			}
-		}
-	}
-
-	public void isAbstractOrHasEmptyConstructor(Element element, IsValid valid) {
-		List<ExecutableElement> constructors = ElementFilter.constructorsIn(element.getEnclosedElements());
-
-		if (!annotationHelper.isAbstract(element)) {
-			if (constructors.size() == 1) {
-				ExecutableElement constructor = constructors.get(0);
-
-				if (!annotationHelper.isPrivate(constructor)) {
-					if (constructor.getParameters().size() != 0) {
-						annotationHelper.printAnnotationError(element, "%s annotated element should have an empty constructor");
-						valid.invalidate();
 					}
 				} else {
 					annotationHelper.printAnnotationError(element, "%s annotated element should not have a private constructor");

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,7 +18,7 @@ package org.androidannotations.holder;
 import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
-import static org.androidannotations.helper.ModelConstants.classSuffix;
+import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -37,7 +37,6 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 
 	protected final ProcessHolder processHolder;
 	protected JDefinedClass generatedClass;
-	protected JClass annotatedClass;
 	protected final TypeElement annotatedElement;
 	protected final APTCodeModelHelper codeModelHelper;
 
@@ -50,15 +49,14 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 
 	protected void setGeneratedClass() throws Exception {
 		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
-		annotatedClass = codeModel().directClass(annotatedElement.asType().toString());
 
 		if (annotatedElement.getNestingKind().isNested()) {
 			Element enclosingElement = annotatedElement.getEnclosingElement();
 			GeneratedClassHolder enclosingHolder = processHolder.getGeneratedClassHolder(enclosingElement);
-			String generatedBeanSimpleName = annotatedElement.getSimpleName().toString() + classSuffix();
+			String generatedBeanSimpleName = annotatedElement.getSimpleName().toString() + GENERATION_SUFFIX;
 			generatedClass = enclosingHolder.getGeneratedClass()._class(PUBLIC | FINAL | STATIC, generatedBeanSimpleName, ClassType.CLASS);
 		} else {
-			String generatedClassQualifiedName = annotatedComponentQualifiedName + classSuffix();
+			String generatedClassQualifiedName = annotatedComponentQualifiedName + GENERATION_SUFFIX;
 			generatedClass = codeModel()._class(PUBLIC | FINAL, generatedClassQualifiedName, ClassType.CLASS);
 		}
 		for (TypeParameterElement typeParam : annotatedElement.getTypeParameters()) {
@@ -67,10 +65,6 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 		}
 		setExtends();
 		codeModelHelper.addNonAAAnotations(generatedClass, annotatedElement.getAnnotationMirrors(), this);
-	}
-
-	public JClass getAnnotatedClass() {
-		return annotatedClass;
 	}
 
 	protected void setExtends() {
