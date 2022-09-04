@@ -35,6 +35,9 @@ import javax.sql.XADataSource;
 import javax.transaction.TransactionManager;
 import javax.transaction.TransactionSynchronizationRegistry;
 
+import com.arjuna.ats.arjuna.common.CoreEnvironmentBeanException;
+import com.arjuna.ats.arjuna.common.arjPropertyManager;
+import com.arjuna.ats.arjuna.coordinator.TxControl;
 import io.agroal.api.AgroalDataSource;
 import io.agroal.api.configuration.supplier.AgroalConnectionPoolConfigurationSupplier;
 import io.agroal.api.configuration.supplier.AgroalDataSourceConfigurationSupplier;
@@ -51,7 +54,7 @@ public class DataSourceProducer {
     private static final int DEFAULT_MIN_POOL_SIZE = 2;
     private static final int DEFAULT_MAX_POOL_SIZE = 20;
 
-    private Class<?> driver;
+    private Class driver;
     private String dataSourceName;
     private String url;
     private String userName;
@@ -65,10 +68,12 @@ public class DataSourceProducer {
     private AgroalDataSource agroalDataSource;
 
     @Inject
-    TransactionManager transactionManager;
+    private TransactionManager transactionManager;
 
     @Inject
-    TransactionSynchronizationRegistry transactionSynchronizationRegistry;
+    private TransactionSynchronizationRegistry transactionSynchronizationRegistry;
+
+    private AgroalDataSource dataSource;
 
     @Produces
     @ApplicationScoped
@@ -141,11 +146,11 @@ public class DataSourceProducer {
         return log;
     }
 
-    public Class<?> getDriver() {
+    public Class getDriver() {
         return driver;
     }
 
-    public void setDriver(Class<?> driver) {
+    public void setDriver(Class driver) {
         this.driver = driver;
     }
 
