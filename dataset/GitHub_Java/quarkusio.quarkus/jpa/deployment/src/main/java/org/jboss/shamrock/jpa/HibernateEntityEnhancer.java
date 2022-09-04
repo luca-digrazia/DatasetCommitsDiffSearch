@@ -26,8 +26,11 @@ import org.objectweb.asm.Opcodes;
 public final class HibernateEntityEnhancer implements BiFunction<String, ClassVisitor, ClassVisitor> {
 
     private final Enhancer enhancer;
+    private final KnownDomainObjects classnameWhitelist;
 
-    public HibernateEntityEnhancer() {
+    public HibernateEntityEnhancer(KnownDomainObjects classnameWhitelist) {
+        Objects.requireNonNull(classnameWhitelist);
+        this.classnameWhitelist = classnameWhitelist;
         BytecodeProvider provider = new org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl();
         DefaultEnhancementContext enhancementContext = new DefaultEnhancementContext() {
             @Override

@@ -15,7 +15,6 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -97,6 +96,7 @@ public class BuildMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+        final byte[] buffer = new byte[8000];
         libDir.mkdirs();
         wiringClassesDirectory.mkdirs();
         try {
@@ -104,12 +104,11 @@ public class BuildMojo extends AbstractMojo {
             List<String> problems = new ArrayList<>();
             Set<String> whitelist = new HashSet<>();
             for (Artifact a : project.getArtifacts()) {
-                if ( ! "jar".equals(a.getType())) {
-                    continue;
-                }
-                try (ZipFile zip = openZipFile(a)) {
-                    if (!a.getScope().equals(PROVIDED) && zip.getEntry("META-INF/services/org.jboss.shamrock.deployment.ShamrockSetup") != null) {
-                         problems.add("Artifact " + a + " is a deployment artifact, however it does not have scope required. This will result in unnecessary jars being included in the final image");
+                try (ZipFile zip = new ZipFile(a.getFile())) {
+                    if (zip.getEntry("META-INF/services/org.jboss.shamrock.deployment.ShamrockSetup") != null) {
+                        if (!a.getScope().equals(PROVIDED)) {
+                            problems.add("Artifact " + a + " is a deployment artifact, however it does not have scope required. This will result in unnecessary jars being included in the final image");
+                        }
                     }
                     ZipEntry deps = zip.getEntry(DEPENDENCIES_RUNTIME);
                     if (deps != null) {
@@ -151,9 +150,8 @@ public class BuildMojo extends AbstractMojo {
                     if (a.getScope().equals(PROVIDED) && !whitelist.contains(a.getDependencyConflictId())) {
                         continue;
                     }
-                    final File artifactFile = a.getFile();
                     if (uberJar) {
-                        try (ZipInputStream in = new ZipInputStream(new FileInputStream(artifactFile))) {
+                        try (ZipInputStream in = new ZipInputStream(new FileInputStream(a.getFile()))) {
                             for (ZipEntry e = in.getNextEntry(); e != null; e = in.getNextEntry()) {
                                 if (e.getName().startsWith("META-INF/services/") && e.getName().length() > 18) {
                                     services.computeIfAbsent(e.getName(), (u) -> new ArrayList<>()).add(read(in));
@@ -172,9 +170,16 @@ public class BuildMojo extends AbstractMojo {
                             }
                         }
                     } else {
-                        final Path targetPath = libDir.toPath().resolve(artifactFile.getName());
-                        Files.copy(artifactFile.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-                        classPath.append(" lib/" + artifactFile.getName());
+                        try (FileInputStream in = new FileInputStream(a.getFile())) {
+                            File file = new File(libDir, a.getFile().getName());
+                            try (FileOutputStream out = new FileOutputStream(file)) {
+                                int r;
+                                while ((r = in.read(buffer)) > 0) {
+                                    out.write(buffer, 0, r);
+                                }
+                            }
+                            classPath.append(" lib/" + file.getName());
+                        }
                     }
                 }
 
@@ -332,21 +337,6 @@ public class BuildMojo extends AbstractMojo {
 
         } catch (Exception e) {
             throw new MojoFailureException("Failed to run", e);
-        }
-    }
-
-    private ZipFile openZipFile(final Artifact a) {
-        final File file = a.getFile();
-        if (file==null){
-            throw new RuntimeException("No file for Artifact:" + a.toString());
-        }
-        if (!Files.isReadable(file.toPath())){
-            throw new RuntimeException("File not existing or not allowed for reading: " + file.getAbsolutePath());
-        }
-        try {
-            return new ZipFile(file);
-        } catch (IOException e) {
-            throw new RuntimeException("Error opening zip stream from artifact: " + a.toString());
         }
     }
 
