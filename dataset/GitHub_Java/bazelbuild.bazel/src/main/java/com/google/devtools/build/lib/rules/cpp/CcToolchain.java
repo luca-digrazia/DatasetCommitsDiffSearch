@@ -665,10 +665,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       return CppToolchainInfo.create(
           cppConfiguration.getCrosstoolTopPathFragment(),
           cppConfiguration.getCcToolchainRuleLabel(),
-          crosstoolInfo,
-          cppConfiguration.disableLegacyCrosstoolFields(),
-          cppConfiguration.disableCompilationModeFlags(),
-          cppConfiguration.disableLinkingModeFlags());
+          crosstoolInfo);
     } catch (InvalidConfigurationException e) {
       throw ruleContext.throwWithRuleError(e.getMessage());
     }
