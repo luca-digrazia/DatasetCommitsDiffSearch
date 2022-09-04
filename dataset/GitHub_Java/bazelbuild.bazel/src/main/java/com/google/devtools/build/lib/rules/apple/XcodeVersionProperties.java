@@ -79,20 +79,20 @@ public class XcodeVersionProperties extends NativeInfo implements XcodePropertie
     this.xcodeVersion = Optional.fromNullable(xcodeVersion);
     this.defaultIosSdkVersion =
         Strings.isNullOrEmpty(defaultIosSdkVersion)
-            ? DottedVersion.fromStringUnchecked(DEFAULT_IOS_SDK_VERSION)
-            : DottedVersion.fromStringUnchecked(defaultIosSdkVersion);
+            ? DottedVersion.fromString(DEFAULT_IOS_SDK_VERSION)
+            : DottedVersion.fromString(defaultIosSdkVersion);
     this.defaultWatchosSdkVersion =
         Strings.isNullOrEmpty(defaultWatchosSdkVersion)
-            ? DottedVersion.fromStringUnchecked(DEFAULT_WATCHOS_SDK_VERSION)
-            : DottedVersion.fromStringUnchecked(defaultWatchosSdkVersion);
+            ? DottedVersion.fromString(DEFAULT_WATCHOS_SDK_VERSION)
+            : DottedVersion.fromString(defaultWatchosSdkVersion);
     this.defaultTvosSdkVersion =
         Strings.isNullOrEmpty(defaultTvosSdkVersion)
-            ? DottedVersion.fromStringUnchecked(DEFAULT_TVOS_SDK_VERSION)
-            : DottedVersion.fromStringUnchecked(defaultTvosSdkVersion);
+            ? DottedVersion.fromString(DEFAULT_TVOS_SDK_VERSION)
+            : DottedVersion.fromString(defaultTvosSdkVersion);
     this.defaultMacosSdkVersion =
         Strings.isNullOrEmpty(defaultMacosSdkVersion)
-            ? DottedVersion.fromStringUnchecked(DEFAULT_MACOS_SDK_VERSION)
-            : DottedVersion.fromStringUnchecked(defaultMacosSdkVersion);
+            ? DottedVersion.fromString(DEFAULT_MACOS_SDK_VERSION)
+            : DottedVersion.fromString(defaultMacosSdkVersion);
   }
 
   /** Returns the xcode version, or null if the xcode version is unknown. */
