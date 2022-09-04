@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ProvidersBinderTest {
 
     @Test
-    void demonstrateThatHk2BinderIsNotPickedUpAsProvider() {
+    public void demonstrateThatHk2BinderIsNotPickedUpAsProvider() {
         org.glassfish.hk2.utilities.Binder binder = new org.glassfish.hk2.utilities.binding.AbstractBinder() {
             @Override
             protected void configure() {
@@ -23,7 +23,7 @@ public class ProvidersBinderTest {
     }
 
     @Test
-    void demonstrateThatJerseyBinderIsPickedUpAsProvider() {
+    public void demonstrateThatJerseyBinderIsPickedUpAsProvider() {
         org.glassfish.jersey.internal.inject.Binder binder = new org.glassfish.jersey.internal.inject.AbstractBinder() {
             @Override
             protected void configure() {
