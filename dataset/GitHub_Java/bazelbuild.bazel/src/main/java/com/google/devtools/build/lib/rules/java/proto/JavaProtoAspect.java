@@ -291,7 +291,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
           protoInfo.getOriginalDirectProtoSources(), "java_proto_library");
     }
 
-    private void createProtoCompileAction(Artifact sourceJar) {
+    private void createProtoCompileAction(Artifact sourceJar) throws InterruptedException {
       ImmutableList.Builder<ToolchainInvocation> invocations = ImmutableList.builder();
       invocations.add(
           new ToolchainInvocation(
