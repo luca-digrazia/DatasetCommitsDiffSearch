@@ -43,6 +43,10 @@ import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
  * <p>GET /{ac,cas}/1234 HTTP/1.1 GET method fetches a blob with the specified key. In this example
  * the key is 1234. A status code of 200 should be followed by the content of blob. Status code of
  * 404 or 204 means the key cannot be found.
+ *
+ * <p>HEAD /{ac,cas}/1234 HTTP/1.1 HEAD method checks to see if the specified key exists in the blob
+ * store. A status code of 200 indicates the key is found in the blob store. A status code of 404
+ * indicates the key is not found in the blob store.
  */
 public final class RestBlobStore implements SimpleBlobStore {
 
@@ -94,7 +98,19 @@ public final class RestBlobStore implements SimpleBlobStore {
 
   @Override
   public boolean containsKey(String key) throws IOException {
-    throw new UnsupportedOperationException("HTTP Caching does not use this method.");
+    HttpResponse response = null;
+    try {
+      response =
+          requestFactory
+              .buildHeadRequest(new GenericUrl(baseUrl + "/" + CAS_PREFIX + "/" + key))
+              .setThrowExceptionOnExecuteError(false)
+              .execute();
+      return HttpStatus.SC_OK == response.getStatusCode();
+    } finally {
+      if (response != null) {
+        response.disconnect();
+      }
+    }
   }
 
   @Override

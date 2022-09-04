@@ -18,12 +18,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auth.Credentials;
 import com.google.devtools.build.lib.remote.blobstore.OnDiskBlobStore;
+import com.google.devtools.build.lib.remote.blobstore.RestBlobStore;
 import com.google.devtools.build.lib.remote.blobstore.SimpleBlobStore;
-import com.google.devtools.build.lib.remote.blobstore.http.HttpBlobStore;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
-import java.net.URI;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
@@ -35,25 +33,16 @@ public final class SimpleBlobStoreFactory {
 
   private SimpleBlobStoreFactory() {}
 
-  public static SimpleBlobStore createRest(RemoteOptions options, Credentials creds) {
-    try {
-      return new HttpBlobStore(
-          URI.create(options.remoteHttpCache),
-          (int) TimeUnit.SECONDS.toMillis(options.remoteTimeout),
-          options.remoteMaxConnections,
-          creds);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+  public static SimpleBlobStore createRest(RemoteOptions options, Credentials creds)
+      throws IOException {
+    return new RestBlobStore(
+        options.remoteRestCache, (int) TimeUnit.SECONDS.toMillis(options.remoteTimeout), creds);
   }
 
-  public static SimpleBlobStore createDiskCache(Path workingDirectory, PathFragment diskCachePath)
+  public static SimpleBlobStore createLocalDisk(RemoteOptions options, Path workingDirectory)
       throws IOException {
-    Path cacheDir = workingDirectory.getRelative(checkNotNull(diskCachePath));
-    if (!cacheDir.exists()) {
-      cacheDir.createDirectoryAndParents();
-    }
-    return new OnDiskBlobStore(cacheDir);
+    return new OnDiskBlobStore(
+        workingDirectory.getRelative(checkNotNull(options.experimentalLocalDiskCachePath)));
   }
 
   public static SimpleBlobStore create(
@@ -62,8 +51,8 @@ public final class SimpleBlobStoreFactory {
     if (isRestUrlOptions(options)) {
       return createRest(options, creds);
     }
-    if (workingDirectory != null && isDiskCache(options)) {
-      return createDiskCache(workingDirectory, options.diskCache);
+    if (workingDirectory != null && isLocalDiskCache(options)) {
+      return createLocalDisk(options, workingDirectory);
     }
     throw new IllegalArgumentException(
         "Unrecognized concurrent map RemoteOptions: must specify "
@@ -71,14 +60,14 @@ public final class SimpleBlobStoreFactory {
   }
 
   public static boolean isRemoteCacheOptions(RemoteOptions options) {
-    return isRestUrlOptions(options) || isDiskCache(options);
+    return isRestUrlOptions(options) || isLocalDiskCache(options);
   }
 
-  public static boolean isDiskCache(RemoteOptions options) {
-    return options.diskCache != null && !options.diskCache.isEmpty();
+  public static boolean isLocalDiskCache(RemoteOptions options) {
+    return options.experimentalLocalDiskCache;
   }
 
-  static boolean isRestUrlOptions(RemoteOptions options) {
-    return options.remoteHttpCache != null;
+  private static boolean isRestUrlOptions(RemoteOptions options) {
+    return options.remoteRestCache != null;
   }
 }
