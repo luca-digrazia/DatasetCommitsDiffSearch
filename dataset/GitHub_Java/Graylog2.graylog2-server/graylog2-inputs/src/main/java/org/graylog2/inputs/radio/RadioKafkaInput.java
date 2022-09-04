@@ -19,8 +19,6 @@
  */
 package org.graylog2.inputs.radio;
 
-import com.codahale.metrics.MetricRegistry;
-import com.google.inject.Inject;
 import org.graylog2.inputs.kafka.KafkaInput;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
@@ -28,7 +26,6 @@ import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.configuration.fields.TextField;
-import org.graylog2.plugin.system.NodeId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,11 +39,6 @@ public class RadioKafkaInput extends KafkaInput {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaInput.class);
 
     public static final String NAME = "Graylog2 Radio Input (Kafka)";
-
-    @Inject
-    public RadioKafkaInput(MetricRegistry metricRegistry, NodeId nodeId) {
-        super(metricRegistry, nodeId);
-    }
 
     @Override
     public void checkConfiguration() throws ConfigurationException {
@@ -103,8 +95,8 @@ public class RadioKafkaInput extends KafkaInput {
         cr.addField(new NumberField(
                 CK_THREADS,
                 "Processor threads",
-                2,
-                "Number of processor threads to spawn. Use one thread per Kafka topic partition.",
+                10,
+                "Number of processor threads to spawn.",
                 ConfigurationField.Optional.NOT_OPTIONAL)
         );
 

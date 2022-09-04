@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2010, 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2;
@@ -27,48 +28,35 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
-import com.google.inject.Guice;
-import com.google.inject.Injector;
-import com.google.inject.Module;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
-import org.graylog2.bindings.PersistenceServicesBindings;
-import org.graylog2.bindings.ServerBindings;
 import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
-import org.graylog2.cluster.NodeService;
-import org.graylog2.cluster.NodeServiceImpl;
 import org.graylog2.filters.*;
-import org.graylog2.initializers.Initializers;
-import org.graylog2.initializers.PeriodicalsInitializer;
-import org.graylog2.inputs.ServerInputRegistry;
-import org.graylog2.inputs.gelf.http.GELFHttpInput;
+import org.graylog2.initializers.*;
+import org.graylog2.inputs.amqp.AMQPInput;
 import org.graylog2.inputs.gelf.tcp.GELFTCPInput;
+import org.graylog2.inputs.gelf.http.GELFHttpInput;
 import org.graylog2.inputs.gelf.udp.GELFUDPInput;
 import org.graylog2.inputs.kafka.KafkaInput;
 import org.graylog2.inputs.misc.jsonpath.JsonPathInput;
 import org.graylog2.inputs.misc.metrics.LocalMetricsInput;
+import org.graylog2.inputs.radio.RadioAMQPInput;
 import org.graylog2.inputs.radio.RadioInput;
+import org.graylog2.inputs.radio.RadioKafkaInput;
 import org.graylog2.inputs.random.FakeHttpMessageInput;
 import org.graylog2.inputs.raw.tcp.RawTCPInput;
 import org.graylog2.inputs.raw.udp.RawUDPInput;
 import org.graylog2.inputs.syslog.tcp.SyslogTCPInput;
 import org.graylog2.inputs.syslog.udp.SyslogUDPInput;
+import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.notifications.Notification;
-import org.graylog2.notifications.NotificationImpl;
-import org.graylog2.notifications.NotificationService;
 import org.graylog2.outputs.ElasticSearchOutput;
 import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.initializers.InitializerConfigurationException;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugins.PluginInstaller;
-import org.graylog2.shared.NodeRunner;
-import org.graylog2.shared.ServerStatus;
-import org.graylog2.shared.bindings.GuiceInstantiationService;
-import org.graylog2.shared.filters.FilterRegistry;
-import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.system.activities.Activity;
-import org.graylog2.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
@@ -76,14 +64,13 @@ import org.slf4j.bridge.SLF4JBridgeHandler;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
-import java.util.List;
 
 /**
  * Main class of Graylog2.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public final class Main extends NodeRunner {
+public final class Main {
 
     private static final Logger LOG = LoggerFactory.getLogger(Main.class);
 
@@ -112,13 +99,25 @@ public final class Main extends NodeRunner {
         String configFile = commandLineArguments.getConfigFile();
         LOG.info("Using config file: {}", configFile);
 
-        final Configuration configuration = getConfiguration(configFile);
+        final Configuration configuration = new Configuration();
+        JadConfig jadConfig = new JadConfig(new PropertiesRepository(configFile), configuration);
+
+        LOG.info("Loading configuration");
+        try {
+            jadConfig.process();
+        } catch (RepositoryException e) {
+            LOG.error("Couldn't load configuration file: [{}]", configFile, e);
+            System.exit(1);
+        } catch (ValidationException e) {
+            LOG.error("Invalid configuration", e);
+            System.exit(1);
+        }
 
         if (configuration.getPasswordSecret().isEmpty()) {
             LOG.error("No password secret set. Please define password_secret in your graylog2.conf.");
             System.exit(1);
         }
-
+        
         if (commandLineArguments.isInstallPlugin()) {
             System.out.println("Plugin installation requested.");
             PluginInstaller installer = new PluginInstaller(
@@ -138,15 +137,8 @@ public final class Main extends NodeRunner {
             logLevel = Level.DEBUG;
         }
 
-        GuiceInstantiationService instantiationService = new GuiceInstantiationService();
-        List<Module> bindingsModules = getBindingsModules(instantiationService,
-                new ServerBindings(configuration),
-                new PersistenceServicesBindings());
-        Injector injector = Guice.createInjector(bindingsModules);
-        instantiationService.setInjector(injector);
-
         // This is holding all our metrics.
-        final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
+        final MetricRegistry metrics = new MetricRegistry();
 
         // Report metrics via JMX.
         final JmxReporter reporter = JmxReporter.forRegistry(metrics).build();
@@ -163,50 +155,59 @@ public final class Main extends NodeRunner {
 
         LOG.info("Graylog2 {} starting up. (JRE: {})", Core.GRAYLOG2_VERSION, Tools.getSystemInformation());
 
+        // If we only want to check our configuration, we just initialize the rules engine to check if the rules compile
+        if (commandLineArguments.isConfigTest()) {
+            Core server = new Core();
+            server.setConfiguration(configuration);
+            DroolsInitializer drools = new DroolsInitializer();
+            try {
+                drools.initialize(server, null);
+            } catch (InitializerConfigurationException e) {
+                LOG.error("Drools initialization failed.", e);
+            }
+            // rules have been checked, exit gracefully
+            System.exit(0);
+        }
+
         // Do not use a PID file if the user requested not to
         if (!commandLineArguments.isNoPidFile()) {
             savePidFile(commandLineArguments.getPidFile());
         }
 
         // Le server object. This is where all the magic happens.
-        Core server = injector.getInstance(Core.class);
-        ServerStatus serverStatus = injector.getInstance(ServerStatus.class);
-        serverStatus.setLifecycle(Lifecycle.STARTING);
+        Core server = new Core();
+        server.setLifecycle(Lifecycle.STARTING);
 
-        server.initialize();
+        server.initialize(configuration, metrics);
 
         // Register this node.
-        final NodeService nodeService = injector.getInstance(NodeService.class);
-        nodeService.registerServer(server, configuration.isMaster(), configuration.getRestTransportUri());
+        Node.registerServer(server, configuration.isMaster(), configuration.getRestTransportUri());
 
         Node thisNode = null;
         try {
-            thisNode = nodeService.thisNode(server);
+            thisNode = Node.thisNode(server);
         } catch (NodeNotFoundException e) {
             throw new RuntimeException("Did not find own node. This should never happen.", e);
         }
-
-        final ActivityWriter activityWriter = injector.getInstance(ActivityWriter.class);
-        if (configuration.isMaster() && !nodeService.isOnlyMaster(server)) {
+        if (configuration.isMaster() && !thisNode.isOnlyMaster()) {
             LOG.warn("Detected another master in the cluster. Retrying in {} seconds to make sure it is not "
-                    + "an old stale instance.", NodeServiceImpl.PING_TIMEOUT);
+                    + "an old stale instance.", Node.PING_TIMEOUT);
             try {
-                Thread.sleep(NodeServiceImpl.PING_TIMEOUT*1000);
+                Thread.sleep(Node.PING_TIMEOUT*1000);
             } catch (InterruptedException e) { /* nope */ }
             
-            if (!nodeService.isOnlyMaster(server)) {
+            if (!thisNode.isOnlyMaster()) {
                 // All devils here.
                 String what = "Detected other master node in the cluster! Starting as non-master! "
                         + "This is a mis-configuration you should fix.";
                 LOG.warn(what);
-                activityWriter.write(new Activity(what, Main.class));
+                server.getActivityWriter().write(new Activity(what, Main.class));
 
                 // Write a notification.
-                final NotificationService notificationService = injector.getInstance(NotificationService.class);
-                Notification notification = notificationService.buildNow()
-                        .addType(NotificationImpl.Type.MULTI_MASTER)
-                        .addSeverity(NotificationImpl.Severity.URGENT);
-                notificationService.publishIfFirst(notification);
+                Notification.buildNow(server)
+                        .addType(Notification.Type.MULTI_MASTER)
+                        .addSeverity(Notification.Severity.URGENT)
+                        .publishIfFirst();
 
                 configuration.setIsMaster(false);
             } else {
@@ -218,13 +219,13 @@ public final class Main extends NodeRunner {
         if (commandLineArguments.isLocal() || commandLineArguments.isDebug()) {
             // In local mode, systemstats are sent to localhost for example.
             LOG.info("Running in local mode");
-            serverStatus.setLocalMode(true);
+            server.setLocalMode(true);
         }
 
         // Are we in stats mode?
         if (commandLineArguments.isStats()) {
             LOG.info("Printing system utilization information.");
-            serverStatus.setStatsMode(true);
+            server.setStatsMode(true);
         }
 
 
@@ -236,49 +237,49 @@ public final class Main extends NodeRunner {
         MessageInput.setDefaultRecvBufferSize(configuration.getUdpRecvBufferSizes());
 
         // Register standard inputs.
-        InputRegistry inputRegistry = injector.getInstance(ServerInputRegistry.class);
-        inputRegistry.register(SyslogUDPInput.class, SyslogUDPInput.NAME);
-        inputRegistry.register(SyslogTCPInput.class, SyslogTCPInput.NAME);
-        inputRegistry.register(RawUDPInput.class, RawUDPInput.NAME);
-        inputRegistry.register(RawTCPInput.class, RawTCPInput.NAME);
-        inputRegistry.register(GELFUDPInput.class, GELFUDPInput.NAME);
-        inputRegistry.register(GELFTCPInput.class, GELFTCPInput.NAME);
-        inputRegistry.register(GELFHttpInput.class, GELFHttpInput.NAME);
-        inputRegistry.register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
-        inputRegistry.register(LocalMetricsInput.class, LocalMetricsInput.NAME);
-        inputRegistry.register(JsonPathInput.class, JsonPathInput.NAME);
-        inputRegistry.register(KafkaInput.class, KafkaInput.NAME);
-        inputRegistry.register(RadioInput.class, RadioInput.NAME);
+        server.inputs().register(SyslogUDPInput.class, SyslogUDPInput.NAME);
+        server.inputs().register(SyslogTCPInput.class, SyslogTCPInput.NAME);
+        server.inputs().register(RawUDPInput.class, RawUDPInput.NAME);
+        server.inputs().register(RawTCPInput.class, RawTCPInput.NAME);
+        server.inputs().register(GELFUDPInput.class, GELFUDPInput.NAME);
+        server.inputs().register(GELFTCPInput.class, GELFTCPInput.NAME);
+        server.inputs().register(GELFHttpInput.class, GELFHttpInput.NAME);
+        server.inputs().register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
+        server.inputs().register(LocalMetricsInput.class, LocalMetricsInput.NAME);
+        server.inputs().register(JsonPathInput.class, JsonPathInput.NAME);
+        server.inputs().register(KafkaInput.class, KafkaInput.NAME);
+        server.inputs().register(RadioKafkaInput.class, RadioKafkaInput.NAME);
+        server.inputs().register(AMQPInput.class, AMQPInput.NAME);
+        server.inputs().register(RadioAMQPInput.class, RadioAMQPInput.NAME);
 
         // Register initializers.
-        Initializers initializers = injector.getInstance(Initializers.class);
-        initializers.register(injector.getInstance(PeriodicalsInitializer.class));
+        server.initializers().register(new DroolsInitializer());
+        server.initializers().register(new PeriodicalsInitializer());
 
         // Register message filters. (Order is important here)
-        final FilterRegistry filterRegistry = injector.getInstance(FilterRegistry.class);
-        filterRegistry.register(injector.getInstance(StaticFieldFilter.class));
-        filterRegistry.register(injector.getInstance(ExtractorFilter.class));
-        filterRegistry.register(injector.getInstance(BlacklistFilter.class));
-        filterRegistry.register(injector.getInstance(StreamMatcherFilter.class));
-        filterRegistry.register(injector.getInstance(RewriteFilter.class));
+        server.registerFilter(new StaticFieldFilter());
+        server.registerFilter(new ExtractorFilter());
+        server.registerFilter(new BlacklistFilter());
+        server.registerFilter(new StreamMatcherFilter());
+        server.registerFilter(new RewriteFilter());
 
         // Register outputs.
-        server.outputs().register(injector.getInstance(ElasticSearchOutput.class));
+        server.outputs().register(new ElasticSearchOutput(server));
 
         // Start services.
         server.run();
 
         // Start REST API.
         try {
-            server.startRestApi(injector);
+            server.startRestApi();
         } catch(Exception e) {
             LOG.error("Could not start REST API on <{}>. Terminating.", configuration.getRestListenUri(), e);
             System.exit(1);
         }
 
-        serverStatus.setLifecycle(Lifecycle.RUNNING);
+        server.setLifecycle(Lifecycle.RUNNING);
 
-        activityWriter.write(new Activity("Started up.", Main.class));
+        server.getActivityWriter().write(new Activity("Started up.", Main.class));
         LOG.info("Graylog2 up and running.");
 
         // Block forever.
@@ -289,24 +290,6 @@ public final class Main extends NodeRunner {
         } catch (InterruptedException e) {
             return;
         }
-    }
-
-    private static Configuration getConfiguration(String configFile) {
-        final Configuration configuration = new Configuration();
-        JadConfig jadConfig = new JadConfig(new PropertiesRepository(configFile), configuration);
-
-        LOG.info("Loading configuration");
-        try {
-            jadConfig.process();
-        } catch (RepositoryException e) {
-            LOG.error("Couldn't load configuration file: [{}]", configFile, e);
-            System.exit(1);
-        } catch (ValidationException e) {
-            LOG.error("Invalid configuration", e);
-            System.exit(1);
-        }
-
-        return configuration;
     }
 
     private static void savePidFile(String pidFile) {

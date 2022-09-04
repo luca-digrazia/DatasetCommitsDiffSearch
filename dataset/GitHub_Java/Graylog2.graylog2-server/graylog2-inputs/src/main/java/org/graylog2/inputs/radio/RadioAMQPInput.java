@@ -19,8 +19,6 @@
  */
 package org.graylog2.inputs.radio;
 
-import com.codahale.metrics.MetricRegistry;
-import com.google.inject.Inject;
 import org.graylog2.inputs.amqp.AMQPInput;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -34,11 +32,6 @@ import org.graylog2.plugin.configuration.fields.TextField;
 public class RadioAMQPInput extends AMQPInput {
 
     public static final String NAME = "Graylog2 Radio Input (AMQP)";
-
-    @Inject
-    public RadioAMQPInput(MetricRegistry metricRegistry) {
-        super(metricRegistry);
-    }
 
     @Override
     public void checkConfiguration() throws ConfigurationException {
@@ -78,16 +71,6 @@ public class RadioAMQPInput extends AMQPInput {
 
         cr.addField(
                 new TextField(
-                        CK_VHOST,
-                        "Broker virtual host",
-                        "/",
-                        "Virtual host of the AMQP broker to use",
-                        ConfigurationField.Optional.NOT_OPTIONAL
-                )
-        );
-
-        cr.addField(
-                new TextField(
                         CK_USERNAME,
                         "Username",
                         "",
@@ -111,8 +94,8 @@ public class RadioAMQPInput extends AMQPInput {
                 new NumberField(
                         CK_PREFETCH,
                         "Prefetch count",
-                        100,
-                        "For advanced usage: AMQP prefetch count. Default is 100.",
+                        0,
+                        "For advanced usage: AMQP prefetch count. Default is 0 (unlimited).",
                         ConfigurationField.Optional.NOT_OPTIONAL
                 )
         );
