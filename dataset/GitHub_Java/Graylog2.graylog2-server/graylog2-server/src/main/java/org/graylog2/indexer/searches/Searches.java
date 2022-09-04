@@ -63,7 +63,6 @@ import org.joda.time.Period;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
@@ -73,7 +72,6 @@ import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
 
@@ -190,7 +188,10 @@ public class Searches {
 
     public ScrollResult scroll(String query, TimeRange range, int limit, int offset, List<String> fields, String filter) {
         final Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
-        final SearchRequestBuilder srb = standardSearchRequest(query, indices, limit, offset, range, filter, null, false);
+        final SearchRequestBuilder srb = standardSearchRequest(query, indices, limit, offset, range, null, false);
+        if (range != null && filter != null) {
+            srb.setPostFilter(standardFilters(range, filter));
+        }
 
         // only request the fields we asked for otherwise we can't figure out which fields will be in the result set
         // until we've scrolled through the entire set.
@@ -420,6 +421,7 @@ public class Searches {
 
         final Filter f = r.getAggregations().get(AGG_FILTER);
         return new FieldStatsResult(
+                f,
                 (ExtendedStats) f.getAggregations().get(AGG_EXTENDED_STATS),
                 (Cardinality) f.getAggregations().get(AGG_CARDINALITY),
                 r.getHits(),
@@ -555,18 +557,6 @@ public class Searches {
             TimeRange range,
             Sorting sort,
             boolean highlight) {
-        return standardSearchRequest(query, indices, limit, offset, range, null, sort, highlight);
-    }
-
-    private SearchRequestBuilder standardSearchRequest(
-            String query,
-            Set<String> indices,
-            int limit,
-            int offset,
-            TimeRange range,
-            String filter,
-            Sorting sort,
-            boolean highlight) {
         if (query == null || query.trim().isEmpty()) {
             query = "*";
         }
@@ -574,21 +564,22 @@ public class Searches {
         SearchRequestBuilder srb = c.prepareSearch();
         srb.setIndices(indices.toArray(new String[indices.size()]));
 
-        final QueryBuilder queryBuilder;
-
         if (query.trim().equals("*")) {
-            queryBuilder = matchAllQuery();
+            srb.setQuery(matchAllQuery());
         } else {
             QueryStringQueryBuilder qs = queryStringQuery(query);
             qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
-            queryBuilder = qs;
+            srb.setQuery(qs);
         }
 
-        srb.setQuery(QueryBuilders.filteredQuery(queryBuilder, standardFilters(range, filter)));
         srb.setFrom(offset);
 
         if (limit > 0) {
             srb.setSize(limit);
+        }
+
+        if (range != null) {
+            srb.setPostFilter(IndexHelper.getTimestampRangeFilter(range));
         }
 
         if (sort != null) {
@@ -608,7 +599,13 @@ public class Searches {
     }
 
     private SearchRequestBuilder filteredSearchRequest(String query, String filter, Set<String> indices, int limit, int offset, TimeRange range, Sorting sort) {
-        return standardSearchRequest(query, indices, limit, offset, range, filter, sort, true);
+        SearchRequestBuilder srb = standardSearchRequest(query, indices, limit, offset, range, sort);
+
+        if (range != null && filter != null) {
+            srb.setPostFilter(standardFilters(range, filter));
+        }
+
+        return srb;
     }
 
     private SearchHit oneOfIndex(String index, QueryBuilder q, SortOrder sort) {
@@ -628,22 +625,24 @@ public class Searches {
         }
     }
 
-    @Nullable
     private BoolFilterBuilder standardFilters(TimeRange range, String filter) {
-        BoolFilterBuilder bfb = null;
+        BoolFilterBuilder bfb = FilterBuilders.boolFilter();
+
+        boolean set = false;
 
         if (range != null) {
-            bfb = FilterBuilders.boolFilter();
             bfb.must(IndexHelper.getTimestampRangeFilter(range));
+            set = true;
             esTimeRangeHistogram.update(TimeRanges.toSeconds(range));
         }
 
-        // Not creating a filter for a "*" value because an empty filter used to be submitted that way.
-        if (!isNullOrEmpty(filter) && !filter.equals("*")) {
-            if (bfb == null) {
-                bfb = FilterBuilders.boolFilter();
-            }
+        if (filter != null && !filter.isEmpty() && !filter.equals("*")) {
             bfb.must(FilterBuilders.queryFilter(QueryBuilders.queryStringQuery(filter)));
+            set = true;
+        }
+
+        if (!set) {
+            throw new RuntimeException("Either range or filter must be set.");
         }
 
         return bfb;

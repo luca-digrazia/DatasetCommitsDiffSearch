@@ -84,7 +84,7 @@ public class FieldStatsResult extends IndexQueryResult {
 
 
     public long getCardinality() {
-        return cardinality != null ? cardinality.getValue() : Long.MIN_VALUE;
+        return cardinality == null ? Long.MIN_VALUE : cardinality.getValue();
     }
 
     public List<ResultMessage> getSearchHits() {
