@@ -43,6 +43,7 @@ public final class TestProcessor {
 
     TestBuildTimeConfig buildTimeConfig;
     TestBuildAndRunTimeConfig buildAndRunTimeConfig;
+    TestRunTimeConfig runTimeConfig;
 
     /**
      * Register a extension capability and feature
@@ -191,8 +192,7 @@ public final class TestProcessor {
      */
     @BuildStep
     @Record(RUNTIME_INIT)
-    void configureBeans(TestTemplate template, List<TestBeanBuildItem> testBeans, BeanContainerBuildItem beanContainer,
-            TestRunTimeConfig runTimeConfig) {
+    void configureBeans(TestTemplate template, List<TestBeanBuildItem> testBeans, BeanContainerBuildItem beanContainer) {
         for (TestBeanBuildItem testBeanBuildItem : testBeans) {
             Class<IConfigConsumer> beanClass = testBeanBuildItem.getConfigConsumer();
             template.configureBeans(beanContainer.getValue(), beanClass, buildAndRunTimeConfig, runTimeConfig);

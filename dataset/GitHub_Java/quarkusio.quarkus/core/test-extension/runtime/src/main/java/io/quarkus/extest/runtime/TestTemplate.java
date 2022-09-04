@@ -1,7 +1,5 @@
 package io.quarkus.extest.runtime;
 
-import java.util.Set;
-
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.runtime.BeanContainer;
@@ -17,12 +15,12 @@ public class TestTemplate {
     /**
      * Instantiate the given class in the given BeanContainer and passes the TestBuildAndRunTimeConfig and TestRunTimeConfig to
      * it
-     *
+     * 
+     * @see IConfigConsumer#loadConfig(TestBuildAndRunTimeConfig, TestRunTimeConfig)
      * @param beanContainer - CDI container
      * @param beanClass - IConfigConsumer
      * @param buildTimeConfig - the extension TestBuildAndRunTimeConfig
      * @param runTimeConfig - the extension TestRunTimeConfig
-     * @see IConfigConsumer#loadConfig(TestBuildAndRunTimeConfig, TestRunTimeConfig)
      */
     public void configureBeans(BeanContainer beanContainer, Class<IConfigConsumer> beanClass,
             TestBuildAndRunTimeConfig buildTimeConfig,
@@ -31,16 +29,5 @@ public class TestTemplate {
         IConfigConsumer instance = beanContainer.instance(beanClass);
         instance.loadConfig(buildTimeConfig, runTimeConfig);
         log.infof("configureBeans, instance=%s\n", instance);
-    }
-
-    /**
-     * Access the primitive class types at runtime to validate the build step generated deploy method
-     * 
-     * @param typesSet
-     */
-    public void validateTypes(Set<Class<?>> typesSet) {
-        for (Class<?> type : typesSet) {
-            log.infof("Checking type: %s", type.getName());
-        }
     }
 }
