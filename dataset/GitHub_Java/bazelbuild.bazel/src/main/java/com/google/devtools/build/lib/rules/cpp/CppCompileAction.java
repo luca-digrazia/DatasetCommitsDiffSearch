@@ -1027,7 +1027,8 @@ public class CppCompileAction extends AbstractAction
   @Override
   public void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addUUID(actionClassId);
-    env.addTo(fp);
+    fp.addStringMap(env.getFixedEnv());
+    fp.addStrings(env.getInheritedEnv());
     fp.addStringMap(compileCommandLine.getEnvironment());
     fp.addStringMap(executionInfo);
 
