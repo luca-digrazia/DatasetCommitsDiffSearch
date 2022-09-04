@@ -26,7 +26,6 @@ import io.quarkus.runtime.annotations.Recorder;
 import io.vertx.core.Vertx;
 import io.vertx.mysqlclient.MySQLConnectOptions;
 import io.vertx.mysqlclient.MySQLPool;
-import io.vertx.mysqlclient.SslMode;
 import io.vertx.sqlclient.PoolOptions;
 
 @Recorder
@@ -142,15 +141,7 @@ public class MySQLPoolRecorder {
         }
 
         if (dataSourceReactiveMySQLConfig.sslMode.isPresent()) {
-            final SslMode sslMode = dataSourceReactiveMySQLConfig.sslMode.get();
-            mysqlConnectOptions.setSslMode(sslMode);
-
-            // If sslMode is verify-identity, we also need a hostname verification algorithm
-            if (sslMode == SslMode.VERIFY_IDENTITY && (!dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm
-                    .isPresent() || "".equals(dataSourceReactiveRuntimeConfig.hostnameVerificationAlgorithm.get()))) {
-                throw new IllegalArgumentException(
-                        "quarkus.datasource.reactive.hostname-verification-algorithm must be specified under verify-identity sslmode");
-            }
+            mysqlConnectOptions.setSslMode(dataSourceReactiveMySQLConfig.sslMode.get());
         }
 
         mysqlConnectOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll);
