@@ -29,10 +29,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts;
-import com.google.devtools.build.lib.analysis.BuildInfoEvent;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.AbortedEvent;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
@@ -81,29 +78,11 @@ public class BuildEventStreamer implements EventHandler {
   private final Reporter reporter;
   private Set<BuildEventId> announcedEvents;
   private final Set<BuildEventId> postedEvents = new HashSet<>();
-  private final Set<BuildEventId> configurationsPosted = new HashSet<>();
   private final Multimap<BuildEventId, BuildEvent> pendingEvents = HashMultimap.create();
   private int progressCount;
   private final CountingArtifactGroupNamer artifactGroupNamer = new CountingArtifactGroupNamer();
-  private OutErrProvider outErrProvider;
   private AbortReason abortReason = AbortReason.UNKNOWN;
   private static final Logger log = Logger.getLogger(BuildEventStreamer.class.getName());
-
-  interface OutErrProvider {
-    /**
-     * Return the chunk of stdout that was produced since the last call to this function (or the
-     * beginning of the build, for the first call). It is the responsibility of the class
-     * implementing this interface to properly synchronize with simultaneously written output.
-     */
-    String getOut();
-
-    /**
-     * Return the chunk of stderr that was produced since the last call to this function (or the
-     * beginning of the build, for the first call). It is the responsibility of the class
-     * implementing this interface to properly synchronize with simultaneously written output.
-     */
-    String getErr();
-  }
 
   private static class CountingArtifactGroupNamer implements ArtifactGroupNamer {
     private final Map<Object, Long> reportedArtifactNames = new HashMap<>();
@@ -144,10 +123,6 @@ public class BuildEventStreamer implements EventHandler {
     this.progressCount = 0;
   }
 
-  public void registerOutErrProvider(OutErrProvider outErrProvider) {
-    this.outErrProvider = outErrProvider;
-  }
-
   /**
    * Post a new event to all transports; simultaneously keep track of the events we announce to
    * still come.
@@ -174,27 +149,12 @@ public class BuildEventStreamer implements EventHandler {
         }
       } else {
         if (!announcedEvents.contains(id)) {
-          String out = null;
-          String err = null;
-          if (outErrProvider != null) {
-            out = outErrProvider.getOut();
-            err = outErrProvider.getErr();
-          }
-          linkEvent = ProgressEvent.progressChainIn(progressCount, id, out, err);
+          linkEvent = ProgressEvent.progressChainIn(progressCount, id);
           progressCount++;
           announcedEvents.addAll(linkEvent.getChildrenEvents());
           postedEvents.add(linkEvent.getEventId());
         }
       }
-
-      if (event instanceof BuildInfoEvent) {
-        // The specification for BuildInfoEvent says that there may be many such events,
-        // but all except the first one should be ignored.
-        if (postedEvents.contains(id)) {
-          return;
-        }
-      }
-
       postedEvents.add(id);
       announcedEvents.addAll(event.getChildrenEvents());
     }
@@ -302,17 +262,6 @@ public class BuildEventStreamer implements EventHandler {
     maybeReportArtifactSet(new NestedSetView<Artifact>(set));
   }
 
-  private void maybeReportConfiguration(BuildConfiguration configuration) {
-    BuildEventId id = configuration.getEventId();
-    synchronized (this) {
-      if (configurationsPosted.contains(id)) {
-        return;
-      }
-      configurationsPosted.add(id);
-    }
-    post(configuration);
-  }
-
   @Override
   public void handle(Event event) {}
 
@@ -330,13 +279,6 @@ public class BuildEventStreamer implements EventHandler {
   public void buildEvent(BuildEvent event) {
     if (isActionWithoutError(event) || bufferUntilPrerequisitesReceived(event)) {
       return;
-    }
-
-    if (event instanceof BuildEventWithConfiguration) {
-      for (BuildConfiguration configuration :
-          ((BuildEventWithConfiguration) event).getConfigurations()) {
-        maybeReportConfiguration(configuration);
-      }
     }
 
     if (event instanceof EventReportingArtifacts) {
@@ -366,13 +308,7 @@ public class BuildEventStreamer implements EventHandler {
 
   private void buildComplete() {
     clearPendingEvents();
-    String out = null;
-    String err = null;
-    if (outErrProvider != null) {
-      out = outErrProvider.getOut();
-      err = outErrProvider.getErr();
-    }
-    post(ProgressEvent.finalProgressUpdate(progressCount, out, err));
+    post(ProgressEvent.finalProgressUpdate(progressCount));
     clearAnnouncedEvents();
     close();
   }

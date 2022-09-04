@@ -16,12 +16,12 @@ package com.google.devtools.build.lib.testutil;
 import static org.junit.Assert.fail;
 
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -41,7 +41,6 @@ public abstract class FoundationTestCase {
   // The event bus of the reporter
   protected EventBus eventBus;
   protected EventCollector eventCollector;
-  protected FileSystem fileSystem;
   protected Scratch scratch;
 
   /** Returns the Scratch instance for this test case. */
@@ -70,8 +69,7 @@ public abstract class FoundationTestCase {
 
   @Before
   public final void initializeFileSystemAndDirectories() throws Exception {
-    fileSystem = createFileSystem();
-    scratch = new Scratch(fileSystem, "/workspace");
+    scratch = new Scratch(createFileSystem(), "/workspace");
     outputBase = scratch.dir("/usr/local/google/_blaze_jrluser/FAKEMD5/");
     rootDirectory = scratch.dir("/workspace");
     scratch.file(rootDirectory.getRelative("WORKSPACE").getPathString());
@@ -79,7 +77,7 @@ public abstract class FoundationTestCase {
 
   @Before
   public final void initializeLogging() throws Exception {
-    eventCollector = new EventCollector(EventKind.ERRORS_WARNINGS_AND_INFO);
+    eventCollector = new EventCollector(EventKind.ERRORS_AND_WARNINGS);
     eventBus = new EventBus();
     reporter = new Reporter(eventBus, eventCollector);
     reporter.addHandler(failFastHandler);
@@ -133,33 +131,5 @@ public abstract class FoundationTestCase {
 
   protected void assertContainsEventsInOrder(String... expectedMessages) {
     MoreAsserts.assertContainsEventsInOrder(eventCollector, expectedMessages);
-  }
-
-  protected void writeBuildFileForJavaToolchain() throws Exception  {
-    scratch.file("java/com/google/test/turbine_canary_deploy.jar");
-    scratch.file("java/com/google/test/tzdata.jar");
-    scratch.overwriteFile(
-        "java/com/google/test/BUILD",
-        "java_toolchain(name = 'toolchain',",
-        "    source_version = '6',",
-        "    target_version = '6',",
-        "    bootclasspath = ['rt.jar'],",
-        "    extclasspath = ['ext/lib.jar'],",
-        "    encoding = 'ISO-8859-1',",
-        "    xlint = ['toto'],",
-        "    misc = ['-Xmaxerrs 500'],",
-        "    compatible_javacopts = {",
-        "        'appengine': ['-XDappengineCompatible'],",
-        "        'android': ['-XDandroidCompatible'],",
-        "    },",
-        "    javac = [':javac_canary.jar'],",
-        "    javabuilder = [':JavaBuilderCanary_deploy.jar'],",
-        "    header_compiler = [':turbine_canary_deploy.jar'],",
-        "    singlejar = ['SingleJar_deploy.jar'],",
-        "    ijar = ['ijar'],",
-        "    genclass = ['GenClass_deploy.jar'],",
-        "    timezone_data = 'tzdata.jar',",
-        ")"
-    );
   }
 }

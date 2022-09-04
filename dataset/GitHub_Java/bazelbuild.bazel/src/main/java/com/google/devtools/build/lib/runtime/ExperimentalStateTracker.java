@@ -681,14 +681,10 @@ class ExperimentalStateTracker {
     }
   }
 
-  synchronized void writeProgressBar(
-      AnsiTerminalWriter rawTerminalWriter, boolean shortVersion, String timestamp)
+  synchronized void writeProgressBar(AnsiTerminalWriter rawTerminalWriter, boolean shortVersion)
       throws IOException {
     PositionAwareAnsiTerminalWriter terminalWriter =
         new PositionAwareAnsiTerminalWriter(rawTerminalWriter);
-    if (timestamp != null) {
-      terminalWriter.append(timestamp);
-    }
     if (status != null) {
       if (ok) {
         terminalWriter.okStatus();
@@ -773,11 +769,6 @@ class ExperimentalStateTracker {
         sampleOldestActions(terminalWriter);
       }
     }
-  }
-
-  void writeProgressBar(AnsiTerminalWriter terminalWriter, boolean shortVersion)
-      throws IOException {
-    writeProgressBar(terminalWriter, shortVersion, null);
   }
 
   void writeProgressBar(AnsiTerminalWriter terminalWriter) throws IOException {

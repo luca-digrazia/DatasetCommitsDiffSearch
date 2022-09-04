@@ -71,7 +71,7 @@ public class ExperimentalEventHandler implements EventHandler {
   static final long LONG_REFRESH_MILLIS = 20000L;
 
   private static final DateTimeFormatter TIMESTAMP_FORMAT =
-      DateTimeFormat.forPattern("(HH:mm:ss) ");
+      DateTimeFormat.forPattern("(HH:mm:ss.SSS) ");
 
   private final boolean cursorControl;
   private final Clock clock;
@@ -225,13 +225,13 @@ public class ExperimentalEventHandler implements EventHandler {
             if (incompleteLine) {
               crlf();
             }
-            if (showTimestamp) {
-              terminal.writeString(TIMESTAMP_FORMAT.print(clock.currentTimeMillis()));
-            }
             setEventKindColor(event.getKind());
             terminal.writeString(event.getKind() + ": ");
             terminal.resetTerminal();
             incompleteLine = true;
+            if (showTimestamp) {
+              terminal.writeString(TIMESTAMP_FORMAT.print(clock.currentTimeMillis()));
+            }
             if (event.getLocation() != null) {
               terminal.writeString(event.getLocation() + ": ");
             }
@@ -328,7 +328,11 @@ public class ExperimentalEventHandler implements EventHandler {
     // The final progress bar will flow into the scroll-back buffer, to if treat
     // it as an event and add a timestamp, if events are supposed to have a timestmap.
     synchronized (this) {
-      stateTracker.buildComplete(event);
+      if (showTimestamp) {
+        stateTracker.buildComplete(event, TIMESTAMP_FORMAT.print(clock.currentTimeMillis()));
+      } else {
+        stateTracker.buildComplete(event);
+      }
       ignoreRefreshLimitOnce();
       refresh();
 
@@ -633,11 +637,7 @@ public class ExperimentalEventHandler implements EventHandler {
     if (cursorControl) {
       terminalWriter = new LineWrappingAnsiTerminalWriter(terminalWriter, terminalWidth - 1);
     }
-    String timestamp = null;
-    if (showTimestamp) {
-      timestamp = TIMESTAMP_FORMAT.print(clock.currentTimeMillis());
-    }
-    stateTracker.writeProgressBar(terminalWriter, /* shortVersion=*/ !cursorControl, timestamp);
+    stateTracker.writeProgressBar(terminalWriter, /* shortVersion=*/ !cursorControl);
     terminalWriter.newline();
     numLinesProgressBar = countingTerminalWriter.getWrittenLines();
     if (progressInTermTitle) {

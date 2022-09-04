@@ -697,9 +697,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     stateTracker.buildStarted(null);
     stateTracker.buildEventTransportsAnnounced(
         new AnnounceBuildEventTransportsEvent(
-            ImmutableList.of(transport1, transport2)));
-    stateTracker.buildEventTransportsAnnounced(
-        new AnnounceBuildEventTransportsEvent(ImmutableList.of(transport3)));
+            ImmutableList.of(transport1, transport2, transport3)));
     stateTracker.buildComplete(new BuildCompleteEvent(buildResult));
 
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter(true);
