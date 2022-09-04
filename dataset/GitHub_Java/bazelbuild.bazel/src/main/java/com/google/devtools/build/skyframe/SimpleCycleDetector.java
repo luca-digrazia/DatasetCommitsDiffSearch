@@ -22,15 +22,11 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
-import com.google.devtools.build.lib.profiler.GoogleAutoProfilerUtils;
 import com.google.devtools.build.lib.util.GroupedList;
+import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import com.google.devtools.build.skyframe.SkyFunctionEnvironment.UndonePreviouslyRequestedDeps;
-import com.google.devtools.build.skyframe.proto.GraphInconsistency.Inconsistency;
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -39,6 +35,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -46,8 +43,7 @@ import javax.annotation.Nullable;
  * completed with at least one root unfinished.
  */
 public class SimpleCycleDetector implements CycleDetector {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
-  private static final Duration MIN_LOGGING = Duration.ofMillis(10);
+  private static final Logger logger = Logger.getLogger(SimpleCycleDetector.class.getName());
 
   @Override
   public void checkForCycles(
@@ -55,8 +51,7 @@ public class SimpleCycleDetector implements CycleDetector {
       EvaluationResult.Builder<?> result,
       ParallelEvaluatorContext evaluatorContext)
       throws InterruptedException {
-    try (AutoProfiler p =
-        GoogleAutoProfilerUtils.logged("Checking for Skyframe cycles", MIN_LOGGING)) {
+    try (AutoProfiler p = AutoProfiler.logged("Checking for Skyframe cycles", logger, 10)) {
       for (SkyKey root : badRoots) {
         ErrorInfo errorInfo = checkForCycles(root, evaluatorContext);
         if (errorInfo == null) {
@@ -138,9 +133,6 @@ public class SimpleCycleDetector implements CycleDetector {
               removeIncompleteChildrenForCycle(
                   key, entry, Iterables.concat(entry.getTemporaryDirectDeps()), evaluatorContext);
         }
-        if (maybeHandleVerifiedCleanNode(key, entry, evaluatorContext, graphPath)) {
-          continue;
-        }
         maybeMarkRebuilding(entry);
         GroupedList<SkyKey> directDeps = entry.getTemporaryDirectDeps();
         // Find out which children have errors. Similar logic to that in Evaluate#run().
@@ -172,8 +164,7 @@ public class SimpleCycleDetector implements CycleDetector {
               "Previously requested dep not done: " + undoneDeps.getDepKeys(), undoneDeps);
         }
         env.setError(entry, ErrorInfo.fromChildErrors(key, errorDeps));
-        Set<SkyKey> reverseDeps = env.commitAndGetParents(entry);
-        evaluatorContext.signalParentsOnAbort(key, reverseDeps, entry.getVersion());
+        env.commit(entry, EnqueueParentBehavior.SIGNAL);
       } else {
         entry = evaluatorContext.getGraph().get(null, Reason.CYCLE_CHECKING, key);
       }
@@ -193,36 +184,15 @@ public class SimpleCycleDetector implements CycleDetector {
         // Found a cycle!
         cyclesFound++;
         Iterable<SkyKey> cycle = graphPath.subList(cycleStart, graphPath.size());
-        logger.atInfo().log("Found cycle : %s from %s", cycle, graphPath);
+        logger.info("Found cycle : " + cycle + " from " + graphPath);
         // Put this node into a consistent state for building if it is dirty.
-        if (entry.isDirty()) {
-          // If this loop runs more than once, we are in the peculiar position of entry not needing
-          // rebuilding even though it was signaled with the graph version. This can happen when the
-          // entry was previously evaluated at this version, but then invalidated anyway, even
-          // though nothing changed.
-          int loopCount = 0;
-          Version graphVersion = evaluatorContext.getGraphVersion();
-          while (entry.getDirtyState() == NodeEntry.DirtyState.CHECK_DEPENDENCIES) {
-            entry.signalDep(graphVersion, null);
-            loopCount++;
-          }
-          if (loopCount > 1 && !entry.getVersion().equals(graphVersion)) {
-            BugReport.sendBugReport(
-                new IllegalStateException(
-                    "Entry needed multiple signaling but didn't have the graph version: "
-                        + key
-                        + ", "
-                        + entry
-                        + ", "
-                        + graphVersion
-                        + ", "
-                        + graphPath));
-          }
-          if (entry.getDirtyState() == NodeEntry.DirtyState.NEEDS_REBUILDING) {
-            entry.markRebuilding();
-          } else if (maybeHandleVerifiedCleanNode(key, entry, evaluatorContext, graphPath)) {
-            continue;
-          }
+        if (entry.isDirty() && entry.getDirtyState() == NodeEntry.DirtyState.CHECK_DEPENDENCIES) {
+          // In the check deps state, entry has exactly one child not done yet. Note that this node
+          // must be part of the path to the cycle we have found (since done nodes cannot be in
+          // cycles, and this is the only missing one). Thus, it will not be removed below in
+          // removeDescendantsOfCycleValue, so it is safe here to signal that it is done.
+          entry.signalDep(evaluatorContext.getGraphVersion(), null);
+          maybeMarkRebuilding(entry);
         }
         if (evaluatorContext.keepGoing()) {
           // Any children of this node that we haven't already visited are not worth visiting,
@@ -253,8 +223,7 @@ public class SimpleCycleDetector implements CycleDetector {
           // Add in this cycle.
           allErrors.add(ErrorInfo.fromCycle(cycleInfo));
           env.setError(entry, ErrorInfo.fromChildErrors(key, allErrors));
-          Set<SkyKey> reverseDeps = env.commitAndGetParents(entry);
-          evaluatorContext.signalParentsOnAbort(key, reverseDeps, entry.getVersion());
+          env.commit(entry, EnqueueParentBehavior.SIGNAL);
           continue;
         } else {
           // We need to return right away in the noKeepGoing case, so construct the cycle (with the
@@ -286,19 +255,26 @@ public class SimpleCycleDetector implements CycleDetector {
         ImmutableSet<SkyKey> childrenSet = ImmutableSet.copyOf(children);
         Set<SkyKey> missingChildren = Sets.difference(childrenSet, childrenNodes.keySet());
         if (missingChildren.isEmpty()) {
-          logger.atWarning().log(
-              "Mismatch for children?? %d, %d, %s, %s, %s, %s",
-              childrenNodes.size(),
-              temporaryDirectDeps.numElements(),
-              childrenSet,
-              childrenNodes,
-              key,
-              entry);
+          logger.warning(
+              "Mismatch for children?? "
+                  + childrenNodes.size()
+                  + ", "
+                  + temporaryDirectDeps.numElements()
+                  + ", "
+                  + childrenSet
+                  + ", "
+                  + childrenNodes
+                  + ", "
+                  + key
+                  + ", "
+                  + entry);
         } else {
           evaluatorContext
               .getGraphInconsistencyReceiver()
               .noteInconsistencyAndMaybeThrow(
-                  key, missingChildren, Inconsistency.ALREADY_DECLARED_CHILD_MISSING);
+                  key,
+                  missingChildren,
+                  GraphInconsistencyReceiver.Inconsistency.ALREADY_DECLARED_CHILD_MISSING);
           entry.removeUnfinishedDeps(missingChildren);
         }
       }
@@ -316,38 +292,6 @@ public class SimpleCycleDetector implements CycleDetector {
     return evaluatorContext.keepGoing()
         ? getAndCheckDoneForCycle(root, evaluatorContext).getErrorInfo()
         : null;
-  }
-
-  /**
-   * Fully process {@code entry} if it is dirty but verified to be clean. This can only happen in
-   * rare circumstances where a node with a cycle is invalidated at the same version. Returns true
-   * if the entry was successfully processed, meaning that its value has been set and all reverse
-   * deps signaled.
-   */
-  private static boolean maybeHandleVerifiedCleanNode(
-      SkyKey key,
-      NodeEntry entry,
-      ParallelEvaluatorContext evaluatorContext,
-      List<SkyKey> graphPathForDebugging)
-      throws InterruptedException {
-    if (entry.getDirtyState() != NodeEntry.DirtyState.VERIFIED_CLEAN) {
-      return false;
-    }
-    Set<SkyKey> rdeps = entry.markClean().getRdepsToSignal();
-    evaluatorContext.signalParentsOnAbort(key, rdeps, entry.getVersion());
-    ErrorInfo error = entry.getErrorInfo();
-    if (error.getCycleInfo().isEmpty()) {
-      BugReport.sendBugReport(
-          new IllegalStateException(
-              "Entry was unchanged from last build, but cycle was found this time and not"
-                  + " last time: "
-                  + key
-                  + ", "
-                  + entry
-                  + ", "
-                  + graphPathForDebugging));
-    }
-    return true;
   }
 
   /**
@@ -391,7 +335,9 @@ public class SimpleCycleDetector implements CycleDetector {
       evaluatorContext
           .getGraphInconsistencyReceiver()
           .noteInconsistencyAndMaybeThrow(
-              parent, missingChildren, Inconsistency.ALREADY_DECLARED_CHILD_MISSING);
+              parent,
+              missingChildren,
+              GraphInconsistencyReceiver.Inconsistency.ALREADY_DECLARED_CHILD_MISSING);
     }
     for (NodeEntry childNode : childMap.values()) {
       ErrorInfo errorInfo = childNode.getErrorInfo();
@@ -549,7 +495,7 @@ public class SimpleCycleDetector implements CycleDetector {
   }
 
   /**
-   * If child is not done, removes {@code inProgressParent} from {@code child}'s reverse deps.
+   * If child is not done, removes {@param inProgressParent} from {@param child}'s reverse deps.
    * Returns whether child should be removed from inProgressParent's entry's direct deps.
    */
   private static boolean removeIncompleteChildForCycle(
