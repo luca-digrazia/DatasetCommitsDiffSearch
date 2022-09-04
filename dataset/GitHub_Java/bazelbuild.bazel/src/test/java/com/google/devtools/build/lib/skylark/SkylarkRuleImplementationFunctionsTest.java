@@ -299,7 +299,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testCreateSpawnActionArgumentsBadExecutable() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
-        "expected value of type 'File or string' for parameter 'executable', in method call "
+        "Cannot convert parameter 'executable' to type File or string, in method "
             + "run(list inputs, list outputs, list arguments, int executable) of 'actions'",
         "ruleContext.actions.run(",
         "  inputs = ruleContext.files.srcs,",
@@ -355,7 +355,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
         ruleContext,
-        "unexpected keyword 'bad_param', in method call run("
+        "unexpected keyword 'bad_param', in method run("
             + "list outputs, string bad_param, File executable) of 'actions'",
         "f = ruleContext.actions.declare_file('foo.sh')",
         "ruleContext.actions.run(outputs=[], bad_param = 'some text', executable = f)");
@@ -433,8 +433,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
     checkErrorContains(
         ruleContext,
-        "parameter 'mnemonic' has no default value, "
-        + "in method call do_nothing(list inputs) of 'actions'",
+        "parameter 'mnemonic' has no default value, in method do_nothing(list inputs) of 'actions'",
         "ruleContext.actions.do_nothing(inputs = ruleContext.files.srcs)");
   }
 
@@ -637,7 +636,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
         ruleContext,
-        "expected value of type 'string or Args' for parameter 'content'",
+        "Cannot convert parameter 'content' to type string or Args",
         "ruleContext.actions.write(",
         "  output = ruleContext.files.srcs[0],",
         "  content = 1,",

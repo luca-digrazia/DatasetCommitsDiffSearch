@@ -21,7 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
+import com.google.devtools.build.lib.skyframe.serialization.testutils.ObjectCodecTester;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -143,26 +143,6 @@ public class PathFragmentTest {
 
     // Test normalization
     assertThat(create("a").getRelative(".").getPathString()).isEqualTo("a");
-  }
-
-  @Test
-  public void testIsNormalizedRelativePath() {
-    assertThat(PathFragment.isNormalizedRelativePath("/a")).isFalse();
-    assertThat(PathFragment.isNormalizedRelativePath("a///b")).isFalse();
-    assertThat(PathFragment.isNormalizedRelativePath("../a")).isFalse();
-    assertThat(PathFragment.isNormalizedRelativePath("a/../b")).isFalse();
-    assertThat(PathFragment.isNormalizedRelativePath("a/b")).isTrue();
-    assertThat(PathFragment.isNormalizedRelativePath("ab")).isTrue();
-  }
-
-  @Test
-  public void testContainsSeparator() {
-    assertThat(PathFragment.containsSeparator("/a")).isTrue();
-    assertThat(PathFragment.containsSeparator("a///b")).isTrue();
-    assertThat(PathFragment.containsSeparator("../a")).isTrue();
-    assertThat(PathFragment.containsSeparator("a/../b")).isTrue();
-    assertThat(PathFragment.containsSeparator("a/b")).isTrue();
-    assertThat(PathFragment.containsSeparator("ab")).isFalse();
   }
 
   @Test
@@ -566,12 +546,13 @@ public class PathFragmentTest {
 
   @Test
   public void testCodec() throws Exception {
-    new SerializationTester(
+    ObjectCodecTester.newBuilder(PathFragment.CODEC)
+        .addSubjects(
             ImmutableList.of("", "a", "/foo", "foo/bar/baz", "/a/path/fragment/with/lots/of/parts")
                 .stream()
                 .map(PathFragment::create)
                 .collect(toImmutableList()))
-        .runTests();
+        .buildAndRunTests();
   }
 
   @Test

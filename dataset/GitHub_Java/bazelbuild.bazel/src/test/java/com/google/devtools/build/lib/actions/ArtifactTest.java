@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.actions.util.LabelArtifactOwner;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
+import com.google.devtools.build.lib.skyframe.serialization.testutils.ObjectCodecTester;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -336,7 +336,8 @@ public class ArtifactTest {
 
   @Test
   public void testCodec() throws Exception {
-    new SerializationTester(
+    ObjectCodecTester.newBuilder(Artifact.CODEC)
+        .addSubjects(
             new Artifact(PathFragment.create("src/a"), rootDir),
             new Artifact(
                 PathFragment.create("src/b"), ArtifactRoot.asSourceRoot(Root.fromPath(execDir))),
@@ -346,8 +347,7 @@ public class ArtifactTest {
                 PathFragment.create("src/c"),
                 new LabelArtifactOwner(Label.parseAbsoluteUnchecked("//foo:bar"))))
         .addDependency(FileSystem.class, scratch.getFileSystem())
-        .addDependency(OutputBaseSupplier.class, () -> scratch.getFileSystem().getPath("/"))
-        .runTests();
+        .buildAndRunTests();
   }
 
   @Test

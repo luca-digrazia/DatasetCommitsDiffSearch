@@ -117,15 +117,7 @@ public class MoreAsserts {
               continue;
             }
 
-            try {
-              f.setAccessible(true);
-            } catch (RuntimeException e) {
-              // JDK9 can throw InaccessibleObjectException when internal modules are accessed.
-              // This isn't available in JDK8, so catch RuntimeException
-              // We can use a JVM arg --add_opens to suppress that, but that involves every
-              // test adding every JVM module to the target.
-              continue;
-            }
+            f.setAccessible(true);
             try {
               Object ref = f.get(current);
               if (ref != null) {

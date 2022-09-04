@@ -430,11 +430,10 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testNonLabelAttrWithProviders() throws Exception {
     checkErrorContains(
-        "unexpected keyword 'providers', in method call string(list providers)",
-        "attr.string(providers = ['a'])");
+        "unexpected keyword 'providers' in call to string", "attr.string(providers = ['a'])");
   }
 
-  private static final RuleClass.ConfiguredTargetFactory<Object, Object, Exception>
+  private static final RuleClass.ConfiguredTargetFactory<Object, Object>
       DUMMY_CONFIGURED_TARGET_FACTORY =
           ruleContext -> {
             throw new IllegalStateException();
@@ -500,8 +499,8 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testAttrDefaultValueBadType() throws Exception {
     checkErrorContains(
-        "expected value of type 'string' for parameter 'default', "
-            + "in method call string(int default) of 'attr (a language module)'",
+        "argument 'default' has type 'int', but should be 'string'\n"
+            + "in call to builtin function attr.string(*, default, doc, mandatory, values)",
         "attr.string(default = 1)");
   }
 
@@ -529,9 +528,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testAttrBadKeywordArguments() throws Exception {
     checkErrorContains(
-        "unexpected keyword 'bad_keyword', in method call string(string bad_keyword) "
-            + "of 'attr (a language module)'",
-        "attr.string(bad_keyword = '')");
+        "unexpected keyword 'bad_keyword' in call to string", "attr.string(bad_keyword = '')");
   }
 
   @Test
@@ -591,8 +588,8 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testAttrDocValueBadType() throws Exception {
     checkErrorContains(
-        "expected value of type 'string' for parameter 'doc', "
-            + "in method call string(int doc) of 'attr (a language module)'",
+        "argument 'doc' has type 'int', but should be 'string'\n"
+            + "in call to builtin function attr.string(*, default, doc, mandatory, values)",
         "attr.string(doc = 1)");
   }
 
@@ -611,8 +608,8 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testLateBoundAttrWorksWithOnlyLabel() throws Exception {
     checkEvalError(
-        "expected value of type 'string' for parameter 'default', "
-            + "in method call string(function default) of 'attr (a language module)'",
+        "argument 'default' has type 'function', but should be 'string'\n"
+            + "in call to builtin function attr.string(*, default, doc, mandatory, values)",
         "def attr_value(cfg): return 'a'",
         "attr.string(default=attr_value)");
   }
@@ -914,9 +911,8 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testLabelAttrWrongDefault() throws Exception {
     checkErrorContains(
-        "expected value of type 'Label or string or SkylarkLateBoundDefault or "
-            + "function or NoneType' for parameter 'default', in method call "
-            + "label(int default) of 'attr (a language module)'",
+        "expected value of type 'string' for parameter 'default' of attribute 'label', "
+            + "but got 123 (int)",
         "attr.label(default = 123)");
   }
 

@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.shell;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth8.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import java.time.Duration;
 import org.junit.Test;
@@ -28,7 +28,7 @@ import org.junit.runners.JUnit4;
 public final class CommandResultTest {
 
   @Test
-  public void testBuilder_withNoStderr() {
+  public void testBuilder_WithNoStderr() {
     Exception e =
         assertThrows(
             IllegalStateException.class,
@@ -41,7 +41,7 @@ public final class CommandResultTest {
   }
 
   @Test
-  public void testBuilder_withNoStdout() {
+  public void testBuilder_WithNoStdout() {
     Exception e =
         assertThrows(
             IllegalStateException.class,
@@ -54,7 +54,7 @@ public final class CommandResultTest {
   }
 
   @Test
-  public void testBuilder_withNoTerminationStatus() {
+  public void testBuilder_WithNoTerminationStatus() {
     Exception e =
         assertThrows(
             IllegalStateException.class,
@@ -67,7 +67,7 @@ public final class CommandResultTest {
   }
 
   @Test
-  public void testBuilder_withNoExecutionTime() {
+  public void testBuilder_WithNoExecutionTime() {
     CommandResult commandResult =
         CommandResult.builder()
             .setStdoutStream(CommandResult.EMPTY_OUTPUT)
@@ -80,7 +80,7 @@ public final class CommandResultTest {
   }
 
   @Test
-  public void testBuilder_withExecutionTime() {
+  public void testBuilder_WithExecutionTime() {
     CommandResult commandResult =
         CommandResult.builder()
             .setStdoutStream(CommandResult.EMPTY_OUTPUT)
