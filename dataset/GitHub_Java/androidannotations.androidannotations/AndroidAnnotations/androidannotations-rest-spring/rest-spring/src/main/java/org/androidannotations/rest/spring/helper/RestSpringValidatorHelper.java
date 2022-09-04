@@ -525,12 +525,6 @@ public class RestSpringValidatorHelper extends ValidatorHelper {
 		}
 	}
 
-	public void doesNotHaveRequestEntityAnnotatedParameters(ExecutableElement element, ElementValidation validation) {
-		doesNotHavePartAnnotatedParameter(element, validation);
-		doesNotHaveFieldAnnotatedParameter(element, validation);
-		doesNotHaveBodyAnnotatedParameter(element, validation);
-	}
-
 	public void doesNotHavePathAnnotation(Element element, ElementValidation validation) {
 		doesNotHaveAnnotation(element, Path.class, validation);
 	}
