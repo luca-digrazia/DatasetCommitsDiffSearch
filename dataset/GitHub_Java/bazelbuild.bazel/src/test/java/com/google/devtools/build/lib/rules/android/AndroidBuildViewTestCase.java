@@ -17,12 +17,13 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
-import static org.junit.Assert.fail;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
+import com.google.common.truth.Truth;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -36,6 +37,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.android.deployinfo.AndroidDeployInfoOuterClass.AndroidDeployInfo;
 import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
@@ -167,33 +169,28 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     JavaRuleOutputJarsProvider jarProvider = target.getProvider(JavaRuleOutputJarsProvider.class);
     assertThat(jarProvider).isNotNull();
     return getGeneratingAction(
-        Iterables.find(
-                jarProvider.getOutputJars(),
-                outputJar -> {
-                  assertThat(outputJar).isNotNull();
-                  assertThat(outputJar.getClassJar()).isNotNull();
-                  return outputJar
-                      .getClassJar()
-                      .getFilename()
-                      .equals(target.getTarget().getName() + "_resources.jar");
-                })
-            .getClassJar());
+        Iterables.find(jarProvider.getOutputJars(), new Predicate<OutputJar>() {
+              @Override
+              public boolean apply(@Nullable OutputJar outputJar) {
+                assertThat(outputJar).isNotNull();
+                assertThat(outputJar.getClassJar()).isNotNull();
+                return outputJar.getClassJar().getFilename().equals(
+                    target.getTarget().getName() + "_resources.jar");
+              }
+            }
+        ).getClassJar()
+    );
   }
 
   // android resources related tests
   protected void assertPrimaryResourceDirs(List<String> expectedPaths, List<String> actualArgs) {
     assertThat(actualArgs).contains("--primaryData");
-    String actualFlagValue = actualArgs.get(actualArgs.indexOf("--primaryData") + 1);
-    List<String> actualPaths = null;
-    if (actualFlagValue.matches("[^;]*;[^;]*;.*")) {
-      actualPaths = Arrays.asList(actualFlagValue.split(";")[0].split("#"));
 
-    } else if (actualFlagValue.matches("[^:]*:[^:]*:.*")) {
-      actualPaths = Arrays.asList(actualFlagValue.split(":")[0].split("#"));
-    } else {
-      fail(String.format("Failed to parse --primaryData: %s", actualFlagValue));
-    }
-    assertThat(actualPaths).containsAllIn(expectedPaths);
+    String actualFlagValue = actualArgs.get(actualArgs.indexOf("--primaryData") + 1);
+    assertThat(actualFlagValue).matches("[^:]*:[^:]*:[^:]*");
+    ImmutableList.Builder<String> actualPaths = ImmutableList.builder();
+    actualPaths.add(actualFlagValue.split(":")[0].split("#"));
+    assertThat(actualPaths.build()).containsAllIn(expectedPaths);
   }
 
   protected List<String> getDirectDependentResourceDirs(List<String> actualArgs) {
@@ -202,24 +199,11 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     return getDependentResourceDirs(actualFlagValue);
   }
 
-  protected List<String> getTransitiveDependentResourceDirs(List<String> actualArgs) {
-    assertThat(actualArgs).contains("--data");
-    String actualFlagValue = actualArgs.get(actualArgs.indexOf("--data") + 1);
-    return getDependentResourceDirs(actualFlagValue);
-  }
-
-  private static List<String> getDependentResourceDirs(String actualFlagValue) {
-    String separator = null;
-    if (actualFlagValue.matches("[^;]*;[^;]*;[^;]*;.*")) {
-      separator = ";";
-    } else if (actualFlagValue.matches("[^:]*:[^:]*:[^:]*:.*")) {
-      separator = ":";
-    } else {
-      fail(String.format("Failed to parse flag: %s", actualFlagValue));
-    }
+  protected List<String> getDependentResourceDirs(String actualFlagValue) {
     ImmutableList.Builder<String> actualPaths = ImmutableList.builder();
     for (String resourceDependency :  actualFlagValue.split(",")) {
-      actualPaths.add(resourceDependency.split(separator)[0].split("#"));
+      assertThat(actualFlagValue).matches("[^:]*:[^:]*:[^:]*:.*");
+      actualPaths.add(resourceDependency.split(":")[0].split("#"));
     }
     return actualPaths.build();
   }
@@ -248,9 +232,37 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
   // Returns an artifact that will be generated when a rule has resources.
   protected static Artifact getResourceArtifact(ConfiguredTarget target) {
     // the last provider is the provider from the target.
-    return Iterables.getLast(
-            target.getProvider(AndroidResourcesProvider.class).getDirectAndroidResources())
-        .getJavaClassJar();
+    if (target
+        .getConfiguration()
+        .getFragment(AndroidConfiguration.class)
+        .useParallelResourceProcessing()) {
+      return Iterables.getLast(target.getProvider(AndroidResourcesProvider.class)
+          .getDirectAndroidResources()).getJavaClassJar();
+    } else {
+      return Iterables.getLast(target.getProvider(AndroidResourcesProvider.class)
+          .getDirectAndroidResources()).getJavaSourceJar();
+    }
+  }
+
+  protected static void assertPrimaryResourceDirs(
+      ConfiguredTarget target, List<String> expectedPaths, List<String> actualArgs) {
+    assertThat(actualArgs).contains("--primaryData");
+
+    String actualFlagValue = actualArgs.get(actualArgs.indexOf("--primaryData") + 1);
+    if (target
+        .getConfiguration()
+        .getFragment(AndroidConfiguration.class)
+        .useParallelResourceProcessing()) {
+      assertThat(actualFlagValue).matches("[^;]*;[^;]*;.*");
+      ImmutableList.Builder<String> actualPaths = ImmutableList.builder();
+      actualPaths.add(actualFlagValue.split(";")[0].split("#"));
+      Truth.assertThat(actualPaths.build()).containsAllIn(expectedPaths);
+    } else {
+      assertThat(actualFlagValue).matches("[^:]*:[^:]*:.*");
+      ImmutableList.Builder<String> actualPaths = ImmutableList.builder();
+      actualPaths.add(actualFlagValue.split(":")[0].split("#"));
+      Truth.assertThat(actualPaths.build()).containsAllIn(expectedPaths);
+    }
   }
 
   protected static Set<Artifact> getNonToolInputs(Action action) {

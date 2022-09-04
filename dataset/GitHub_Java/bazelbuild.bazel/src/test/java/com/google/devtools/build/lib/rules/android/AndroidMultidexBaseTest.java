@@ -17,12 +17,10 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
 import java.util.Set;
 import org.junit.Before;
@@ -66,19 +64,14 @@ public class AndroidMultidexBaseTest extends BuildViewTestCase {
     // Only created in legacy mode:
     Artifact strippedJar = getFirstArtifactEndingWith(artifacts, "main_dex_intermediate.jar");
     Artifact mainDexList = getFirstArtifactEndingWith(artifacts, "main_dex_list.txt");
-    String ruleName = Label.parseAbsolute(ruleLabel, ImmutableMap.of()).getName();
-    Artifact mainDexProguardSpec = getFirstArtifactEndingWith(
-        artifacts, "main_dex_" + ruleName + "_proguard.cfg");
 
     if (multidexMode == MultidexMode.LEGACY) {
       // First action: check that the stripped jar is generated through Proguard.
-      assertThat(mainDexProguardSpec).isNotNull();
       AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(getRuleContext(binary));
       assertThat(strippedJar).isNotNull();
       SpawnAction stripAction = getGeneratingSpawnAction(strippedJar);
       assertThat(stripAction.getCommandFilename())
           .isEqualTo(sdk.getProguard().getExecutable().getExecPathString());
-      assertThat(stripAction.getInputs()).contains(mainDexProguardSpec);
 
       // Second action: The dexer consumes the stripped jar to create the main dex class list.
       assertThat(mainDexList).isNotNull();
@@ -96,10 +89,12 @@ public class AndroidMultidexBaseTest extends BuildViewTestCase {
       assertThat(mainDexList).isNull();
     }
 
+    Artifact dexMerger = getFirstArtifactEndingWith(artifacts, "dexmerger");
     Artifact dexMergerInput = getFirstArtifactEndingWith(artifacts, "classes.jar");
     SpawnAction dexMergerAction = getGeneratingSpawnAction(finalDexOutput);
     ImmutableList.Builder<String> argsBuilder = ImmutableList.<String>builder()
         .add(
+            dexMerger.getExecPathString(),
             "--input",
             dexMergerInput.getExecPathString(),
             "--output",
@@ -110,9 +105,7 @@ public class AndroidMultidexBaseTest extends BuildViewTestCase {
     if (multidexMode == MultidexMode.LEGACY || multidexMode == MultidexMode.MANUAL_MAIN_DEX) {
       argsBuilder.add("--main-dex-list", mainDexList.getExecPathString());
     }
-    assertThat(dexMergerAction.getRemainingArguments())
-        .containsExactlyElementsIn(argsBuilder.build())
-        .inOrder();
+    assertThat(dexMergerAction.getArguments()).containsExactlyElementsIn(argsBuilder.build()).inOrder();
   }
 
   /**
@@ -122,18 +115,19 @@ public class AndroidMultidexBaseTest extends BuildViewTestCase {
   protected void internalTestNonMultidexBuildStructure(String ruleLabel) throws Exception {
     ConfiguredTarget binary = getConfiguredTarget(ruleLabel);
     Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(getFilesToBuild(binary));
+    Artifact dexMerger = getFirstArtifactEndingWith(artifacts, "dexmerger");
     Artifact dexInput = getFirstArtifactEndingWith(artifacts, "classes.jar");
     Artifact dexOutput = getFirstArtifactEndingWith(artifacts, "classes.dex.zip");
     SpawnAction dexAction = getGeneratingSpawnAction(dexOutput);
 
-    assertThat(dexAction.getRemainingArguments())
+    assertThat(dexAction.getArguments())
         .containsAllOf(
+            dexMerger.getExecPathString(),
             "--input",
             dexInput.getExecPathString(),
             "--output",
             dexOutput.getExecPathString(),
-            "--multidex=off")
-        .inOrder();
+            "--multidex=off").inOrder();
   }
 }
 
