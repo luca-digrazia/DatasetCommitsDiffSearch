@@ -124,15 +124,6 @@ public class DOM implements ChromeDevtoolsDomain {
     return response;
   }
 
-  @ChromeDevtoolsMethod
-  public void setInspectModeEnabled(JsonRpcPeer peer, JSONObject params) {
-    SetInspectModeEnabledRequest request = mObjectMapper.convertValue(
-        params,
-        SetInspectModeEnabledRequest.class);
-
-    mDOMProvider.setInspectModeEnabled(request.enabled);
-  }
-
   private Node createNodeForElement(Object element) {
     NodeDescriptor descriptor = mDOMProvider.getNodeDescriptor(element);
 
@@ -270,7 +261,7 @@ public class DOM implements ChromeDevtoolsDomain {
 
       if (parentNodeId == null || childNodeId == null) {
         LogUtil.d(
-            "DOMProvider.Listener.onChildRemoved() called for a non-mapped node: "
+            "DOM.onChildRemoved() called for a non-mapped node: "
                 + "parentElement=(nodeId=%s, %s), childElement=(nodeId=%s, %s)",
             parentNodeId,
             parentElement,
@@ -284,20 +275,6 @@ public class DOM implements ChromeDevtoolsDomain {
       }
 
       removeElementTree(childElement);
-    }
-
-    @Override
-    public void onInspectRequested(Object element) {
-      Integer nodeId = mObjectIdMapper.getIdForObject(element);
-      if (nodeId == null) {
-        LogUtil.d(
-            "DOMProvider.Listener.onInspectRequested() called for a non-mapped node: element=%s",
-            element);
-      } else {
-        InspectNodeRequestedEvent message = new InspectNodeRequestedEvent();
-        message.nodeId = nodeId;
-        mPeerManager.sendNotificationToPeers("DOM.inspectNodeRequested", message);
-      }
     }
   }
 
@@ -384,22 +361,6 @@ public class DOM implements ChromeDevtoolsDomain {
   private static class HighlightConfig {
     @JsonProperty
     public RGBAColor contentColor;
-  }
-
-  private static class InspectNodeRequestedEvent {
-    @JsonProperty
-    public int nodeId;
-  }
-
-  private static class SetInspectModeEnabledRequest {
-    @JsonProperty(required = true)
-    public boolean enabled;
-
-    @JsonProperty
-    public Boolean inspectShadowDOM;
-
-    @JsonProperty
-    public HighlightConfig highlightConfig;
   }
 
   private static class RGBAColor {
