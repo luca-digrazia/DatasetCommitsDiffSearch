@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.Attribute.Transition;
-import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
@@ -64,7 +63,7 @@ public final class TransitionResolver {
    *     {@link Attribute.ConfigurationTransition}).
    */
   public Transition evaluateTransition(BuildConfiguration fromConfig, final Rule fromRule,
-      final Attribute attribute, final Target toTarget, ConfiguredAttributeMapper attributeMap) {
+      final Attribute attribute, final Target toTarget) {
 
     // I. Input files and package groups have no configurations. We don't want to duplicate them.
     if (usesNullConfiguration(toTarget)) {
@@ -113,7 +112,7 @@ public final class TransitionResolver {
     // The "else" is a legacy restriction from static configurations.
     if (attribute.hasSplitConfigurationTransition()) {
       currentTransition = split(currentTransition,
-          (SplitTransition<BuildOptions>) attribute.getSplitTransition(attributeMap));
+          (SplitTransition<BuildOptions>) attribute.getSplitTransition(fromRule));
     } else {
       // III. Attributes determine configurations. The configuration of a prerequisite is determined
       // by the attribute.
