@@ -16,10 +16,13 @@
 
 package org.jboss.shamrock.jpa;
 
-import static org.jboss.shamrock.annotations.ExecutionTime.RUNTIME_INIT;
-import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
+import static org.jboss.shamrock.deployment.annotations.ExecutionTime.RUNTIME_INIT;
+import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
 
+import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -33,7 +36,6 @@ import javax.persistence.PersistenceContext;
 import javax.persistence.PersistenceUnit;
 import javax.persistence.spi.PersistenceUnitTransactionType;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.hibernate.boot.archive.scan.spi.ClassDescriptor;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.dialect.H2Dialect;
@@ -43,29 +45,39 @@ import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
-import org.jboss.shamrock.annotations.BuildProducer;
-import org.jboss.shamrock.annotations.BuildStep;
-import org.jboss.shamrock.annotations.Record;
+import org.jboss.jandex.Indexer;
+import org.jboss.shamrock.agroal.DataSourceDriverBuildItem;
 import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanContainerBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanContainerListenerBuildItem;
 import org.jboss.shamrock.arc.deployment.ResourceAnnotationBuildItem;
 import org.jboss.shamrock.deployment.Capabilities;
+import org.jboss.shamrock.deployment.annotations.BuildProducer;
+import org.jboss.shamrock.deployment.annotations.BuildStep;
+import org.jboss.shamrock.deployment.annotations.Record;
+import org.jboss.shamrock.deployment.builditem.ApplicationArchivesBuildItem;
+import org.jboss.shamrock.deployment.builditem.ApplicationIndexBuildItem;
+import org.jboss.shamrock.deployment.builditem.ArchiveRootBuildItem;
 import org.jboss.shamrock.deployment.builditem.BytecodeTransformerBuildItem;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
+import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedResourceBuildItem;
 import org.jboss.shamrock.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import org.jboss.shamrock.deployment.configuration.ConfigurationError;
+import org.jboss.shamrock.deployment.index.IndexingUtil;
 import org.jboss.shamrock.deployment.recording.RecorderContext;
+import org.jboss.shamrock.deployment.util.IoUtil;
 import org.jboss.shamrock.jpa.runtime.DefaultEntityManagerFactoryProducer;
 import org.jboss.shamrock.jpa.runtime.DefaultEntityManagerProducer;
 import org.jboss.shamrock.jpa.runtime.JPAConfig;
 import org.jboss.shamrock.jpa.runtime.JPADeploymentTemplate;
+import org.jboss.shamrock.jpa.runtime.RequestScopedEntityManagerHolder;
 import org.jboss.shamrock.jpa.runtime.TransactionEntityManagers;
 import org.jboss.shamrock.jpa.runtime.boot.scan.ShamrockScanner;
 
@@ -85,16 +97,9 @@ public final class HibernateResourceProcessor {
     private static final DotName PRODUCES = DotName.createSimple(Produces.class.getName());
 
     /**
-     * TODO why document this, is it exposed
-     */
-    @ConfigProperty(name = "shamrock.datasource.driver")
-    Optional<String> driver;
-
-    /**
      * Hibernate ORM configuration
      */
-    @ConfigProperty(name = "shamrock.hibernate")
-    Optional<HibernateOrmConfig> hibernateOrmConfig;
+    HibernateConfig hibernate;
 
     @BuildStep
     HotDeploymentConfigFileBuildItem configFile() {
@@ -102,9 +107,15 @@ public final class HibernateResourceProcessor {
     }
 
     @BuildStep
-    void doParse(BuildProducer<PersistenceUnitDescriptorBuildItem> persistenceProducer) {
+    void doParseAndRegisterSubstrateResources(BuildProducer<PersistenceUnitDescriptorBuildItem> persistenceProducer,
+                                              BuildProducer<SubstrateResourceBuildItem> resourceProducer,
+                                              BuildProducer<HotDeploymentConfigFileBuildItem> hotDeploymentProducer,
+                                              ArchiveRootBuildItem root,
+                                              ApplicationArchivesBuildItem applicationArchivesBuildItem,
+                                              Optional<DataSourceDriverBuildItem> driverBuildItem
+    ) throws IOException {
         List<ParsedPersistenceXmlDescriptor> descriptors = loadOriginalXMLParsedDescriptors();
-        handleHibernateORMWithNoPersistenceXml(descriptors);
+        handleHibernateORMWithNoPersistenceXml(descriptors, resourceProducer, hotDeploymentProducer, root, driverBuildItem, applicationArchivesBuildItem);
         for (ParsedPersistenceXmlDescriptor i : descriptors) {
             persistenceProducer.produce(new PersistenceUnitDescriptorBuildItem(i));
         }
@@ -124,7 +135,7 @@ public final class HibernateResourceProcessor {
 
     @BuildStep
     void registerBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans, CombinedIndexBuildItem combinedIndex, List<PersistenceUnitDescriptorBuildItem> descriptors) {
-        additionalBeans.produce(new AdditionalBeanBuildItem(JPAConfig.class, TransactionEntityManagers.class));
+        additionalBeans.produce(new AdditionalBeanBuildItem(false, JPAConfig.class, TransactionEntityManagers.class, RequestScopedEntityManagerHolder.class));
 
         if (descriptors.size() == 1) {
             // There is only one persistence unit - register CDI beans for EM and EMF if no
@@ -150,17 +161,33 @@ public final class HibernateResourceProcessor {
     @BuildStep
     @Record(STATIC_INIT)
     public BeanContainerListenerBuildItem build(RecorderContext recorder, JPADeploymentTemplate template,
-                                                List<PersistenceUnitDescriptorBuildItem> descItems, CombinedIndexBuildItem index,
-                                                BuildProducer<BytecodeTransformerBuildItem> transformers,
+                                                List<PersistenceUnitDescriptorBuildItem> descItems,
+                                                List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems,
+                                                List<NonJpaModelBuildItem> nonJpaModelBuildItems,
+                                                CombinedIndexBuildItem index,
+                                                ApplicationIndexBuildItem applicationIndex,
                                                 BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-                                                BuildProducer<FeatureBuildItem> feature) throws Exception {
+                                                BuildProducer<FeatureBuildItem> feature,
+                                                BuildProducer<JpaEntitiesBuildItems> domainObjectsProducer) throws Exception {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.JPA));
 
         List<ParsedPersistenceXmlDescriptor> descriptors = descItems.stream().map(PersistenceUnitDescriptorBuildItem::getDescriptor).collect(Collectors.toList());
 
-        JpaJandexScavenger scavenger = new JpaJandexScavenger(reflectiveClass, descriptors, index.getIndex());
-        final KnownDomainObjects domainObjects = scavenger.discoverModelAndRegisterForReflection();
+        // build a composite index with additional jpa model classes
+        Indexer indexer = new Indexer();
+        Set<DotName> additionalIndex = new HashSet<>();
+        for(AdditionalJpaModelBuildItem jpaModel : additionalJpaModelBuildItems) {
+            IndexingUtil.indexClass(jpaModel.getClassName(), indexer, index.getIndex(), additionalIndex,
+                                    HibernateResourceProcessor.class.getClassLoader());
+        }
+        CompositeIndex compositeIndex = CompositeIndex.create(index.getIndex(), indexer.complete());
+
+        Set<String> nonJpaModelClasses = nonJpaModelBuildItems.stream()
+                .map(NonJpaModelBuildItem::getClassName)
+                .collect(Collectors.toSet());
+        JpaJandexScavenger scavenger = new JpaJandexScavenger(reflectiveClass, descriptors, compositeIndex, nonJpaModelClasses);
+        final JpaEntitiesBuildItems domainObjects = scavenger.discoverModelAndRegisterForReflection();
 
         for (String className : domainObjects.getClassNames()) {
             template.addEntity(className);
@@ -168,8 +195,8 @@ public final class HibernateResourceProcessor {
         template.enlistPersistenceUnit();
         template.callHibernateFeatureInit();
 
-        //Modify the bytecode of all entities to enable lazy-loading, dirty checking, etc..
-        enhanceEntities(domainObjects, transformers);
+        // remember how to run the enhancers later
+        domainObjectsProducer.produce(domainObjects);
 
         //set up the scanner, as this scanning has already been done we need to just tell it about the classes we
         //have discovered. This scanner is bytecode serializable and is passed directly into the template
@@ -186,6 +213,17 @@ public final class HibernateResourceProcessor {
         return new BeanContainerListenerBuildItem(template.initMetadata(descriptors, scanner));
     }
 
+    @BuildStep
+    public HibernateEnhancersRegisteredBuildItem enhancerDomainObjects(JpaEntitiesBuildItems domainObjects,
+                                                                       BuildProducer<BytecodeTransformerBuildItem> transformers,
+                                                                       List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems,
+                                                                       BuildProducer<GeneratedClassBuildItem> additionalClasses) {
+        // Modify the bytecode of all entities to enable lazy-loading, dirty checking, etc..
+        enhanceEntities(domainObjects, transformers, additionalJpaModelBuildItems, additionalClasses);
+        // this allows others to register their enhancers after Hibernate, so they run before ours
+        return new HibernateEnhancersRegisteredBuildItem();
+    }
+    
     @BuildStep
     @Record(STATIC_INIT)
     public void build(JPADeploymentTemplate template,
@@ -223,12 +261,18 @@ public final class HibernateResourceProcessor {
         return true;
     }
 
-    private void handleHibernateORMWithNoPersistenceXml(List<ParsedPersistenceXmlDescriptor> descriptors) {
+    private void handleHibernateORMWithNoPersistenceXml(
+            List<ParsedPersistenceXmlDescriptor> descriptors,
+            BuildProducer<SubstrateResourceBuildItem> resourceProducer,
+            BuildProducer<HotDeploymentConfigFileBuildItem> hotDeploymentProducer,
+            ArchiveRootBuildItem root,
+            Optional<DataSourceDriverBuildItem> driverBuildItem,
+            ApplicationArchivesBuildItem applicationArchivesBuildItem) {
         if ( descriptors.isEmpty() ) {
             //we have no persistence.xml so we will create a default one
-            Optional<String> dialect = hibernateOrmConfig.flatMap(c -> c.dialect);
+            Optional<String> dialect = hibernate.dialect;
             if (!dialect.isPresent()) {
-                dialect = guessDialect(driver);
+                dialect = guessDialect(driverBuildItem.map(DataSourceDriverBuildItem::getDriver));
             }
             dialect.ifPresent(s -> {
                 // we found one
@@ -236,27 +280,46 @@ public final class HibernateResourceProcessor {
                 desc.setName("default");
                 desc.setTransactionType(PersistenceUnitTransactionType.JTA);
                 desc.getProperties().setProperty(AvailableSettings.DIALECT, s);
-                hibernateOrmConfig
-                        .flatMap(c -> c.schemaGeneration)
-                        .ifPresent( p -> desc.getProperties().setProperty(AvailableSettings.HBM2DDL_DATABASE_ACTION, p) );
-                hibernateOrmConfig
-                        .flatMap(c -> c.showSql)
-                        .ifPresent( sql -> {
-                            if (sql.equals(Boolean.TRUE)) {
-                                desc.getProperties().setProperty(AvailableSettings.SHOW_SQL, "true");
-                                desc.getProperties().setProperty(AvailableSettings.FORMAT_SQL, "true");
-                            }
+                hibernate.schemaGeneration.ifPresent(
+                    p -> desc.getProperties().setProperty(AvailableSettings.HBM2DDL_DATABASE_ACTION, p)
+                );
+                if (hibernate.showSql) {
+                    desc.getProperties().setProperty(AvailableSettings.SHOW_SQL, "true");
+                    desc.getProperties().setProperty(AvailableSettings.FORMAT_SQL, "true");
+                }
+
+                // sql-load-script-source
+                // explicit file or default one
+                String file = hibernate.sqlLoadScriptSource.orElse("import.sql"); //default Hibernate ORM file imported
+
+                Optional<Path> loadScriptPath = Optional.ofNullable(applicationArchivesBuildItem.getRootArchive().getChildPath(file));
+                // enlist resource if present
+                loadScriptPath
+                        .filter( path -> !Files.isDirectory(path))
+                        .ifPresent( path -> {
+                            String resourceAsString = root.getPath().relativize(loadScriptPath.get()).toString();
+                            resourceProducer.produce(new SubstrateResourceBuildItem(resourceAsString));
+                            hotDeploymentProducer.produce(new HotDeploymentConfigFileBuildItem(resourceAsString));
+                            desc.getProperties().setProperty(AvailableSettings.HBM2DDL_LOAD_SCRIPT_SOURCE, file);
                         });
+
+                //raise exception if explicit file is not present (i.e. not the default)
+                hibernate.sqlLoadScriptSource
+                        .filter(o -> !loadScriptPath.filter( path -> !Files.isDirectory(path)).isPresent())
+                        .ifPresent(
+                            c -> { throw new ConfigurationError(
+                                "Unable to find file referenced in 'shamrock.hibernate.sql-load-script-source="
+                                + c + "'. Remove property or add file to your path."
+                            );
+                        });
+
                 descriptors.add(desc);
             });
-
         }
         else {
-            if (hibernateOrmConfig.isPresent() && hibernateOrmConfig.get().isAnyPropertySet()) {
-                hibernateOrmConfig.ifPresent(c -> {
-                    throw new ConfigurationError("Hibernate ORM configuration present in persistence.xml and Shamrock config file at the same time\n"
-                            + "If you use persistence.xml remove all shamrock.hibernate.* properties from the Shamrock config file.");
-                });
+            if (hibernate.isAnyPropertySet()) {
+                throw new ConfigurationError("Hibernate ORM configuration present in persistence.xml and Shamrock config file at the same time\n"
+                    + "If you use persistence.xml remove all shamrock.hibernate.* properties from the Shamrock config file.");
             }
         }
     }
@@ -275,13 +338,27 @@ public final class HibernateResourceProcessor {
         if ( resolvedDriver.contains("org.mariadb.jdbc.Driver")) {
             return Optional.of(MariaDB103Dialect.class.getName());
         }
-        return Optional.empty();
+        String error = driver.isPresent() ?
+                "Hibernate extension could not guess the dialect from the driver '" + resolvedDriver + "'. Add an explicit 'shamrock.hibernate.dialect' property." :
+                "Hibernate extension cannot guess the dialect as no JDBC driver is specified by 'shamrock.datasource.driver'";
+        throw new ConfigurationError(error);
     }
 
-    private void enhanceEntities(final KnownDomainObjects domainObjects, BuildProducer<BytecodeTransformerBuildItem> transformers) {
+    private void enhanceEntities(final JpaEntitiesBuildItems domainObjects, BuildProducer<BytecodeTransformerBuildItem> transformers, 
+                                 List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems, BuildProducer<GeneratedClassBuildItem> additionalClasses) {
         HibernateEntityEnhancer hibernateEntityEnhancer = new HibernateEntityEnhancer();
         for (String i : domainObjects.getClassNames()) {
             transformers.produce(new BytecodeTransformerBuildItem(i, hibernateEntityEnhancer));
+        }
+        for (AdditionalJpaModelBuildItem additionalJpaModel : additionalJpaModelBuildItems) {
+            String className = additionalJpaModel.getClassName();
+            try {
+                byte[] bytes = IoUtil.readClassAsBytes(HibernateResourceProcessor.class.getClassLoader(), className);
+                byte[] enhanced = hibernateEntityEnhancer.enhance(className, bytes);
+                additionalClasses.produce(new GeneratedClassBuildItem(true, className, enhanced != null ? enhanced : bytes));
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read Model class", e);
+            }
         }
     }
 

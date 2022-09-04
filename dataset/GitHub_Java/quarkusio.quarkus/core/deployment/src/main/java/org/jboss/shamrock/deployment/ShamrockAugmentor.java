@@ -21,20 +21,22 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.jboss.builder.BuildChain;
 import org.jboss.builder.BuildChainBuilder;
-import org.jboss.builder.BuildContext;
 import org.jboss.builder.BuildResult;
-import org.jboss.builder.BuildStep;
 import org.jboss.builder.item.BuildItem;
 import org.jboss.logging.Logger;
 import org.jboss.shamrock.deployment.builditem.ArchiveRootBuildItem;
 import org.jboss.shamrock.deployment.builditem.ClassOutputBuildItem;
+import org.jboss.shamrock.deployment.builditem.ExtensionClassLoaderBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedResourceBuildItem;
+import org.jboss.shamrock.deployment.builditem.LaunchModeBuildItem;
 import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import org.jboss.shamrock.runtime.LaunchMode;
 
 public class ShamrockAugmentor {
 
@@ -44,59 +46,72 @@ public class ShamrockAugmentor {
     private final ClassLoader classLoader;
     private final Path root;
     private final Set<Class<? extends BuildItem>> finalResults;
+    private final List<Consumer<BuildChainBuilder>> buildChainCustomizers;
+    private final LaunchMode launchMode;
 
     ShamrockAugmentor(Builder builder) {
         this.output = builder.output;
         this.classLoader = builder.classLoader;
         this.root = builder.root;
         this.finalResults = new HashSet<>(builder.finalResults);
+        this.buildChainCustomizers = new ArrayList<>(builder.buildChainCustomizers);
+        this.launchMode = builder.launchMode;
     }
 
     public BuildResult run() throws Exception {
         long time = System.currentTimeMillis();
         log.info("Beginning shamrock augmentation");
-        ClassLoader old = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(classLoader);
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            Thread.currentThread().setContextClassLoader(classLoader);
 
-        BuildChainBuilder chainBuilder = BuildChain.builder()
+            final BuildChainBuilder chainBuilder = BuildChain.builder();
 
-                .loadProviders(Thread.currentThread().getContextClassLoader())
-                .addBuildStep(new BuildStep() {
-                    @Override
-                    public void execute(BuildContext context) {
-                        //TODO: this should not be here
-                        context.produce(new SubstrateResourceBuildItem("META-INF/microprofile-config.properties"));
-                        context.produce(ShamrockConfig.INSTANCE);
-                        context.produce(new ArchiveRootBuildItem(root));
-                        context.produce(new ClassOutputBuildItem(output));
-                        context.produce(new ShutdownContextBuildItem());
-                    }
-                })
-                .produces(ShamrockConfig.class)
-                .produces(SubstrateResourceBuildItem.class)
-                .produces(ArchiveRootBuildItem.class)
-                .produces(ShutdownContextBuildItem.class)
-                .produces(ClassOutputBuildItem.class)
-                .build();
-        for (Class<? extends BuildItem> i : finalResults) {
-            chainBuilder.addFinal(i);
+            ExtensionLoader.loadStepsFrom(classLoader).accept(chainBuilder);
+            chainBuilder.loadProviders(classLoader);
+
+            chainBuilder
+                .addInitial(ShamrockConfig.class)
+                .addInitial(SubstrateResourceBuildItem.class)
+                .addInitial(ArchiveRootBuildItem.class)
+                .addInitial(ShutdownContextBuildItem.class)
+                .addInitial(ClassOutputBuildItem.class)
+                .addInitial(LaunchModeBuildItem.class)
+                .addInitial(ExtensionClassLoaderBuildItem.class);
+            for (Class<? extends BuildItem> i : finalResults) {
+                chainBuilder.addFinal(i);
+            }
+            chainBuilder.addFinal(GeneratedClassBuildItem.class)
+                    .addFinal(GeneratedResourceBuildItem.class);
+
+            for (Consumer<BuildChainBuilder> i : buildChainCustomizers) {
+                i.accept(chainBuilder);
+            }
+
+            BuildChain chain = chainBuilder
+                    .build();
+            BuildResult buildResult = chain.createExecutionBuilder("main")
+                .produce(new SubstrateResourceBuildItem("META-INF/microprofile-config.properties"))
+                .produce(ShamrockConfig.INSTANCE)
+                .produce(new ArchiveRootBuildItem(root))
+                .produce(new ClassOutputBuildItem(output))
+                .produce(new ShutdownContextBuildItem())
+                .produce(new LaunchModeBuildItem(launchMode))
+                .produce(new ExtensionClassLoaderBuildItem(classLoader))
+                .execute();
+
+            //TODO: this seems wrong
+            for (GeneratedClassBuildItem i : buildResult.consumeMulti(GeneratedClassBuildItem.class)) {
+                output.writeClass(i.isApplicationClass(), i.getName(), i.getClassData());
+            }
+            for (GeneratedResourceBuildItem i : buildResult.consumeMulti(GeneratedResourceBuildItem.class)) {
+                output.writeResource(i.getName(), i.getClassData());
+            }
+            log.info("Shamrock augmentation completed in " + (System.currentTimeMillis() - time) + "ms");
+            return buildResult;
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
-        chainBuilder.addFinal(GeneratedClassBuildItem.class)
-                .addFinal(GeneratedResourceBuildItem.class);
-
-        BuildChain chain = chainBuilder
-                .build();
-        BuildResult buildResult = chain.createExecutionBuilder("main").execute();
-
-        //TODO: this seems wrong
-        for (GeneratedClassBuildItem i : buildResult.consumeMulti(GeneratedClassBuildItem.class)) {
-            output.writeClass(i.isApplicationClass(), i.getName(), i.getClassData());
-        }
-        for (GeneratedResourceBuildItem i : buildResult.consumeMulti(GeneratedResourceBuildItem.class)) {
-            output.writeResource(i.getName(), i.getClassData());
-        }
-        log.info("Shamrock augmentation completed in " + (System.currentTimeMillis() - time) + "ms");
-        return buildResult;
     }
 
 
@@ -111,7 +126,13 @@ public class ShamrockAugmentor {
         ClassLoader classLoader;
         Path root;
         Set<Class<? extends BuildItem>> finalResults = new HashSet<>();
+        private final List<Consumer<BuildChainBuilder>> buildChainCustomizers = new ArrayList<>();
+        LaunchMode launchMode = LaunchMode.NORMAL;
 
+        public Builder addBuildChainCustomizer(Consumer<BuildChainBuilder> customizer) {
+            this.buildChainCustomizers.add(customizer);
+            return this;
+        }
 
         public List<Path> getAdditionalApplicationArchives() {
             return additionalApplicationArchives;
@@ -128,6 +149,15 @@ public class ShamrockAugmentor {
 
         public Builder setOutput(ClassOutput output) {
             this.output = output;
+            return this;
+        }
+
+        public LaunchMode getLaunchMode() {
+            return launchMode;
+        }
+
+        public Builder setLaunchMode(LaunchMode launchMode) {
+            this.launchMode = launchMode;
             return this;
         }
 
