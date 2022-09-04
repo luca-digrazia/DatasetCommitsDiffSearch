@@ -47,17 +47,17 @@ public class ReactiveMailerImpl implements ReactiveMailer {
     /**
      * Default from value.
      */
-    private volatile String from;
+    private String from;
 
     /**
      * Default bounce address.
      */
-    private volatile String bounceAddress;
+    private String bounceAddress;
 
     /**
      * If {@code true}, mails are not sent to the server, the body is printed in the console.
      */
-    private volatile boolean mock;
+    private boolean mock;
 
     @Override
     public CompletionStage<Void> send(Mail... mails) {
