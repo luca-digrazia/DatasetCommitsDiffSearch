@@ -6,7 +6,6 @@ import org.graylog2.restclient.models.api.requests.outputs.OutputLaunchRequest;
 import org.graylog2.restclient.models.api.responses.system.OutputSummaryResponse;
 import org.graylog2.restclient.models.api.responses.system.OutputsResponse;
 import org.graylog2.restroutes.generated.routes;
-import play.mvc.Http;
 
 import javax.inject.Inject;
 import java.io.IOException;
@@ -38,7 +37,6 @@ public class OutputService {
     public Output create(OutputLaunchRequest request) throws APIException, IOException {
         OutputSummaryResponse response = api.path(routes.OutputResource().create(), OutputSummaryResponse.class)
                 .body(request)
-                .expect(Http.Status.CREATED)
                 .execute();
         return outputFactory.fromSummaryResponse(response);
     }
@@ -53,6 +51,6 @@ public class OutputService {
     }
 
     public OutputTypesResponse available() throws APIException, IOException {
-        return api.path(routes.OutputResource().available(), OutputTypesResponse.class).execute();
+        return api.path(routes.OutputResource().available(null), OutputTypesResponse.class).execute();
     }
 }
