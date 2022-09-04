@@ -20,11 +20,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
+import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
@@ -34,7 +33,6 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import javax.annotation.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -137,7 +135,7 @@ public class RunfilesTest extends FoundationTestCase {
     assertThat(Iterables.getOnlyElement(eventCollector).getKind()).isEqualTo(EventKind.ERROR);
   }
 
-  private static final class SimpleActionLookupKey implements ActionLookupKey {
+  private static class SimpleActionLookupKey extends ActionLookupKey {
     private final String name;
 
     SimpleActionLookupKey(String name) {
@@ -148,17 +146,11 @@ public class RunfilesTest extends FoundationTestCase {
     public SkyFunctionName functionName() {
       return SkyFunctionName.createHermetic(name);
     }
-
-    @Nullable
-    @Override
-    public Label getLabel() {
-      return null;
-    }
   }
 
   @Test
   public void testPutDerivedArtifactWithDifferentOwnerDoesNotConflict() throws Exception {
-    ArtifactRoot root = ArtifactRoot.asDerivedRoot(scratch.dir("/workspace"), false, "out");
+    ArtifactRoot root = ArtifactRoot.asDerivedRoot(scratch.dir("/workspace"), "out");
     PathFragment path = PathFragment.create("src/foo.cc");
 
     SimpleActionLookupKey owner1 = new SimpleActionLookupKey("//owner1");
@@ -181,7 +173,7 @@ public class RunfilesTest extends FoundationTestCase {
 
   @Test
   public void testPutDerivedArtifactWithDifferentPathConflicts() throws Exception {
-    ArtifactRoot root = ArtifactRoot.asDerivedRoot(scratch.dir("/workspace"), false, "out");
+    ArtifactRoot root = ArtifactRoot.asDerivedRoot(scratch.dir("/workspace"), "out");
     PathFragment path = PathFragment.create("src/foo.cc");
     PathFragment path2 = PathFragment.create("src/bar.cc");
 
@@ -390,23 +382,20 @@ public class RunfilesTest extends FoundationTestCase {
   public void testLegacyRunfilesStructure() {
     ArtifactRoot root = ArtifactRoot.asSourceRoot(Root.fromPath(scratch.resolve("/workspace")));
     PathFragment workspaceName = PathFragment.create("wsname");
-    PathFragment pathB = PathFragment.create("repo/b");
-    PathFragment legacyPathB = LabelConstants.EXTERNAL_PATH_PREFIX.getRelative(pathB);
-    PathFragment runfilesPathB = LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX.getRelative(pathB);
-    Artifact artifactB = ActionsTestUtil.createArtifactWithRootRelativePath(root, legacyPathB);
+    PathFragment pathB = PathFragment.create("external/repo/b");
+    Artifact artifactB = ActionsTestUtil.createArtifactWithRootRelativePath(root, pathB);
 
     Runfiles.ManifestBuilder builder = new Runfiles.ManifestBuilder(workspaceName, true);
 
     Map<PathFragment, Artifact> inputManifest = Maps.newHashMap();
-    inputManifest.put(runfilesPathB, artifactB);
+    inputManifest.put(pathB, artifactB);
     Runfiles.ConflictChecker checker = new Runfiles.ConflictChecker(
         Runfiles.ConflictPolicy.WARN, reporter, null);
     builder.addUnderWorkspace(inputManifest, checker);
 
-    assertThat(builder.build().entrySet())
-        .containsExactly(
-            Maps.immutableEntry(workspaceName.getRelative(legacyPathB), artifactB),
-            Maps.immutableEntry(PathFragment.create("repo/b"), artifactB));
+    assertThat(builder.build().entrySet()).containsExactly(
+        Maps.immutableEntry(workspaceName.getRelative(pathB), artifactB),
+        Maps.immutableEntry(PathFragment.create("repo/b"), artifactB));
     assertNoEvents();
   }
 
@@ -414,14 +403,14 @@ public class RunfilesTest extends FoundationTestCase {
   public void testRunfileAdded() {
     ArtifactRoot root = ArtifactRoot.asSourceRoot(Root.fromPath(scratch.resolve("/workspace")));
     PathFragment workspaceName = PathFragment.create("wsname");
-    PathFragment pathB = PathFragment.create("repo/b");
-    PathFragment legacyPathB = LabelConstants.EXTERNAL_PATH_PREFIX.getRelative(pathB);
-    PathFragment runfilesPathB = LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX.getRelative(pathB);
-    Artifact artifactB = ActionsTestUtil.createArtifactWithRootRelativePath(root, legacyPathB);
+    PathFragment pathB = PathFragment.create("external/repo/b");
+    Artifact artifactB = ActionsTestUtil.createArtifactWithRootRelativePath(root, pathB);
 
     Runfiles.ManifestBuilder builder = new Runfiles.ManifestBuilder(workspaceName, false);
 
-    Map<PathFragment, Artifact> inputManifest = ImmutableMap.of(runfilesPathB, artifactB);
+    Map<PathFragment, Artifact> inputManifest = ImmutableMap.<PathFragment, Artifact>builder()
+        .put(pathB, artifactB)
+        .build();
     Runfiles.ConflictChecker checker = new Runfiles.ConflictChecker(
         Runfiles.ConflictPolicy.WARN, reporter, null);
     builder.addUnderWorkspace(inputManifest, checker);
@@ -437,18 +426,18 @@ public class RunfilesTest extends FoundationTestCase {
   public void testConflictWithExternal() {
     ArtifactRoot root = ArtifactRoot.asSourceRoot(Root.fromPath(scratch.resolve("/workspace")));
     PathFragment pathB = PathFragment.create("repo/b");
-    PathFragment externalLegacyPath = LabelConstants.EXTERNAL_PATH_PREFIX.getRelative(pathB);
-    PathFragment externalRunfilesPathB =
-        LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX.getRelative(pathB);
+    PathFragment externalPathB = LabelConstants.EXTERNAL_PACKAGE_NAME.getRelative(pathB);
     Artifact artifactB = ActionsTestUtil.createArtifactWithRootRelativePath(root, pathB);
     Artifact artifactExternalB =
-        ActionsTestUtil.createArtifactWithRootRelativePath(root, externalLegacyPath);
+        ActionsTestUtil.createArtifactWithRootRelativePath(root, externalPathB);
 
     Runfiles.ManifestBuilder builder = new Runfiles.ManifestBuilder(
         PathFragment.EMPTY_FRAGMENT, false);
 
-    Map<PathFragment, Artifact> inputManifest =
-        ImmutableMap.of(pathB, artifactB, externalRunfilesPathB, artifactExternalB);
+    Map<PathFragment, Artifact> inputManifest = ImmutableMap.<PathFragment, Artifact>builder()
+        .put(pathB, artifactB)
+        .put(externalPathB, artifactExternalB)
+        .build();
     Runfiles.ConflictChecker checker = new Runfiles.ConflictChecker(
         Runfiles.ConflictPolicy.WARN, reporter, null);
     builder.addUnderWorkspace(inputManifest, checker);
@@ -489,7 +478,7 @@ public class RunfilesTest extends FoundationTestCase {
   @Test
   public void testOnlyExtraMiddlemenNotConsideredEmpty() {
     ArtifactRoot root =
-        ArtifactRoot.asDerivedRoot(scratch.resolve("execroot"), true, PathFragment.create("out"));
+        ArtifactRoot.middlemanRoot(scratch.resolve("execroot"), scratch.resolve("execroot/out"));
     Artifact mm = ActionsTestUtil.createArtifact(root, "a-middleman");
     Runfiles runfiles = new Runfiles.Builder("TESTING").addLegacyExtraMiddleman(mm).build();
     assertThat(runfiles.isEmpty()).isFalse();
@@ -498,7 +487,7 @@ public class RunfilesTest extends FoundationTestCase {
   @Test
   public void testMergingExtraMiddlemen() {
     ArtifactRoot root =
-        ArtifactRoot.asDerivedRoot(scratch.resolve("execroot"), true, PathFragment.create("out"));
+        ArtifactRoot.middlemanRoot(scratch.resolve("execroot"), scratch.resolve("execroot/out"));
     Artifact mm1 = ActionsTestUtil.createArtifact(root, "middleman-1");
     Artifact mm2 = ActionsTestUtil.createArtifact(root, "middleman-2");
     Runfiles runfiles1 = new Runfiles.Builder("TESTING").addLegacyExtraMiddleman(mm1).build();
