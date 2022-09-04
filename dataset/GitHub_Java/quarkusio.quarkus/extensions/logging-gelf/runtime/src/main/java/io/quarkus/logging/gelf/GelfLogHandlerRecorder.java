@@ -25,9 +25,13 @@ public class GelfLogHandlerRecorder {
         handler.setExtractStackTrace(extractStackTrace);
         handler.setFilterStackTrace(config.filterStackTrace);
         handler.setTimestampPattern(config.timestampPattern);
+        handler.setIncludeFullMdc(config.includeFullMdc);
         handler.setHost(config.host);
         handler.setPort(config.port);
         handler.setLevel(config.level);
+        handler.setMaximumMessageSize(config.maximumMessageSize);
+        handler.setIncludeLocation(config.includeLocation);
+        handler.setIncludeLogMessageParameters(config.includeLogMessageParameters);
 
         // handle additional fields
         if (!config.additionalField.isEmpty()) {
