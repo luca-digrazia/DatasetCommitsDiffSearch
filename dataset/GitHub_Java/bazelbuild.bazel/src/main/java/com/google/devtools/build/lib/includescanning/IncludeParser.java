@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.ContainingPackageLookupValue;
-import com.google.devtools.build.lib.skyframe.GlobDescriptor;
 import com.google.devtools.build.lib.skyframe.GlobValue;
 import com.google.devtools.build.lib.skyframe.GlobValue.InvalidGlobPatternException;
 import com.google.devtools.build.lib.skyframe.PerBuildSyscallCache;
@@ -51,14 +50,12 @@ import com.google.devtools.build.lib.vfs.UnixGlob.FilesystemCalls;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.ValueOrException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
@@ -250,49 +247,34 @@ class IncludeParser {
     }
 
     /**
-     * Returns the "path" type hinted inclusions for the given paths. Callers are responsible for
+     * Returns the "path" type hinted inclusions for a given path. Callers are responsible for
      * caching.
      */
-    Collection<Artifact> getPathLevelHintedInclusions(
-        ImmutableList<PathFragment> paths, Environment env) throws InterruptedException {
-      return getHintedInclusionsWithSkyframe(Rule.Type.PATH, paths, env);
+    Collection<Artifact> getPathLevelHintedInclusions(PathFragment path, Environment env)
+        throws InterruptedException {
+      return getHintedInclusionsWithSkyframe(Rule.Type.PATH, path, env);
     }
 
     /**
-     * Performs the work of matching the given paths against the hints and returns the matching
-     * files. This is semantically different from {@link #getHintedInclusionsLegacy} in that it will
-     * not cross package boundaries.
+     * Performs the work of matching a given path against the hints and returns the matching files.
+     * This is semantically different from {@link #getHintedInclusionsLegacy} in that it will not
+     * cross package boundaries.
      */
     private Collection<Artifact> getHintedInclusionsWithSkyframe(
-        Rule.Type type, ImmutableList<PathFragment> paths, Environment env)
-        throws InterruptedException {
-      ImmutableList<String> pathStrings =
-          paths.stream()
-              .map(PathFragment::getPathString)
-              .filter((p) -> p.startsWith(ALLOWED_PREFIX))
-              .collect(ImmutableList.toImmutableList());
-      if (pathStrings.isEmpty()) {
+        Rule.Type type, PathFragment path, Environment env) throws InterruptedException {
+      String pathString = path.getPathString();
+      if (!pathString.startsWith(ALLOWED_PREFIX)) {
         return ImmutableList.of();
       }
       // Delay creation until we know we need one. Use a TreeSet to make sure that the results are
       // sorted with a stable order and unique.
       Set<Artifact> hints = null;
-      List<ContainingPackageLookupValue.Key> rulePaths = new ArrayList<>(rules.size());
-      List<String> findFilters = new ArrayList<>(rules.size());
       for (Rule rule : rules) {
         if (type != rule.type) {
           continue;
         }
-        String firstMatchPathString = null;
-        Matcher m = null;
-        for (String pathString : pathStrings) {
-          m = rule.pattern.matcher(pathString);
-          if (m.matches()) {
-            firstMatchPathString = pathString;
-            break;
-          }
-        }
-        if (firstMatchPathString == null) {
+        Matcher m = rule.pattern.matcher(pathString);
+        if (!m.matches()) {
           continue;
         }
         if (hints == null) {
@@ -300,8 +282,7 @@ class IncludeParser {
         }
         PathFragment relativePath = PathFragment.create(m.replaceFirst(rule.findRoot));
         if (LOG_FINE) {
-          logger.fine(
-              "hint for " + rule.type + " " + firstMatchPathString + " root: " + relativePath);
+          logger.fine("hint for " + rule.type + " " + pathString + " root: " + relativePath);
         }
         if (!relativePath.getPathString().startsWith(ALLOWED_PREFIX)) {
           logger.warning(
@@ -311,24 +292,12 @@ class IncludeParser {
                   + ALLOWED_PREFIX);
           continue;
         }
-        rulePaths.add(
-            ContainingPackageLookupValue.key(PackageIdentifier.createInMainRepo(relativePath)));
-        findFilters.add(rule.findFilter);
-      }
-      Map<SkyKey, ValueOrException<NoSuchPackageException>> containingPackageLookupValues =
-          env.getValuesOrThrow(rulePaths, NoSuchPackageException.class);
-      if (env.valuesMissing()) {
-        return null;
-      }
-      List<GlobDescriptor> globKeys = new ArrayList<>(rulePaths.size());
-      for (int i = 0; i < rulePaths.size(); i++) {
         ContainingPackageLookupValue containingPackageLookupValue;
-        ContainingPackageLookupValue.Key relativePathKey = rulePaths.get(i);
-        PathFragment relativePath = relativePathKey.argument().getPackageFragment();
         try {
           containingPackageLookupValue =
-              (ContainingPackageLookupValue)
-                  containingPackageLookupValues.get(relativePathKey).get();
+              (ContainingPackageLookupValue) env.getValueOrThrow(ContainingPackageLookupValue.key(
+                  PackageIdentifier.createInMainRepo(relativePath)),
+                  NoSuchPackageException.class);
         } catch (NoSuchPackageException e) {
           logger.warning(
               "Unexpected exception when looking up containing package for "
@@ -337,46 +306,45 @@ class IncludeParser {
                   + e.getMessage());
           continue;
         }
+        if (env.valuesMissing()) {
+          return null;
+        }
         if (!containingPackageLookupValue.hasContainingPackage()) {
           logger.warning(relativePath + " not contained in any package: skipping");
           continue;
         }
         PathFragment packageFragment =
             containingPackageLookupValue.getContainingPackageName().getPackageFragment();
-        String pattern = findFilters.get(i);
+        SkyKey globKey;
         try {
-          globKeys.add(
+          globKey =
               GlobValue.key(
                   containingPackageLookupValue.getContainingPackageName(),
                   containingPackageLookupValue.getContainingPackageRoot(),
-                  pattern,
+                  rule.findFilter,
                   /* excludeDirs= */ true,
-                  relativePath.relativeTo(packageFragment)));
+                  relativePath.relativeTo(packageFragment));
         } catch (InvalidGlobPatternException e) {
-          env.getListener()
-              .handle(Event.warn("Error parsing pattern " + pattern + " for " + relativePath));
+          env.getListener().handle(
+              Event.warn("Error parsing pattern " + rule.findFilter + " for " + relativePath));
           continue;
         }
-      }
-      Map<SkyKey, ValueOrException<IOException>> globResults =
-          env.getValuesOrThrow(globKeys, IOException.class);
-      if (env.valuesMissing()) {
-        return null;
-      }
-      for (Map.Entry<SkyKey, ValueOrException<IOException>> globEntry : globResults.entrySet()) {
-        GlobValue globValue;
-        GlobDescriptor globKey = (GlobDescriptor) globEntry.getKey();
-        PathFragment packageFragment = globKey.getPackageId().getPackageFragment();
+        GlobValue globValue = null;
         try {
-          globValue = (GlobValue) globEntry.getValue().get();
+          globValue =
+              (GlobValue) env.getValueOrThrow(globKey, IOException.class);
         } catch (IOException e) {
-          logger.warning("Error getting hints for " + packageFragment + ": " + e);
+          logger.warning("Error getting hints for " + relativePath + ": " + e);
           continue;
+        }
+        if (env.valuesMissing()) {
+          return null;
         }
         for (PathFragment file : globValue.getMatches()) {
           hints.add(
               artifactFactory.getSourceArtifact(
-                  packageFragment.getRelative(file), globKey.getPackageRoot()));
+                  packageFragment.getRelative(file),
+                  containingPackageLookupValue.getContainingPackageRoot()));
         }
       }
       return hints == null || hints.isEmpty() ? ImmutableList.<Artifact>of() : hints;

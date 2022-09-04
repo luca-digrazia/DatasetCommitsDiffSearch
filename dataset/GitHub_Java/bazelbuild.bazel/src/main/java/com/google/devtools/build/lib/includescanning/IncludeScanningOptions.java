@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.includescanning;
 
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
-import com.google.devtools.build.lib.util.ResourceConverter;
+import com.google.devtools.common.options.Converters.IntegerConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
@@ -27,16 +27,22 @@ import com.google.devtools.common.options.OptionsParsingException;
 public class IncludeScanningOptions extends OptionsBase {
 
   /**
-   * Converter for scanning parallelism threads: Takes {@value #FLAG_SYNTAX} 0 disables scanning
-   * parallelism.
+   * Converter for a number of threads or {@code auto}, which automatically selects a value that
+   * makes sense according to the local machine resources.
    */
-  public static class ParallelismConverter extends ResourceConverter {
-    public ParallelismConverter() throws OptionsParsingException {
-      super(
-          /* autoSupplier= */ () ->
-              (int) Math.ceil(LocalHostCapacity.getLocalHostCapacity().getCpuUsage()),
-          /* minValue= */ 0,
-          /* maxValue= */ Integer.MAX_VALUE);
+  public static class ParallelismConverter extends IntegerConverter {
+    @Override
+    public Integer convert(String input) throws OptionsParsingException {
+      if (input.equals("auto")) {
+        return (int) Math.ceil(LocalHostCapacity.getLocalHostCapacity().getCpuUsage());
+      } else {
+        return super.convert(input);
+      }
+    }
+
+    @Override
+    public String getTypeDescription() {
+      return "\"auto\" or " + super.getTypeDescription();
     }
   }
 
@@ -86,18 +92,18 @@ public class IncludeScanningOptions extends OptionsBase {
       name = "experimental_include_scanning_parallelism",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {
-        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-        OptionEffectTag.EXECUTION,
-        OptionEffectTag.HOST_MACHINE_RESOURCE_OPTIMIZATIONS
+          OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
+          OptionEffectTag.EXECUTION,
+          OptionEffectTag.HOST_MACHINE_RESOURCE_OPTIMIZATIONS
       },
       defaultValue = "80",
       converter = ParallelismConverter.class,
       help =
-          "Configures the size of the thread pool used for include scanning. Takes "
-              + ResourceConverter.FLAG_SYNTAX
-              + ". 0 means to disable parallelism and to just rely on the build graph parallelism "
+          "Configures the size of the thread pool used for include scanning. "
+              + "0 means to disable parallelism and to just rely on the build graph parallelism "
               + "for concurrency. "
               + " \"auto\" means to use a reasonable value derived from the machine's hardware"
-              + " profile (e.g. the number of processors).")
+              + " profile (e.g. the number of processors)."
+  )
   public int includeScanningParallelism;
 }
