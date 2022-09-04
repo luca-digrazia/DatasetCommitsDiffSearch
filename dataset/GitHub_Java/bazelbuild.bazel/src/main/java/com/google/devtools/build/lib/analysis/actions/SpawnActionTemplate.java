@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionKeyCacher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionTemplate;
@@ -28,17 +27,16 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.CommandLine;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Map;
 
-/** An {@link ActionTemplate} that expands into {@link SpawnAction}s at execution time. */
-public final class SpawnActionTemplate extends ActionKeyCacher
-    implements ActionTemplate<SpawnAction> {
+/**
+ * An {@link ActionTemplate} that expands into {@link SpawnAction}s at execution time.
+ */
+public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
   private final SpecialArtifact inputTreeArtifact;
   private final SpecialArtifact outputTreeArtifact;
   private final NestedSet<Artifact> commonInputs;
@@ -49,6 +47,7 @@ public final class SpawnActionTemplate extends ActionKeyCacher
   private final OutputPathMapper outputPathMapper;
   private final SpawnAction.Builder spawnActionBuilder;
   private final CustomCommandLine commandLineTemplate;
+  private String cachedKey;
 
   /**
    * Interface providing mapping between expanded input files under the input TreeArtifact and
@@ -116,15 +115,18 @@ public final class SpawnActionTemplate extends ActionKeyCacher
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
-      throws CommandLineExpansionException {
+  public synchronized String getKey(ActionKeyContext actionKeyContext) {
+    if (cachedKey != null) {
+      return cachedKey;
+    }
     TreeFileArtifact inputTreeFileArtifact =
         ActionInputHelper.treeFileArtifact(inputTreeArtifact, "dummy_for_key");
     TreeFileArtifact outputTreeFileArtifact =
         ActionInputHelper.treeFileArtifact(
             outputTreeArtifact, outputPathMapper.parentRelativeOutputPath(inputTreeFileArtifact));
     SpawnAction dummyAction = createAction(inputTreeFileArtifact, outputTreeFileArtifact);
-    dummyAction.computeKey(actionKeyContext, fp);
+    cachedKey = dummyAction.getKey(actionKeyContext);
+    return cachedKey;
   }
 
   /**

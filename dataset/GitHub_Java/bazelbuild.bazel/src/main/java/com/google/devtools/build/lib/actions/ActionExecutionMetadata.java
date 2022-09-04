@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
+import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import javax.annotation.Nullable;
 
@@ -24,6 +25,16 @@ import javax.annotation.Nullable;
  * other than that all methods with side effects must belong to the former.
  */
 public interface ActionExecutionMetadata extends ActionAnalysisMetadata {
+
+  /**
+   * Return this key to signify a failed key computation.
+   *
+   * <p>Actions that return this value should fail to execute.
+   *
+   * <p>Consumers must either gracefully handle multiple failed actions having the same key,
+   * (recommended), or check against this value explicitly.
+   */
+  String KEY_ERROR = "1ea50e01-0349-4552-80cf-76cf520e8592";
 
   /**
    * If this executable can supply verbose information, returns a string that can be used as a
@@ -104,4 +115,11 @@ public interface ActionExecutionMetadata extends ActionAnalysisMetadata {
   default boolean mayInsensitivelyPropagateInputs() {
     return false;
   }
+
+  /**
+   * Returns the {@link PlatformInfo} platform this action should be executed on. If the execution
+   * platform is {@code null}, then the host platform is assumed.
+   */
+  @Nullable
+  PlatformInfo getExecutionPlatform();
 }
