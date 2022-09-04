@@ -4,6 +4,7 @@ import java.util.Date;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.TextView;
 
 import com.googlecode.androidannotations.annotations.Click;
@@ -27,8 +28,8 @@ public class MyActivity extends Activity {
 		foo.setText("Bar !");
 	}
 
-	@Click
-	public void myButton() {
+	@Click(R.id.myButton)
+	public void myButtonWasClicked() {
 		content.setText("Clicked at " + new Date());
 	}
 
