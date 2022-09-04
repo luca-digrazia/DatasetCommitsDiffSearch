@@ -32,11 +32,8 @@ import io.quarkus.hibernate.orm.panache.runtime.JpaOperations;
 @NamedQuery(name = "Person.getByName", query = "from Person2 where name = :name")
 @FilterDef(name = "Person.hasName", defaultCondition = "name = :name", parameters = @ParamDef(name = "name", type = "string"))
 @FilterDef(name = "Person.isAlive", defaultCondition = "status = 'LIVING'")
-@FilterDef(name = "Person.name.in", defaultCondition = "name in (:names)", parameters = {
-        @ParamDef(name = "names", type = "string") })
 @Filter(name = "Person.isAlive")
 @Filter(name = "Person.hasName")
-@Filter(name = "Person.name.in")
 public class Person extends PanacheEntity {
 
     public String name;
@@ -64,7 +61,7 @@ public class Person extends PanacheEntity {
 
     // For https://github.com/quarkusio/quarkus/issues/9635
     public static <T extends PanacheEntityBase> PanacheQuery<T> find(String query, Object... params) {
-        return (PanacheQuery<T>) JpaOperations.INSTANCE.find(Person.class, query, params);
+        return (PanacheQuery<T>) JpaOperations.find(Person.class, query, params);
     }
 
     // For JAXB: both getter and setter are required
@@ -80,9 +77,5 @@ public class Person extends PanacheEntity {
 
     public static long methodWithPrimitiveParams(boolean b, byte bb, short s, int i, long l, float f, double d, char c) {
         return 0;
-    }
-
-    public static void voidMethod() {
-        throw new RuntimeException("void");
     }
 }

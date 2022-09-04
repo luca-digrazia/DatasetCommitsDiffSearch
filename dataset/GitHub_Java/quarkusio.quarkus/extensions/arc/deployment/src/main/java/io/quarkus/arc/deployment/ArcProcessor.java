@@ -38,7 +38,6 @@ import io.quarkus.arc.processor.AlternativePriorities;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanConfigurator;
 import io.quarkus.arc.processor.BeanDefiningAnnotation;
-import io.quarkus.arc.processor.BeanDeployment;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BeanProcessor;
 import io.quarkus.arc.processor.BytecodeTransformer;
@@ -56,8 +55,6 @@ import io.quarkus.arc.runtime.LaunchModeProducer;
 import io.quarkus.arc.runtime.LifecycleEventRunner;
 import io.quarkus.bootstrap.BootstrapDebug;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -104,12 +101,7 @@ public class ArcProcessor {
 
     @BuildStep
     CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.CDI);
-    }
-
-    @BuildStep
-    FeatureBuildItem feature() {
-        return new FeatureBuildItem(Feature.CDI);
+        return new CapabilityBuildItem(Capabilities.CDI_ARC);
     }
 
     @BuildStep
@@ -144,6 +136,7 @@ public class ArcProcessor {
             List<UnremovableBeanBuildItem> removalExclusions,
             Optional<TestClassPredicateBuildItem> testClassPredicate,
             Capabilities capabilities,
+            BuildProducer<FeatureBuildItem> feature,
             CustomScopeAnnotationsBuildItem scopes,
             LaunchModeBuildItem launchModeBuildItem) {
 
@@ -151,6 +144,8 @@ public class ArcProcessor {
             throw new IllegalArgumentException("Invalid configuration value set for 'quarkus.arc.remove-unused-beans'." +
                     " Please use one of " + ArcConfig.ALLOWED_REMOVE_UNUSED_BEANS_VALUES);
         }
+
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.CDI));
 
         List<String> additionalBeansTypes = beanArchiveIndex.getAdditionalBeans();
         Set<DotName> generatedClassNames = beanArchiveIndex.getGeneratedClassNames();
@@ -269,12 +264,12 @@ public class ArcProcessor {
             });
         }
         builder.setTransformUnproxyableClasses(arcConfig.transformUnproxyableClasses);
-        builder.setJtaCapabilities(capabilities.isPresent(Capability.TRANSACTIONS));
+        builder.setJtaCapabilities(capabilities.isCapabilityPresent(Capabilities.TRANSACTIONS));
         builder.setGenerateSources(BootstrapDebug.DEBUG_SOURCES_DIR != null);
         builder.setAllowMocking(launchModeBuildItem.getLaunchMode() == LaunchMode.TEST);
 
         if (arcConfig.selectedAlternatives.isPresent()) {
-            final List<Predicate<ClassInfo>> selectedAlternatives = initClassPredicates(
+            final List<Predicate<ClassInfo>> selectedAlternatives = initAlternativePredicates(
                     arcConfig.selectedAlternatives.get());
             builder.setAlternativePriorities(new AlternativePriorities() {
 
@@ -309,13 +304,6 @@ public class ArcProcessor {
             });
         }
 
-        if (arcConfig.excludeTypes.isPresent()) {
-            for (Predicate<ClassInfo> predicate : initClassPredicates(
-                    arcConfig.excludeTypes.get())) {
-                builder.addExcludeType(predicate);
-            }
-        }
-
         BeanProcessor beanProcessor = builder.build();
         ContextRegistrar.RegistrationContext context = beanProcessor.registerCustomContexts();
         return new ContextRegistrationPhaseBuildItem(context, beanProcessor);
@@ -324,9 +312,7 @@ public class ArcProcessor {
     // PHASE 2 - register all beans
     @BuildStep
     public BeanRegistrationPhaseBuildItem registerBeans(ContextRegistrationPhaseBuildItem contextRegistrationPhase,
-            List<ContextConfiguratorBuildItem> contextConfigurators,
-            BuildProducer<InterceptorResolverBuildItem> interceptorResolver,
-            BuildProducer<TransformedAnnotationsBuildItem> transformedAnnotations) {
+            List<ContextConfiguratorBuildItem> contextConfigurators) {
 
         for (ContextConfiguratorBuildItem contextConfigurator : contextConfigurators) {
             for (ContextConfigurator value : contextConfigurator.getValues()) {
@@ -334,10 +320,6 @@ public class ArcProcessor {
                 value.done();
             }
         }
-
-        BeanDeployment beanDeployment = contextRegistrationPhase.getBeanProcessor().getBeanDeployment();
-        interceptorResolver.produce(new InterceptorResolverBuildItem(beanDeployment));
-        transformedAnnotations.produce(new TransformedAnnotationsBuildItem(beanDeployment));
 
         return new BeanRegistrationPhaseBuildItem(contextRegistrationPhase.getBeanProcessor().registerBeans(),
                 contextRegistrationPhase.getBeanProcessor());
@@ -483,7 +465,7 @@ public class ArcProcessor {
         return new CustomScopeAnnotationsBuildItem(names);
     }
 
-    private List<Predicate<ClassInfo>> initClassPredicates(List<String> selectedAlternatives) {
+    private List<Predicate<ClassInfo>> initAlternativePredicates(List<String> selectedAlternatives) {
         final String packMatch = ".*";
         final String packStarts = ".**";
         List<Predicate<ClassInfo>> predicates = new ArrayList<>();
