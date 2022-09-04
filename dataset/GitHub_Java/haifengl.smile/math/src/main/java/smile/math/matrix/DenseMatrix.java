@@ -22,5 +22,4 @@ package smile.math.matrix;
  * @author Haifeng Li
  */
 public interface DenseMatrix extends IMatrix {
-    
 }
