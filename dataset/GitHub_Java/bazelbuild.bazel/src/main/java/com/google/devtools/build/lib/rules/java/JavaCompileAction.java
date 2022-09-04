@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CommandLines;
-import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
@@ -441,7 +440,6 @@ public class JavaCompileAction extends AbstractAction
           ImmutableList.copyOf(expandedCommandLines.arguments()),
           environment,
           executionInfo,
-          EmptyRunfilesSupplier.INSTANCE,
           JavaCompileAction.this,
           LOCAL_RESOURCES);
       this.inputs = Iterables.concat(inputs, expandedCommandLines.getParamFiles());
