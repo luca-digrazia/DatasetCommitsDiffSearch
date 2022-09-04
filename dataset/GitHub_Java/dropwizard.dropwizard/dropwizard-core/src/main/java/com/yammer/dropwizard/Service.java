@@ -53,13 +53,6 @@ public abstract class Service<T extends Configuration> {
     }
 
     /**
-     * Initializes the service bootstrap.
-     *
-     * @param bootstrap the service bootstrap
-     */
-    public abstract void initialize(Bootstrap<T> bootstrap);
-
-    /**
      * When the service runs, this is called after the {@link Bundle}s are run. Override it to add
      * providers, resources, etc. for your service.
      *
@@ -68,6 +61,16 @@ public abstract class Service<T extends Configuration> {
      * @throws Exception if something goes wrong
      */
     public abstract void run(T configuration, Environment environment) throws Exception;
+
+    /**
+     * Initializes the service bootstrap.
+     *
+     * @param bootstrap the service bootstrap
+     */
+    @SuppressWarnings("UnusedParameters")
+    public void initialize(Bootstrap<T> bootstrap) {
+        // no default implementation
+    }
 
     /**
      * Parses command-line arguments and runs the service. Call this method from a {@code public
