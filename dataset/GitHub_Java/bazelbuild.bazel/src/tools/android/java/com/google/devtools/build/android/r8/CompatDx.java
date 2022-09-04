@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -636,7 +637,19 @@ public class CompatDx {
       if (dexArgs.backportStatics) {
         CompatDxSupport.enableDesugarBackportStatics(builder);
       }
-      D8.run(builder.build());
+      try {
+        // Check if the referenced r8.jar has these methods. If so, the support code accessing
+        // the internals is not required.
+        Method setEnableMainDexListCheck =
+            D8Command.Builder.class.getDeclaredMethod("setEnableMainDexListCheck", boolean.class);
+        // The methods are package private to not reveal them as part of the external API.
+        setEnableMainDexListCheck.setAccessible(true);
+        setEnableMainDexListCheck.invoke(builder, Boolean.FALSE);
+        D8.run(builder.build());
+      } catch (ReflectiveOperationException e) {
+        // Go through the support code accessing the internals for the compilation.
+        CompatDxSupport.run(builder.build());
+      }
     } finally {
       executor.shutdown();
     }
