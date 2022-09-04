@@ -21,7 +21,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.android.AaptCommandBuilder;
 import com.google.devtools.build.android.AndroidResourceOutputs;
 import com.google.devtools.build.android.Profiler;
@@ -217,12 +216,7 @@ public class ResourceLinker {
               .when(densities.size() == 1)
               .thenAddRepeated("--preferred-density", densities)
               .add("--stable-ids", compiled.getStableIds())
-              .addRepeated(
-                  "-A",
-                  Streams.concat(
-                          assetDirs.stream().map(Path::toString),
-                          compiled.getAssetsStrings().stream())
-                      .collect(toList()))
+              .addRepeated("-A", assetDirs.stream().map(Path::toString).collect(toList()))
               .addRepeated("-I", StaticLibrary.toPathStrings(linkAgainst))
               .addRepeated(
                   "-R",
