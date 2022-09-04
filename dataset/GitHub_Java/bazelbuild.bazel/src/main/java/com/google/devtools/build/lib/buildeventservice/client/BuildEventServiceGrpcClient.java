@@ -14,8 +14,8 @@
 
 package com.google.devtools.build.lib.buildeventservice.client;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
+import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
+import static com.google.devtools.build.lib.util.Preconditions.checkState;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.google.common.base.Function;
@@ -29,7 +29,7 @@ import com.google.devtools.build.v1.PublishBuildToolEventStreamRequest;
 import com.google.devtools.build.v1.PublishBuildToolEventStreamResponse;
 import com.google.devtools.build.v1.PublishLifecycleEventRequest;
 import io.grpc.CallCredentials;
-import io.grpc.Channel;
+import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.AbstractStub;
@@ -39,15 +39,20 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
 /** Implementation of BuildEventServiceClient that uploads data using gRPC. */
-public abstract class BuildEventServiceGrpcClient implements BuildEventServiceClient {
+public class BuildEventServiceGrpcClient implements BuildEventServiceClient {
+
   /** Max wait time for a single non-streaming RPC to finish */
   private static final Duration RPC_TIMEOUT = Duration.ofSeconds(15);
 
   private final PublishBuildEventStub besAsync;
   private final PublishBuildEventBlockingStub besBlocking;
+  private final ManagedChannel channel;
   private final AtomicReference<StreamObserver<PublishBuildToolEventStreamRequest>> streamReference;
 
-  public BuildEventServiceGrpcClient(Channel channel, @Nullable CallCredentials callCredentials) {
+  public BuildEventServiceGrpcClient(
+      ManagedChannel channel,
+      @Nullable CallCredentials callCredentials) {
+    this.channel = channel;
     this.besAsync = withCallCredentials(
         PublishBuildEventGrpc.newStub(channel), callCredentials);
     this.besBlocking = withCallCredentials(
@@ -150,6 +155,11 @@ public abstract class BuildEventServiceGrpcClient implements BuildEventServiceCl
   }
 
   @Override
+  public void shutdown() throws InterruptedException {
+    this.channel.shutdown();
+  }
+
+  @Override
   public String userReadableError(Throwable t) {
     if (t instanceof StatusRuntimeException) {
       Throwable rootCause = Throwables.getRootCause(t);
@@ -160,7 +170,4 @@ public abstract class BuildEventServiceGrpcClient implements BuildEventServiceCl
       return t.getMessage();
     }
   }
-
-  @Override
-  public abstract void shutdown() throws InterruptedException;
 }

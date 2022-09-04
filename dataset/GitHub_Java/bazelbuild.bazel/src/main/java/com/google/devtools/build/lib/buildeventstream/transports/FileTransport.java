@@ -15,30 +15,19 @@
 package com.google.devtools.build.lib.buildeventstream.transports;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Function;
-import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
-import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
-import com.google.devtools.build.lib.buildeventstream.PathConverter;
-import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.io.AsynchronousFileOutputStream;
-import com.google.devtools.build.lib.vfs.Path;
-import com.google.protobuf.Message;
 import java.io.IOException;
-import java.util.Set;
-import java.util.function.Consumer;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousFileChannel;
+import java.nio.channels.CompletionHandler;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -46,127 +35,125 @@ import java.util.logging.Logger;
  * Non-blocking file transport.
  *
  * <p>Implementors of this class need to implement {@code #sendBuildEvent(BuildEvent)} which
- * serializes the build event and writes it to file using {@link
- * AsynchronousFileOutputStream#write}.
+ * serializes the build event and writes it to file using {@link #writeData(byte[])}.
  */
 abstract class FileTransport implements BuildEventTransport {
+
+  /**
+   * We use an {@link AsynchronousFileChannel} to perform non-blocking writes to a file. It get's
+   * tricky when it comes to {@link #close()}, as we may only complete the returned future when all
+   * writes have completed (succeeded or failed). Thus, we use a field {@link #outstandingWrites} to
+   * keep track of the number of writes that have not completed yet. It's simply incremented before
+   * a new write and decremented after a write has completed. When it's {@code 0} it's safe to
+   * complete the close future.
+   */
   private static final Logger logger = Logger.getLogger(FileTransport.class.getName());
 
-  private final BuildEventProtocolOptions options;
-  private final BuildEventArtifactUploader uploader;
-  private final Consumer<AbruptExitException> exitFunc;
-
   @VisibleForTesting
-  final AsynchronousFileOutputStream out;
+  final AsynchronousFileChannel ch;
+  private final WriteCompletionHandler completionHandler = new WriteCompletionHandler();
+  // The offset in the file to begin the next write at.
+  private long writeOffset;
+  // Number of writes that haven't completed yet.
+  private long outstandingWrites;
+  // The future returned by close()
+  private SettableFuture<Void> closeFuture;
 
-  FileTransport(
-      String path,
-      BuildEventProtocolOptions options,
-      BuildEventArtifactUploader uploader,
-      Consumer<AbruptExitException> exitFunc)
-          throws IOException {
-    this.uploader = uploader;
-    this.options = options;
-    this.exitFunc = exitFunc;
-    out = new AsynchronousFileOutputStream(path);
-  }
-
-  // Silent wrappers to AsynchronousFileOutputStream methods.
-
-  protected void write(Message m) {
+  FileTransport(String path) {
     try {
-      out.write(m);
-    } catch (Exception e) {
-      logger.log(Level.SEVERE, e.getMessage(), e);
+      ch = AsynchronousFileChannel.open(Paths.get(path), StandardOpenOption.CREATE,
+          StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
     }
   }
 
-  protected void write(String s) {
-    try {
-      out.write(s);
-    } catch (Exception e) {
-      logger.log(Level.SEVERE, e.getMessage(), e);
+  synchronized void writeData(byte[] data) {
+    checkNotNull(data);
+    if (!ch.isOpen()) {
+      @SuppressWarnings({"unused", "nullness"})
+      Future<?> possiblyIgnoredError = close();
+      return;
     }
+    if (closing()) {
+      return;
+    }
+
+    outstandingWrites++;
+
+    ch.write(ByteBuffer.wrap(data), writeOffset, null, completionHandler);
+
+    writeOffset += data.length;
   }
 
   @Override
   public synchronized ListenableFuture<Void> close() {
-    return Futures.catching(
-        out.closeAsync(),
-        Throwable.class,
-        (t) -> {
-          logger.log(Level.SEVERE, t.getMessage(), t);
-          return null;
-        },
-        MoreExecutors.directExecutor());
+    if (closing()) {
+      return closeFuture;
+    }
+    closeFuture = SettableFuture.create();
+
+    if (writesComplete()) {
+      doClose();
+    }
+
+    return closeFuture;
+  }
+
+  private void doClose() {
+    try {
+      ch.force(true);
+      ch.close();
+    } catch (IOException e) {
+      logger.log(Level.SEVERE, e.getMessage(), e);
+    } finally {
+      closeFuture.set(null);
+    }
   }
 
   @Override
+  @SuppressWarnings("FutureReturnValueIgnored")
   public void closeNow() {
-    out.closeNow();
+    close();
+  }
+
+  private boolean closing() {
+    return closeFuture != null;
+  }
+
+  private boolean writesComplete() {
+    return outstandingWrites == 0;
   }
 
   /**
-   * Converts the given event into a proto object; this may trigger uploading of referenced files as
-   * a side effect. May return {@code null} if there was an interrupt. This method is not
-   * thread-safe.
+   * Handler that's notified when a write completes.
    */
-  protected ListenableFuture<BuildEventStreamProtos.BuildEvent> asStreamProto(
-      BuildEvent event, ArtifactGroupNamer namer) {
-    checkNotNull(event);
+  private final class WriteCompletionHandler implements CompletionHandler<Integer, Void> {
 
-    return Futures.transform(
-        uploadReferencedFiles(event.referencedLocalFiles()),
-        new Function<PathConverter, BuildEventStreamProtos.BuildEvent>() {
-          @Override
-          public BuildEventStreamProtos.BuildEvent apply(PathConverter pathConverter) {
-            BuildEventContext context =
-                new BuildEventContext() {
-                  @Override
-                  public PathConverter pathConverter() {
-                    return pathConverter;
-                  }
+    @Override
+    public void completed(Integer result, Void attachment) {
+      countWriteAndTryClose();
+    }
 
-                  @Override
-                  public ArtifactGroupNamer artifactGroupNamer() {
-                    return namer;
-                  }
+    @Override
+    public void failed(Throwable exc, Void attachment) {
+      logger.log(Level.SEVERE, exc.getMessage(), exc);
+      countWriteAndTryClose();
+      // There is no point in trying to continue. Close the transport.
+      @SuppressWarnings({"unused", "nullness"})
+      Future<?> possiblyIgnoredError = close();
+    }
 
-                  @Override
-                  public BuildEventProtocolOptions getOptions() {
-                    return options;
-                  }
-                };
-            return event.asStreamProto(context);
-          }
-        },
-        MoreExecutors.directExecutor());
-  }
+    private void countWriteAndTryClose() {
+      synchronized (FileTransport.this) {
+        checkState(outstandingWrites > 0);
 
-  /**
-   * Returns a {@link PathConverter} for the uploaded files, or {@code null} when the uploaded
-   * failed.
-   */
-  private ListenableFuture<PathConverter> uploadReferencedFiles(Set<Path> artifacts) {
-    checkNotNull(artifacts);
+        outstandingWrites--;
 
-    ListenableFuture<PathConverter> upload = uploader.upload(artifacts);
-    Futures.addCallback(
-        upload,
-        new FutureCallback<PathConverter>() {
-          @Override
-          public void onSuccess(PathConverter result) {
-            // Intentionally left empty.
-          }
-
-          @Override
-          public void onFailure(Throwable t) {
-            exitFunc.accept(
-                new AbruptExitException(
-                    Throwables.getStackTraceAsString(t), ExitCode.PUBLISH_ERROR, t));
-          }
-        },
-        MoreExecutors.directExecutor());
-    return upload;
+        if (closing() && writesComplete()) {
+          doClose();
+        }
+      }
+    }
   }
 }
