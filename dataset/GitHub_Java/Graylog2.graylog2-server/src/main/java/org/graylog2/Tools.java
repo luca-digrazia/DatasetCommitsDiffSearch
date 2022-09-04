@@ -20,29 +20,43 @@
 
 package org.graylog2;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
+import org.drools.util.codec.Base64;
+import org.joda.time.DateTime;
+
 /**
- * Tools.java: May 17, 2010 9:46:31 PM
- *
  * Utilty class for various tool/helper functions.
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public final class Tools {
+
+    private static final Logger LOG = LoggerFactory.getLogger(Tools.class);
 
     private Tools() { }
 
     /**
      * Get the own PID of this process.
      *
-     * @return PID
-     * @throws Exception
+     * @return PID of the running process
      */
-    public static String getPID() throws Exception {
-        byte[] bo = new byte[100];
-        String[] cmd = {"bash", "-c", "echo $PPID"};
-        Process p = Runtime.getRuntime().exec(cmd);
-        p.getInputStream().read(bo);
-        return new String(bo).trim();
+    public static String getPID() {
+        return ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
+
     }
 
     /**
@@ -123,4 +137,115 @@ public final class Tools {
         return ret;
     }
 
+
+    /**
+     * Decompress ZLIB (RFC 1950) compressed data
+     *
+     * @return A string containing the decompressed data
+     */
+    public static String decompressZlib(byte[] compressedData) throws IOException {
+        byte[] buffer = new byte[compressedData.length];
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        InflaterInputStream in = new InflaterInputStream(new ByteArrayInputStream(compressedData));
+        for (int bytesRead = 0; bytesRead != -1; bytesRead = in.read(buffer)) {
+            out.write(buffer, 0, bytesRead);
+        }
+        return new String(out.toByteArray(), "UTF-8");
+    }
+
+    /**
+     * Decompress GZIP (RFC 1952) compressed data
+     * 
+     * @return A string containing the decompressed data
+     */
+    public static String decompressGzip(byte[] compressedData) throws IOException {
+        byte[] buffer = new byte[compressedData.length];
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(compressedData));
+        for (int bytesRead = 0; bytesRead != -1; bytesRead = in.read(buffer)) {
+            out.write(buffer, 0, bytesRead);
+        }
+        return new String(out.toByteArray(), "UTF-8");
+    }
+
+    /**
+     *
+     * @return The current UTC UNIX timestamp.
+     */
+    public static int getUTCTimestamp() {
+       DateTime dateTime = new DateTime();
+       return (int) (dateTime.getMillis()/1000);
+    }
+
+    /**
+     * Get the current UNIX epoch with milliseconds of the system
+     *
+     * @return The current UTC UNIX timestamp with milliseconds.
+     */
+    public static double getUTCTimestampWithMilliseconds() {
+        DateTime dateTime = new DateTime();
+        return getUTCTimestampWithMilliseconds(dateTime.getMillis());
+    }
+
+    /**
+     * Get the UNIX epoch with milliseconds of the provided millisecond timestamp
+     *
+     * @param timestamp a millisecond timestamp (milliseconds since UNIX epoch)
+     * @return The current UTC UNIX timestamp with milliseconds.
+     */
+    public static double getUTCTimestampWithMilliseconds(long timestamp) {
+
+        return Double.parseDouble(String.format("%d.%d", timestamp/1000, timestamp%1000));
+    }
+
+    public static String getLocalHostname() {
+        InetAddress addr = null;
+        try {
+            addr = InetAddress.getLocalHost();
+        } catch (UnknownHostException ex) {
+            return "Unknown";
+        }
+
+        return addr.getHostName();
+    }
+    
+    public static String getLocalCanonicalHostname() {
+        InetAddress addr = null;
+        try {
+            addr = InetAddress.getLocalHost();
+        } catch (UnknownHostException ex) {
+            return "Unknown";
+        }
+
+        return addr.getCanonicalHostName();
+    }
+
+    public static int getTimestampDaysAgo(int ts, int days) {
+        return (ts - (days*86400));
+    }
+
+    public static String encodeBase64(String what) {
+        return new String(Base64.encodeBase64(what.getBytes()));
+    }
+
+    public static String decodeBase64(String what) {
+        return new String(Base64.decodeBase64(what));
+    }
+
+    public static String rdnsLookup(InetAddress socketAddress) throws UnknownHostException {
+        return socketAddress.getCanonicalHostName();
+    }
+    
+    public static String generateServerId() {
+        UUID id = UUID.randomUUID();
+        
+        return getLocalHostname() + "-" + id.toString();
+    }
+    
+    public static <T extends Comparable<? super T>> List<T> asSortedList(Collection<T> c) {
+        List<T> list = new ArrayList<T>(c);
+        java.util.Collections.sort(list);
+        return list;
+    }
+ 
 }

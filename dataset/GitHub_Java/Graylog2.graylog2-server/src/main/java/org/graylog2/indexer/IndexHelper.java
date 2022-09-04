@@ -23,15 +23,17 @@ import com.google.common.collect.Sets;
 import java.util.List;
 import java.util.Set;
 import org.elasticsearch.common.collect.Lists;
-import org.elasticsearch.index.query.FilterBuilder;
-import org.elasticsearch.index.query.FilterBuilders;
-import org.graylog2.plugin.Tools;
+import org.graylog2.Tools;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class IndexHelper {
-
+    
+    private static final Logger LOG = LoggerFactory.getLogger(IndexHelper.class);
+    
     public static Set<String> getOldestIndices(Set<String> indexNames, int count) {
         Set<String> r = Sets.newHashSet();
         
@@ -53,15 +55,6 @@ public class IndexHelper {
         return r;
     }
 
-    public static FilterBuilder getTimestampRangeFilter(int timerange) {
-    	if (timerange <= 0) {
-    		return null;
-    	}
-    	
-		String from = Tools.buildElasticSearchTimeFormat(Tools.getUTCTimestamp()-timerange);
-		return FilterBuilders.rangeFilter("timestamp").from(from);
-    }
-    
     private static String getPrefix(Set<String> names) {
         if (names.isEmpty()) {
             return "";
