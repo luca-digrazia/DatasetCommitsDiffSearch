@@ -17,34 +17,40 @@ package com.google.devtools.build.lib.analysis.skylark;
 import static com.google.devtools.build.lib.analysis.skylark.FunctionTransitionUtil.applyAndValidate;
 import static com.google.devtools.build.lib.analysis.skylark.SkylarkAttributesCollection.ERROR_MESSAGE_FOR_NO_ATTR;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.SplitTransitionProvider;
 import com.google.devtools.build.lib.packages.AttributeMap;
+import com.google.devtools.build.lib.packages.AttributeTransitionData;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
-import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.skylarkbuildapi.SplitTransitionProviderApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Starlark;
 import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.Map;
 
 /**
- * This class implements a {@link SplitTransitionProvider} to provide a starlark-defined transition
- * that rules can apply to their dependencies' configurations. This transition has access to (1) the
- * a map of the current configuration's build settings and (2) the configured attributes of the
- * given rule (not its dependencies').
+ * This class implements {@link TransitionFactory} to provide a starlark-defined transition that
+ * rules can apply to their dependencies' configurations. This transition has access to (1) the a
+ * map of the current configuration's build settings and (2) the configured attributes of the given
+ * rule (not its dependencies').
  *
  * <p>For starlark defined rule class transitions, see {@link StarlarkRuleTransitionProvider}.
  *
  * <p>TODO(bazel-team): Consider allowing dependency-typed attributes to actually return providers
  * instead of just labels (see {@link SkylarkAttributesCollection#addAttribute}).
  */
-public class StarlarkAttributeTransitionProvider implements SplitTransitionProvider {
+public class StarlarkAttributeTransitionProvider
+    implements TransitionFactory<AttributeTransitionData>, SplitTransitionProviderApi {
   private final StarlarkDefinedConfigTransition starlarkDefinedConfigTransition;
 
   StarlarkAttributeTransitionProvider(
@@ -52,35 +58,71 @@ public class StarlarkAttributeTransitionProvider implements SplitTransitionProvi
     this.starlarkDefinedConfigTransition = starlarkDefinedConfigTransition;
   }
 
+  @VisibleForTesting
+  public StarlarkDefinedConfigTransition getStarlarkDefinedConfigTransitionForTesting() {
+    return starlarkDefinedConfigTransition;
+  }
+
   @Override
-  public SplitTransition apply(AttributeMap attributeMap) {
+  public SplitTransition create(AttributeTransitionData data) {
+    AttributeMap attributeMap = data.attributes();
     Preconditions.checkArgument(attributeMap instanceof ConfiguredAttributeMapper);
     return new FunctionSplitTransition(
         starlarkDefinedConfigTransition, (ConfiguredAttributeMapper) attributeMap);
   }
 
-  private static class FunctionSplitTransition implements SplitTransition {
-    private final StarlarkDefinedConfigTransition starlarkDefinedConfigTransition;
+  @Override
+  public boolean isSplit() {
+    return true;
+  }
+
+  @Override
+  public void repr(Printer printer) {
+    printer.append("<transition object>");
+  }
+
+  class FunctionSplitTransition extends StarlarkTransition implements SplitTransition {
     private final StructImpl attrObject;
 
     FunctionSplitTransition(
         StarlarkDefinedConfigTransition starlarkDefinedConfigTransition,
         ConfiguredAttributeMapper attributeMap) {
-      this.starlarkDefinedConfigTransition = starlarkDefinedConfigTransition;
+      super(starlarkDefinedConfigTransition);
 
       LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
       for (String attribute : attributeMap.getAttributeNames()) {
         Object val = attributeMap.get(attribute, attributeMap.getAttributeType(attribute));
-        attributes.put(
-            Attribute.getSkylarkName(attribute),
-            val == null ? Runtime.NONE : SkylarkType.convertToSkylark(val, (Environment) null));
+        attributes.put(Attribute.getSkylarkName(attribute), Starlark.fromJava(val, null));
       }
       attrObject = StructProvider.STRUCT.create(attributes, ERROR_MESSAGE_FOR_NO_ATTR);
     }
 
+    /**
+     * @return the post-transition build options or a clone of the original build options if an
+     *     error was encountered during transition application/validation.
+     */
     @Override
-    public final List<BuildOptions> split(BuildOptions buildOptions) {
-      return applyAndValidate(buildOptions, starlarkDefinedConfigTransition, attrObject);
+    public final Map<String, BuildOptions> split(BuildOptions buildOptions) {
+      try {
+        return applyAndValidate(buildOptions, starlarkDefinedConfigTransition, attrObject);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        starlarkDefinedConfigTransition
+            .getEventHandler()
+            .handle(
+                Event.error(
+                    starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+                    "Starlark transition interrupted during attribute transition implementation"));
+        return ImmutableMap.of("error", buildOptions.clone());
+      } catch (EvalException e) {
+        starlarkDefinedConfigTransition
+            .getEventHandler()
+            .handle(
+                Event.error(
+                    starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+                    e.getMessage()));
+        return ImmutableMap.of("error", buildOptions.clone());
+      }
     }
   }
 }
