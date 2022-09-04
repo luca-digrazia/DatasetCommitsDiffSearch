@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
-import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
@@ -43,7 +42,6 @@ import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
@@ -62,9 +60,7 @@ import javax.annotation.Nullable;
 public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
 
   private final LabelLateBoundDefault<JavaConfiguration> hostJdkAttribute;
-  private final Label javaRuntimeToolchainType;
   private final LabelLateBoundDefault<JavaConfiguration> javaToolchainAttribute;
-  private final Label javaToolchainType;
 
   private static LabelLateBoundDefault<?> getSpeedProtoToolchainLabel(String defaultValue) {
     return LabelLateBoundDefault.fromTargetConfiguration(
@@ -91,17 +87,12 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
     this.defaultSpeedProtoToolchainLabel =
         Preconditions.checkNotNull(defaultSpeedProtoToolchainLabel);
     this.hostJdkAttribute = JavaSemantics.hostJdkAttribute(env);
-    this.javaRuntimeToolchainType = JavaRuleClasses.javaRuntimeTypeAttribute(env);
     this.javaToolchainAttribute = JavaSemantics.javaToolchainAttribute(env);
-    this.javaToolchainType = JavaRuleClasses.javaToolchainTypeAttribute(env);
   }
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase,
-      RuleContext ruleContext,
-      AspectParameters parameters,
-      String toolsRepository)
+      ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException, ActionConflictException {
     ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(this, parameters, ruleContext);
 
@@ -124,8 +115,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
         new AspectDefinition.Builder(this)
             .propagateAlongAttribute("deps")
             .propagateAlongAttribute("exports")
-            .requiresConfigurationFragments(
-                JavaConfiguration.class, ProtoConfiguration.class, PlatformConfiguration.class)
+            .requiresConfigurationFragments(JavaConfiguration.class, ProtoConfiguration.class)
             .requireSkylarkProviders(ProtoInfo.PROVIDER.id())
             .advertiseProvider(JavaProtoLibraryAspectProvider.class)
             .advertiseProvider(ImmutableList.of(JavaSkylarkApiProvider.SKYLARK_NAME))
@@ -137,11 +127,10 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
                     .value(getSpeedProtoToolchainLabel(defaultSpeedProtoToolchainLabel)))
             .add(attr(":host_jdk", LABEL).cfg(HostTransition.INSTANCE).value(hostJdkAttribute))
             .add(
-                attr(JavaRuleClasses.JAVA_TOOLCHAIN_ATTRIBUTE_NAME, LABEL)
+                attr(":java_toolchain", LABEL)
                     .useOutputLicenses()
                     .allowedRuleClasses("java_toolchain")
-                    .value(javaToolchainAttribute))
-            .addRequiredToolchains(javaRuntimeToolchainType, javaToolchainType);
+                    .value(javaToolchainAttribute));
 
     rpcSupport.mutateAspectDefinition(result, aspectParameters);
 

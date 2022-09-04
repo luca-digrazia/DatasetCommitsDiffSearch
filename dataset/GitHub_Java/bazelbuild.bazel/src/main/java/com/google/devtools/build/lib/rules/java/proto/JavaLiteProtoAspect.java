@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
-import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
@@ -43,7 +42,6 @@ import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -73,9 +71,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
   @Nullable private final String jacocoLabel;
   private final String defaultProtoToolchainLabel;
   private final LabelLateBoundDefault<JavaConfiguration> hostJdkAttribute;
-  private final Label javaRuntimeToolchainType;
   private final LabelLateBoundDefault<JavaConfiguration> javaToolchainAttribute;
-  private final Label javaToolchainType;
 
   public JavaLiteProtoAspect(
       JavaSemantics javaSemantics,
@@ -86,17 +82,12 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
     this.jacocoLabel = jacocoLabel;
     this.defaultProtoToolchainLabel = defaultProtoToolchainLabel;
     this.hostJdkAttribute = JavaSemantics.hostJdkAttribute(env);
-    this.javaRuntimeToolchainType = JavaRuleClasses.javaRuntimeTypeAttribute(env);
     this.javaToolchainAttribute = JavaSemantics.javaToolchainAttribute(env);
-    this.javaToolchainType = JavaRuleClasses.javaToolchainTypeAttribute(env);
   }
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase,
-      RuleContext ruleContext,
-      AspectParameters parameters,
-      String toolsRepository)
+      ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException, ActionConflictException {
     ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(this, parameters, ruleContext);
 
@@ -116,8 +107,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
         new AspectDefinition.Builder(this)
             .propagateAlongAttribute("deps")
             .propagateAlongAttribute("exports")
-            .requiresConfigurationFragments(
-                JavaConfiguration.class, ProtoConfiguration.class, PlatformConfiguration.class)
+            .requiresConfigurationFragments(JavaConfiguration.class, ProtoConfiguration.class)
             .requireSkylarkProviders(ProtoInfo.PROVIDER.id())
             .advertiseProvider(JavaProtoLibraryAspectProvider.class)
             .advertiseProvider(ImmutableList.of(JavaSkylarkApiProvider.SKYLARK_NAME))
@@ -133,11 +123,10 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
                     .value(hostJdkAttribute)
                     .mandatoryProviders(JavaRuntimeInfo.PROVIDER.id()))
             .add(
-                attr(JavaRuleClasses.JAVA_TOOLCHAIN_ATTRIBUTE_NAME, LABEL)
+                attr(":java_toolchain", LABEL)
                     .useOutputLicenses()
                     .allowedRuleClasses("java_toolchain")
-                    .value(javaToolchainAttribute))
-            .addRequiredToolchains(javaRuntimeToolchainType, javaToolchainType);
+                    .value(javaToolchainAttribute));
 
     Attribute.Builder<Label> jacocoAttr =
         attr("$jacoco_instrumentation", LABEL).cfg(HostTransition.INSTANCE);

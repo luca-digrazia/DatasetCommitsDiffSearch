@@ -47,10 +47,17 @@ import com.google.devtools.build.lib.bazel.rules.java.proto.BazelJavaProtoLibrar
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyRuleClasses;
+import com.google.devtools.build.lib.bazel.rules.python.BazelPyRuntimeRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyTestRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration;
+import com.google.devtools.build.lib.bazel.rules.workspace.GitRepositoryRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.HttpArchiveRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.HttpFileRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.HttpJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.rules.android.AarImportBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
@@ -81,16 +88,11 @@ import com.google.devtools.build.lib.rules.proto.BazelProtoLibraryRule;
 import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainRule;
-import com.google.devtools.build.lib.rules.python.PyInfo;
-import com.google.devtools.build.lib.rules.python.PyRuntimeInfo;
-import com.google.devtools.build.lib.rules.python.PyRuntimeRule;
 import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
 import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.rules.test.TestingSupportRules;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidBootstrap;
-import com.google.devtools.build.lib.skylarkbuildapi.proto.ProtoBootstrap;
-import com.google.devtools.build.lib.skylarkbuildapi.python.PyBootstrap;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -112,7 +114,7 @@ public class BazelRuleClassProvider {
     @Option(
         name = "incompatible_strict_action_env",
         oldName = "experimental_strict_action_env",
-        defaultValue = "false",
+        defaultValue = "true",
         documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
         effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
         metadataTags = {
@@ -232,9 +234,7 @@ public class BazelRuleClassProvider {
           builder.addConfigurationFragment(new ProtoConfiguration.Loader());
           builder.addRuleDefinition(new BazelProtoLibraryRule());
           builder.addRuleDefinition(new ProtoLangToolchainRule());
-
-          ProtoBootstrap bootstrap = new ProtoBootstrap(ProtoInfo.PROVIDER);
-          builder.addSkylarkBootstrap(bootstrap);
+          builder.addSkylarkAccessibleTopLevels(ProtoInfo.SKYLARK_NAME, ProtoInfo.PROVIDER);
         }
 
         @Override
@@ -347,9 +347,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new BazelPyLibraryRule());
           builder.addRuleDefinition(new BazelPyBinaryRule());
           builder.addRuleDefinition(new BazelPyTestRule());
-          builder.addRuleDefinition(new PyRuntimeRule());
-
-          builder.addSkylarkBootstrap(new PyBootstrap(PyInfo.PROVIDER, PyRuntimeInfo.PROVIDER));
+          builder.addRuleDefinition(new BazelPyRuntimeRule());
         }
 
         @Override
@@ -363,8 +361,14 @@ public class BazelRuleClassProvider {
         @Override
         public void init(ConfiguredRuleClassProvider.Builder builder) {
           // TODO(ulfjack): Split this up by conceptual units.
+          builder.addRuleDefinition(new GitRepositoryRule());
+          builder.addRuleDefinition(new HttpArchiveRule());
+          builder.addRuleDefinition(new HttpJarRule());
+          builder.addRuleDefinition(new HttpFileRule());
           builder.addRuleDefinition(new MavenJarRule());
           builder.addRuleDefinition(new MavenServerRule());
+          builder.addRuleDefinition(new NewHttpArchiveRule());
+          builder.addRuleDefinition(new NewGitRepositoryRule());
           builder.addRuleDefinition(new NewLocalRepositoryRule());
           builder.addRuleDefinition(new AndroidSdkRepositoryRule());
           builder.addRuleDefinition(new AndroidNdkRepositoryRule());
