@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
+import static com.google.devtools.build.lib.rules.cpp.Link.LINK_LIBRARY_FILETYPES;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ASSET_CATALOG;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.BUNDLE_IMPORT_DIR;
@@ -25,6 +26,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEFINE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DYNAMIC_FRAMEWORK_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DYNAMIC_FRAMEWORK_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FLAG;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_FOR_XCODEGEN;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_CPP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GENERAL_RESOURCE_DIR;
@@ -53,6 +55,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRA
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCDATAMODEL;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XIB;
+import static com.google.devtools.build.lib.vfs.PathFragment.TO_PATH_FRAGMENT;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
@@ -72,6 +75,7 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
+import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -453,6 +457,15 @@ public final class ObjcCommon {
             .addAll(SDK_FRAMEWORK, frameworkLinkOpts.build())
             .addAll(LINKOPT, nonFrameworkLinkOpts.build())
             .addTransitiveAndPropagate(CC_LIBRARY, params.getLibraries());
+
+        for (LinkerInputs.LibraryToLink library : params.getLibraries()) {
+          Artifact artifact = library.getArtifact();
+          if (LINK_LIBRARY_FILETYPES.matches(artifact.getFilename())) {
+            objcProvider.add(
+                FORCE_LOAD_FOR_XCODEGEN,
+                "$(WORKSPACE_ROOT)/" + artifact.getExecPath().getSafePathString());
+          }
+        }
       }
 
       if (compilationAttributes.isPresent()) {
@@ -462,7 +475,7 @@ public final class ObjcCommon {
                 Interspersing.prependEach(
                     AppleToolchain.sdkDir() + "/usr/include/",
                     PathFragment.safePathStrings(attributes.sdkIncludes())),
-                PathFragment::create);
+                TO_PATH_FRAGMENT);
         objcProvider
             .addAll(HEADER, filterFileset(attributes.hdrs()))
             .addAll(HEADER, filterFileset(attributes.textualHdrs()))
@@ -537,10 +550,18 @@ public final class ObjcCommon {
         for (CompilationArtifacts artifacts : compilationArtifacts.asSet()) {
           for (Artifact archive : artifacts.getArchive().asSet()) {
             objcProvider.add(FORCE_LOAD_LIBRARY, archive);
+            objcProvider.add(
+                FORCE_LOAD_FOR_XCODEGEN,
+                String.format(
+                    "$(BUILT_PRODUCTS_DIR)/lib%s.a",
+                    XcodeProvider.xcodeTargetName(context.getLabel())));
           }
         }
         for (Artifact archive : extraImportLibraries) {
           objcProvider.add(FORCE_LOAD_LIBRARY, archive);
+          objcProvider.add(
+              FORCE_LOAD_FOR_XCODEGEN,
+              "$(WORKSPACE_ROOT)/" + archive.getExecPath().getSafePathString());
         }
       }
 
