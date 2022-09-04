@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentCollection.EnvironmentWithGroup;
-import com.google.devtools.build.lib.analysis.constraints.SupportedEnvironmentsProvider.RemovedEnvironmentCulprit;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -48,7 +47,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.StringJoiner;
 import javax.annotation.Nullable;
 
 /**
@@ -539,7 +537,7 @@ public class ConstraintSemantics {
       RuleContext ruleContext,
       EnvironmentCollection staticEnvironments,
       EnvironmentCollection.Builder refinedEnvironments,
-      Map<Label, RemovedEnvironmentCulprit> removedEnvironmentCulprits) {
+      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
     Set<EnvironmentWithGroup> refinedEnvironmentsSoFar = new LinkedHashSet<>();
     // Start with the full set of static environments:
     refinedEnvironmentsSoFar.addAll(staticEnvironments.getGroupedEnvironments());
@@ -604,7 +602,7 @@ public class ConstraintSemantics {
       Map<Label, EnvironmentWithGroup> labelsToEnvironments,
       Set<EnvironmentWithGroup> refinedEnvironmentsSoFar,
       Set<EnvironmentLabels> groupsWithEnvironmentsRemoved,
-      Map<Label, RemovedEnvironmentCulprit> removedEnvironmentCulprits) {
+      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
 
     SupportedEnvironmentsProvider depEnvironments =
         dep.getProvider(SupportedEnvironmentsProvider.class);
@@ -634,7 +632,7 @@ public class ConstraintSemantics {
       refinedEnvironmentsSoFar.remove(envToPrune);
       groupsWithEnvironmentsRemoved.add(envToPrune.group());
       removedEnvironmentCulprits.put(envToPrune.environment(),
-          findOriginalRefiner(ruleContext, dep.getLabel(), depEnvironments, envToPrune));
+          findOriginalRefiner(ruleContext, depEnvironments, envToPrune));
       prunedEnvironmentsFromThisDep.add(envToPrune.environment());
     }
 
@@ -664,7 +662,7 @@ public class ConstraintSemantics {
       Set<EnvironmentLabels> groupsWithEnvironmentsRemoved,
       Set<EnvironmentWithGroup> refinedEnvironmentsSoFar,
       EnvironmentCollection.Builder refinedEnvironments,
-      Map<Label, RemovedEnvironmentCulprit> removedEnvironmentCulprits) {
+      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
     Set<EnvironmentLabels> refinedGroups = new LinkedHashSet<>();
     for (EnvironmentWithGroup envWithGroup : refinedEnvironmentsSoFar) {
       refinedEnvironments.put(envWithGroup.group(), envWithGroup.environment());
@@ -685,38 +683,22 @@ public class ConstraintSemantics {
    */
   private static String getOverRefinementError(
       Set<EnvironmentLabels> newlyEmptyGroups,
-      Map<Label, RemovedEnvironmentCulprit> removedEnvironmentCulprits) {
-    StringJoiner message = new StringJoiner("\n")
-        .add("the current command line flags disqualify all supported environments because of "
-            + "incompatible select() paths:");
+      Map<Label, LabelAndLocation> removedEnvironmentCulprits) {
+    StringBuilder message = new StringBuilder("the current command-line flags disqualify "
+        + "all supported environments because of incompatible select() paths:");
     for (EnvironmentLabels group : newlyEmptyGroups) {
       if (newlyEmptyGroups.size() > 1) {
-        message
-            .add(" ")
-            .add("environment group: " + group.getLabel() + ":");
+        message.append("\n\nenvironment group: " + group.getLabel() + ":");
       }
       for (Label prunedEnvironment : group.getEnvironments()) {
-        RemovedEnvironmentCulprit culprit = removedEnvironmentCulprits.get(prunedEnvironment);
-        // Only environments this rule statically declared support for have culprits.
-        if (culprit != null) {
-          message
-              .add(" ")
-              .add(getMissingEnvironmentCulpritMessage(prunedEnvironment, culprit));
+        LabelAndLocation culprit = removedEnvironmentCulprits.get(prunedEnvironment);
+        if (culprit != null) { // Only environments this rule declared support for have culprits.
+          message.append("\n environment: " + prunedEnvironment
+              + " removed by: " + culprit.getLabel() + " (" + culprit.getLocation() + ")");
         }
       }
     }
     return message.toString();
-  }
-
-  static String getMissingEnvironmentCulpritMessage(Label environment,
-      RemovedEnvironmentCulprit reason) {
-    LabelAndLocation culprit = reason.culprit();
-    return new StringJoiner("\n")
-        .add("  environment: " + environment)
-        .add("    removed by: " + culprit.getLabel() + " (" + culprit.getLocation() + ")")
-        .add("    which has a select() that chooses dep: " + reason.selectedDepForCulprit())
-        .add("    which lacks: " + environment)
-        .toString();
   }
 
   /**
@@ -731,24 +713,12 @@ public class ConstraintSemantics {
    *
    * <p>then D2 is the original refiner (even though D1 and R inherit the same pruning).
    */
-  private static RemovedEnvironmentCulprit findOriginalRefiner(RuleContext ruleContext, Label dep,
-      SupportedEnvironmentsProvider depEnvironments, EnvironmentWithGroup envToPrune) {
-    RemovedEnvironmentCulprit depCulprit =
-        depEnvironments.getRemovedEnvironmentCulprit(envToPrune.environment());
-    if (depCulprit != null) {
-      return depCulprit;
-    }
+  private static LabelAndLocation findOriginalRefiner(
+      RuleContext ruleContext, SupportedEnvironmentsProvider dep, EnvironmentWithGroup envToPrune) {
+    LabelAndLocation depCulprit = dep.getRemovedEnvironmentCulprit(envToPrune.environment());
     // If the dep has no record of this environment being refined, that means the current rule
     // is the culprit.
-    return RemovedEnvironmentCulprit.create(
-        LabelAndLocation.of(ruleContext.getTarget()),
-        // While it'd be nice to know the dep's location too, it isn't strictly necessary.
-        // Especially since we already have the parent's location. So it's easy enough to find the
-        // dep. And we want to respect the efficiency concerns described in LabelAndLocation.
-        //
-        // Alternatively, we could prepare error strings directly in SupportedEnvironmentsProvider,
-        // which should remove the need for LabelAndLocation for any target.
-        dep);
+    return depCulprit == null ? LabelAndLocation.of(ruleContext.getTarget()) : depCulprit;
   }
 
   /**
@@ -923,9 +893,20 @@ public class ConstraintSemantics {
    */
   private static void addSelectValuesToSet(BuildType.Selector<?> select, final Set<Label> set) {
     Type<?> type = select.getOriginalType();
-    LabelVisitor<?> visitor = (label, dummy) -> set.add(label);
+    LabelVisitor<?> visitor = new LabelVisitor<Object>() {
+      @Override
+      public void visit(Label label, Object dummy) {
+        set.add(label);
+      }
+    };
     for (Object value : select.getEntries().values()) {
-      type.visitLabels(visitor, value, /*context=*/ null);
+      try {
+        type.visitLabels(visitor, value, /*context=*/ null);
+      } catch (InterruptedException ex) {
+        // Because the LabelVisitor does not throw InterruptedException, it should not be thrown
+        // by visitLabels here.
+        throw new AssertionError(ex);
+      }
     }
   }
 }

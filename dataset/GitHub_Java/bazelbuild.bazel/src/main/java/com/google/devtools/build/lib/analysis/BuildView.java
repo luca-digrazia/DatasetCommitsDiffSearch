@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.analysis.constraints.TopLevelConstraintSema
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
-import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -100,6 +99,12 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
+import com.google.devtools.common.options.Converter;
+import com.google.devtools.common.options.Option;
+import com.google.devtools.common.options.OptionDocumentationCategory;
+import com.google.devtools.common.options.OptionEffectTag;
+import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParsingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -158,6 +163,78 @@ import javax.annotation.Nullable;
  * invariants.
  */
 public class BuildView {
+
+  /**
+   * Options that affect the <i>mechanism</i> of analysis. These are distinct from {@link
+   * com.google.devtools.build.lib.analysis.config.BuildOptions}, which affect the <i>value</i> of a
+   * BuildConfiguration.
+   */
+  public static class Options extends OptionsBase {
+    @Option(
+      name = "analysis_warnings_as_errors",
+      deprecationWarning =
+          "analysis_warnings_as_errors is now a no-op and will be removed in"
+              + " an upcoming Blaze release",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.NO_OP},
+      help = "Treat visible analysis warnings as errors."
+    )
+    public boolean analysisWarningsAsErrors;
+
+    @Option(
+      name = "discard_analysis_cache",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Discard the analysis cache immediately after the analysis phase completes."
+              + " Reduces memory usage by ~10%, but makes further incremental builds slower."
+    )
+    public boolean discardAnalysisCache;
+
+    @Option(
+      name = "experimental_extra_action_filter",
+      defaultValue = "",
+      converter = RegexFilter.RegexFilterConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "Filters set of targets to schedule extra_actions for."
+    )
+    public RegexFilter extraActionFilter;
+
+    @Option(
+      name = "experimental_extra_action_top_level_only",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "Only schedules extra_actions for top level targets."
+    )
+    public boolean extraActionTopLevelOnly;
+
+    @Option(
+      name = "version_window_for_dirty_node_gc",
+      defaultValue = "0",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Nodes that have been dirty for more than this many versions will be deleted"
+              + " from the graph upon the next update. Values must be non-negative long integers,"
+              + " or -1 indicating the maximum possible window."
+    )
+    public long versionWindowForDirtyNodeGc;
+
+    @Deprecated
+    @Option(
+      name = "experimental_interleave_loading_and_analysis",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "No-op."
+    )
+    public boolean interleaveLoadingAndAnalysis;
+  }
+
   private static final Logger logger = Logger.getLogger(BuildView.class.getName());
 
   private final BlazeDirectories directories;
@@ -226,6 +303,137 @@ public class BuildView {
     throw new UnsupportedOperationException();  // avoid nondeterminism
   }
 
+  /**
+   * Return value for {@link BuildView#update} and {@code BuildTool.prepareToBuild}.
+   */
+  public static final class AnalysisResult {
+    private final ImmutableSet<ConfiguredTarget> targetsToBuild;
+    @Nullable private final ImmutableList<ConfiguredTarget> targetsToTest;
+    private final ImmutableSet<ConfiguredTarget> targetsToSkip;
+    @Nullable private final String error;
+    private final ActionGraph actionGraph;
+    private final ImmutableSet<Artifact> artifactsToBuild;
+    private final ImmutableSet<ConfiguredTarget> parallelTests;
+    private final ImmutableSet<ConfiguredTarget> exclusiveTests;
+    @Nullable private final TopLevelArtifactContext topLevelContext;
+    private final ImmutableSet<AspectValue> aspects;
+    private final PackageRoots packageRoots;
+    private final String workspaceName;
+    List<TargetAndConfiguration> topLevelTargetsWithConfigs;
+
+    private AnalysisResult(
+        Collection<ConfiguredTarget> targetsToBuild,
+        ImmutableSet<AspectValue> aspects,
+        Collection<ConfiguredTarget> targetsToTest,
+        Collection<ConfiguredTarget> targetsToSkip,
+        @Nullable String error,
+        ActionGraph actionGraph,
+        Collection<Artifact> artifactsToBuild,
+        Collection<ConfiguredTarget> parallelTests,
+        Collection<ConfiguredTarget> exclusiveTests,
+        TopLevelArtifactContext topLevelContext,
+        PackageRoots packageRoots,
+        String workspaceName,
+        List<TargetAndConfiguration> topLevelTargetsWithConfigs) {
+      this.targetsToBuild = ImmutableSet.copyOf(targetsToBuild);
+      this.aspects = aspects;
+      this.targetsToTest = targetsToTest == null ? null : ImmutableList.copyOf(targetsToTest);
+      this.targetsToSkip = ImmutableSet.copyOf(targetsToSkip);
+      this.error = error;
+      this.actionGraph = actionGraph;
+      this.artifactsToBuild = ImmutableSet.copyOf(artifactsToBuild);
+      this.parallelTests = ImmutableSet.copyOf(parallelTests);
+      this.exclusiveTests = ImmutableSet.copyOf(exclusiveTests);
+      this.topLevelContext = topLevelContext;
+      this.packageRoots = packageRoots;
+      this.workspaceName = workspaceName;
+      this.topLevelTargetsWithConfigs = topLevelTargetsWithConfigs;
+    }
+
+    /**
+     * Returns configured targets to build.
+     */
+    public ImmutableSet<ConfiguredTarget> getTargetsToBuild() {
+      return targetsToBuild;
+    }
+
+    /** @see PackageRoots */
+    public PackageRoots getPackageRoots() {
+      return packageRoots;
+    }
+
+    /**
+     * Returns aspects of configured targets to build.
+     *
+     * <p>If this list is empty, build the targets returned by {@code getTargetsToBuild()}.
+     * Otherwise, only build these aspects of the targets returned by {@code getTargetsToBuild()}.
+     */
+    public ImmutableSet<AspectValue> getAspects() {
+      return aspects;
+    }
+
+    /**
+     * Returns the configured targets to run as tests, or {@code null} if testing was not
+     * requested (e.g. "build" command rather than "test" command).
+     */
+    @Nullable
+    public Collection<ConfiguredTarget> getTargetsToTest() {
+      return targetsToTest;
+    }
+
+    /**
+     * Returns the configured targets that should not be executed because they're not
+     * platform-compatible with the current build.
+     *
+     * <p>For example: tests that aren't intended for the designated CPU.
+     */
+    public ImmutableSet<ConfiguredTarget> getTargetsToSkip() {
+      return targetsToSkip;
+    }
+
+    public ImmutableSet<Artifact> getAdditionalArtifactsToBuild() {
+      return artifactsToBuild;
+    }
+
+    public ImmutableSet<ConfiguredTarget> getExclusiveTests() {
+      return exclusiveTests;
+    }
+
+    public ImmutableSet<ConfiguredTarget> getParallelTests() {
+      return parallelTests;
+    }
+
+    /**
+     * Returns an error description (if any).
+     */
+    @Nullable public String getError() {
+      return error;
+    }
+
+    public boolean hasError() {
+      return error != null;
+    }
+
+    /**
+     * Returns the action graph.
+     */
+    public ActionGraph getActionGraph() {
+      return actionGraph;
+    }
+
+    public TopLevelArtifactContext getTopLevelContext() {
+      return topLevelContext;
+    }
+
+    public String getWorkspaceName() {
+      return workspaceName;
+    }
+
+    public List<TargetAndConfiguration> getTopLevelTargetsWithConfigs() {
+      return topLevelTargetsWithConfigs;
+    }
+  }
+
   /** Returns the collection of configured targets corresponding to any of the provided targets. */
   @VisibleForTesting
   static Iterable<? extends ConfiguredTarget> filterTestsByTargets(
@@ -255,7 +463,7 @@ public class BuildView {
       LoadingResult loadingResult,
       BuildConfigurationCollection configurations,
       List<String> aspects,
-      AnalysisOptions viewOptions,
+      Options viewOptions,
       boolean keepGoing,
       int loadingPhaseThreads,
       TopLevelArtifactContext topLevelOptions,
@@ -330,9 +538,7 @@ public class BuildView {
         }
         SkylarkImport skylarkImport;
         try {
-          skylarkImport =
-              SkylarkImports.create(
-                  bzlFileLoadLikeString, /* repositoryMapping= */ ImmutableMap.of());
+          skylarkImport = SkylarkImports.create(bzlFileLoadLikeString);
         } catch (SkylarkImportSyntaxException e) {
           throw new ViewCreationFailedException(
               String.format("Invalid aspect '%s': %s", aspect, e.getMessage()), e);
@@ -382,6 +588,7 @@ public class BuildView {
               target.getFirst(), target.getSecond(), aspectConfigurations.get(target)));
     }
 
+    skyframeExecutor.maybeInvalidateWorkspaceStatusValue(loadingResult.getWorkspaceName());
     SkyframeAnalysisResult skyframeAnalysisResult;
     try {
       skyframeAnalysisResult =
@@ -425,7 +632,7 @@ public class BuildView {
       ExtendedEventHandler eventHandler,
       LoadingResult loadingResult,
       TopLevelArtifactContext topLevelOptions,
-      AnalysisOptions viewOptions,
+      BuildView.Options viewOptions,
       SkyframeAnalysisResult skyframeAnalysisResult,
       Set<ConfiguredTarget> targetsToSkip,
       List<TargetAndConfiguration> topLevelTargetsWithConfigs)
@@ -555,7 +762,7 @@ public class BuildView {
   }
 
   private void addExtraActionsIfRequested(
-      AnalysisOptions viewOptions,
+      Options viewOptions,
       Collection<ConfiguredTarget> configuredTargets,
       Collection<AspectValue> aspects,
       Set<Artifact> artifactsToBuild,
@@ -576,7 +783,7 @@ public class BuildView {
   }
 
   private NestedSet<Artifact> addExtraActionsFromTargets(
-      AnalysisOptions viewOptions,
+      BuildView.Options viewOptions,
       Collection<ConfiguredTarget> configuredTargets,
       ExtendedEventHandler eventHandler) {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
@@ -631,7 +838,7 @@ public class BuildView {
   }
 
   private NestedSet<Artifact> addExtraActionsFromAspects(
-      AnalysisOptions viewOptions, Collection<AspectValue> aspects) {
+      BuildView.Options viewOptions, Collection<AspectValue> aspects) {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     for (AspectValue aspect : aspects) {
       ExtraActionArtifactsProvider provider =
@@ -846,7 +1053,7 @@ public class BuildView {
       }
 
       @Override
-      protected Target getTarget(Target from, Label label, NestedSetBuilder<Cause> rootCauses)
+      protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses)
           throws InterruptedException {
         try {
           return skyframeExecutor.getPackageManager().getTarget(eventHandler, label);
@@ -1082,5 +1289,36 @@ public class BuildView {
       }
     }
     return null;
+  }
+
+  /**
+   * A converter for loading phase thread count. Since the default is not a true constant, we create
+   * a converter here to implement the default logic.
+   */
+  public static final class LoadingPhaseThreadCountConverter implements Converter<Integer> {
+    @Override
+    public Integer convert(String input) throws OptionsParsingException {
+      if ("-1".equals(input)) {
+        // Reduce thread count while running tests. Test cases are typically small, and large thread
+        // pools vying for a relatively small number of CPU cores may induce non-optimal
+        // performance.
+        return System.getenv("TEST_TMPDIR") == null ? 200 : 5;
+      }
+
+      try {
+        int result = Integer.decode(input);
+        if (result < 0) {
+          throw new OptionsParsingException("'" + input + "' must be at least -1");
+        }
+        return result;
+      } catch (NumberFormatException e) {
+        throw new OptionsParsingException("'" + input + "' is not an int");
+      }
+    }
+
+    @Override
+    public String getTypeDescription() {
+      return "an integer";
+    }
   }
 }

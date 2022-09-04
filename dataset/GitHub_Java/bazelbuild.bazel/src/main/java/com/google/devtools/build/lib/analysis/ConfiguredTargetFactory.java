@@ -332,6 +332,7 @@ public final class ConfiguredTargetFactory {
                 ImmutableList.of(),
                 configuration,
                 hostConfiguration,
+                ruleClassProvider.getLipoDataTransition(),
                 ruleClassProvider.getPrerequisiteValidator(),
                 rule.getRuleClassObject().getConfigurationFragmentPolicy())
             .setVisibility(convertVisibility(prerequisiteMap, env.getEventHandler(), rule, null))
@@ -448,6 +449,7 @@ public final class ConfiguredTargetFactory {
             aspectPath,
             aspectConfiguration,
             hostConfiguration,
+            ruleClassProvider.getLipoDataTransition(),
             ruleClassProvider.getPrerequisiteValidator(),
             aspect.getDefinition().getConfigurationFragmentPolicy());
 

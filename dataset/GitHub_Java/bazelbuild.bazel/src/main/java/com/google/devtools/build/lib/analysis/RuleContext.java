@@ -1108,9 +1108,11 @@ public final class RuleContext extends TargetContext
             + " is not configured for the target configuration");
       }
     } else if (mode == Mode.DATA) {
-      throw new IllegalStateException(getRule().getLocation() + ": "
-          + getRuleClassNameForLogging() + " attribute " + attributeName
-          + ": DATA transition no longer supported"); // See b/80157700.
+      if (transition != disableLipoTransition) {
+        throw new IllegalStateException(getRule().getLocation() + ": "
+            + getRuleClassNameForLogging() + " attribute " + attributeName
+            + " is not configured for the data configuration");
+      }
     } else if (mode == Mode.SPLIT) {
       if (!(attributeDefinition.hasSplitConfigurationTransition())) {
         throw new IllegalStateException(getRule().getLocation() + ": "
