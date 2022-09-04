@@ -202,6 +202,8 @@ final class ActionFileSystem extends FileSystem implements ActionInputFileCache,
 
   @Override
   protected long getFileSize(Path path, boolean followSymlinks) throws IOException {
+    Preconditions.checkArgument(
+        followSymlinks, "ActionFileSystem doesn't support no-follow: %s", path);
     return getMetadataOrThrowFileNotFound(path).getSize();
   }
 
@@ -212,6 +214,8 @@ final class ActionFileSystem extends FileSystem implements ActionInputFileCache,
 
   @Override
   protected long getLastModifiedTime(Path path, boolean followSymlinks) throws IOException {
+    Preconditions.checkArgument(
+        followSymlinks, "ActionFileSystem doesn't support no-follow: %s", path);
     return getMetadataOrThrowFileNotFound(path).getModifiedTime();
   }
 
