@@ -133,7 +133,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test");
-    assertContainsEvent("transition function returned string, want dict or list of dicts");
+    assertContainsEvent("Transition function must return a dictionary or list of dictionaries.");
   }
 
   @Test
@@ -1087,8 +1087,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         .containsExactly("post-transition");
   }
 
-  // TODO(blaze-configurability): We probably want to eventually turn this off. Flip this test when
-  // this isn't allowed anymore.
+  // TODO(juliexxia): flip this test when this isn't allowed anymore.
   @Test
   public void testAllowlistOnTargetsStillWorks() throws Exception {
     // allowlists //test/...
