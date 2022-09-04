@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.LinkedHashMap;
@@ -151,9 +152,10 @@ public final class ActionEnvironment {
   }
 
   private final EnvironmentVariables fixedEnv;
-  private final ImmutableSet<String> inheritedEnv;
+  private final Iterable<String> inheritedEnv;
 
-  private ActionEnvironment(EnvironmentVariables fixedEnv, ImmutableSet<String> inheritedEnv) {
+  private ActionEnvironment(EnvironmentVariables fixedEnv, Iterable<String> inheritedEnv) {
+    CollectionUtils.checkImmutable(inheritedEnv);
     this.fixedEnv = fixedEnv;
     this.inheritedEnv = inheritedEnv;
   }
@@ -165,15 +167,15 @@ public final class ActionEnvironment {
    */
   @AutoCodec.Instantiator
   public static ActionEnvironment create(
-      EnvironmentVariables fixedEnv, ImmutableSet<String> inheritedEnv) {
-    if (fixedEnv.isEmpty() && inheritedEnv.isEmpty()) {
+      EnvironmentVariables fixedEnv, Iterable<String> inheritedEnv) {
+    if (fixedEnv.isEmpty() && Iterables.isEmpty(inheritedEnv)) {
       return EMPTY;
     }
     return new ActionEnvironment(fixedEnv, inheritedEnv);
   }
 
   public static ActionEnvironment create(
-      Map<String, String> fixedEnv, ImmutableSet<String> inheritedEnv) {
+      Map<String, String> fixedEnv, Iterable<String> inheritedEnv) {
     return new ActionEnvironment(SimpleEnvironmentVariables.create(fixedEnv), inheritedEnv);
   }
 
@@ -191,7 +193,7 @@ public final class ActionEnvironment {
 
   /** Returns the combined size of the fixed and inherited environments. */
   public int size() {
-    return fixedEnv.size() + inheritedEnv.size();
+    return fixedEnv.size() + Iterables.size(inheritedEnv);
   }
 
   /**
@@ -209,7 +211,7 @@ public final class ActionEnvironment {
    * be used for testing and to compute the cache keys of actions. Use {@link #resolve} instead to
    * get the complete environment.
    */
-  public ImmutableSet<String> getInheritedEnv() {
+  public Iterable<String> getInheritedEnv() {
     return inheritedEnv;
   }
 
@@ -220,7 +222,7 @@ public final class ActionEnvironment {
    * <p>We pass in a map to mutate to avoid creating and merging intermediate maps.
    */
   public void resolve(Map<String, String> result, Map<String, String> clientEnv) {
-    checkNotNull(clientEnv);
+    Preconditions.checkNotNull(clientEnv);
     result.putAll(fixedEnv.toMap());
     for (String var : inheritedEnv) {
       String value = clientEnv.get(var);

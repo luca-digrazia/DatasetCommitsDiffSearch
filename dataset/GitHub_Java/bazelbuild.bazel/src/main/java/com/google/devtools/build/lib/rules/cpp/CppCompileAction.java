@@ -333,11 +333,6 @@ public class CppCompileAction extends AbstractAction
     return Preconditions.checkNotNull(additionalInputs);
   }
 
-  /** Clears the discovered {@link #additionalInputs}. */
-  public void clearAdditionalInputs() {
-    additionalInputs = null;
-  }
-
   @Override
   public boolean discoversInputs() {
     return shouldScanIncludes || needsDotdInputPruning;
@@ -1105,7 +1100,7 @@ public class CppCompileAction extends AbstractAction
           actionExecutionContext.getVerboseFailures(),
           this);
     } finally {
-      clearAdditionalInputs();
+      additionalInputs = null;
     }
     ensureCoverageNotesFilesExist(actionExecutionContext);
 

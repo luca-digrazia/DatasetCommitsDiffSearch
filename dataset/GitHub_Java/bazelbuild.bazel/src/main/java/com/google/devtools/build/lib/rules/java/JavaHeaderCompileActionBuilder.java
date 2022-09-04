@@ -68,7 +68,6 @@ public class JavaHeaderCompileActionBuilder {
   @Nullable private String injectingRuleKind;
   private PathFragment tempDirectory;
   private BuildConfiguration.StrictDepsMode strictJavaDeps = BuildConfiguration.StrictDepsMode.OFF;
-  private boolean reduceClasspath = true;
   private NestedSet<Artifact> directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
   private NestedSet<Artifact> compileTimeDependencyArtifacts =
       NestedSetBuilder.emptySet(Order.STABLE_ORDER);
@@ -182,12 +181,6 @@ public class JavaHeaderCompileActionBuilder {
       BuildConfiguration.StrictDepsMode strictJavaDeps) {
     checkNotNull(strictJavaDeps, "strictJavaDeps must not be null");
     this.strictJavaDeps = strictJavaDeps;
-    return this;
-  }
-
-  /** Enables reduced classpaths. */
-  public JavaHeaderCompileActionBuilder setReduceClasspath(boolean reduceClasspath) {
-    this.reduceClasspath = reduceClasspath;
     return this;
   }
 
@@ -324,7 +317,7 @@ public class JavaHeaderCompileActionBuilder {
     }
 
     // If we get here the action requires annotation processing, so add additional inputs and
-    // flags needed for the javac-based header compiler implementations that supports
+    // flags needed for the javac-based header compiler implementatino that supports
     // annotation processing.
 
     builder.addTransitiveInputs(classpathEntries);
@@ -340,11 +333,6 @@ public class JavaHeaderCompileActionBuilder {
       if (!compileTimeDependencyArtifacts.isEmpty()) {
         commandLine.addExecPaths("--deps_artifacts", compileTimeDependencyArtifacts);
       }
-    }
-    if (reduceClasspath && strictJavaDeps != BuildConfiguration.StrictDepsMode.OFF) {
-      commandLine.add("--reduce_classpath");
-    } else {
-      commandLine.add("--noreduce_classpath");
     }
 
     ruleContext.registerAction(

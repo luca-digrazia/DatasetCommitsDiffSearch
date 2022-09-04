@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.query2;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.TargetAccessor;
 import com.google.devtools.build.lib.query2.output.AqueryOptions;
@@ -53,12 +53,12 @@ public class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCall
   private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   ActionGraphTextOutputFormatterCallback(
-      Reporter reporter,
+      ExtendedEventHandler eventHandler,
       AqueryOptions options,
       OutputStream out,
       SkyframeExecutor skyframeExecutor,
       TargetAccessor<ConfiguredTargetValue> accessor) {
-    super(reporter, options, out, skyframeExecutor, accessor);
+    super(eventHandler, options, out, skyframeExecutor, accessor);
   }
 
   @Override
@@ -174,13 +174,13 @@ public class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCall
       SpawnAction spawnAction = (SpawnAction) action;
       // TODO(twerth): This handles the fixed environment. We probably want to output the inherited
       // environment as well.
-      ImmutableSet<Entry<String, String>> fixedEnvironment =
-          spawnAction.getEnvironment().getFixedEnv().entrySet();
-      if (!fixedEnvironment.isEmpty()) {
+      Iterable<Map.Entry<String, String>> fixedEnvironment =
+          spawnAction.getEnvironment().getFixedEnv().toMap().entrySet();
+      if (!Iterables.isEmpty(fixedEnvironment)) {
         stringBuilder
             .append("  Environment: [")
             .append(
-                fixedEnvironment.stream()
+                Streams.stream(fixedEnvironment)
                     .map(
                         environmentVariable ->
                             environmentVariable.getKey() + "=" + environmentVariable.getValue())

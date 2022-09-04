@@ -57,11 +57,9 @@ import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
-import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
 import java.util.ArrayList;
@@ -135,6 +133,13 @@ public class BuildConfiguration implements BuildConfigurationApi {
      */
     @SuppressWarnings("unused")
     public void reportInvalidOptions(EventHandler reporter, BuildOptions buildOptions) {
+    }
+
+    /**
+     * Adds mapping of names to values of "Make" variables defined by this configuration.
+     */
+    @SuppressWarnings("unused")
+    public void addGlobalMakeVariables(ImmutableMap.Builder<String, String> globalMakeEnvBuilder) {
     }
 
     /**
@@ -332,9 +337,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
    * input string.
    */
   public static class Options extends FragmentOptions implements Cloneable {
-    public static final OptionDefinition CPU =
-        OptionsParser.getOptionDefinitionByName(Options.class, "cpu");
-
     @Option(
       name = "experimental_separate_genfiles_directory",
       defaultValue = "true",
@@ -784,16 +786,17 @@ public class BuildConfiguration implements BuildConfigurationApi {
     )
     public boolean isHost;
 
+    // TODO(cparsons): Make this flag non-experimental when it is fully implemented.
     @Option(
-        name = "allow_analysis_failures",
+        name = "experimental_allow_analysis_failures",
         defaultValue = "false",
         documentationCategory = OptionDocumentationCategory.TESTING,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-        help =
-            "If true, an analysis failure of a rule target results in the target's propagation "
-                + "of an instance of AnalysisFailureInfo containing the error description, instead "
-                + "of resulting in a build failure.")
+        effectTags = { OptionEffectTag.LOADING_AND_ANALYSIS },
+        metadataTags = { OptionMetadataTag.EXPERIMENTAL },
+        help = "If true, an analysis failure of a rule target results in the target's propagation "
+            + "of an instance of AnalysisFailureInfo containing the error description, instead of "
+            + "resulting in a build failure."
+    )
     public boolean allowAnalysisFailures;
 
     @Option(
@@ -918,13 +921,13 @@ public class BuildConfiguration implements BuildConfigurationApi {
     public ConfigsMode configsMode;
 
     @Option(
-        name = "enable_runfiles",
-        oldName = "experimental_enable_runfiles",
-        defaultValue = "auto",
-        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-        help =
-            "Enable runfiles symlink tree; By default, it's off on Windows, on on other platforms.")
+      name = "experimental_enable_runfiles",
+      defaultValue = "auto",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
+      metadataTags = { OptionMetadataTag.EXPERIMENTAL },
+      help = "Enable runfiles; off on Windows, on on other platforms"
+    )
     public TriState enableRunfiles;
 
     @Option(
@@ -1295,6 +1298,9 @@ public class BuildConfiguration implements BuildConfigurationApi {
         TransitiveOptionDetails.forOptionsWithDefaults(buildOptions.getNativeOptions());
 
     ImmutableMap.Builder<String, String> globalMakeEnvBuilder = ImmutableMap.builder();
+    for (Fragment fragment : fragments.values()) {
+      fragment.addGlobalMakeVariables(globalMakeEnvBuilder);
+    }
 
     // TODO(configurability-team): Deprecate TARGET_CPU in favor of platforms.
     globalMakeEnvBuilder.put("TARGET_CPU", options.cpu);
