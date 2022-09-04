@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 Graylog, Inc.
+ * Copyright (c) 2012 TORCH GmbH
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@
 package org.graylog2.plugin;
 
 import java.net.URI;
-import java.util.Set;
 
 public interface PluginMetaData {
     String getUniqueId();
@@ -39,6 +38,4 @@ public interface PluginMetaData {
     String getDescription();
 
     Version getRequiredVersion();
-
-    Set<ServerStatus.Capability> getRequiredCapabilities();
 }
