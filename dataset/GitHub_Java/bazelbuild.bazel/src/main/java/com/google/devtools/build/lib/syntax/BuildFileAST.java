@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.HashCode;
@@ -22,6 +23,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Parser.ParseResult;
 import com.google.devtools.build.lib.syntax.SkylarkImport.SkylarkImportSyntaxException;
+import com.google.devtools.build.lib.util.Pair;
 import java.io.IOException;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -35,6 +37,8 @@ public class BuildFileAST extends Node {
   private final ImmutableList<Statement> statements;
 
   private final ImmutableList<Comment> comments;
+
+  @Nullable private final ImmutableList<SkylarkImport> imports;
 
   /**
    * Whether any errors were encountered during scanning or parsing.
@@ -51,12 +55,14 @@ public class BuildFileAST extends Node {
       String contentHashCode,
       Location location,
       ImmutableList<Comment> comments,
+      @Nullable ImmutableList<SkylarkImport> imports,
       List<Event> stringEscapeEvents) {
     this.statements = statements;
     this.containsErrors = containsErrors;
     this.contentHashCode = contentHashCode;
     this.comments = comments;
     this.setLocation(location);
+    this.imports = imports;
     this.stringEscapeEvents = stringEscapeEvents;
   }
 
@@ -83,13 +89,16 @@ public class BuildFileAST extends Node {
     }
     ImmutableList<Statement> statements = statementsbuilder.build();
     boolean containsErrors = result.containsErrors;
-    containsErrors |= fetchLoads(statements, repositoryMapping, eventHandler);
+    Pair<Boolean, ImmutableList<SkylarkImport>> skylarkImports =
+        fetchLoads(statements, repositoryMapping, eventHandler);
+    containsErrors |= skylarkImports.first;
     return new BuildFileAST(
         statements,
         containsErrors,
         contentHashCode,
         result.location,
         ImmutableList.copyOf(result.comments),
+        skylarkImports.second,
         result.stringEscapeEvents);
   }
 
@@ -109,11 +118,12 @@ public class BuildFileAST extends Node {
    */
   public BuildFileAST subTree(int firstStatement, int lastStatement) {
     ImmutableList<Statement> statements = this.statements.subList(firstStatement, lastStatement);
+    ImmutableList.Builder<SkylarkImport> imports = ImmutableList.builder();
     for (Statement stmt : statements) {
       if (stmt instanceof LoadStatement) {
         String str = ((LoadStatement) stmt).getImport().getValue();
         try {
-          SkylarkImport.create(str, /* repositoryMapping= */ ImmutableMap.of()); // discard result
+          imports.add(SkylarkImport.create(str, /* repositoryMapping= */ ImmutableMap.of()));
         } catch (SkylarkImportSyntaxException e) {
           throw new IllegalStateException(
               "Cannot create SkylarkImport for '" + str + "'. This is an internal error.", e);
@@ -126,27 +136,32 @@ public class BuildFileAST extends Node {
         null,
         this.statements.get(firstStatement).getLocation(),
         ImmutableList.of(),
+        imports.build(),
         stringEscapeEvents);
   }
 
-  /** Checks all load statements. Reports whether there were errors resolving imports. */
-  private static boolean fetchLoads(
+  /**
+   * Collects all load statements. Returns a pair with a boolean saying if there were errors and the
+   * imports that could be resolved.
+   */
+  private static Pair<Boolean, ImmutableList<SkylarkImport>> fetchLoads(
       List<Statement> statements,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       EventHandler eventHandler) {
+    ImmutableList.Builder<SkylarkImport> imports = ImmutableList.builder();
     boolean error = false;
     for (Statement stmt : statements) {
       if (stmt instanceof LoadStatement) {
         String importString = ((LoadStatement) stmt).getImport().getValue();
         try {
-          SkylarkImport.create(importString, repositoryMapping); // discard result
+          imports.add(SkylarkImport.create(importString, repositoryMapping));
         } catch (SkylarkImportSyntaxException e) {
           eventHandler.handle(Event.error(stmt.getLocation(), e.getMessage()));
           error = true;
         }
       }
     }
-    return error;
+    return Pair.of(error, imports.build());
   }
 
   /**
@@ -170,6 +185,23 @@ public class BuildFileAST extends Node {
    */
   public ImmutableList<Comment> getComments() {
     return comments;
+  }
+
+  /** Returns a list of loads in this BUILD file. */
+  public ImmutableList<SkylarkImport> getImports() {
+    Preconditions.checkNotNull(imports, "computeImports Should be called in parse* methods");
+    return imports;
+  }
+
+  /** Returns a list of loads as strings in this BUILD file. */
+  public ImmutableList<StringLiteral> getRawImports() {
+    ImmutableList.Builder<StringLiteral> imports = ImmutableList.builder();
+    for (Statement stmt : statements) {
+      if (stmt instanceof LoadStatement) {
+        imports.add(((LoadStatement) stmt).getImport());
+      }
+    }
+    return imports.build();
   }
 
   /** Returns true if there was no error event. */
@@ -322,7 +354,6 @@ public class BuildFileAST extends Node {
    * Parse the specified file but avoid the validation of the imports, returning its AST. All errors
    * during scanning or parsing will be reported to the event handler.
    */
-  // TODO(adonovan): redundant; delete.
   public static BuildFileAST parseWithoutImports(ParserInput input, EventHandler eventHandler) {
     ParseResult result = Parser.parseFile(input, eventHandler);
     return new BuildFileAST(
@@ -331,6 +362,7 @@ public class BuildFileAST extends Node {
         /* contentHashCode= */ null,
         result.location,
         ImmutableList.copyOf(result.comments),
+        /* imports= */ null,
         result.stringEscapeEvents);
   }
 
@@ -360,6 +392,7 @@ public class BuildFileAST extends Node {
         contentHashCode,
         getLocation(),
         comments,
+        imports,
         stringEscapeEvents);
   }
 

@@ -815,6 +815,13 @@ public final class Environment implements Freezable {
   @Nullable private Continuation continuation;
 
   /**
+   * Gets the label of the BUILD file that is using this environment. For example, if a target //foo
+   * has a dependency on //bar which is a Skylark rule defined in //rules:my_rule.bzl being
+   * evaluated in this environment, then this would return //foo.
+   */
+  @Nullable private final Label callerLabel;
+
+  /**
    * Enters a scope by saving state to a new Continuation
    *
    * @param function the function whose scope to enter
@@ -912,6 +919,7 @@ public final class Environment implements Freezable {
    * @param eventHandler an EventHandler for warnings, errors, etc
    * @param importedExtensions Extension-s from which to import bindings with load()
    * @param fileContentHashCode a hash for the source file being evaluated, if any
+   * @param callerLabel the label this environment came from
    */
   private Environment(
       GlobalFrame globalFrame,
@@ -919,7 +927,8 @@ public final class Environment implements Freezable {
       StarlarkContext starlarkContext,
       EventHandler eventHandler,
       Map<String, Extension> importedExtensions,
-      @Nullable String fileContentHashCode) {
+      @Nullable String fileContentHashCode,
+      @Nullable Label callerLabel) {
     this.lexicalFrame = Preconditions.checkNotNull(globalFrame);
     this.globalFrame = Preconditions.checkNotNull(globalFrame);
     this.mutability = globalFrame.mutability();
@@ -928,6 +937,7 @@ public final class Environment implements Freezable {
     this.starlarkContext = starlarkContext;
     this.eventHandler = eventHandler;
     this.importedExtensions = importedExtensions;
+    this.callerLabel = callerLabel;
     this.transitiveHashCode =
         computeTransitiveContentHashCode(fileContentHashCode, importedExtensions);
   }
@@ -946,6 +956,7 @@ public final class Environment implements Freezable {
     @Nullable private EventHandler eventHandler;
     @Nullable private Map<String, Extension> importedExtensions;
     @Nullable private String fileContentHashCode;
+    private Label label;
 
     Builder(Mutability mutability) {
       this.mutability = mutability;
@@ -1042,12 +1053,23 @@ public final class Environment implements Freezable {
           starlarkContext,
           eventHandler,
           importedExtensions,
-          fileContentHashCode);
+          fileContentHashCode,
+          label);
+    }
+
+    public Builder setCallerLabel(Label label) {
+      this.label = label;
+      return this;
     }
   }
 
   public static Builder builder(Mutability mutability) {
     return new Builder(mutability);
+  }
+
+  /** Returns the caller's label. */
+  public Label getCallerLabel() {
+    return callerLabel;
   }
 
   /** Remove variable from local bindings. */
