@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.actions.SpawnAction.Builder;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
@@ -554,7 +555,7 @@ final class JavaInfoBuildHelper {
       commandLine.addLabel("--target_label", targetLabel);
     }
     SpawnAction.Builder actionBuilder =
-        new SpawnAction.Builder()
+        new Builder()
             .addInput(inputJar)
             .addOutput(interfaceJar)
             .setExecutable(ijarTarget)
@@ -584,7 +585,7 @@ final class JavaInfoBuildHelper {
             .add("--nostrip_jar")
             .addLabel("--target_label", targetLabel);
     SpawnAction.Builder actionBuilder =
-        new SpawnAction.Builder()
+        new Builder()
             .addInput(inputJar)
             .addOutput(outputJar)
             .setExecutable(ijarTarget)

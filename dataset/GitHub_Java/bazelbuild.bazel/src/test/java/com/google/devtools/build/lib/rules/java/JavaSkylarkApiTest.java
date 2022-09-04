@@ -881,11 +881,11 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     SkylarkNestedSet transitiveCompileTimeJars = info.getTransitiveCompileTimeJars();
     assertThat(prettyArtifactNames(transitiveCompileTimeJars.getSet(Artifact.class)))
-        .containsExactly("foo/liba.jar", "foo/libc.jar");
+        .containsExactly("foo/libc.jar");
 
     SkylarkNestedSet transitiveRuntimeJars = info.getTransitiveRuntimeJars();
     assertThat(prettyArtifactNames(transitiveRuntimeJars.getSet(Artifact.class)))
-        .containsExactly("foo/libd.jar", "foo/libb.jar");
+        .containsExactly("foo/libd.jar");
   }
 
   @Test
@@ -968,9 +968,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     List<String> transitiveCompileTimeJars =
         prettyArtifactNames(provider.getTransitiveCompileTimeJars());
-    assertThat(transitiveCompileTimeJars).containsExactly("foo/liba.jar", "foo/libc.jar");
+    assertThat(transitiveCompileTimeJars).containsExactly("foo/libc.jar");
     List<String> transitiveRuntimeJars = prettyArtifactNames(provider.getRuntimeJars());
-    assertThat(transitiveRuntimeJars).containsExactly("foo/libd.jar", "foo/libb.jar");
+    assertThat(transitiveRuntimeJars).containsExactly("foo/libd.jar");
 
     JavaSourceJarsProvider sourcesProvider =
         JavaInfo.getProvider(JavaSourceJarsProvider.class, target);
@@ -1640,33 +1640,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         configuredTarget.get(new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl"), "result"));
     Label javaToolchainLabel = ((Label) info.getValue("java_toolchain_label"));
     assertThat(javaToolchainLabel.toString()).isEqualTo("//java/com/google/test:toolchain");
-  }
-
-  @Test
-  public void testIncompatibleDisallowLegacyJavaInfo() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_disallow_legacy_javainfo");
-    scratch.file(
-        "java/test/custom_rule.bzl",
-        "def _impl(ctx):",
-        "  jar = ctx.actions.declare_file('jar')",
-        "  java_common.create_provider(",
-        "      compile_time_jars = [jar],",
-        "      transitive_compile_time_jars = [jar],",
-        "      runtime_jars = [jar],",
-        "      use_ijar = False,",
-        "  )",
-        "java_custom_library = rule(",
-        "  implementation = _impl,",
-        ")");
-    checkError(
-        "java/test",
-        "custom",
-        "create_provider is deprecated and cannot be used when "
-            + "--incompatible_disallow_legacy_javainfo is set. ",
-        "load(':custom_rule.bzl', 'java_custom_library')",
-        "java_custom_library(",
-        "  name = 'custom',",
-        ")");
   }
 
   private static boolean javaCompilationArgsHaveTheSameParent(
