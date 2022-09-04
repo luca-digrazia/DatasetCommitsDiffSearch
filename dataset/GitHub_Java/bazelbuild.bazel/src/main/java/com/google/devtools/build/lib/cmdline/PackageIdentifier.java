@@ -210,18 +210,12 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
     return create(RepositoryName.MAIN, pkgName);
   }
 
-  /** Returns the package in label syntax format. */
-  public String getCanonicalForm() {
-    String repository = getRepository().getCanonicalForm();
-    return repository + "//" + getPackageFragment();
-  }
-
   /**
    * Returns the name of this package.
    *
    * <p>There are certain places that expect the path fragment as the package name ('foo/bar') as a
    * package identifier. This isn't specific enough for packages in other repositories, so their
-   * stringified version is '@baz//foo/bar'.
+   * stringified version is '@baz//foo/bar'.</p>
    */
   @Override
   public String toString() {
