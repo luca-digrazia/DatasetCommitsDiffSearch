@@ -22,15 +22,17 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.protobuf.TextFormat;
@@ -42,7 +44,16 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 /** An instance (in the Skylark sense, not Java) of a {@link Provider}. */
-public abstract class Info implements ClassObject, StructApi, Serializable {
+@SkylarkModule(
+  name = "struct",
+  category = SkylarkModuleCategory.BUILTIN,
+  doc =
+      "A generic object with fields. See the global <a href=\"globals.html#struct\"><code>struct"
+          + "</code></a> function for more details."
+          + "<p>Structs fields cannot be reassigned once the struct is created. Two structs are "
+          + "equal if they have the same fields and if corresponding field values are equal."
+)
+public abstract class Info implements ClassObject, SkylarkValue, Serializable {
 
   /** The {@link Provider} that describes the type of this instance. */
   private final Provider provider;
@@ -212,15 +223,34 @@ public abstract class Info implements ClassObject, StructApi, Serializable {
     printer.append(")");
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "to_proto",
+      doc =
+          "Creates a text message from the struct parameter. This method only works if all "
+              + "struct elements (recursively) are strings, ints, booleans, other structs or a "
+              + "list of these types. Quotes and new lines in strings are escaped. "
+              + "Keys are iterated in the sorted order. "
+              + "Examples:<br><pre class=language-python>"
+              + "struct(key=123).to_proto()\n# key: 123\n\n"
+              + "struct(key=True).to_proto()\n# key: true\n\n"
+              + "struct(key=[1, 2, 3]).to_proto()\n# key: 1\n# key: 2\n# key: 3\n\n"
+              + "struct(key='text').to_proto()\n# key: \"text\"\n\n"
+              + "struct(key=struct(inner_key='text')).to_proto()\n"
+              + "# key {\n#   inner_key: \"text\"\n# }\n\n"
+              + "struct(key=[struct(inner_key=1), struct(inner_key=2)]).to_proto()\n"
+              + "# key {\n#   inner_key: 1\n# }\n# key {\n#   inner_key: 2\n# }\n\n"
+              + "struct(key=struct(inner_key=struct(inner_inner_key='text'))).to_proto()\n"
+              + "# key {\n#    inner_key {\n#     inner_inner_key: \"text\"\n#   }\n# }\n</pre>",
+      useLocation = true
+  )
   public String toProto(Location loc) throws EvalException {
     StringBuilder sb = new StringBuilder();
     printProtoTextMessage(this, sb, 0, loc);
     return sb.toString();
   }
 
-  private void printProtoTextMessage(ClassObject object, StringBuilder sb, int indent, Location loc)
-      throws EvalException {
+  private void printProtoTextMessage(
+      ClassObject object, StringBuilder sb, int indent, Location loc) throws EvalException {
     // For determinism sort the fields alphabetically.
     List<String> fields = new ArrayList<>(object.getFieldNames());
     Collections.sort(fields);
@@ -261,7 +291,8 @@ public abstract class Info implements ClassObject, StructApi, Serializable {
   }
 
   private void printProtoTextMessage(
-      String key, Object value, StringBuilder sb, int indent, Location loc) throws EvalException {
+      String key, Object value, StringBuilder sb, int indent, Location loc)
+      throws EvalException {
     if (value instanceof SkylarkList) {
       for (Object item : ((SkylarkList) value)) {
         // TODO(bazel-team): There should be some constraint on the fields of the structs
@@ -290,14 +321,33 @@ public abstract class Info implements ClassObject, StructApi, Serializable {
     return TextFormat.escapeDoubleQuotesAndBackslashes(string).replace("\n", "\\n");
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "to_json",
+      doc =
+          "Creates a JSON string from the struct parameter. This method only works if all "
+              + "struct elements (recursively) are strings, ints, booleans, other structs or a "
+              + "list of these types. Quotes and new lines in strings are escaped. "
+              + "Examples:<br><pre class=language-python>"
+              + "struct(key=123).to_json()\n# {\"key\":123}\n\n"
+              + "struct(key=True).to_json()\n# {\"key\":true}\n\n"
+              + "struct(key=[1, 2, 3]).to_json()\n# {\"key\":[1,2,3]}\n\n"
+              + "struct(key='text').to_json()\n# {\"key\":\"text\"}\n\n"
+              + "struct(key=struct(inner_key='text')).to_json()\n"
+              + "# {\"key\":{\"inner_key\":\"text\"}}\n\n"
+              + "struct(key=[struct(inner_key=1), struct(inner_key=2)]).to_json()\n"
+              + "# {\"key\":[{\"inner_key\":1},{\"inner_key\":2}]}\n\n"
+              + "struct(key=struct(inner_key=struct(inner_inner_key='text'))).to_json()\n"
+              + "# {\"key\":{\"inner_key\":{\"inner_inner_key\":\"text\"}}}\n</pre>",
+      useLocation = true
+  )
   public String toJson(Location loc) throws EvalException {
     StringBuilder sb = new StringBuilder();
     printJson(this, sb, loc, "struct field", null);
     return sb.toString();
   }
 
-  private void printJson(Object value, StringBuilder sb, Location loc, String container, String key)
+  private void printJson(
+      Object value, StringBuilder sb, Location loc, String container, String key)
       throws EvalException {
     if (value == Runtime.NONE) {
       sb.append("null");
@@ -312,29 +362,6 @@ public abstract class Info implements ClassObject, StructApi, Serializable {
         sb.append(field);
         sb.append("\":");
         printJson(((ClassObject) value).getValue(field), sb, loc, "struct field", field);
-      }
-      sb.append("}");
-    } else if (value instanceof SkylarkDict) {
-      sb.append("{");
-      String join = "";
-      for (Map.Entry<?, ?> entry : ((SkylarkDict<?, ?>) value).entrySet()) {
-        sb.append(join);
-        join = ",";
-        if (!(entry.getKey() instanceof String)) {
-          String errorMessage =
-              "Keys must be a string but got a "
-                  + EvalUtils.getDataTypeName(entry.getKey())
-                  + " for "
-                  + container;
-          if (key != null) {
-            errorMessage += " '" + key + "'";
-          }
-          throw new EvalException(loc, errorMessage);
-        }
-        sb.append("\"");
-        sb.append(entry.getKey());
-        sb.append("\":");
-        printJson(entry.getValue(), sb, loc, "dict value", String.valueOf(entry.getKey()));
       }
       sb.append("}");
     } else if (value instanceof List) {
