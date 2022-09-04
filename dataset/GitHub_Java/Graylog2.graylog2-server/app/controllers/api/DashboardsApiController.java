@@ -17,8 +17,6 @@
 
 package controllers.api;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import controllers.AuthenticatedController;
@@ -29,19 +27,15 @@ import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.timeranges.InvalidRangeParametersException;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
 import org.graylog2.restclient.models.User;
-import org.graylog2.restclient.models.api.requests.dashboards.CreateDashboardRequest;
-import org.graylog2.restclient.models.api.requests.dashboards.UpdateDashboardRequest;
 import org.graylog2.restclient.models.api.requests.dashboards.UserSetWidgetPositionsRequest;
 import org.graylog2.restclient.models.api.responses.dashboards.DashboardWidgetValueResponse;
 import org.graylog2.restclient.models.dashboards.Dashboard;
 import org.graylog2.restclient.models.dashboards.DashboardService;
-import org.graylog2.restclient.models.dashboards.widgets.ChartWidget;
 import org.graylog2.restclient.models.dashboards.widgets.DashboardWidget;
 import org.graylog2.restclient.models.dashboards.widgets.FieldChartWidget;
 import org.graylog2.restclient.models.dashboards.widgets.QuickvaluesWidget;
 import org.graylog2.restclient.models.dashboards.widgets.SearchResultChartWidget;
 import org.graylog2.restclient.models.dashboards.widgets.SearchResultCountWidget;
-import org.graylog2.restclient.models.dashboards.widgets.StackedChartWidget;
 import org.graylog2.restclient.models.dashboards.widgets.StatisticalCountWidget;
 import org.graylog2.restclient.models.dashboards.widgets.StreamSearchResultCountWidget;
 import org.joda.time.DateTime;
@@ -57,15 +51,13 @@ import play.libs.Json;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
+import views.helpers.Permissions;
 
 import javax.inject.Inject;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static com.google.common.base.Strings.isNullOrEmpty;
-import static views.helpers.Permissions.isPermitted;
 
 public class DashboardsApiController extends AuthenticatedController {
     private final DashboardService dashboardService;
@@ -123,7 +115,7 @@ public class DashboardsApiController extends AuthenticatedController {
         List<Dashboard> writable = Lists.newArrayList();
 
         for (Dashboard dashboard : dashboardService.getAll()) {
-            if (isPermitted(user, RestPermissions.DASHBOARDS_EDIT, dashboard.getId())) {
+            if (Permissions.isPermitted(user, RestPermissions.DASHBOARDS_EDIT, dashboard.getId())) {
                 writable.add(dashboard);
             }
         }
@@ -131,51 +123,7 @@ public class DashboardsApiController extends AuthenticatedController {
         return writable;
     }
 
-    public Result create() {
-        if (!isPermitted(RestPermissions.DASHBOARDS_CREATE)) {
-            return forbidden();
-        }
-
-        CreateDashboardRequest cdr = Json.fromJson(request().body().asJson(), CreateDashboardRequest.class);
-        if (isNullOrEmpty(cdr.getTitle()) || isNullOrEmpty(cdr.getDescription())) {
-            return badRequest("Missing field");
-        }
-
-        try {
-            final String dashboardId = dashboardService.create(cdr);
-
-            return ok(Json.toJson(dashboardId));
-        } catch (APIException e) {
-            String message = "Could not create dashboard. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-    }
-
-    public Result update(String id) {
-        if (!isPermitted(RestPermissions.DASHBOARDS_EDIT, id)) {
-            return forbidden();
-        }
-
-        UpdateDashboardRequest udr = Json.fromJson(request().body().asJson(), UpdateDashboardRequest.class);
-        if (isNullOrEmpty(udr.title) || isNullOrEmpty(udr.description)) {
-            return badRequest("Missing field");
-        }
-
-        try {
-            Dashboard dashboard = dashboardService.get(id);
-            dashboard.update(udr);
-
-            return ok();
-        } catch (APIException e) {
-            String message = "Could not update dashboard. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-    }
-
+    @BodyParser.Of(BodyParser.Json.class)
     public Result setWidgetPositions(String dashboardId) {
 
         try {
@@ -228,7 +176,7 @@ public class DashboardsApiController extends AuthenticatedController {
             DashboardWidgetValueResponse widgetValue = widget.getValue(api());
 
             Object resultValue;
-            if (widget instanceof ChartWidget) {
+            if (widget instanceof SearchResultChartWidget || widget instanceof FieldChartWidget) {
                 resultValue = formatWidgetValueResults(resolution, widget, widgetValue);
             } else {
                 resultValue = widgetValue.result;
@@ -249,54 +197,29 @@ public class DashboardsApiController extends AuthenticatedController {
         }
     }
 
-    protected List<Map<String, Object>> formatWidgetValueResults(final int maxDataPoints,
-                                                                 final DashboardWidget widget,
-                                                                 final DashboardWidgetValueResponse widgetValue) {
+    protected Map<String, Object> formatWidgetValueResults(final int maxDataPoints,
+                                                               final DashboardWidget widget,
+                                                               final DashboardWidgetValueResponse widgetValue) {
         final Map<String, Object> widgetConfig = widget.getConfig();
         final String interval = widgetConfig.containsKey("interval") ? (String) widgetConfig.get("interval") : "minute";
         final boolean allQuery = widgetConfig.get("range_type").equals("relative") && widgetConfig.get("range").equals("0");
 
-        if (widget instanceof StackedChartWidget) {
-            final List widgetResults = (List) widgetValue.result;
-            final List<Map<String, String>> series = (List<Map<String, String>>) widget.getConfig().get("series");
-            final ImmutableList.Builder<Map<String, Object>> formattedWidgetResults = ImmutableList.builder();
-            int i = 0;
-
-            for (Object widgetResult : widgetResults) {
-                final Map<String, String> currentSeries = series.get(i);
-
-                formattedWidgetResults.addAll(formatWidgetValueResults(maxDataPoints,
-                        widgetResult,
-                        currentSeries.get("statistical_function"),
-                        interval,
-                        widgetValue.computationTimeRange,
-                        allQuery,
-                        i + 1));
-
-                i++;
-            }
-
-            return formattedWidgetResults.build();
-        } else {
-            return formatWidgetValueResults(maxDataPoints,
-                    widgetValue.result,
-                    (String) widgetConfig.get("valuetype"),
-                    interval,
-                    widgetValue.computationTimeRange,
-                    allQuery,
-                    null);
-        }
+        return formatWidgetValueResults(maxDataPoints,
+                widgetValue.result,
+                (String)widgetConfig.get("valuetype"),
+                interval,
+                widgetValue.computationTimeRange,
+                allQuery);
     }
 
     // TODO: Extract common parts of this and the similar method on SearchApiController
-    protected List<Map<String, Object>> formatWidgetValueResults(final int maxDataPoints,
-                                                                 final Object resultValue,
-                                                                 final String functionType,
-                                                                 final String interval,
-                                                                 final Map<String, Object> timeRange,
-                                                                 final boolean allQuery,
-                                                                 final Integer seriesNo) {
-        final ImmutableList.Builder<Map<String, Object>> pointListBuilder = ImmutableList.builder();
+    protected Map<String, Object> formatWidgetValueResults(final int maxDataPoints,
+                                                         final Object resultValue,
+                                                         final String functionType,
+                                                         final String interval,
+                                                         final Map<String, Object> timeRange,
+                                                         final boolean allQuery) {
+        final Map<String, Object> points = Maps.newHashMap();
 
         if (resultValue instanceof Map) {
             final Map<?, ?> resultMap = (Map) resultValue;
@@ -324,24 +247,16 @@ public class DashboardsApiController extends AuthenticatedController {
                     String timestamp = Long.toString(currentTime.getMillis() / 1000);
                     Object value = resultMap.get(timestamp);
                     if (functionType != null && value != null) {
-                        value = ((Map) value).get(functionType);
+                        value = ((Map)value).get(functionType);
                     }
                     Object result = value == null ? 0 : value;
-                    final ImmutableMap.Builder<String, Object> pointBuilder = ImmutableMap.<String, Object>builder()
-                            .put("x", Long.parseLong(timestamp))
-                            .put("y", result);
-
-                    if (seriesNo != null) {
-                        pointBuilder.put("series", seriesNo);
-                    }
-
-                    pointListBuilder.add(pointBuilder.build());
+                    points.put(timestamp, result);
                 }
                 index++;
                 nextStep(interval, currentTime);
             }
         }
-        return pointListBuilder.build();
+        return points;
     }
 
     private void nextStep(String interval, MutableDateTime currentTime) {
@@ -434,14 +349,14 @@ public class DashboardsApiController extends AuthenticatedController {
         return step;
     }
 
-    @BodyParser.Of(BodyParser.Json.class)
+    @BodyParser.Of(BodyParser.FormUrlEncoded.class)
     public Result addWidget(String dashboardId) {
         try {
-            final AddWidgetRequest request = Json.fromJson(request().body().asJson(), AddWidgetRequest.class);
+            final Map<String, String> params = flattenFormUrlEncoded(request().body().asFormUrlEncoded());
 
-            String query = (String) request.config().get("query");
-            String rangeType = (String) request.config().get("range_type");
-            String description = request.description();
+            String query = params.get("query");
+            String rangeType = params.get("rangeType");
+            String description = params.get("description");
 
             Dashboard dashboard = dashboardService.get(dashboardId);
 
@@ -449,40 +364,37 @@ public class DashboardsApiController extends AuthenticatedController {
             TimeRange timerange;
             try {
                 int relative = 0;
-                Object relativeTimeRange = request.config().get("relative");
-                if (relativeTimeRange != null) {
-                    relative = (Integer) relativeTimeRange;
+                if (params.get("relative") != null) {
+                    relative = Integer.parseInt(params.get("relative"));
                 }
 
-                timerange = TimeRange.factory(
-                        rangeType, relative,
-                        (String) request.config().get("from"),
-                        (String) request.config().get("to"),
-                        (String) request.config().get("keyword"));
+                timerange = TimeRange.factory(rangeType, relative, params.get("from"), params.get("to"), params.get("keyword"));
             } catch (InvalidRangeParametersException e2) {
                 return status(400, views.html.errors.error.render("Invalid range parameters provided.", e2, request()));
             } catch (IllegalArgumentException e1) {
                 return status(400, views.html.errors.error.render("Invalid range type provided.", e1, request()));
             }
 
-            String streamId = "";
-
-            if (request.config().containsKey("streamId")) {
-                streamId = (String) request.config().get("streamId");
+            String streamId;
+            if (params.containsKey("streamId")) {
+                streamId = params.get("streamId");
+            } else {
+                streamId = params.get("streamid");
             }
 
             final DashboardWidget widget;
             try {
-                final DashboardWidget.Type widgetType = DashboardWidget.Type.valueOf(request.type());
+                final DashboardWidget.Type widgetType = DashboardWidget.Type.valueOf(params.get("widgetType"));
                 switch (widgetType) {
                     case SEARCH_RESULT_COUNT: {
-                        final Map<String, Boolean> trendInformation = this.extractCountTrendInformation(request.config());
-                        if (trendInformation.get("trend")) {
+                        final Boolean trend = Boolean.parseBoolean(params.get("trend"));
+                        if (trend) {
                             if (!rangeType.equals("relative")) {
-                                Logger.error("Cannot add search count widget with trend on a non relative time range");
+                                Logger.error("Cannot add search result count widget with trend on a non relative time range");
                                 return badRequest();
                             }
-                            widget = new SearchResultCountWidget(dashboard, query, timerange, description, trendInformation.get("trend"), trendInformation.get("lowerIsBetter"));
+                            final Boolean lowerIsBetter = Boolean.parseBoolean(params.get("lowerIsBetter"));
+                            widget = new SearchResultCountWidget(dashboard, query, timerange, description, trend, lowerIsBetter);
                         } else {
                             widget = new SearchResultCountWidget(dashboard, query, timerange, description);
                         }
@@ -490,13 +402,14 @@ public class DashboardsApiController extends AuthenticatedController {
                     }
                     case STREAM_SEARCH_RESULT_COUNT: {
                         if (!canReadStream(streamId)) return unauthorized();
-                        final Map<String, Boolean> trendInformation = this.extractCountTrendInformation(request.config());
-                        if (trendInformation.get("trend")) {
+                        final Boolean trend = Boolean.parseBoolean(params.get("trend"));
+                        if (trend) {
                             if (!rangeType.equals("relative")) {
                                 Logger.error("Cannot add search result count widget with trend on a non relative time range");
                                 return badRequest();
                             }
-                            widget = new StreamSearchResultCountWidget(dashboard, query, timerange, description, trendInformation.get("trend"), trendInformation.get("lowerIsBetter"), streamId);
+                            final Boolean lowerIsBetter = Boolean.parseBoolean(params.get("lowerIsBetter"));
+                            widget = new StreamSearchResultCountWidget(dashboard, query, timerange, description, trend, lowerIsBetter, streamId);
                         } else {
                             widget = new StreamSearchResultCountWidget(dashboard, query, timerange, description, streamId);
                         }
@@ -504,36 +417,35 @@ public class DashboardsApiController extends AuthenticatedController {
                     }
                     case FIELD_CHART:
                         Map<String, Object> config = new HashMap<String, Object>() {{
-                            put("field", request.config().get("field"));
-                            put("valuetype", request.config().get("valuetype"));
-                            put("renderer", request.config().get("renderer"));
-                            put("interpolation", request.config().get("interpolation"));
-                            put("interval", request.config().get("interval"));
+                            put("field", params.get("field"));
+                            put("valuetype", params.get("valuetype"));
+                            put("renderer", params.get("renderer"));
+                            put("interpolation", params.get("interpolation"));
+                            put("interval", params.get("interval"));
                         }};
                         if (!canReadStream(streamId)) return unauthorized();
 
                         widget = new FieldChartWidget(dashboard, query, timerange, description, streamId, config);
                         break;
                     case QUICKVALUES:
-                        final Boolean showPieChart = request.config().containsKey("show_pie_chart") && request.config().get("show_pie_chart").equals(true);
-                        final Boolean showDataTable = request.config().containsKey("show_data_table") && request.config().get("show_data_table").equals(true);
                         if (!canReadStream(streamId)) return unauthorized();
-                        widget = new QuickvaluesWidget(dashboard, query, timerange, (String) request.config().get("field"), description, showPieChart, showDataTable, streamId);
+                        widget = new QuickvaluesWidget(dashboard, query, timerange, params.get("field"), description, streamId);
                         break;
                     case SEARCH_RESULT_CHART:
                         if (!canReadStream(streamId)) return unauthorized();
-                        widget = new SearchResultChartWidget(dashboard, query, timerange, description, streamId, (String) request.config().get("interval"));
+                        widget = new SearchResultChartWidget(dashboard, query, timerange, description, streamId, params.get("interval"));
                         break;
                     case STATS_COUNT: {
-                        final String field = (String) request.config().get("field");
-                        final String statsFunction = (String) request.config().get("statsFunction");
-                        final Map<String, Boolean> trendInformation = this.extractCountTrendInformation(request.config());
-                        if (trendInformation.get("trend")) {
+                        final String field = params.get("field");
+                        final String statsFunction = params.get("statsFunction");
+                        final Boolean trend = Boolean.parseBoolean(params.get("trend"));
+                        if (trend) {
                             if (!rangeType.equals("relative")) {
                                 Logger.error("Cannot add statistical count widget with trend on a non relative time range");
                                 return badRequest();
                             }
-                            widget = new StatisticalCountWidget(dashboard, query, timerange, description, trendInformation.get("trend"), trendInformation.get("lowerIsBetter"), field, statsFunction, streamId);
+                            final Boolean lowerIsBetter = Boolean.parseBoolean(params.get("lowerIsBetter"));
+                            widget = new StatisticalCountWidget(dashboard, query, timerange, description, trend, lowerIsBetter, field, statsFunction, streamId);
                         } else {
                             widget = new StatisticalCountWidget(dashboard, query, timerange, description, field, statsFunction, streamId);
                         }
@@ -543,7 +455,7 @@ public class DashboardsApiController extends AuthenticatedController {
                         throw new IllegalArgumentException();
                 }
             } catch (IllegalArgumentException e) {
-                Logger.error("No such widget type: " + request.type());
+                Logger.error("No such widget type: " + params.get("widgetType"));
                 return badRequest();
             }
 
@@ -558,15 +470,9 @@ public class DashboardsApiController extends AuthenticatedController {
         }
     }
 
-    private Map<String, Boolean> extractCountTrendInformation(Map<String, Object> config) {
-        final Boolean trend = config.containsKey("trend") && config.get("trend").equals(true);
-        final Boolean lowerIsBetter = trend && config.containsKey("lower_is_better") && config.get("lower_is_better").equals(true);
-        return ImmutableMap.of("trend", trend, "lowerIsBetter", lowerIsBetter);
-    }
-
     private boolean canReadStream(String streamId) {
         if (streamId == null) return true;
-        return isPermitted(RestPermissions.STREAMS_READ, streamId);
+        return Permissions.isPermitted(RestPermissions.STREAMS_READ, streamId);
     }
 
     public Result removeWidget(String dashboardId, String widgetId) {
@@ -585,7 +491,7 @@ public class DashboardsApiController extends AuthenticatedController {
 
     @BodyParser.Of(BodyParser.Json.class)
     public Result updateWidget(String dashboardId, String widgetId) {
-        if (!isPermitted(RestPermissions.DASHBOARDS_EDIT, dashboardId)) {
+        if (!Permissions.isPermitted(RestPermissions.DASHBOARDS_EDIT, dashboardId)) {
             return redirect(controllers.routes.StartpageController.redirect());
         }
 
