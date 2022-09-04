@@ -209,10 +209,6 @@ public class ColorPatternFormatter extends PatternFormatter {
         public int estimateLength() {
             return delegate.estimateLength() + 30;
         }
-
-        public boolean isCallerInformationRequired() {
-            return false;
-        }
     }
 }
 
