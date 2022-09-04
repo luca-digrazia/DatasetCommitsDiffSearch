@@ -19,17 +19,16 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_AC
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -47,17 +46,17 @@ public class CreateIncSymlinkActionTest extends FoundationTestCase {
   public void testDifferentOrderSameActionKey() throws Exception {
     Path includePath = rootDirectory.getRelative("out");
     ArtifactRoot root = ArtifactRoot.asDerivedRoot(rootDirectory, includePath);
-    Artifact a = ActionsTestUtil.createArtifact(root, "a");
-    Artifact b = ActionsTestUtil.createArtifact(root, "b");
-    Artifact c = ActionsTestUtil.createArtifact(root, "c");
-    Artifact d = ActionsTestUtil.createArtifact(root, "d");
+    Artifact a = new Artifact(PathFragment.create("a"), root);
+    Artifact b = new Artifact(PathFragment.create("b"), root);
+    Artifact c = new Artifact(PathFragment.create("c"), root);
+    Artifact d = new Artifact(PathFragment.create("d"), root);
     CreateIncSymlinkAction action1 =
         new CreateIncSymlinkAction(NULL_ACTION_OWNER, ImmutableMap.of(a, b, c, d), includePath);
     // Can't reuse the artifacts here; that would lead to DuplicateArtifactException.
-    a = ActionsTestUtil.createArtifact(root, "a");
-    b = ActionsTestUtil.createArtifact(root, "b");
-    c = ActionsTestUtil.createArtifact(root, "c");
-    d = ActionsTestUtil.createArtifact(root, "d");
+    a = new Artifact(PathFragment.create("a"), root);
+    b = new Artifact(PathFragment.create("b"), root);
+    c = new Artifact(PathFragment.create("c"), root);
+    d = new Artifact(PathFragment.create("d"), root);
     CreateIncSymlinkAction action2 =
         new CreateIncSymlinkAction(NULL_ACTION_OWNER, ImmutableMap.of(c, d, a, b), includePath);
 
@@ -68,13 +67,13 @@ public class CreateIncSymlinkActionTest extends FoundationTestCase {
   public void testDifferentTargetsDifferentActionKey() throws Exception {
     Path includePath = rootDirectory.getRelative("out");
     ArtifactRoot root = ArtifactRoot.asDerivedRoot(rootDirectory, includePath);
-    Artifact a = ActionsTestUtil.createArtifact(root, "a");
-    Artifact b = ActionsTestUtil.createArtifact(root, "b");
+    Artifact a = new Artifact(PathFragment.create("a"), root);
+    Artifact b = new Artifact(PathFragment.create("b"), root);
     CreateIncSymlinkAction action1 =
         new CreateIncSymlinkAction(NULL_ACTION_OWNER, ImmutableMap.of(a, b), includePath);
     // Can't reuse the artifacts here; that would lead to DuplicateArtifactException.
-    a = ActionsTestUtil.createArtifact(root, "a");
-    b = ActionsTestUtil.createArtifact(root, "c");
+    a = new Artifact(PathFragment.create("a"), root);
+    b = new Artifact(PathFragment.create("c"), root);
     CreateIncSymlinkAction action2 =
         new CreateIncSymlinkAction(NULL_ACTION_OWNER, ImmutableMap.of(a, b), includePath);
 
@@ -85,13 +84,13 @@ public class CreateIncSymlinkActionTest extends FoundationTestCase {
   public void testDifferentSymlinksDifferentActionKey() throws Exception {
     Path includePath = rootDirectory.getRelative("out");
     ArtifactRoot root = ArtifactRoot.asDerivedRoot(rootDirectory, includePath);
-    Artifact a = ActionsTestUtil.createArtifact(root, "a");
-    Artifact b = ActionsTestUtil.createArtifact(root, "b");
+    Artifact a = new Artifact(PathFragment.create("a"), root);
+    Artifact b = new Artifact(PathFragment.create("b"), root);
     CreateIncSymlinkAction action1 =
         new CreateIncSymlinkAction(NULL_ACTION_OWNER, ImmutableMap.of(a, b), includePath);
     // Can't reuse the artifacts here; that would lead to DuplicateArtifactException.
-    a = ActionsTestUtil.createArtifact(root, "c");
-    b = ActionsTestUtil.createArtifact(root, "b");
+    a = new Artifact(PathFragment.create("c"), root);
+    b = new Artifact(PathFragment.create("b"), root);
     CreateIncSymlinkAction action2 =
         new CreateIncSymlinkAction(NULL_ACTION_OWNER, ImmutableMap.of(a, b), includePath);
 
@@ -104,8 +103,8 @@ public class CreateIncSymlinkActionTest extends FoundationTestCase {
     outputDir.createDirectory();
     ArtifactRoot root = ArtifactRoot.asDerivedRoot(rootDirectory, outputDir);
     Path symlink = rootDirectory.getRelative("out/a");
-    Artifact a = ActionsTestUtil.createArtifact(root, symlink);
-    Artifact b = ActionsTestUtil.createArtifact(root, "b");
+    Artifact a = new Artifact(symlink, root);
+    Artifact b = new Artifact(PathFragment.create("b"), root);
     CreateIncSymlinkAction action = new CreateIncSymlinkAction(NULL_ACTION_OWNER,
         ImmutableMap.of(a, b), outputDir);
     action.execute(makeDummyContext());
@@ -123,7 +122,6 @@ public class CreateIncSymlinkActionTest extends FoundationTestCase {
         /*actionInputPrefetcher=*/ null,
         /*actionKeyContext=*/ null,
         /*metadataHandler=*/ null,
-        LostInputsCheck.NONE,
         /*fileOutErr=*/ null,
         new StoredEventHandler(),
         /*clientEnv=*/ ImmutableMap.of(),
@@ -139,8 +137,8 @@ public class CreateIncSymlinkActionTest extends FoundationTestCase {
     outputDir.createDirectory();
     ArtifactRoot root = ArtifactRoot.asDerivedRoot(rootDirectory, outputDir);
     Path symlink = rootDirectory.getRelative("out/subdir/a");
-    Artifact a = ActionsTestUtil.createArtifact(root, symlink);
-    Artifact b = ActionsTestUtil.createArtifact(root, "b");
+    Artifact a = new Artifact(symlink, root);
+    Artifact b = new Artifact(PathFragment.create("b"), root);
     CreateIncSymlinkAction action =
         new CreateIncSymlinkAction(NULL_ACTION_OWNER, ImmutableMap.of(a, b), outputDir);
     Path extra = rootDirectory.getRelative("out/extra");

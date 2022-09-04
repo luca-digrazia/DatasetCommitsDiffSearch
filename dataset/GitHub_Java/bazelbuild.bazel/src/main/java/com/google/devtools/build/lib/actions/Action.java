@@ -118,14 +118,8 @@ public interface Action extends ActionExecutionMetadata {
    * @throws InterruptedException if the execution is interrupted
    */
   @ConditionallyThreadCompatible
-  default ActionResult execute(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException, InterruptedException {
-    ActionContinuationOrResult continuation = beginExecution(actionExecutionContext);
-    while (!continuation.isDone()) {
-      continuation = continuation.execute();
-    }
-    return continuation.get();
-  }
+  ActionResult execute(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException;
 
   /**
    * Actions that want to support async execution can use this interface to do so. While this is
