@@ -161,20 +161,11 @@ public class ConfigDefinition extends CompoundConfigType {
     public void registerConfigRoot(Class<?> configRoot) {
         final AccessorFinder accessorFinder = new AccessorFinder();
         final ConfigRoot configRootAnnotation = configRoot.getAnnotation(ConfigRoot.class);
-        final ConfigPhase configPhase = configRootAnnotation.phase();
         if (configRoot.isAnnotationPresent(ConfigGroup.class)) {
             throw reportError(configRoot, "Roots cannot have a @ConfigGroup annotation");
         }
-        final String containingName;
-        if (configPhase == ConfigPhase.RUN_TIME) {
-            containingName = join(
-                    withoutSuffix(lowerCaseFirst(camelHumpsIterator(configRoot.getSimpleName())), "Config", "Configuration",
-                            "RunTimeConfig", "RunTimeConfiguration"));
-        } else {
-            containingName = join(
-                    withoutSuffix(lowerCaseFirst(camelHumpsIterator(configRoot.getSimpleName())), "Config", "Configuration",
-                            "BuildTimeConfig", "BuildTimeConfiguration"));
-        }
+        final String containingName = join(
+                withoutSuffix(lowerCaseFirst(camelHumpsIterator(configRoot.getSimpleName())), "Config", "Configuration"));
         final String name = configRootAnnotation.name();
         final String rootName;
         if (name.equals(ConfigItem.PARENT)) {
@@ -187,6 +178,7 @@ public class ConfigDefinition extends CompoundConfigType {
         } else {
             rootName = name;
         }
+        final ConfigPhase configPhase = configRootAnnotation.phase();
         if (rootTypesByContainingName.containsKey(containingName))
             throw reportError(configRoot, "Duplicate configuration root name \"" + containingName + "\"");
         final GroupConfigType configGroup = processConfigGroup(containingName, this, true, rootName, configRoot,
@@ -203,7 +195,6 @@ public class ConfigDefinition extends CompoundConfigType {
         GroupConfigType gct = new GroupConfigType(containingName, container, consumeSegment, configGroupClass, accessorFinder);
         final Field[] fields = configGroupClass.getDeclaredFields();
         for (Field field : fields) {
-            String javadocKey = field.getDeclaringClass().getName().replace("$", ".") + "." + field.getName();
             final int mods = field.getModifiers();
             if (Modifier.isStatic(mods)) {
                 // ignore static fields
@@ -243,19 +234,19 @@ public class ConfigDefinition extends CompoundConfigType {
                 final LeafConfigType leaf;
                 if (fieldClass == boolean.class) {
                     gct.addField(leaf = new BooleanConfigType(field.getName(), gct, consume,
-                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "false" : defaultValue, javadocKey, subKey));
+                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "false" : defaultValue));
                 } else if (fieldClass == int.class) {
                     gct.addField(leaf = new IntConfigType(field.getName(), gct, consume,
-                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue, javadocKey, subKey));
+                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue));
                 } else if (fieldClass == long.class) {
                     gct.addField(leaf = new LongConfigType(field.getName(), gct, consume,
-                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue, javadocKey, subKey));
+                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue));
                 } else if (fieldClass == double.class) {
                     gct.addField(leaf = new DoubleConfigType(field.getName(), gct, consume,
-                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue, javadocKey, subKey));
+                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue));
                 } else if (fieldClass == float.class) {
                     gct.addField(leaf = new FloatConfigType(field.getName(), gct, consume,
-                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue, javadocKey, subKey));
+                            defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue));
                 } else {
                     throw reportError(field, "Unsupported primitive field type");
                 }
@@ -265,26 +256,25 @@ public class ConfigDefinition extends CompoundConfigType {
                     throw reportError(field, "Map key must be " + String.class);
                 }
                 gct.addField(processMap(field.getName(), gct, field, consume, subKey, typeOfParameter(fieldType, 1),
-                        accessorFinder, javadocKey));
+                        accessorFinder));
             } else if (fieldClass == List.class) {
                 // list leaf class
                 final LeafConfigType leaf;
                 final Class<?> listType = rawTypeOfParameter(fieldType, 0);
                 gct.addField(leaf = new ObjectListConfigType(field.getName(), gct, consume,
-                        mapDefaultValue(defaultValue, listType), listType, javadocKey, subKey));
+                        mapDefaultValue(defaultValue, listType), listType));
                 container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
             } else if (fieldClass == Optional.class) {
                 final LeafConfigType leaf;
                 // optional config property
                 gct.addField(leaf = new OptionalObjectConfigType(field.getName(), gct, consume,
-                        defaultValue.equals(ConfigItem.NO_DEFAULT) ? "" : defaultValue, rawTypeOfParameter(fieldType, 0),
-                        javadocKey, subKey));
+                        defaultValue.equals(ConfigItem.NO_DEFAULT) ? "" : defaultValue, rawTypeOfParameter(fieldType, 0)));
                 container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
             } else {
                 final LeafConfigType leaf;
                 // it's a plain config property
                 gct.addField(leaf = new ObjectConfigType(field.getName(), gct, consume,
-                        mapDefaultValue(defaultValue, fieldClass), fieldClass, javadocKey, subKey));
+                        mapDefaultValue(defaultValue, fieldClass), fieldClass));
                 container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
             }
         }
@@ -293,7 +283,7 @@ public class ConfigDefinition extends CompoundConfigType {
 
     private MapConfigType processMap(final String containingName, final CompoundConfigType container,
             final AnnotatedElement containingElement, final boolean consumeSegment, final String baseKey,
-            final Type mapValueType, final AccessorFinder accessorFinder, String javadocKey) {
+            final Type mapValueType, final AccessorFinder accessorFinder) {
         MapConfigType mct = new MapConfigType(containingName, container, consumeSegment);
         final Class<?> valueClass = rawTypeOf(mapValueType);
         final String subKey = baseKey + ".{*}";
@@ -301,22 +291,21 @@ public class ConfigDefinition extends CompoundConfigType {
             if (!(mapValueType instanceof ParameterizedType))
                 throw reportError(containingElement, "Map must be parameterized");
             processMap(NO_CONTAINING_NAME, mct, containingElement, true, subKey, typeOfParameter(mapValueType, 1),
-                    accessorFinder, javadocKey);
+                    accessorFinder);
         } else if (valueClass.isAnnotationPresent(ConfigGroup.class)) {
             processConfigGroup(NO_CONTAINING_NAME, mct, true, subKey, valueClass, accessorFinder);
         } else if (valueClass == List.class) {
             if (!(mapValueType instanceof ParameterizedType))
                 throw reportError(containingElement, "List must be parameterized");
             final ObjectListConfigType leaf = new ObjectListConfigType(NO_CONTAINING_NAME, mct, consumeSegment, "",
-                    rawTypeOfParameter(mapValueType, 0), javadocKey, subKey);
+                    rawTypeOfParameter(mapValueType, 0));
             container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
         } else if (valueClass == Optional.class || valueClass == OptionalInt.class || valueClass == OptionalDouble.class
                 || valueClass == OptionalLong.class) {
             throw reportError(containingElement, "Optionals are not allowed as a map value type");
         } else {
             // treat as a plain object
-            final ObjectConfigType leaf = new ObjectConfigType(NO_CONTAINING_NAME, mct, true, "", valueClass, javadocKey,
-                    subKey);
+            final ObjectConfigType leaf = new ObjectConfigType(NO_CONTAINING_NAME, mct, true, "", valueClass);
             container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
         }
         return mct;
