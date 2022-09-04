@@ -135,9 +135,7 @@ class InterfaceDesugaring extends ClassVisitor {
     } else {
       result = super.visitMethod(access, name, desc, signature, exceptions);
     }
-    return result != null
-        ? new InterfaceInvocationRewriter(result, internalName, bootclasspath)
-        : null;
+    return result != null ? new InterfaceInvocationRewriter(result) : null;
   }
 
   private static String normalizeInterfaceMethodName(
@@ -193,16 +191,10 @@ class InterfaceDesugaring extends ClassVisitor {
    * methods declared in the bootclasspath as-is (but note that these would presumably fail on
    * devices without those methods).
    */
-  static class InterfaceInvocationRewriter extends MethodVisitor {
+  private class InterfaceInvocationRewriter extends MethodVisitor {
 
-    private final String internalName;
-    private final ClassReaderFactory bootclasspath;
-
-    public InterfaceInvocationRewriter(
-        MethodVisitor dest, String internalName, ClassReaderFactory bootclasspath) {
+    public InterfaceInvocationRewriter(MethodVisitor dest) {
       super(Opcodes.ASM5, dest);
-      this.internalName = internalName;
-      this.bootclasspath = bootclasspath;
     }
 
     @Override
