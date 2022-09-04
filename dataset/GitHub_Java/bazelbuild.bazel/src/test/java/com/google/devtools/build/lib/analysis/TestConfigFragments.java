@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -29,14 +30,14 @@ import com.google.devtools.build.lib.packages.Target;
  */
 public class TestConfigFragments {
   /**
-   * A {@link PatchTransition} that appends a given value to {@link
-   * BuildConfiguration.Options#hostCpu}.
+   * A {@link PatchTransition} that appends a given value to
+   * {@link BuildConfiguration.Options#testArguments}.
    */
-  private static class HostCpuTransition implements PatchTransition {
+  private static class TestArgTransition implements PatchTransition {
 
     private final String patchMessage;
 
-    HostCpuTransition(String patchMessage) {
+    TestArgTransition(String patchMessage) {
       this.patchMessage = patchMessage;
     }
 
@@ -51,8 +52,8 @@ public class TestConfigFragments {
       BuildOptions toOptions = options.clone();
       BuildConfiguration.Options coreOptions =
           toOptions.get(BuildConfiguration.Options.class);
-      String prefix = coreOptions.hostCpu.startsWith("$") ? coreOptions.hostCpu : "";
-      coreOptions.hostCpu = prefix + "$" + patchMessage;
+      coreOptions.testArguments = new ImmutableList.Builder<String>()
+          .addAll(coreOptions.testArguments).add(patchMessage).build();
       return toOptions;
     }
   }
@@ -84,27 +85,29 @@ public class TestConfigFragments {
     }
   }
 
-  /** Factory for a test fragment with a top-level configuration hook. */
+  /**
+   * Factory for a test fragment with a top-level configuration hook.
+   */
   public static SimpleFragmentFactory FragmentWithTopLevelConfigHook1Factory =
-      new SimpleFragmentFactory(
-          new BuildConfiguration.Fragment() {
-            @Override
-            public PatchTransition topLevelConfigurationHook(Target toTarget) {
-              return new HostCpuTransition("CONFIG HOOK 1");
-            }
-          });
+      new SimpleFragmentFactory(new BuildConfiguration.Fragment() {
+        @Override
+        public PatchTransition topLevelConfigurationHook(Target toTarget) {
+          return new TestArgTransition("CONFIG HOOK 1");
+        }
+      });
 
-  /** Factory for a test fragment with a top-level configuration hook. */
+  /**
+   * Factory for a test fragment with a top-level configuration hook.
+   */
   public static SimpleFragmentFactory FragmentWithTopLevelConfigHook2Factory =
       // The anonymous class definition for the BuildConfiguration.Fragment needs to be different
       // than the one of its peer above. This is because Bazel indexes configuration fragments
       // by class name. So we need to make sure all fragment definitions retain distinct class
       // names (i.e. "TestConfigFragments$1", "TestConfigFragments$2", etc).
-      new SimpleFragmentFactory(
-          new BuildConfiguration.Fragment() {
-            @Override
-            public PatchTransition topLevelConfigurationHook(Target toTarget) {
-              return new HostCpuTransition("CONFIG HOOK 2");
-            }
-          });
+      new SimpleFragmentFactory(new BuildConfiguration.Fragment() {
+        @Override
+        public PatchTransition topLevelConfigurationHook(Target toTarget) {
+          return new TestArgTransition("CONFIG HOOK 2");
+        }
+      });
 }

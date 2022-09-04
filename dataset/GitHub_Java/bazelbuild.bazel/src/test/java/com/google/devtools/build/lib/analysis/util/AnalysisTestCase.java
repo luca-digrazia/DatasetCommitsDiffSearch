@@ -55,6 +55,8 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
+import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
+import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
@@ -124,7 +126,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected MockToolsConfig mockToolsConfig;
 
   protected AnalysisMock analysisMock;
-  protected BuildOptions buildOptions;
   private OptionsParser optionsParser;
   protected PackageManager packageManager;
   private LoadingPhaseRunner loadingPhaseRunner;
@@ -170,11 +171,11 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             ruleClassProvider.getConfigurationFragments()));
     PackageFactory pkgFactory =
         analysisMock
-            .getPackageFactoryBuilderForTesting()
-            .build(ruleClassProvider, scratch.getFileSystem());
+            .getPackageFactoryForTesting()
+            .create(ruleClassProvider, scratch.getFileSystem());
     BinTools binTools = BinTools.forUnitTesting(directories, analysisMock.getEmbeddedTools());
     skyframeExecutor =
-        SequencedSkyframeExecutor.createForTesting(
+        SequencedSkyframeExecutor.create(
             pkgFactory,
             directories,
             binTools,
@@ -185,7 +186,9 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             analysisMock.getSkyFunctions(),
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
-            analysisMock.getProductName());
+            analysisMock.getProductName(),
+            CrossRepositoryLabelViolationStrategy.ERROR,
+            ImmutableList.of(BuildFileName.BUILD_DOT_BAZEL, BuildFileName.BUILD));
     PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
     packageCacheOptions.showLoadingProgress = true;
     packageCacheOptions.globbingThreads = 3;
@@ -243,8 +246,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
     InvocationPolicyEnforcer optionsPolicyEnforcer = analysisMock.getInvocationPolicyEnforcer();
     optionsPolicyEnforcer.enforce(optionsParser);
-
-    buildOptions = ruleClassProvider.createBuildOptions(optionsParser);
   }
 
   protected FlagBuilder defaultFlags() {
@@ -319,6 +320,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     BuildView.Options viewOptions = optionsParser.getOptions(BuildView.Options.class);
     viewOptions.keepGoing = flags.contains(Flag.KEEP_GOING);
     viewOptions.loadingPhaseThreads = LOADING_PHASE_THREADS;
+
+    BuildOptions buildOptions = ruleClassProvider.createBuildOptions(optionsParser);
 
     PackageCacheOptions packageCacheOptions = optionsParser.getOptions(PackageCacheOptions.class);
     PathPackageLocator pathPackageLocator = PathPackageLocator.create(
