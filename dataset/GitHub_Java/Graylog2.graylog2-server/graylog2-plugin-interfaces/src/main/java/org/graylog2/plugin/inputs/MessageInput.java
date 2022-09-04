@@ -28,7 +28,11 @@ import com.codahale.metrics.MetricSet;
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.annotation.JsonValue;
 import com.google.common.collect.Maps;
-import org.graylog2.plugin.*;
+import org.graylog2.plugin.ServerStatus;
+import org.graylog2.plugin.AbstractDescriptor;
+import org.graylog2.plugin.Message;
+import org.graylog2.plugin.Stoppable;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
@@ -102,13 +106,7 @@ public abstract class MessageInput implements Stoppable {
 
     public MessageInput(MetricRegistry metricRegistry,
                         Transport transport,
-                        LocalMetricRegistry localRegistry, Codec codec, Config config, Descriptor descriptor, ServerStatus serverStatus) {
-        if (metricRegistry == localRegistry) {
-            LOG.error("########### Do not add the global metric registry twice, the localRegistry parameter is " +
-                              "the same as the global metricRegistry. " +
-                              "This will cause duplicated metrics and is a bug. " +
-                              "Use LocalMetricRegistry in your input instead.");
-        }
+                        MetricRegistry localRegistry, Codec codec, Config config, Descriptor descriptor, ServerStatus serverStatus) {
         this.metricRegistry = metricRegistry;
         this.transport = transport;
         this.localRegistry = localRegistry;
