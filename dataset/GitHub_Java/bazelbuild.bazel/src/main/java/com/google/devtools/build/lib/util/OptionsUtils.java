@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.util;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
@@ -104,11 +103,7 @@ public final class OptionsUtils {
 
     @Override
     public PathFragment convert(String input) {
-      String path = Preconditions.checkNotNull(input);
-      if (!path.isEmpty() && path.startsWith("~/")) {
-        path = path.replace("~", System.getProperty("user.home"));
-      }
-      return PathFragment.create(path);
+      return PathFragment.create(input);
     }
 
     @Override
@@ -128,9 +123,6 @@ public final class OptionsUtils {
       List<PathFragment> list = new ArrayList<>();
       for (String piece : input.split(":")) {
         if (!piece.isEmpty()) {
-          if (piece.startsWith("~/")) {
-            piece = piece.replace("~", System.getProperty("user.home"));
-          }
           list.add(PathFragment.create(piece));
         }
       }

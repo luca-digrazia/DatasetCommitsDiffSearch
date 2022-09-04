@@ -14,7 +14,6 @@
 
 package com.google.devtools.common.options;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import java.util.function.Function;
 import javax.annotation.Nullable;
@@ -28,49 +27,25 @@ import javax.annotation.Nullable;
 public final class ParsedOptionDescription {
 
   private final OptionDefinition optionDefinition;
-  @Nullable private final String commandLineForm;
+  private final String commandLineForm;
   @Nullable private final String unconvertedValue;
   private final OptionInstanceOrigin origin;
 
-  private ParsedOptionDescription(
-      OptionDefinition optionDefinition,
-      @Nullable String commandLineForm,
-      @Nullable String unconvertedValue,
-      OptionInstanceOrigin origin) {
-    this.optionDefinition = Preconditions.checkNotNull(optionDefinition);
-    this.commandLineForm = commandLineForm;
-    this.unconvertedValue = unconvertedValue;
-    this.origin = Preconditions.checkNotNull(origin);
-  }
-
-  static ParsedOptionDescription newParsedOptionDescription(
+  public ParsedOptionDescription(
       OptionDefinition optionDefinition,
       String commandLineForm,
       @Nullable String unconvertedValue,
       OptionInstanceOrigin origin) {
-    // An actual ParsedOptionDescription should always have a form in which it was parsed, but some
-    // options, such as expansion options, legitimately have no value.
-    return new ParsedOptionDescription(
-        optionDefinition,
-        Preconditions.checkNotNull(commandLineForm),
-        unconvertedValue,
-        origin);
-  }
-
-  /**
-   * This factory should be used when there is no actual parsed option, since in those cases we do
-   * not have an original value or form that the option took.
-   */
-  static ParsedOptionDescription newDummyInstance(
-      OptionDefinition optionDefinition, OptionInstanceOrigin origin) {
-    return new ParsedOptionDescription(optionDefinition, null, null, origin);
+    this.optionDefinition = optionDefinition;
+    this.commandLineForm = commandLineForm;
+    this.unconvertedValue = unconvertedValue;
+    this.origin = origin;
   }
 
   public OptionDefinition getOptionDefinition() {
     return optionDefinition;
   }
 
-  @Nullable
   public String getCommandLineForm() {
     return commandLineForm;
   }
@@ -140,11 +115,7 @@ public final class ParsedOptionDescription {
     return unconvertedValue;
   }
 
-  public OptionInstanceOrigin getOrigin() {
-    return origin;
-  }
-
-  public OptionPriority getPriority() {
+  OptionPriority getPriority() {
     return origin.getPriority();
   }
 
@@ -152,11 +123,11 @@ public final class ParsedOptionDescription {
     return origin.getSource();
   }
 
-  ParsedOptionDescription getImplicitDependent() {
+  OptionDefinition getImplicitDependent() {
     return origin.getImplicitDependent();
   }
 
-  ParsedOptionDescription getExpandedFrom() {
+  OptionDefinition getExpandedFrom() {
     return origin.getExpandedFrom();
   }
 
@@ -177,14 +148,14 @@ public final class ParsedOptionDescription {
 
   @Override
   public String toString() {
-    // Check that a dummy value-less option instance does not output all the default information.
-    if (commandLineForm == null) {
-      return optionDefinition.toString();
+    StringBuilder result = new StringBuilder();
+    result.append("option '").append(optionDefinition.getOptionName()).append("' ");
+    result.append("set to '").append(unconvertedValue).append("' ");
+    result.append("with priority ").append(origin.getPriority());
+    if (origin.getSource() != null) {
+      result.append(" and source '").append(origin.getSource()).append("'");
     }
-    String source = origin.getSource();
-    return String.format(
-        "option '%s'%s",
-        commandLineForm, source == null ? "" : String.format(" (source %s)", source));
+    return result.toString();
   }
 
 }
