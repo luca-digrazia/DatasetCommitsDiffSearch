@@ -22,6 +22,8 @@ import javax.ws.rs.sse.SseEventSource;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -29,11 +31,11 @@ import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import io.quarkus.it.mongodb.panache.BookDTO;
-import io.quarkus.it.mongodb.panache.MongoTestResource;
 import io.quarkus.it.mongodb.panache.book.BookDetail;
 import io.quarkus.it.mongodb.panache.person.Person;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.mongodb.MongoReplicaSetTestResource;
 import io.restassured.RestAssured;
 import io.restassured.common.mapper.TypeRef;
 import io.restassured.config.ObjectMapperConfig;
@@ -41,7 +43,8 @@ import io.restassured.parsing.Parser;
 import io.restassured.response.Response;
 
 @QuarkusTest
-@QuarkusTestResource(MongoTestResource.class)
+@QuarkusTestResource(MongoReplicaSetTestResource.class)
+@DisabledOnOs(OS.WINDOWS)
 class ReactiveMongodbPanacheResourceTest {
     private static final TypeRef<List<BookDTO>> LIST_OF_BOOK_TYPE_REF = new TypeRef<List<BookDTO>>() {
     };
@@ -205,7 +208,7 @@ class ReactiveMongodbPanacheResourceTest {
                 nbEvent.increment();
             });
             source.open();
-            await().atMost(Duration.ofSeconds(1)).until(() -> nbEvent.count() == 3);
+            await().atMost(Duration.ofSeconds(10)).until(() -> nbEvent.count() == 3);
         }
 
         //delete all
@@ -277,6 +280,23 @@ class ReactiveMongodbPanacheResourceTest {
         list = get(endpoint + "?sort=firstname").as(LIST_OF_PERSON_TYPE_REF);
         assertEquals(4, list.size());
 
+        //with project
+        list = get(endpoint + "/search/Doe").as(LIST_OF_PERSON_TYPE_REF);
+        Assertions.assertEquals(1, list.size());
+        Assertions.assertNotNull(list.get(0).lastname);
+        //expected the firstname field to be null as we project on lastname only
+        Assertions.assertNull(list.get(0).firstname);
+
+        //rename the Doe
+        RestAssured
+                .given()
+                .queryParam("previousName", "Doe").queryParam("newName", "Dupont")
+                .header("Content-Type", "application/json")
+                .when().post(endpoint + "/rename")
+                .then().statusCode(200);
+        list = get(endpoint + "/search/Dupont").as(LIST_OF_PERSON_TYPE_REF);
+        Assertions.assertEquals(1, list.size());
+
         //count
         Long count = get(endpoint + "/count").as(Long.class);
         assertEquals(4, count);
@@ -333,5 +353,15 @@ class ReactiveMongodbPanacheResourceTest {
         public int count() {
             return cpt;
         }
+    }
+
+    @Test
+    public void testMoreEntityFunctionalities() {
+        get("/test/reactive/entity").then().statusCode(200);
+    }
+
+    @Test
+    public void testMoreRepositoryFunctionalities() {
+        get("/test/reactive/repository").then().statusCode(200);
     }
 }

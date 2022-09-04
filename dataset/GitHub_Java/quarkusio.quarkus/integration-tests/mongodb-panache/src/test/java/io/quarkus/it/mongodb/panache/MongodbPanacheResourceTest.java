@@ -11,8 +11,11 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
 
+import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -23,6 +26,7 @@ import io.quarkus.it.mongodb.panache.book.BookDetail;
 import io.quarkus.it.mongodb.panache.person.Person;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.mongodb.MongoReplicaSetTestResource;
 import io.restassured.RestAssured;
 import io.restassured.common.mapper.TypeRef;
 import io.restassured.config.ObjectMapperConfig;
@@ -30,12 +34,18 @@ import io.restassured.parsing.Parser;
 import io.restassured.response.Response;
 
 @QuarkusTest
-@QuarkusTestResource(MongoTestResource.class)
+@QuarkusTestResource(MongoReplicaSetTestResource.class)
+@DisabledOnOs(OS.WINDOWS)
 class MongodbPanacheResourceTest {
     private static final TypeRef<List<BookDTO>> LIST_OF_BOOK_TYPE_REF = new TypeRef<List<BookDTO>>() {
     };
     private static final TypeRef<List<Person>> LIST_OF_PERSON_TYPE_REF = new TypeRef<List<Person>>() {
     };
+
+    @Test
+    public void testAccessors() {
+        callEndpoint("/accessors");
+    }
 
     @Test
     public void testBookEntity() {
@@ -194,6 +204,21 @@ class MongodbPanacheResourceTest {
         Assertions.assertEquals(204, response.statusCode());
     }
 
+    private void callEndpoint(String endpoint) {
+        RestAssured.defaultParser = Parser.JSON;
+        RestAssured.config
+                .objectMapperConfig(new ObjectMapperConfig().jackson2ObjectMapperFactory((type, s) -> new ObjectMapper()
+                        .registerModule(new Jdk8Module())
+                        .registerModule(new JavaTimeModule())
+                        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)));
+
+        Response response = RestAssured
+                .given()
+                .get(endpoint)
+                .andReturn();
+        Assertions.assertEquals(200, response.statusCode());
+    }
+
     private void callPersonEndpoint(String endpoint) {
         RestAssured.defaultParser = Parser.JSON;
         RestAssured.config
@@ -257,7 +282,7 @@ class MongodbPanacheResourceTest {
 
         //with project
         list = get(endpoint + "/search/Doe").as(LIST_OF_PERSON_TYPE_REF);
-        Assertions.assertEquals(2, list.size());
+        Assertions.assertEquals(1, list.size());
         Assertions.assertNotNull(list.get(0).lastname);
         //expected the firstname field to be null as we project on lastname only
         Assertions.assertNull(list.get(0).firstname);
@@ -270,7 +295,7 @@ class MongodbPanacheResourceTest {
                 .when().post(endpoint + "/rename")
                 .then().statusCode(200);
         list = get(endpoint + "/search/Dupont").as(LIST_OF_PERSON_TYPE_REF);
-        Assertions.assertEquals(2, list.size());
+        Assertions.assertEquals(1, list.size());
 
         //count
         Long count = get(endpoint + "/count").as(Long.class);
@@ -310,6 +335,15 @@ class MongodbPanacheResourceTest {
 
         count = get(endpoint + "/count").as(Long.class);
         Assertions.assertEquals(0, count);
+
+        // Test prometheus metrics gathered using micrometer metrics
+        RestAssured.given()
+                .when().get("/q/metrics")
+                .then()
+                .statusCode(200)
+                .body(CoreMatchers.containsString("mongodb_driver_pool_checkedout"))
+                .body(CoreMatchers.containsString("mongodb_driver_pool_size"))
+                .body(CoreMatchers.containsString("mongodb_driver_pool_waitqueuesize"));
     }
 
     private Date yearToDate(int year) {
@@ -353,5 +387,10 @@ class MongodbPanacheResourceTest {
     @Test
     public void testMoreRepositoryFunctionalities() {
         get("/test/imperative/repository").then().statusCode(200);
+    }
+
+    @Test
+    public void testBug13301() {
+        get("/bugs/13301").then().statusCode(200);
     }
 }
