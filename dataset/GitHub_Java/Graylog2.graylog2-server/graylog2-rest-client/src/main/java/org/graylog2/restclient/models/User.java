@@ -38,7 +38,6 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -200,7 +199,7 @@ public class User {
             cur.startpage.type = null;
             cur.startpage.id = null;
         } else {
-            cur.startpage.type = startpage.getType().toString().toLowerCase(Locale.ENGLISH);
+            cur.startpage.type = startpage.getType().toString().toLowerCase();
             cur.startpage.id = startpage.getId();
         }
         return update(cur);
