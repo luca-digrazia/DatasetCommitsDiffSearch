@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,12 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.matrix;
 
+import java.io.Serializable;
 import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 import smile.math.MathEx;
 import smile.math.blas.*;
 import static smile.math.blas.Layout.*;
@@ -92,12 +92,12 @@ public class FloatSymmMatrix extends SMatrix {
     }
 
     @Override
-    public int nrows() {
+    public int nrow() {
         return n;
     }
 
     @Override
-    public int ncols() {
+    public int ncol() {
         return n;
     }
 
@@ -108,19 +108,23 @@ public class FloatSymmMatrix extends SMatrix {
 
     /**
      * Returns the matrix layout.
+     * @return the matrix layout.
      */
     public Layout layout() {
         return COL_MAJOR;
     }
 
-    /** Gets the format of packed matrix. */
+    /**
+     * Gets the format of packed matrix.
+     * @return the format of packed matrix.
+     */
     public UPLO uplo() {
         return uplo;
     }
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || !(o instanceof FloatSymmMatrix)) {
+        if (!(o instanceof FloatSymmMatrix)) {
             return false;
         }
 
@@ -128,19 +132,20 @@ public class FloatSymmMatrix extends SMatrix {
     }
 
     /**
-     * Returns if two matrices equals given an error margin.
+     * Returns true if two matrices equal in given precision.
      *
      * @param o the other matrix.
-     * @param eps the error margin.
+     * @param epsilon a number close to zero.
+     * @return true if two matrices equal in given precision.
      */
-    public boolean equals(FloatSymmMatrix o, float eps) {
+    public boolean equals(FloatSymmMatrix o, float epsilon) {
         if (n != o.n) {
             return false;
         }
 
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < n; i++) {
-                if (!MathEx.isZero(get(i, j) - o.get(i, j), eps)) {
+                if (!MathEx.isZero(get(i, j) - o.get(i, j), epsilon)) {
                     return false;
                 }
             }
@@ -169,7 +174,7 @@ public class FloatSymmMatrix extends SMatrix {
     }
 
     @Override
-    public FloatSymmMatrix set(int i, int j, float x) {
+    public void set(int i, int j, float x) {
         if (uplo == LOWER) {
             if (j > i) {
                 int tmp = i;
@@ -185,8 +190,6 @@ public class FloatSymmMatrix extends SMatrix {
             }
             AP[i + (j * (j+1) / 2)] = x;
         }
-
-        return this;
     }
 
     @Override
@@ -208,6 +211,7 @@ public class FloatSymmMatrix extends SMatrix {
 
     /**
      * Bunch-Kaufman decomposition.
+     * @return Bunch-Kaufman decomposition.
      */
     public BunchKaufman bk() {
         FloatSymmMatrix lu = clone();
@@ -225,6 +229,7 @@ public class FloatSymmMatrix extends SMatrix {
      * Cholesky decomposition for symmetric and positive definite matrix.
      *
      * @throws ArithmeticException if the matrix is not positive definite.
+     * @return Cholesky decomposition.
      */
     public Cholesky cholesky() {
         if (uplo == null) {
@@ -242,10 +247,10 @@ public class FloatSymmMatrix extends SMatrix {
     }
 
     /**
-     * The LU decomposition. For an m-by-n matrix A with m &ge; n, the LU
+     * The LU decomposition. For an m-by-n matrix A with {@code m >= n}, the LU
      * decomposition is an m-by-n unit lower triangular matrix L, an n-by-n
      * upper triangular matrix U, and a permutation vector piv of length m
-     * so that A(piv,:) = L*U. If m &lt; n, then L is m-by-m and U is m-by-n.
+     * so that A(piv,:) = L*U. If {@code m < n}, then L is m-by-m and U is m-by-n.
      * <p>
      * The LU decomposition with pivoting always exists, even if the matrix is
      * singular. The primary use of the LU decomposition is in the solution of
@@ -254,7 +259,8 @@ public class FloatSymmMatrix extends SMatrix {
      *
      * @author Haifeng Li
      */
-    public static class BunchKaufman {
+    public static class BunchKaufman implements Serializable {
+        private static final long serialVersionUID = 2L;
         /**
          * The Bunch–Kaufman decomposition.
          */
@@ -266,8 +272,8 @@ public class FloatSymmMatrix extends SMatrix {
         public final int[] ipiv;
 
         /**
-         * If info = 0, the LU decomposition was successful.
-         * If info = i > 0,  U(i,i) is exactly zero. The factorization
+         * If {@code info = 0}, the LU decomposition was successful.
+         * If {@code info = i > 0}, U(i,i) is exactly zero. The factorization
          * has been completed, but the factor U is exactly
          * singular, and division by zero will occur if it is used
          * to solve a system of equations.
@@ -276,9 +282,9 @@ public class FloatSymmMatrix extends SMatrix {
 
         /**
          * Constructor.
-         * @param lu       LU decomposition matrix
-         * @param ipiv     the pivot vector
-         * @param info     info > 0 if the matrix is singular
+         * @param lu   LU decomposition matrix.
+         * @param ipiv the pivot vector.
+         * @param info {@code info > 0} if the matrix is singular.
          */
         public BunchKaufman(FloatSymmMatrix lu, int[] ipiv, int info) {
             this.lu = lu;
@@ -287,18 +293,20 @@ public class FloatSymmMatrix extends SMatrix {
         }
 
         /**
-         * Returns if the matrix is singular.
+         * Returns true if the matrix is singular.
+         * @return true if the matrix is singular.
          */
         public boolean isSingular() {
             return info > 0;
         }
 
         /**
-         * Returns the matrix determinant
+         * Returns the matrix determinant.
+         * @return the matrix determinant.
          */
         public float det() {
             int n = lu.n;
-            float d = 1.0f;
+            double d = 1.0;
             for (int j = 0; j < n; j++) {
                 d *= lu.get(j, j);
             }
@@ -309,11 +317,12 @@ public class FloatSymmMatrix extends SMatrix {
                 }
             }
 
-            return d;
+            return (float) d;
         }
 
         /**
-         * Returns the matrix inverse. For pseudo inverse, use QRDecomposition.
+         * Returns the inverse of matrix.
+         * @return the inverse of matrix.
          */
         public FloatMatrix inverse() {
             FloatMatrix inv = FloatMatrix.eye(lu.n);
@@ -323,21 +332,21 @@ public class FloatSymmMatrix extends SMatrix {
 
         /**
          * Solve A * x = b.
-         * @param b  right hand side of linear system.
-         *           On output, b will be overwritten with the solution matrix.
-         * @exception  RuntimeException  if matrix is singular.
+         * @param b the right hand side of linear system.
+         * @throws RuntimeException when the matrix is singular.
+         * @return the solution vector.
          */
         public float[] solve(float[] b) {
-            float[] x = b.clone();
-            solve(new FloatMatrix(x));
-            return x;
+            FloatMatrix x = FloatMatrix.column(b);
+            solve(x);
+            return x.A;
         }
 
         /**
          * Solve A * X = B. B will be overwritten with the solution matrix on output.
-         * @param B  right hand side of linear system.
-         *           On output, B will be overwritten with the solution matrix.
-         * @throws  RuntimeException  if matrix is singular.
+         * @param B the right hand side of linear system.
+         *          On output, B will be overwritten with the solution matrix.
+         * @throws RuntimeException when the matrix is singular.
          */
         public void solve(FloatMatrix B) {
             if (B.m != lu.n) {
@@ -352,7 +361,7 @@ public class FloatSymmMatrix extends SMatrix {
                 throw new RuntimeException("The matrix is singular.");
             }
 
-            int ret = LAPACK.engine.sptrs(lu.layout(), lu.uplo, lu.n, B.n, FloatBuffer.wrap(lu.AP), IntBuffer.wrap(ipiv), B.A, B.ld);
+            int ret = LAPACK.engine.sptrs(lu.layout(), lu.uplo, lu.n, B.n, lu.AP, ipiv, B.A, B.ld);
             if (ret != 0) {
                 logger.error("LAPACK GETRS error code: {}", ret);
                 throw new ArithmeticException("LAPACK GETRS error code: " + ret);
@@ -383,8 +392,8 @@ public class FloatSymmMatrix extends SMatrix {
      *
      * @author Haifeng Li
      */
-    public static class Cholesky {
-
+    public static class Cholesky implements Serializable {
+        private static final long serialVersionUID = 2L;
         /**
          * The Cholesky decomposition.
          */
@@ -396,26 +405,42 @@ public class FloatSymmMatrix extends SMatrix {
          *           factorization.
          */
         public Cholesky(FloatSymmMatrix lu) {
-            if (lu.nrows() != lu.ncols()) {
+            if (lu.nrow() != lu.ncol()) {
                 throw new UnsupportedOperationException("Cholesky constructor on a non-square matrix");
             }
             this.lu = lu;
         }
 
         /**
-         * Returns the matrix determinant
+         * Returns the matrix determinant.
+         * @return the matrix determinant.
          */
         public float det() {
-            float d = 1.0f;
+            double d = 1.0;
             for (int i = 0; i < lu.n; i++) {
                 d *= lu.get(i, i);
             }
 
-            return d * d;
+            return (float) (d * d);
         }
 
         /**
-         * Returns the matrix inverse.
+         * Returns the log of matrix determinant.
+         * @return the log of matrix determinant.
+         */
+        public float logdet() {
+            int n = lu.n;
+            double d = 0.0;
+            for (int i = 0; i < n; i++) {
+                d += Math.log(lu.get(i, i));
+            }
+
+            return (float) (2.0 * d);
+        }
+
+        /**
+         * Returns the inverse of matrix.
+         * @return the inverse of matrix.
          */
         public FloatMatrix inverse() {
             FloatMatrix inv = FloatMatrix.eye(lu.n);
@@ -429,9 +454,9 @@ public class FloatSymmMatrix extends SMatrix {
          * @return the solution vector.
          */
         public float[] solve(float[] b) {
-            float[] x = b.clone();
-            solve(new FloatMatrix(x));
-            return x;
+            FloatMatrix x = FloatMatrix.column(b);
+            solve(x);
+            return x.A;
         }
 
         /**
@@ -444,7 +469,7 @@ public class FloatSymmMatrix extends SMatrix {
                 throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", lu.n, lu.n, B.m, B.n));
             }
 
-            int info = LAPACK.engine.pptrs(lu.layout(), lu.uplo, lu.n, B.n, FloatBuffer.wrap(lu.AP), B.A, B.ld);
+            int info = LAPACK.engine.pptrs(lu.layout(), lu.uplo, lu.n, B.n, lu.AP, B.A, B.ld);
             if (info != 0) {
                 logger.error("LAPACK POTRS error code: {}", info);
                 throw new ArithmeticException("LAPACK POTRS error code: " + info);

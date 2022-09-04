@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,12 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.matrix;
 
+import java.io.Serializable;
 import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 import smile.math.MathEx;
 import smile.math.blas.*;
 import static smile.math.blas.Layout.*;
@@ -56,12 +56,13 @@ import static smile.math.blas.UPLO.*;
  * involved in performing operations such as multiplication falls significantly,
  * often leading to huge savings in terms of calculation time and complexity.
  * <p>
- * Given a n-by-n band matrix with m<sub>1</sub> rows below the diagonal and m<sub>2</sub> rows above.
- * The matrix is compactly stored in an array A[0,n-1][0,m<sub>1</sub>+m<sub>2</sub>]. The diagonal
- * elements are in A[0,n-1][m<sub>1</sub>]. Subdiagonal elements are in A[j,n-1][0,m<sub>1</sub>-1]
- * with j &gt; 0 appropriate to the number of elements on each subdiagonal.
- * Superdiagonal elements are in A[0,j][m<sub>1</sub>+1,m<sub>2</sub>+m<sub>2</sub>]
- * with j &lt; n-1 appropriate to the number of elements on each superdiagonal.
+ * Given a n-by-n band matrix with m<sub>1</sub> rows below the diagonal
+ * and m<sub>2</sub> rows above. The matrix is compactly stored in an array
+ * A[0,n-1][0,m<sub>1</sub>+m<sub>2</sub>]. The diagonal elements are in
+ * A[0,n-1][m<sub>1</sub>]. The subdiagonal elements are in A[j,n-1][0,m<sub>1</sub>-1]
+ * with {@code j > 0} appropriate to the number of elements on each subdiagonal.
+ * The superdiagonal elements are in A[0,j][m<sub>1</sub>+1,m<sub>2</sub>+m<sub>2</sub>]
+ * with {@code j < n-1} appropriate to the number of elements on each superdiagonal.
  * 
  * @author Haifeng Li
  */
@@ -136,8 +137,8 @@ public class FloatBandMatrix extends SMatrix {
      * @param n the number of columns.
      * @param kl the number of subdiagonals.
      * @param ku the number of superdiagonals.
-     * @param AB the band matrix. A[i, j] is stored in
-     *           AB[ku+i-j, j] for max(0, j-ku) <= i <= min(m-1, j+kl).
+     * @param AB the band matrix. A[i, j] is stored in {@code AB[ku+i-j, j]}
+     *           for {@code max(0, j-ku) <= i <= min(m-1, j+kl)}.
      */
     public FloatBandMatrix(int m, int n, int kl, int ku, float[][] AB) {
         this(m, n, kl, ku);
@@ -162,12 +163,12 @@ public class FloatBandMatrix extends SMatrix {
     }
 
     @Override
-    public int nrows() {
+    public int nrow() {
         return m;
     }
 
     @Override
-    public int ncols() {
+    public int ncol() {
         return n;
     }
 
@@ -176,18 +177,25 @@ public class FloatBandMatrix extends SMatrix {
         return AB.length;
     }
 
-    /** Returns the number of subdiagonals. */
+    /**
+     * Returns the number of subdiagonals.
+     * @return the number of subdiagonals.
+     */
     public int kl() {
         return kl;
     }
 
-    /** Returns the number of superdiagonals. */
+    /**
+     * Returns the number of superdiagonals.
+     * @return the number of superdiagonals.
+     */
     public int ku() {
         return ku;
     }
 
     /**
      * Returns the matrix layout.
+     * @return the matrix layout.
      */
     public Layout layout() {
         return COL_MAJOR;
@@ -195,19 +203,25 @@ public class FloatBandMatrix extends SMatrix {
 
     /**
      * Returns the leading dimension.
+     * @return the leading dimension.
      */
     public int ld() {
         return ld;
     }
 
     /**
-     * Return if the matrix is symmetric (uplo != null).
+     * Return true if the matrix is symmetric (uplo != null).
+     * @return true if the matrix is symmetric (uplo != null).
      */
     public boolean isSymmetric() {
         return uplo != null;
     }
 
-    /** Sets the format of symmetric band matrix. */
+    /**
+     * Sets the format of symmetric band matrix.
+     * @param uplo the format of symmetric band matrix.
+     * @return this matrix.
+     */
     public FloatBandMatrix uplo(UPLO uplo) {
         if (m != n) {
             throw new IllegalArgumentException(String.format("The matrix is not square: %d x %d", m, n));
@@ -221,14 +235,17 @@ public class FloatBandMatrix extends SMatrix {
         return this;
     }
 
-    /** Gets the format of packed matrix. */
+    /**
+     * Gets the format of packed matrix.
+     * @return the format of packed matrix.
+     */
     public UPLO uplo() {
         return uplo;
     }
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || !(o instanceof FloatBandMatrix)) {
+        if (!(o instanceof FloatBandMatrix)) {
             return false;
         }
 
@@ -236,19 +253,20 @@ public class FloatBandMatrix extends SMatrix {
     }
 
     /**
-     * Returns if two matrices equals given an error margin.
+     * Returns true if two matrices equal in given precision.
      *
      * @param o the other matrix.
-     * @param eps the error margin.
+     * @param epsilon a number close to zero.
+     * @return true if two matrices equal in given precision.
      */
-    public boolean equals(FloatBandMatrix o, float eps) {
+    public boolean equals(FloatBandMatrix o, float epsilon) {
         if (m != o.m || n != o.n) {
             return false;
         }
 
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
-                if (!MathEx.isZero(get(i, j) - o.get(i, j), eps)) {
+                if (!MathEx.isZero(get(i, j) - o.get(i, j), epsilon)) {
                     return false;
                 }
             }
@@ -267,14 +285,12 @@ public class FloatBandMatrix extends SMatrix {
     }
 
     @Override
-    public FloatBandMatrix set(int i, int j, float x) {
+    public void set(int i, int j, float x) {
         if (Math.max(0, j-ku) <= i && i <= Math.min(m-1, j+kl)) {
             AB[j * ld + ku + i - j] = x;
         } else {
             throw new UnsupportedOperationException(String.format("Set element at (%d, %d)", i, j));
         }
-
-        return this;
     }
 
     @Override
@@ -310,6 +326,7 @@ public class FloatBandMatrix extends SMatrix {
 
     /**
      * LU decomposition.
+     * @return LU decomposition.
      */
     public LU lu() {
         FloatBandMatrix lu = new FloatBandMatrix(m, n, 2*kl, ku);
@@ -332,6 +349,7 @@ public class FloatBandMatrix extends SMatrix {
      * Cholesky decomposition for symmetric and positive definite matrix.
      *
      * @throws ArithmeticException if the matrix is not positive definite.
+     * @return Cholesky decomposition.
      */
     public Cholesky cholesky() {
         if (uplo == null) {
@@ -364,10 +382,10 @@ public class FloatBandMatrix extends SMatrix {
     }
 
     /**
-     * The LU decomposition. For an m-by-n matrix A with m &ge; n, the LU
+     * The LU decomposition. For an m-by-n matrix A with {@code m >= n}, the LU
      * decomposition is an m-by-n unit lower triangular matrix L, an n-by-n
      * upper triangular matrix U, and a permutation vector piv of length m
-     * so that A(piv,:) = L*U. If m &lt; n, then L is m-by-m and U is m-by-n.
+     * so that A(piv,:) = L*U. If {@code m < n}, then L is m-by-m and U is m-by-n.
      * <p>
      * The LU decomposition with pivoting always exists, even if the matrix is
      * singular. The primary use of the LU decomposition is in the solution of
@@ -376,7 +394,8 @@ public class FloatBandMatrix extends SMatrix {
      *
      * @author Haifeng Li
      */
-    public static class LU {
+    public static class LU implements Serializable {
+        private static final long serialVersionUID = 2L;
         /**
          * The LU decomposition.
          */
@@ -388,8 +407,8 @@ public class FloatBandMatrix extends SMatrix {
         public final int[] ipiv;
 
         /**
-         * If info = 0, the LU decomposition was successful.
-         * If info = i > 0,  U(i,i) is exactly zero. The factorization
+         * If {@code info = 0}, the LU decomposition was successful.
+         * If {@code info = i > 0}, U(i,i) is exactly zero. The factorization
          * has been completed, but the factor U is exactly
          * singular, and division by zero will occur if it is used
          * to solve a system of equations.
@@ -398,9 +417,9 @@ public class FloatBandMatrix extends SMatrix {
 
         /**
          * Constructor.
-         * @param lu       LU decomposition matrix
-         * @param ipiv     the pivot vector
-         * @param info     info > 0 if the matrix is singular
+         * @param lu   LU decomposition matrix.
+         * @param ipiv the pivot vector.
+         * @param info {@code info > 0} if the matrix is singular.
          */
         public LU(FloatBandMatrix lu, int[] ipiv, int info) {
             this.lu = lu;
@@ -409,14 +428,16 @@ public class FloatBandMatrix extends SMatrix {
         }
 
         /**
-         * Returns if the matrix is singular.
+         * Returns true if the matrix is singular.
+         * @return true if the matrix is singular.
          */
         public boolean isSingular() {
             return info > 0;
         }
 
         /**
-         * Returns the matrix determinant
+         * Returns the matrix determinant.
+         * @return the matrix determinant.
          */
         public float det() {
             int m = lu.m;
@@ -426,7 +447,7 @@ public class FloatBandMatrix extends SMatrix {
                 throw new IllegalArgumentException(String.format("The matrix is not square: %d x %d", m, n));
             }
 
-            float d = 1.0f;
+            double d = 1.0;
             for (int j = 0; j < n; j++) {
                 d *= lu.AB[j * lu.ld + lu.kl/2 + lu.ku];
             }
@@ -437,11 +458,12 @@ public class FloatBandMatrix extends SMatrix {
                 }
             }
 
-            return d;
+            return (float) d;
         }
 
         /**
-         * Returns the matrix inverse. For pseudo inverse, use QRDecomposition.
+         * Returns the inverse of matrix.
+         * @return the inverse of matrix.
          */
         public FloatMatrix inverse() {
             FloatMatrix inv = FloatMatrix.eye(lu.n);
@@ -450,22 +472,22 @@ public class FloatBandMatrix extends SMatrix {
         }
 
         /**
-         * Solve A * x = b.
-         * @param b  right hand side of linear system.
-         *           On output, b will be overwritten with the solution matrix.
-         * @exception  RuntimeException  if matrix is singular.
+         * Solve {@code A * x = b}.
+         * @param b the right hand side of linear system.
+         * @throws RuntimeException when the matrix is singular.
+         * @return the solution vector.
          */
         public float[] solve(float[] b) {
-            float[] x = b.clone();
-            solve(new FloatMatrix(x));
-            return x;
+            FloatMatrix x = FloatMatrix.column(b);
+            solve(x);
+            return x.A;
         }
 
         /**
-         * Solve A * X = B. B will be overwritten with the solution matrix on output.
-         * @param B  right hand side of linear system.
-         *           On output, B will be overwritten with the solution matrix.
-         * @throws  RuntimeException  if matrix is singular.
+         * Solve {@code A * X = B}. B will be overwritten with the solution matrix on output.
+         * @param B the right hand side of linear system.
+         *          On output, B will be overwritten with the solution matrix.
+         * @throws RuntimeException when the matrix is singular.
          */
         public void solve(FloatMatrix B) {
             if (lu.m != lu.n) {
@@ -484,7 +506,7 @@ public class FloatBandMatrix extends SMatrix {
                 throw new RuntimeException("The matrix is singular.");
             }
 
-            int ret = LAPACK.engine.gbtrs(lu.layout(), NO_TRANSPOSE, lu.n, lu.kl/2, lu.ku, B.n, FloatBuffer.wrap(lu.AB), lu.ld, IntBuffer.wrap(ipiv), B.A, B.ld);
+            int ret = LAPACK.engine.gbtrs(lu.layout(), NO_TRANSPOSE, lu.n, lu.kl/2, lu.ku, B.n, lu.AB, lu.ld, ipiv, B.A, B.ld);
             if (ret != 0) {
                 logger.error("LAPACK GETRS error code: {}", ret);
                 throw new ArithmeticException("LAPACK GETRS error code: " + ret);
@@ -515,8 +537,8 @@ public class FloatBandMatrix extends SMatrix {
      *
      * @author Haifeng Li
      */
-    public static class Cholesky {
-
+    public static class Cholesky implements Serializable {
+        private static final long serialVersionUID = 2L;
         /**
          * The Cholesky decomposition.
          */
@@ -528,26 +550,42 @@ public class FloatBandMatrix extends SMatrix {
          *           factorization.
          */
         public Cholesky(FloatBandMatrix lu) {
-            if (lu.nrows() != lu.ncols()) {
+            if (lu.nrow() != lu.ncol()) {
                 throw new UnsupportedOperationException("Cholesky constructor on a non-square matrix");
             }
             this.lu = lu;
         }
 
         /**
-         * Returns the matrix determinant
+         * Returns the matrix determinant.
+         * @return the matrix determinant.
          */
         public float det() {
-            float d = 1.0f;
+            double d = 1.0;
             for (int i = 0; i < lu.n; i++) {
                 d *= lu.get(i, i);
             }
 
-            return d * d;
+            return (float) (d * d);
         }
 
         /**
-         * Returns the matrix inverse.
+         * Returns the log of matrix determinant.
+         * @return the log of matrix determinant.
+         */
+        public float logdet() {
+            int n = lu.n;
+            double d = 0.0;
+            for (int i = 0; i < n; i++) {
+                d += Math.log(lu.get(i, i));
+            }
+
+            return (float) (2.0 * d);
+        }
+
+        /**
+         * Returns the inverse of matrix.
+         * @return the inverse of matrix.
          */
         public FloatMatrix inverse() {
             FloatMatrix inv = FloatMatrix.eye(lu.n);
@@ -556,18 +594,18 @@ public class FloatBandMatrix extends SMatrix {
         }
 
         /**
-         * Solves the linear system A * x = b.
+         * Solves the linear system {@code A * x = b}.
          * @param b the right hand side of linear systems.
          * @return the solution vector.
          */
         public float[] solve(float[] b) {
-            float[] x = b.clone();
-            solve(new FloatMatrix(x));
-            return x;
+            FloatMatrix x = FloatMatrix.column(b);
+            solve(x);
+            return x.A;
         }
 
         /**
-         * Solves the linear system A * X = B.
+         * Solves the linear system {@code A * X = B}.
          * @param B the right hand side of linear systems. On output, B will
          *          be overwritten with the solution matrix.
          */
@@ -576,7 +614,7 @@ public class FloatBandMatrix extends SMatrix {
                 throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", lu.m, lu.n, B.m, B.n));
             }
 
-            int info = LAPACK.engine.pbtrs(lu.layout(), lu.uplo, lu.n, lu.uplo == LOWER ? lu.kl : lu.ku, B.n, FloatBuffer.wrap(lu.AB), lu.ld, B.A, B.ld);
+            int info = LAPACK.engine.pbtrs(lu.layout(), lu.uplo, lu.n, lu.uplo == LOWER ? lu.kl : lu.ku, B.n, lu.AB, lu.ld, B.A, B.ld);
             if (info != 0) {
                 logger.error("LAPACK POTRS error code: {}", info);
                 throw new ArithmeticException("LAPACK POTRS error code: " + info);
