@@ -18,9 +18,11 @@ import com.google.common.base.Strings;
 import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.AndroidResourceProcessor.AaptConfigOptions;
 import com.google.devtools.build.android.Converters.PathConverter;
+import com.google.devtools.build.android.Converters.PathListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
+import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
@@ -79,6 +81,22 @@ public class LibraryRClassGeneratorAction {
     )
     public List<Path> symbols;
 
+    // TODO(laszlocsomor): remove this flag after 2018-01-31 (about 6 months from now). Everyone
+    // should have updated to newer Bazel versions by then.
+    @Deprecated
+    @Option(
+      name = "symbols",
+      defaultValue = "",
+      converter = PathListConverter.class,
+      deprecationWarning = "Deprecated in favour of \"--symbol\"",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      category = "config",
+      help = "Parsed symbol binaries to write as R classes.",
+      metadataTags = {OptionMetadataTag.DEPRECATED}
+    )
+    public List<Path> deprecatedSymbols;
+
     @Option(
       name = "targetLabel",
       defaultValue = "null",
@@ -109,6 +127,7 @@ public class LibraryRClassGeneratorAction {
     optionsParser.parseAndExitUponError(args);
     AaptConfigOptions aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     Options options = optionsParser.getOptions(Options.class);
+    options.symbols = Converters.concatLists(options.symbols, options.deprecatedSymbols);
     logger.fine(
         String.format("Option parsing finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
     try (ScopedTemporaryDirectory scopedTmp =

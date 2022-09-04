@@ -42,6 +42,7 @@ public class OptionsUtilsTest {
   public static class IntrospectionExample extends OptionsBase {
     @Option(
       name = "alpha",
+      category = "one",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "alpha"
@@ -50,6 +51,7 @@ public class OptionsUtilsTest {
 
     @Option(
       name = "beta",
+      category = "one",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "beta"
@@ -106,6 +108,7 @@ public class OptionsUtilsTest {
   public static class BooleanOpts extends OptionsBase {
     @Option(
       name = "b_one",
+      category = "xyz",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "true"
@@ -114,6 +117,7 @@ public class OptionsUtilsTest {
 
     @Option(
       name = "b_two",
+      category = "123", // Not printed in usage messages!
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false"

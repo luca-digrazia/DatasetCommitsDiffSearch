@@ -25,7 +25,8 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.android.AndroidDataConverter.JoinerType;
+import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.ToArg;
+import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.ToArg.Includes;
 import com.google.devtools.build.lib.util.OS;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,28 +40,27 @@ import java.util.List;
  */
 public class AndroidResourceMergingActionBuilder {
 
-  private static final AndroidDataConverter<MergableAndroidData> RESOURCE_CONTAINER_TO_ARG =
-      AndroidDataConverter.<MergableAndroidData>builder(JoinerType.SEMICOLON_AMPERSAND)
-          .withRoots(MergableAndroidData::getResourceRoots)
-          .withRoots(MergableAndroidData::getAssetRoots)
-          .withLabel(MergableAndroidData::getLabel)
-          .withArtifact(MergableAndroidData::getSymbols)
-          .build();
+  private static final ResourceContainerConverter.ToArg RESOURCE_CONTAINER_TO_ARG =
+      ResourceContainerConverter.builder()
+          .include(Includes.ResourceRoots)
+          .include(Includes.Label)
+          .include(Includes.SymbolsBin)
+          .withSeparator(ToArg.SeparatorType.SEMICOLON_AMPERSAND)
+          .toArgConverter();
 
-  private static final AndroidDataConverter<CompiledMergableAndroidData>
-      RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED =
-          AndroidDataConverter.<CompiledMergableAndroidData>builder(JoinerType.SEMICOLON_AMPERSAND)
-              .withRoots(CompiledMergableAndroidData::getResourceRoots)
-              .withRoots(CompiledMergableAndroidData::getAssetRoots)
-              .withLabel(CompiledMergableAndroidData::getLabel)
-              .withArtifact(CompiledMergableAndroidData::getCompiledSymbols)
-              .build();
+  private static final ResourceContainerConverter.ToArg RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED =
+      ResourceContainerConverter.builder()
+          .include(Includes.ResourceRoots)
+          .include(Includes.Label)
+          .include(Includes.CompiledSymbols)
+          .withSeparator(ToArg.SeparatorType.SEMICOLON_AMPERSAND)
+          .toArgConverter();
 
   private final RuleContext ruleContext;
   private final AndroidSdkProvider sdk;
 
   // Inputs
-  private CompiledMergableAndroidData primary;
+  private ResourceContainer primary;
   private ResourceDependencies dependencies;
 
   // Outputs
@@ -84,7 +84,7 @@ public class AndroidResourceMergingActionBuilder {
    * The primary resource for merging. This resource will overwrite any resource or data value in
    * the transitive closure.
    */
-  private AndroidResourceMergingActionBuilder withPrimary(CompiledMergableAndroidData primary) {
+  public AndroidResourceMergingActionBuilder withPrimary(ResourceContainer primary) {
     this.primary = primary;
     return this;
   }
@@ -172,10 +172,8 @@ public class AndroidResourceMergingActionBuilder {
     inputs.add(primary.getCompiledSymbols());
 
     if (dependencies != null) {
-      RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED.addDepsToCommandLine(
-          builder,
-          dependencies.getDirectResourceContainers(),
-          dependencies.getTransitiveResourceContainers());
+      ResourceContainerConverter.addToCommandLine(
+          dependencies, builder, RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED);
       inputs.addTransitive(dependencies.getTransitiveResources());
       inputs.addTransitive(dependencies.getTransitiveAssets());
       inputs.addTransitive(dependencies.getTransitiveCompiledSymbols());
@@ -210,10 +208,7 @@ public class AndroidResourceMergingActionBuilder {
     inputs.add(primary.getSymbols());
 
     if (dependencies != null) {
-      RESOURCE_CONTAINER_TO_ARG.addDepsToCommandLine(
-          builder,
-          dependencies.getDirectResourceContainers(),
-          dependencies.getTransitiveResourceContainers());
+      ResourceContainerConverter.addToCommandLine(dependencies, builder, RESOURCE_CONTAINER_TO_ARG);
       inputs.addTransitive(dependencies.getTransitiveResources());
       inputs.addTransitive(dependencies.getTransitiveAssets());
       inputs.addTransitive(dependencies.getTransitiveSymbolsBin());
@@ -245,7 +240,7 @@ public class AndroidResourceMergingActionBuilder {
             .build(context));
   }
 
-  private void build(RuleContext context) {
+  public ResourceContainer build(RuleContext context) {
     CustomCommandLine.Builder parsedMergeBuilder =
         new CustomCommandLine.Builder().add("--tool").add("MERGE").add("--");
     CustomCommandLine.Builder compiledMergeBuilder =
@@ -290,13 +285,9 @@ public class AndroidResourceMergingActionBuilder {
     if (!parsedMergeOutputs.isEmpty()) {
       buildParsedResourceMergingAction(parsedMergeBuilder, parsedMergeOutputs, context);
     }
-  }
-
-  public ResourceContainer build(RuleContext ruleContext, ResourceContainer resourceContainer) {
-    withPrimary(resourceContainer).build(ruleContext);
 
     // Return the full set of processed transitive dependencies.
-    ResourceContainer.Builder result = resourceContainer.toBuilder();
+    ResourceContainer.Builder result = primary.toBuilder();
     if (classJarOut != null) {
       // ensure the classJar is propagated if it exists. Otherwise, AndroidCommon tries to make it.
       // TODO(corysmith): Centralize the class jar generation.

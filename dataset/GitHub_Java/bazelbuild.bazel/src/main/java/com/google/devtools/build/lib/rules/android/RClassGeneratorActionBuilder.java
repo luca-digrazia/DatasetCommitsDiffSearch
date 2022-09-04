@@ -97,7 +97,7 @@ public class RClassGeneratorActionBuilder {
     }
     if (dependencies != null) {
       // TODO(corysmith): Remove NestedSet as we are already flattening it.
-      Iterable<ValidatedAndroidData> depResources = dependencies.getResourceContainers();
+      Iterable<ResourceContainer> depResources = dependencies.getResourceContainers();
       if (!Iterables.isEmpty(depResources)) {
         builder.addAll(
             VectorArg.addBefore("--library")
@@ -132,15 +132,15 @@ public class RClassGeneratorActionBuilder {
             .build(ruleContext));
   }
 
-  private static Artifact chooseRTxt(ValidatedAndroidData container, AndroidAaptVersion version) {
+  private static Artifact chooseRTxt(ResourceContainer container, AndroidAaptVersion version) {
     return version == AndroidAaptVersion.AAPT2 ? container.getAapt2RTxt() : container.getRTxt();
   }
 
-  private static Function<ValidatedAndroidData, NestedSet<Artifact>> chooseDepsToArtifacts(
+  private static Function<ResourceContainer, NestedSet<Artifact>> chooseDepsToArtifacts(
       final AndroidAaptVersion version) {
-    return new Function<ValidatedAndroidData, NestedSet<Artifact>>() {
+    return new Function<ResourceContainer, NestedSet<Artifact>>() {
       @Override
-      public NestedSet<Artifact> apply(ValidatedAndroidData container) {
+      public NestedSet<Artifact> apply(ResourceContainer container) {
         NestedSetBuilder<Artifact> artifacts = NestedSetBuilder.naiveLinkOrder();
         addIfNotNull(chooseRTxt(container, version), artifacts);
         addIfNotNull(container.getManifest(), artifacts);
@@ -155,11 +155,11 @@ public class RClassGeneratorActionBuilder {
     };
   }
 
-  private static Function<ValidatedAndroidData, String> chooseDepsToArg(
+  private static Function<ResourceContainer, String> chooseDepsToArg(
       final AndroidAaptVersion version) {
-    return new Function<ValidatedAndroidData, String>() {
+    return new Function<ResourceContainer, String>() {
       @Override
-      public String apply(ValidatedAndroidData container) {
+      public String apply(ResourceContainer container) {
         Artifact rTxt = chooseRTxt(container, version);
         return (rTxt != null ? rTxt.getExecPath() : "")
             + ","

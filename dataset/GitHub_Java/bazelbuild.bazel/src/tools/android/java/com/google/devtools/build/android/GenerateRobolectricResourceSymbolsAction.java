@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -52,12 +53,11 @@ public class GenerateRobolectricResourceSymbolsAction {
       Logger.getLogger(GenerateRobolectricResourceSymbolsAction.class.getName());
 
   private static final class WriteLibraryRClass implements Callable<Boolean> {
-    private final Map.Entry<String, Collection<ListenableFuture<ResourceSymbols>>>
-        librarySymbolEntry;
+    private final Entry<String, Collection<ListenableFuture<ResourceSymbols>>> librarySymbolEntry;
     private final RClassGenerator generator;
 
     private WriteLibraryRClass(
-        Map.Entry<String, Collection<ListenableFuture<ResourceSymbols>>> librarySymbolEntry,
+        Entry<String, Collection<ListenableFuture<ResourceSymbols>>> librarySymbolEntry,
         RClassGenerator generator) {
       this.librarySymbolEntry = librarySymbolEntry;
       this.generator = generator;
@@ -185,9 +185,8 @@ public class GenerateRobolectricResourceSymbolsAction {
           libraries.add(library);
         }
         List<ListenableFuture<Boolean>> writeSymbolsTask = new ArrayList<>();
-        for (final Map.Entry<String, Collection<ListenableFuture<ResourceSymbols>>>
-            librarySymbolEntry :
-                ResourceSymbols.loadFrom(libraries, executorService, null).asMap().entrySet()) {
+        for (final Entry<String, Collection<ListenableFuture<ResourceSymbols>>> librarySymbolEntry :
+            ResourceSymbols.loadFrom(libraries, executorService, null).asMap().entrySet()) {
           writeSymbolsTask.add(
               executorService.submit(new WriteLibraryRClass(librarySymbolEntry, generator)));
         }
