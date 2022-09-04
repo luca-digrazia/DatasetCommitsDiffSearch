@@ -18,46 +18,39 @@ package org.graylog2.outputs;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
-import com.jayway.awaitility.Duration;
+import com.google.common.util.concurrent.Uninterruptibles;
 import org.graylog2.Configuration;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.shared.journal.NoopJournal;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
-import static com.jayway.awaitility.Awaitility.await;
 import static org.mockito.Matchers.anyListOf;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import static org.testng.Assert.fail;
 
-@RunWith(MockitoJUnitRunner.class)
 public class BatchedElasticSearchOutputTest {
 
     private MetricRegistry metricRegistry;
-    @Mock
-    private Messages messages;
-    @Mock
     private Cluster cluster;
+    private Messages messages;
 
-    @Before
+    @BeforeMethod
     public void setUp() {
         metricRegistry = new MetricRegistry();
+        cluster = mock(Cluster.class);
+        messages = mock(Messages.class);
     }
 
     @Test
-    public void flushingBatchWritesBulk() throws Exception {
+    public void flushingBatchWritesBulk() {
         final Configuration config = new Configuration() {
             @Override
             public int getOutputBatchSize() {
@@ -71,10 +64,14 @@ public class BatchedElasticSearchOutputTest {
         MetricRegistry metricRegistry = new MetricRegistry();
 
         final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, messages,
-                cluster, config, new NoopJournal());
+                                                                                 cluster, config, new NoopJournal());
 
-        for (Message message : messageList) {
-            output.write(message);
+        try {
+            for (Message message : messageList) {
+                output.write(message);
+            }
+        } catch (Exception e) {
+            fail("Output should not throw", e);
         }
 
         output.flush(false);
@@ -83,7 +80,7 @@ public class BatchedElasticSearchOutputTest {
     }
 
     @Test
-    public void dontFlushWritesIfElasticsearchIsUnhealthy() throws Exception {
+    public void dontFlushWritesIfElasticsearchIsUnhealthy() {
         final Configuration config = new Configuration() {
             @Override
             public int getOutputBatchSize() {
@@ -95,8 +92,12 @@ public class BatchedElasticSearchOutputTest {
         final List<Message> messageList = buildMessages(3);
         BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, messages, cluster, config, new NoopJournal());
 
-        for (Message message : messageList) {
-            output.write(message);
+        try {
+            for (Message message : messageList) {
+                output.write(message);
+            }
+        } catch (Exception e) {
+            fail("Output should not throw", e);
         }
 
         output.flush(false);
@@ -105,7 +106,7 @@ public class BatchedElasticSearchOutputTest {
     }
 
     @Test
-    public void flushIfBatchSizeIsExceeded() throws Exception {
+    public void flushIfBatchSizeIsExceeded() {
         final int batchSize = 5;
         final Configuration config = new Configuration() {
             @Override
@@ -118,16 +119,18 @@ public class BatchedElasticSearchOutputTest {
         final List<Message> messageList = buildMessages(batchSize + 1);
         final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, messages, cluster, config, new NoopJournal());
 
-        for (Message message : messageList) {
-            output.write(message);
+        try {
+            for (Message message : messageList) {
+                output.write(message);
+            }
+        } catch (Exception e) {
+            fail("Output should not throw", e);
         }
 
-        await().atMost(Duration.FIVE_SECONDS).until(new Runnable() {
-            @Override
-            public void run() {
-                verify(messages, times(1)).bulkIndex(eq(messageList.subList(0, batchSize)));
-            }
-        });
+        // Give the asynchronous flush a chance to finish
+        Uninterruptibles.sleepUninterruptibly(250, TimeUnit.MILLISECONDS);
+
+        verify(messages, times(1)).bulkIndex(eq(messageList.subList(0, batchSize)));
     }
 
     @Test
