@@ -16,26 +16,18 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.collect.CollectionUtils;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Fingerprint;
 
 /** A representation of a list of arguments. */
-@AutoCodec(strategy = Strategy.POLYMORPHIC)
 public abstract class CommandLine {
-  public static final ObjectCodec<CommandLine> CODEC = new CommandLine_AutoCodec();
-
   @AutoCodec
   @VisibleForSerialization
   static class EmptyCommandLine extends CommandLine {
-    public static final ObjectCodec<EmptyCommandLine> CODEC =
-        new CommandLine_EmptyCommandLine_AutoCodec();
-
     @Override
     public Iterable<String> arguments() throws CommandLineExpansionException {
       return ImmutableList.of();
@@ -69,13 +61,10 @@ public abstract class CommandLine {
 
   @AutoCodec
   @VisibleForSerialization
-  static class ArgumentCommandLine extends CommandLine {
-    public static final ObjectCodec<ArgumentCommandLine> CODEC =
-        new CommandLine_ArgumentCommandLine_AutoCodec();
-
+  static class SimpleCommandLine extends CommandLine {
     private Iterable<String> args;
 
-    ArgumentCommandLine(Iterable<String> args) {
+    SimpleCommandLine(Iterable<String> args) {
       this.args = args;
     }
 
@@ -88,33 +77,54 @@ public abstract class CommandLine {
   /** Returns a {@link CommandLine} backed by a copy of the given list of arguments. */
   public static CommandLine of(Iterable<String> arguments) {
     final Iterable<String> immutableArguments = CollectionUtils.makeImmutable(arguments);
-    return new ArgumentCommandLine(immutableArguments);
+    return new SimpleCommandLine(immutableArguments);
   }
 
   @AutoCodec
   @VisibleForSerialization
-  static class ConcatenatedCommandLine extends CommandLine {
-    public static final ObjectCodec<ConcatenatedCommandLine> CODEC =
-        new CommandLine_ConcatenatedCommandLine_AutoCodec();
-
+  static class PrefixedCommandLine extends CommandLine {
     private ImmutableList<String> executableArgs;
     private CommandLine commandLine;
 
     @VisibleForSerialization
-    ConcatenatedCommandLine(ImmutableList<String> executableArgs, CommandLine commandLine) {
+    PrefixedCommandLine(ImmutableList<String> executableArgs, CommandLine commandLine) {
       this.executableArgs = executableArgs;
       this.commandLine = commandLine;
     }
 
     @Override
     public Iterable<String> arguments() throws CommandLineExpansionException {
-      return Iterables.concat(executableArgs, commandLine.arguments());
+      return IterablesChain.concat(executableArgs, commandLine.arguments());
     }
 
     @Override
     public Iterable<String> arguments(ArtifactExpander artifactExpander)
         throws CommandLineExpansionException {
-      return Iterables.concat(executableArgs, commandLine.arguments(artifactExpander));
+      return IterablesChain.concat(executableArgs, commandLine.arguments(artifactExpander));
+    }
+  }
+
+  @AutoCodec
+  @VisibleForSerialization
+  static class SuffixedCommandLine extends CommandLine {
+    private ImmutableList<String> executableArgs;
+    private CommandLine commandLine;
+
+    @VisibleForSerialization
+    SuffixedCommandLine(ImmutableList<String> executableArgs, CommandLine commandLine) {
+      this.executableArgs = executableArgs;
+      this.commandLine = commandLine;
+    }
+
+    @Override
+    public Iterable<String> arguments() throws CommandLineExpansionException {
+      return IterablesChain.concat(commandLine.arguments(), executableArgs);
+    }
+
+    @Override
+    public Iterable<String> arguments(ArtifactExpander artifactExpander)
+        throws CommandLineExpansionException {
+      return IterablesChain.concat(commandLine.arguments(artifactExpander), executableArgs);
     }
   }
 
@@ -127,34 +137,10 @@ public abstract class CommandLine {
     if (executableArgs.isEmpty()) {
       return commandLine;
     }
-    return new ConcatenatedCommandLine(executableArgs, commandLine);
-  }
-
-  @AutoCodec
-  @VisibleForSerialization
-  static class ReverseConcatenatedCommandLine extends CommandLine {
-    public static final ObjectCodec<ReverseConcatenatedCommandLine> CODEC =
-        new CommandLine_ReverseConcatenatedCommandLine_AutoCodec();
-
-    private ImmutableList<String> executableArgs;
-    private CommandLine commandLine;
-
-    @VisibleForSerialization
-    ReverseConcatenatedCommandLine(ImmutableList<String> executableArgs, CommandLine commandLine) {
-      this.executableArgs = executableArgs;
-      this.commandLine = commandLine;
+    if (commandLine == EMPTY) {
+      return CommandLine.of(executableArgs);
     }
-
-    @Override
-    public Iterable<String> arguments() throws CommandLineExpansionException {
-      return Iterables.concat(commandLine.arguments(), executableArgs);
-    }
-
-    @Override
-    public Iterable<String> arguments(ArtifactExpander artifactExpander)
-        throws CommandLineExpansionException {
-      return Iterables.concat(commandLine.arguments(artifactExpander), executableArgs);
-    }
+    return new PrefixedCommandLine(executableArgs, commandLine);
   }
 
   /**
@@ -166,7 +152,10 @@ public abstract class CommandLine {
     if (args.isEmpty()) {
       return commandLine;
     }
-    return new ReverseConcatenatedCommandLine(args, commandLine);
+    if (commandLine == EMPTY) {
+      return CommandLine.of(args);
+    }
+    return new SuffixedCommandLine(args, commandLine);
   }
 
   /**
