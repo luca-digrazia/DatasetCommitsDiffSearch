@@ -24,36 +24,45 @@ import com.googlecode.androidannotations.annotations.OnActivityResult;
 @EActivity(R.layout.views_injected)
 public class AwaitingResultActivity extends Activity {
 
-	@OnActivityResult(R.id.first_request)
+	static final int FIRST_REQUEST = 11;
+	static final int SECOND_REQUEST = 22;
+	static final int THIRD_REQUEST = 33;
+
+	boolean	onResultCalled = false;
+	boolean	onResultWithDataCalled = false;
+	boolean	onActivityResultWithResultCodeAndDataCalled = false;
+	boolean	onActivityResultWithDataAndResultCodeCalled = false;
+	boolean	onResultWithIntResultCodeCalled = false;
+	boolean	onResultWithIntegerResultCodeCalled = false;
+
+	@OnActivityResult(FIRST_REQUEST)
 	void onResult() {
+		onResultCalled = true;
 	}
 
-	@OnActivityResult(R.id.second_request)
+	@OnActivityResult(SECOND_REQUEST)
 	void onResultWithData(Intent intentData) {
+		onResultWithDataCalled = true;
 	}
 
-	@OnActivityResult
-	void secondRequestResult(int result, Intent intentData) {
+	@OnActivityResult(SECOND_REQUEST)
+	void onActivityResultWithResultCodeAndData(int result, Intent intentData) {
+		onActivityResultWithResultCodeAndDataCalled = true;
 	}
 
-	@OnActivityResult
-	void secondRequestResult(Intent intentData, int result) {
+	@OnActivityResult(SECOND_REQUEST)
+	void onActivityResultWithDataAndResultCode(Intent intentData, int result) {
+		onActivityResultWithDataAndResultCodeCalled = true;
 	}
 
-	@OnActivityResult(R.id.third_request)
+	@OnActivityResult(THIRD_REQUEST)
 	void onResultWithIntResultCode(int resultCode) {
+		onResultWithIntResultCodeCalled = true;
 	}
 
-	@OnActivityResult(R.id.third_request)
+	@OnActivityResult(THIRD_REQUEST)
 	void onResultWithIntegerResultCode(Integer resultCodeInteger) {
-	}
-
-	@OnActivityResult({ R.id.first_request, R.id.second_request })
-	void firstAndSecondRequestResult(Integer resultCodeInteger) {
-	}
-
-	@OnActivityResult(resName = { "third_request", "second_request" })
-	void secondAndThirdRequestResult(Integer resultCodeInteger) {
+		onResultWithIntegerResultCodeCalled = true;
 	}
 
 }

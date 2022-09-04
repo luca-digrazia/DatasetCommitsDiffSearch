@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,11 +15,15 @@
  */
 package com.googlecode.androidannotations.processing;
 
+import java.lang.annotation.Annotation;
 import java.util.HashMap;
-import java.util.Map;
 
+import com.googlecode.androidannotations.annotations.EBean;
+import com.googlecode.androidannotations.annotations.EViewGroup;
+import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
+import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
@@ -29,12 +33,16 @@ import com.sun.codemodel.JVar;
 
 public class EBeanHolder {
 
-	public JDefinedClass eBean;
+	public final JDefinedClass generatedClass;
 	/**
 	 * Only defined on activities
 	 */
 	public JVar beforeCreateSavedInstanceStateParam;
 	public JMethod init;
+	/**
+	 * Only defined on activities and components potentially depending on
+	 * activity ( {@link EViewGroup}, {@link EBean}
+	 */
 	public JMethod afterSetContentView;
 	public JBlock extrasNotNullBlock;
 	public JVar extras;
@@ -42,30 +50,90 @@ public class EBeanHolder {
 
 	public JMethod cast;
 
-	private Map<String, JClass> loadedClasses = new HashMap<String, JClass>();
 	public JFieldVar handler;
 
-	public JSwitch onOptionsItemSelectedSwitch;
+	public JBlock onOptionsItemSelectedIfElseBlock;
+	public JVar onOptionsItemSelectedItemId;
 	public JVar onOptionsItemSelectedItem;
-	
+
+	public JMethod restoreSavedInstanceStateMethod;
+	public JBlock saveInstanceStateBlock;
+
 	public JExpression contextRef;
+	/**
+	 * Should not be used by inner annotations that target services, broadcast
+	 * receivers, and content providers
+	 */
 	public JBlock initIfActivityBody;
 	public JExpression initActivityRef;
 
+	/**
+	 * Only defined in activities
+	 */
+	public JDefinedClass intentBuilderClass;
+
+	/**
+	 * Only defined in activities
+	 */
+	public JFieldVar intentField;
+
+	/**
+	 * Only defined in activities
+	 */
+	public NonConfigurationHolder nonConfigurationHolder;
+
+	/**
+	 * TextWatchers by idRef
+	 */
+	public final HashMap<String, TextWatcherHolder> textWatchers = new HashMap<String, TextWatcherHolder>();
+
+	/**
+	 * OnActivityResult byResultCode
+	 */
+	public final HashMap<Integer, JBlock> onActivityResultCases = new HashMap<Integer, JBlock>();
+
+	public JSwitch onActivityResultSwitch;
+	public JMethod onActivityResultMethod;
+
+	/**
+	 * onSeekBarChangeListeners by idRef
+	 */
+	public final HashMap<String, OnSeekBarChangeListenerHolder> onSeekBarChangeListeners = new HashMap<String, OnSeekBarChangeListenerHolder>();
+
+	public JVar fragmentArguments;
+	public JFieldVar fragmentArgumentsBuilderField;
+	public JMethod fragmentArgumentsInjectMethod;
+	public JBlock fragmentArgumentsNotNullBlock;
+	public JDefinedClass fragmentBuilderClass;
+
+	public JMethod findNativeFragmentById;
+	public JMethod findSupportFragmentById;
+	public JMethod findNativeFragmentByTag;
+	public JMethod findSupportFragmentByTag;
+
+	private final EBeansHolder eBeansHolder;
+	public final Class<? extends Annotation> eBeanAnnotation;
+
+	public EBeanHolder(EBeansHolder eBeansHolder, Class<? extends Annotation> eBeanAnnotation, JDefinedClass generatedClass) {
+		this.eBeansHolder = eBeansHolder;
+		this.eBeanAnnotation = eBeanAnnotation;
+		this.generatedClass = generatedClass;
+	}
+
+	public Classes classes() {
+		return eBeansHolder.classes();
+	}
+
+	public JCodeModel codeModel() {
+		return eBeansHolder.codeModel();
+	}
+
 	public JClass refClass(String fullyQualifiedClassName) {
-
-		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
-
-		if (refClass == null) {
-			refClass = eBean.owner().ref(fullyQualifiedClassName);
-			loadedClasses.put(fullyQualifiedClassName, refClass);
-		}
-
-		return refClass;
+		return eBeansHolder.refClass(fullyQualifiedClassName);
 	}
 
 	public JClass refClass(Class<?> clazz) {
-		return eBean.owner().ref(clazz);
+		return eBeansHolder.refClass(clazz);
 	}
 
 }
