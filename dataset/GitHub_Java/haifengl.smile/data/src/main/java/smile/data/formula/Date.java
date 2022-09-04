@@ -1,30 +1,29 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.data.formula;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import smile.data.Tuple;
-import smile.data.measure.Measure;
-import smile.data.measure.NominalScale;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
 import smile.data.type.StructType;
@@ -54,7 +53,7 @@ class Date implements HyperTerm {
     public Date(String name, DateFeature... features) {
         this.name = name;
         this.features = features;
-        this.terms = Arrays.stream(features).map(feature -> new FeatureExtractor(feature)).collect(Collectors.toList());
+        terms = Arrays.stream(features).map(feature -> new FeatureExtractor(feature)).collect(Collectors.toList());
     }
 
     @Override
@@ -121,38 +120,20 @@ class Date implements HyperTerm {
     }
 
     /** The date/time feature extractor. */
-    class FeatureExtractor extends AbstractTerm {
-        /** The feature to be extracted. */
-        DateFeature feature;
+    class FeatureExtractor extends AbstractTerm implements Term {
         /** The level of nominal scale. */
-        Optional<Measure> measure;
+        DateFeature feature;
 
         /**
          * Constructor.
          */
         public FeatureExtractor(DateFeature feature) {
             this.feature = feature;
-            switch (feature) {
-                case MONTH: {
-                    int[] values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-                    String[] levels = {"JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"};
-                    measure = Optional.of(new NominalScale(values, levels));
-                    break;
-                }
-                case DAY_OF_WEEK: {
-                    int[] values = {1, 2, 3, 4, 5, 6, 7};
-                    String[] levels = {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"};
-                    measure = Optional.of(new NominalScale(values, levels));
-                    break;
-                }
-                default:
-                    measure = Optional.empty();
-            }
         }
 
         @Override
         public String toString() {
-            return name();
+            return String.format("%s_%s", name, feature);
         }
 
         @Override
@@ -212,18 +193,8 @@ class Date implements HyperTerm {
         }
 
         @Override
-        public String name() {
-            return String.format("%s_%s", name, feature);
-        }
-
-        @Override
         public DataType type() {
             return DataTypes.IntegerType;
-        }
-
-        @Override
-        public Optional<Measure> measure() {
-            return measure;
         }
 
         @Override

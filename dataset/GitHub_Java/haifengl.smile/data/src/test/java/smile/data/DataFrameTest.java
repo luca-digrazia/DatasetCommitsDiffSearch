@@ -15,6 +15,7 @@
  *******************************************************************************/
 package smile.data;
 
+import com.sun.tools.javah.Gen;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -28,6 +29,7 @@ import java.util.List;
 
 import smile.data.formula.DateFeature;
 import smile.data.formula.Formula;
+import smile.data.measure.NominalScale;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
 import smile.data.type.StructField;

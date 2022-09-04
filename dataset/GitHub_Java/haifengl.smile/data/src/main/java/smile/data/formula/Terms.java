@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.data.formula;
 
 import java.util.function.*;
@@ -35,22 +33,12 @@ public interface Terms {
 
     /** Returns all columns not otherwise in the formula. */
     static HyperTerm all() {
-        return new All();
+        return all(true);
     }
 
-    /** Factor interaction of two or more factors. */
-    static HyperTerm interact(String... factors) {
-        return new Interaction(factors);
-    }
-
-    /** Factor crossing of two or more factors. */
-    static HyperTerm cross(String... factors) {
-        return new FactorCrossing(factors);
-    }
-
-    /** Factor crossing of two or more factors. */
-    static HyperTerm cross(int order, String... factors) {
-        return new FactorCrossing(order, factors);
+    /** Returns all columns if rest is true or only those not otherwise in the formula. */
+    static HyperTerm all(boolean rest) {
+        return new All(rest);
     }
 
     /** Deletes a variable from the formula. */
@@ -63,9 +51,9 @@ public interface Terms {
         return new Delete(x);
     }
 
-    /** One-hot encoding of nominal factors. */
-    static HyperTerm onehot(String... factors) {
-        return new OneHot(factors);
+    /** One-hot encoding of a nominal scale. */
+    static HyperTerm onehot(String x) {
+        return new OneHot(x);
     }
 
     /** Extracts date/time features. */
@@ -408,11 +396,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return String.valueOf(x);
             }
 
@@ -433,11 +416,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return String.valueOf(x);
             }
 
@@ -473,11 +451,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return String.valueOf(x);
             }
 
@@ -513,11 +486,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return String.valueOf(x);
             }
 
@@ -553,11 +521,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return String.valueOf(x);
             }
 
@@ -593,11 +556,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return String.valueOf(x);
             }
 
@@ -628,11 +586,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return String.valueOf(x);
             }
 
@@ -663,11 +616,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return String.valueOf(x);
             }
 
@@ -695,11 +643,6 @@ public interface Terms {
         return new Constant() {
             @Override
             public String toString() {
-                return name();
-            }
-
-            @Override
-            public String name() {
                 return x.toString();
             }
 
