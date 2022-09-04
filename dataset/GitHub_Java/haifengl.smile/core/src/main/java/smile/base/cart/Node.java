@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.base.cart;
 
@@ -27,8 +27,6 @@ import smile.math.MathEx;
 
 /**
  * CART tree node.
- *
- * @author Haifeng Li
  */
 public interface Node extends Serializable {
     /**
@@ -46,9 +44,6 @@ public interface Node extends Serializable {
 
     /** Returns the number of samples in the node. */
     int size();
-
-    /** Returns the number of leaf nodes in the subtree. */
-    int leafs();
 
     /**
      * Returns the maximum depth of the tree -- the number of
