@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
@@ -54,6 +53,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CppDebugFileProvider;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
@@ -107,7 +107,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
 
     try {
       ConfiguredAspect.Builder result = new ConfiguredAspect.Builder(this, parameters, ruleContext);
-      new Impl(ruleContext, protoInfo, cppSemantics, ccToolchainType).addProviders(result);
+      new Impl(ruleContext, protoInfo, cppSemantics).addProviders(result);
       return result.build();
     } catch (RuleErrorException e) {
       ruleContext.ruleError(e.getMessage());
@@ -145,18 +145,12 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
     private final ProtoInfo protoInfo;
     private final CppSemantics cppSemantics;
     private final NestedSetBuilder<Artifact> filesBuilder;
-    private final Label ccToolchainType;
 
-    Impl(
-        RuleContext ruleContext,
-        ProtoInfo protoInfo,
-        CppSemantics cppSemantics,
-        Label ccToolchainType)
+    Impl(RuleContext ruleContext, ProtoInfo protoInfo, CppSemantics cppSemantics)
         throws RuleErrorException, InterruptedException {
       this.ruleContext = ruleContext;
       this.protoInfo = protoInfo;
       this.cppSemantics = cppSemantics;
-      this.ccToolchainType = ccToolchainType;
       FeatureConfiguration featureConfiguration = getFeatureConfiguration();
       ProtoConfiguration protoConfiguration = ruleContext.getFragment(ProtoConfiguration.class);
 
@@ -231,16 +225,16 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
           ccLinkingHelper.buildCcLinkingContextFromLibrariesToLink(
               libraryToLink, compilationInfo.getCcCompilationContext());
 
+      CppDebugFileProvider cppDebugFileProvider =
+          CcCompilationHelper.buildCppDebugFileProvider(
+              compilationInfo.getCcCompilationOutputs(), deps);
       ccLibraryProviders =
           new TransitiveInfoProviderMapBuilder()
+              .add(cppDebugFileProvider)
               .put(
                   CcInfo.builder()
                       .setCcCompilationContext(compilationInfo.getCcCompilationContext())
                       .setCcLinkingContext(ccLinkingContext)
-                      .setCcDebugInfoContext(
-                          CppHelper.mergeCcDebugInfoContexts(
-                              compilationInfo.getCcCompilationOutputs(),
-                              AnalysisUtils.getProviders(deps, CcInfo.PROVIDER)))
                       .build())
               .add(ccNativeLibraryProvider)
               .build();
@@ -370,11 +364,10 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       return helper;
     }
 
-    private CcToolchainProvider ccToolchain(RuleContext ruleContext) {
+    private static CcToolchainProvider ccToolchain(RuleContext ruleContext) {
       return CppHelper.getToolchain(
           ruleContext,
-          ruleContext.getPrerequisite(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, TARGET),
-          ccToolchainType);
+          ruleContext.getPrerequisite(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, TARGET));
     }
 
     private ImmutableSet<Artifact> getOutputFiles(Iterable<String> suffixes) {
