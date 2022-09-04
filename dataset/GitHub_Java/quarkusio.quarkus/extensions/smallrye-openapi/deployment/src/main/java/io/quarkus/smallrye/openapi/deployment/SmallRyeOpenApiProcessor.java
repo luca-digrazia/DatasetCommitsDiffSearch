@@ -61,7 +61,6 @@ import io.quarkus.resteasy.server.common.spi.AllowedJaxRsAnnotationPrefixBuildIt
 import io.quarkus.resteasy.server.common.spi.ResteasyJaxrsConfigBuildItem;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.smallrye.openapi.common.deployment.SmallRyeOpenApiConfig;
-import io.quarkus.smallrye.openapi.deployment.security.SecurityConfigFilter;
 import io.quarkus.smallrye.openapi.deployment.spi.AddToOpenAPIDefinitionBuildItem;
 import io.quarkus.smallrye.openapi.runtime.OpenApiConstants;
 import io.quarkus.smallrye.openapi.runtime.OpenApiDocumentService;
@@ -168,25 +167,17 @@ public class SmallRyeOpenApiProcessor {
          */
         if (launch.getLaunchMode() == LaunchMode.DEVELOPMENT) {
             recorder.setupClDevMode(shutdownContext);
+            displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem(
+                    nonApplicationRootPathBuildItem.adjustPath(openApiConfig.path), "Open API Schema document"));
         }
 
         Handler<RoutingContext> handler = recorder.handler(openApiRuntimeConfig);
-        return nonApplicationRootPathBuildItem.routeBuilder()
+        return new RouteBuildItem.Builder()
                 .route(openApiConfig.path)
-                .routeConfigKey("quarkus.smallrye-openapi.path")
                 .handler(handler)
-                .displayOnNotFoundPage("Open API Schema document")
-                .requiresLegacyRedirect()
                 .blockingRoute()
+                .nonApplicationRoute()
                 .build();
-    }
-
-    @BuildStep
-    void addSecurityFilter(BuildProducer<AddToOpenAPIDefinitionBuildItem> addToOpenAPIDefinitionProducer,
-            SmallRyeOpenApiConfig config) {
-
-        addToOpenAPIDefinitionProducer
-                .produce(new AddToOpenAPIDefinitionBuildItem(new SecurityConfigFilter(config)));
     }
 
     @BuildStep
