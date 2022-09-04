@@ -3,6 +3,7 @@ package io.quarkus.vertx.http.deployment.devmode.console;
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -44,7 +45,7 @@ public class OpenIdeHandler extends DevConsolePostHandler {
         }
 
         if (ide != null) {
-            typicalProcessLaunch(routingContext, className, lang, srcMainPath, line, ide);
+            typicalProcessLaunch(routingContext, className, lang, srcMainPath, line, ide.getExecutable());
         } else {
             log.debug("Unhandled IDE : " + ide);
             routingContext.fail(500);
@@ -52,33 +53,26 @@ public class OpenIdeHandler extends DevConsolePostHandler {
     }
 
     private void typicalProcessLaunch(RoutingContext routingContext, String className, String lang, String srcMainPath,
-            String line, Ide ide) {
+            String line, String binary) {
         String arg = toFileName(className, lang, srcMainPath);
         if (!isNullOrEmpty(line)) {
             arg = arg + ":" + line;
         }
-        launchInIDE(ide, arg, routingContext);
+        launchInIDE(Arrays.asList(binary, arg), routingContext);
     }
 
     private String toFileName(String className, String lang, String srcMainPath) {
-        String effectiveClassName = className;
-        int dollarIndex = className.indexOf("$");
-        if (dollarIndex > -1) {
-            // in this case we are dealing with inner classes, so we need to get the name of the outer class
-            // in order to use for conversion to the file name
-            effectiveClassName = className.substring(0, dollarIndex);
-        }
+        // TODO: handler inner classes
         return srcMainPath + File.separator + lang + File.separator
-                + (effectiveClassName.replace('.', File.separatorChar) + "." + LANG_TO_EXT.get(lang));
+                + (className.replace('.', File.separatorChar) + "." + LANG_TO_EXT.get(lang));
 
     }
 
-    protected void launchInIDE(Ide ide, String arg, RoutingContext routingContext) {
+    protected void launchInIDE(List<String> command, RoutingContext routingContext) {
         new Thread(new Runnable() {
             public void run() {
                 try {
-                    new ProcessBuilder(Arrays.asList(ide.getEffectiveCommand(), arg)).inheritIO().start().waitFor(10,
-                            TimeUnit.SECONDS);
+                    new ProcessBuilder(command).inheritIO().start().waitFor(10, TimeUnit.SECONDS);
                     routingContext.response().setStatusCode(200).end();
                 } catch (Exception e) {
                     routingContext.fail(e);
