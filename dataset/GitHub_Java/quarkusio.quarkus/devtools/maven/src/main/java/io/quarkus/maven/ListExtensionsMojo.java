@@ -16,7 +16,7 @@ import io.quarkus.generators.BuildTool;
  * List the available extensions.
  * You can add one or several extensions in one go, with the 2 following mojos:
  * {@code add-extensions} and {@code add-extension}.
- * You can list all extension or just installable. Choose between 3 output formats: name, concise and full.
+ * You can list all extension or just installable and choose simple or full format.
  */
 @Mojo(name = "list-extensions", requiresProject = false)
 public class ListExtensionsMojo extends AbstractMojo {
@@ -34,10 +34,9 @@ public class ListExtensionsMojo extends AbstractMojo {
     protected boolean all;
 
     /**
-     * Select the output format among 'name' (display the name only), 'concise' (display name and description) and 'full'
-     * (concise format and version related columns).
+     * Display in simplified format.
      */
-    @Parameter(property = "quarkus.extension.format", alias = "quarkus.extension.format", defaultValue = "concise")
+    @Parameter(property = "quarkus.extension.format", alias = "quarkus.extension.format", defaultValue = "simple")
     protected String format;
 
     /**
