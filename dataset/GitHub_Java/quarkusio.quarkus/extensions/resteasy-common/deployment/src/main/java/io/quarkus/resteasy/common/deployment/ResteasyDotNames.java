@@ -44,8 +44,6 @@ public final class ResteasyDotNames {
             .createSimple(org.jboss.resteasy.annotations.jaxrs.HeaderParam.class.getName());
     public static final DotName RESTEASY_MATRIX_PARAM = DotName
             .createSimple(org.jboss.resteasy.annotations.jaxrs.MatrixParam.class.getName());
-    public static final DotName RESTEASY_SSE_ELEMENT_TYPE = DotName
-            .createSimple(org.jboss.resteasy.annotations.SseElementType.class.getName());
 
     public static final IgnoreForReflectionPredicate IGNORE_FOR_REFLECTION_PREDICATE = new IgnoreForReflectionPredicate();
 
@@ -77,7 +75,6 @@ public final class ResteasyDotNames {
             DotName.createSimple("javax.ws.rs.core.Response"),
             DotName.createSimple("javax.ws.rs.container.AsyncResponse"),
             DotName.createSimple("javax.ws.rs.core.StreamingOutput"),
-            DotName.createSimple("javax.ws.rs.core.Form"),
 
             // RESTEasy
             DotName.createSimple("org.jboss.resteasy.plugins.providers.multipart.MultipartInput"),
