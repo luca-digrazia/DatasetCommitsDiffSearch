@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.demo.classification;
 
@@ -21,6 +21,7 @@ import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -30,7 +31,6 @@ import javax.swing.JPanel;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
 import org.apache.commons.csv.CSVFormat;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.data.type.DataTypes;
@@ -95,7 +95,7 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
         setLayout(new BorderLayout());
         add(optionPane, BorderLayout.NORTH);
 
-        double[][] data = formula.x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.ONE_HOT);
+        double[][] data = formula.x(dataset[datasetIndex]).toArray();
         int[] label = formula.y(dataset[datasetIndex]).toIntArray();
         
         if (data.length < 500) {
@@ -114,7 +114,7 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
      * @param label the data label for classification
      */
     protected Canvas paintOnCanvas(double[][] data, int[] label) {
-        return ScatterPlot.of(data, label, mark).canvas();
+        return ScatterPlot.of(data, mark, label).canvas();
     }
     
     /**
@@ -140,7 +140,8 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
     }
 
     /**
-     * Execute the classification algorithm.
+     * Execute the clustering algorithm and return a swing JComponent representing
+     * the clusters.
      */
     public abstract double[][] learn(double[] x, double[] y);
 
@@ -149,7 +150,7 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
         startButton.setEnabled(false);
         datasetBox.setEnabled(false);
 
-        double[][] data = formula.x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.ONE_HOT);
+        double[][] data = formula.x(dataset[datasetIndex]).toArray();
         int[] label = formula.y(dataset[datasetIndex]).toIntArray();
         
         if (data.length < 500) {
@@ -179,6 +180,7 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
             double[][] f = learn(x, y);
 
             if (f != null) {
+                /*
                 double[][] grid = new double[y.length * x.length][];
                 int[] clazz = new int[y.length * x.length];
                 for (int i = 0, k = 0; i < y.length; i++) {
@@ -189,7 +191,8 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
                     }
                 }
 
-                canvas.add(ScatterPlot.of(grid, clazz, '.'));
+                canvas.add(ScatterPlot.of(grid, '.', clazz));
+                 */
 
                 double[] levels = getContourLevels();
                 Contour contour = new Contour(x, y, f, levels);
@@ -217,7 +220,7 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
             datasetIndex = datasetBox.getSelectedIndex();
             loadData(datasetIndex);
 
-            double[][] data = formula.x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.ONE_HOT);
+            double[][] data = formula.x(dataset[datasetIndex]).toArray();
             int[] label = formula.y(dataset[datasetIndex]).toIntArray();
         
             if (data.length < 500) {
@@ -225,7 +228,7 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
             } else {
                 mark = '.';
             }
-            Canvas canvas = ScatterPlot.of(data, label, mark).canvas();
+            Canvas canvas = ScatterPlot.of(data, mark, label).canvas();
             BorderLayout layout = (BorderLayout) getLayout();
             remove(layout.getLayoutComponent(BorderLayout.CENTER));
             add(canvas.panel(), BorderLayout.CENTER);
@@ -238,10 +241,10 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
         if (datasetBox.getSelectedIndex() != datasetIndex) {
             datasetBox.setSelectedIndex(datasetIndex);
 
-            double[][] data = formula.x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.ONE_HOT);
+            double[][] data = formula.x(dataset[datasetIndex]).toArray();
             int[] label = formula.y(dataset[datasetIndex]).toIntArray();
         
-            Canvas canvas = ScatterPlot.of(data, label, mark).canvas();
+            Canvas canvas = ScatterPlot.of(data, mark, label).canvas();
             BorderLayout layout = (BorderLayout) getLayout();
             remove(layout.getLayoutComponent(BorderLayout.CENTER));
             add(canvas.panel(), BorderLayout.CENTER);

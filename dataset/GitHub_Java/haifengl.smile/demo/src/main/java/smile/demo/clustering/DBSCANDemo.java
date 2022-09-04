@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.clustering;
 
@@ -82,7 +82,7 @@ public class DBSCANDemo extends ClusteringDemo {
         DBSCAN<double[]> dbscan = DBSCAN.fit(dataset[datasetIndex], new EuclideanDistance(), minPts, range);
         System.out.format("DBSCAN clusterings %d samples in %dms\n", dataset[datasetIndex].length, System.currentTimeMillis()-clock);
 
-        Canvas plot = ScatterPlot.of(dataset[datasetIndex], dbscan.y, mark).canvas();
+        Canvas plot = ScatterPlot.of(dataset[datasetIndex], mark, dbscan.y).canvas();
         return plot.panel();
 
     }

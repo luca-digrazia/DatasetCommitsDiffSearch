@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.clustering;
 
@@ -62,7 +62,7 @@ public class DeterministicAnnealingDemo extends ClusteringDemo {
         DeterministicAnnealing annealing = DeterministicAnnealing.fit(dataset[datasetIndex], clusterNumber, alpha, 100, 1E-4, 1E-2);
         System.out.format("Deterministic Annealing clusterings %d samples in %dms\n", dataset[datasetIndex].length, System.currentTimeMillis()-clock);
 
-        Canvas plot = ScatterPlot.of(dataset[datasetIndex], annealing.y, mark).canvas();
+        Canvas plot = ScatterPlot.of(dataset[datasetIndex], mark, annealing.y).canvas();
         plot.add(ScatterPlot.of(annealing.centroids, '@'));
         return plot.panel();
 

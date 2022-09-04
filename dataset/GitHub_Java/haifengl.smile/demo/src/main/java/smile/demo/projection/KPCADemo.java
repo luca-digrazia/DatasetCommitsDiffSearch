@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.projection;
 
@@ -90,7 +90,7 @@ public class KPCADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -104,7 +104,7 @@ public class KPCADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -118,7 +118,7 @@ public class KPCADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -134,7 +134,7 @@ public class KPCADemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }

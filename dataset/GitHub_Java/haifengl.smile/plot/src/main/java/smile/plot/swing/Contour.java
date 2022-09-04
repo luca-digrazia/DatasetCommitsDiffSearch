@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.plot.swing;
 
@@ -68,9 +68,9 @@ public class Contour extends Plot {
      */
     private List<Isoline> contours;
     /**
-     * If show axis ticks.
+     * If show axis marks.
      */
-    private boolean isTickVisible;
+    private boolean isLabelVisible;
     /**
      * Show the level.
      */
@@ -184,7 +184,7 @@ public class Contour extends Plot {
      * Initialize the contour lines.
      */
     private void init() {
-        isTickVisible = x != null || y != null;
+        isLabelVisible = x != null || y != null;
 
         if (x == null) {
             x = new double[z[0].length];
@@ -714,9 +714,9 @@ public class Contour extends Plot {
         Canvas canvas = new Canvas(getLowerBound(), getUpperBound(), false);
         canvas.add(this);
 
-        if (!isTickVisible) {
-            canvas.getAxis(0).setTickVisible(false);
-            canvas.getAxis(1).setTickVisible(false);
+        if (!isLabelVisible) {
+            canvas.getAxis(0).setLabelVisible(false);
+            canvas.getAxis(1).setLabelVisible(false);
         }
 
         return canvas;

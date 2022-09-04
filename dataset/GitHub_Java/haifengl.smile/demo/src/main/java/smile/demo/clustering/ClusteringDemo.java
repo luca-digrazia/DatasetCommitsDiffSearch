@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.clustering;
 
@@ -34,7 +34,6 @@ import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
 
 import org.apache.commons.csv.CSVFormat;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.io.Read;
 import smile.plot.swing.ScatterPlot;
@@ -228,7 +227,7 @@ public abstract class ClusteringDemo extends JPanel implements Runnable, ActionL
         CSVFormat format = CSVFormat.DEFAULT.withDelimiter(delimiter[datasetIndex]).withIgnoreSurroundingSpaces(true);
         try {
             DataFrame data = Read.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
-            dataset[datasetIndex] = data.toArray(false, CategoricalEncoder.ONE_HOT);
+            dataset[datasetIndex] = data.toArray();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(null, String.format("Failed to load dataset %s", datasetName[datasetIndex]), "ERROR", JOptionPane.ERROR_MESSAGE);
             System.err.println(e);

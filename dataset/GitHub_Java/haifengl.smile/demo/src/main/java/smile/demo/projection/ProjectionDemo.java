@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.projection;
 
 import org.apache.commons.csv.CSVFormat;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.io.Read;
@@ -113,10 +112,10 @@ public abstract class ProjectionDemo extends JPanel implements Runnable, ActionL
             String[] names = null;
 
             if (formula[datasetIndex] == null) {
-                data = dataset[datasetIndex].toArray(false, CategoricalEncoder.ONE_HOT);
+                data = dataset[datasetIndex].toArray();
             } else {
                 DataFrame datax = formula[datasetIndex].x(dataset[datasetIndex]);
-                data = datax.toArray(false, CategoricalEncoder.ONE_HOT);
+                data = datax.toArray();
                 if (datasetIndex == 1) {
                     names = dataset[datasetIndex].stringVector(0).toArray();
                 } else {

@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,14 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.classification;
 
 import java.awt.Dimension;
 import javax.swing.JFrame;
 import org.apache.commons.csv.CSVFormat;
-import smile.data.CategoricalEncoder;
 import smile.plot.swing.Canvas;
 import smile.plot.swing.ScatterPlot;
 
@@ -80,7 +79,7 @@ public class NaiveBayesDemo extends ClassificationDemo {
             }
         }
 
-        return ScatterPlot.of(paintPoints, label, 'o').canvas();
+        return ScatterPlot.of(paintPoints, 'o', label).canvas();
     }
     
     @Override
@@ -91,7 +90,7 @@ public class NaiveBayesDemo extends ClassificationDemo {
     @Override
     public double[][] learn(double[] x, double[] y) {
 
-        double[][] data = formula.x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.LEVEL);
+        double[][] data = formula.x(dataset[datasetIndex]).toArray();
         int[] label = formula.y(dataset[datasetIndex]).toIntArray();
         int[] labelPredict = new int[label.length];
         

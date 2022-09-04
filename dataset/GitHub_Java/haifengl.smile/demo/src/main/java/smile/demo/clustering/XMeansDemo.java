@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.clustering;
 
@@ -66,7 +66,7 @@ public class XMeansDemo extends ClusteringDemo {
         XMeans xmeans = XMeans.fit(dataset[datasetIndex], maxClusterNumber);
         System.out.format("X-Means clusterings %d samples in %dms\n", dataset[datasetIndex].length, System.currentTimeMillis()-clock);
 
-        Canvas plot = ScatterPlot.of(dataset[datasetIndex], xmeans.y, mark).canvas();
+        Canvas plot = ScatterPlot.of(dataset[datasetIndex], mark, xmeans.y).canvas();
         plot.add(ScatterPlot.of(xmeans.centroids, '@'));
         return plot.panel();
     }

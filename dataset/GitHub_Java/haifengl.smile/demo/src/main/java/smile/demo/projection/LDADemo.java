@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.projection;
 
@@ -32,7 +32,6 @@ import javax.swing.JPanel;
 
 import org.apache.commons.csv.CSVFormat;
 import smile.classification.FLD;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.io.Read;
@@ -97,7 +96,7 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
      * the clusters.
      */
     public JComponent learn() {
-        double[][] data = formula[datasetIndex].x(dataset[datasetIndex]).toArray(false, CategoricalEncoder.ONE_HOT);
+        double[][] data = formula[datasetIndex].x(dataset[datasetIndex]).toArray();
         int[] labels = formula[datasetIndex].y(dataset[datasetIndex]).toIntArray();
 
         int min = MathEx.min(labels);
@@ -113,7 +112,7 @@ public class LDADemo extends JPanel implements Runnable, ActionListener {
 
         Canvas plot;
         if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }

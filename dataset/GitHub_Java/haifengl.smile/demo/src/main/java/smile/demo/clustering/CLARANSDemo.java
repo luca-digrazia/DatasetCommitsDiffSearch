@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.clustering;
 
@@ -80,7 +80,7 @@ public class CLARANSDemo extends ClusteringDemo {
         CLARANS<double[]> clarans = CLARANS.fit(dataset[datasetIndex], MathEx::distance, clusterNumber, maxNeighbor);
         System.out.format("CLARANS clusterings %d samples in %dms\n", dataset[datasetIndex].length, System.currentTimeMillis()-clock);
 
-        Canvas plot = ScatterPlot.of(dataset[datasetIndex], clarans.y, mark).canvas();
+        Canvas plot = ScatterPlot.of(dataset[datasetIndex], mark, clarans.y).canvas();
         plot.add(ScatterPlot.of(clarans.centroids, '@'));
         return plot.panel();
     }

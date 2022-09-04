@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.manifold;
 
@@ -23,7 +23,6 @@ import java.awt.event.ActionListener;
 import javax.swing.*;
 
 import org.apache.commons.csv.CSVFormat;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.io.Read;
 import smile.plot.swing.Palette;
@@ -95,7 +94,7 @@ public class TSNEDemo extends JPanel implements Runnable, ActionListener {
 
         double[][] y = tsne.coordinates;
 
-        Canvas plot = ScatterPlot.of(y, labels, '@').canvas();
+        Canvas plot = ScatterPlot.of(y, '@', labels).canvas();
 
         plot.setTitle("t-SNE");
         pane.add(plot.panel());
@@ -134,7 +133,7 @@ public class TSNEDemo extends JPanel implements Runnable, ActionListener {
             try {
                 CSVFormat format = CSVFormat.DEFAULT.withDelimiter(' ').withIgnoreSurroundingSpaces(true);
                 DataFrame dataset = Read.csv(smile.util.Paths.getTestData("mnist/mnist2500_X.txt"), format);
-                data = dataset.toArray(false, CategoricalEncoder.ONE_HOT);
+                data = dataset.toArray();
 
                 dataset = Read.csv(smile.util.Paths.getTestData("mnist/mnist2500_labels.txt"));
                 labels = dataset.column(0).toIntArray();

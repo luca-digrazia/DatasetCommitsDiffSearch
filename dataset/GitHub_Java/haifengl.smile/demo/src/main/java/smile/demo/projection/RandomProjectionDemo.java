@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.demo.projection;
 
@@ -25,7 +25,7 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
-import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
 import smile.plot.swing.Canvas;
 import smile.plot.swing.ScatterPlot;
 import smile.plot.swing.TextPlot;
@@ -61,7 +61,7 @@ public class RandomProjectionDemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -75,7 +75,7 @@ public class RandomProjectionDemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -85,7 +85,7 @@ public class RandomProjectionDemo extends ProjectionDemo {
 
         RandomProjection rp = sparseBox.isSelected() ? RandomProjection.sparse(data[0].length, 0) : RandomProjection.of(data[0].length, 2);
         System.out.format("%d x %d Random Projection:\n", data[0].length, 3);
-        Matrix projection = rp.getProjection();
+        DenseMatrix projection = rp.getProjection();
         for (int i = 0; i < projection.nrows(); i++) {
             for (int j = 0; j < projection.ncols(); j++) {
                 System.out.format("% .4f ", projection.get(i, j));
@@ -97,7 +97,7 @@ public class RandomProjectionDemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }
@@ -119,7 +119,7 @@ public class RandomProjectionDemo extends ProjectionDemo {
         if (names != null) {
             plot = TextPlot.of(names, y).canvas();
         } else if (labels != null) {
-            plot = ScatterPlot.of(y, labels, mark).canvas();
+            plot = ScatterPlot.of(y, mark, labels).canvas();
         } else {
             plot = ScatterPlot.of(y).canvas();
         }

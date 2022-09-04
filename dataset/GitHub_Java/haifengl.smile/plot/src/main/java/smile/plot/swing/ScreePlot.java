@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.plot.swing;
 
@@ -29,7 +29,7 @@ import smile.projection.PCA;
  * analysis (FA) or principal components to keep in a principal component
  * analysis (PCA). The procedure of finding statistically significant
  * factors or components using a scree plot is also known as a scree test.
- * <p>
+ *
  * A scree plot always displays the eigenvalues in a downward curve,
  * ordering the eigenvalues from largest to smallest. According to the
  * scree test, the "elbow" of the graph where the eigenvalues seem to
@@ -98,7 +98,7 @@ public class ScreePlot extends Plot {
     public Canvas canvas() {
         Canvas canvas = new Canvas(getLowerBound(), getUpperBound(), false);
         canvas.setAxisLabels("Principal Component", "Proportion of Variance");
-        canvas.getAxis(0).setTicks(labels, x);
+        canvas.getAxis(0).addLabel(labels, x);
         canvas.add(this);
         return canvas;
     }
