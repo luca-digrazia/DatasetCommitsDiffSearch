@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.MissingNestedSetException;
 import com.google.devtools.build.lib.concurrent.MoreFutures;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -37,6 +36,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
@@ -70,15 +70,8 @@ import javax.annotation.Nullable;
 @SuppressWarnings("unchecked")
 @AutoCodec
 public final class NestedSet<E> {
-  // The set's order and approximate depth, packed to save space.
-  //
-  // The low 2 bits contain the Order.ordinal value.
-  //
-  // The high 30 bits, of which only about 12 are really necessary, contain the
-  // depth of the set; see getApproxDepth. Because the union constructor discards
-  // the depths of all but the deepest nonleaf child, the sets returned by
-  // getNonLeaves have inaccurate depths that may overapproximate the true depth.
-  private final int depthAndOrder;
+  // Order of set, represented as numeric ordinal to save space.
+  private final int orderOrdinal;
 
   // children contains the "direct" elements and "transitive" nested sets.
   // Direct elements are never arrays.
@@ -89,13 +82,9 @@ public final class NestedSet<E> {
   //
   // Please be careful to use the terms of the conceptual model in the API documentation,
   // and the terms of the physical representation in internal comments. They are not the same.
-  // In graphical terms, the "direct" elements are the graph successors that are leaves,
-  // and the "transitive" elements are the graph successors that are non-leaves, and
-  // non-leaf nodes have an out-degree of at least 2.
   //
-  // TODO(adonovan): rename this field and all accessors that use the same format to
-  // something less suggestive such as 'repr' or 'impl', and rename all uses of children
-  // meaning "logical graph successors" to 'successors'.
+  // TODO(adonovan): rename this field and related accessors to something less suggestive,
+  // such as 'state' or 'repr' or 'node'.  The public API no longer mentions "children".
   final Object children;
 
   // memo is a compact encoding of facts computed by a complete traversal.
@@ -114,6 +103,14 @@ public final class NestedSet<E> {
   // share the empty NO_MEMO array.
   @Nullable private byte[] memo;
 
+  /**
+   * The application depth limit of nested sets. Nested sets over this depth will throw {@link
+   * NestedSetDepthException} on flattening of the depset.
+   *
+   * <p>This limit should be set by command line option processing in the Bazel server.
+   */
+  private static final AtomicInteger expansionDepthLimit = new AtomicInteger(3500);
+
   // NO_MEMO is the distinguished memo for all nodes of depth < 2, that is,
   // leaf nodes and nodes whose successors are all leaf nodes.
   private static final byte[] NO_MEMO = {};
@@ -122,7 +119,7 @@ public final class NestedSet<E> {
 
   /** Construct an empty NestedSet. Should only be called by Order's class initializer. */
   NestedSet(Order order) {
-    this.depthAndOrder = order.ordinal();
+    this.orderOrdinal = order.ordinal();
     this.children = EMPTY_CHILDREN;
     this.memo = NO_MEMO;
   }
@@ -130,13 +127,15 @@ public final class NestedSet<E> {
   NestedSet(
       Order order, Set<E> direct, Set<NestedSet<E>> transitive, InterruptStrategy interruptStrategy)
       throws InterruptedException {
+    this.orderOrdinal = order.ordinal();
+
     // The iteration order of these collections is the order in which we add the items.
     Collection<E> directOrder = direct;
     Collection<NestedSet<E>> transitiveOrder = transitive;
     // True if we visit the direct members before the transitive members.
     boolean preorder;
 
-    switch (order) {
+    switch(order) {
       case LINK_ORDER:
         directOrder = ImmutableList.copyOf(direct).reverse();
         transitiveOrder = ImmutableList.copyOf(transitive).reverse();
@@ -158,9 +157,8 @@ public final class NestedSet<E> {
     Set<E> alreadyInserted = ImmutableSet.of();
     // The candidate array of children.
     Object[] children = new Object[direct.size() + transitive.size()];
-    int approxDepth = 0;
-    int n = 0; // current position in children array
-    boolean shallow = true; // whether true depth < 3
+    int n = 0; // current position in children
+    boolean shallow = true; // until we find otherwise
 
     for (int pass = 0; pass <= 1; ++pass) {
       if ((pass == 0) == preorder && !direct.isEmpty()) {
@@ -173,14 +171,12 @@ public final class NestedSet<E> {
           }
           if (!alreadyInserted.contains(member)) {
             children[n++] = member;
-            approxDepth = Math.max(approxDepth, 2);
           }
         }
         alreadyInserted = direct;
       } else if ((pass == 1) == preorder && !transitive.isEmpty()) {
         CompactHashSet<E> hoisted = null;
         for (NestedSet<E> subset : transitiveOrder) {
-          approxDepth = Math.max(approxDepth, 1 + subset.getApproxDepth());
           // If this is a deserialization future, this call blocks.
           Object c = subset.getChildrenInternal(interruptStrategy);
           if (c instanceof Object[]) {
@@ -205,31 +201,27 @@ public final class NestedSet<E> {
       }
     }
 
-    // n == |successors|
-    if (n == 0) {
-      approxDepth = 0;
-      this.children = EMPTY_CHILDREN;
-    } else if (n == 1) {
-      // If we ended up wrapping exactly one item or one other set, dereference it.
-      approxDepth--;
+    // If we ended up wrapping exactly one item or one other set, dereference it.
+    if (n == 1) {
       this.children = children[0];
+    } else if (n == 0) {
+      this.children = EMPTY_CHILDREN;
+    } else if (n < children.length) {
+      this.children = Arrays.copyOf(children, n);
     } else {
-      if (n < children.length) {
-        children = Arrays.copyOf(children, n); // shrink to save space
-      }
       this.children = children;
     }
-    this.depthAndOrder = (approxDepth << 2) | order.ordinal();
-
     if (shallow) {
       this.memo = NO_MEMO;
     }
   }
 
-  // Precondition: EMPTY_CHILDREN is used as the canonical empty array.
-  private NestedSet(Order order, int depth, Object children, @Nullable byte[] memo) {
-    this.depthAndOrder = (depth << 2) | order.ordinal();
-    this.children = children;
+  private NestedSet(Order order, Object children, @Nullable byte[] memo) {
+    this.orderOrdinal = order.ordinal();
+    this.children =
+        children instanceof Object[] && ((Object[]) children).length == 0
+            ? EMPTY_CHILDREN
+            : children;
     this.memo = memo;
   }
 
@@ -238,24 +230,24 @@ public final class NestedSet<E> {
    * complete, gives the contents of the NestedSet.
    */
   static <E> NestedSet<E> withFuture(
-      Order order, int depth, ListenableFuture<Object[]> deserializationFuture) {
-    return new NestedSet<>(order, depth, deserializationFuture, /*memo=*/ null);
+      Order order, ListenableFuture<Object[]> deserializationFuture) {
+    return new NestedSet<>(order, deserializationFuture, /*memo=*/ null);
   }
 
   // Only used by deserialization
   @AutoCodec.Instantiator
-  static <E> NestedSet<E> forDeserialization(Order order, int approxDepth, Object children) {
+  static <E> NestedSet<E> forDeserialization(Order order, Object children) {
     Preconditions.checkState(!(children instanceof ListenableFuture));
     boolean hasChildren =
         children instanceof Object[]
             && (Arrays.stream((Object[]) children).anyMatch(child -> child instanceof Object[]));
     byte[] memo = hasChildren ? null : NO_MEMO;
-    return new NestedSet<>(order, approxDepth, children, memo);
+    return new NestedSet<>(order, children, memo);
   }
 
   /** Returns the ordering of this nested set. */
   public Order getOrder() {
-    return Order.getOrder(depthAndOrder & 3);
+    return Order.getOrder(orderOrdinal & 3);
   }
 
   /**
@@ -358,18 +350,6 @@ public final class NestedSet<E> {
     return isSingleton(children);
   }
 
-  /**
-   * Returns the approximate depth of the nested set graph. The empty set has depth zero. A leaf
-   * node with a single element has depth 1. A non-leaf node has a depth one greater than its
-   * deepest successor.
-   *
-   * <p>This function may return an overapproximation of the true depth if the NestedSet was derived
-   * from the result of calling {@link #getNonLeaves} or {@link #splitIfExceedsMaximumSize}.
-   */
-  int getApproxDepth() {
-    return this.depthAndOrder >>> 2;
-  }
-
   private static boolean isSingleton(Object children) {
     // Singleton sets are special cased in serialization, and make no calls to storage.  Therefore,
     // we know that any NestedSet with a ListenableFuture member is not a singleton.
@@ -411,22 +391,18 @@ public final class NestedSet<E> {
    * TimeoutException} if this set is deserializing and does not become ready within the given
    * timeout.
    *
-   * <p>Additionally, throws {@link MissingNestedSetException} if this nested set {@link
-   * #isFromStorage} and could not be retrieved.
-   *
    * <p>Note that the timeout only applies to blocking for the deserialization future to become
    * available. The actual list transformation is untimed.
    */
   public ImmutableList<E> toListWithTimeout(Duration timeout)
-      throws InterruptedException, TimeoutException, MissingNestedSetException {
+      throws InterruptedException, TimeoutException {
     Object actualChildren;
     if (children instanceof ListenableFuture) {
       try {
         actualChildren =
             ((ListenableFuture<Object[]>) children).get(timeout.toNanos(), TimeUnit.NANOSECONDS);
       } catch (ExecutionException e) {
-        Throwables.propagateIfPossible(
-            e.getCause(), InterruptedException.class, MissingNestedSetException.class);
+        Throwables.propagateIfPossible(e.getCause(), InterruptedException.class);
         throw new IllegalStateException(e);
       }
     } else {
@@ -587,7 +563,6 @@ public final class NestedSet<E> {
   // a copy in cases where we can preallocate an array of the correct size.
   private static final class ArraySharingCollection<E> extends AbstractCollection<E> {
     private final Object[] array;
-
     ArraySharingCollection(Object[] array) {
       this.array = array;
     }
@@ -610,12 +585,10 @@ public final class NestedSet<E> {
 
   /**
    * If this is the first call for this object, fills {@code this.memo} and returns a set from
-   * {@link #walk}. Otherwise returns null, in which case some other thread must have completely
-   * populated memo; the caller should use {@link #replay} instead.
+   * {@link #walk}. Otherwise returns null; the caller should use {@link #replay} instead.
    */
   private synchronized CompactHashSet<E> lockedExpand(Object[] children) {
     // Precondition: this is a non-leaf node with non-leaf successors (depth > 2).
-    // Postcondition: memo is completely populated.
     if (memo != null) {
       return null;
     }
@@ -623,7 +596,14 @@ public final class NestedSet<E> {
     CompactHashSet<Object> sets = CompactHashSet.createWithExpectedSize(128);
     sets.add(children);
     memo = new byte[3 + Math.min(ceildiv(children.length, 8), 8)]; // (+3 for size: a guess)
-    int pos = walk(sets, members, children, /*pos=*/ 0);
+    int pos =
+        walk(
+            sets,
+            members,
+            children,
+            /* pos= */ 0,
+            /* currentDepth= */ 1,
+            expansionDepthLimit.get());
     int bytes = ceildiv(pos, 8);
 
     // Append (nonzero) size to memo, in reverse varint encoding:
@@ -670,7 +650,15 @@ public final class NestedSet<E> {
    * <p>Returns the final value of {@code pos}.
    */
   private int walk(
-      CompactHashSet<Object> sets, CompactHashSet<E> members, Object[] children, int pos) {
+      CompactHashSet<Object> sets,
+      CompactHashSet<E> members,
+      Object[] children,
+      int pos,
+      int currentDepth,
+      int maxDepth) {
+    if (currentDepth > maxDepth) {
+      throw new NestedSetDepthException(maxDepth);
+    }
     for (Object child : children) {
       if ((pos >> 3) >= memo.length) {
         memo = Arrays.copyOf(memo, memo.length * 2);
@@ -679,7 +667,7 @@ public final class NestedSet<E> {
         if (sets.add(child)) {
           int prepos = pos;
           int presize = members.size();
-          pos = walk(sets, members, (Object[]) child, pos + 1);
+          pos = walk(sets, members, (Object[]) child, pos + 1, currentDepth + 1, maxDepth);
           if (presize < members.size()) {
             memo[prepos >> 3] |= (byte) (1 << (prepos & 7));
           } else {
@@ -723,36 +711,59 @@ public final class NestedSet<E> {
   }
 
   /**
-   * Returns a new NestedSet containing the same elements, but represented using a graph node whose
-   * out-degree does not exceed {@code maxDegree}, which must be at least 2. The operation is
-   * shallow, not deeply recursive. The resulting set's iteration order is undefined.
+   * Sets the application depth limit of nested sets. When flattening a {@link NestedSet} deeper
+   * than this limit, a {@link NestedSetDepthException} will be thrown.
+   *
+   * <p>This limit should be set by command line option processing.
+   *
+   * @return true if the previous limit was different than this new limit
    */
-  // TODO(adonovan): move this hack into BuildEventStreamer. And rename 'size' to 'degree'.
-  public NestedSet<E> splitIfExceedsMaximumSize(int maxDegree) {
-    Preconditions.checkArgument(maxDegree >= 2, "maxDegree must be at least 2");
+  public static boolean setApplicationDepthLimit(int newLimit) {
+    int oldValue = expansionDepthLimit.getAndSet(newLimit);
+    return oldValue != newLimit;
+  }
+
+  /** An exception thrown when a nested set exceeds the application's depth limits. */
+  public static final class NestedSetDepthException extends RuntimeException {
+    private final int depthLimit;
+
+    public NestedSetDepthException(int depthLimit) {
+      this.depthLimit = depthLimit;
+    }
+
+    /** Returns the depth limit that was exceeded which resulted in this exception being thrown. */
+    public int getDepthLimit() {
+      return depthLimit;
+    }
+  }
+
+  /**
+   * Returns a new NestedSet containing the same elements, but represented using a logical graph
+   * with the specified maximum out-degree, which must be at least 2. The resulting set's iteration
+   * order is undefined.
+   */
+  public NestedSet<E> splitIfExceedsMaximumSize(int maximumSize) {
+    Preconditions.checkArgument(maximumSize >= 2, "maximumSize must be at least 2");
     Object children = getChildren(); // may wait for a future
     if (!(children instanceof Object[])) {
       return this;
     }
-    Object[] succs = (Object[]) children;
-    int nsuccs = succs.length;
-    if (nsuccs <= maxDegree) {
+    Object[] arr = (Object[]) children;
+    int size = arr.length;
+    if (size <= maximumSize) {
       return this;
     }
-    Object[][] pieces = new Object[ceildiv(nsuccs, maxDegree)][];
+    Object[][] pieces = new Object[ceildiv(size, maximumSize)][];
     for (int i = 0; i < pieces.length; i++) {
-      int max = Math.min((i + 1) * maxDegree, succs.length);
-      pieces[i] = Arrays.copyOfRange(succs, i * maxDegree, max);
+      int max = Math.min((i + 1) * maximumSize, arr.length);
+      pieces[i] = Arrays.copyOfRange(arr, i * maximumSize, max);
     }
-    int depth = getApproxDepth() + 1; // may be an overapproximation
 
-    // TODO(adonovan): (preexisting): if the last piece is a singleton, it must be inlined.
-
-    // Each piece is now smaller than maxDegree, but there may be many pieces.
-    // Recursively split pieces. (The recursion affects only the root; it
-    // does not traverse into successors.) In practice, maxDegree is large
-    // enough that the recursion rarely does any work.
-    return new NestedSet<E>(getOrder(), depth, pieces, null).splitIfExceedsMaximumSize(maxDegree);
+    // TODO(adonovan): why is this recursive call here? It looks like it is intended to propagate
+    // the split down to each subgraph, but it clearly never did that, because it would have to be
+    // applied to each element of pieces[i]. More surprising is that it does anything at all: pieces
+    // has already been split. Yet a test breaks if it is removed. Investigate and simplify.
+    return new NestedSet<E>(getOrder(), pieces, null).splitIfExceedsMaximumSize(maximumSize);
   }
 
   /** Returns the list of this node's successors that are themselves non-leaf nodes. */
@@ -764,8 +775,7 @@ public final class NestedSet<E> {
     ImmutableList.Builder<NestedSet<E>> res = ImmutableList.builder();
     for (Object c : (Object[]) children) {
       if (c instanceof Object[]) {
-        int depth = getApproxDepth() - 1; // possible overapproximation
-        res.add(new NestedSet<>(getOrder(), depth, c, null));
+        res.add(new NestedSet<>(getOrder(), c, null));
       }
     }
     return res.build();
