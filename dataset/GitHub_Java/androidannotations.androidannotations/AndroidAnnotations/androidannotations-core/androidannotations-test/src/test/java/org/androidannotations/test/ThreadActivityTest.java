@@ -1,5 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2019 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -36,7 +37,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 import org.mockito.internal.util.MockUtil;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
@@ -83,7 +84,7 @@ public class ThreadActivityTest {
 				.in(BackgroundExecutor.class) //
 				.get();
 
-		if (new MockUtil().isMock(executor) || !(executor instanceof ExecutorService)) {
+		if (MockUtil.isMock(executor) || !(executor instanceof ExecutorService)) {
 			return;
 		}
 
@@ -105,19 +106,19 @@ public class ThreadActivityTest {
 
 		activity.emptyBackgroundMethod();
 
-		verify(executor).execute(Matchers.<Runnable> any());
+		verify(executor).execute(ArgumentMatchers.<Runnable> any());
 	}
 
 	/**
 	 * Verify that non-serialized background tasks <strong>are not</strong>
-	 * serialized (ensure that serial feature does not force all background
-	 * tasks to be serialized).
+	 * serialized (ensure that serial feature does not force all background tasks to
+	 * be serialized).
 	 *
 	 * Start several requests which add an item to a list in background, without
 	 * "@Background" serial attribute enabled.
 	 *
-	 * Once all tasks have completed execution, verify that the items in the
-	 * list are not ordered (with very little false-negative probability).
+	 * Once all tasks have completed execution, verify that the items in the list
+	 * are not ordered (with very little false-negative probability).
 	 */
 	@Test
 	public void parallelBackgroundTasks() {
@@ -137,8 +138,8 @@ public class ThreadActivityTest {
 		/* execute NB_ADD requests to add an item to the list */
 		for (int i = 0; i < NB_ADD; i++) {
 			/*
-			 * wait a random delay (between 0 and 20 milliseconds) to increase
-			 * the probability of wrong order
+			 * wait a random delay (between 0 and 20 milliseconds) to increase the
+			 * probability of wrong order
 			 */
 			int delay = random.nextInt(20);
 			activity.addBackground(list, i, delay, sem);
@@ -150,8 +151,8 @@ public class ThreadActivityTest {
 			Assert.assertTrue("Requested tasks should have completed execution", acquired);
 
 			/*
-			 * verify that list items are in the wrong order (the probability it
-			 * is in the right is 1/(NB_ADD!), which is nearly 0)
+			 * verify that list items are in the wrong order (the probability it is in the
+			 * right is 1/(NB_ADD!), which is nearly 0)
 			 */
 			boolean rightOrder = true;
 			for (int i = 0; i < NB_ADD && rightOrder; i++) {
@@ -163,6 +164,31 @@ public class ThreadActivityTest {
 		}
 	}
 
+	@Test
+	public void serializedBackgroundTasksAsynchronous() throws InterruptedException {
+		/* set an executor with 4 threads */
+		BackgroundExecutor.setExecutor(Executors.newFixedThreadPool(4));
+
+		testSerializedBackgroundTasks();
+	}
+
+	@Test
+	public void serializedBackgroundTasksSynchronous() throws InterruptedException {
+		/* set a synchronous executor */
+		BackgroundExecutor.setExecutor(new Executor() {
+			@Override
+			public void execute(Runnable command) {
+				try {
+					command.run();
+				} catch (RuntimeException ignored) {
+					// ignored
+				}
+			}
+		});
+
+		testSerializedBackgroundTasks();
+	}
+
 	/**
 	 * Verify that serialized background tasks are correctly serialized.
 	 *
@@ -170,20 +196,16 @@ public class ThreadActivityTest {
 	 * "@Background" serial attribute enabled, so the requests must be executed
 	 * sequentially.
 	 *
-	 * Once all tasks have completed execution, verify that the items in the
-	 * list are ordered.
+	 * Once all tasks have completed execution, verify that the items in the list
+	 * are ordered.
 	 */
-	@Test
-	public void serializedBackgroundTasks() {
+	private void testSerializedBackgroundTasks() {
 		/* number of items to add to the list */
 		final int NB_ADD = 10;
 
-		/* set an executor with 4 threads */
-		BackgroundExecutor.setExecutor(Executors.newFixedThreadPool(4));
-
 		/*
-		 * the calls are serialized, but not necessarily on the same thread, so
-		 * we need to synchronize to avoid cache effects
+		 * the calls are serialized, but not necessarily on the same thread, so we need
+		 * to synchronize to avoid cache effects
 		 */
 		List<Integer> list = Collections.synchronizedList(new ArrayList<Integer>());
 
@@ -195,8 +217,8 @@ public class ThreadActivityTest {
 		/* execute NB_ADD requests to add an item to the list */
 		for (int i = 0; i < NB_ADD; i++) {
 			/*
-			 * wait a random delay (between 0 and 20 milliseconds) to increase
-			 * the probability of wrong order if buggy
+			 * wait a random delay (between 0 and 20 milliseconds) to increase the
+			 * probability of wrong order if buggy
 			 */
 			int delay = random.nextInt(20);
 			activity.addSerializedBackground(list, i, delay, sem);
@@ -216,14 +238,14 @@ public class ThreadActivityTest {
 	}
 
 	/**
-	 * Verify that cancellable background tasks are correctly cancelled, and
-	 * others are not.
+	 * Verify that cancellable background tasks are correctly cancelled, and others
+	 * are not.
 	 *
 	 * Start several requests which add an item to a list in background, half
 	 * explicitly cancelled, half not cancelled.
 	 *
-	 * Once all tasks have completed execution, check if and only if the items
-	 * from the uncancelled tasks are in the list.
+	 * Once all tasks have completed execution, check if and only if the items from
+	 * the uncancelled tasks are in the list.
 	 */
 	@Test
 	public void cancellableBackgroundTasks() {
@@ -234,8 +256,8 @@ public class ThreadActivityTest {
 		BackgroundExecutor.setExecutor(Executors.newFixedThreadPool(4));
 
 		/*
-		 * the calls are serialized, but not necessarily on the same thread, so
-		 * we need to synchronize to avoid cache effects
+		 * the calls are serialized, but not necessarily on the same thread, so we need
+		 * to synchronize to avoid cache effects
 		 */
 		List<Integer> list = Collections.synchronizedList(new ArrayList<Integer>());
 
@@ -243,8 +265,7 @@ public class ThreadActivityTest {
 		Semaphore sem = new Semaphore(1 - NB_ADD);
 
 		/*
-		 * execute 2*NB_ADD requests to add an item to the list, half being
-		 * cancelled
+		 * execute 2*NB_ADD requests to add an item to the list, half being cancelled
 		 */
 		for (int i = 0; i < NB_ADD; i++) {
 			activity.addBackground(list, i, 0, sem);
@@ -280,8 +301,8 @@ public class ThreadActivityTest {
 		BackgroundExecutor.setExecutor(Executors.newFixedThreadPool(4));
 
 		/*
-		 * the calls are serialized, but not necessarily on the same thread, so
-		 * we need to synchronize to avoid cache effects
+		 * the calls are serialized, but not necessarily on the same thread, so we need
+		 * to synchronize to avoid cache effects
 		 */
 		List<Integer> list = Collections.synchronizedList(new ArrayList<Integer>());
 
@@ -289,8 +310,7 @@ public class ThreadActivityTest {
 		Semaphore sem = new Semaphore(1 - NB_ADD);
 
 		/*
-		 * execute 2*NB_ADD requests to add an item to the list, half being
-		 * cancelled
+		 * execute 2*NB_ADD requests to add an item to the list, half being cancelled
 		 */
 		for (int i = 0; i < NB_ADD; i++) {
 			activity.addSerializedBackground(list, i, 0, sem);
@@ -364,9 +384,25 @@ public class ThreadActivityTest {
 		Assert.assertTrue("Exception should have been caught in the DefaultUncaughtExceptionHandler during @Background call.", propagatedExceptionToGlobalExceptionHandler);
 	}
 
+	@Test
+	public void testDelayedSerial() {
+		BackgroundExecutor.setExecutor(Executors.newScheduledThreadPool(1));
+
+		final Object LOCK = new Object();
+		activity.callDelayedSerial(new Runnable() {
+			@Override
+			public void run() {
+				LOCK.notify();
+			}
+		});
+		Assert.assertFalse(activity.calledDelayed);
+		waitOn(LOCK, ThreadActivity.SERIAL_DELAY * 2);
+		Assert.assertTrue(activity.calledDelayed);
+	}
+
 	/**
-	 * Call wait() on the given object with the specified timeout. Avoid
-	 * boilerplate code like synchronized or try..catch.
+	 * Call wait() on the given object with the specified timeout. Avoid boilerplate
+	 * code like synchronized or try..catch.
 	 */
 	private void waitOn(Object lock, long timeout) {
 		synchronized (lock) {
