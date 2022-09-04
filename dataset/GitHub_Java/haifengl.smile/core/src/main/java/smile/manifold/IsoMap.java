@@ -15,11 +15,13 @@
  *******************************************************************************/
 package smile.manifold;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.graph.AdjacencyList;
 import smile.graph.Graph;
 import smile.graph.Graph.Edge;
 import smile.math.distance.EuclideanDistance;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.EVD;
@@ -72,7 +74,7 @@ import smile.neighbor.Neighbor;
  * @author Haifeng Li
  */
 public class IsoMap {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(IsoMap.class);
+    private static final Logger logger = LoggerFactory.getLogger(IsoMap.class);
 
     /**
      * The original sample index.
@@ -165,8 +167,8 @@ public class IsoMap {
             }
         }
 
-        double[] mean = MathEx.rowMeans(D);
-        double mu = MathEx.mean(mean);
+        double[] mean = Math.rowMeans(D);
+        double mu = Math.mean(mean);
 
         DenseMatrix B = Matrix.zeros(n, n);
         for (int i = 0; i < n; i++) {
@@ -180,7 +182,7 @@ public class IsoMap {
         B.setSymmetric(true);
 
         EVD eigen = B.eigen(d);
-
+        
         if (eigen.getEigenValues().length < d) {
             logger.warn("eigen({}) returns only {} eigen vectors", d, eigen.getEigenValues().length);
             d = eigen.getEigenValues().length;
