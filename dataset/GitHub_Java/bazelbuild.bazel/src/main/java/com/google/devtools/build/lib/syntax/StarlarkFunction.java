@@ -15,6 +15,9 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.profiler.Profiler;
+import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.profiler.SilentCloseable;
 
 /** A StarlarkFunction is the function value created by a Starlark {@code def} statement. */
 public final class StarlarkFunction extends BaseFunction {
@@ -50,9 +53,6 @@ public final class StarlarkFunction extends BaseFunction {
     return name;
   }
 
-  /** @deprecated Do not assume function values are represented as syntax trees. */
-  // TODO(adonovan): the only non-test use is to obtain the function's doc string. Add API for that.
-  @Deprecated
   public ImmutableList<Statement> getStatements() {
     return statements;
   }
@@ -65,20 +65,31 @@ public final class StarlarkFunction extends BaseFunction {
   protected Object call(Object[] arguments, FuncallExpression ast, StarlarkThread thread)
       throws EvalException, InterruptedException {
     if (thread.mutability().isFrozen()) {
-      throw new EvalException(null, "Trying to call in frozen environment");
+      throw new EvalException(getLocation(), "Trying to call in frozen environment");
     }
     if (thread.isRecursiveCall(this)) {
-      throw new EvalException(null, String.format("function '%s' called recursively", name));
+      throw new EvalException(
+          getLocation(),
+          String.format(
+              "Recursion was detected when calling '%s' from '%s'",
+              getName(), thread.getCurrentFunction().getName()));
     }
 
-    // Registering the functions's arguments as variables in the local StarlarkThread
-    // foreach loop is not used to avoid iterator overhead
-    ImmutableList<String> names = getSignature().getParameterNames();
-    for (int i = 0; i < names.size(); ++i) {
-      thread.update(names.get(i), arguments[i]);
-    }
+    Location loc = ast == null ? Location.BUILTIN : ast.getLocation();
+    thread.push(this, loc, ast);
+    try (SilentCloseable c =
+        Profiler.instance().profile(ProfilerTask.STARLARK_USER_FN, getName())) {
+      // Registering the functions's arguments as variables in the local StarlarkThread
+      // foreach loop is not used to avoid iterator overhead
+      ImmutableList<String> names = getSignature().getParameterNames();
+      for (int i = 0; i < names.size(); ++i) {
+        thread.update(names.get(i), arguments[i]);
+      }
 
-    return Eval.execStatements(thread, statements);
+      return Eval.execStatements(thread, statements);
+    } finally {
+      thread.pop();
+    }
   }
 
   @Override

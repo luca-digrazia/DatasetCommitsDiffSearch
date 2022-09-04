@@ -468,10 +468,7 @@ final class Eval {
           Object object = eval(thread, dot.getObject());
           String name = dot.getField().getName();
           Object result = EvalUtils.getAttr(thread, dot.getLocation(), object, name);
-          if (result == null) {
-            throw EvalUtils.getMissingFieldException(object, name, thread.getSemantics(), "field");
-          }
-          return result;
+          return checkResult(object, result, name, dot.getLocation(), thread.getSemantics());
         }
 
       case FUNCALL:
@@ -713,6 +710,17 @@ final class Eval {
     } else {
       return original;
     }
+  }
+
+  /** Throws the correct error message if the result is null depending on the objValue. */
+  // TODO(adonovan): inline sole call and simplify.
+  private static Object checkResult(
+      Object objValue, Object result, String name, Location loc, StarlarkSemantics semantics)
+      throws EvalException {
+    if (result != null) {
+      return result;
+    }
+    throw EvalUtils.getMissingFieldException(objValue, name, loc, semantics, "field");
   }
 
   /**

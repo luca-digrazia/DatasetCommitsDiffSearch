@@ -17,6 +17,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.profiler.Profiler;
+import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.profiler.SilentCloseable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -80,7 +83,9 @@ public abstract class BuiltinFunction extends BaseFunction {
     }
 
     // Last but not least, actually make an inner call to the function with the resolved arguments.
-    try {
+    thread.push(this, ast.getLocation(), ast);
+    try (SilentCloseable c =
+        Profiler.instance().profile(ProfilerTask.STARLARK_BUILTIN_FN, getName())) {
       return invokeMethod.invoke(this, args);
     } catch (InvocationTargetException x) {
       Throwable e = x.getCause();
@@ -115,6 +120,8 @@ public abstract class BuiltinFunction extends BaseFunction {
       throw badCallException(loc, e, args);
     } catch (IllegalAccessException e) {
       throw badCallException(loc, e, args);
+    } finally {
+      thread.pop();
     }
   }
 
