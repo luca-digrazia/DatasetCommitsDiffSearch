@@ -31,10 +31,6 @@ public class JournalShow extends AbstractJournalCommand {
     @Option(name = {"-s", "--show-segments"}, description = "Show detail information for all segments")
     private boolean showSegmentDetails = false;
 
-    public JournalShow() {
-        super("show-journal");
-    }
-
     @Override
     protected void runCommand() {
         long sizeInBytes = journal.size();

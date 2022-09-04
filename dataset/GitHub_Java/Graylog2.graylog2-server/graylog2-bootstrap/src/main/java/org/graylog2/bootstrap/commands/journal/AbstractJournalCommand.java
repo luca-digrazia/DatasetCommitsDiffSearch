@@ -37,10 +37,7 @@ public abstract class AbstractJournalCommand extends CmdLineTool {
     protected KafkaJournal journal;
 
     public AbstractJournalCommand() {
-        this(null);
-    }
-    public AbstractJournalCommand(String commandName) {
-        super(commandName, configuration);
+        super(configuration);
     }
 
     @Override
