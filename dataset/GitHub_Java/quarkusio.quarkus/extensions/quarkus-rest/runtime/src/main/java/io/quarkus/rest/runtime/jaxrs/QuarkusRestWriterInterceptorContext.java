@@ -45,7 +45,6 @@ public class QuarkusRestWriterInterceptorContext extends QuarkusRestAbstractInte
 
     @Override
     public void proceed() throws IOException, WebApplicationException {
-        Response response = context.getResponse().get();
         if (index == interceptors.length) {
             MessageBodyWriter effectiveWriter = writer;
             if (rediscoveryNeeded) {
@@ -59,8 +58,8 @@ public class QuarkusRestWriterInterceptorContext extends QuarkusRestAbstractInte
             }
             ByteArrayOutputStream baos = context.getOrCreateOutputStream();
             effectiveWriter.writeTo(entity, type, genericType,
-                    annotations, mediaType, response.getHeaders(), context.getOutputStream());
-            context.setResult(Response.fromResponse(response).replaceAll(headers).build());
+                    annotations, mediaType, context.getResponse().getHeaders(), context.getOutputStream());
+            context.setResult(Response.fromResponse(context.getResponse()).replaceAll(headers).build());
             Serialisers.encodeResponseHeaders(context);
             context.getOutputStream().close();
             context.getContext().response().end(Buffer.buffer(baos.toByteArray()));
@@ -69,7 +68,7 @@ public class QuarkusRestWriterInterceptorContext extends QuarkusRestAbstractInte
             interceptors[index++].aroundWriteTo(this);
             if (!done) {
                 //TODO: how to handle
-                context.setResult(Response.fromResponse(response).replaceAll(headers).build());
+                context.setResult(Response.fromResponse(context.getResponse()).replaceAll(headers).build());
                 Serialisers.encodeResponseHeaders(context);
                 context.getContext().response().end();
             }
