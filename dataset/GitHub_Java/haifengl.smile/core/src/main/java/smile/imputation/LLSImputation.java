@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.imputation;
 
@@ -141,7 +141,7 @@ public class LLSImputation implements MissingValueImputation {
             if (!sufficient)
                 continue;
 
-            Matrix.LU lu = A.lu(true);
+            Matrix.LU lu = A.lu();
             lu.solve(b);
 
             for (int j = 0; j < d; j++) {

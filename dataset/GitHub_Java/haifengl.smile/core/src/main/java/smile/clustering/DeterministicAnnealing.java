@@ -58,7 +58,7 @@ public class DeterministicAnnealing extends CentroidClustering<double[], double[
     }
 
     @Override
-    protected double distance(double[] x, double[] y) {
+    public double distance(double[] x, double[] y) {
         return MathEx.squaredDistance(x, y);
     }
 

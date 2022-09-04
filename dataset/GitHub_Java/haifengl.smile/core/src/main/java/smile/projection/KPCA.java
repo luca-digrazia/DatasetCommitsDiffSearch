@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.projection;
 
@@ -165,7 +165,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
         }
 
         K.uplo(UPLO.LOWER);
-        Matrix.EVD eigen = ARPACK.syev(K, ARPACK.SymmOption.LA, k);;
+        Matrix.EVD eigen = ARPACK.syev(K, k, ARPACK.SymmWhich.LA);;
 
         double[] eigvalues = eigen.wr;
         Matrix eigvectors = eigen.Vr;

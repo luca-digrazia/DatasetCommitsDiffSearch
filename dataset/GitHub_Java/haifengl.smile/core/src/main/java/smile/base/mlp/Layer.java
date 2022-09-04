@@ -17,7 +17,6 @@
 
 package smile.base.mlp;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import smile.math.MathEx;
@@ -40,29 +39,29 @@ public abstract class Layer implements Serializable {
      */
     protected int p;
     /**
+     * The output vector.
+     */
+    protected double[] output;
+    /**
+     * The gradient vector.
+     */
+    protected double[] gradient;
+    /**
      * The affine transformation matrix.
      */
     protected Matrix weight;
+    /**
+     * The weight update of mini batch or momentum.
+     */
+    protected Matrix update;
     /**
      * The bias.
      */
     protected double[] bias;
     /**
-     * The output vector.
-     */
-    protected transient ThreadLocal<double[]> output;
-    /**
-     * The gradient vector.
-     */
-    protected transient ThreadLocal<double[]> gradient;
-    /**
-     * The weight update of mini batch or momentum.
-     */
-    protected transient ThreadLocal<Matrix> update;
-    /**
      * The bias update of mini batch or momentum.
      */
-    protected transient ThreadLocal<double[]> updateBias;
+    protected double[] updateBias;
 
     /**
      * Constructor.
@@ -77,43 +76,11 @@ public abstract class Layer implements Serializable {
         double r = Math.sqrt(2.0 / p);
         weight = Matrix.rand(n, p, new GaussianDistribution(0.0, r));
         bias = new double[n];
+        output = new double[n];
+        gradient = new double[n];
 
-        init();
-    }
-
-    /**
-     * Initializes the workspace when deserializing the object.
-     */
-    private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
-        in.defaultReadObject();
-        init();
-    }
-
-    /**
-     * Initializes the workspace.
-     */
-    private void init() {
-        output = new ThreadLocal<double[]>() {
-            protected synchronized double[] initialValue() {
-                return new double[n];
-            }
-        };
-        gradient = new ThreadLocal<double[]>() {
-            protected synchronized double[] initialValue() {
-                return new double[n];
-            }
-        };
-
-        update = new ThreadLocal<Matrix>() {
-            protected synchronized Matrix initialValue() {
-                return new Matrix(n, p);
-            }
-        };
-        updateBias = new ThreadLocal<double[]>() {
-            protected synchronized double[] initialValue() {
-                return new double[n];
-            }
-        };
+        update = new Matrix(n, p);
+        updateBias = new double[n];
     }
 
     /** Returns the dimension of output vector. */
@@ -128,12 +95,12 @@ public abstract class Layer implements Serializable {
 
     /** Returns the output vector. */
     public double[] output() {
-        return output.get();
+        return output;
     }
 
     /** Returns the error/gradient vector. */
     public double[] gradient() {
-        return gradient.get();
+        return gradient;
     }
 
     /**
@@ -141,7 +108,6 @@ public abstract class Layer implements Serializable {
      * @param x the lower layer signals.
      */
     public void propagate(double[] x) {
-        double[] output = this.output.get();
         System.arraycopy(bias, 0, output, 0, n);
         weight.mv(1.0, x, 1.0, output);
         f(output);
@@ -167,10 +133,6 @@ public abstract class Layer implements Serializable {
      * @param x the input vector.
      */
     public void computeUpdate(double eta, double alpha, double[] x) {
-        double[] gradient = this.gradient.get();
-        Matrix update = this.update.get();
-        double[] updateBias = this.updateBias.get();
-
         for (int j = 0; j < p; j++) {
             double xj = x[j];
             for (int i = 0; i < n; i++) {
@@ -193,9 +155,6 @@ public abstract class Layer implements Serializable {
      * @param lambda weight decay factor
      */
     public void update(double alpha, double lambda) {
-        Matrix update = this.update.get();
-        double[] updateBias = this.updateBias.get();
-
         weight.add(1.0, update);
         MathEx.add(bias, updateBias);
 

@@ -43,14 +43,14 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
     private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CART.class);
 
-    /** The model formula. */
-    protected Formula formula;
-
-    /** The schema of predictors. */
+    /** The schema of data. */
     protected StructType schema;
 
     /** The schema of response variable. */
     protected StructField response;
+
+    /** Design matrix formula */
+    protected Formula formula = null;
 
     /** The root of decision tree. */
     protected Node root;
@@ -156,7 +156,7 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
 
         if (mtry < 1 || mtry > p) {
             logger.debug("Invalid mtry. Use all features.");
-            this.mtry = p;
+            this.mtry = schema.length();
         }
 
         if (maxDepth < 1) {

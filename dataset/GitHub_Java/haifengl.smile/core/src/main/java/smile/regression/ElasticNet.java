@@ -21,7 +21,6 @@ import java.util.Arrays;
 import java.util.Properties;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
-import smile.data.type.StructType;
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 
@@ -108,9 +107,6 @@ public class ElasticNet {
 
         double c = 1 / Math.sqrt(1 + lambda2);
 
-        formula = formula.expand(data.schema());
-        StructType schema = formula.bind(data.schema());
-
         Matrix X = formula.matrix(data, false);
         double[] y = formula.y(data).toDoubleArray();
 
@@ -136,7 +132,7 @@ public class ElasticNet {
 
         LinearModel model = LASSO.train(X2, y2,lambda1 * c, tol, maxIter);
         model.formula = formula;
-        model.schema = schema;
+        model.schema = formula.xschema();
         model.predictors = X.colNames();
 
         double[] w = new double[p];

@@ -24,9 +24,13 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import smile.data.*;
 import smile.math.kernel.GaussianKernel;
+import smile.math.kernel.LinearKernel;
 import smile.math.MathEx;
-import smile.validation.*;
-import smile.validation.metric.RMSE;
+import smile.validation.CrossValidation;
+import smile.validation.LOOCV;
+import smile.validation.RMSE;
+import smile.validation.Validation;
+
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -58,10 +62,11 @@ public class SVRTest {
     public void testLongley() throws Exception {
         System.out.println("longley");
 
-        RegressionMetrics metrics = LOOCV.regression(Longley.x, Longley.y, (x, y) -> SVR.fit(x, y, 2.0, 10.0, 1E-3));
+        double[] prediction = LOOCV.regression(Longley.x, Longley.y, (x, y) -> SVR.fit(x, y, 2.0, 10.0, 1E-3));
+        double rmse = RMSE.of(Longley.y, prediction);
 
-        System.out.println("LOOCV RMSE = " + metrics.rmse);
-        assertEquals(1.6140026106705365, metrics.rmse, 1E-4);
+        System.out.println("LOOCV RMSE = " + rmse);
+        assertEquals(1.6140026106705365, rmse, 1E-4);
 
         Regression<double[]> model = SVR.fit(Longley.x, Longley.y, 2.0, 10.0, 1E-3);
         java.nio.file.Path temp = smile.data.Serialize.write(model);
@@ -76,11 +81,11 @@ public class SVRTest {
         MathEx.standardize(x);
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        RegressionValidations<Regression<double[]>> result = CrossValidation.regression(10, x, CPU.y,
-                (xi, yi) -> SVR.fit(xi, yi,40.0, 10.0, 1E-3));
+        double[] prediction = CrossValidation.regression(10, x, CPU.y, (xi, yi) -> SVR.fit(xi, yi,40.0, 10.0, 1E-3));
+        double rmse = RMSE.of(CPU.y, prediction);
 
-        System.out.println(result);
-        assertEquals(54.63430240465948, result.avg.rmse, 1E-4);
+        System.out.println("10-CV RMSE = " + rmse);
+        assertEquals(54.63430240465948, rmse, 1E-4);
     }
 
     @Test
@@ -88,12 +93,12 @@ public class SVRTest {
         System.out.println("Prostate");
 
         GaussianKernel kernel = new GaussianKernel(6.0);
+        KernelMachine<double[]> model = SVR.fit(Prostate.x, Prostate.y, kernel, 0.5, 5, 1E-3);
 
-        RegressionValidation<Regression<double[]>> result = RegressionValidation.of(Prostate.x, Prostate.y,
-                Prostate.testx, Prostate.testy, (x, y) -> SVR.fit(x, y, kernel, 0.5, 5, 1E-3));
-
-        System.out.println(result);
-        assertEquals(0.9112183360712871, result.metrics.rmse, 1E-4);
+        double[] prediction = Validation.test(model, Prostate.testx);
+        double rmse = RMSE.of(Prostate.testy, prediction);
+        System.out.println("Test RMSE = " + rmse);
+        assertEquals(0.9112183360712871, rmse, 1E-4);
     }
 
     @Test
@@ -114,10 +119,10 @@ public class SVRTest {
 
         MathEx.setSeed(19650218); // to get repeatable results.
         GaussianKernel kernel = new GaussianKernel(5.0);
-        RegressionValidations<Regression<double[]>> result = CrossValidation.regression(10, Diabetes.x, Diabetes.y,
-                (x, y) -> SVR.fit(x, y, kernel, 50, 1000, 1E-3));
+        double[] prediction = CrossValidation.regression(10, Diabetes.x, Diabetes.y, (x, y) -> SVR.fit(x, y, kernel, 50, 1000, 1E-3));
+        double rmse = RMSE.of(Diabetes.y, prediction);
 
-        System.out.println(result);
-        assertEquals(61.710080572519516, result.avg.rmse, 1E-4);
+        System.out.println("Diabetes 10-CV RMSE = " + rmse);
+        assertEquals(61.710080572519516, rmse, 1E-4);
     }
 }

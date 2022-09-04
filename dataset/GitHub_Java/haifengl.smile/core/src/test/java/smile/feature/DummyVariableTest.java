@@ -22,8 +22,10 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.CategoricalEncoder;
+import smile.data.DataFrame;
 import smile.data.WeatherNominal;
+import smile.data.formula.Formula;
+import static smile.data.formula.Terms.onehot;
 import static org.junit.Assert.*;
 
 /**
@@ -71,10 +73,13 @@ public class DummyVariableTest {
             {0, 0, 1, 0, 1, 0, 1, 0, 1, 0}
         };
 
-        double[][] data = WeatherNominal.data.toArray(false, CategoricalEncoder.ONE_HOT);
+        Formula formula = Formula.rhs(onehot());
+        DataFrame df = formula.frame(WeatherNominal.data);
+        System.out.println(df);
+
         for (int i = 0; i < result.length; i++) {
             for (int j = 0; j < result[i].length; j++) {
-                assertEquals(result[i][j], data[i][j], 1E-10);
+                assertEquals(result[i][j], df.getByte(i, j));
             }
         }
     }

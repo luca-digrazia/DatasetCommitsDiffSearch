@@ -21,7 +21,6 @@ import java.util.Arrays;
 import java.util.Properties;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
-import smile.data.type.StructType;
 import smile.math.MathEx;
 import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
@@ -110,9 +109,6 @@ public class RidgeRegression {
             throw new IllegalArgumentException("Invalid shrinkage/regularization parameter lambda = " + lambda);
         }
 
-        formula = formula.expand(data.schema());
-        StructType schema = formula.bind(data.schema());
-
         Matrix X = formula.matrix(data, false);
         double[] y = formula.y(data).toDoubleArray();
 
@@ -125,7 +121,7 @@ public class RidgeRegression {
 
         LinearModel model = new LinearModel();
         model.formula = formula;
-        model.schema = schema;
+        model.schema = formula.xschema();
         model.predictors = X.colNames();
         model.p = p;
         double[] center = X.colMeans();
@@ -133,7 +129,7 @@ public class RidgeRegression {
 
         for (int j = 0; j < scale.length; j++) {
             if (MathEx.isZero(scale[j])) {
-                throw new IllegalArgumentException(String.format("The column '%s' is constant", X.colName(j)));
+                throw new IllegalArgumentException(String.format("The column '%s' is constant", formula.schema().fieldName(j)));
             }
         }
 

@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.manifold;
 
@@ -178,7 +178,7 @@ public class LaplacianEigenmap implements Serializable {
 
         // ARPACK may not find all needed eigenvalues for k = d + 1.
         // Hack it with 10 * (d + 1).
-        Matrix.EVD eigen = ARPACK.syev(L, ARPACK.SymmOption.SM, Math.min(10*(d+1), n-1));
+        Matrix.EVD eigen = ARPACK.syev(L, Math.min(10*(d+1), n-1), ARPACK.SymmWhich.SM);
 
         Matrix V = eigen.Vr;
         double[][] coordinates = new double[n][d];

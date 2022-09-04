@@ -21,6 +21,7 @@ import java.io.Serializable;
 import java.util.Properties;
 import smile.math.DifferentiableFunction;
 import smile.math.MathEx;
+import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
 import smile.projection.ica.Exp;
 import smile.projection.ica.LogCosh;
@@ -239,7 +240,8 @@ public class ICA implements Serializable {
         }
 
         Matrix XXt = X.aat();
-        Matrix.EVD eigen = XXt.eigen(false, true, true);
+        XXt.uplo(UPLO.LOWER);
+        Matrix.EVD eigen = XXt.eigen();
         Matrix E = eigen.Vr;
         Matrix Y = E.tm(X);
 

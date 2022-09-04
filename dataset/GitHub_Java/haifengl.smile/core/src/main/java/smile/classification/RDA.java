@@ -152,7 +152,7 @@ public class RDA extends QDA {
                 }
             }
 
-            Matrix.EVD evd = v.eigen(false, true, true).sort();
+            Matrix.EVD evd = v.eigen().sort();
 
             for (double s : evd.wr) {
                 if (s < tol) {

@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.regression;
 
@@ -142,7 +142,7 @@ public class RBFNetwork<T> implements Regression<T> {
             }
         }
 
-        Matrix.QR qr = G.qr(true);
+        Matrix.QR qr = G.qr();
         double[] w = qr.solve(b);
 
         return new RBFNetwork<>(rbf, w, normalized);

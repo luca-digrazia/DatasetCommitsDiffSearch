@@ -25,7 +25,7 @@ import org.junit.Test;
 import smile.data.*;
 import smile.math.MathEx;
 import smile.validation.*;
-import smile.validation.metric.Error;
+import smile.validation.Error;
 
 import static org.junit.Assert.*;
 
@@ -58,22 +58,20 @@ public class LogisticRegressionTest {
     public void testIris() {
         System.out.println("Iris");
 
-        ClassificationMetrics metrics = LOOCV.classification(Iris.x, Iris.y,
-                (x, y) -> LogisticRegression.fit(x, y));
-
-        System.out.println(metrics);
-        assertEquals(5, metrics.accuracy);
+        int[] prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> LogisticRegression.fit(x, y));
+        int error = Error.of(Iris.y, prediction);
+        System.out.println("Error = " + error);
+        assertEquals(5, error);
     }
 
     @Test
     public void testWeather() {
         System.out.println("Weather");
 
-        ClassificationMetrics metrics = LOOCV.classification(WeatherNominal.dummy, WeatherNominal.y,
-                (x, y) -> LogisticRegression.fit(x, y));
-
-        System.out.println(metrics);
-        assertEquals(4, metrics.accuracy);
+        int[] prediction = LOOCV.classification(WeatherNominal.dummy, WeatherNominal.y, (x, y) -> LogisticRegression.fit(x, y));
+        int error = Error.of(WeatherNominal.y, prediction);
+        System.out.println("Error = " + error);
+        assertEquals(4, error);
     }
 
     @Test
@@ -81,11 +79,11 @@ public class LogisticRegressionTest {
         System.out.println("Pen Digits");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<LogisticRegression> result = CrossValidation.classification(10, PenDigits.x, PenDigits.y,
-                (x, y) -> LogisticRegression.fit(x, y));
+        int[] prediction = CrossValidation.classification(10, PenDigits.x, PenDigits.y, (x, y) -> LogisticRegression.fit(x, y));
+        int error = Error.of(PenDigits.y, prediction);
 
-        System.out.println(result);
-        assertEquals(339, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(339, error);
     }
 
     @Test
@@ -93,11 +91,11 @@ public class LogisticRegressionTest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<LogisticRegression> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
-                (x, y) -> LogisticRegression.fit(x, y));
+        int[] prediction = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y, (x, y) -> LogisticRegression.fit(x, y));
+        int error = Error.of(BreastCancer.y, prediction);
 
-        System.out.println(result);
-        assertEquals(26, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(26, error);
     }
 
     @Test
