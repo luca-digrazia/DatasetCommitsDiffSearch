@@ -11,14 +11,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
 import com.google.common.io.Resources;
-import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
-import io.dropwizard.jersey.errors.LoggingExceptionMapper;
-import io.dropwizard.jersey.filter.AllowedMethodsFilter;
-import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
-import io.dropwizard.jersey.validation.ConstraintViolationExceptionMapper;
-import org.glassfish.jersey.servlet.ServletContainer;
+import javax.servlet.Servlet;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
 import io.dropwizard.jetty.GzipFilterFactory;
@@ -40,20 +34,17 @@ import org.eclipse.jetty.setuid.RLimit;
 import org.eclipse.jetty.setuid.SetUIDListener;
 import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.eclipse.jetty.util.thread.ThreadPool;
-import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import javax.servlet.DispatcherType;
-import javax.servlet.Servlet;
 import javax.validation.Valid;
 import javax.validation.Validator;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.io.IOException;
 import java.util.EnumSet;
-import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.regex.Pattern;
 
@@ -164,27 +155,11 @@ import java.util.regex.Pattern;
  *         </td>
  *     </tr>
  *     <tr>
- *         <td>{@code registerDefaultExceptionMappers}</td>
- *         <td>true</td>
- *         <td>
- *            Whether or not the default Jersey ExceptionMappers should be registered.
- *            Set this to false if you want to register your own.
- *         </td>
- *     </tr>
- *     <tr>
  *         <td>{@code shutdownGracePeriod}</td>
  *         <td>30 seconds</td>
  *         <td>
  *             The maximum time to wait for Jetty, and all Managed instances, to cleanly shutdown
  *             before forcibly terminating them.
- *         </td>
- *     </tr>
- *     <tr>
- *         <td>{@code allowedMethods}</td>
- *         <td>GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH</td>
- *         <td>
- *             The set of allowed HTTP methods. Others will be rejected with a
- *             405 Method Not Allowed response.
  *         </td>
  *     </tr>
  * </table>
@@ -233,15 +208,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
 
     private Boolean startsAsRoot;
 
-    private Boolean registerDefaultExceptionMappers = Boolean.TRUE;
-
     private Duration shutdownGracePeriod = Duration.seconds(30);
-
-    @NotNull
-    private Set<String> allowedMethods = AllowedMethodsFilter.DEFAULT_ALLOWED_METHODS;
-
-    @NotEmpty
-    private String jerseyRootPath = "/*";
 
     @JsonIgnore
     @ValidationMethod(message = "must have a smaller minThreads than maxThreads")
@@ -389,14 +356,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
         this.startsAsRoot = startsAsRoot;
     }
 
-    public Boolean getRegisterDefaultExceptionMappers() {
-        return registerDefaultExceptionMappers;
-    }
-
-    public void setRegisterDefaultExceptionMappers(Boolean registerDefaultExceptionMappers) {
-        this.registerDefaultExceptionMappers = registerDefaultExceptionMappers;
-    }
-
     @JsonProperty
     public Duration getShutdownGracePeriod() {
         return shutdownGracePeriod;
@@ -407,42 +366,19 @@ public abstract class AbstractServerFactory implements ServerFactory {
         this.shutdownGracePeriod = shutdownGracePeriod;
     }
 
-    @JsonProperty
-    public Set<String> getAllowedMethods() {
-        return allowedMethods;
-    }
-
-    @JsonProperty
-    public void setAllowedMethods(Set<String> allowedMethods) {
-        this.allowedMethods = allowedMethods;
-    }
-
-    @JsonProperty("rootPath")
-    public String getJerseyRootPath() {
-        return jerseyRootPath;
-    }
-
-    @JsonProperty("rootPath")
-    public void setJerseyRootPath(String jerseyRootPath) {
-        this.jerseyRootPath = jerseyRootPath;
-    }
-
     protected Handler createAdminServlet(Server server,
                                          MutableServletContextHandler handler,
                                          MetricRegistry metrics,
                                          HealthCheckRegistry healthChecks) {
         configureSessionsAndSecurity(handler, server);
-        handler.setServer(server);
+        handler.setServer(server);  
         handler.getServletContext().setAttribute(MetricsServlet.METRICS_REGISTRY, metrics);
         handler.getServletContext().setAttribute(HealthCheckServlet.HEALTH_CHECK_REGISTRY, healthChecks);
         handler.addServlet(new NonblockingServletHolder(new AdminServlet()), "/*");
-        handler.addFilter(AllowedMethodsFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST))
-                .setInitParameter(AllowedMethodsFilter.ALLOWED_METHODS_PARAM, Joiner.on(',').join(allowedMethods));
         return handler;
     }
 
     private void configureSessionsAndSecurity(MutableServletContextHandler handler, Server server) {
-        handler.setServer(server);
         if (handler.isSecurityEnabled()) {
             handler.getSecurityHandler().setServer(server);
         }
@@ -459,23 +395,13 @@ public abstract class AbstractServerFactory implements ServerFactory {
                                        @Nullable Servlet jerseyContainer,
                                        MetricRegistry metricRegistry) {
         configureSessionsAndSecurity(handler, server);
-        handler.addFilter(AllowedMethodsFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST))
-                .setInitParameter(AllowedMethodsFilter.ALLOWED_METHODS_PARAM, Joiner.on(',').join(allowedMethods));
         handler.addFilter(ThreadNameFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST));
         if (gzip.isEnabled()) {
             final FilterHolder holder = new FilterHolder(gzip.build());
             handler.addFilter(holder, "/*", EnumSet.allOf(DispatcherType.class));
         }
         if (jerseyContainer != null) {
-            jersey.setUrlPattern(jerseyRootPath);
             jersey.register(new JacksonMessageBodyProvider(objectMapper, validator));
-            if (registerDefaultExceptionMappers == null || registerDefaultExceptionMappers) {
-                jersey.register(new LoggingExceptionMapper<Throwable>() {
-                });
-                jersey.register(new ConstraintViolationExceptionMapper());
-                jersey.register(new JsonProcessingExceptionMapper());
-                jersey.register(new EarlyEofExceptionMapper());
-            }
             handler.addServlet(new NonblockingServletHolder(jerseyContainer), jersey.getUrlPattern());
         }
         final InstrumentedHandler instrumented = new InstrumentedHandler(metricRegistry);
