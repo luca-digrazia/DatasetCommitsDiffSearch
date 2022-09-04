@@ -447,8 +447,7 @@ public class Parser {
     if (function.getLocation() == null) {
       function = setLocation(function, start, end);
     }
-    Expression fun = receiver == null ? function : new DotExpression(receiver, function);
-    return setLocation(new FuncallExpression(fun, args), start, end);
+    return setLocation(new FuncallExpression(receiver, function, args), start, end);
   }
 
   // arg ::= IDENTIFIER '=' nontupleexpr
