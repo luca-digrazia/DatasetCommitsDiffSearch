@@ -53,7 +53,6 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
       boolean includeGeneratedExtensionRegistry,
       boolean isJavaPluginRule)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    semantics.checkDependencyRuleKinds(ruleContext);
     JavaTargetAttributes.Builder attributesBuilder = common.initCommon();
 
     // Collect the transitive dependencies.
@@ -120,7 +119,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     Artifact nativeHeaderOutput = helper.createNativeHeaderJar(classJar);
 
     JavaCompileAction javaCompileAction =
-        helper.createCompileAction(classJar, manifestProtoOutput, genSourceJar, nativeHeaderOutput);
+        helper.createCompileActionWithInstrumentation(
+            classJar, manifestProtoOutput, genSourceJar, javaArtifactsBuilder, nativeHeaderOutput);
     helper.createSourceJarAction(srcJar, genSourceJar);
 
     Artifact iJar = null;

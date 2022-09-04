@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.java;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelListConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelMapConverter;
@@ -31,8 +32,10 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.TriState;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Command-line options for building Java targets */
 public class JavaOptions extends FragmentOptions {
@@ -123,7 +126,7 @@ public class JavaOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_use_jdk11_as_host_javabase",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
       metadataTags = {
@@ -638,27 +641,6 @@ public class JavaOptions extends FragmentOptions {
           "Disables the resource_jars attribute; use java_import and deps or runtime_deps instead.")
   public boolean disallowResourceJars;
 
-  @Option(
-      name = "incompatible_windows_escape_jvm_flags",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {
-        OptionEffectTag.ACTION_COMMAND_LINES,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-      },
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "On Linux/macOS/non-Windows: no-op. On Windows: this flag affects how java_binary and"
-              + " java_test targets are built; in particular, how the launcher of these targets"
-              + " escapes flags at the time of running the java_binary/java_test. When the flag is"
-              + " true, the launcher escapes the JVM flags using Windows-style escaping (correct"
-              + " behavior). When the flag is false, the launcher uses Bash-style escaping"
-              + " (buggy behavior). See https://github.com/bazelbuild/bazel/issues/7072")
-  public boolean windowsEscapeJvmFlags;
-
   private Label getHostJavaBase() {
     if (hostJavaBase == null) {
       if (useJDK11AsHostJavaBase) {
@@ -733,9 +715,15 @@ public class JavaOptions extends FragmentOptions {
 
     host.disallowResourceJars = disallowResourceJars;
 
-    host.windowsEscapeJvmFlags = windowsEscapeJvmFlags;
-
     return host;
   }
 
+  @Override
+  public Map<String, Set<Label>> getDefaultsLabels() {
+    Map<String, Set<Label>> result = new HashMap<>();
+    result.put("JDK", ImmutableSet.of(javaBase, getHostJavaBase()));
+    result.put("JAVA_TOOLCHAIN", ImmutableSet.of(getJavaToolchain()));
+
+    return result;
+  }
 }
