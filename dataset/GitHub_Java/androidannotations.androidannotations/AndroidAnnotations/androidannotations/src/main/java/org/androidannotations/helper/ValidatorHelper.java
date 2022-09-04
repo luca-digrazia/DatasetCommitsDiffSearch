@@ -118,15 +118,18 @@ public class ValidatorHelper {
 	private static final List<Receiver.RegisterAt> VALID_SERVICE_REGISTER_AT = Arrays.asList(Receiver.RegisterAt.OnCreateOnDestroy);
 	private static final List<Receiver.RegisterAt> VALID_FRAGMENT_REGISTER_AT = Arrays.asList(Receiver.RegisterAt.OnCreateOnDestroy, Receiver.RegisterAt.OnResumeOnPause, Receiver.RegisterAt.OnStartOnStop, Receiver.RegisterAt.OnAttachOnDetach);
 
-	private static final List<String> VALID_PREFERENCE_CLASSES = asList(CanonicalNameConstants.PREFERENCE_ACTIVITY, CanonicalNameConstants.PREFERENCE_FRAGMENT, CanonicalNameConstants.SUPPORT_V4_PREFERENCE_FRAGMENT, CanonicalNameConstants.MACHINARIUS_V4_PREFERENCE_FRAGMENT);
+	private static final List<String> VALID_PREFERENCE_CLASSES = asList(CanonicalNameConstants.PREFERENCE_ACTIVITY, CanonicalNameConstants.PREFERENCE_FRAGMENT);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
 	public final ValidatorParameterHelper param;
 
+	private final ActionBarSherlockHelper thirdPartyLibHelper;
+
 	public ValidatorHelper(TargetAnnotationHelper targetAnnotationHelper) {
 		annotationHelper = targetAnnotationHelper;
 		param = new ValidatorParameterHelper(annotationHelper);
+		thirdPartyLibHelper = new ActionBarSherlockHelper(annotationHelper);
 	}
 
 	public void isNotFinal(Element element, IsValid valid) {
@@ -528,7 +531,11 @@ public class ValidatorHelper {
 		TypeElement enclosingTypeElement = annotationHelper.typeElementFromQualifiedName(enclosingQualifiedName);
 
 		if (enclosingTypeElement != null) {
-			extendsType(element, CanonicalNameConstants.MENU_ITEM, valid);
+			if (thirdPartyLibHelper.usesActionBarSherlock(enclosingTypeElement)) {
+				extendsType(element, CanonicalNameConstants.SHERLOCK_MENU_ITEM, valid);
+			} else {
+				extendsType(element, CanonicalNameConstants.MENU_ITEM, valid);
+			}
 		}
 	}
 
@@ -1523,16 +1530,13 @@ public class ValidatorHelper {
 		TypeElement preferenceFragmentElement = annotationHelper.getElementUtils().getTypeElement(CanonicalNameConstants.PREFERENCE_FRAGMENT);
 
 		if (preferenceFragmentElement == null) {
-			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "The class " + CanonicalNameConstants.PREFERENCE_FRAGMENT + " cannot be found. You have to use at least API 11");
 		}
 	}
-
 	public void usesEnqueueIfHasId(Element element, IsValid valid) {
 		UiThread annotation = element.getAnnotation(UiThread.class);
 
 		if (!"".equals(annotation.id()) && annotation.propagation() == Propagation.REUSE) {
-			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "An id only can be used with Propagation.ENQUEUE");
 		}
 	}
