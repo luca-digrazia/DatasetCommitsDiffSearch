@@ -14,14 +14,17 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor.StructConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Concatable;
@@ -31,7 +34,11 @@ import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /** An implementation class of ClassObject for structs created in Skylark code. */
 @SkylarkModule(
@@ -43,31 +50,39 @@ import java.util.Map;
           + "for more details."
 )
 public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable, Serializable {
-  /** Error message to use when errorMessage argument is null. */
-  private static final String DEFAULT_ERROR_MESSAGE = "'struct' object has no attribute '%s'";
-
-  private final SkylarkClassObjectConstructor constructor;
+  private final ClassObjectConstructor constructor;
   private final ImmutableMap<String, Object> values;
   private final Location creationLoc;
   private final String errorMessage;
 
+  /** Creates an empty struct with a given location. */
+  public SkylarkClassObject(ClassObjectConstructor constructor, Location location) {
+    this.constructor = constructor;
+    this.values = ImmutableMap.of();
+    this.creationLoc = location;
+    this.errorMessage = constructor.getErrorMessageFormatForInstances();
+  }
+
   /**
-   * Primarily for testing purposes where no location is available and the default
-   * errorMessage suffices.
+   * Creates a built-in struct (i.e. without creation loc).
    */
-  public SkylarkClassObject(SkylarkClassObjectConstructor constructor,
+  public SkylarkClassObject(ClassObjectConstructor constructor,
       Map<String, Object> values) {
     this.constructor = constructor;
     this.values = copyValues(values);
     this.creationLoc = null;
-    this.errorMessage = DEFAULT_ERROR_MESSAGE;
+    this.errorMessage = constructor.getErrorMessageFormatForInstances();
   }
 
   /**
-   * Creates a built-in struct (i.e. without creation loc). The errorMessage has to have
-   * exactly one '%s' parameter to substitute the struct field name.
+   * Creates a built-in struct (i.e. without creation loc).
+   *
+   * Allows to supply a specific error message.
+   * Only used in {@link StructConstructor#create(Map, String)}
+   * If you need to override an error message, preferred way is to create a specific
+   * {@link NativeClassObjectConstructor}.
    */
-  public SkylarkClassObject(SkylarkClassObjectConstructor constructor,
+  SkylarkClassObject(ClassObjectConstructor constructor,
       Map<String, Object> values, String errorMessage) {
     this.constructor = constructor;
     this.values = copyValues(values);
@@ -75,19 +90,20 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
     this.errorMessage = Preconditions.checkNotNull(errorMessage);
   }
 
-  public SkylarkClassObject(SkylarkClassObjectConstructor constructor,
+  public SkylarkClassObject(ClassObjectConstructor constructor,
       Map<String, Object> values, Location creationLoc) {
     this.constructor = constructor;
     this.values = copyValues(values);
     this.creationLoc = Preconditions.checkNotNull(creationLoc);
-    this.errorMessage = DEFAULT_ERROR_MESSAGE;
+    this.errorMessage = constructor.getErrorMessageFormatForInstances();
   }
 
   // Ensure that values are all acceptable to Skylark before to stuff them in a ClassObject
   private ImmutableMap<String, Object> copyValues(Map<String, Object> values) {
     ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
     for (Map.Entry<String, Object> e : values.entrySet()) {
-      builder.put(e.getKey(), SkylarkType.convertToSkylark(e.getValue(), null));
+      builder.put(
+          Attribute.getSkylarkName(e.getKey()), SkylarkType.convertToSkylark(e.getValue(), null));
     }
     return builder.build();
   }
@@ -95,6 +111,10 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
   @Override
   public Object getValue(String name) {
     return values.get(name);
+  }
+
+  public boolean hasKey(String name) {
+    return values.containsKey(name);
   }
 
   /**
@@ -123,9 +143,14 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
   public Concatter getConcatter() {
     return StructConcatter.INSTANCE;
   }
-
-  public SkylarkClassObjectConstructor getConstructor() {
+  
+  public ClassObjectConstructor getConstructor() {
     return constructor;
+  }
+
+  @Nullable
+  public Location getCreationLocOrNull() {
+    return creationLoc;
   }
 
   private static class StructConcatter implements Concatter {
@@ -169,6 +194,10 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
 
   @Override
   public boolean isImmutable() {
+    // If the constructor is not yet exported the hash code of the object is subject to change
+    if (!constructor.isExported()) {
+      return false;
+    }
     for (Object item : values.values()) {
       if (!EvalUtils.isImmutable(item)) {
         return false;
@@ -177,26 +206,80 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
     return true;
   }
 
+  @Override
+  public boolean equals(Object otherObject) {
+    if (!(otherObject instanceof SkylarkClassObject)) {
+      return false;
+    }
+    SkylarkClassObject other = (SkylarkClassObject) otherObject;
+    if (this == other) {
+      return true;
+    }
+    if (!this.constructor.equals(other.constructor)) {
+      return false;
+    }
+    // Compare objects' keys and values
+    if (!this.getKeys().equals(other.getKeys())) {
+      return false;
+    }
+    for (String key : getKeys()) {
+      if (!this.getValue(key).equals(other.getValue(key))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @Override
+  public int hashCode() {
+    List<String> keys = new ArrayList<>(getKeys());
+    Collections.sort(keys);
+    List<Object> objectsToHash = new ArrayList<>();
+    objectsToHash.add(constructor);
+    for (String key : keys) {
+      objectsToHash.add(key);
+      objectsToHash.add(getValue(key));
+    }
+    return Objects.hashCode(objectsToHash.toArray());
+  }
+
   /**
-   * Convert the object to string using Skylark syntax. The output tries to be
-   * reversible (but there is no guarantee, it depends on the actual values).
+   * Convert the object to string using Skylark syntax. The output tries to be reversible (but there
+   * is no guarantee, it depends on the actual values).
    */
   @Override
-  public void write(Appendable buffer, char quotationMark) {
+  public void repr(SkylarkPrinter printer) {
     boolean first = true;
-    Printer.append(buffer, constructor.getPrintableName());
-    Printer.append(buffer, "(");
+    printer.append("struct(");
     // Sort by key to ensure deterministic output.
     for (String key : Ordering.natural().sortedCopy(values.keySet())) {
       if (!first) {
-        Printer.append(buffer, ", ");
+        printer.append(", ");
       }
       first = false;
-      Printer.append(buffer, key);
-      Printer.append(buffer, " = ");
-      Printer.write(buffer, values.get(key), quotationMark);
+      printer.append(key);
+      printer.append(" = ");
+      printer.repr(values.get(key));
     }
-    Printer.append(buffer, ")");
+    printer.append(")");
+  }
+
+  @Override
+  public void reprLegacy(SkylarkPrinter printer) {
+    boolean first = true;
+    printer.append(constructor.getPrintableName());
+    printer.append("(");
+    // Sort by key to ensure deterministic output.
+    for (String key : Ordering.natural().sortedCopy(values.keySet())) {
+      if (!first) {
+        printer.append(", ");
+      }
+      first = false;
+      printer.append(key);
+      printer.append(" = ");
+      printer.repr(values.get(key));
+    }
+    printer.append(")");
   }
 
   @Override
