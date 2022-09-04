@@ -21,9 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.net.MediaType;
 import controllers.AuthenticatedController;
-import lib.json.Json;
 import lib.security.RestPermissions;
 import org.graylog2.rest.models.dashboards.requests.AddWidgetRequest;
 import org.graylog2.restclient.lib.APIException;
@@ -55,6 +53,7 @@ import org.joda.time.Minutes;
 import org.joda.time.MutableDateTime;
 import org.joda.time.Weeks;
 import play.Logger;
+import play.libs.Json;
 import play.mvc.BodyParser;
 import play.mvc.Http;
 import play.mvc.Result;
@@ -88,7 +87,7 @@ public class DashboardsApiController extends AuthenticatedController {
                 result.put(d.getId(), dashboard);
             }
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (APIException e) {
             String message = "Could not get dashboards. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
@@ -110,7 +109,7 @@ public class DashboardsApiController extends AuthenticatedController {
                 result.put(d.getId(), dashboard);
             }
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (APIException e) {
             String message = "Could not get dashboards. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
@@ -144,7 +143,7 @@ public class DashboardsApiController extends AuthenticatedController {
         try {
             final String dashboardId = dashboardService.create(cdr);
 
-            return ok(Json.toJsonString(dashboardId)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(dashboardId));
         } catch (APIException e) {
             String message = "Could not create dashboard. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
@@ -209,7 +208,7 @@ public class DashboardsApiController extends AuthenticatedController {
             result.put("creator_user_id", widget.getCreatorUserId());
             result.put("config", widget.getConfig());
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (APIException e) {
             String message = "Could not get dashboard. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
@@ -240,7 +239,7 @@ public class DashboardsApiController extends AuthenticatedController {
             result.put("calculated_at", widgetValue.calculatedAt);
             result.put("time_range", widgetValue.computationTimeRange);
 
-            return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(result));
         } catch (APIException e) {
             String message = "Could not get dashboard. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
