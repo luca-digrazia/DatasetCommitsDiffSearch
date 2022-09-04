@@ -132,7 +132,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "lipo input collector",
     defaultValue = "false",
-    category = "internal",
+    category = "undocumented",
     help = "Internal flag, only used to create configurations with the LIPO-collector flag set."
   )
   public boolean lipoCollector;

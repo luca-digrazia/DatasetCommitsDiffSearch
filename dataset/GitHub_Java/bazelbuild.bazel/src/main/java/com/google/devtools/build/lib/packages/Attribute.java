@@ -130,7 +130,7 @@ public final class Attribute implements Comparable<Attribute> {
 
   /** A RuleAspect that just wraps a pre-existing Aspect that doesn't vary with the Rule. */
   private static class PredefinedRuleAspect extends RuleAspect<AspectClass> {
-    private final Aspect aspect;
+    private Aspect aspect;
 
     public PredefinedRuleAspect(Aspect aspect) {
       super(aspect.getAspectClass(), null);
@@ -438,7 +438,7 @@ public final class Attribute implements Comparable<Attribute> {
    * already undocumented based on its name cannot be marked as undocumented.
    */
   public static class Builder <TYPE> {
-    private final String name;
+    private String name;
     private final Type<TYPE> type;
     private Transition configTransition = ConfigurationTransition.NONE;
     private Predicate<RuleClass> allowedRuleClassesForLabels = Predicates.alwaysTrue();
@@ -1662,8 +1662,8 @@ public final class Attribute implements Comparable<Attribute> {
     private final ImmutableList<Label> labels;
     private final ImmutableSet<Class<?>> requiredConfigurationFragments;
 
-    public LateBoundLabelList(Class<?>... requiredConfigurationFragments) {
-      this(ImmutableList.<Label>of(), requiredConfigurationFragments);
+    public LateBoundLabelList() {
+      this(ImmutableList.<Label>of());
     }
 
     public LateBoundLabelList(List<Label> labels, Class<?>... requiredConfigurationFragments) {
