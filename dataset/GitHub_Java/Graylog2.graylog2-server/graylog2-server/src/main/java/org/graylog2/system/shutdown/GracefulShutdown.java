@@ -19,7 +19,6 @@
 
 package org.graylog2.system.shutdown;
 
-import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.inject.Inject;
 import org.graylog2.Configuration;
 import org.graylog2.initializers.BufferSynchronizerService;
@@ -36,7 +35,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Singleton;
-import java.util.concurrent.TimeUnit;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -93,15 +91,21 @@ public class GracefulShutdown implements Runnable {
         LOG.info("Node status: [{}]. Waiting <{}sec> for possible load balancers to recognize state change.",
                 serverStatus.getLifecycle().toString(),
                 configuration.getLoadBalancerRecognitionPeriodSeconds());
-        Uninterruptibles.sleepUninterruptibly(configuration.getLoadBalancerRecognitionPeriodSeconds(), TimeUnit.SECONDS);
+        try {
+            Thread.sleep(configuration.getLoadBalancerRecognitionPeriodSeconds()*1000);
+        } catch (InterruptedException ignored) { /* nope */ }
 
-        activityWriter.write(new Activity("Graceful shutdown initiated.", GracefulShutdown.class));
+        activityWriter.write(
+                new Activity("Graceful shutdown initiated.", GracefulShutdown.class)
+        );
 
         /*
          * Wait a second to give for example the calling REST call some time to respond
          * to the client. Using a latch or something here might be a bit over-engineered.
          */
-        Uninterruptibles.sleepUninterruptibly(SLEEP_SECS, TimeUnit.SECONDS);
+        try {
+            Thread.sleep(SLEEP_SECS*1000);
+        } catch (InterruptedException ignored) { /* nope */ }
 
         // Stop REST API service to avoid changes from outside.
         restApiService.stopAsync().awaitTerminated();
