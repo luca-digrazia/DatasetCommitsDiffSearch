@@ -50,8 +50,8 @@ import javax.ws.rs.core.Response;
 import java.util.Collection;
 import java.util.stream.Collectors;
 
-@Api(value = "Pipelines/Rules", description = "Rules for the pipeline message processor")
-@Path("/system/pipelines/rule")
+@Api(value = "Pipeline/Rules", description = "Rules for the pipeline message processor")
+@Path("/system/pipelines")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class RuleResource extends RestResource implements PluginRestResource {
@@ -74,7 +74,7 @@ public class RuleResource extends RestResource implements PluginRestResource {
 
     @ApiOperation(value = "Create a processing rule from source", notes = "")
     @POST
-    @Path("/")
+    @Path("/rule")
     public RuleSource createFromParser(@ApiParam(name = "rule", required = true) @NotNull RuleSource ruleSource) throws ParseException {
         final Rule rule;
         try {
@@ -92,13 +92,13 @@ public class RuleResource extends RestResource implements PluginRestResource {
         final RuleDao save = ruleService.save(newRuleSource);
         // TODO determine which pipelines could change because of this new rule (there could be pipelines referring to a previously unresolved rule)
         clusterBus.post(RulesChangedEvent.updatedRuleId(save.id()));
-        log.debug("Created new rule {}", save);
+        log.info("Created new rule {}", save);
         return RuleSource.fromDao(pipelineRuleParser, save);
     }
 
     @ApiOperation(value = "Parse a processing rule without saving it", notes = "")
     @POST
-    @Path("/parse")
+    @Path("/rule/parse")
     public RuleSource parse(@ApiParam(name = "rule", required = true) @NotNull RuleSource ruleSource) throws ParseException {
         final Rule rule;
         try {
@@ -117,7 +117,7 @@ public class RuleResource extends RestResource implements PluginRestResource {
 
     @ApiOperation(value = "Get all processing rules")
     @GET
-    @Path("/")
+    @Path("/rule")
     public Collection<RuleSource> getAll() {
         final Collection<RuleDao> ruleDaos = ruleService.loadAll();
         return ruleDaos.stream()
@@ -126,25 +126,14 @@ public class RuleResource extends RestResource implements PluginRestResource {
     }
 
     @ApiOperation(value = "Get a processing rule", notes = "It can take up to a second until the change is applied")
-    @Path("/{id}")
+    @Path("/rule/{id}")
     @GET
     public RuleSource get(@ApiParam(name = "id") @PathParam("id") String id) throws NotFoundException {
         return RuleSource.fromDao(pipelineRuleParser, ruleService.load(id));
     }
 
-    @ApiOperation("Retrieve the named processing rules in bulk")
-    @Path("/multiple")
-    @POST
-    public Collection<RuleSource> getBulk(@ApiParam("rules") BulkRuleRequest rules) {
-        Collection<RuleDao> ruleDaos = ruleService.loadNamed(rules.rules());
-
-        return ruleDaos.stream()
-                .map(ruleDao -> RuleSource.fromDao(pipelineRuleParser, ruleDao))
-                .collect(Collectors.toList());
-    }
-
     @ApiOperation(value = "Modify a processing rule", notes = "It can take up to a second until the change is applied")
-    @Path("/{id}")
+    @Path("/rule/{id}")
     @PUT
     public RuleSource update(@ApiParam(name = "id") @PathParam("id") String id,
                              @ApiParam(name = "rule", required = true) @NotNull RuleSource update) throws NotFoundException {
@@ -170,7 +159,7 @@ public class RuleResource extends RestResource implements PluginRestResource {
     }
 
     @ApiOperation(value = "Delete a processing rule", notes = "It can take up to a second until the change is applied")
-    @Path("/{id}")
+    @Path("/rule/{id}")
     @DELETE
     public void delete(@ApiParam(name = "id") @PathParam("id") String id) throws NotFoundException {
         ruleService.load(id);
