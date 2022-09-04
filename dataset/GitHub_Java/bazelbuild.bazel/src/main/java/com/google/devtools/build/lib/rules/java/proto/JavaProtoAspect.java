@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
@@ -130,7 +129,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
                 ImmutableList.of(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey())))
             .add(
                 attr(JavaProtoAspectCommon.SPEED_PROTO_TOOLCHAIN_ATTR, LABEL)
-                    // TODO(carmi): reinstate mandatoryBuiltinProviders(ProtoLangToolchainProvider)
+                    // TODO(carmi): reinstate mandatoryNativeProviders(ProtoLangToolchainProvider)
                     // once it's in a Bazel release.
                     .legacyAllowAnyFileType()
                     .value(getSpeedProtoToolchainLabel(defaultSpeedProtoToolchainLabel)))
@@ -219,11 +218,10 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
         JavaRuleOutputJarsProvider ruleOutputJarsProvider =
             JavaRuleOutputJarsProvider.builder()
                 .addOutputJar(
-                    OutputJar.builder()
-                        .setClassJar(outputJar)
-                        .setCompileJar(compileTimeJar)
-                        .addSourceJar(sourceJar)
-                        .build())
+                    outputJar,
+                    compileTimeJar,
+                    null /* manifestProto */,
+                    ImmutableList.of(sourceJar))
                 .build();
         JavaSourceJarsProvider sourceJarsProvider =
             JavaSourceJarsProvider.create(
