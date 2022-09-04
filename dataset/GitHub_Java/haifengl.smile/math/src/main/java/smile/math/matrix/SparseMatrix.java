@@ -1,10 +1,10 @@
 /*******************************************************************************
  * Copyright (c) 2010 Haifeng Li
- *
+ *   
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+ *  
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,13 +15,10 @@
  *******************************************************************************/
 package smile.math.matrix;
 
+import java.io.IOException;
 import java.util.Arrays;
-import java.util.Spliterator;
-import java.util.function.Consumer;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
-
-import smile.math.Math;
+import java.util.Scanner;
+import smile.math.MathEx;
 
 /**
  * A sparse matrix is a matrix populated primarily with zeros. Conceptually,
@@ -45,6 +42,7 @@ import smile.math.Math;
  * @author Haifeng Li
  */
 public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, SparseMatrix> {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SparseMatrix.class);
     private static final long serialVersionUID = 1L;
 
     /**
@@ -107,7 +105,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * @param D a dense matrix to converted into sparse matrix format.
      */
     public SparseMatrix(double[][] D) {
-        this(D, 100 * Math.EPSILON);
+        this(D, 100 * MathEx.EPSILON);
     }
 
     /**
@@ -169,7 +167,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
     /**
      * Returns the number of nonzero values.
      */
-    public int size() {
+    public int length() {
         return colIndex[ncols];
     }
 
@@ -180,204 +178,11 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
     public double[] values() {
         return x;
     }
-
-    /**
-     * Returns the row index
-     */
-    public int[] getRowIndex() {
-        return rowIndex;
-    }
-
-    /**
-     * Returns the column index
-     */
-    @SuppressWarnings("WeakerAccess")
-    public int[] getColIndex() {
-        return colIndex;
-    }
-
-    /**
-     * Calls a lambda with each non-zero value. This will be a bit faster than using a stream
-     * because we can avoid boxing up the coordinates of the element being processed, but it
-     * will be considerably less general.
-     * <p>
-     * Note that the action could be called on values that are either effectively or actually
-     * zero. The only guarantee is that no values that are known to be zero based on the
-     * structure of the matrix will be processed.
-     *
-     * @param action Action to perform on each non-zero, typically this is a lambda.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public void foreachNonzero(MatrixElementConsumer action) {
-        for (int j = 0; j < ncols; j++) {
-            for (int k = colIndex[j]; k < colIndex[j + 1]; k++) {
-                int i = rowIndex[k];
-                action.eval(i, j, x[k]);
-            }
-        }
-    }
-
-
-    /**
-     * Calls a lambda with each non-zero value. This will be a bit faster than using a stream
-     * because we can avoid boxing up the coordinates of the element being processed, but it
-     * will be considerably less general.
-     * <p>
-     * Note that the action could be called on values that are either effectively or actually
-     * zero. The only guarantee is that no values that are known to be zero based on the
-     * structure of the matrix will be processed.
-     *
-     * @param startColumn The first column to scan.
-     * @param endColumn   One past the last column to scan.
-     * @param action      Action to perform on each non-zero, typically this is a lambda.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public void foreachNonzero(int startColumn, int endColumn, MatrixElementConsumer action) {
-        if (startColumn < 0 || startColumn >= ncols) {
-            throw new IllegalArgumentException("Start column must be in range [0,ncols)");
-        }
-        if (endColumn < 0 || endColumn > ncols) {
-            throw new IllegalArgumentException("End column must be in range [startColumn,ncols]");
-        }
-
-        for (int j = startColumn; j < endColumn; j++) {
-            for (int k = colIndex[j]; k < colIndex[j + 1]; k++) {
-                int i = rowIndex[k];
-                action.eval(i, j, x[k]);
-            }
-        }
-    }
-
-    /**
-     * Provides a stream over all of the non-zero elements of a sparse matrix.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public Stream<SparseMatrixEntry> nonzeros() {
-        return StreamSupport.stream(new SparseMatrixSpliterator(this, 0, ncols), false);
-    }
-
-    /**
-     * Provides a stream over all of the non-zero elements of range of columns of a sparse matrix.
-     *
-     * @param startColumn The first column to scan
-     * @param endColumn   The first column after the ones that we should scan.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public Stream<SparseMatrixEntry> nonzeros(int startColumn, int endColumn) {
-        return StreamSupport.stream(new SparseMatrixSpliterator(this, startColumn, endColumn), false);
-    }
-
-    /**
-     * Provides a spliterator for access to a sparse matrix in column major order.
-     * <p>
-     * This is exposed to facilitate lower level access to the stream API for a matrix.
-     */
-    public static class SparseMatrixSpliterator implements Spliterator<SparseMatrixEntry> {
-        private final SparseMatrix m;
-        private int col;      // current colum, advanced on split or traversal
-        private int index;    // current element within column
-        private final int fence; // one past the last column to process
-
-        SparseMatrixSpliterator(SparseMatrix matrix, int col, int fence) {
-            this.m = matrix;
-            this.col = col;
-            this.index = m.colIndex[col];
-            this.fence = fence;
-        }
-
-        public void forEachRemaining(Consumer<? super SparseMatrixEntry> action) {
-            for (; col < fence; col++) {
-                for (; index < m.colIndex[col + 1]; index++) {
-                    action.accept(new SparseMatrixEntry(m.rowIndex[index], col, m.x[index], index, m.x));
-                }
-            }
-        }
-
-        public boolean tryAdvance(Consumer<? super SparseMatrixEntry> action) {
-            if (col < fence) {
-                while (col < fence && index >= m.colIndex[col + 1]) {
-                    col++;
-                }
-                if (col < fence) {
-                    action.accept(new SparseMatrixEntry(m.rowIndex[index], col, m.x[index], index, m.x));
-                    index++;
-                    return true;
-                } else {
-                    return false;
-                }
-            } else {
-                // cannot advance
-                return false;
-            }
-        }
-
-        public Spliterator<SparseMatrixEntry> trySplit() {
-            int lo = col; // divide range in half, assuming roughly constant size of all columns
-            int mid = ((lo + fence) >>> 1) & ~1; // force midpoint to be even
-            if (lo < mid) { // split out left half
-                col = mid; // reset this Spliterator's origin
-                return new SparseMatrixSpliterator(m, lo, mid);
-            } else {
-                // too small to split
-                return null;
-            }
-        }
-
-        public long estimateSize() {
-            return (long) (m.colIndex[fence] - m.colIndex[col]);
-        }
-
-        public int characteristics() {
-            return ORDERED | SIZED | IMMUTABLE | SUBSIZED;
-        }
-    }
-
-    /**
-     * Encapsulates important information about an entry in a matrix for use
-     * in streaming, including a string that leads back to the original cell
-     * so that in-place updates are possible.
-     */
-    public static class SparseMatrixEntry {
-        // these fields are exposed for direct access to simplify in-lining by the JVM
-        public final int row;
-        public final int col;
-        public double x;
-
-        // these are hidden due to internal dependency
-        private final int index;
-        private double[] values;
-
-
-        @SuppressWarnings("WeakerAccess")
-        public SparseMatrixEntry(int row, int col, double x, int index, double[] values) {
-            this.row = row;
-            this.col = col;
-            this.x = x;
-            this.index = index;
-            this.values = values;
-        }
-
-        public void set(double value) {
-            this.x = value;
-            values[index] = value;
-        }
-
-        public SparseMatrixEntry clone(double value) {
-            return new SparseMatrixEntry(row, col, value, index, values);
-        }
-    }
-
-    /**
-     * Functional interface for lambda iteration through a sparse matrix.
-     */
-    public interface MatrixElementConsumer {
-        void eval(int row, int column, double value);
-    }
-
+    
     @Override
     public double get(int i, int j) {
         if (i < 0 || i >= nrows || j < 0 || j >= ncols) {
-            throw new IllegalArgumentException("Invalid index: row = " + i + " col = " + j);
+            throw new IllegalArgumentException("Invalid index: i = " + i + " j = " + j);
         }
 
         for (int k = colIndex[j]; k < colIndex[j + 1]; k++) {
@@ -505,7 +310,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
         }
 
         int m = nrows;
-        int anz = size();
+        int anz = length();
         int n = B.ncols;
         int[] Bp = B.colIndex;
         int[] Bi = B.rowIndex;
@@ -576,7 +381,6 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
 
         return nz;
     }
-
     @Override
     public SparseMatrix abtmm(SparseMatrix B) {
         SparseMatrix BT = B.transpose();
@@ -587,6 +391,11 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
     public SparseMatrix atbmm(SparseMatrix B) {
         SparseMatrix AT = transpose();
         return AT.abmm(B);
+    }
+
+    @Override
+    public SparseMatrix atbtmm(SparseMatrix B) {
+        return B.abmm(this).transpose();
     }
 
     @Override
@@ -681,7 +490,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
 
     @Override
     public double[] diag() {
-        int n = smile.math.Math.min(nrows(), ncols());
+        int n = Math.min(nrows(), ncols());
         double[] d = new double[n];
 
         for (int i = 0; i < n; i++) {
@@ -694,5 +503,127 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
         }
 
         return d;
+    }
+
+    /**
+     * Reads a sparse matrix from a Harwell-Boeing Exchange Format file.
+     * For details, see
+     * <a href="http://people.sc.fsu.edu/~jburkardt/data/hb/hb.html">http://people.sc.fsu.edu/~jburkardt/data/hb/hb.html</a>.
+     *
+     * Note that our implementation supports only real-valued matrix and we ignore
+     * the optional supplementary data (e.g. right hand side vectors).
+     *
+     * @param path the input file path.
+     *
+     * @author Haifeng Li
+     */
+    public static SparseMatrix harwell(java.nio.file.Path path) throws IOException {
+        logger.info("Reads Harwell-Boeing file '{}'", path.toAbsolutePath());
+        try (java.io.InputStream stream = java.nio.file.Files.newInputStream(path);
+             Scanner scanner = new Scanner(stream)) {
+
+            // Ignore the title line.
+            String line = scanner.nextLine();
+            logger.info(line);
+
+            line = scanner.nextLine().trim();
+            logger.info(line);
+            String[] tokens = line.split("\\s+");
+            int RHSCRD = Integer.parseInt(tokens[4]);
+
+            line = scanner.nextLine().trim();
+            logger.info(line);
+            if (!line.startsWith("R")) {
+                throw new UnsupportedOperationException("SparseMatrix supports only real-valued matrix.");
+            }
+
+            tokens = line.split("\\s+");
+            int nrows = Integer.parseInt(tokens[1]);
+            int ncols = Integer.parseInt(tokens[2]);
+            int nz = Integer.parseInt(tokens[3]);
+
+            line = scanner.nextLine();
+            logger.info(line);
+            if (RHSCRD > 0) {
+                line = scanner.nextLine();
+                logger.info(line);
+            }
+
+            int[] colIndex = new int[ncols + 1];
+            int[] rowIndex = new int[nz];
+            double[] data = new double[nz];
+            for (int i = 0; i <= ncols; i++) {
+                colIndex[i] = scanner.nextInt() - 1;
+            }
+            for (int i = 0; i < nz; i++) {
+                rowIndex[i] = scanner.nextInt() - 1;
+            }
+            for (int i = 0; i < nz; i++) {
+                data[i] = scanner.nextDouble();
+            }
+
+            return new SparseMatrix(nrows, ncols, data, rowIndex, colIndex);
+        }
+    }
+
+    /**
+     * Reads a sparse matrix from a Rutherford-Boeing Exchange Format file.
+     * The Rutherford Boeing format is an updated more flexible version of the
+     * Harwell Boeing format.
+     * For details, see
+     * <a href="http://people.sc.fsu.edu/~jburkardt/data/rb/rb.html">http://people.sc.fsu.edu/~jburkardt/data/rb/rb.html</a>.
+     * Especially, the supplementary data in the form of right-hand sides,
+     * estimates or solutions are treated as separate files.
+     *
+     * Note that our implementation supports only real-valued matrix and we ignore
+     * the optional supplementary data (e.g. right hand side vectors).
+     *
+     * @param path the input file path.
+     *
+     * @author Haifeng Li
+     */
+    public static SparseMatrix rutherford(java.nio.file.Path path) throws IOException {
+        // As we ignore the supplementary data, the parsing process
+        // is same as Harwell.
+        return harwell(path);
+    }
+
+    /**
+     * Reads a sparse matrix from a text file.
+     * The first line contains three integers, which are the number of rows,
+     * the number of columns, and the number of nonzero entries in the matrix.
+     * <p>
+     * Following the first line, there are m + 1 integers that are the indices of
+     * columns, where m is the number of columns. Then there are n integers that
+     * are the row indices of nonzero entries, where n is the number of nonzero
+     * entries. Finally, there are n float numbers that are the values of nonzero
+     * entries.
+     *
+     * @param path the input file path.
+     *
+     * @author Haifeng Li
+     */
+    public static SparseMatrix text(java.nio.file.Path path) throws IOException {
+        try (java.io.InputStream stream = java.nio.file.Files.newInputStream(path);
+             Scanner scanner = new Scanner(stream)) {
+            int nrows = scanner.nextInt();
+            int ncols = scanner.nextInt();
+            int nz = scanner.nextInt();
+
+            int[] colIndex = new int[ncols + 1];
+            int[] rowIndex = new int[nz];
+            double[] data = new double[nz];
+            for (int i = 0; i <= ncols; i++) {
+                colIndex[i] = scanner.nextInt() - 1;
+            }
+            for (int i = 0; i < nz; i++) {
+                rowIndex[i] = scanner.nextInt() - 1;
+            }
+            for (int i = 0; i < nz; i++) {
+                data[i] = scanner.nextDouble();
+            }
+
+            return new SparseMatrix(nrows, ncols, data, rowIndex, colIndex);
+        }
     }
 }
