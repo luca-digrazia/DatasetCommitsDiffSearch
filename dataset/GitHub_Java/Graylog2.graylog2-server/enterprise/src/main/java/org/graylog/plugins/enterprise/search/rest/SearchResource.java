@@ -150,9 +150,6 @@ public class SearchResource extends RestResource implements PluginRestResource {
             throw new InternalServerErrorException("Error executing search job: " + e.getMessage());
         } catch (TimeoutException e) {
             throw new InternalServerErrorException("Timeout while executing search job");
-        } catch (Exception e) {
-            LOG.error("Other error", e);
-            throw e;
         }
 
         return searchJob;
