@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.buffers.processors;
 
@@ -24,8 +24,6 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.MessageEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Collection;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -57,29 +55,25 @@ public abstract class ProcessBufferProcessor implements WorkHandler<MessageEvent
         // TODO The DecodingProcessor does not need to be a EventHandler. We decided to do it like this to keep the change as small as possible for 1.0.0.
         decodingProcessor.onEvent(event, 0L, false);
 
-        final Collection<Message> messageList = event.getMessages();
-        if (messageList == null) {
+        final Message msg = event.getMessage();
+        if (msg == null) {
             // skip message events which could not be decoded properly
             return;
         }
-
-        for (final Message message : messageList) {
-            dispatchMessage(message);
-        }
-    }
-
-    private void dispatchMessage(final Message msg) {
         incomingMessages.mark();
+        final Timer.Context tcx = processTime.time();
+
 
         LOG.debug("Starting to process message <{}>.", msg.getId());
 
-        try (final Timer.Context ignored = processTime.time()) {
+        try {
             LOG.debug("Finished processing message <{}>. Writing to output buffer.", msg.getId());
             handleMessage(msg);
         } catch (Exception e) {
             LOG.warn("Unable to process message <{}>: {}", msg.getId(), e);
         } finally {
             outgoingMessages.mark();
+            tcx.stop();
         }
     }
 

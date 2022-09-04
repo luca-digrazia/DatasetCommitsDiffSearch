@@ -1,22 +1,21 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.buffers;
 
-import com.codahale.metrics.Gauge;
 import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
@@ -25,14 +24,12 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
-import org.graylog2.plugin.GlobalMetricNames;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.journal.RawMessage;
 import org.graylog2.shared.buffers.processors.DecodingProcessor;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
-import org.graylog2.shared.metrics.MetricUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,8 +42,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static org.graylog2.shared.metrics.MetricUtils.constantGauge;
-import static org.graylog2.shared.metrics.MetricUtils.safelyRegister;
 
 public class ProcessBuffer extends Buffer {
     private final Timer parseTime;
@@ -76,14 +71,6 @@ public class ProcessBuffer extends Buffer {
 
         this.parseTime = metricRegistry.timer(name(ProcessBuffer.class, "parseTime"));
         this.decodeTime = metricRegistry.timer(name(ProcessBuffer.class, "decodeTime"));
-
-        MetricUtils.safelyRegister(metricRegistry, GlobalMetricNames.PROCESS_BUFFER_USAGE, new Gauge<Long>() {
-            @Override
-            public Long getValue() {
-                return ProcessBuffer.this.getUsage();
-            }
-        });
-        safelyRegister(metricRegistry, GlobalMetricNames.PROCESS_BUFFER_SIZE, constantGauge(ringBufferSize));
 
         if (serverStatus.hasCapability(ServerStatus.Capability.RADIO)) {
             SOURCE_INPUT_ATTR_NAME = "gl2_source_radio_input";
