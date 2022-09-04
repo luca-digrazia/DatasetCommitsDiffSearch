@@ -121,8 +121,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     collectTransitiveAars(ruleContext, transitiveAars, transitiveAarArtifacts);
 
     NestedSetBuilder<Artifact> proguardConfigsbuilder = NestedSetBuilder.stableOrder();
-    ProguardLibrary proguardLibrary = new ProguardLibrary(ruleContext);
-    proguardConfigsbuilder.addTransitive(proguardLibrary.collectProguardSpecs());
+    proguardConfigsbuilder.addTransitive(new ProguardLibrary(ruleContext).collectProguardSpecs());
     AndroidIdlHelper.maybeAddSupportLibProguardConfigs(ruleContext, proguardConfigsbuilder);
     NestedSet<Artifact> transitiveProguardConfigs = proguardConfigsbuilder.build();
 
@@ -132,9 +131,9 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     AndroidCommon androidCommon = new AndroidCommon(javaCommon);
 
     boolean definesLocalResources =
-        AndroidResources.definesAndroidResources(ruleContext.attributes());
+        LocalResourceContainer.definesAndroidResources(ruleContext.attributes());
     if (definesLocalResources) {
-      AndroidResources.validateRuleContext(ruleContext);
+      LocalResourceContainer.validateRuleContext(ruleContext);
     }
 
     // TODO(b/69668042): Always correctly apply neverlinking for resources
@@ -225,7 +224,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
               .setSourceJarOut(resourceContainer.getJavaSourceJar())
               .setJavaPackage(resourceContainer.getJavaPackage())
               .withPrimary(resourceContainer)
-              .withResourceDependencies(resourceApk.getResourceDependencies())
+              .withDependencies(resourceApk.getResourceDependencies())
               .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
               .setThrowOnResourceConflict(
                   ruleContext.getFragment(AndroidConfiguration.class).throwOnResourceConflict())
@@ -238,7 +237,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         .withRtxt(primaryResources.getRTxt())
         .withClasses(classesJar)
         .setAAROut(aarOut)
-        .setProguardSpecs(proguardLibrary.collectLocalProguardSpecs())
         .setThrowOnResourceConflict(
             ruleContext.getFragment(AndroidConfiguration.class).throwOnResourceConflict())
         .build(ruleContext);
