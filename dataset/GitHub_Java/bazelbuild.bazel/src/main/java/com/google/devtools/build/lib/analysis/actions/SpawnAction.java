@@ -1049,7 +1049,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
      */
     public Builder addArgument(String argument) {
       Preconditions.checkState(commandLine == null);
-      commandLineBuilder.addDynamicString(argument);
+      commandLineBuilder.add(argument);
       return this;
     }
 
