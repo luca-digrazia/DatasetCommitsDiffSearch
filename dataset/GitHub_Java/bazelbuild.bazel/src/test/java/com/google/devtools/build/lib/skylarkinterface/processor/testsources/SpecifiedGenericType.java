@@ -16,24 +16,23 @@ package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.Dict;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 
 /**
  * Test case for a SkylarkCallable method which has a parameter with an unsafely specified generic
  * type. (Parameters, if generic, may only have wildcards, as the types of these parameters must be
  * validated dynamically.)
  */
-public class SpecifiedGenericType implements StarlarkValue {
+public class SpecifiedGenericType {
 
   @SkylarkCallable(
       name = "specified_generic_type",
       documented = false,
       parameters = {
-        @Param(name = "one", type = Sequence.class, named = true),
+        @Param(name = "one", type = SkylarkList.class, named = true),
       })
-  public String specifiedGenericType(Dict<?, String> one) {
+  public String specifiedGenericType(SkylarkDict<?, String> one) {
     return "bar";
   }
 }

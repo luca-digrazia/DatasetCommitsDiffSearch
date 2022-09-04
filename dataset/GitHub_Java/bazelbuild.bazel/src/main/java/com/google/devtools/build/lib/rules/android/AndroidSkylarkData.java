@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import javax.annotation.Nullable;
 
 /** Skylark-visible methods for working with Android data (manifests, resources, and assets). */
@@ -234,21 +233,35 @@ public abstract class AndroidSkylarkData
     }
 
     // Get the target's local resources, if defined, from the provider
-    Optional<? extends AndroidResources> resources =
-        resourcesInfo.getDirectAndroidResources().toList().stream()
-            .filter(r -> r.getLabel().equals(ctx.getLabel()))
-            .findFirst();
-    boolean definesLocalResources = resources.isPresent();
+    boolean definesLocalResources = resourcesInfo.getDirectAndroidResources().isSingleton();
+    AndroidResources resources = AndroidResources.empty();
+    if (definesLocalResources) {
+      ValidatedAndroidResources validatedAndroidResources =
+          resourcesInfo.getDirectAndroidResources().toList().get(0);
+      if (validatedAndroidResources.getLabel().equals(ctx.getLabel())) {
+        resources = validatedAndroidResources;
+      } else {
+        definesLocalResources = false;
+      }
+    }
 
     // Get the target's local assets, if defined, from the provider
-    Optional<? extends AndroidAssets> assets =
-        assetsInfo.getDirectParsedAssets().toList().stream()
-            .filter(a -> a.getLabel().equals(ctx.getLabel()))
-            .findFirst();
-    // The target might still define an empty list of assets, in which case its information is not
-    // propagated for efficiency. If this is the case, we will still have an artifact for the
-    // merging output.
-    boolean definesLocalAssets = assets.isPresent() || assetsInfo.getValidationResult() != null;
+    boolean definesLocalAssets = false;
+    AndroidAssets assets = AndroidAssets.empty();
+    if (assetsInfo.getDirectParsedAssets().isSingleton()) {
+      ParsedAndroidAssets parsed = assetsInfo.getDirectParsedAssets().toList().get(0);
+      if (parsed.getLabel().equals(ctx.getLabel())) {
+        assets = parsed;
+        definesLocalAssets = true;
+      }
+    }
+
+    if (!definesLocalAssets) {
+      // The target might still define an empty list of assets, in which case its information is not
+      // propagated for efficiency. If this is the case, we will still have an artifact for the
+      // merging output.
+      definesLocalAssets = assetsInfo.getValidationResult() != null;
+    }
 
     if (definesLocalResources != definesLocalAssets) {
       throw new EvalException(
@@ -260,8 +273,8 @@ public abstract class AndroidSkylarkData
 
     return Aar.makeAar(
             ctx,
-            resources.isPresent() ? resources.get() : AndroidResources.empty(),
-            assets.isPresent() ? assets.get() : AndroidAssets.empty(),
+            resources,
+            assets,
             resourcesInfo.getManifest(),
             resourcesInfo.getRTxt(),
             libraryClassJar,
