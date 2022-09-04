@@ -1,38 +1,39 @@
 /**
- * This file is part of Graylog2.
+ * The MIT License
+ * Copyright (c) 2012 TORCH GmbH
  *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
 package org.graylog2.periodical;
 
 import com.codahale.metrics.Meter;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.graylog2.inputs.Cache;
-import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
-import org.graylog2.plugin.buffers.ProcessingDisabledException;
 import org.graylog2.plugin.periodical.Periodical;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -42,11 +43,9 @@ public abstract class AbstractCacheWorkerThread extends Periodical {
     private final ServerStatus serverStatus;
     protected Meter writtenMessages;
     protected Meter outOfCapacity;
-    private final int batchLimit;
 
-    protected AbstractCacheWorkerThread(ServerStatus serverStatus, BaseConfiguration configuration) {
+    protected AbstractCacheWorkerThread(ServerStatus serverStatus) {
         this.serverStatus = serverStatus;
-        this.batchLimit = configuration.getRingSize()/2;
     }
 
     protected void work(Cache cache, Buffer targetBuffer) {
@@ -54,42 +53,38 @@ public abstract class AbstractCacheWorkerThread extends Periodical {
 
         while(true) {
             try {
-                //singleMessageEnqueue(cache, targetBuffer);
-                drainMessagesEnqueue(cache, targetBuffer);
-            } catch (BufferOutOfCapacityException ex) {
-                outOfCapacity.mark();
-                LOG.error("Target buffer out of capacity in {}. Breaking.", cacheName);
-            } catch (ProcessingDisabledException e) {
-                LOG.error("Processing has been disabled while working on cache: ", e);
-            } catch (Exception e) {
-                LOG.error("Exception while working on cache: ", e);
+                if (!cache.isEmpty() && serverStatus.isProcessing()) {
+                    LOG.debug("{} contains {} messages. Trying to process them.", cacheName, cache.size());
+
+                    while (true) {
+                        if (cache.isEmpty()) {
+                            LOG.debug("Read all messages from {}.", cacheName);
+                            break;
+                        }
+
+                        if (targetBuffer.hasCapacity() && serverStatus.isProcessing()) {
+                            try {
+                                LOG.debug("Reading message from {}.", cacheName);
+                                Message msg = cache.pop();
+                                if (msg != null) {
+                                    targetBuffer.insertFailFast(msg, msg.getSourceInput());
+                                    writtenMessages.mark();
+                                }
+                            } catch (BufferOutOfCapacityException ex) {
+                                outOfCapacity.mark();
+                                LOG.debug("Target buffer out of capacity in {}. Breaking.", cacheName);
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch(Exception e) {
+                LOG.error("Error while trying to work on Cache <" + cacheName + ">.", e);
+                Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
             }
+
+            Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS);
         }
-    }
-
-    protected void drainMessagesEnqueue(Cache cache, Buffer targetBuffer) throws BufferOutOfCapacityException, ProcessingDisabledException {
-        List<Message> messages = new ArrayList<>();
-
-        Message topElement = null;
-        while (topElement == null) {
-            topElement = cache.pop();
-        }
-
-        messages.add(cache.pop());
-        int result = cache.drainTo(messages, batchLimit);
-        //LOG.error("Drained {} messages from cache. Remaining: {}", result, cache.size());
-        while (!targetBuffer.hasCapacity(result))
-            LockSupport.parkNanos(10);
-        targetBuffer.insertCached(messages);
-        writtenMessages.mark(messages.size());
-    }
-
-    protected void singleMessageEnqueue(Cache cache, Buffer targetBuffer) throws BufferOutOfCapacityException, ProcessingDisabledException {
-        Message msg = cache.pop();
-        while(!targetBuffer.hasCapacity())
-            LockSupport.parkNanos(1000);
-        targetBuffer.insertFailFast(msg, msg.getSourceInput());
-        writtenMessages.mark();
     }
 
     @Override
@@ -131,6 +126,4 @@ public abstract class AbstractCacheWorkerThread extends Periodical {
     public int getPeriodSeconds() {
         return 1;
     }
-
-
 }
