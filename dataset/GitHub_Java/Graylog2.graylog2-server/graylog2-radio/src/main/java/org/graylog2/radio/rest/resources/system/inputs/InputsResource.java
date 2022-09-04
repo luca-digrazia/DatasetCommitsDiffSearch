@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.radio.rest.resources.system.inputs;
 
@@ -25,16 +26,16 @@ import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.radio.inputs.InputRegistry;
+import org.graylog2.radio.inputs.NoSuchInputTypeException;
+import org.graylog2.radio.inputs.api.InputSummaryResponse;
 import org.graylog2.radio.rest.resources.RestResource;
-import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.inputs.NoSuchInputTypeException;
-import org.graylog2.shared.rest.resources.system.inputs.requests.InputLaunchRequest;
+import org.graylog2.radio.rest.resources.system.inputs.requests.InputLaunchRequest;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -42,6 +43,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -50,16 +52,13 @@ import java.util.UUID;
 public class InputsResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(InputsResource.class);
-    
-    @Inject
-    private InputRegistry inputRegistry;
 
     @GET @Timed
     @Produces(MediaType.APPLICATION_JSON)
     public String list() {
         List<Map<String, Object>> inputStates = Lists.newArrayList();
 
-        for (InputState inputState : inputRegistry.getInputStates()) {
+        for (InputState inputState : radio.inputs().getInputStates()) {
             inputStates.add(inputState.asMap());
         }
 
@@ -74,7 +73,7 @@ public class InputsResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/{inputId}")
     public String single(@PathParam("inputId") String inputId) {
-        MessageInput input = inputRegistry.getRunningInput(inputId);
+        MessageInput input = radio.inputs().getRunningInput(inputId);
 
         if (input == null) {
             LOG.info("Input [{}] not found. Returning HTTP 404.", inputId);
@@ -105,8 +104,8 @@ public class InputsResource extends RestResource {
         DateTime createdAt = new DateTime(DateTimeZone.UTC);
         MessageInput input;
         try {
-            input = inputRegistry.create(lr.type);
-            input.initialize(inputConfig);
+            input = InputRegistry.factory(lr.type);
+            input.initialize(inputConfig, radio);
             input.setTitle(lr.title);
             input.setCreatorUserId(lr.creatorUserId);
             input.setCreatedAt(createdAt);
@@ -122,16 +121,16 @@ public class InputsResource extends RestResource {
         }
 
         String inputId = UUID.randomUUID().toString();
-        //input.setPersistId(inputId);
+        input.setPersistId(inputId);
 
         // Don't run if exclusive and another instance is already running.
-        if (input.isExclusive() && inputRegistry.hasTypeRunning(input.getClass())) {
+        if (input.isExclusive() && radio.inputs().hasTypeRunning(input.getClass())) {
             LOG.error("Type is exclusive and already has input running.");
             throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
         // Launch input. (this will run async and clean up itself in case of an error.)
-        inputRegistry.launch(input, inputId, true);
+        radio.inputs().launch(input, inputId, true);
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("input_id", inputId);
@@ -144,17 +143,29 @@ public class InputsResource extends RestResource {
     @DELETE @Timed
     @Path("/{inputId}")
     public Response terminate(@PathParam("inputId") String inputId) {
-        MessageInput input = inputRegistry.getRunningInput(inputId);
+        MessageInput input = radio.inputs().getRunningInput(inputId);
+
+        String msg = "Attempting to terminate input [" + input.getName()+ "]. Reason: REST request.";
+        LOG.info(msg);
 
         if (input == null) {
             LOG.info("Cannot terminate input. Input not found.");
             throw new WebApplicationException(404);
         }
 
-        String msg = "Attempting to terminate input [" + input.getName()+ "]. Reason: REST request.";
-        LOG.info(msg);
+        // Unregister on server cluster.
+        try {
+            radio.inputs().unregisterInCluster(input);
+        } catch (Exception e) {
+            LOG.error("Could not unregister input [" + input.getName()+ "] on server cluster. Not continuing.", e);
+            return Response.status(Response.Status.BAD_GATEWAY).build();
+        }
 
-        inputRegistry.terminate(input);
+        LOG.info("Unregistered input [" + input.getName()+ "] on server cluster.");
+
+        // Shutdown actual input.
+        input.stop();
+        radio.inputs().removeFromRunning(input);
 
         String msg2 = "Terminated input [" + input.getName()+ "]. Reason: REST request.";
         LOG.info(msg2);
@@ -167,7 +178,7 @@ public class InputsResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     public String types() {
         Map<String, Object> result = Maps.newHashMap();
-        result.put("types", inputRegistry.getAvailableInputs());
+        result.put("types", radio.inputs().getAvailableInputs());
 
         return json(result);
     }
@@ -179,7 +190,7 @@ public class InputsResource extends RestResource {
 
         MessageInput input;
         try {
-            input = inputRegistry.create(inputType);
+            input = InputRegistry.factory(inputType);
         } catch (NoSuchInputTypeException e) {
             LOG.error("There is no such input type registered.", e);
             throw new WebApplicationException(e, Response.Status.NOT_FOUND);
@@ -195,49 +206,32 @@ public class InputsResource extends RestResource {
         return json(result);
     }
 
-    @POST @Timed
+    @GET @Timed
     @Path("/{inputId}/launch")
     @Produces(MediaType.APPLICATION_JSON)
     public Response launchExisting(@PathParam("inputId") String inputId) {
-        MessageInput isr = inputRegistry.getPersisted(inputId);
-        if (isr == null) {
-            throw new WebApplicationException(404);
+        try {
+            InputSummaryResponse isr = radio.inputs().getPersisted(inputId);
+            if (isr == null) {
+                throw new WebApplicationException(404);
+            }
+
+            radio.inputs().launchPersisted(isr);
+
+            Map<String, Object> result = Maps.newHashMap();
+            result.put("input_id", inputId);
+            result.put("persist_id", inputId);
+
+            return Response.status(Response.Status.ACCEPTED).entity(json(result)).build();
+        } catch (ExecutionException e) {
+            LOG.error("Unable to launch existing input: ", e);
+            return Response.status(Response.Status.BAD_GATEWAY).build();
+        } catch (InterruptedException e) {
+            LOG.error("Unable to launch existing input: ", e);
+            return Response.status(Response.Status.BAD_GATEWAY).build();
+        } catch (IOException e) {
+            LOG.error("Unable to launch existing input: ", e);
+            return Response.status(Response.Status.BAD_GATEWAY).build();
         }
-
-        inputRegistry.launchPersisted(isr);
-
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("input_id", inputId);
-        result.put("persist_id", inputId);
-
-        return Response.status(Response.Status.ACCEPTED).entity(json(result)).build();
-    }
-
-    @POST @Timed
-    @Path("/{inputId}/stop")
-    public Response stop(@PathParam("inputId") String inputId) {
-        final MessageInput input = inputRegistry.getRunningInput(inputId);
-        if (input == null) {
-            LOG.info("Cannot stop input. Input not found.");
-            throw new WebApplicationException(Response.Status.NOT_FOUND);
-        }
-
-        String msg = "Stopping input [" + input.getName()+ "]. Reason: REST request.";
-        LOG.info(msg);
-
-        inputRegistry.stop(input);
-
-        String msg2 = "Stopped input [" + input.getName()+ "]. Reason: REST request.";
-        LOG.info(msg2);
-
-        return Response.status(Response.Status.ACCEPTED).build();
-    }
-
-    @POST @Timed
-    @Path("/{inputId}/restart")
-    public Response restart(@PathParam("inputId") String inputId) {
-        stop(inputId);
-        launchExisting(inputId);
-        return Response.status(Response.Status.ACCEPTED).build();
     }
 }
