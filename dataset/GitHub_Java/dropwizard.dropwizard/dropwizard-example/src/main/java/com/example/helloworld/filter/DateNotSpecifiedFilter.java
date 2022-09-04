@@ -12,10 +12,11 @@ import java.io.IOException;
 public class DateNotSpecifiedFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
-        final String dateHeader = requestContext.getHeaderString(HttpHeaders.DATE);
+        String dateHeader = requestContext.getHeaderString(HttpHeaders.DATE);
+
         if (dateHeader == null) {
-            throw new WebApplicationException(new IllegalArgumentException("Date Header was not specified"),
-                    Response.Status.BAD_REQUEST);
+            Exception cause = new IllegalArgumentException("Date Header was not specified");
+            throw new WebApplicationException(cause, Response.Status.BAD_REQUEST);
         }
     }
 }
