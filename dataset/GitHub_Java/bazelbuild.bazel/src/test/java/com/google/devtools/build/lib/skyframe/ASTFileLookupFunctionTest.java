@@ -15,31 +15,29 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
-import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.Constants;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
-import com.google.devtools.build.lib.syntax.SkylarkImport;
+import com.google.devtools.build.lib.syntax.LoadStatement;
+import com.google.devtools.build.lib.syntax.StarlarkFile;
+import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
-
+import java.io.IOException;
+import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.io.IOException;
 
 /**
  * Unit tests of specific functionality of ASTFileLookupFunction.
@@ -47,19 +45,15 @@ import java.io.IOException;
 @RunWith(JUnit4.class)
 public class ASTFileLookupFunctionTest extends BuildViewTestCase {
 
-  private static class MockFileSystem extends InMemoryFileSystem {
-
-    boolean statThrowsIoException;
+  private class MockFileSystem extends InMemoryFileSystem {
+    PathFragment throwIOExceptionFor = null;
 
     @Override
-    public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
-      if (statThrowsIoException
-          && path.asFragment()
-              .getPathString()
-              .equals("/workspace/tools/build_rules/prelude_" + Constants.PRODUCT_NAME)) {
+    public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
+      if (throwIOExceptionFor != null && path.asFragment().equals(throwIOExceptionFor)) {
         throw new IOException("bork");
       }
-      return super.stat(path, followSymlinks);
+      return super.statIfFound(path, followSymlinks);
     }
   }
 
@@ -71,20 +65,26 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
     return mockFS;
   }
 
-    @Test
+  @Test
   public void testPreludeASTFileIsNotMandatory() throws Exception {
+    Label preludeLabel = getRuleClassProvider().getPreludeLabel();
+    if (preludeLabel == null) {
+      // No prelude, no need to test
+      return;
+    }
+
     reporter.removeHandler(failFastHandler);
     scratch.file(
         "foo/BUILD", "genrule(name = 'foo',", "  outs = ['out.txt'],", "  cmd = 'echo hello >@')");
-    scratch.deleteFile("tools/build_rules/prelude_blaze");
+    scratch.deleteFile(preludeLabel.toPathFragment().getPathString());
     invalidatePackages();
 
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//foo"));
     EvaluationResult<PackageValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
-    assertFalse(result.hasError());
-    assertFalse(result.get(skyKey).getPackage().containsErrors());
+    assertThat(result.hasError()).isFalse();
+    assertThat(result.get(skyKey).getPackage().containsErrors()).isFalse();
   }
 
   @Test
@@ -93,68 +93,76 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
     scratch.file("/workspace/tools/build_rules/BUILD");
     scratch.file(
         "foo/BUILD", "genrule(name = 'foo',", "  outs = ['out.txt'],", "  cmd = 'echo hello >@')");
-    mockFS.statThrowsIoException = true;
-    invalidatePackages();
+    mockFS.throwIOExceptionFor = PathFragment.create("/workspace/foo/BUILD");
+    invalidatePackages(/*alsoConfigs=*/false); // We don't want to fail early on config creation.
 
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//foo"));
     EvaluationResult<PackageValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
-    assertTrue(result.hasError());
+    assertThat(result.hasError()).isTrue();
     ErrorInfo errorInfo = result.getError(skyKey);
     Throwable e = errorInfo.getException();
-    assertEquals(skyKey, errorInfo.getRootCauseOfException());
+    assertThat(errorInfo.getRootCauseOfException()).isEqualTo(skyKey);
     assertThat(e).isInstanceOf(NoSuchPackageException.class);
-    assertThat(e.getMessage()).contains("bork");
+    assertThat(e).hasMessageThat().contains("bork");
   }
 
   @Test
   public void testLoadFromBuildFileInRemoteRepo() throws Exception {
-    scratch.deleteFile("tools/build_rules/prelude_blaze");
     scratch.overwriteFile("WORKSPACE",
         "local_repository(",
         "    name = 'a_remote_repo',",
         "    path = '/a_remote_repo'",
         ")");
+    scratch.file("/a_remote_repo/WORKSPACE");
     scratch.file("/a_remote_repo/remote_pkg/BUILD",
         "load(':ext.bzl', 'CONST')");
     scratch.file("/a_remote_repo/remote_pkg/ext.bzl",
         "CONST = 17");
 
-    invalidatePackages();
+    invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchains.
     SkyKey skyKey =
         ASTFileLookupValue.key(Label.parseAbsoluteUnchecked("@a_remote_repo//remote_pkg:BUILD"));
     EvaluationResult<ASTFileLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
-    ImmutableList<SkylarkImport> imports = result.get(skyKey).getAST().getImports();
-    assertThat(imports).hasSize(1);
-    assertThat(imports.get(0).getImportString()).isEqualTo(":ext.bzl");
+    List<String> loads = getLoads(result.get(skyKey).getAST());
+    assertThat(loads).containsExactly(":ext.bzl");
   }
 
   @Test
   public void testLoadFromSkylarkFileInRemoteRepo() throws Exception {
-    scratch.deleteFile("tools/build_rules/prelude_blaze");
     scratch.overwriteFile("WORKSPACE",
         "local_repository(",
         "    name = 'a_remote_repo',",
         "    path = '/a_remote_repo'",
         ")");
+    scratch.file("/a_remote_repo/WORKSPACE");
     scratch.file("/a_remote_repo/remote_pkg/BUILD");
     scratch.file("/a_remote_repo/remote_pkg/ext1.bzl",
         "load(':ext2.bzl', 'CONST')");
     scratch.file("/a_remote_repo/remote_pkg/ext2.bzl",
         "CONST = 17");
 
-    invalidatePackages();
+    invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchains.
     SkyKey skyKey =
         ASTFileLookupValue.key(Label.parseAbsoluteUnchecked("@a_remote_repo//remote_pkg:ext1.bzl"));
     EvaluationResult<ASTFileLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
-    ImmutableList<SkylarkImport> imports = result.get(skyKey).getAST().getImports();
-    assertThat(imports).hasSize(1);
-    assertThat(imports.get(0).getImportString()).isEqualTo(":ext2.bzl");
+    List<String> loads = getLoads(result.get(skyKey).getAST());
+    assertThat(loads).containsExactly(":ext2.bzl");
+  }
+
+  private static List<String> getLoads(StarlarkFile file) {
+    List<String> loads = Lists.newArrayList();
+    for (Statement stmt : file.getStatements()) {
+      if (stmt instanceof LoadStatement) {
+        loads.add(((LoadStatement) stmt).getImport().getValue());
+      }
+    }
+    return loads;
   }
 
   @Test
@@ -165,10 +173,10 @@ public class ASTFileLookupFunctionTest extends BuildViewTestCase {
     EvaluationResult<ASTFileLookupValue> result =
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), skyKey, /*keepGoing=*/ false, reporter);
-    ErrorInfo errorInfo = result.getError(skyKey);
-    Throwable e = errorInfo.getException();
-    assertEquals(skyKey, errorInfo.getRootCauseOfException());
-    assertThat(e).isInstanceOf(ErrorReadingSkylarkExtensionException.class);
-    assertThat(e.getMessage()).contains("no such package '@a_remote_repo//remote_pkg'");
+    assertThat(result.get(skyKey).lookupSuccessful()).isFalse();
+    assertThat(result.get(skyKey).getErrorMsg())
+    .contains("Unable to load package for '@a_remote_repo//remote_pkg:BUILD'");
+    assertThat(result.get(skyKey).getErrorMsg())
+        .contains("The repository '@a_remote_repo' could not be resolved");
   }
 }
