@@ -18,8 +18,7 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.util.FileType.HasFileType;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
+import com.google.devtools.build.lib.util.FileType.HasFilename;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -38,15 +37,15 @@ public class FileTypeTest {
   private static final FileType JAVA_SOURCE = FileType.of(".java");
   private static final FileType PYTHON_SOURCE = FileType.of(".py");
 
-  private static final class HasFileTypeImpl implements HasFileType {
+  private static final class HasFilenameImpl implements HasFilename {
     private final String path;
 
-    private HasFileTypeImpl(String path) {
+    private HasFilenameImpl(String path) {
       this.path = path;
     }
 
     @Override
-    public String filePathForFileTypeMatcher() {
+    public String getFilename() {
       return path;
     }
 
@@ -84,7 +83,7 @@ public class FileTypeTest {
 
   @Test
   public void handlesPathObjects() {
-    Path readme = new InMemoryFileSystem(DigestHashFunction.MD5).getPath("/readme.txt");
+    Path readme = new InMemoryFileSystem().getPath("/readme.txt");
     assertThat(TEXT.matches(readme)).isTrue();
   }
 
@@ -102,11 +101,11 @@ public class FileTypeTest {
     assertThat(allowedTypes.matches("style.css")).isFalse();
   }
 
-  private List<HasFileType> getArtifacts() {
-    return Lists.newArrayList(
-        new HasFileTypeImpl("Foo.java"),
-        new HasFileTypeImpl("bar.cc"),
-        new HasFileTypeImpl("baz.py"));
+  private List<HasFilename> getArtifacts() {
+    return Lists.<HasFilename>newArrayList(
+        new HasFilenameImpl("Foo.java"),
+        new HasFilenameImpl("bar.cc"),
+        new HasFilenameImpl("baz.py"));
   }
 
   private String filterAll(FileType... fileTypes) {
@@ -129,13 +128,18 @@ public class FileTypeTest {
         .isEqualTo("Foo.java bar.cc baz.py");
   }
 
-  private HasFileType filename(final String name) {
-    return () -> name;
+  private HasFilename filename(final String name) {
+    return new HasFilename() {
+      @Override
+      public String getFilename() {
+        return name;
+      }
+    };
   }
 
   @Test
   public void checkingSingleWithTypePredicate() throws Exception {
-    HasFileType item = filename("config.txt");
+    FileType.HasFilename item = filename("config.txt");
 
     assertThat(FileType.contains(item, TEXT)).isTrue();
     assertThat(FileType.contains(item, CFG)).isFalse();
@@ -143,8 +147,10 @@ public class FileTypeTest {
 
   @Test
   public void checkingListWithTypePredicate() throws Exception {
-    ImmutableList<HasFileType> unfiltered =
-        ImmutableList.of(filename("config.txt"), filename("index.html"), filename("README.txt"));
+    ImmutableList<FileType.HasFilename> unfiltered = ImmutableList.of(
+        filename("config.txt"),
+        filename("index.html"),
+        filename("README.txt"));
 
     assertThat(FileType.contains(unfiltered, TEXT)).isTrue();
     assertThat(FileType.contains(unfiltered, CFG)).isFalse();
@@ -152,12 +158,11 @@ public class FileTypeTest {
 
   @Test
   public void filteringWithTypePredicate() throws Exception {
-    ImmutableList<HasFileType> unfiltered =
-        ImmutableList.of(
-            filename("config.txt"),
-            filename("index.html"),
-            filename("README.txt"),
-            filename("archive.zip"));
+    ImmutableList<FileType.HasFilename> unfiltered = ImmutableList.of(
+        filename("config.txt"),
+        filename("index.html"),
+        filename("README.txt"),
+        filename("archive.zip"));
 
     assertThat(FileType.filter(unfiltered, TEXT)).containsExactly(unfiltered.get(0),
         unfiltered.get(2)).inOrder();
@@ -165,12 +170,11 @@ public class FileTypeTest {
 
   @Test
   public void filteringWithMatcherPredicate() throws Exception {
-    ImmutableList<HasFileType> unfiltered =
-        ImmutableList.of(
-            filename("config.txt"),
-            filename("index.html"),
-            filename("README.txt"),
-            filename("archive.zip"));
+    ImmutableList<FileType.HasFilename> unfiltered = ImmutableList.of(
+        filename("config.txt"),
+        filename("index.html"),
+        filename("README.txt"),
+        filename("archive.zip"));
 
     assertThat(FileType.filter(unfiltered, TEXT::matches))
         .containsExactly(unfiltered.get(0), unfiltered.get(2))
@@ -179,24 +183,22 @@ public class FileTypeTest {
 
   @Test
   public void filteringWithAlwaysFalse() throws Exception {
-    ImmutableList<HasFileType> unfiltered =
-        ImmutableList.of(
-            filename("config.txt"),
-            filename("index.html"),
-            filename("binary"),
-            filename("archive.zip"));
+    ImmutableList<FileType.HasFilename> unfiltered = ImmutableList.of(
+        filename("config.txt"),
+        filename("index.html"),
+        filename("binary"),
+        filename("archive.zip"));
 
     assertThat(FileType.filter(unfiltered, FileTypeSet.NO_FILE)).isEmpty();
   }
 
   @Test
   public void filteringWithAlwaysTrue() throws Exception {
-    ImmutableList<HasFileType> unfiltered =
-        ImmutableList.of(
-            filename("config.txt"),
-            filename("index.html"),
-            filename("binary"),
-            filename("archive.zip"));
+    ImmutableList<FileType.HasFilename> unfiltered = ImmutableList.of(
+        filename("config.txt"),
+        filename("index.html"),
+        filename("binary"),
+        filename("archive.zip"));
 
     assertThat(FileType.filter(unfiltered, FileTypeSet.ANY_FILE)).containsExactly(unfiltered.get(0),
         unfiltered.get(1), unfiltered.get(2), unfiltered.get(3)).inOrder();
@@ -204,12 +206,11 @@ public class FileTypeTest {
 
   @Test
   public void exclusionWithTypePredicate() throws Exception {
-    ImmutableList<HasFileType> unfiltered =
-        ImmutableList.of(
-            filename("config.txt"),
-            filename("index.html"),
-            filename("README.txt"),
-            filename("server.cfg"));
+    ImmutableList<FileType.HasFilename> unfiltered = ImmutableList.of(
+        filename("config.txt"),
+        filename("index.html"),
+        filename("README.txt"),
+        filename("server.cfg"));
 
     assertThat(FileType.except(unfiltered, TEXT)).containsExactly(unfiltered.get(1),
         unfiltered.get(3)).inOrder();
@@ -217,12 +218,11 @@ public class FileTypeTest {
 
   @Test
   public void listFiltering() throws Exception {
-    ImmutableList<HasFileType> unfiltered =
-        ImmutableList.of(
-            filename("config.txt"),
-            filename("index.html"),
-            filename("README.txt"),
-            filename("server.cfg"));
+    ImmutableList<FileType.HasFilename> unfiltered = ImmutableList.of(
+        filename("config.txt"),
+        filename("index.html"),
+        filename("README.txt"),
+        filename("server.cfg"));
     FileTypeSet filter = FileTypeSet.of(HTML, CFG);
 
     assertThat(FileType.filterList(unfiltered, filter)).containsExactly(unfiltered.get(1),
