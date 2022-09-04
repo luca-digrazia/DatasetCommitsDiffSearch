@@ -396,7 +396,9 @@ public class CppCompileAction extends AbstractAction
     for (Artifact source : getIncludeScannerSources()) {
       undeclaredHeaders.remove(source);
     }
-    ccCompilationContext.removeDeclaredIncludes(undeclaredHeaders);
+    for (Artifact header : ccCompilationContext.getDeclaredIncludeSrcs()) {
+      undeclaredHeaders.remove(header);
+    }
     for (Artifact header : additionalPrunableHeaders) {
       undeclaredHeaders.remove(header);
     }

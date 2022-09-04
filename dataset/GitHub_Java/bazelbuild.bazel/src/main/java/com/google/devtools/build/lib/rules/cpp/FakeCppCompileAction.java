@@ -58,6 +58,7 @@ public class FakeCppCompileAction extends CppCompileAction {
 
   FakeCppCompileAction(
       ActionOwner owner,
+      NestedSet<Artifact> allInputs,
       FeatureConfiguration featureConfiguration,
       CcToolchainVariables variables,
       Artifact sourceFile,
@@ -83,6 +84,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       Artifact grepIncludes) {
     super(
         owner,
+        allInputs,
         featureConfiguration,
         variables,
         sourceFile,
