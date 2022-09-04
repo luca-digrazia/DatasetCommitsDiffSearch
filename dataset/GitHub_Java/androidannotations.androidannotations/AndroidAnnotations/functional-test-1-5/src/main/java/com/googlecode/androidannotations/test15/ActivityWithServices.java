@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -28,7 +28,6 @@ import android.net.ConnectivityManager;
 import android.net.wifi.WifiManager;
 import android.os.PowerManager;
 import android.os.Vibrator;
-import android.telephony.TelephonyManager;
 import android.text.ClipboardManager;
 import android.view.LayoutInflater;
 import android.view.WindowManager;
@@ -84,9 +83,6 @@ public class ActivityWithServices extends Activity {
     
     @SystemService
     ClipboardManager clipboardManager;
-    
-    @SystemService
-    TelephonyManager telephonyManager;
 
     // TODO Test those for > 1.5 Android versions
     // UiModeManager uiModeManager;

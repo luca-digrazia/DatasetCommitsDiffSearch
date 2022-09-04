@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,7 +20,7 @@ import java.util.Map;
 
 import javax.lang.model.type.TypeMirror;
 
-import com.googlecode.androidannotations.processing.EBeanHolder;
+import com.googlecode.androidannotations.processing.ActivityHolder;
 import com.sun.codemodel.JFieldRef;
 
 public class AndroidSystemServices {
@@ -44,8 +44,7 @@ public class AndroidSystemServices {
         registeredServices.put("android.app.UiModeManager", "android.content.Context.UI_MODE_SERVICE");
         registeredServices.put("android.app.DownloadManager", "android.content.Context.DOWNLOAD_SERVICE");
         registeredServices.put("android.hardware.SensorManager", "android.content.Context.SENSOR_SERVICE");
-        registeredServices.put("android.text.ClipboardManager", "android.content.Context.CLIPBOARD_SERVICE"); 
-        registeredServices.put("android.telephony.TelephonyManager", "android.content.Context.TELEPHONY_SERVICE");        
+        registeredServices.put("android.text.ClipboardManager", "android.content.Context.CLIPBOARD_SERVICE");        
     }
 
     public boolean contains(TypeMirror serviceType) {
@@ -56,11 +55,11 @@ public class AndroidSystemServices {
         return registeredServices.get(serviceType.toString());
     }
 
-    public JFieldRef getServiceConstant(TypeMirror serviceType, EBeanHolder holder) {
+    public JFieldRef getServiceConstant(TypeMirror serviceType, ActivityHolder holder) {
         return extractIdStaticRef(holder, registeredServices.get(serviceType.toString()));
     }
 
-    private JFieldRef extractIdStaticRef(EBeanHolder holder, String staticFieldQualifiedName) {
+    private JFieldRef extractIdStaticRef(ActivityHolder holder, String staticFieldQualifiedName) {
         if (staticFieldQualifiedName != null) {
             int fieldSuffix = staticFieldQualifiedName.lastIndexOf('.');
             String fieldName = staticFieldQualifiedName.substring(fieldSuffix + 1);
