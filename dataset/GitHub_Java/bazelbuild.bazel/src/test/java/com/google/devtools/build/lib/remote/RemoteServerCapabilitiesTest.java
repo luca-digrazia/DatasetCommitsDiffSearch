@@ -204,7 +204,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_noChecks() throws Exception {
+  public void testCheckClientServerCompatibility_NoChecks() throws Exception {
     RemoteServerCapabilities.ClientServerCompatibilityStatus st =
         RemoteServerCapabilities.checkClientServerCompatibility(
             ServerCapabilities.getDefaultInstance(),
@@ -214,7 +214,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_apiVersionDeprecated() throws Exception {
+  public void testCheckClientServerCompatibility_ApiVersionDeprecated() throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
             .setDeprecatedApiVersion(ApiVersion.current.toSemVer())
@@ -238,7 +238,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_apiVersionUnsupported() throws Exception {
+  public void testCheckClientServerCompatibility_ApiVersionUnsupported() throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
             .setLowApiVersion(new ApiVersion(100, 0, 0, "").toSemVer())
@@ -260,7 +260,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_remoteCacheDoesNotSupportDigestFunction()
+  public void testCheckClientServerCompatibility_RemoteCacheDoesNotSupportDigestFunction()
       throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
@@ -283,7 +283,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_remoteCacheDoesNotSupportUpdate()
+  public void testCheckClientServerCompatibility_RemoteCacheDoesNotSupportUpdate()
       throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
@@ -312,7 +312,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_remoteExecutionIsDisabled() throws Exception {
+  public void testCheckClientServerCompatibility_RemoteExecutionIsDisabled() throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
             .setLowApiVersion(ApiVersion.current.toSemVer())
@@ -339,7 +339,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_remoteExecutionDoesNotSupportDigestFunction()
+  public void testCheckClientServerCompatibility_RemoteExecutionDoesNotSupportDigestFunction()
       throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
@@ -367,7 +367,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_localFallbackNoRemoteCacheUpdate()
+  public void testCheckClientServerCompatibility_LocalFallbackNoRemoteCacheUpdate()
       throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
@@ -410,7 +410,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_cachePriority() throws Exception {
+  public void testCheckClientServerCompatibility_CachePriority() throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
             .setLowApiVersion(ApiVersion.current.toSemVer())
@@ -452,7 +452,7 @@ public class RemoteServerCapabilitiesTest {
   }
 
   @Test
-  public void testCheckClientServerCompatibility_executionPriority() throws Exception {
+  public void testCheckClientServerCompatibility_ExecutionPriority() throws Exception {
     ServerCapabilities caps =
         ServerCapabilities.newBuilder()
             .setLowApiVersion(ApiVersion.current.toSemVer())
