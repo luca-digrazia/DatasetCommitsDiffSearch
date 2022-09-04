@@ -1,4 +1,4 @@
-// Copyright 2017 The Bazel Authors. All rights reserved.
+// Copyright 2019 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,64 +11,135 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.auto.value.AutoValue;
-import com.google.common.base.Ascii;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import java.util.List;
-import java.util.function.Function;
+import com.google.common.collect.ImmutableSortedMap;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Options that affect Starlark semantics.
+ * A StarlarkSemantics is an immutable set of optional name/value pairs that affect the dynamic
+ * behavior of Starlark operators and built-in functions, both core and application-defined.
  *
- * <p>For descriptions of what these options do, see {@link StarlarkSemanticsOptions}.
+ * <p>For extensibility, a StarlarkSemantics only records a name/value pair when the value differs
+ * from the default value appropriate to that name. Values of most types are accessed using a {@link
+ * Key}, which defines the name, type, and default value for an entry. Boolean values are accessed
+ * using a string key; the string must have the prefix "+" or "-", indicating the default value: +
+ * for true, - for false. The reason for the special treatment of boolean entries is that they may
+ * enable or disable methods and parameters in the StarlarkMethod annotation system, and it is not
+ * possible to refer to a Key from a Java annotation, only a string.
+ *
+ * <p>It is the client's responsibility to ensure that a StarlarkSemantics does not encounter
+ * multiple Keys of the same name but different value types.
+ *
+ * <p>For Bazel's semantics options, see {@link packages.semantics.BuildLanguageOptions}.
+ *
+ * <p>For options that affect the static behavior of the Starlark frontend (lexer, parser,
+ * validator, compiler), see {@link FileOptions}.
  */
-// TODO(brandjon): User error messages that reference options should maybe be substituted with the
-// option name outside of the core Starlark interpreter?
-// TODO(brandjon): Eventually these should be documented in full here, and StarlarkSemanticsOptions
-// should refer to this class for documentation. But this doesn't play nice with the options
-// parser's annotation mechanism.
-@AutoValue
-public abstract class StarlarkSemantics {
+public final class StarlarkSemantics {
 
-  /**
-   * Enum where each element represents a starlark semantics flag. The name of each value should be
-   * the exact name of the flag transformed to upper case (for error representation).
-   */
-  public enum FlagIdentifier {
-    EXPERIMENTAL_ENABLE_ANDROID_MIGRATION_APIS(
-        StarlarkSemantics::experimentalEnableAndroidMigrationApis),
-    EXPERIMENTAL_BUILD_SETTING_API(StarlarkSemantics::experimentalBuildSettingApi),
-    EXPERIMENTAL_PLATFORM_API(StarlarkSemantics::experimentalPlatformsApi),
-    EXPERIMENTAL_STARLARK_CONFIG_TRANSITION(
-        StarlarkSemantics::experimentalStarlarkConfigTransitions),
-    INCOMPATIBLE_DISABLE_OBJC_PROVIDER_RESOURCES(
-        StarlarkSemantics::incompatibleDisableObjcProviderResources),
-    INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT(StarlarkSemantics::incompatibleNoOutputAttrDefault),
-    INCOMPATIBLE_NO_TARGET_OUTPUT_GROUP(StarlarkSemantics::incompatibleNoTargetOutputGroup),
-    INCOMPATIBLE_NO_ATTR_LICENSE(StarlarkSemantics::incompatibleNoAttrLicense),
-    INCOMPATIBLE_REQUIRE_FEATURE_CONFIGURATION_FOR_PIC(
-        StarlarkSemantics::incompatibleRequireFeatureConfigurationForPic),
-    NONE(null);
+  /** Returns the empty semantics, in which every option has its default value. */
+  public static final StarlarkSemantics DEFAULT = new StarlarkSemantics(ImmutableSortedMap.of());
 
-    // Using a Function here makes the enum definitions far cleaner, and, since this is
-    // a private field, and we can ensure no callers treat this field as mutable.
-    @SuppressWarnings("ImmutableEnumChecker")
-    private final Function<StarlarkSemantics, Boolean> semanticsFunction;
+  // A map entry must be accessed by Key iff its name has no [+-] prefix.
+  // Key<Boolean> is permitted too.
+  // We use ImmutableSortedMap for the benefit of equals/hashCode/toString.
+  private final ImmutableSortedMap<String, Object> map;
+  private final int hashCode;
 
-    FlagIdentifier(Function<StarlarkSemantics, Boolean> semanticsFunction) {
-      this.semanticsFunction = semanticsFunction;
-    }
+  private StarlarkSemantics(ImmutableSortedMap<String, Object> map) {
+    this.map = map;
+    this.hashCode = map.hashCode();
+  }
+
+  /** Returns the value of a boolean option, which must have a [+-] prefix. */
+  public boolean getBool(String name) {
+    char prefix = name.charAt(0);
+    Preconditions.checkArgument(prefix == '+' || prefix == '-');
+    boolean defaultValue = prefix == '+';
+    Boolean v = (Boolean) map.get(name); // prefix => cast cannot fail
+    return v != null ? v : defaultValue;
+  }
+
+  /** Returns the value of the option denoted by {@code key}. */
+  public <T> T get(Key<T> key) {
+    @SuppressWarnings("unchecked") // safe, if Key.names are unique
+    T v = (T) map.get(key.name);
+    return v != null ? v : key.defaultValue;
+  }
+
+  /** A Key identifies an option, providing its name, type, and default value. */
+  public static class Key<T> {
+    public final String name;
+    public final T defaultValue;
 
     /**
-     * Returns the name of the flag that this identifier controls. For example, EXPERIMENTAL_FOO
-     * would return 'experimental_foo'.
+     * Constructs a key. The name must not start with [+-]. The value must not be subsequently
+     * modified.
      */
-    public String getFlagName() {
-      return Ascii.toLowerCase(this.name());
+    public Key(String name, T defaultValue) {
+      char prefix = name.charAt(0);
+      Preconditions.checkArgument(prefix != '-' && prefix != '+');
+      this.name = name;
+      this.defaultValue = Preconditions.checkNotNull(defaultValue);
+    }
+
+    @Override
+    public String toString() {
+      return this.name;
+    }
+  }
+
+  /**
+   * Returns a new builder that initially holds the same key/value pairs as this StarlarkSemantics.
+   */
+  public Builder toBuilder() {
+    return new Builder(new HashMap<>(map));
+  }
+
+  /** Returns a new empty builder. */
+  public static Builder builder() {
+    return new Builder(new HashMap<>());
+  }
+
+  /** A Builder is a mutable container used to construct an immutable StarlarkSemantics. */
+  public static final class Builder {
+    private final HashMap<String, Object> map;
+
+    private Builder(HashMap<String, Object> map) {
+      this.map = map;
+    }
+
+    /** Sets the value for the specified key. */
+    public <T> Builder set(Key<T> key, T value) {
+      if (!value.equals(key.defaultValue)) {
+        map.put(key.name, value);
+      } else {
+        map.remove(key.name);
+      }
+      return this;
+    }
+
+    /** Sets the value for the boolean key, which must have a [+-] prefix. */
+    public Builder setBool(String name, boolean value) {
+      char prefix = name.charAt(0);
+      Preconditions.checkArgument(prefix == '+' || prefix == '-');
+      boolean defaultValue = prefix == '+';
+      if (value != defaultValue) {
+        map.put(name, value);
+      } else {
+        map.remove(name);
+      }
+      return this;
+    }
+
+    /** Returns an immutable StarlarkSemantics. */
+    public StarlarkSemantics build() {
+      return new StarlarkSemantics(ImmutableSortedMap.copyOf(map));
     }
   }
 
@@ -76,252 +147,68 @@ public abstract class StarlarkSemantics {
    * Returns true if a feature attached to the given toggling flags should be enabled.
    *
    * <ul>
-   *   <li>If both parameters are {@code NONE}, this indicates the feature is not
-   *       controlled by flags, and should thus be enabled.</li>
-   *   <li>If the {@code enablingFlag} parameter is non-{@code NONE}, this returns
-   *       true if and only if that flag is true. (This represents a feature that is only on
-   *       if a given flag is *on*).</li>
-   *   <li>If the {@code disablingFlag} parameter is non-{@code NONE}, this returns
-   *       true if and only if that flag is false. (This represents a feature that is only on
-   *       if a given flag is *off*).</li>
-   *   <li>It is illegal to pass both parameters as non-{@code NONE}.</li>
+   *   <li>If both parameters are empty, this indicates the feature is not controlled by flags, and
+   *       should thus be enabled.
+   *   <li>If the {@code enablingFlag} parameter is non-empty, this returns true if and only if that
+   *       flag is true. (This represents a feature that is only on if a given flag is *on*).
+   *   <li>If the {@code disablingFlag} parameter is non-empty, this returns true if and only if
+   *       that flag is false. (This represents a feature that is only on if a given flag is *off*).
+   *   <li>It is illegal to pass both parameters as non-empty.
    * </ul>
    */
-  public boolean isFeatureEnabledBasedOnTogglingFlags(
-      FlagIdentifier enablingFlag,
-      FlagIdentifier disablingFlag) {
-    Preconditions.checkArgument(enablingFlag == FlagIdentifier.NONE
-        || disablingFlag == FlagIdentifier.NONE,
-        "at least one of 'enablingFlag' or 'disablingFlag' must be NONE");
-    if (enablingFlag != FlagIdentifier.NONE) {
-      return enablingFlag.semanticsFunction.apply(this);
+  boolean isFeatureEnabledBasedOnTogglingFlags(String enablingFlag, String disablingFlag) {
+    Preconditions.checkArgument(
+        enablingFlag.isEmpty() || disablingFlag.isEmpty(),
+        "at least one of 'enablingFlag' or 'disablingFlag' must be empty");
+    if (!enablingFlag.isEmpty()) {
+      return this.getBool(enablingFlag);
+    } else if (!disablingFlag.isEmpty()) {
+      return !this.getBool(disablingFlag);
     } else {
-      return disablingFlag == FlagIdentifier.NONE || !disablingFlag.semanticsFunction.apply(this);
+      return true;
     }
   }
 
-  /** Returns the value of the given flag. */
-  public boolean flagValue(FlagIdentifier flagIdentifier) {
-    return flagIdentifier.semanticsFunction.apply(this);
+  @Override
+  public int hashCode() {
+    return hashCode;
+  }
+
+  @Override
+  public boolean equals(Object that) {
+    return this == that
+        || (that instanceof StarlarkSemantics && this.map.equals(((StarlarkSemantics) that).map));
   }
 
   /**
-   * The AutoValue-generated concrete class implementing this one.
-   *
-   * <p>AutoValue implementation classes are usually package-private. We expose it here for the
-   * benefit of code that relies on reflection.
+   * Returns a representation of this StarlarkSemantics' non-default key/value pairs in key order.
    */
-  public static final Class<? extends StarlarkSemantics> IMPL_CLASS =
-      AutoValue_StarlarkSemantics.class;
-
-  // <== Add new options here in alphabetic order ==>
-  public abstract boolean checkThirdPartyTargetsHaveLicenses();
-
-  public abstract boolean experimentalBuildSettingApi();
-
-  public abstract ImmutableList<String> experimentalCcSkylarkApiEnabledPackages();
-
-  public abstract boolean experimentalEnableAndroidMigrationApis();
-
-  public abstract boolean experimentalEnableRepoMapping();
-
-  public abstract ImmutableList<String> experimentalJavaCommonCreateProviderEnabledPackages();
-
-  public abstract boolean experimentalPlatformsApi();
-
-  public abstract boolean experimentalStarlarkConfigTransitions();
-
-  public abstract String experimentalTransitionWhitelistLocation();
-
-  public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
-
-  public abstract boolean incompatibleDepsetIsNotIterable();
-
-  public abstract boolean incompatibleDepsetUnion();
-
-  public abstract boolean incompatibleDisableDeprecatedAttrParams();
-
-  public abstract boolean incompatibleDisableObjcProviderResources();
-
-  public abstract boolean incompatibleDisallowDataTransition();
-
-  public abstract boolean incompatibleDisallowDictPlus();
-
-  public abstract boolean incompatibleDisallowFileType();
-
-  public abstract boolean incompatibleDisallowLegacyJavaProvider();
-
-  public abstract boolean incompatibleDisallowLegacyJavaInfo();
-
-  public abstract boolean incompatibleDisallowLoadLabelsToCrossPackageBoundaries();
-
-  public abstract boolean incompatibleDisallowOldStyleArgsAdd();
-
-  public abstract boolean incompatibleDisallowStructProviderSyntax();
-
-  public abstract boolean incompatibleExpandDirectories();
-
-  public abstract boolean incompatibleGenerateJavaCommonSourceJar();
-
-  public abstract boolean incompatibleNewActionsApi();
-
-  public abstract boolean incompatibleNoAttrLicense();
-
-  public abstract boolean incompatibleNoOutputAttrDefault();
-
-  public abstract boolean incompatibleNoSupportToolsInActionInputs();
-
-  public abstract boolean incompatibleNoTargetOutputGroup();
-
-  public abstract boolean incompatibleNoTransitiveLoads();
-
-  public abstract boolean incompatibleRemapMainRepo();
-
-  public abstract boolean incompatibleRemoveNativeMavenJar();
-
-  public abstract boolean incompatibleRequireFeatureConfigurationForPic();
-
-  public abstract boolean incompatibleStricArgumentOrdering();
-
-  public abstract boolean incompatibleStringIsNotIterable();
-
-  public abstract boolean internalSkylarkFlagTestCanary();
-
-  public abstract boolean incompatibleUseToolchainProvidersInJavaCommon();
-
-  /** Returns a {@link Builder} initialized with the values of this instance. */
-  public abstract Builder toBuilder();
-
-  public static Builder builder() {
-    return new AutoValue_StarlarkSemantics.Builder();
+  @Override
+  public String toString() {
+    // Print "StarlarkSemantics{k=v, ...}", without +/- prefixes.
+    StringBuilder buf = new StringBuilder();
+    buf.append("StarlarkSemantics{");
+    String sep = "";
+    for (Map.Entry<String, Object> e : map.entrySet()) {
+      String key = e.getKey();
+      buf.append(sep);
+      sep = ", ";
+      if (key.charAt(0) == '+' || key.charAt(0) == '-') {
+        buf.append(key, 1, key.length());
+      } else {
+        buf.append(key);
+      }
+      buf.append('=').append(e.getValue());
+    }
+    return buf.append('}').toString();
   }
 
-  /** Returns a {@link Builder} initialized with default values for all options. */
-  public static Builder builderWithDefaults() {
-    return DEFAULT_SEMANTICS.toBuilder();
-  }
+  // -- semantics options affecting the Starlark interpreter itself --
 
-  public static final StarlarkSemantics DEFAULT_SEMANTICS =
-      builder()
-          // <== Add new options here in alphabetic order ==>
-          .checkThirdPartyTargetsHaveLicenses(true)
-          .experimentalBuildSettingApi(false)
-          .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
-          .experimentalEnableAndroidMigrationApis(false)
-          .experimentalEnableRepoMapping(false)
-          .experimentalJavaCommonCreateProviderEnabledPackages(ImmutableList.of())
-          .experimentalPlatformsApi(false)
-          .experimentalStarlarkConfigTransitions(false)
-          .experimentalTransitionWhitelistLocation("")
-          .incompatibleUseToolchainProvidersInJavaCommon(false)
-          .incompatibleBzlDisallowLoadAfterStatement(false)
-          .incompatibleDepsetIsNotIterable(false)
-          .incompatibleDepsetUnion(false)
-          .incompatibleDisableDeprecatedAttrParams(false)
-          .incompatibleDisableObjcProviderResources(false)
-          .incompatibleDisallowDataTransition(true)
-          .incompatibleDisallowDictPlus(false)
-          .incompatibleDisallowFileType(true)
-          .incompatibleDisallowLegacyJavaProvider(false)
-          .incompatibleDisallowLegacyJavaInfo(false)
-          .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(false)
-          .incompatibleDisallowOldStyleArgsAdd(false)
-          .incompatibleDisallowStructProviderSyntax(false)
-          .incompatibleExpandDirectories(true)
-          .incompatibleGenerateJavaCommonSourceJar(true)
-          .incompatibleNewActionsApi(false)
-          .incompatibleNoAttrLicense(false)
-          .incompatibleNoOutputAttrDefault(false)
-          .incompatibleNoSupportToolsInActionInputs(false)
-          .incompatibleNoTargetOutputGroup(false)
-          .incompatibleNoTransitiveLoads(false)
-          .incompatibleRemapMainRepo(false)
-          .incompatibleRemoveNativeMavenJar(false)
-          .incompatibleRequireFeatureConfigurationForPic(true)
-          .incompatibleStricArgumentOrdering(true)
-          .incompatibleStringIsNotIterable(true)
-          .internalSkylarkFlagTestCanary(false)
-          .build();
+  /** Ignore negative n in string.replace(count=n), and treat n=None as an error. */
+  public static final String INCOMPATIBLE_STRING_REPLACE_COUNT =
+      "-incompatible_string_replace_count";
 
-  /** Builder for {@link StarlarkSemantics}. All fields are mandatory. */
-  @AutoValue.Builder
-  public abstract static class Builder {
-
-    // <== Add new options here in alphabetic order ==>
-    public abstract Builder checkThirdPartyTargetsHaveLicenses(boolean value);
-
-    public abstract Builder experimentalBuildSettingApi(boolean value);
-
-    public abstract Builder experimentalCcSkylarkApiEnabledPackages(List<String> value);
-
-    public abstract Builder experimentalEnableAndroidMigrationApis(boolean value);
-
-    public abstract Builder experimentalEnableRepoMapping(boolean value);
-
-    public abstract Builder experimentalJavaCommonCreateProviderEnabledPackages(List<String> value);
-
-    public abstract Builder experimentalPlatformsApi(boolean value);
-
-    public abstract Builder experimentalStarlarkConfigTransitions(boolean value);
-
-    public abstract Builder experimentalTransitionWhitelistLocation(String value);
-
-    public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
-
-    public abstract Builder incompatibleDepsetIsNotIterable(boolean value);
-
-    public abstract Builder incompatibleDepsetUnion(boolean value);
-
-    public abstract Builder incompatibleDisableDeprecatedAttrParams(boolean value);
-
-    public abstract Builder incompatibleRequireFeatureConfigurationForPic(boolean value);
-
-    public abstract Builder incompatibleDisableObjcProviderResources(boolean value);
-
-    public abstract Builder incompatibleDisallowDataTransition(boolean value);
-
-    public abstract Builder incompatibleDisallowDictPlus(boolean value);
-
-    public abstract Builder incompatibleDisallowFileType(boolean value);
-
-    public abstract Builder incompatibleDisallowLegacyJavaProvider(boolean value);
-
-    public abstract Builder incompatibleDisallowLegacyJavaInfo(boolean value);
-
-    public abstract Builder incompatibleDisallowLoadLabelsToCrossPackageBoundaries(boolean value);
-
-    public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
-
-    public abstract Builder incompatibleDisallowStructProviderSyntax(boolean value);
-
-    public abstract Builder incompatibleExpandDirectories(boolean value);
-
-    public abstract Builder incompatibleGenerateJavaCommonSourceJar(boolean value);
-
-    public abstract Builder incompatibleNewActionsApi(boolean value);
-
-    public abstract Builder incompatibleNoAttrLicense(boolean value);
-
-    public abstract Builder incompatibleNoOutputAttrDefault(boolean value);
-
-    public abstract Builder incompatibleNoSupportToolsInActionInputs(boolean value);
-
-    public abstract Builder incompatibleNoTargetOutputGroup(boolean value);
-
-    public abstract Builder incompatibleNoTransitiveLoads(boolean value);
-
-    public abstract Builder incompatibleRemapMainRepo(boolean value);
-
-    public abstract Builder incompatibleRemoveNativeMavenJar(boolean value);
-
-    public abstract Builder incompatibleStricArgumentOrdering(boolean value);
-
-    public abstract Builder incompatibleStringIsNotIterable(boolean value);
-
-    public abstract Builder incompatibleUseToolchainProvidersInJavaCommon(boolean value);
-
-    public abstract Builder internalSkylarkFlagTestCanary(boolean value);
-
-    public abstract StarlarkSemantics build();
-  }
+  /** Change the behavior of 'print' statements. Used in tests to verify flag propagation. */
+  public static final String PRINT_TEST_MARKER = "-print_test_marker";
 }
