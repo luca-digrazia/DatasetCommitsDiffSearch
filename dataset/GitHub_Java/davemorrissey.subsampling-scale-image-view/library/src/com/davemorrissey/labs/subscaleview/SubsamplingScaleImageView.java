@@ -22,7 +22,6 @@ import android.graphics.*;
 import android.graphics.Bitmap.Config;
 import android.media.ExifInterface;
 import android.os.AsyncTask;
-import android.os.Build.VERSION;
 import android.os.Handler;
 import android.os.Message;
 import android.util.AttributeSet;
@@ -97,7 +96,6 @@ public class SubsamplingScaleImageView extends View {
 
     // Tile decoder
     private BitmapRegionDecoder decoder;
-    private final Object decoderLock = new Object();
 
     // Sample size used to display the whole image when fully zoomed out
     private int fullImageSampleSize;
@@ -218,10 +216,10 @@ public class SubsamplingScaleImageView extends View {
         flingMomentum = null;
         if (newImage) {
             if (decoder != null) {
-                synchronized (decoderLock) {
+                synchronized (decoder) {
                     decoder.recycle();
-                    decoder = null;
                 }
+                decoder = null;
             }
             sWidth = 0;
             sHeight = 0;
@@ -447,7 +445,7 @@ public class SubsamplingScaleImageView extends View {
 
         // On first render with no tile map ready, initialise it and kick off async base image loading.
         if (tileMap == null) {
-            initialiseBaseLayer(getMaxBitmapDimensions(canvas));
+            initialiseBaseLayer();
             return;
         }
 
@@ -525,7 +523,7 @@ public class SubsamplingScaleImageView extends View {
      * Called on first draw when the view has dimensions. Calculates the initial sample size and starts async loading of
      * the base layer image - the whole source subsampled as necessary.
      */
-    private synchronized void initialiseBaseLayer(Point maxTileDimensions) {
+    private synchronized void initialiseBaseLayer() {
 
         fitToBounds();
 
@@ -536,11 +534,11 @@ public class SubsamplingScaleImageView extends View {
             fullImageSampleSize /= 2;
         }
 
-        initialiseTileMap(maxTileDimensions);
+        initialiseTileMap();
 
         List<Tile> baseGrid = tileMap.get(fullImageSampleSize);
         for (Tile baseTile : baseGrid) {
-            BitmapTileTask task = new BitmapTileTask(this, decoder, decoderLock, baseTile);
+            BitmapTileTask task = new BitmapTileTask(this, decoder, baseTile);
             task.execute();
         }
 
@@ -571,7 +569,7 @@ public class SubsamplingScaleImageView extends View {
                     if (RectF.intersects(sVisRect, convertRect(tile.sRect))) {
                         tile.visible = true;
                         if (!tile.loading && tile.bitmap == null && load) {
-                            BitmapTileTask task = new BitmapTileTask(this, decoder, decoderLock, tile);
+                            BitmapTileTask task = new BitmapTileTask(this, decoder, tile);
                             task.execute();
                         }
                     } else if (tile.sampleSize != fullImageSampleSize) {
@@ -649,7 +647,7 @@ public class SubsamplingScaleImageView extends View {
     /**
      * Once source image and view dimensions are known, creates a map of sample size to tile grid.
      */
-    private void initialiseTileMap(Point maxTileDimensions) {
+    private void initialiseTileMap() {
         this.tileMap = new LinkedHashMap<Integer, List<Tile>>();
         int sampleSize = fullImageSampleSize;
         int tilesPerSide = 1;
@@ -658,7 +656,7 @@ public class SubsamplingScaleImageView extends View {
             int sTileHeight = sHeight()/tilesPerSide;
             int subTileWidth = sTileWidth/sampleSize;
             int subTileHeight = sTileHeight/sampleSize;
-            while (subTileWidth > maxTileDimensions.x || subTileHeight > maxTileDimensions.y) {
+            while (subTileWidth > 2048 || subTileHeight > 2048) {
                 tilesPerSide *= 2;
                 sTileWidth = sWidth()/tilesPerSide;
                 sTileHeight = sHeight()/tilesPerSide;
@@ -784,13 +782,11 @@ public class SubsamplingScaleImageView extends View {
     private static class BitmapTileTask extends AsyncTask<Void, Void, Bitmap> {
         private final WeakReference<SubsamplingScaleImageView> viewRef;
         private final WeakReference<BitmapRegionDecoder> decoderRef;
-        private final WeakReference<Object> decoderLockRef;
         private final WeakReference<Tile> tileRef;
 
-        public BitmapTileTask(SubsamplingScaleImageView view, BitmapRegionDecoder decoder, Object decoderLock, Tile tile) {
+        public BitmapTileTask(SubsamplingScaleImageView view, BitmapRegionDecoder decoder, Tile tile) {
             this.viewRef = new WeakReference<SubsamplingScaleImageView>(view);
             this.decoderRef = new WeakReference<BitmapRegionDecoder>(decoder);
-            this.decoderLockRef = new WeakReference<Object>(decoderLock);
             this.tileRef = new WeakReference<Tile>(tile);
             tile.loading = true;
         }
@@ -800,11 +796,10 @@ public class SubsamplingScaleImageView extends View {
             try {
                 if (decoderRef != null && tileRef != null && viewRef != null) {
                     final BitmapRegionDecoder decoder = decoderRef.get();
-                    final Object decoderLock = decoderLockRef.get();
                     final Tile tile = tileRef.get();
                     final SubsamplingScaleImageView view = viewRef.get();
-                    if (decoder != null && decoderLock != null && tile != null && view != null && !decoder.isRecycled()) {
-                        synchronized (decoderLock) {
+                    if (decoder != null && tile != null && view != null && !decoder.isRecycled()) {
+                        synchronized (decoder) {
                             BitmapFactory.Options options = new BitmapFactory.Options();
                             options.inSampleSize = tile.sampleSize;
                             options.inPreferredConfig = Config.RGB_565;
@@ -847,22 +842,6 @@ public class SubsamplingScaleImageView extends View {
         private boolean loading;
         private boolean visible;
 
-    }
-
-    /**
-     * In SDK 14 and above, use canvas max bitmap width and height instead of the default 2048, to avoid redundant tiling.
-     */
-    private Point getMaxBitmapDimensions(Canvas canvas) {
-        if (VERSION.SDK_INT >= 14) {
-            try {
-                int maxWidth = (Integer)Canvas.class.getMethod("getMaximumBitmapWidth").invoke(canvas);
-                int maxHeight = (Integer)Canvas.class.getMethod("getMaximumBitmapHeight").invoke(canvas);
-                return new Point(maxWidth, maxHeight);
-            } catch (Exception e) {
-                // Return default
-            }
-        }
-        return new Point(2048, 2048);
     }
 
     /**
