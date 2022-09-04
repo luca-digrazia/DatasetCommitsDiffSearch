@@ -138,25 +138,27 @@ public class LegacyDynamicSpawnStrategy implements SpawnStrategy {
   public ImmutableList<SpawnResult> exec(
       final Spawn spawn, final ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
-    if (options.requireAvailabilityInfo
-        && !options.availabilityInfoExempt.contains(spawn.getMnemonic())) {
+    if (options.requireAvailabilityInfo) {
       if (spawn.getExecutionInfo().containsKey(ExecutionRequirements.REQUIRES_DARWIN)
-          && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.REQUIREMENTS_SET)) {
-        throw new EnvironmentalExecException(
-            String.format(
-                "The following spawn was missing Xcode-related execution requirements. Please"
-                    + " let the Bazel team know if you encounter this issue. You can work around"
-                    + " this error by passing --experimental_require_availability_info=false --"
-                    + " at your own risk! This may cause some actions to be executed on the"
-                    + " wrong platform, which can result in build failures.\n"
-                    + "Failing spawn: mnemonic = %s\n"
-                    + "tool files = %s\n"
-                    + "execution platform = %s\n"
-                    + "execution info = %s\n",
-                spawn.getMnemonic(),
-                spawn.getToolFiles(),
-                spawn.getExecutionPlatform(),
-                spawn.getExecutionInfo()));
+          && !spawn.getMnemonic().equals("Genrule")
+          && !spawn.getMnemonic().contains("Test")) {
+        if (!spawn.getExecutionInfo().containsKey(ExecutionRequirements.REQUIREMENTS_SET)) {
+          throw new EnvironmentalExecException(
+              String.format(
+                  "The following spawn was missing Xcode-related execution requirements. Please"
+                      + " let the Bazel team know if you encounter this issue. You can work around"
+                      + " this error by passing --experimental_require_availability_info=false --"
+                      + " at your own risk! This may cause some actions to be executed on the"
+                      + " wrong platform, which can result in build failures.\n"
+                      + "Failing spawn: mnemonic = %s\n"
+                      + "tool files = %s\n"
+                      + "execution platform = %s\n"
+                      + "execution info = %s\n",
+                  spawn.getMnemonic(),
+                  spawn.getToolFiles(),
+                  spawn.getExecutionPlatform(),
+                  spawn.getExecutionInfo()));
+        }
       }
     }
     ExecutionPolicy executionPolicy = getExecutionPolicy.apply(spawn);
