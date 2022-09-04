@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTe
 import com.google.devtools.build.lib.packages.Attribute.ValidityPredicate;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.packages.RuleClass.ExecutionPlatformConstraintsAllowed;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
@@ -893,6 +892,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         /* hasFunctionTransitionWhitelist=*/ false,
         /* ignorePackageLicenses=*/ false,
         implicitOutputsFunction,
+        /*isConfigMatcher=*/ false,
         transitionFactory,
         configuredTargetFactory,
         validityPredicate,
@@ -910,7 +910,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
             .setMissingFragmentPolicy(missingFragmentPolicy)
             .build(),
         supportsConstraintChecking,
-        ThirdPartyLicenseExistencePolicy.USER_CONTROLLABLE,
         /*requiredToolchains=*/ ImmutableSet.of(),
         /*supportsPlatforms=*/ true,
         ExecutionPlatformConstraintsAllowed.PER_RULE,
