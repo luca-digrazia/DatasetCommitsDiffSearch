@@ -252,9 +252,7 @@ public class ValueResolverGenerator {
             }
         }
 
-        // Sort methods (getters must come before is/has properties, etc.)
-        List<MethodKey> methods = clazz.methods().stream().filter(filter::test).map(MethodKey::new).sorted()
-                .collect(Collectors.toList());
+        Set<MethodKey> methods = clazz.methods().stream().filter(filter::test).map(MethodKey::new).collect(Collectors.toSet());
         if (!ignoreSuperclasses) {
             DotName superName = clazz.superName();
             while (superName != null && !superName.equals(OBJECT)) {
@@ -275,8 +273,8 @@ public class ValueResolverGenerator {
             Map<Match, List<MethodInfo>> matches = new HashMap<>();
             Map<Match, List<MethodInfo>> varargsMatches = new HashMap<>();
 
-            for (MethodKey methodKey : methods) {
-                MethodInfo method = methodKey.method;
+            for (MethodInfo method : methods.stream().map(MethodKey::getMethod).collect(Collectors.toSet())) {
+
                 List<Type> methodParams = method.parameters();
                 if (methodParams.isEmpty()) {
                     // No params - just invoke the method
@@ -787,7 +785,7 @@ public class ValueResolverGenerator {
                         && !method.name().equals("<clinit>");
             case FIELD:
                 FieldInfo field = target.asField();
-                return Modifier.isPublic(field.flags()) && !Modifier.isStatic(field.flags()) && !isSynthetic(field.flags());
+                return Modifier.isPublic(field.flags()) && !Modifier.isStatic(field.flags());
             default:
                 throw new IllegalArgumentException("Unsupported annotation target");
         }
@@ -892,17 +890,12 @@ public class ValueResolverGenerator {
 
     public static boolean hasCompletionStageInTypeClosure(ClassInfo classInfo,
             IndexView index) {
-        return hasClassInTypeClosure(classInfo, COMPLETION_STAGE, index);
-    }
-
-    public static boolean hasClassInTypeClosure(ClassInfo classInfo, DotName className,
-            IndexView index) {
 
         if (classInfo == null) {
             // TODO cannot perform analysis
             return false;
         }
-        if (classInfo.name().equals(className)) {
+        if (classInfo.name().equals(COMPLETION_STAGE)) {
             return true;
         }
         // Interfaces
@@ -915,7 +908,7 @@ public class ValueResolverGenerator {
         // Superclass
         if (classInfo.superClassType() != null) {
             ClassInfo superClassInfo = index.getClassByName(classInfo.superName());
-            if (superClassInfo != null && hasClassInTypeClosure(superClassInfo, className, index)) {
+            if (superClassInfo != null && hasCompletionStageInTypeClosure(superClassInfo, index)) {
                 return true;
             }
         }
@@ -958,7 +951,7 @@ public class ValueResolverGenerator {
 
     }
 
-    static class MethodKey implements Comparable<MethodKey> {
+    static class MethodKey {
 
         final String name;
         final List<DotName> params;
@@ -975,24 +968,6 @@ public class ValueResolverGenerator {
 
         public MethodInfo getMethod() {
             return method;
-        }
-
-        @Override
-        public int compareTo(MethodKey other) {
-            // compare the name, then number of params and param type names 
-            int res = name.compareTo(other.name);
-            if (res == 0) {
-                res = Integer.compare(params.size(), other.params.size());
-                if (res == 0) {
-                    for (int i = 0; i < params.size(); i++) {
-                        res = params.get(i).compareTo(other.params.get(i));
-                        if (res != 0) {
-                            break;
-                        }
-                    }
-                }
-            }
-            return res;
         }
 
         @Override
