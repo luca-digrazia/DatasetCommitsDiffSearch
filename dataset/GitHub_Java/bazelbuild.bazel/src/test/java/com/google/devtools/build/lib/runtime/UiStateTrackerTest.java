@@ -18,6 +18,7 @@ import static com.google.common.truth.Truth.assertWithMessage;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.google.common.base.Strings;
@@ -31,6 +32,7 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.BuildConfigurationEvent;
 import com.google.devtools.build.lib.actions.RunningActionEvent;
 import com.google.devtools.build.lib.actions.ScanningActionEvent;
 import com.google.devtools.build.lib.actions.SchedulingActionEvent;
@@ -38,6 +40,7 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.bazel.repository.downloader.DownloadProgressEvent;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
+import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransportClosedEvent;
 import com.google.devtools.build.lib.buildtool.BuildResult;
@@ -45,7 +48,6 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.FetchProgress;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.runtime.UiStateTracker.ProgressMode;
 import com.google.devtools.build.lib.runtime.UiStateTracker.StrategyIds;
 import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
@@ -53,7 +55,6 @@ import com.google.devtools.build.lib.skyframe.PackageProgressReceiver;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.util.DetailedExitCode;
-import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.LoggingTerminalWriter;
 import com.google.devtools.build.lib.vfs.Path;
@@ -66,10 +67,10 @@ import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import net.starlark.java.syntax.Location;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mockito;
 
 /** Tests {@link UiStateTracker}. */
 @RunWith(JUnit4.class)
@@ -154,13 +155,13 @@ public class UiStateTrackerTest extends FoundationTestCase {
     Artifact artifact =
         ActionsTestUtil.createArtifact(ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)), path);
 
-    Action action = Mockito.mock(Action.class);
+    Action action = mock(Action.class);
     when(action.getProgressMessage()).thenReturn(progressMessage);
     when(action.getPrimaryOutput()).thenReturn(artifact);
     return action;
   }
 
-  private int longestLine(String output) {
+  private static int longestLine(String output) {
     int maxLength = 0;
     for (String line : output.split("\n")) {
       maxLength = Math.max(maxLength, line.length());
@@ -174,8 +175,8 @@ public class UiStateTrackerTest extends FoundationTestCase {
     // should be visible in the progress bar.
     String state = "42 packages loaded";
     String activity = "currently loading //src/foo/bar and 17 more";
-    PackageProgressReceiver progress = Mockito.mock(PackageProgressReceiver.class);
-    when(progress.progressState()).thenReturn(new Pair<String, String>(state, activity));
+    PackageProgressReceiver progress = mock(PackageProgressReceiver.class);
+    when(progress.progressState()).thenReturn(new Pair<>(state, activity));
 
     ManualClock clock = new ManualClock();
     UiStateTracker stateTracker = new UiStateTracker(clock);
@@ -242,7 +243,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     stateTracker.actionStarted(new ActionStartedEvent(fastAction, 123456789));
     stateTracker.actionStarted(new ActionStartedEvent(slowAction, 123456999));
     stateTracker.actionCompletion(
-        new ActionCompletionEvent(20, fastAction, Mockito.mock(ActionLookupData.class)));
+        new ActionCompletionEvent(20, fastAction, mock(ActionLookupData.class)));
 
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
     stateTracker.writeProgressBar(terminalWriter);
@@ -417,13 +418,13 @@ public class UiStateTrackerTest extends FoundationTestCase {
     // The test count should be visible in the status bar, as well as the short status bar
     ManualClock clock = new ManualClock();
     UiStateTracker stateTracker = new UiStateTracker(clock);
-    TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
+    TestFilteringCompleteEvent filteringComplete = mock(TestFilteringCompleteEvent.class);
     Label labelA = Label.parseAbsolute("//foo/bar:baz", ImmutableMap.of());
-    ConfiguredTarget targetA = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget targetA = mock(ConfiguredTarget.class);
     when(targetA.getLabel()).thenReturn(labelA);
-    ConfiguredTarget targetB = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget targetB = mock(ConfiguredTarget.class);
     when(filteringComplete.getTestTargets()).thenReturn(ImmutableSet.of(targetA, targetB));
-    TestSummary testSummary = Mockito.mock(TestSummary.class);
+    TestSummary testSummary = mock(TestSummary.class);
     when(testSummary.getTarget()).thenReturn(targetA);
     when(testSummary.getLabel()).thenReturn(labelA);
 
@@ -450,13 +451,13 @@ public class UiStateTrackerTest extends FoundationTestCase {
     // The last test should still be visible in the long status bar, and colored as ok if it passed.
     ManualClock clock = new ManualClock();
     UiStateTracker stateTracker = new UiStateTracker(clock);
-    TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
+    TestFilteringCompleteEvent filteringComplete = mock(TestFilteringCompleteEvent.class);
     Label labelA = Label.parseAbsolute("//foo/bar:baz", ImmutableMap.of());
-    ConfiguredTarget targetA = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget targetA = mock(ConfiguredTarget.class);
     when(targetA.getLabel()).thenReturn(labelA);
-    ConfiguredTarget targetB = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget targetB = mock(ConfiguredTarget.class);
     when(filteringComplete.getTestTargets()).thenReturn(ImmutableSet.of(targetA, targetB));
-    TestSummary testSummary = Mockito.mock(TestSummary.class);
+    TestSummary testSummary = mock(TestSummary.class);
     when(testSummary.getStatus()).thenReturn(BlazeTestStatus.PASSED);
     when(testSummary.getTarget()).thenReturn(targetA);
     when(testSummary.getLabel()).thenReturn(labelA);
@@ -481,13 +482,13 @@ public class UiStateTrackerTest extends FoundationTestCase {
     // did not pass.
     ManualClock clock = new ManualClock();
     UiStateTracker stateTracker = new UiStateTracker(clock);
-    TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
+    TestFilteringCompleteEvent filteringComplete = mock(TestFilteringCompleteEvent.class);
     Label labelA = Label.parseAbsolute("//foo/bar:baz", ImmutableMap.of());
-    ConfiguredTarget targetA = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget targetA = mock(ConfiguredTarget.class);
     when(targetA.getLabel()).thenReturn(labelA);
-    ConfiguredTarget targetB = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget targetB = mock(ConfiguredTarget.class);
     when(filteringComplete.getTestTargets()).thenReturn(ImmutableSet.of(targetA, targetB));
-    TestSummary testSummary = Mockito.mock(TestSummary.class);
+    TestSummary testSummary = mock(TestSummary.class);
     when(testSummary.getStatus()).thenReturn(BlazeTestStatus.FAILED);
     when(testSummary.getTarget()).thenReturn(targetA);
     when(testSummary.getLabel()).thenReturn(labelA);
@@ -524,12 +525,14 @@ public class UiStateTrackerTest extends FoundationTestCase {
     ActionOwner owner =
         ActionOwner.create(
             label,
-            ImmutableList.<AspectDescriptor>of(),
-            null,
-            null,
-            null,
+            ImmutableList.of(),
+            new Location("dummy-file", 0, 0),
+            "dummy-mnemonic",
+            "dummy-target-kind",
             "fedcba",
-            null,
+            new BuildConfigurationEvent(
+                BuildEventStreamProtos.BuildEventId.getDefaultInstance(),
+                BuildEventStreamProtos.BuildEvent.getDefaultInstance()),
             null,
             ImmutableMap.of(),
             null);
@@ -564,7 +567,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     Artifact artifact =
         ActionsTestUtil.createArtifact(ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)), path);
     Action action = mockAction("Some random action", primaryOutput);
-    when(action.getOwner()).thenReturn(Mockito.mock(ActionOwner.class));
+    when(action.getOwner()).thenReturn(mock(ActionOwner.class));
     when(action.getPrimaryOutput()).thenReturn(artifact);
 
     UiStateTracker stateTracker = new UiStateTracker(clock);
@@ -591,7 +594,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     Artifact artifact =
         ActionsTestUtil.createArtifact(ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)), path);
     Action action = mockAction("Some random action", primaryOutput);
-    when(action.getOwner()).thenReturn(Mockito.mock(ActionOwner.class));
+    when(action.getOwner()).thenReturn(mock(ActionOwner.class));
     when(action.getPrimaryOutput()).thenReturn(artifact);
 
     UiStateTracker stateTracker = new UiStateTracker(clock);
@@ -627,7 +630,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     Artifact artifact1 =
         ActionsTestUtil.createArtifact(ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)), path1);
     Action action1 = mockAction("First random action", primaryOutput1);
-    when(action1.getOwner()).thenReturn(Mockito.mock(ActionOwner.class));
+    when(action1.getOwner()).thenReturn(mock(ActionOwner.class));
     when(action1.getPrimaryOutput()).thenReturn(artifact1);
     stateTracker.actionStarted(new ActionStartedEvent(action1, clock.nanoTime()));
 
@@ -635,7 +638,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     Artifact artifact2 =
         ActionsTestUtil.createArtifact(ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)), path2);
     Action action2 = mockAction("First random action", primaryOutput1);
-    when(action2.getOwner()).thenReturn(Mockito.mock(ActionOwner.class));
+    when(action2.getOwner()).thenReturn(mock(ActionOwner.class));
     when(action2.getPrimaryOutput()).thenReturn(artifact2);
     stateTracker.actionStarted(new ActionStartedEvent(action2, clock.nanoTime()));
 
@@ -683,13 +686,13 @@ public class UiStateTrackerTest extends FoundationTestCase {
         Label.parseAbsolute(
             "//src/another/very/long/long/path/long/long/long/long/long/long/long/long/bars:bartest",
             ImmutableMap.of());
-    ConfiguredTarget bartestTarget = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget bartestTarget = mock(ConfiguredTarget.class);
     when(bartestTarget.getLabel()).thenReturn(bartestLabel);
 
-    TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
+    TestFilteringCompleteEvent filteringComplete = mock(TestFilteringCompleteEvent.class);
     when(filteringComplete.getTestTargets()).thenReturn(ImmutableSet.of(bartestTarget));
 
-    TestSummary testSummary = Mockito.mock(TestSummary.class);
+    TestSummary testSummary = mock(TestSummary.class);
     when(testSummary.getStatus()).thenReturn(BlazeTestStatus.PASSED);
     when(testSummary.getTarget()).thenReturn(bartestTarget);
     when(testSummary.getLabel()).thenReturn(bartestLabel);
@@ -748,10 +751,10 @@ public class UiStateTrackerTest extends FoundationTestCase {
     clock.advanceMillis(120000);
     UiStateTracker stateTracker = new UiStateTracker(clock);
     Action actionFoo = mockAction("Building foo", "foo/foo");
-    ActionOwner ownerFoo = Mockito.mock(ActionOwner.class);
+    ActionOwner ownerFoo = mock(ActionOwner.class);
     when(actionFoo.getOwner()).thenReturn(ownerFoo);
     Action actionBar = mockAction("Building bar", "bar/bar");
-    ActionOwner ownerBar = Mockito.mock(ActionOwner.class);
+    ActionOwner ownerBar = mock(ActionOwner.class);
     when(actionBar.getOwner()).thenReturn(ownerBar);
     LoggingTerminalWriter terminalWriter;
     String output;
@@ -824,10 +827,10 @@ public class UiStateTrackerTest extends FoundationTestCase {
     String output;
 
     Action actionFoo = mockAction("Building foo", "foo/foo");
-    ActionOwner ownerFoo = Mockito.mock(ActionOwner.class);
+    ActionOwner ownerFoo = mock(ActionOwner.class);
     when(actionFoo.getOwner()).thenReturn(ownerFoo);
     Action actionBar = mockAction("Building bar", "bar/bar");
-    ActionOwner ownerBar = Mockito.mock(ActionOwner.class);
+    ActionOwner ownerBar = mock(ActionOwner.class);
     when(actionBar.getOwner()).thenReturn(ownerBar);
 
     stateTracker.actionStarted(new ActionStartedEvent(actionFoo, clock.nanoTime()));
@@ -877,7 +880,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     ManualClock clock = new ManualClock();
     UiStateTracker stateTracker = new UiStateTracker(clock);
     Action actionFoo = mockAction("Building foo", "foo/foo");
-    ActionOwner ownerFoo = Mockito.mock(ActionOwner.class);
+    ActionOwner ownerFoo = mock(ActionOwner.class);
     when(actionFoo.getOwner()).thenReturn(ownerFoo);
     LoggingTerminalWriter terminalWriter;
     String output;
@@ -890,7 +893,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
     stateTracker.writeProgressBar(terminalWriter);
     output = terminalWriter.getTranscript();
-    assertWithMessage("Expected at least some status bar").that(output.length() != 0).isTrue();
+    assertWithMessage("Expected at least some status bar").that(output).isNotEmpty();
 
     // Action actually started
     stateTracker.actionStarted(new ActionStartedEvent(actionFoo, clock.nanoTime()));
@@ -912,7 +915,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
 
     for (int i = 0; i < 30; i++) {
       Action action = mockAction("Takes long to schedule number " + i, "long/startup" + i);
-      ActionOwner owner = Mockito.mock(ActionOwner.class);
+      ActionOwner owner = mock(ActionOwner.class);
       when(action.getOwner()).thenReturn(owner);
       stateTracker.actionStarted(new ActionStartedEvent(action, 123456789 + i));
       stateTracker.schedulingAction(new SchedulingActionEvent(action, "xyz-sandbox"));
@@ -920,7 +923,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
 
     for (int i = 0; i < 3; i++) {
       Action action = mockAction("quickstart" + i, "pkg/quickstart" + i);
-      ActionOwner owner = Mockito.mock(ActionOwner.class);
+      ActionOwner owner = mock(ActionOwner.class);
       when(action.getOwner()).thenReturn(owner);
       stateTracker.actionStarted(new ActionStartedEvent(action, 123457000 + i));
       stateTracker.runningAction(new RunningActionEvent(action, "xyz-sandbox"));
@@ -932,7 +935,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
           .that(output.contains("quickstart" + i))
           .isTrue();
       assertWithMessage("Number of running actions should be indicated in output:\n" + output)
-          .that(output.contains("" + (i + 1) + " running"))
+          .that(output.contains((i + 1) + " running"))
           .isTrue();
     }
   }
@@ -946,36 +949,40 @@ public class UiStateTrackerTest extends FoundationTestCase {
     UiStateTracker stateTracker = new UiStateTracker(clock, 80);
 
     Label labelFooTest = Label.parseAbsolute("//foo/bar:footest", ImmutableMap.of());
-    ConfiguredTarget targetFooTest = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget targetFooTest = mock(ConfiguredTarget.class);
     when(targetFooTest.getLabel()).thenReturn(labelFooTest);
     ActionOwner fooOwner =
         ActionOwner.create(
             labelFooTest,
-            ImmutableList.<AspectDescriptor>of(),
-            null,
-            null,
-            null,
+            ImmutableList.of(),
+            new Location("dummy-file", 0, 0),
+            "dummy-mnemonic",
+            "dummy-target-kind",
             "abcdef",
-            null,
+            new BuildConfigurationEvent(
+                BuildEventStreamProtos.BuildEventId.getDefaultInstance(),
+                BuildEventStreamProtos.BuildEvent.getDefaultInstance()),
             null,
             ImmutableMap.of(),
             null);
 
     Label labelBarTest = Label.parseAbsolute("//baz:bartest", ImmutableMap.of());
-    ConfiguredTarget targetBarTest = Mockito.mock(ConfiguredTarget.class);
+    ConfiguredTarget targetBarTest = mock(ConfiguredTarget.class);
     when(targetBarTest.getLabel()).thenReturn(labelBarTest);
-    TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
+    TestFilteringCompleteEvent filteringComplete = mock(TestFilteringCompleteEvent.class);
     when(filteringComplete.getTestTargets())
         .thenReturn(ImmutableSet.of(targetFooTest, targetBarTest));
     ActionOwner barOwner =
         ActionOwner.create(
             labelBarTest,
-            ImmutableList.<AspectDescriptor>of(),
-            null,
-            null,
-            null,
+            ImmutableList.of(),
+            new Location("dummy-file", 0, 0),
+            "dummy-mnemonic",
+            "dummy-target-kind",
             "fedcba",
-            null,
+            new BuildConfigurationEvent(
+                BuildEventStreamProtos.BuildEventId.getDefaultInstance(),
+                BuildEventStreamProtos.BuildEvent.getDefaultInstance()),
             null,
             ImmutableMap.of(),
             null);
@@ -1018,7 +1025,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testSuffix() throws Exception {
+  public void testSuffix() {
     assertThat(UiStateTracker.suffix("foobar", 3)).isEqualTo("bar");
     assertThat(UiStateTracker.suffix("foo", -2)).isEmpty();
     assertThat(UiStateTracker.suffix("foobar", 200)).isEqualTo("foobar");
@@ -1034,7 +1041,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
 
     URL url = new URL("http://example.org/first/dep");
 
-    stateTracker.buildStarted(null);
+    stateTracker.buildStarted();
     stateTracker.downloadProgress(new DownloadProgressEvent(url));
     clock.advanceMillis(TimeUnit.SECONDS.toMillis(6));
 
@@ -1089,7 +1096,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     UiStateTracker stateTracker = new UiStateTracker(clock, 60);
     URL url = new URL("http://example.org/some/really/very/very/long/path/filename.tar.gz");
 
-    stateTracker.buildStarted(null);
+    stateTracker.buildStarted();
     stateTracker.downloadProgress(new DownloadProgressEvent(url));
     clock.advanceMillis(TimeUnit.SECONDS.toMillis(6));
     for (int i = 0; i < 10; i++) {
@@ -1129,12 +1136,12 @@ public class UiStateTrackerTest extends FoundationTestCase {
     BuildEventTransport transport2 = newBepTransport("BuildEventTransport2");
     BuildEventTransport transport3 = newBepTransport("BuildEventTransport3");
     BuildResult buildResult = new BuildResult(clock.currentTimeMillis());
-    buildResult.setDetailedExitCode(DetailedExitCode.justExitCode(ExitCode.SUCCESS));
+    buildResult.setDetailedExitCode(DetailedExitCode.success());
     clock.advanceMillis(TimeUnit.SECONDS.toMillis(1));
     buildResult.setStopTime(clock.currentTimeMillis());
 
     UiStateTracker stateTracker = new UiStateTracker(clock, 80);
-    stateTracker.buildStarted(null);
+    stateTracker.buildStarted();
     stateTracker.buildEventTransportsAnnounced(
         new AnnounceBuildEventTransportsEvent(ImmutableList.of(transport1, transport2)));
     stateTracker.buildEventTransportsAnnounced(
@@ -1199,10 +1206,10 @@ public class UiStateTrackerTest extends FoundationTestCase {
     BuildEventTransport transport1 = newBepTransport(Strings.repeat("A", 61));
     BuildEventTransport transport2 = newBepTransport("BuildEventTransport");
     BuildResult buildResult = new BuildResult(clock.currentTimeMillis());
-    buildResult.setDetailedExitCode(DetailedExitCode.justExitCode(ExitCode.SUCCESS));
+    buildResult.setDetailedExitCode(DetailedExitCode.success());
     LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter(true);
     UiStateTracker stateTracker = new UiStateTracker(clock, 60);
-    stateTracker.buildStarted(null);
+    stateTracker.buildStarted();
     stateTracker.buildEventTransportsAnnounced(
         new AnnounceBuildEventTransportsEvent(ImmutableList.of(transport1, transport2)));
     stateTracker.buildComplete(new BuildCompleteEvent(buildResult));
@@ -1230,8 +1237,8 @@ public class UiStateTrackerTest extends FoundationTestCase {
     assertThat(output.split("\\n")).hasLength(2);
   }
 
-  private BuildEventTransport newBepTransport(String name) {
-    BuildEventTransport transport = Mockito.mock(BuildEventTransport.class);
+  private static BuildEventTransport newBepTransport(String name) {
+    BuildEventTransport transport = mock(BuildEventTransport.class);
     when(transport.name()).thenReturn(name);
     return transport;
   }
@@ -1241,7 +1248,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     ManualClock clock = new ManualClock();
     UiStateTracker stateTracker = new UiStateTracker(clock, 80);
 
-    stateTracker.buildStarted(null);
+    stateTracker.buildStarted();
     for (int i = 0; i < 30; i++) {
       stateTracker.downloadProgress(new FetchEvent("@repoFoo" + i));
     }
@@ -1259,7 +1266,7 @@ public class UiStateTrackerTest extends FoundationTestCase {
     Path path = outputBase.getRelative(PathFragment.create(primaryOutput));
     Artifact artifact =
         ActionsTestUtil.createArtifact(ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)), path);
-    Action action = Mockito.mock(Action.class);
+    Action action = mock(Action.class);
     when(action.getMnemonic()).thenReturn(mnemonic);
     when(action.getPrimaryOutput()).thenReturn(artifact);
     return action;
