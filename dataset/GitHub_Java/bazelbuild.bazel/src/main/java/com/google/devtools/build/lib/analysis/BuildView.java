@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -850,22 +851,11 @@ public class BuildView {
 
     for (TargetAndConfiguration targetAndConfig : inputs) {
       labelsToTargets.put(targetAndConfig.getLabel(), targetAndConfig.getTarget());
-
-      Attribute.Transition ruleclassTransition = null;
-      if (targetAndConfig.getTarget().getAssociatedRule() != null) {
-        ruleclassTransition = targetAndConfig
-            .getTarget()
-            .getAssociatedRule()
-            .getRuleClassObject()
-            .getTransition();
-      }
       if (targetAndConfig.getConfiguration() != null) {
         asDeps.put(targetAndConfig.getConfiguration(),
             Dependency.withTransitionAndAspects(
                 targetAndConfig.getLabel(),
-                ruleclassTransition == null
-                  ? Attribute.ConfigurationTransition.NONE
-                  : ruleclassTransition,
+                Attribute.ConfigurationTransition.NONE,
                 // TODO(bazel-team): support top-level aspects
                 AspectCollection.EMPTY));
       }
@@ -1093,14 +1083,14 @@ public class BuildView {
   @VisibleForTesting
   public RuleContext getRuleContextForTesting(
       ConfiguredTarget target, StoredEventHandler eventHandler,
-      BuildConfigurationCollection configurations)
+      BuildConfigurationCollection configurations, BinTools binTools)
           throws EvalException, InvalidConfigurationException, InterruptedException {
     BuildConfiguration targetConfig = target.getConfiguration();
     CachingAnalysisEnvironment env =
         new CachingAnalysisEnvironment(getArtifactFactory(),
             new ConfiguredTargetKey(target.getLabel(), targetConfig),
             /*isSystemEnv=*/false, targetConfig.extendedSanityChecks(), eventHandler,
-            /*skyframeEnv=*/null, targetConfig.isActionsEnabled());
+            /*skyframeEnv=*/null, targetConfig.isActionsEnabled(), binTools);
     return getRuleContextForTesting(eventHandler, target, env, configurations);
   }
 

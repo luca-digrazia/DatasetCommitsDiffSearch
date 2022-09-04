@@ -15,10 +15,8 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -31,7 +29,6 @@ import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.syntax.SkylarkImport;
 import com.google.devtools.build.skyframe.SkyFunctionName;
-import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -70,7 +67,7 @@ public final class AspectValue extends ActionLookupValue {
     }
 
     @Override
-    protected SkyFunctionName getType() {
+    SkyFunctionName getType() {
       return SkyFunctions.ASPECT;
     }
 
@@ -112,7 +109,7 @@ public final class AspectValue extends ActionLookupValue {
     /**
      * Returns the configuration to be used for the evaluation of the aspect itself.
      *
-     * <p>In trimmed configuration mode, the aspect may require more fragments than the target on
+     * <p>In dynamic configuration mode, the aspect may require more fragments than the target on
      * which it is being evaluated; in addition to configuration fragments required by the target
      * and its dependencies, an aspect has configuration fragment requirements of its own, as well
      * as dependencies of its own with their own configuration fragment requirements.
@@ -122,7 +119,7 @@ public final class AspectValue extends ActionLookupValue {
      * configurations trimmed from this one as normal.
      *
      * <p>Because of these properties, this configuration is always a superset of that returned by
-     * {@link #getBaseConfiguration()}. In untrimmed configuration mode, this configuration will be
+     * {@link #getBaseConfiguration()}. In static configuration mode, this configuration will be
      * equivalent to that returned by {@link #getBaseConfiguration()}.
      *
      * @see #getBaseConfiguration()
@@ -134,7 +131,7 @@ public final class AspectValue extends ActionLookupValue {
     /**
      * Returns the configuration to be used for the base target.
      *
-     * <p>In trimmed configuration mode, the configured target this aspect is attached to may have
+     * <p>In dynamic configuration mode, the configured target this aspect is attached to may have
      * a different configuration than the aspect itself (see the documentation for
      * {@link #getAspectConfiguration()} for an explanation why). The base configuration is the one
      * used to construct a key to look up the base configured target.
@@ -242,7 +239,7 @@ public final class AspectValue extends ActionLookupValue {
     }
 
     @Override
-    protected SkyFunctionName getType() {
+    SkyFunctionName getType() {
       return SkyFunctions.LOAD_SKYLARK_ASPECT;
     }
 
@@ -308,14 +305,12 @@ public final class AspectValue extends ActionLookupValue {
   }
 
 
-  // These variables are only non-final because they may be clear()ed to save memory. They are null
-  // only after they are cleared.
-  @Nullable private Label label;
-  @Nullable private Aspect aspect;
-  @Nullable private Location location;
-  @Nullable private AspectKey key;
-  @Nullable private ConfiguredAspect configuredAspect;
-  @Nullable private NestedSet<Package> transitivePackages;
+  private final Label label;
+  private final Aspect aspect;
+  private final Location location;
+  private final AspectKey key;
+  private final ConfiguredAspect configuredAspect;
+  private final NestedSet<Package> transitivePackages;
 
   public AspectValue(
       AspectKey key,
@@ -323,66 +318,44 @@ public final class AspectValue extends ActionLookupValue {
       Label label,
       Location location,
       ConfiguredAspect configuredAspect,
-      List<ActionAnalysisMetadata> actions,
-      NestedSet<Package> transitivePackages,
-      boolean removeActionsAfterEvaluation) {
-    super(actions, removeActionsAfterEvaluation);
-    this.label = Preconditions.checkNotNull(label, actions);
-    this.aspect = Preconditions.checkNotNull(aspect, label);
-    this.location = Preconditions.checkNotNull(location, label);
-    this.key = Preconditions.checkNotNull(key, label);
-    this.configuredAspect = Preconditions.checkNotNull(configuredAspect, label);
-    this.transitivePackages = Preconditions.checkNotNull(transitivePackages, label);
+      Iterable<ActionAnalysisMetadata> actions,
+      NestedSet<Package> transitivePackages) {
+    super(actions);
+    this.aspect = aspect;
+    this.location = location;
+    this.label = label;
+    this.key = key;
+    this.configuredAspect = configuredAspect;
+    this.transitivePackages = transitivePackages;
   }
 
   public ConfiguredAspect getConfiguredAspect() {
-    return Preconditions.checkNotNull(configuredAspect);
+    return configuredAspect;
   }
 
   public Label getLabel() {
-    return Preconditions.checkNotNull(label);
+    return label;
   }
 
   public Location getLocation() {
-    return Preconditions.checkNotNull(location);
+    return location;
   }
 
   public AspectKey getKey() {
-    return Preconditions.checkNotNull(key);
+    return key;
   }
 
   public Aspect getAspect() {
-    return Preconditions.checkNotNull(aspect);
-  }
-
-  void clear(boolean clearEverything) {
-    Preconditions.checkNotNull(label, this);
-    Preconditions.checkNotNull(aspect, this);
-    Preconditions.checkNotNull(location, this);
-    Preconditions.checkNotNull(key, this);
-    Preconditions.checkNotNull(configuredAspect, this);
-    Preconditions.checkNotNull(transitivePackages, this);
-    if (clearEverything) {
-      label = null;
-      aspect = null;
-      location = null;
-      key = null;
-      configuredAspect = null;
-    }
-    transitivePackages = null;
+    return aspect;
   }
 
   public NestedSet<Package> getTransitivePackages() {
-    return Preconditions.checkNotNull(transitivePackages);
+    return transitivePackages;
   }
 
-  // TODO(janakr): Add a nice toString after cl/150542180 is submitted.
-
   public static AspectKey createAspectKey(
-      Label label,
-      BuildConfiguration baseConfiguration,
-      ImmutableList<AspectKey> baseKeys,
-      AspectDescriptor aspectDescriptor,
+      Label label, BuildConfiguration baseConfiguration,
+      ImmutableList<AspectKey> baseKeys, AspectDescriptor aspectDescriptor,
       BuildConfiguration aspectConfiguration) {
     return new AspectKey(
         label, baseConfiguration,

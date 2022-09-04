@@ -13,12 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -26,13 +26,11 @@ import javax.annotation.Nullable;
 /**
  * A dependency of a configured target through a label.
  *
- * <p>The dep's configuration can be specified in one of two ways:
- *
- * <p>Explicit configurations: includes the target and the configuration of the dependency
+ * <p>For static configurations: includes the target and the configuration of the dependency
  * configured target and any aspects that may be required, as well as the configurations for
  * these aspects.
  *
- * <p>Configuration transitions: includes the target and the desired configuration transitions
+ * <p>For dynamic configurations: includes the target and the desired configuration transitions
  * that should be applied to produce the dependency's configuration. It's the caller's
  * responsibility to construct an actual configuration out of that. A set of aspects is also
  * included; the caller must also construct configurations for each of these.
@@ -47,29 +45,30 @@ public abstract class Dependency {
 
   /**
    * Creates a new {@link Dependency} with a null configuration, suitable for edges with no
-   * configuration.
+   * configuration in static configuration builds.
    */
   public static Dependency withNullConfiguration(Label label) {
     return new NullConfigurationDependency(label);
   }
 
   /**
-   * Creates a new {@link Dependency} with the given explicit configuration.
+   * Creates a new {@link Dependency} with the given configuration, suitable for static
+   * configuration builds.
    *
    * <p>The configuration must not be {@code null}.
    *
    * <p>A {@link Dependency} created this way will have no associated aspects.
    */
   public static Dependency withConfiguration(Label label, BuildConfiguration configuration) {
-    return new ExplicitConfigurationDependency(
+    return new StaticConfigurationDependency(
         label, configuration,
         AspectCollection.EMPTY,
         ImmutableMap.<AspectDescriptor, BuildConfiguration>of());
   }
 
   /**
-   * Creates a new {@link Dependency} with the given configuration and aspects. The configuration
-   * is also applied to all aspects.
+   * Creates a new {@link Dependency} with the given configuration and aspects, suitable for
+   * static configuration builds. The configuration is also applied to all aspects.
    *
    * <p>The configuration and aspects must not be {@code null}.
    */
@@ -80,13 +79,12 @@ public abstract class Dependency {
     for (AspectDescriptor aspect : aspects.getAllAspects()) {
       aspectBuilder.put(aspect, configuration);
     }
-    return new ExplicitConfigurationDependency(label, configuration, aspects,
-        aspectBuilder.build());
+    return new StaticConfigurationDependency(label, configuration, aspects, aspectBuilder.build());
   }
 
   /**
    * Creates a new {@link Dependency} with the given configuration and aspects, suitable for
-   * storing the output of a configuration trimming step. The aspects each have their own
+   * storing the output of a dynamic configuration trimming step. The aspects each have their own
    * configuration.
    *
    * <p>The aspects and configurations must not be {@code null}.
@@ -95,16 +93,17 @@ public abstract class Dependency {
       Label label, BuildConfiguration configuration,
       AspectCollection aspects,
       Map<AspectDescriptor, BuildConfiguration> aspectConfigurations) {
-    return new ExplicitConfigurationDependency(
+    return new StaticConfigurationDependency(
         label, configuration, aspects, ImmutableMap.copyOf(aspectConfigurations));
   }
 
   /**
-   * Creates a new {@link Dependency} with the given transition and aspects.
+   * Creates a new {@link Dependency} with the given transition and aspects, suitable for dynamic
+   * configuration builds.
    */
   public static Dependency withTransitionAndAspects(
-      Label label, ConfigurationTransition transition, AspectCollection aspects) {
-    return new ConfigurationTransitionDependency(label, transition, aspects);
+      Label label, Attribute.Transition transition, AspectCollection aspects) {
+    return new DynamicConfigurationDependency(label, transition, aspects);
   }
 
   protected final Label label;
@@ -123,25 +122,25 @@ public abstract class Dependency {
   }
 
   /**
-   * Returns true if this dependency specifies an explicit configuration, false if it specifies
-   * a configuration transition.
+   * Returns true if this dependency specifies a static configuration, false if it specifies
+   * a dynamic transition.
    */
-  public abstract boolean hasExplicitConfiguration();
+  public abstract boolean hasStaticConfiguration();
 
   /**
-   * Returns the explicit configuration intended for this dependency.
+   * Returns the static configuration for the target this dependency points to.
    *
-   * @throws IllegalStateException if {@link #hasExplicitConfiguration} returns false.
+   * @throws IllegalStateException if {@link #hasStaticConfiguration} returns false.
    */
   @Nullable
   public abstract BuildConfiguration getConfiguration();
 
   /**
-   * Returns the configuration transition to apply to reach the target this dependency points to.
+   * Returns the dynamic transition to be applied to reach the target this dependency points to.
    *
-   * @throws IllegalStateException if {@link #hasExplicitConfiguration} returns true.
+   * @throws IllegalStateException if {@link #hasStaticConfiguration} returns true.
    */
-  public abstract ConfigurationTransition getTransition();
+  public abstract Attribute.Transition getTransition();
 
   /**
    * Returns the set of aspects which should be evaluated and combined with the configured target
@@ -152,15 +151,15 @@ public abstract class Dependency {
   public abstract AspectCollection getAspects();
 
   /**
-   * Returns the configuration an aspect should be evaluated with
+   * Returns the the static configuration an aspect should be evaluated with
    **
-   * @throws IllegalStateException if {@link #hasExplicitConfiguration()} returns false.
+   * @throws IllegalStateException if {@link #hasStaticConfiguration()} returns false.
    */
   public abstract BuildConfiguration getAspectConfiguration(AspectDescriptor aspect);
 
   /**
-   * Implementation of a dependency with no configuration, suitable for, e.g., source files or
-   * visibility.
+   * Implementation of a dependency with no configuration, suitable for static configuration
+   * builds of edges to source files or e.g. for visibility.
    */
   private static final class NullConfigurationDependency extends Dependency {
     public NullConfigurationDependency(Label label) {
@@ -168,7 +167,7 @@ public abstract class Dependency {
     }
 
     @Override
-    public boolean hasExplicitConfiguration() {
+    public boolean hasStaticConfiguration() {
       return true;
     }
 
@@ -179,9 +178,9 @@ public abstract class Dependency {
     }
 
     @Override
-    public ConfigurationTransition getTransition() {
+    public Attribute.Transition getTransition() {
       throw new IllegalStateException(
-          "This dependency has an explicit configuration, not a transition.");
+          "A dependency with a static configuration does not have a transition.");
     }
 
     @Override
@@ -215,14 +214,15 @@ public abstract class Dependency {
   }
 
   /**
-   * Implementation of a dependency with an explicitly set configuration.
+   * Implementation of a dependency with static configurations, suitable for static configuration
+   * builds.
    */
-  private static final class ExplicitConfigurationDependency extends Dependency {
+  private static final class StaticConfigurationDependency extends Dependency {
     private final BuildConfiguration configuration;
     private final AspectCollection aspects;
     private final ImmutableMap<AspectDescriptor, BuildConfiguration> aspectConfigurations;
 
-    public ExplicitConfigurationDependency(
+    public StaticConfigurationDependency(
         Label label, BuildConfiguration configuration,
         AspectCollection aspects,
         ImmutableMap<AspectDescriptor, BuildConfiguration> aspectConfigurations) {
@@ -233,7 +233,7 @@ public abstract class Dependency {
     }
 
     @Override
-    public boolean hasExplicitConfiguration() {
+    public boolean hasStaticConfiguration() {
       return true;
     }
 
@@ -243,9 +243,9 @@ public abstract class Dependency {
     }
 
     @Override
-    public ConfigurationTransition getTransition() {
+    public Attribute.Transition getTransition() {
       throw new IllegalStateException(
-          "This dependency has an explicit configuration, not a transition.");
+          "A dependency with a static configuration does not have a transition.");
     }
 
     @Override
@@ -265,10 +265,10 @@ public abstract class Dependency {
 
     @Override
     public boolean equals(Object other) {
-      if (!(other instanceof ExplicitConfigurationDependency)) {
+      if (!(other instanceof StaticConfigurationDependency)) {
         return false;
       }
-      ExplicitConfigurationDependency otherDep = (ExplicitConfigurationDependency) other;
+      StaticConfigurationDependency otherDep = (StaticConfigurationDependency) other;
       return label.equals(otherDep.label)
           && configuration.equals(otherDep.configuration)
           && aspects.equals(otherDep.aspects)
@@ -278,38 +278,39 @@ public abstract class Dependency {
     @Override
     public String toString() {
       return String.format(
-          "%s{label=%s, configuration=%s, aspectConfigurations=%s}",
-          getClass().getSimpleName(), label, configuration, aspectConfigurations);
+          "StaticConfigurationDependency{label=%s, configuration=%s, aspectConfigurations=%s}",
+          label, configuration, aspectConfigurations);
     }
   }
 
   /**
-   * Implementation of a dependency with a given configuration transition.
+   * Implementation of a dependency with a given configuration transition, suitable for dynamic
+   * configuration builds.
    */
-  private static final class ConfigurationTransitionDependency extends Dependency {
-    private final ConfigurationTransition transition;
+  private static final class DynamicConfigurationDependency extends Dependency {
+    private final Attribute.Transition transition;
     private final AspectCollection aspects;
 
-    public ConfigurationTransitionDependency(
-        Label label, ConfigurationTransition transition, AspectCollection aspects) {
+    public DynamicConfigurationDependency(
+        Label label, Attribute.Transition transition, AspectCollection aspects) {
       super(label);
       this.transition = Preconditions.checkNotNull(transition);
       this.aspects = Preconditions.checkNotNull(aspects);
     }
 
     @Override
-    public boolean hasExplicitConfiguration() {
+    public boolean hasStaticConfiguration() {
       return false;
     }
 
     @Override
     public BuildConfiguration getConfiguration() {
       throw new IllegalStateException(
-          "This dependency has a transition, not an explicit configuration.");
+          "A dependency with a dynamic configuration transition does not have a configuration.");
     }
 
     @Override
-    public ConfigurationTransition getTransition() {
+    public Attribute.Transition getTransition() {
       return transition;
     }
 
@@ -321,7 +322,8 @@ public abstract class Dependency {
     @Override
     public BuildConfiguration getAspectConfiguration(AspectDescriptor aspect) {
       throw new IllegalStateException(
-          "This dependency has a transition, not an explicit aspect configuration.");
+          "A dependency with a dynamic configuration transition does not have aspect "
+              + "configurations.");
     }
 
     @Override
@@ -331,10 +333,10 @@ public abstract class Dependency {
 
     @Override
     public boolean equals(Object other) {
-      if (!(other instanceof ConfigurationTransitionDependency)) {
+      if (!(other instanceof DynamicConfigurationDependency)) {
         return false;
       }
-      ConfigurationTransitionDependency otherDep = (ConfigurationTransitionDependency) other;
+      DynamicConfigurationDependency otherDep = (DynamicConfigurationDependency) other;
       return label.equals(otherDep.label)
           && transition.equals(otherDep.transition)
           && aspects.equals(otherDep.aspects);
@@ -343,8 +345,8 @@ public abstract class Dependency {
     @Override
     public String toString() {
       return String.format(
-          "%s{label=%s, transition=%s, aspects=%s}",
-          getClass().getSimpleName(), label, transition, aspects);
+          "DynamicConfigurationDependency{label=%s, transition=%s, aspects=%s}",
+          label, transition, aspects);
     }
   }
 }

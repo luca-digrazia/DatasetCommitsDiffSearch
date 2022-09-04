@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.testing.EqualsTester;
 import com.google.common.testing.NullPointerTester;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -43,7 +42,7 @@ public class DependencyTest extends AnalysisTestCase {
     Dependency nullDep = Dependency.withNullConfiguration(Label.parseAbsolute("//a"));
 
     assertThat(nullDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(nullDep.hasExplicitConfiguration()).isTrue();
+    assertThat(nullDep.hasStaticConfiguration()).isTrue();
     assertThat(nullDep.getConfiguration()).isNull();
     assertThat(nullDep.getAspects().getAllAspects()).isEmpty();
 
@@ -62,7 +61,7 @@ public class DependencyTest extends AnalysisTestCase {
         Dependency.withConfiguration(Label.parseAbsolute("//a"), getTargetConfiguration());
 
     assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(targetDep.hasExplicitConfiguration()).isTrue();
+    assertThat(targetDep.hasStaticConfiguration()).isTrue();
     assertThat(targetDep.getConfiguration()).isEqualTo(getTargetConfiguration());
     assertThat(targetDep.getAspects().getAllAspects()).isEmpty();
 
@@ -86,7 +85,7 @@ public class DependencyTest extends AnalysisTestCase {
             Label.parseAbsolute("//a"), getTargetConfiguration(), twoAspects);
 
     assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(targetDep.hasExplicitConfiguration()).isTrue();
+    assertThat(targetDep.hasStaticConfiguration()).isTrue();
     assertThat(targetDep.getConfiguration()).isEqualTo(getTargetConfiguration());
     assertThat(targetDep.getAspects()).isEqualTo(twoAspects);
     assertThat(targetDep.getAspectConfiguration(simpleAspect)).isEqualTo(getTargetConfiguration());
@@ -143,10 +142,10 @@ public class DependencyTest extends AnalysisTestCase {
             Label.parseAbsolute("//a"), getTargetConfiguration(), aspects, twoAspectMap);
 
     assertThat(targetDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(targetDep.hasExplicitConfiguration()).isTrue();
+    assertThat(targetDep.hasStaticConfiguration()).isTrue();
     assertThat(targetDep.getConfiguration()).isEqualTo(getTargetConfiguration());
     assertThat(targetDep.getAspects().getAllAspects())
-        .containsExactly(simpleAspect, attributeAspect);
+        .containsExactlyElementsIn(ImmutableSet.of(simpleAspect, attributeAspect));
     assertThat(targetDep.getAspectConfiguration(simpleAspect)).isEqualTo(getTargetConfiguration());
     assertThat(targetDep.getAspectConfiguration(attributeAspect))
         .isEqualTo(getHostConfiguration());
@@ -180,13 +179,13 @@ public class DependencyTest extends AnalysisTestCase {
         ImmutableSet.of(simpleAspect, attributeAspect));
     Dependency hostDep =
         Dependency.withTransitionAndAspects(
-            Label.parseAbsolute("//a"), HostTransition.INSTANCE, twoAspects);
+            Label.parseAbsolute("//a"), ConfigurationTransition.HOST, twoAspects);
 
     assertThat(hostDep.getLabel()).isEqualTo(Label.parseAbsolute("//a"));
-    assertThat(hostDep.hasExplicitConfiguration()).isFalse();
+    assertThat(hostDep.hasStaticConfiguration()).isFalse();
     assertThat(hostDep.getAspects().getAllAspects())
         .containsExactlyElementsIn(twoAspects.getAllAspects());
-    assertThat(hostDep.getTransition().isHostTransition()).isTrue();
+    assertThat(hostDep.getTransition()).isEqualTo(ConfigurationTransition.HOST);
 
     try {
       hostDep.getConfiguration();
@@ -217,7 +216,7 @@ public class DependencyTest extends AnalysisTestCase {
     update();
     Dependency dep =
         Dependency.withTransitionAndAspects(
-            Label.parseAbsolute("//a"), HostTransition.INSTANCE,
+            Label.parseAbsolute("//a"), ConfigurationTransition.HOST,
             AspectCollection.EMPTY);
     // Here we're also checking that this doesn't throw an exception. No boom? OK. Good.
     assertThat(dep.getAspects().getAllAspects()).isEmpty();
@@ -356,25 +355,25 @@ public class DependencyTest extends AnalysisTestCase {
             Dependency.withConfiguredAspects(b, target, noAspects, noAspectsMap))
         .addEqualityGroup(
             // base set but with transition HOST
-            Dependency.withTransitionAndAspects(a, HostTransition.INSTANCE, twoAspects),
+            Dependency.withTransitionAndAspects(a, ConfigurationTransition.HOST, twoAspects),
             Dependency.withTransitionAndAspects(
-                aExplicit, HostTransition.INSTANCE, twoAspects),
-            Dependency.withTransitionAndAspects(a, HostTransition.INSTANCE, inverseAspects),
+                aExplicit, ConfigurationTransition.HOST, twoAspects),
+            Dependency.withTransitionAndAspects(a, ConfigurationTransition.HOST, inverseAspects),
             Dependency.withTransitionAndAspects(
-                aExplicit, HostTransition.INSTANCE, inverseAspects))
+                aExplicit, ConfigurationTransition.HOST, inverseAspects))
         .addEqualityGroup(
             // base set but with transition HOST and different aspects
-            Dependency.withTransitionAndAspects(a, HostTransition.INSTANCE, differentAspects),
+            Dependency.withTransitionAndAspects(a, ConfigurationTransition.HOST, differentAspects),
             Dependency.withTransitionAndAspects(
-                aExplicit, HostTransition.INSTANCE, differentAspects))
+                aExplicit, ConfigurationTransition.HOST, differentAspects))
         .addEqualityGroup(
             // base set but with transition HOST and label //b
-            Dependency.withTransitionAndAspects(b, HostTransition.INSTANCE, twoAspects),
-            Dependency.withTransitionAndAspects(b, HostTransition.INSTANCE, inverseAspects))
+            Dependency.withTransitionAndAspects(b, ConfigurationTransition.HOST, twoAspects),
+            Dependency.withTransitionAndAspects(b, ConfigurationTransition.HOST, inverseAspects))
         .addEqualityGroup(
             // inverse of base set: transition HOST, label //b, different aspects
-            Dependency.withTransitionAndAspects(b, HostTransition.INSTANCE, differentAspects),
-            Dependency.withTransitionAndAspects(b, HostTransition.INSTANCE, differentAspects))
+            Dependency.withTransitionAndAspects(b, ConfigurationTransition.HOST, differentAspects),
+            Dependency.withTransitionAndAspects(b, ConfigurationTransition.HOST, differentAspects))
         .addEqualityGroup(
             // base set but with transition NONE
             Dependency.withTransitionAndAspects(a, ConfigurationTransition.NONE, twoAspects),

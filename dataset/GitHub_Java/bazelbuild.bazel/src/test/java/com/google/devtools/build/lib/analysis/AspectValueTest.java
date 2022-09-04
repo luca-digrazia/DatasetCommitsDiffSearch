@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
+import com.google.devtools.build.lib.skyframe.ActionLookupValue;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -219,11 +220,10 @@ public class AspectValueTest extends AnalysisTestCase {
   private static SkyKey createKey(
       Label label, BuildConfiguration baseConfiguration, NativeAspectClass aspectClass,
       AspectParameters parameters, BuildConfiguration aspectConfiguration) {
-    return AspectValue.createAspectKey(
-        label,
-        baseConfiguration,
-        new AspectDescriptor(aspectClass, parameters),
-        aspectConfiguration);
+    return ActionLookupValue.key(AspectValue.createAspectKey(
+                label, baseConfiguration, new AspectDescriptor(aspectClass, parameters),
+        aspectConfiguration
+    ));
   }
 
   private static SkyKey createDerivedKey(
@@ -234,12 +234,11 @@ public class AspectValueTest extends AnalysisTestCase {
       BuildConfiguration aspectConfiguration2) {
     AspectKey baseKey = AspectValue.createAspectKey(label, baseConfiguration,
         new AspectDescriptor(aspectClass1, parameters1), aspectConfiguration1);
-    return AspectValue.createAspectKey(
-        label,
-        baseConfiguration,
-        ImmutableList.of(baseKey),
-        new AspectDescriptor(aspectClass2, parameters2),
-        aspectConfiguration2);
+    return ActionLookupValue.key(AspectValue.createAspectKey(
+        label, baseConfiguration,
+        ImmutableList.of(baseKey), new AspectDescriptor(aspectClass2, parameters2),
+        aspectConfiguration2
+    ));
   }
 
 }

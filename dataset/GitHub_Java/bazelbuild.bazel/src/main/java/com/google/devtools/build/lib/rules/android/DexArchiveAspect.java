@@ -104,12 +104,10 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
   private static final String ASPECT_DEXBUILDER_PREREQ = "$dex_archive_dexbuilder";
   /** Aspect-only label for desugaring executable, to avoid name clashes with labels on rules. */
   private static final String ASPECT_DESUGAR_PREREQ = "$aspect_desugar";
-  private static final ImmutableList<String> TRANSITIVE_ATTRIBUTES_EXCEPT_FOR_PROTOS =
-      ImmutableList.of("deps", "exports", "runtime_deps");
   private static final ImmutableList<String> TRANSITIVE_ATTRIBUTES =
-      ImmutableList.<String>builder().addAll(TRANSITIVE_ATTRIBUTES_EXCEPT_FOR_PROTOS)
+      ImmutableList.of("deps", "exports", "runtime_deps",
           // To get from proto_library through proto_lang_toolchain rule to proto runtime library.
-          .add(JavaLiteProtoAspect.PROTO_TOOLCHAIN_ATTR, "runtime").build();
+          JavaLiteProtoAspect.PROTO_TOOLCHAIN_ATTR, "runtime");
 
   private final String toolsRepository;
 
@@ -217,15 +215,14 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
     }
     AndroidRuntimeJarProvider.Builder desugaredJars = new AndroidRuntimeJarProvider.Builder()
         .addTransitiveProviders(collectPrerequisites(ruleContext, AndroidRuntimeJarProvider.class));
-    if (isProtoLibrary(ruleContext)
-        && getAndroidConfig(ruleContext).incrementalDexingForLiteProtos()) {
+    if (isProtoLibrary(ruleContext)) {
       // TODO(b/33557068): Desugar protos if needed instead of assuming they don't need desugaring
       result.addProvider(desugaredJars.build());
       return Functions.identity();
     }
 
     JavaRuntimeJarProvider jarProvider = base.getProvider(JavaRuntimeJarProvider.class);
-    if (jarProvider != null && !isProtoLibrary(ruleContext)) {
+    if (jarProvider != null) {
       // These are all transitive hjars of dependencies and hjar of the jar itself
       NestedSet<Artifact> compileTimeClasspath =
           getJavaCompilationArgsProvider(base, ruleContext)
@@ -248,8 +245,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
 
   private static Iterable<Artifact> getProducedRuntimeJars(ConfiguredTarget base,
       RuleContext ruleContext) {
-    if (isProtoLibrary(ruleContext)
-        && getAndroidConfig(ruleContext).incrementalDexingForLiteProtos()) {
+    if (isProtoLibrary(ruleContext)) {
       JavaCompilationArgsAspectProvider javaProtos =
           base.getProvider(JavaCompilationArgsAspectProvider.class);
       if (javaProtos != null && !ruleContext.getPrerequisites("srcs", Mode.TARGET).isEmpty()) {
@@ -289,10 +285,8 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
 
   private static <T extends TransitiveInfoProvider> IterablesChain<T> collectPrerequisites(
       RuleContext ruleContext, Class<T> classType) {
-    ImmutableList<String> attrs = getAndroidConfig(ruleContext).incrementalDexingForLiteProtos()
-        ? TRANSITIVE_ATTRIBUTES : TRANSITIVE_ATTRIBUTES_EXCEPT_FOR_PROTOS;
     IterablesChain.Builder<T> result = IterablesChain.builder();
-    for (String attr : attrs) {
+    for (String attr : TRANSITIVE_ATTRIBUTES) {
       if (ruleContext.attributes().getAttributeType(attr) != null) {
         result.add(ruleContext.getPrerequisites(attr, Mode.TARGET, classType));
       }

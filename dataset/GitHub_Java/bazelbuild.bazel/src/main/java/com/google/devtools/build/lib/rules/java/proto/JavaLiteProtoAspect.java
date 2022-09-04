@@ -199,7 +199,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
         // TODO(carmi): Expose to native rules
         JavaRuleOutputJarsProvider ruleOutputJarsProvider =
             JavaRuleOutputJarsProvider.builder()
-                .addOutputJar(outputJar, compileTimeJar, ImmutableList.of(sourceJar))
+                .addOutputJar(outputJar, compileTimeJar, sourceJar)
                 .build();
         JavaSourceJarsProvider sourceJarsProvider =
             JavaSourceJarsProvider.create(
