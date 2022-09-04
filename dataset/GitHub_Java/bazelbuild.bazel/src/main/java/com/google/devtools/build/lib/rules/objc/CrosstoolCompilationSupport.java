@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
-import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
@@ -53,7 +52,6 @@ import com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag;
 import com.google.devtools.build.lib.rules.objc.ObjcVariablesExtension.VariableCategory;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
-import javax.annotation.Nullable;
 
 /**
  * Constructs command lines for objc compilation, archiving, and linking. Uses the crosstool
@@ -79,8 +77,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
           "preprocess-assemble",
           "c-compile",
           "c++-compile");
-  @Nullable private final CcToolchainProvider ccToolchain;
-  @Nullable private final FdoSupportProvider fdoSupport;
+  private final CcToolchainProvider ccToolchain;
 
   /**
    * Creates a new CompilationSupport instance that uses the c++ rule backend
@@ -108,16 +105,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       IntermediateArtifacts intermediateArtifacts,
       CompilationAttributes compilationAttributes) {
     super(ruleContext, buildConfiguration, intermediateArtifacts, compilationAttributes);
-    // Note some rules like objc_import do not need to compile anything and therefore do not define
-    // any toolchain attribute. However, they still use the base class to set up other actions like
-    // the module map action. Here we guard against those cases.
-    if (ruleContext.attributes().has(":cc_toolchain", BuildType.LABEL)) {
-      this.ccToolchain = CppHelper.getToolchain(ruleContext, ":cc_toolchain");
-      this.fdoSupport = CppHelper.getFdoSupport(ruleContext, ":cc_toolchain");
-    } else {
-      this.ccToolchain = null;
-      this.fdoSupport = null;
-    }
+    this.ccToolchain = CppHelper.getToolchain(ruleContext, ":cc_toolchain");
   }
 
   @Override
@@ -173,8 +161,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
         .build();
     
     CppLinkAction fullyLinkAction =
-        new CppLinkActionBuilder(
-                ruleContext, outputArchive, ccToolchain, fdoSupport.getFdoSupport())
+        new CppLinkActionBuilder(ruleContext, outputArchive, ccToolchain)
             .addActionInputs(objcProvider.getObjcLibraries())
             .addActionInputs(objcProvider.getCcLibraries())
             .addActionInputs(objcProvider.get(IMPORTED_LIBRARY).toSet())
@@ -236,7 +223,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
    
     Artifact binaryToLink = getBinaryToLink();
     CppLinkAction executableLinkAction =
-        new CppLinkActionBuilder(ruleContext, binaryToLink, ccToolchain, fdoSupport.getFdoSupport())
+        new CppLinkActionBuilder(ruleContext, binaryToLink, ccToolchain)
             .setMnemonic("ObjcLink")
             .addActionInputs(bazelBuiltLibraries)
             .addActionInputs(objcProvider.getCcLibraries())
@@ -274,8 +261,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
                     ruleContext.getFragment(ObjcConfiguration.class)),
                 getFeatureConfiguration(ruleContext),
                 CcLibraryHelper.SourceCategory.CC_AND_OBJC,
-                ccToolchain,
-                fdoSupport)
+                ccToolchain)
             .addSources(arcSources, ImmutableMap.of("objc_arc", ""))
             .addSources(nonArcSources, ImmutableMap.of("no_objc_arc", ""))
             .addSources(privateHdrs)

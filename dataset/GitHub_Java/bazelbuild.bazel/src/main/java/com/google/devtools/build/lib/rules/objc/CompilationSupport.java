@@ -597,10 +597,8 @@ public abstract class CompilationSupport {
     xcodeProviderBuilder
         .addHeaders(attributes.hdrs())
         .addHeaders(attributes.textualHdrs())
-        .addUserHeaderSearchPaths(
-            ObjcCommon.userHeaderSearchPaths(common.getObjcProvider(), buildConfiguration))
-        .addHeaderSearchPaths(
-            "$(WORKSPACE_ROOT)",
+        .addUserHeaderSearchPaths(ObjcCommon.userHeaderSearchPaths(buildConfiguration))
+        .addHeaderSearchPaths("$(WORKSPACE_ROOT)",
             attributes.headerSearchPaths(buildConfiguration.getGenfilesFragment()))
         .addHeaderSearchPaths("$(WORKSPACE_ROOT)", includeSystemPaths)
         .addHeaderSearchPaths("$(SDKROOT)/usr/include", attributes.sdkIncludes())
