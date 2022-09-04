@@ -1,7 +1,7 @@
 package io.dropwizard.views;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableMap;
 import io.dropwizard.Bundle;
 import io.dropwizard.Configuration;
 import io.dropwizard.ConfiguredBundle;
@@ -41,7 +41,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
  * }
  * </code></pre>
  *
- *<p>The {@code "profile.ftl[hx]"} or {@code "profile.mustache"} is the path of the template relative to the class name. If
+ *<p>The {@code "profile.ftl"} or {@code "profile.mustache"} is the path of the template relative to the class name. If
  * this class was {@code com.example.application.PersonView}, Freemarker or Mustache would then look for the file
  * {@code src/main/resources/com/example/application/profile.ftl} or {@code
  * src/main/resources/com/example/application/profile.mustache} respectively. If the template path
@@ -51,8 +51,8 @@ import static com.google.common.base.MoreObjects.firstNonNull;
  * <p>A resource method with a view would looks something like this:</p>
  *
  * <pre><code>
- * @GET
- * public PersonView getPerson(@PathParam("id") String id) {
+ * \@GET
+ * public PersonView getPerson(\@PathParam("id") String id) {
  *     return new PersonView(dao.find(id));
  * }
  * </code></pre>
@@ -60,7 +60,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
  * <p>Freemarker templates look something like this:</p>
  *
  * <pre>{@code
- * <#-- @ftlvariable name="" type="com.example.application.PersonView" -->
+ * &lt;#-- @ftlvariable name="" type="com.example.application.PersonView" --&gt;
  * <html>
  *     <body>
  *         <h1>Hello, ${person.name?html}!</h1>
@@ -73,7 +73,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
  * at the top indicate to Freemarker (and your IDE) that the root object is a {@code Person},
  * allowing for better type-safety in your templates.</p>
  *
- * See Also: <a href="http://freemarker.sourceforge.net/docs/index.html">FreeMarker Manual</a>
+ * @see <a href="http://freemarker.sourceforge.net/docs/index.html">FreeMarker Manual</a>
  *
  * <p>Mustache templates look something like this:</p>
  *
@@ -87,7 +87,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
  *
  * <p>In this template, {@code {{person.name}}} calls {@code getPerson().getName()}.</p>
  *
- * See Also: <a href="http://mustache.github.io/mustache.5.html">Mustache Manual</a>
+ * @see <a href="http://mustache.github.io/mustache.5.html">Mustache Manual</a>
  */
 public class ViewBundle<T extends Configuration> implements ConfiguredBundle<T>, ViewConfigurable<T> {
     private final Iterable<ViewRenderer> viewRenderers;
@@ -100,7 +100,6 @@ public class ViewBundle<T extends Configuration> implements ConfiguredBundle<T>,
         this.viewRenderers = ImmutableSet.copyOf(viewRenderers);
     }
 
-    @Override
     public Map<String, Map<String, String>> getViewConfiguration(T configuration) {
         return ImmutableMap.of();
     }
@@ -109,8 +108,8 @@ public class ViewBundle<T extends Configuration> implements ConfiguredBundle<T>,
     public void run(T configuration, Environment environment) throws Exception {
         final Map<String, Map<String, String>> options = getViewConfiguration(configuration);
         for (ViewRenderer viewRenderer : viewRenderers) {
-            final Map<String, String> viewOptions = options.get(viewRenderer.getConfigurationKey());
-            viewRenderer.configure(firstNonNull(viewOptions, Collections.emptyMap()));
+            final Map<String, String> viewOptions = options.get(viewRenderer.getSuffix());
+            viewRenderer.configure(firstNonNull(viewOptions, Collections.<String, String>emptyMap()));
         }
         environment.jersey().register(new ViewMessageBodyWriter(environment.metrics(), viewRenderers));
     }

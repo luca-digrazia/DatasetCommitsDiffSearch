@@ -190,11 +190,14 @@ public class DropwizardApacheConnector implements Connector {
     @Override
     public Future<?> apply(final ClientRequest request, final AsyncConnectorCallback callback) {
         // Simulate an asynchronous execution
-        return MoreExecutors.newDirectExecutorService().submit((Runnable) () -> {
-            try {
-                callback.response(apply(request));
-            } catch (Exception e) {
-                callback.failure(e);
+        return MoreExecutors.newDirectExecutorService().submit(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    callback.response(apply(request));
+                } catch (Exception e) {
+                    callback.failure(e);
+                }
             }
         });
     }
@@ -263,7 +266,12 @@ public class DropwizardApacheConnector implements Connector {
          */
         @Override
         public void writeTo(final OutputStream outputStream) throws IOException {
-            clientRequest.setStreamProvider(contentLength -> outputStream);
+            clientRequest.setStreamProvider(new OutboundMessageContext.StreamProvider() {
+                @Override
+                public OutputStream getOutputStream(int contentLength) throws IOException {
+                    return outputStream;
+                }
+            });
             clientRequest.writeEntity();
         }
 
@@ -292,7 +300,12 @@ public class DropwizardApacheConnector implements Connector {
 
         private BufferedJerseyRequestHttpEntity(ClientRequest clientRequest) {
             final ByteArrayOutputStream stream = new ByteArrayOutputStream(BUFFER_INITIAL_SIZE);
-            clientRequest.setStreamProvider(contentLength -> stream);
+            clientRequest.setStreamProvider(new OutboundMessageContext.StreamProvider() {
+                @Override
+                public OutputStream getOutputStream(int contentLength) throws IOException {
+                    return stream;
+                }
+            });
             try {
                 clientRequest.writeEntity();
             } catch (IOException e) {

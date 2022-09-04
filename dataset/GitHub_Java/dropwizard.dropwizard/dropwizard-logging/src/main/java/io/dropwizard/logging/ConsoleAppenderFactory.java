@@ -1,15 +1,16 @@
 package io.dropwizard.logging;
 
 import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.ConsoleAppender;
+import ch.qos.logback.core.Layout;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
-import ch.qos.logback.core.spi.DeferredProcessingAware;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import io.dropwizard.logging.filter.FilterFactory;
 
 import javax.validation.constraints.NotNull;
+import java.util.TimeZone;
 
 /**
  * An {@link AppenderFactory} implementation which provides an appender that writes events to the console.
@@ -58,7 +59,7 @@ import javax.validation.constraints.NotNull;
  * @see AbstractAppenderFactory
  */
 @JsonTypeName("console")
-public class ConsoleAppenderFactory<E extends DeferredProcessingAware> extends AbstractAppenderFactory<E> {
+public class ConsoleAppenderFactory extends AbstractAppenderFactory {
     @SuppressWarnings("UnusedDeclaration")
     public enum ConsoleStream {
         STDOUT("System.out"),
@@ -76,7 +77,20 @@ public class ConsoleAppenderFactory<E extends DeferredProcessingAware> extends A
     }
 
     @NotNull
+    private TimeZone timeZone = TimeZone.getTimeZone("UTC");
+
+    @NotNull
     private ConsoleStream target = ConsoleStream.STDOUT;
+
+    @JsonProperty
+    public TimeZone getTimeZone() {
+        return timeZone;
+    }
+
+    @JsonProperty
+    public void setTimeZone(TimeZone timeZone) {
+        this.timeZone = timeZone;
+    }
 
     @JsonProperty
     public ConsoleStream getTarget() {
@@ -89,20 +103,19 @@ public class ConsoleAppenderFactory<E extends DeferredProcessingAware> extends A
     }
 
     @Override
-    public Appender<E> build(LoggerContext context, String applicationName, LayoutFactory<E> layoutFactory,
-                             FilterFactory<E> thresholdFilterFactory, AsyncAppenderFactory<E> asyncAppenderFactory) {
-        final ConsoleAppender<E> appender = new ConsoleAppender<>();
+    public Appender<ILoggingEvent> build(LoggerContext context, String applicationName, Layout<ILoggingEvent> layout) {
+        final ConsoleAppender<ILoggingEvent> appender = new ConsoleAppender<>();
         appender.setName("console-appender");
         appender.setContext(context);
         appender.setTarget(target.get());
 
-        final LayoutWrappingEncoder<E> layoutEncoder = new LayoutWrappingEncoder<>();
-        layoutEncoder.setLayout(buildLayout(context, layoutFactory));
+        final LayoutWrappingEncoder<ILoggingEvent> layoutEncoder = new LayoutWrappingEncoder<>();
+        layoutEncoder.setLayout(layout == null ? buildLayout(context, timeZone) : layout);
         appender.setEncoder(layoutEncoder);
 
-        appender.addFilter(thresholdFilterFactory.build(threshold));
+        addThresholdFilter(appender, threshold);
         appender.start();
 
-        return wrapAsync(appender, asyncAppenderFactory);
+        return wrapAsync(appender);
     }
 }

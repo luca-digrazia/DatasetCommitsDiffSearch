@@ -54,7 +54,12 @@ public class ConstraintViolationBenchmark {
     private ConstraintViolation<ConstraintViolationBenchmark.Resource> paramViolation;
     private ConstraintViolation<ConstraintViolationBenchmark.Resource> objViolation;
 
-    final Invocable invocable = Invocable.create(request -> null);
+    final Invocable invocable = Invocable.create(new Inflector<Request, Object>() {
+        @Override
+        public Object apply(Request request) {
+            return null;
+        }
+    });
 
     @Setup
     public void prepare() {

@@ -518,7 +518,7 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     @Deprecated
     @JsonProperty
     public void setDefaultReadOnly(boolean defaultReadOnly) {
-        readOnlyByDefault = defaultReadOnly;
+        readOnlyByDefault = Boolean.valueOf(defaultReadOnly);
     }
 
     @JsonIgnore

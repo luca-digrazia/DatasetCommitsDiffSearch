@@ -4,8 +4,6 @@ import io.dropwizard.db.ManagedDataSource;
 import io.dropwizard.db.PooledDataSourceFactory;
 import io.dropwizard.setup.Environment;
 import org.hibernate.SessionFactory;
-import org.hibernate.boot.registry.BootstrapServiceRegistry;
-import org.hibernate.boot.registry.BootstrapServiceRegistryBuilder;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Configuration;
@@ -71,8 +69,7 @@ public class SessionFactoryFactory {
                                                ConnectionProvider connectionProvider,
                                                Map<String, String> properties,
                                                List<Class<?>> entities) {
-        final BootstrapServiceRegistry bootstrapServiceRegistry = new BootstrapServiceRegistryBuilder().build();
-        final Configuration configuration = new Configuration(bootstrapServiceRegistry);
+        final Configuration configuration = new Configuration();
         configuration.setProperty(AvailableSettings.CURRENT_SESSION_CONTEXT_CLASS, "managed");
         configuration.setProperty(AvailableSettings.USE_SQL_COMMENTS, Boolean.toString(dbConfig.isAutoCommentsEnabled()));
         configuration.setProperty(AvailableSettings.USE_GET_GENERATED_KEYS, "true");
@@ -89,9 +86,9 @@ public class SessionFactoryFactory {
         addAnnotatedClasses(configuration, entities);
         bundle.configure(configuration);
 
-        final ServiceRegistry registry = new StandardServiceRegistryBuilder(bootstrapServiceRegistry)
+        final ServiceRegistry registry = new StandardServiceRegistryBuilder()
                 .addService(ConnectionProvider.class, connectionProvider)
-                .applySettings(configuration.getProperties())
+                .applySettings(properties)
                 .build();
 
         configure(configuration, registry);

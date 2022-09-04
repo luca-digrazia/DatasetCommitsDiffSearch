@@ -18,6 +18,9 @@ public class LoggingUtil {
     private static boolean julHijacked = false;
     private static final Lock julHijackingLock = new ReentrantLock();
 
+    private LoggingUtil() {
+    }
+
     /**
      * Acquires the logger context.
      * <p/>
@@ -35,7 +38,7 @@ public class LoggingUtil {
     public static LoggerContext getLoggerContext() {
         final long startTime = System.nanoTime();
         while (true) {
-            ILoggerFactory iLoggerFactory = LoggerFactory.getILoggerFactory();
+            final ILoggerFactory iLoggerFactory = LoggerFactory.getILoggerFactory();
             if (iLoggerFactory instanceof LoggerContext) {
                 return (LoggerContext) iLoggerFactory;
             }
@@ -52,7 +55,7 @@ public class LoggingUtil {
 
     /**
      * Gets the root j.u.l.Logger and removes all registered handlers
-     * then redirects all active j.u.l. to SL4J
+     * then redirects all active j.u.l. to SLF4J
      * <p/>
      * N.B. This should only happen once, hence the flag and locking
      */

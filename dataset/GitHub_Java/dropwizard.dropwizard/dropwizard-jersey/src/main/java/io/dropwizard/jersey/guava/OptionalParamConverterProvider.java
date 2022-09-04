@@ -1,6 +1,5 @@
 package io.dropwizard.jersey.guava;
 
-import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import org.glassfish.hk2.api.ServiceLocator;
 import org.glassfish.jersey.internal.inject.Providers;
@@ -18,7 +17,6 @@ import java.util.Set;
 
 @Singleton
 public class OptionalParamConverterProvider implements ParamConverterProvider {
-
     private final ServiceLocator locator;
 
     @Inject
@@ -26,47 +24,48 @@ public class OptionalParamConverterProvider implements ParamConverterProvider {
         this.locator = locator;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public <T> ParamConverter<T> getConverter(final Class<T> rawType, final Type genericType, final Annotation[] annotations) {
-        final List<ClassTypePair> ctps = ReflectionHelper.getTypeArgumentAndClass(genericType);
-        final ClassTypePair ctp = (ctps.size() == 1) ? ctps.get(0) : null;
-        if (ctp == null || ctp.rawClass() == String.class) {
-            return new ParamConverter<T>() {
-                @Override
-                public T fromString(final String value) {
-                    return rawType.cast(Optional.fromNullable(value));
-                }
+        if (Optional.class.equals(rawType)) {
+            final List<ClassTypePair> ctps = ReflectionHelper.getTypeArgumentAndClass(genericType);
+            final ClassTypePair ctp = (ctps.size() == 1) ? ctps.get(0) : null;
 
-                @Override
-                public String toString(final T value) throws IllegalArgumentException {
-                    return value.toString();
-                }
-            };
-        }
-        final Set<ParamConverterProvider> converterProviders = Providers.getProviders(locator, ParamConverterProvider.class);
-        for (ParamConverterProvider provider : converterProviders) {
-            @SuppressWarnings("unchecked")
-            final ParamConverter<?> converter = provider.getConverter(ctp.rawClass(), ctp.type(), annotations);
-            if (converter != null) {
+            if (ctp == null || ctp.rawClass() == String.class) {
                 return new ParamConverter<T>() {
                     @Override
                     public T fromString(final String value) {
-                        return rawType.cast(Optional.fromNullable(value)
-                                .transform(new Function<String, Object>() {
-                                    @Override
-                                    public Object apply(final String s) {
-                                        return converter.fromString(value);
-                                    }
-                                }));
+                        return rawType.cast(Optional.fromNullable(value));
                     }
 
                     @Override
-                    public String toString(final T value) throws IllegalArgumentException {
+                    public String toString(final T value) {
                         return value.toString();
                     }
                 };
             }
+
+            for (ParamConverterProvider provider : Providers.getProviders(locator, ParamConverterProvider.class)) {
+                final ParamConverter<?> converter = provider.getConverter(ctp.rawClass(), ctp.type(), annotations);
+                if (converter != null) {
+                    return new ParamConverter<T>() {
+                        @Override
+                        public T fromString(final String value) {
+                            final Object convertedValue = value == null ? null : converter.fromString(value);
+                            return rawType.cast(Optional.fromNullable(convertedValue));
+                        }
+
+                        @Override
+                        public String toString(final T value) {
+                            return value.toString();
+                        }
+                    };
+                }
+            }
         }
+
         return null;
     }
 }

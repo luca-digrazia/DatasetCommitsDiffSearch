@@ -1,19 +1,19 @@
 package io.dropwizard.auth;
 
-import org.glassfish.jersey.internal.inject.AbstractBinder;
-import org.glassfish.jersey.server.ContainerRequest;
-import org.glassfish.jersey.server.internal.inject.AbstractValueParamProvider;
+import org.glassfish.hk2.api.InjectionResolver;
+import org.glassfish.hk2.api.ServiceLocator;
+import org.glassfish.hk2.api.TypeLiteral;
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
+import org.glassfish.jersey.server.internal.inject.AbstractContainerRequestValueFactory;
+import org.glassfish.jersey.server.internal.inject.AbstractValueFactoryProvider;
 import org.glassfish.jersey.server.internal.inject.MultivaluedParameterExtractorProvider;
+import org.glassfish.jersey.server.internal.inject.ParamInjectionResolver;
 import org.glassfish.jersey.server.model.Parameter;
-import org.glassfish.jersey.server.spi.internal.ValueParamProvider;
+import org.glassfish.jersey.server.spi.internal.ValueFactoryProvider;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.lang.reflect.ParameterizedType;
 import java.security.Principal;
-import java.util.Optional;
-import java.util.function.Function;
 
 /**
  * Value factory provider supporting {@link Principal} injection
@@ -22,7 +22,7 @@ import java.util.function.Function;
  * @param <T> the type of the principal
  */
 @Singleton
-public class AuthValueFactoryProvider<T extends Principal> extends AbstractValueParamProvider {
+public class AuthValueFactoryProvider<T extends Principal> extends AbstractValueFactoryProvider {
 
     /**
      * Class of the provided {@link Principal}
@@ -33,28 +33,52 @@ public class AuthValueFactoryProvider<T extends Principal> extends AbstractValue
      * {@link Principal} value factory provider injection constructor.
      *
      * @param mpep                   multivalued parameter extractor provider
+     * @param injector               injector instance
      * @param principalClassProvider provider of the principal class
      */
     @Inject
     public AuthValueFactoryProvider(MultivaluedParameterExtractorProvider mpep,
-                                    PrincipalClassProvider<T> principalClassProvider) {
-        super(() -> mpep, org.glassfish.jersey.model.Parameter.Source.UNKNOWN);
+                                    ServiceLocator injector, PrincipalClassProvider<T> principalClassProvider) {
+        super(mpep, injector, Parameter.Source.UNKNOWN);
         this.principalClass = principalClassProvider.clazz;
     }
 
-    @Nullable
+    /**
+     * Return a factory for the provided parameter. We only expect objects of
+     * the type {@link T} being annotated with {@link Auth} annotation.
+     *
+     * @param parameter parameter that was annotated for being injected
+     * @return the factory if annotated parameter matched type
+     */
     @Override
-    protected Function<ContainerRequest, ?> createValueProvider(Parameter parameter) {
-        if (!parameter.isAnnotationPresent(Auth.class)) {
+    public AbstractContainerRequestValueFactory<?> createValueFactory(Parameter parameter) {
+        if (!parameter.isAnnotationPresent(Auth.class) || !principalClass.equals(parameter.getRawType())) {
             return null;
-        } else if (principalClass.equals(parameter.getRawType())) {
-            return request -> new PrincipalContainerRequestValueFactory(request).provide();
-        } else {
-            final boolean isOptionalPrincipal = parameter.getRawType() == Optional.class
-                && ParameterizedType.class.isAssignableFrom(parameter.getType().getClass())
-                && principalClass == ((ParameterizedType) parameter.getType()).getActualTypeArguments()[0];
+        }
 
-            return isOptionalPrincipal ? request -> new OptionalPrincipalContainerRequestValueFactory(request).provide() : null;
+        return new AbstractContainerRequestValueFactory<Principal>() {
+
+            /**
+             * @return {@link Principal} stored on the request, or {@code null} if no object was found.
+             */
+            public Principal provide() {
+                final Principal principal = getContainerRequest().getSecurityContext().getUserPrincipal();
+                if (principal == null) {
+                    throw new IllegalStateException("Cannot inject a custom principal into unauthenticated request");
+                }
+                return principal;
+            }
+        };
+    }
+
+    @Singleton
+    static class AuthInjectionResolver extends ParamInjectionResolver<Auth> {
+
+        /**
+         * Create new {@link Auth} annotation injection resolver.
+         */
+        AuthInjectionResolver() {
+            super(AuthValueFactoryProvider.class);
         }
     }
 
@@ -69,7 +93,7 @@ public class AuthValueFactoryProvider<T extends Principal> extends AbstractValue
     }
 
     /**
-     * Injection binder for {@link AuthValueFactoryProvider}.
+     * Injection binder for {@link AuthValueFactoryProvider} and {@link AuthInjectionResolver}.
      *
      * @param <T> the type of the principal
      */
@@ -84,7 +108,9 @@ public class AuthValueFactoryProvider<T extends Principal> extends AbstractValue
         @Override
         protected void configure() {
             bind(new PrincipalClassProvider<>(principalClass)).to(PrincipalClassProvider.class);
-            bind(AuthValueFactoryProvider.class).to(ValueParamProvider.class).in(Singleton.class);
+            bind(AuthValueFactoryProvider.class).to(ValueFactoryProvider.class).in(Singleton.class);
+            bind(AuthInjectionResolver.class).to(new TypeLiteral<InjectionResolver<Auth>>() {
+            }).in(Singleton.class);
         }
     }
 }

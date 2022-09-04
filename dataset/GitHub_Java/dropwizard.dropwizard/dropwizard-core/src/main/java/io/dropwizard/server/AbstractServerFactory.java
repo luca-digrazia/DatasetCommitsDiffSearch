@@ -11,7 +11,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.io.Resources;
 import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
 import io.dropwizard.jersey.errors.LoggingExceptionMapper;
@@ -26,7 +25,6 @@ import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.jetty.NonblockingServletHolder;
 import io.dropwizard.jetty.RequestLogFactory;
 import io.dropwizard.jetty.Slf4jRequestLogFactory;
-import io.dropwizard.jetty.ServerPushFilterFactory;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.servlets.ThreadNameFilter;
 import io.dropwizard.util.Duration;
@@ -41,6 +39,7 @@ import org.eclipse.jetty.setuid.RLimit;
 import org.eclipse.jetty.setuid.SetUIDListener;
 import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.eclipse.jetty.util.thread.ThreadPool;
+import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,11 +76,6 @@ import java.util.regex.Pattern;
  *         <td>{@code gzip}</td>
  *         <td></td>
  *         <td>The {@link GzipHandlerFactory GZIP} configuration.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code serverPush}</td>
- *         <td></td>
- *         <td>The {@link ServerPushFilterFactory} configuration.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code maxThreads}</td>
@@ -193,7 +187,7 @@ import java.util.regex.Pattern;
  *     </tr>
  *     <tr>
  *         <td>{@code rootPath}</td>
- *         <td>/*</td>
+ *         <td>/</td>
  *         <td>
  *           The URL pattern relative to {@code applicationContextPath} from which the JAX-RS resources will be served.
  *         </td>
@@ -214,10 +208,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
     @Valid
     @NotNull
     private GzipHandlerFactory gzip = new GzipHandlerFactory();
-
-    @Valid
-    @NotNull
-    private ServerPushFilterFactory serverPush = new ServerPushFilterFactory();
 
     @Min(2)
     private int maxThreads = 1024;
@@ -255,7 +245,8 @@ public abstract class AbstractServerFactory implements ServerFactory {
     @NotNull
     private Set<String> allowedMethods = AllowedMethodsFilter.DEFAULT_ALLOWED_METHODS;
 
-    private Optional<String> jerseyRootPath = Optional.absent();
+    @NotEmpty
+    private String jerseyRootPath = "/";
 
     @JsonIgnore
     @ValidationMethod(message = "must have a smaller minThreads than maxThreads")
@@ -281,16 +272,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
     @JsonProperty("gzip")
     public void setGzipFilterFactory(GzipHandlerFactory gzip) {
         this.gzip = gzip;
-    }
-
-    @JsonProperty("serverPush")
-    public ServerPushFilterFactory getServerPush() {
-        return serverPush;
-    }
-
-    @JsonProperty("serverPush")
-    public void setServerPush(ServerPushFilterFactory serverPush) {
-        this.serverPush = serverPush;
     }
 
     @JsonProperty
@@ -442,13 +423,13 @@ public abstract class AbstractServerFactory implements ServerFactory {
     }
 
     @JsonProperty("rootPath")
-    public Optional<String> getJerseyRootPath() {
+    public String getJerseyRootPath() {
         return jerseyRootPath;
     }
 
     @JsonProperty("rootPath")
     public void setJerseyRootPath(String jerseyRootPath) {
-        this.jerseyRootPath = Optional.fromNullable(jerseyRootPath);
+        this.jerseyRootPath = jerseyRootPath;
     }
 
     protected Handler createAdminServlet(Server server,
@@ -486,18 +467,15 @@ public abstract class AbstractServerFactory implements ServerFactory {
         handler.addFilter(AllowedMethodsFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST))
                 .setInitParameter(AllowedMethodsFilter.ALLOWED_METHODS_PARAM, Joiner.on(',').join(allowedMethods));
         handler.addFilter(ThreadNameFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST));
-        serverPush.addFilter(handler);
         if (jerseyContainer != null) {
-            if (jerseyRootPath.isPresent()) {
-                String urlPattern = jerseyRootPath.get();
-                if (!urlPattern.endsWith("*") && !urlPattern.endsWith("/")) {
-                    urlPattern += "/";
-                }
-                if (!urlPattern.endsWith("*")) {
-                    urlPattern += "*";
-                }
-                jersey.setUrlPattern(urlPattern);
+            String urlPattern = jerseyRootPath;
+            if (!urlPattern.endsWith("*") && !urlPattern.endsWith("/")) {
+                urlPattern += "/";
             }
+            if (!urlPattern.endsWith("*")) {
+                urlPattern += "*";
+            }
+            jersey.setUrlPattern(urlPattern);
             jersey.register(new JacksonMessageBodyProvider(objectMapper));
             jersey.register(new HibernateValidationFeature(validator));
             if (registerDefaultExceptionMappers == null || registerDefaultExceptionMappers) {

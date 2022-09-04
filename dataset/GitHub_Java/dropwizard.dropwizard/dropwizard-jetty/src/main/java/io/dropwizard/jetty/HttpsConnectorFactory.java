@@ -5,17 +5,15 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
-import io.dropwizard.validation.ValidationMethod;
+
 import org.eclipse.jetty.http.HttpVersion;
 import org.eclipse.jetty.io.ByteBufferPool;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.SecureRequestCustomizer;
-import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.SslConnectionFactory;
-import org.eclipse.jetty.util.component.AbstractLifeCycle;
-import org.eclipse.jetty.util.component.LifeCycle;
+import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.Scheduler;
@@ -24,11 +22,15 @@ import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.dropwizard.validation.ValidationMethod;
+
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
+
 import java.io.File;
 import java.net.URI;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -529,13 +531,13 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
 
     @Override
     public Connector build(Server server, MetricRegistry metrics, String name, ThreadPool threadPool) {
+        logSupportedParameters();
+
         final HttpConfiguration httpConfig = buildHttpConfiguration();
 
         final HttpConnectionFactory httpConnectionFactory = buildHttpConnectionFactory(httpConfig);
 
         final SslContextFactory sslContextFactory = buildSslContextFactory();
-        sslContextFactory.addLifeCycleListener(logSslInfoOnStart(sslContextFactory));
-
         server.addBean(sslContextFactory);
 
         final SslConnectionFactory sslConnectionFactory =
@@ -561,40 +563,33 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
         return config;
     }
 
-    /** Register a listener that waits until the ssl context factory has started. Once it has
-     *  started we can grab the fully initialized context so we can log the parameters.
-     */
-    protected AbstractLifeCycle.AbstractLifeCycleListener logSslInfoOnStart(final SslContextFactory sslContextFactory) {
-        return new AbstractLifeCycle.AbstractLifeCycleListener() {
-            @Override
-            public void lifeCycleStarted(LifeCycle event) {
-                logSupportedParameters(sslContextFactory.getSslContext());
-            }
-        };
-    }
-
-    private void logSupportedParameters(SSLContext context) {
+    protected void logSupportedParameters() {
         if (LOGGED.compareAndSet(false, true)) {
-            final String[] protocols = context.getSupportedSSLParameters().getProtocols();
-            final SSLSocketFactory factory = context.getSocketFactory();
-            final String[] cipherSuites = factory.getSupportedCipherSuites();
-            LOGGER.info("Supported protocols: {}", Arrays.toString(protocols));
-            LOGGER.info("Supported cipher suites: {}", Arrays.toString(cipherSuites));
+            try {
+                final SSLContext context = SSLContext.getDefault();
+                final String[] protocols = context.getSupportedSSLParameters().getProtocols();
+                final SSLSocketFactory factory = context.getSocketFactory();
+                final String[] cipherSuites = factory.getSupportedCipherSuites();
+                LOGGER.info("Supported protocols: {}", Arrays.toString(protocols));
+                LOGGER.info("Supported cipher suites: {}", Arrays.toString(cipherSuites));
 
-            if (getSupportedProtocols() != null) {
-                LOGGER.info("Configured protocols: {}", getSupportedProtocols());
-            }
+                if (getSupportedProtocols() != null) {
+                    LOGGER.info("Configured protocols: {}", getSupportedProtocols());
+                }
 
-            if (getExcludedProtocols() != null) {
-                LOGGER.info("Excluded protocols: {}", getExcludedProtocols());
-            }
+                if (getExcludedProtocols() != null) {
+                    LOGGER.info("Excluded protocols: {}", getExcludedProtocols());
+                }
 
-            if (getSupportedCipherSuites() != null) {
-                LOGGER.info("Configured cipher suites: {}", getSupportedCipherSuites());
-            }
+                if (getSupportedCipherSuites() != null) {
+                    LOGGER.info("Configured cipher suites: {}", getSupportedCipherSuites());
+                }
 
-            if (getExcludedCipherSuites() != null) {
-                LOGGER.info("Excluded cipher suites: {}", getExcludedCipherSuites());
+                if (getExcludedCipherSuites() != null) {
+                    LOGGER.info("Excluded cipher suites: {}", getExcludedCipherSuites());
+                }
+            } catch (NoSuchAlgorithmException ignored) {
+
             }
         }
     }
@@ -626,14 +621,14 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
 
         final String trustStoreType = getTrustStoreType();
         if (trustStoreType.startsWith("Windows-")) {
-            try {
-                final KeyStore keyStore = KeyStore.getInstance(trustStoreType);
+          try {
+            final KeyStore keyStore = KeyStore.getInstance(trustStoreType);
 
-                keyStore.load(null, null);
-                factory.setTrustStore(keyStore);
-            } catch (Exception e) {
-                throw new IllegalStateException("Windows key store not supported", e);
-            }
+            keyStore.load(null, null);
+            factory.setTrustStore(keyStore);
+          } catch (Exception e) {
+            throw new IllegalStateException("Windows key store not supported", e);
+          }
         } else {
             if (trustStorePath != null) {
                 factory.setTrustStorePath(trustStorePath);

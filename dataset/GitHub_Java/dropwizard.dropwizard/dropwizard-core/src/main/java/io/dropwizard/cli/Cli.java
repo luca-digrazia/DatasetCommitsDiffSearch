@@ -11,7 +11,6 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
-import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -71,11 +70,11 @@ public class Cli {
                 parser.printVersion(stdOut);
             } else {
                 final Namespace namespace = parser.parseArgs(arguments);
-                final Command command = commands.get(namespace.getString(COMMAND_NAME_ATTR));
-                command.run(bootstrap, namespace);
+                if (namespace.get("is-help") == null) {
+                    final Command command = commands.get(namespace.getString(COMMAND_NAME_ATTR));
+                    command.run(bootstrap, namespace);
+                }
             }
-            return true;
-        } catch (HelpScreenException e) {
             return true;
         } catch (ArgumentParserException e) {
             stdErr.println(e.getMessage());
@@ -139,7 +138,7 @@ public class Cli {
                         Map<String, Object> attrs, String flag, Object value)
                 throws ArgumentParserException {
             parser.printHelp(out);
-            throw new HelpScreenException(parser);
+            attrs.put("is-help", Boolean.TRUE);
         }
 
         @Override

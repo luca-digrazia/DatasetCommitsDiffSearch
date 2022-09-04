@@ -19,24 +19,20 @@ public class CacheControlledResponseFeature implements DynamicFeature {
 
     @Override
     public void configure(final ResourceInfo resourceInfo, final FeatureContext configuration) {
-        AnnotatedMethod am = new AnnotatedMethod(resourceInfo.getResourceMethod());
+        final AnnotatedMethod am = new AnnotatedMethod(resourceInfo.getResourceMethod());
 
-        // check to ee if it has cache control annotation
-        CacheControl cc = am.getAnnotation(CacheControl.class);
+        // check to see if it has cache control annotation
+        final CacheControl cc = am.getAnnotation(CacheControl.class);
         if (cc != null) {
             configuration.register(new CacheControlledResponseFilter(cc));
-            return;
         }
-
     }
 
-    private static class CacheControlledResponseFilter implements ContainerResponseFilter
-    {
+    private static class CacheControlledResponseFilter implements ContainerResponseFilter {
         private static final int ONE_YEAR_IN_SECONDS = (int) TimeUnit.DAYS.toSeconds(365);
         private String cacheResponseHeader;
 
-        public CacheControlledResponseFilter (CacheControl control)
-        {
+        CacheControlledResponseFilter(CacheControl control) {
             final javax.ws.rs.core.CacheControl cacheControl = new javax.ws.rs.core.CacheControl();
             cacheControl.setPrivate(control.isPrivate());
             cacheControl.setNoCache(control.noCache());
@@ -64,5 +60,4 @@ public class CacheControlledResponseFeature implements DynamicFeature {
         }
 
     }
-
 }

@@ -15,6 +15,9 @@ import org.glassfish.jersey.server.monitoring.RequestEvent;
 import org.glassfish.jersey.server.monitoring.RequestEventListener;
 
 import org.hibernate.SessionFactory;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+import org.hibernate.context.internal.ManagedSessionContext;
 
 
 /**
@@ -61,28 +64,100 @@ public class UnitOfWorkApplicationListener implements ApplicationEventListener {
 
     private static class UnitOfWorkEventListener implements RequestEventListener {
         private final Map<Method, UnitOfWork> methodMap;
-        private final UnitOfWorkAspect unitOfWorkAspect;
+        private final Map<String, SessionFactory> sessionFactories;
+
+        private UnitOfWork unitOfWork;
+        private Session session;
+        private SessionFactory sessionFactory;
 
         UnitOfWorkEventListener(Map<Method, UnitOfWork> methodMap,
                                        Map<String, SessionFactory> sessionFactories) {
             this.methodMap = methodMap;
-            unitOfWorkAspect = new UnitOfWorkAspect(sessionFactories);
+            this.sessionFactories = sessionFactories;
         }
 
         @Override
         public void onEvent(RequestEvent event) {
             if (event.getType() == RequestEvent.Type.RESOURCE_METHOD_START) {
-                UnitOfWork unitOfWork = methodMap.get(event.getUriInfo()
+                this.unitOfWork = this.methodMap.get(event.getUriInfo()
                         .getMatchedResourceMethod().getInvocable().getDefinitionMethod());
-                unitOfWorkAspect.beforeStart(unitOfWork);
+                if (unitOfWork != null) {
+                    sessionFactory = sessionFactories.get(unitOfWork.value());
+                    if (sessionFactory == null) {
+                        // If the user didn't specify the name of a session factory,
+                        // and we have only one registered, we can assume that it's the right one.
+                        if (unitOfWork.value().equals(HibernateBundle.DEFAULT_NAME) && sessionFactories.size() == 1) {
+                            sessionFactory = sessionFactories.values().iterator().next();
+                        } else {
+                            throw new IllegalArgumentException("Unregistered Hibernate bundle: '" +
+                                    unitOfWork.value() + "'");
+                        }
+                    }
+                    this.session = this.sessionFactory.openSession();
+                    try {
+                        configureSession();
+                        ManagedSessionContext.bind(this.session);
+                        beginTransaction();
+                    } catch (Throwable th) {
+                        this.session.close();
+                        this.session = null;
+                        ManagedSessionContext.unbind(this.sessionFactory);
+                        throw th;
+                    }
+                }
             } else if (event.getType() == RequestEvent.Type.RESP_FILTERS_START) {
-                try {
-                    unitOfWorkAspect.afterEnd();
-                } catch (Exception e) {
-                    throw new MappableException(e);
+                if (this.session != null) {
+                    try {
+                        commitTransaction();
+                    } catch (Exception e) {
+                        rollbackTransaction();
+                        throw new MappableException(e);
+                    } finally {
+                        this.session.close();
+                        this.session = null;
+                        ManagedSessionContext.unbind(this.sessionFactory);
+                    }
                 }
             } else if (event.getType() == RequestEvent.Type.ON_EXCEPTION) {
-                unitOfWorkAspect.onError();
+                if (this.session != null) {
+                    try {
+                        rollbackTransaction();
+                    } finally {
+                        this.session.close();
+                        this.session = null;
+                        ManagedSessionContext.unbind(this.sessionFactory);
+                    }
+                }
+            }
+        }
+
+        private void beginTransaction() {
+            if (this.unitOfWork.transactional()) {
+                this.session.beginTransaction();
+            }
+        }
+
+        private void configureSession() {
+            this.session.setDefaultReadOnly(this.unitOfWork.readOnly());
+            this.session.setCacheMode(this.unitOfWork.cacheMode());
+            this.session.setFlushMode(this.unitOfWork.flushMode());
+        }
+
+        private void rollbackTransaction() {
+            if (this.unitOfWork.transactional()) {
+                final Transaction txn = this.session.getTransaction();
+                if (txn != null && txn.isActive()) {
+                    txn.rollback();
+                }
+            }
+        }
+
+        private void commitTransaction() {
+            if (this.unitOfWork.transactional()) {
+                final Transaction txn = this.session.getTransaction();
+                if (txn != null && txn.isActive()) {
+                    txn.commit();
+                }
             }
         }
     }

@@ -11,8 +11,8 @@ import io.dropwizard.validation.MinSize;
 import io.dropwizard.validation.PortRange;
 import org.eclipse.jetty.io.ArrayByteBufferPool;
 import org.eclipse.jetty.io.ByteBufferPool;
-import org.eclipse.jetty.server.ConnectionFactory;
 import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.ConnectionFactory;
 import org.eclipse.jetty.server.ForwardedRequestCustomizer;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
@@ -48,15 +48,6 @@ import static com.codahale.metrics.MetricRegistry.name;
  *         <td>{@code bindHost}</td>
  *         <td>(none)</td>
  *         <td>The hostname to bind to.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code inheritChannel}</td>
- *         <td>false</td>
- *         <td>
- *             Whether this connector uses a channel inherited from the JVM.
- *             Use it with <a href="https://github.com/kazuho/p5-Server-Starter">Server::Starter</a>,
- *             to launch an instance of Jetty on demand.
- *         </td>
  *     </tr>
  *     <tr>
  *         <td>{@code headerCacheSize}</td>
@@ -194,8 +185,6 @@ public class HttpConnectorFactory implements ConnectorFactory {
 
     private String bindHost = null;
 
-    private boolean inheritChannel = false;
-
     @NotNull
     @MinSize(128)
     private Size headerCacheSize = Size.bytes(512);
@@ -265,16 +254,6 @@ public class HttpConnectorFactory implements ConnectorFactory {
     @JsonProperty
     public void setBindHost(String bindHost) {
         this.bindHost = bindHost;
-    }
-
-    @JsonProperty
-    public boolean isInheritChannel() {
-        return inheritChannel;
-    }
-
-    @JsonProperty
-    public void setInheritChannel(boolean inheritChannel) {
-        this.inheritChannel = inheritChannel;
     }
 
     @JsonProperty
@@ -487,18 +466,9 @@ public class HttpConnectorFactory implements ConnectorFactory {
                                                               factories);
         connector.setPort(port);
         connector.setHost(bindHost);
-        connector.setInheritChannel(inheritChannel);
         if (acceptQueueSize != null) {
             connector.setAcceptQueueSize(acceptQueueSize);
-        } else {
-            // if we do not set the acceptQueueSize, when jetty
-            // creates the ServerSocket, it uses the default backlog of 50, and
-            // not the value from the OS.  Therefore we set to the value
-            // obtained from NetUtil, which will attempt to read the value from the OS.
-            // somaxconn setting
-            connector.setAcceptQueueSize(NetUtil.getTcpBacklog());
         }
-
         connector.setReuseAddress(reuseAddress);
         if (soLingerTime != null) {
             connector.setSoLingerTime((int) soLingerTime.toSeconds());

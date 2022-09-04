@@ -6,7 +6,6 @@ import org.glassfish.jersey.message.MessageBodyWorkers;
 import javax.inject.Inject;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.ext.MessageBodyWriter;
@@ -22,7 +21,7 @@ import java.lang.reflect.Type;
 public class OptionalMessageBodyWriter implements MessageBodyWriter<Optional<?>> {
 
     @Inject
-    javax.inject.Provider<MessageBodyWorkers> mbw;
+    private javax.inject.Provider<MessageBodyWorkers> mbw;
 
     // Jersey ignores this
     @Override
@@ -37,7 +36,7 @@ public class OptionalMessageBodyWriter implements MessageBodyWriter<Optional<?>>
         return (Optional.class.isAssignableFrom(type));
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Override
     public void writeTo(Optional<?> entity,
                         Class<?> type,
@@ -46,16 +45,17 @@ public class OptionalMessageBodyWriter implements MessageBodyWriter<Optional<?>>
                         MediaType mediaType,
                         MultivaluedMap<String, Object> httpHeaders,
                         OutputStream entityStream)
-                               throws IOException, WebApplicationException {
-        if (!entity.isPresent())
+            throws IOException {
+        if (!entity.isPresent()) {
             throw new NotFoundException();
+        }
 
-        ParameterizedType actualGenericType = (ParameterizedType) genericType;
-
-        MessageBodyWriter writer = mbw.get().getMessageBodyWriter(entity.get().getClass(),
-                actualGenericType.getActualTypeArguments()[0], annotations, mediaType);
+        final ParameterizedType actualGenericType = (ParameterizedType) genericType;
+        final Type actualGenericTypeArgument = actualGenericType.getActualTypeArguments()[0];
+        final MessageBodyWriter writer = mbw.get().getMessageBodyWriter(entity.get().getClass(),
+                actualGenericTypeArgument, annotations, mediaType);
         writer.writeTo(entity.get(), entity.get().getClass(),
-                actualGenericType.getActualTypeArguments()[0],
+                actualGenericTypeArgument,
                 annotations, mediaType, httpHeaders, entityStream);
     }
 

@@ -12,7 +12,6 @@ import java.io.IOException;
 
 import javax.validation.Validator;
 
-import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 
@@ -54,18 +53,7 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
      */
     @Override
     public void configure(Subparser subparser) {
-        addFileArgument(subparser);
-    }
-
-    /**
-     * Adds the configuration file argument for the configured command.
-     * @param subparser The subparser to register the argument on
-     * @return the register argument
-     */
-    protected Argument addFileArgument(Subparser subparser) {
-        return subparser.addArgument("file")
-                        .nargs("?")
-                        .help("application configuration file");
+        subparser.addArgument("file").nargs("?").help("application configuration file");
     }
 
     @Override

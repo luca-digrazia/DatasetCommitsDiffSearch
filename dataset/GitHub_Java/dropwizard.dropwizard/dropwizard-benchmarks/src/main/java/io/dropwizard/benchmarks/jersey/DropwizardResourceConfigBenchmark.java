@@ -1,7 +1,8 @@
 package io.dropwizard.benchmarks.jersey;
 
+import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.ImmutableList;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import org.glassfish.jersey.test.JerseyTest;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Mode;
@@ -12,14 +13,12 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.core.Application;
-import java.util.Arrays;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -28,23 +27,14 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 public class DropwizardResourceConfigBenchmark {
 
-    private DropwizardResourceConfig dropwizardResourceConfig = DropwizardResourceConfig.forTesting();
+    private DropwizardResourceConfig dropwizardResourceConfig =
+            new DropwizardResourceConfig(true, new MetricRegistry());
 
     @Setup
-    public void setUp() throws Exception {
+    public void setUp() {
         dropwizardResourceConfig.register(DistributionResource.class);
         dropwizardResourceConfig.register(AssetResource.class);
         dropwizardResourceConfig.register(ClustersResource.class);
-
-        final JerseyTest jerseyTest = new JerseyTest() {
-            @Override
-            protected Application configure() {
-                return dropwizardResourceConfig;
-            }
-        };
-
-        jerseyTest.setUp();
-        jerseyTest.tearDown();
     }
 
     @Benchmark
@@ -86,7 +76,7 @@ public class DropwizardResourceConfigBenchmark {
 
         @GET
         public List<String> getAll() {
-            return Arrays.asList("first_asset", "second_asset");
+            return ImmutableList.of("first_asset", "second_asset");
         }
 
         @DELETE
@@ -151,7 +141,7 @@ public class DropwizardResourceConfigBenchmark {
 
         @GET
         public List<String> getAll() {
-            return Arrays.asList("first_cluster", "second_cluster", "third_cluster");
+            return ImmutableList.of("first_cluster", "second_cluster", "third_cluster");
         }
 
         @DELETE

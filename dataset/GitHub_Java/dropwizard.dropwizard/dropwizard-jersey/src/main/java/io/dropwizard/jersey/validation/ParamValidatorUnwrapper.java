@@ -17,7 +17,7 @@ public class ParamValidatorUnwrapper extends ValidatedValueUnwrapper<AbstractPar
 
     @Override
     public Object handleValidatedValue(final AbstractParam<?> abstractParam) {
-        return abstractParam == null ? null : abstractParam.get();
+        return abstractParam.get();
     }
 
     @Override

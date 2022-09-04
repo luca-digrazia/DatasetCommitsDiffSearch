@@ -6,6 +6,7 @@ import com.google.common.base.Strings;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Iterables;
+import io.dropwizard.validation.ConstraintViolations;
 import io.dropwizard.validation.ValidationMethod;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
@@ -67,7 +68,7 @@ public class ConstraintMessage {
         // Take the message specified in a ValidationMethod annotation if it
         // is what caused the violation
         if (isValidationMethod(v)) {
-            return v.getMessage();
+            return ConstraintViolations.validationMethodFormatted(v);
         }
 
         final Optional<String> entity = isRequestEntity(v, invocable);

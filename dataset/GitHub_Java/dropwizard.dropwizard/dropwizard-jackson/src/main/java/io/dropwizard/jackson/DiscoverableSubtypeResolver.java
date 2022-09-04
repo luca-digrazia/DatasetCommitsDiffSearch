@@ -1,6 +1,7 @@
 package io.dropwizard.jackson;
 
 import com.fasterxml.jackson.databind.jsontype.impl.StdSubtypeResolver;
+import com.google.common.collect.ImmutableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,24 +24,24 @@ public class DiscoverableSubtypeResolver extends StdSubtypeResolver {
     private static final long serialVersionUID = 1L;
     private static final Logger LOGGER = LoggerFactory.getLogger(DiscoverableSubtypeResolver.class);
 
-    private final List<Class<?>> discoveredSubtypes;
+    private final ImmutableList<Class<?>> discoveredSubtypes;
 
     public DiscoverableSubtypeResolver() {
         this(Discoverable.class);
     }
 
     public DiscoverableSubtypeResolver(Class<?> rootKlass) {
-        final List<Class<?>> subtypes = new ArrayList<>();
+        final ImmutableList.Builder<Class<?>> subtypes = ImmutableList.builder();
         for (Class<?> klass : discoverServices(rootKlass)) {
             for (Class<?> subtype : discoverServices(klass)) {
                 subtypes.add(subtype);
                 registerSubtypes(subtype);
             }
         }
-        this.discoveredSubtypes = subtypes;
+        this.discoveredSubtypes = subtypes.build();
     }
 
-    public List<Class<?>> getDiscoveredSubtypes() {
+    public ImmutableList<Class<?>> getDiscoveredSubtypes() {
         return discoveredSubtypes;
     }
 
@@ -62,11 +63,9 @@ public class DiscoverableSubtypeResolver extends StdSubtypeResolver {
                      BufferedReader reader = new BufferedReader(streamReader)) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        if (!line.startsWith("#")) {
-                            final Class<?> loadedClass = loadClass(line);
-                            if (loadedClass != null) {
-                                serviceClasses.add(loadedClass);
-                            }
+                        final Class<?> loadedClass = loadClass(line);
+                        if (loadedClass != null) {
+                            serviceClasses.add(loadedClass);
                         }
                     }
                 }

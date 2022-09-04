@@ -5,7 +5,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.jmx.JMXConfigurator;
 import ch.qos.logback.classic.jul.LevelChangePropagator;
-import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.util.StatusPrinter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.logback.InstrumentedAppender;
@@ -19,8 +18,6 @@ import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.dropwizard.jackson.Jackson;
-import io.dropwizard.logging.filter.FilterFactory;
-import io.dropwizard.logging.filter.ThresholdFilterFactory;
 
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.MalformedObjectNameException;
@@ -51,8 +48,8 @@ public class DefaultLoggingFactory implements LoggingFactory {
 
     @Valid
     @NotNull
-    private ImmutableList<AppenderFactory<ILoggingEvent>> appenders = ImmutableList.<AppenderFactory<ILoggingEvent>>of(
-            new ConsoleAppenderFactory<ILoggingEvent>()
+    private ImmutableList<AppenderFactory> appenders = ImmutableList.<AppenderFactory>of(
+            new ConsoleAppenderFactory()
     );
 
     @JsonIgnore
@@ -102,12 +99,12 @@ public class DefaultLoggingFactory implements LoggingFactory {
     }
 
     @JsonProperty
-    public ImmutableList<AppenderFactory<ILoggingEvent>> getAppenders() {
+    public ImmutableList<AppenderFactory> getAppenders() {
         return appenders;
     }
 
     @JsonProperty
-    public void setAppenders(List<AppenderFactory<ILoggingEvent>> appenders) {
+    public void setAppenders(List<AppenderFactory> appenders) {
         this.appenders = ImmutableList.copyOf(appenders);
     }
 
@@ -122,12 +119,8 @@ public class DefaultLoggingFactory implements LoggingFactory {
             CHANGE_LOGGER_CONTEXT_LOCK.unlock();
         }
 
-        final FilterFactory<ILoggingEvent> thresholdFilterFactory = new ThresholdFilterFactory();
-        final AsyncAppenderFactory<ILoggingEvent> asyncAppenderFactory = new AsyncLoggingEventAppenderFactory();
-        final LayoutFactory<ILoggingEvent> layoutFactory = new DropwizardLayoutFactory();
-
-        for (AppenderFactory<ILoggingEvent> output : appenders) {
-            root.addAppender(output.build(loggerContext, name, layoutFactory, thresholdFilterFactory, asyncAppenderFactory));
+        for (AppenderFactory output : appenders) {
+            root.addAppender(output.build(loggerContext, name, null));
         }
 
         StatusPrinter.setPrintStream(configurationErrorsStream);
@@ -186,10 +179,6 @@ public class DefaultLoggingFactory implements LoggingFactory {
 
         root.setLevel(level);
 
-        final FilterFactory<ILoggingEvent> thresholdFilterFactory = new ThresholdFilterFactory();
-        final AsyncAppenderFactory<ILoggingEvent> asyncAppenderFactory = new AsyncLoggingEventAppenderFactory();
-        final LayoutFactory<ILoggingEvent> layoutFactory = new DropwizardLayoutFactory();
-
         for (Map.Entry<String, JsonNode> entry : loggers.entrySet()) {
             final Logger logger = loggerContext.getLogger(entry.getKey());
             final JsonNode jsonNode = entry.getValue();
@@ -206,9 +195,8 @@ public class DefaultLoggingFactory implements LoggingFactory {
                 }
                 logger.setLevel(configuration.getLevel());
                 logger.setAdditive(configuration.isAdditive());
-
-                for (AppenderFactory<ILoggingEvent> appender : configuration.getAppenders()) {
-                    logger.addAppender(appender.build(loggerContext, name, layoutFactory, thresholdFilterFactory, asyncAppenderFactory));
+                for (AppenderFactory appender : configuration.getAppenders()) {
+                    logger.addAppender(appender.build(loggerContext, name, null));
                 }
             } else {
                 throw new IllegalArgumentException("Unsupported format of logger '" + entry.getKey() + "'");

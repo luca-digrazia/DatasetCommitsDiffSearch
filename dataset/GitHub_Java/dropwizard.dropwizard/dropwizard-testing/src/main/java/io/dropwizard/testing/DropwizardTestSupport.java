@@ -164,7 +164,12 @@ public class DropwizardTestSupport<C extends Configuration> {
             final Bootstrap<C> bootstrap = new Bootstrap<C>(application) {
                 @Override
                 public void run(C configuration, Environment environment) throws Exception {
-                    environment.lifecycle().addServerLifecycleListener(server -> jettyServer = server);
+                    environment.lifecycle().addServerLifecycleListener(new ServerLifecycleListener() {
+                        @Override
+                        public void serverStarted(Server server) {
+                            jettyServer = server;
+                        }
+                    });
                     DropwizardTestSupport.this.configuration = configuration;
                     DropwizardTestSupport.this.environment = environment;
                     super.run(configuration, environment);
@@ -178,11 +183,21 @@ public class DropwizardTestSupport<C extends Configuration> {
                 }
             };
             if (explicitConfig) {
-                bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
-                    new POJOConfigurationFactory<>(configuration));
+                bootstrap.setConfigurationFactoryFactory(new ConfigurationFactoryFactory<C>() {
+                    @Override
+                    public ConfigurationFactory<C> create(Class<C> klass, Validator validator,
+                                                          ObjectMapper objectMapper, String propertyPrefix) {
+                        return new POJOConfigurationFactory<>(configuration);
+                    }
+                });
             } else if (customPropertyPrefix.isPresent()) {
-                bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
-                    new ConfigurationFactory<>(klass, validator, objectMapper, customPropertyPrefix.get()));
+                bootstrap.setConfigurationFactoryFactory(new ConfigurationFactoryFactory<C>() {
+                    @Override
+                    public ConfigurationFactory<C> create(Class<C> klass, Validator validator,
+                                                          ObjectMapper objectMapper, String propertyPrefix) {
+                        return new ConfigurationFactory<>(klass, validator, objectMapper, customPropertyPrefix.get());
+                    }
+                });
             }
 
             application.initialize(bootstrap);
