@@ -21,14 +21,13 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsInOutputGroup;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.File;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.OutputGroup;
-import com.google.devtools.build.lib.buildeventstream.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.causes.Cause;
@@ -38,7 +37,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.rules.test.TestProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -117,10 +115,8 @@ public final class TargetCompleteEvent
 
   @Override
   public BuildEventId getEventId() {
-    BuildConfiguration config = getTarget().getConfiguration();
-    BuildEventId configId =
-        config == null ? BuildEventId.nullConfigurationId() : config.getEventId();
-    return BuildEventId.targetCompleted(getTarget().getLabel(), configId);
+    return BuildEventId.targetCompleted(
+        getTarget().getLabel(), getTarget().getConfiguration().getEventId());
   }
 
   @Override
@@ -146,21 +142,6 @@ public final class TargetCompleteEvent
     return childrenBuilder.build();
   }
 
-  private BuildEventStreamProtos.TestSize bepTestSize(TestSize size) {
-    switch (size) {
-      case SMALL:
-        return BuildEventStreamProtos.TestSize.SMALL;
-      case MEDIUM:
-        return BuildEventStreamProtos.TestSize.MEDIUM;
-      case LARGE:
-        return BuildEventStreamProtos.TestSize.LARGE;
-      case ENORMOUS:
-        return BuildEventStreamProtos.TestSize.ENORMOUS;
-      default:
-        return BuildEventStreamProtos.TestSize.UNKNOWN;
-    }
-  }
-
   @Override
   public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
     BuildEventStreamProtos.TargetComplete.Builder builder =
@@ -170,11 +151,6 @@ public final class TargetCompleteEvent
     builder.setTargetKind(target.getTarget().getTargetKind());
     builder.addAllTag(getTags());
     builder.addAllOutputGroup(getOutputFilesByGroup(converters.artifactGroupNamer()));
-
-    if (isTest) {
-      builder.setTestSize(
-          bepTestSize(TestSize.getTestSize(target.getTarget().getAssociatedRule())));
-    }
 
     // TODO(aehlig): remove direct reporting of artifacts as soon as clients no longer
     // need it.
@@ -208,12 +184,12 @@ public final class TargetCompleteEvent
   }
 
   @Override
-  public Collection<BuildEvent> getConfigurations() {
+  public Collection<BuildConfiguration> getConfigurations() {
     BuildConfiguration configuration = target.getConfiguration();
     if (configuration != null) {
       return ImmutableList.of(target.getConfiguration());
     } else {
-      return ImmutableList.<BuildEvent>of();
+      return ImmutableList.<BuildConfiguration>of();
     }
   }
 
