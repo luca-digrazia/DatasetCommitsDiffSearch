@@ -49,11 +49,7 @@ import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
-import io.quarkus.extest.runtime.FinalFieldReflectionObject;
-import io.quarkus.extest.runtime.IConfigConsumer;
-import io.quarkus.extest.runtime.RuntimeXmlConfigService;
-import io.quarkus.extest.runtime.TestAnnotation;
-import io.quarkus.extest.runtime.TestRecorder;
+import io.quarkus.extest.runtime.*;
 import io.quarkus.extest.runtime.beans.CommandServlet;
 import io.quarkus.extest.runtime.beans.PublicKeyProducer;
 import io.quarkus.extest.runtime.config.ObjectOfValue;
@@ -231,6 +227,7 @@ public final class TestProcessor {
      * Validate the expected BUILD_TIME configuration
      */
     @BuildStep
+    @Record(STATIC_INIT)
     void checkConfig() {
         if (!configRoot.validateBuildConfig) {
             return;
@@ -399,12 +396,14 @@ public final class TestProcessor {
     }
 
     @BuildStep
+    @Record(RUNTIME_INIT)
     ServiceStartBuildItem boot(LaunchModeBuildItem launchMode) {
         log.infof("boot, launchMode=%s", launchMode.getLaunchMode());
         return new ServiceStartBuildItem("test-service");
     }
 
     @BuildStep
+    @Record(STATIC_INIT)
     void registerSUNProvider(BuildProducer<ReflectiveClassBuildItem> classes) {
         Provider provider = Security.getProvider("SUN");
         ArrayList<String> providerClasses = new ArrayList<>();
