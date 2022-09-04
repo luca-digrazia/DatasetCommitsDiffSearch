@@ -12,7 +12,7 @@ import io.restassured.RestAssured;
 
 public class ContextUnitTest {
     private static Class[] testClasses = {
-            ContextEndpoint.class, RequestBean.class
+            ContextEndpoint.class, RequestBean.class, ContextEntity.class, TestResources.class, CompletionExceptionMapper.class, TransactionalBean.class
     };
 
     @RegisterExtension
@@ -28,8 +28,38 @@ public class ContextUnitTest {
     }
 
     @Test()
+    public void testThreadContextPropagation() {
+        RestAssured.when().get("/context/thread-context").then()
+                .statusCode(Response.Status.OK.getStatusCode());
+    }
+
+    @Test()
     public void testArcContextPropagation() {
         RestAssured.when().get("/context/arc").then()
+                .statusCode(Response.Status.OK.getStatusCode());
+    }
+
+    @Test()
+    public void testArcContextPropagationDisabled() {
+        RestAssured.when().get("/context/noarc").then()
+                .statusCode(Response.Status.OK.getStatusCode());
+    }
+
+    @Test()
+    public void testTransactionContextPropagation() {
+        RestAssured.when().get("/context/transaction").then()
+                .statusCode(Response.Status.OK.getStatusCode());
+        RestAssured.when().get("/context/transaction2").then()
+                .statusCode(Response.Status.CONFLICT.getStatusCode());
+        RestAssured.when().get("/context/transaction3").then()
+                .statusCode(Response.Status.CONFLICT.getStatusCode());
+        RestAssured.when().get("/context/transaction4").then()
+                .statusCode(Response.Status.OK.getStatusCode());
+    }
+
+    @Test()
+    public void testTransactionNewContextPropagation() {
+        RestAssured.when().get("/context/transaction-new").then()
                 .statusCode(Response.Status.OK.getStatusCode());
     }
 }
