@@ -297,6 +297,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       return null;
     }
 
+    ruleContext.checkSrcsSamePackage(true);
+
     CcCommon common = new CcCommon(ruleContext);
     common.reportInvalidOptions(ruleContext);
     CcToolchainProvider ccToolchain = common.getToolchain();
@@ -933,7 +935,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // Because rules referencing .dwp targets may be invoked with or without fission, we need
     // to support .dwp generation even when fission is disabled. Since no actual functionality
     // is expected then, an empty file is appropriate.
-    if (dwoFiles.isEmpty()) {
+    if (Iterables.isEmpty(dwoFiles)) {
       context.registerAction(FileWriteAction.create(context, dwpOutput, "", false));
       return;
     }
