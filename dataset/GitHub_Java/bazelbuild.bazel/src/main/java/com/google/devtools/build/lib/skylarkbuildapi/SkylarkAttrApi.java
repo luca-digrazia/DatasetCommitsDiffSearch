@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 
 /**
@@ -39,7 +39,7 @@ import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 @SkylarkModule(
     name = "attr",
     namespace = true,
-    category = SkylarkModuleCategory.TOP_LEVEL_TYPE,
+    category = SkylarkModuleCategory.BUILTIN,
     doc =
         "This is a top-level module for defining the attribute schemas of a rule or aspect. Each "
             + "function returns an object representing the schema of a single attribute. These "
@@ -350,11 +350,7 @@ public interface SkylarkAttrApi extends SkylarkValue {
             positional = false,
             doc =
                 CONFIGURATION_DOC
-                    + " This parameter is required if <code>executable</code> is True "
-                    + "to guard against accidentally building host tools in the "
-                    + "target configuration. <code>\"target\"</code> has no semantic "
-                    + "effect, so don't set it when <code>executable</code> is False "
-                    + "unless it really helps clarify your intentions."),
+                    + " This parameter is required if <code>executable</code> is True."),
         @Param(
             name = ASPECTS_ARG,
             type = SkylarkList.class,
@@ -1030,7 +1026,7 @@ public interface SkylarkAttrApi extends SkylarkValue {
   /** An attribute descriptor. */
   @SkylarkModule(
       name = "Attribute",
-      category = SkylarkModuleCategory.BUILTIN,
+      category = SkylarkModuleCategory.NONE,
       doc =
           "Representation of a definition of an attribute. Use the <a href=\"attr.html\">attr</a> "
               + "module to create an Attribute. They are only for use with a "

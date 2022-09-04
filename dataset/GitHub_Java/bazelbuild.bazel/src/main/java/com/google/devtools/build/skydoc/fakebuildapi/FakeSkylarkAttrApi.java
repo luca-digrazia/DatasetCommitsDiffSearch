@@ -14,20 +14,15 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi;
 
-import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkAttrApi;
-import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
-import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.AttributeType;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.skydoc.rendering.AttributeInfo.Type;
 
 /**
  * Fake implementation of {@link SkylarkAttrApi}.
@@ -39,11 +34,12 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
       Integer defaultInt,
       String doc,
       Boolean mandatory,
-      Sequence<?> values,
-      Location loc,
-      StarlarkThread thread)
+      SkylarkList<?> values,
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(AttributeType.INT, doc, mandatory, ImmutableList.of(), defaultInt);
+    return new FakeDescriptor(Type.INT, doc, mandatory);
   }
 
   @Override
@@ -51,16 +47,12 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
       String defaultString,
       String doc,
       Boolean mandatory,
-      Sequence<?> values,
-      Location loc,
-      StarlarkThread thread)
+      SkylarkList<?> values,
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(
-        AttributeType.STRING,
-        doc,
-        mandatory,
-        ImmutableList.of(),
-        defaultString != null ? "\"" + defaultString + "\"" : null);
+    return new FakeDescriptor(Type.STRING, doc, mandatory);
   }
 
   @Override
@@ -71,19 +63,16 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
       Object allowFiles,
       Object allowSingleFile,
       Boolean mandatory,
-      Sequence<?> providers,
+      SkylarkList<?> providers,
       Object allowRules,
       Boolean singleFile,
       Object cfg,
-      Sequence<?> aspects,
-      Location loc,
-      StarlarkThread thread)
+      SkylarkList<?> aspects,
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    List<List<String>> allNameGroups = new ArrayList<>();
-    if (providers != null) {
-      allNameGroups = allProviderNameGroups(providers, thread);
-    }
-    return new FakeDescriptor(AttributeType.LABEL, doc, mandatory, allNameGroups, defaultO);
+    return new FakeDescriptor(Type.LABEL, doc, mandatory);
   }
 
   @Override
@@ -91,13 +80,13 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
       Boolean mandatory,
       Boolean nonEmpty,
       Boolean allowEmpty,
-      Sequence<?> defaultList,
+      SkylarkList<?> defaultList,
       String doc,
-      Location loc,
-      StarlarkThread thread)
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(
-        AttributeType.STRING_LIST, doc, mandatory, ImmutableList.of(), defaultList);
+    return new FakeDescriptor(Type.STRING_LIST, doc, mandatory);
   }
 
   @Override
@@ -105,13 +94,13 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
       Boolean mandatory,
       Boolean nonEmpty,
       Boolean allowEmpty,
-      Sequence<?> defaultList,
+      SkylarkList<?> defaultList,
       String doc,
-      Location loc,
-      StarlarkThread thread)
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(
-        AttributeType.INT_LIST, doc, mandatory, ImmutableList.of(), defaultList);
+    return new FakeDescriptor(Type.INT_LIST, doc, mandatory);
   }
 
   @Override
@@ -121,20 +110,17 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
       String doc,
       Object allowFiles,
       Object allowRules,
-      Sequence<?> providers,
-      Sequence<?> flags,
+      SkylarkList<?> providers,
+      SkylarkList<?> flags,
       Boolean mandatory,
       Boolean nonEmpty,
       Object cfg,
-      Sequence<?> aspects,
-      Location loc,
-      StarlarkThread thread)
+      SkylarkList<?> aspects,
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    List<List<String>> allNameGroups = new ArrayList<>();
-    if (providers != null) {
-      allNameGroups = allProviderNameGroups(providers, thread);
-    }
-    return new FakeDescriptor(AttributeType.LABEL_LIST, doc, mandatory, allNameGroups, defaultList);
+    return new FakeDescriptor(Type.LABEL_LIST, doc, mandatory);
   }
 
   @Override
@@ -144,40 +130,41 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
       String doc,
       Object allowFiles,
       Object allowRules,
-      Sequence<?> providers,
-      Sequence<?> flags,
+      SkylarkList<?> providers,
+      SkylarkList<?> flags,
       Boolean mandatory,
       Boolean nonEmpty,
       Object cfg,
-      Sequence<?> aspects,
-      Location loc,
-      StarlarkThread thread)
+      SkylarkList<?> aspects,
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    List<List<String>> allNameGroups = new ArrayList<>();
-    if (providers != null) {
-      allNameGroups = allProviderNameGroups(providers, thread);
-    }
-    return new FakeDescriptor(
-        AttributeType.LABEL_STRING_DICT, doc, mandatory, allNameGroups, defaultList);
+    return new FakeDescriptor(Type.LABEL_STRING_DICT, doc, mandatory);
   }
 
   @Override
   public Descriptor boolAttribute(
-      Boolean defaultO, String doc, Boolean mandatory, Location loc, StarlarkThread thread)
+      Boolean defaultO,
+      String doc,
+      Boolean mandatory,
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(
-        AttributeType.BOOLEAN,
-        doc,
-        mandatory,
-        ImmutableList.of(),
-        Boolean.TRUE.equals(defaultO) ? "True" : "False");
+    return new FakeDescriptor(Type.BOOLEAN, doc, mandatory);
   }
 
   @Override
   public Descriptor outputAttribute(
-      Object defaultO, String doc, Boolean mandatory, Location loc, StarlarkThread thread)
+      Object defaultO,
+      String doc,
+      Boolean mandatory,
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(AttributeType.OUTPUT, doc, mandatory, ImmutableList.of(), defaultO);
+    return new FakeDescriptor(Type.OUTPUT, doc, mandatory);
   }
 
   @Override
@@ -187,119 +174,53 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
-      Location loc,
-      StarlarkThread thread)
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(
-        AttributeType.OUTPUT_LIST, doc, mandatory, ImmutableList.of(), defaultList);
+    return new FakeDescriptor(Type.OUTPUT_LIST, doc, mandatory);
   }
 
   @Override
   public Descriptor stringDictAttribute(
       Boolean allowEmpty,
-      Dict<?, ?> defaultO,
+      SkylarkDict<?, ?> defaultO,
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
-      Location loc,
-      StarlarkThread thread)
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(
-        AttributeType.STRING_DICT, doc, mandatory, ImmutableList.of(), defaultO);
+    return new FakeDescriptor(Type.STRING_DICT, doc, mandatory);
   }
 
   @Override
   public Descriptor stringListDictAttribute(
       Boolean allowEmpty,
-      Dict<?, ?> defaultO,
+      SkylarkDict<?, ?> defaultO,
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
-      Location loc,
-      StarlarkThread thread)
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(
-        AttributeType.STRING_LIST_DICT, doc, mandatory, ImmutableList.of(), defaultO);
+    return new FakeDescriptor(Type.STRING_LIST_DICT, doc, mandatory);
   }
 
   @Override
   public Descriptor licenseAttribute(
-      Object defaultO, String doc, Boolean mandatory, Location loc, StarlarkThread thread)
+      Object defaultO,
+      String doc,
+      Boolean mandatory,
+      FuncallExpression ast,
+      Environment env,
+      StarlarkContext context)
       throws EvalException {
-    return new FakeDescriptor(
-        AttributeType.STRING_LIST, doc, mandatory, ImmutableList.of(), defaultO);
+    return new FakeDescriptor(Type.LICENSE, doc, mandatory);
   }
 
   @Override
-  public void repr(Printer printer) {}
-
-  /**
-   * Returns a list of provider name groups, given the value of a Starlark attribute's "providers"
-   * argument.
-   *
-   * <p>{@code providers} can either be a list of providers or a list of lists of providers, where
-   * each provider is represented by a ProviderApi or by a String. In the case of a single-level
-   * list, the whole list is considered a single group, while in the case of a double-level list,
-   * each of the inner lists is a separate group.
-   */
-  private static List<List<String>> allProviderNameGroups(
-      Sequence<?> providers, StarlarkThread thread) {
-
-    List<List<String>> allNameGroups = new ArrayList<>();
-    for (Object object : providers) {
-      List<String> providerNameGroup;
-      if (object instanceof Sequence) {
-        Sequence<?> group = (Sequence<?>) object;
-        providerNameGroup = parseProviderGroup(group, thread);
-        allNameGroups.add(providerNameGroup);
-      } else {
-        providerNameGroup = parseProviderGroup(providers, thread);
-        allNameGroups.add(providerNameGroup);
-        break;
-      }
-    }
-    return allNameGroups;
-  }
-
-  /**
-   * Returns the names of the providers in the given group.
-   *
-   * <p>Each item in the group may be either a {@link ProviderApi} or a {@code String} (representing
-   * a legacy provider).
-   */
-  private static List<String> parseProviderGroup(Sequence<?> group, StarlarkThread thread) {
-    List<String> providerNameGroup = new ArrayList<>();
-    for (Object object : group) {
-      if (object instanceof ProviderApi) {
-        ProviderApi provider = (ProviderApi) object;
-        String providerName = providerName(provider, thread);
-        providerNameGroup.add(providerName);
-      } else if (object instanceof String) {
-        String legacyProvider = (String) object;
-        providerNameGroup.add(legacyProvider);
-      }
-    }
-    return providerNameGroup;
-  }
-
-  /**
-   * Returns the name of {@code provider}.
-   *
-   * <p>{@code thread} contains a {@code Map<String, Object>} where the values are built-in objects
-   * or objects defined in the file and the keys are the names of these objects. If a {@code
-   * provider} is in the map, the name of the provider is set as the key of this object in {@code
-   * bindings}. If it is not in the map, the provider may be part of a module in the map and the
-   * name will be set to "Unknown Provider".
-   */
-  private static String providerName(ProviderApi provider, StarlarkThread thread) {
-    Map<String, Object> bindings = thread.getGlobals().getTransitiveBindings();
-    if (bindings.containsValue(provider)) {
-      for (Entry<String, Object> envEntry : bindings.entrySet()) {
-        if (provider.equals(envEntry.getValue())) {
-          return envEntry.getKey();
-        }
-      }
-    }
-    return "Unknown Provider";
-  }
+  public void repr(SkylarkPrinter printer) {}
 }

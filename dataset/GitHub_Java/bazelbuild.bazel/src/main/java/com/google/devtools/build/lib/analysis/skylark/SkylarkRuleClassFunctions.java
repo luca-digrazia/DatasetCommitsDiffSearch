@@ -677,14 +677,11 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         Attribute attr = descriptor.build(name);
 
         hasStarlarkDefinedTransition |= attr.hasStarlarkDefinedTransition();
-        if (attr.hasAnalysisTestTransition()) {
-          if (!builder.isAnalysisTest()) {
-            throw new EvalException(
-                location,
-                "Only rule definitions with analysis_test=True may have attributes with "
-                    + "analysis_test_transition transitions");
-          }
-          builder.setHasAnalysisTestTransition();
+        if (attr.hasAnalysisTestTransition() && !builder.isAnalysisTest()) {
+          throw new EvalException(
+              location,
+              "Only rule definitions with analysis_test=True may have attributes with "
+                  + "analysis_test_transition transitions");
         }
         // Check for existence of the function transition whitelist attribute.
         // TODO(b/121385274): remove when we stop whitelisting starlark transitions
@@ -756,16 +753,9 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
 
   @Override
   public Label label(
-      String labelString,
-      Boolean relativeToCallerRepository,
-      Location loc,
-      Environment env,
-      StarlarkContext context)
+      String labelString, Boolean relativeToCallerRepository, Location loc, Environment env)
       throws EvalException {
-
-    BazelStarlarkContext bazelStarlarkContext = (BazelStarlarkContext) context;
-
-    Label parentLabel;
+    Label parentLabel = null;
     if (relativeToCallerRepository) {
       parentLabel = env.getCallerLabel();
     } else {
@@ -774,9 +764,10 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     try {
       if (parentLabel != null) {
         LabelValidator.parseAbsoluteLabel(labelString);
+        // TODO(dannark): pass the environment here
         labelString =
             parentLabel
-                .getRelativeWithRemapping(labelString, bazelStarlarkContext.getRepoMapping())
+                .getRelativeWithRemapping(labelString, ImmutableMap.of())
                 .getUnambiguousCanonicalForm();
       }
       return labelCache.get(labelString);
