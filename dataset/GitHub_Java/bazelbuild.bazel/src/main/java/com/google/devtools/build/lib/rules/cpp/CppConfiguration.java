@@ -252,25 +252,30 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
             ? cppToolchainInfo.getDefaultSysroot()
             : params.sysrootLabel.getPackageFragment(),
         params.sysrootLabel,
-        new FlagList(coptsBuilder.build(), ImmutableList.copyOf(cppOptions.coptList)),
-        new FlagList(cxxOptsBuilder.build(), ImmutableList.copyOf(cppOptions.cxxoptList)),
         new FlagList(
-            ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()), ImmutableList.of()),
+            coptsBuilder.build(),
+            ImmutableList.copyOf(cppOptions.coptList)),
+        new FlagList(
+            cxxOptsBuilder.build(),
+            ImmutableList.copyOf(cppOptions.cxxoptList)),
+        new FlagList(
+            ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()),
+            ImmutableList.of()),
         ImmutableList.copyOf(cppOptions.conlyoptList),
         new FlagList(
-            cppToolchainInfo.configureAllLegacyLinkOptions(
+            cppToolchainInfo.configureLinkerOptions(
                 compilationMode, cppOptions.getLipoMode(), LinkingMode.FULLY_STATIC),
             ImmutableList.of()),
         new FlagList(
-            cppToolchainInfo.configureAllLegacyLinkOptions(
+            cppToolchainInfo.configureLinkerOptions(
                 compilationMode, cppOptions.getLipoMode(), LinkingMode.MOSTLY_STATIC),
             ImmutableList.of()),
         new FlagList(
-            cppToolchainInfo.configureAllLegacyLinkOptions(
+            cppToolchainInfo.configureLinkerOptions(
                 compilationMode, cppOptions.getLipoMode(), LinkingMode.MOSTLY_STATIC_LIBRARIES),
             ImmutableList.of()),
         new FlagList(
-            cppToolchainInfo.configureAllLegacyLinkOptions(
+            cppToolchainInfo.configureLinkerOptions(
                 compilationMode, cppOptions.getLipoMode(), LinkingMode.DYNAMIC),
             ImmutableList.of()),
         ImmutableList.copyOf(cppOptions.coptList),
