@@ -1,24 +1,20 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.clustering.linkage;
-
-import smile.math.MathEx;
-import smile.math.distance.Distance;
 
 /**
  * A measure of dissimilarity between clusters (i.e. sets of observations).
@@ -48,7 +44,7 @@ public abstract class Linkage {
 
     /** Initialize the linkage with the lower triangular proximity matrix. */
     public Linkage(double[][] proximity) {
-        this.size = proximity.length;
+        size = proximity.length;
         this.proximity = new float[size * (size+1) / 2];
 
         // row wise
@@ -74,7 +70,7 @@ public abstract class Linkage {
      * @param size the data size.
      * @param proximity column-wise linearized proximity matrix that stores
      *                  only the lower half. The length of proximity should be
-     *                  size * (size+1) / 2.
+     *                  size * (size+1) / 2;
      *                  To save space, Linkage will use this argument directly
      *                  without copy. The elements may be modified.
      */
@@ -113,36 +109,4 @@ public abstract class Linkage {
      * @param j cluster id.
      */
     public abstract void merge(int i, int j);
-
-    /** Calculate the proximity matrix (linearized in column major) with Euclidean distance. */
-    public static float[] proximity(double[][] data) {
-        int n = data.length;
-        int length = n * (n+1) / 2;
-
-        float[] proximity = new float[length];
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < i; j++) {
-                int k = length - (n-j)*(n-j+1)/2 + i - j;
-                proximity[k] = (float) MathEx.distance(data[i], data[j]);
-            }
-        }
-
-        return proximity;
-    }
-
-    /** Calculate the proximity matrix (linearized in column major). */
-    public static <T> float[] proximity(T[] data, Distance<T> distance) {
-        int n = data.length;
-        int length = n * (n+1) / 2;
-
-        float[] proximity = new float[length];
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < i; j++) {
-                int k = length - (n-j)*(n-j+1)/2 + i - j;
-                proximity[k] = (float) distance.d(data[i], data[j]);
-            }
-        }
-
-        return proximity;
-    }
 }

@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,18 +13,19 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.data.formula;
 
 import java.util.Set;
+import smile.data.type.StructType;
 
 /**
  * This class provides a skeletal implementation of the function term.
  *
  * @author Haifeng Li
  */
-public abstract class AbstractFunction implements Term {
+public abstract class AbstractFunction extends AbstractTerm {
     /** The name of function. */
     String name;
     /** The operand. */
@@ -42,15 +43,22 @@ public abstract class AbstractFunction implements Term {
     }
 
     @Override
+    public String name() {
+        return String.format("%s(%s)", name, x.name());
+    }
+
+    @Override
     public String toString() {
-        if (x instanceof Operator)
-            return String.format("%s%s", name, x);
-        else
-            return String.format("%s(%s)", name, x);
+        return name();
     }
 
     @Override
     public Set<String> variables() {
         return x.variables();
+    }
+
+    @Override
+    public void bind(StructType schema) {
+        x.bind(schema);
     }
 }

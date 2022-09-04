@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.validation;
 
@@ -23,10 +23,10 @@ package smile.validation;
  * divided by the number of all positive results, and the recall r is the number of
  * correct positive results divided by the number of positive results that should
  * have been returned.
- * <p>
+ *
  * The traditional or balanced F-score (F1 score) is the harmonic mean of
  * precision and recall, where an F1 score reaches its best value at 1 and worst at 0.
- * <p>
+ *
  * The general formula involves a positive real &beta; so that F-score measures
  * the effectiveness of retrieval with respect to a user who attaches &beta; times
  * as much importance to recall as precision.
@@ -34,9 +34,13 @@ package smile.validation;
  * @author Haifeng Li
  */
 public class FMeasure implements ClassificationMeasure {
+    public final static FMeasure instance = new FMeasure();
+
     @Override
     public double measure(int[] truth, int[] prediction) {
-        return of(beta, truth, prediction);
+        double p = new Precision().measure(truth, prediction);
+        double r = new Recall().measure(truth, prediction);
+        return (1 + beta2) * (p * r) / (beta2 * p + r);
     }
 
     /**
@@ -45,39 +49,27 @@ public class FMeasure implements ClassificationMeasure {
      * as much importance to recall as precision. The default value 1.0
      * corresponds to F1-score.
      */
-    private double beta = 1.0;
+    private double beta2 = 1.0;
 
     /** Constructor of F1 score. */
     public FMeasure() {
-        this(1.0);
+
     }
 
     /** Constructor of general F-score.
      *
      * @param beta a positive value such that F-score measures
-     *             the effectiveness of retrieval with respect
-     *             to a user who attaches &beta; times as much
-     *             importance to recall as precision.
+     * the effectiveness of retrieval with respect to a user who attaches &beta; times
+     * as much importance to recall as precision.
      */
     public FMeasure(double beta) {
-        if (beta <= 0.0) {
+        if (beta <= 0.0)
             throw new IllegalArgumentException("Negative beta");
-        }
-
-        this.beta = beta;
+        this.beta2 = beta * beta;
     }
 
-    /**
-     * Calculates the F1 score.
-     * @param beta a positive value such that F-score measures
-     *             the effectiveness of retrieval with respect
-     *             to a user who attaches &beta; times as much
-     *             importance to recall as precision.
-     */
-    public static double of(double beta, int[] truth, int[] prediction) {
-        double beta2 = beta * beta;
-        double p = new Precision().measure(truth, prediction);
-        double r = new Recall().measure(truth, prediction);
-        return (1 + beta2) * (p * r) / (beta2 * p + r);
+    /** Calculates the F1 score. */
+    public static double apply(int[] truth, int[] prediction) {
+        return instance.measure(truth, prediction);
     }
 }

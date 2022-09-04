@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.data.formula;
 
@@ -26,7 +26,7 @@ import smile.data.type.StructType;
  *
  * @author Haifeng Li
  */
-public abstract class AbstractBiFunction implements Term {
+public abstract class AbstractBiFunction extends AbstractTerm {
     /** The name of function. */
     String name;
     /** The first parameter of function. */
@@ -48,8 +48,13 @@ public abstract class AbstractBiFunction implements Term {
     }
 
     @Override
+    public String name() {
+        return String.format("%s(%s, %s)", name, x.name(), y.name());
+    }
+
+    @Override
     public String toString() {
-        return String.format("%s(%s, %s)", name, x, y);
+        return name();
     }
 
     @Override
@@ -57,5 +62,11 @@ public abstract class AbstractBiFunction implements Term {
         Set<String> vars = new HashSet<>(x.variables());
         vars.addAll(y.variables());
         return vars;
+    }
+
+    @Override
+    public void bind(StructType schema) {
+        x.bind(schema);
+        y.bind(schema);
     }
 }

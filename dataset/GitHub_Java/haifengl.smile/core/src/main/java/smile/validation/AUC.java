@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.validation;
 
@@ -39,28 +39,14 @@ import smile.sort.QuickSort;
  *
  * @author Haifeng Li
  */
-public class AUC implements BinaryClassificationMeasure {
-    private static final long serialVersionUID = 2L;
-    /** Default instance. */
-    public final static AUC instance = new AUC();
-
-    @Override
-    public double measure(int[] truth, int[] prediction) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public double measure(int[] truth, double[] probability) {
-        return of(truth, probability);
-    }
-
+public class AUC {
     /**
-     * Calculates AUC for binary classifier.
+     * Caulculate AUC for binary classifier.
      * @param truth The sample labels
      * @param probability The posterior probability of positive class.
      * @return AUC
      */
-    public static double of(int[] truth, double[] probability) {
+    public static double apply(int[] truth, double[] probability) {
         if (truth.length != probability.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, probability.length));
         }
@@ -106,10 +92,5 @@ public class AUC implements BinaryClassificationMeasure {
 
         auc = (auc - (pos * (pos+1) / 2.0)) / (pos * neg);
         return auc;
-    }
-
-    @Override
-    public String toString() {
-        return "AUC";
     }
 }
