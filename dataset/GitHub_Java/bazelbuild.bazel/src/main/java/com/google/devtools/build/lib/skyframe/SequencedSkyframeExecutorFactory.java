@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -33,7 +32,6 @@ public class SequencedSkyframeExecutorFactory implements SkyframeExecutorFactory
   @Override
   public SkyframeExecutor create(
       PackageFactory pkgFactory,
-      FileSystem fileSystem,
       BlazeDirectories directories,
       Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
@@ -43,7 +41,6 @@ public class SequencedSkyframeExecutorFactory implements SkyframeExecutorFactory
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers) {
     return SequencedSkyframeExecutor.create(
         pkgFactory,
-        fileSystem,
         directories,
         workspaceStatusActionFactory,
         buildInfoFactories,
@@ -51,8 +48,7 @@ public class SequencedSkyframeExecutorFactory implements SkyframeExecutorFactory
         allowedMissingInputs,
         extraSkyFunctions,
         customDirtinessCheckers,
-        BazelSkyframeExecutorConstants.HARDCODED_BLACKLISTED_PACKAGE_PREFIXES,
-        BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
+        PathFragment.EMPTY_FRAGMENT,
         BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
         BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
         BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);

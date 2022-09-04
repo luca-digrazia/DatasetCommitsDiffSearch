@@ -126,7 +126,6 @@ import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.LegacyLoadingPhaseRunner;
-import com.google.devtools.build.lib.skyframe.PackageRootsNoSymlinkCreation;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
@@ -478,7 +477,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     view = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
     view.setConfigurationsForTesting(masterConfig);
 
-    view.setArtifactRoots(new PackageRootsNoSymlinkCreation(rootDirectory));
+    view.setArtifactRoots(
+        ImmutableMap.of(PackageIdentifier.createInMainRepo(""), rootDirectory));
   }
 
   protected CachingAnalysisEnvironment getTestAnalysisEnvironment() {
