@@ -69,7 +69,7 @@ public class ProtoCompileActionBuilder {
   private final String langPrefix;
   private final Iterable<Artifact> outputs;
   private Iterable<Artifact> inputs;
-  private FilesToRunProvider langPlugin;
+  private String langPluginName;
   private Supplier<String> langPluginParameter;
   private boolean hasServices;
   private Iterable<String> additionalCommandLineArguments;
@@ -86,8 +86,8 @@ public class ProtoCompileActionBuilder {
     return this;
   }
 
-  public ProtoCompileActionBuilder setLangPlugin(FilesToRunProvider langPlugin) {
-    this.langPlugin = langPlugin;
+  public ProtoCompileActionBuilder setLangPluginName(String langPluginName) {
+    this.langPluginName = langPluginName;
     return this;
   }
 
@@ -206,8 +206,9 @@ public class ProtoCompileActionBuilder {
     SpawnAction.Builder result =
         new SpawnAction.Builder().addTransitiveInputs(protoInfo.getTransitiveProtoSources());
 
-    if (langPlugin != null) {
-      result.addTool(langPlugin);
+    FilesToRunProvider langPluginTarget = getLangPluginTarget();
+    if (langPluginTarget != null) {
+      result.addTool(langPluginTarget);
     }
 
     if (inputs != null) {
@@ -242,16 +243,30 @@ public class ProtoCompileActionBuilder {
     return ruleContext.getBinDirectory().getExecPath().getSegment(0);
   }
 
+  @Nullable
+  private FilesToRunProvider getLangPluginTarget() throws MissingPrerequisiteException {
+    if (langPluginName == null) {
+      return null;
+    }
+    FilesToRunProvider result =
+        ruleContext.getExecutablePrerequisite(langPluginName, RuleConfiguredTarget.Mode.HOST);
+    if (result == null) {
+      throw new MissingPrerequisiteException();
+    }
+    return result;
+  }
+
   /** Commandline generator for protoc invocations. */
   @VisibleForTesting
   CustomCommandLine.Builder createProtoCompilerCommandLine() throws MissingPrerequisiteException {
     CustomCommandLine.Builder result = CustomCommandLine.builder();
 
-    if (langPlugin != null) {
-      // We pass a separate langPlugin as there are plugins that cannot be overridden
+    if (langPluginName != null) {
+      FilesToRunProvider langPluginTarget = getLangPluginTarget();
+      // We pass a separate langPluginName as there are plugins that cannot be overridden
       // and thus we have to deal with "$xx_plugin" and "xx_plugin".
       result.addFormatted(
-          "--plugin=protoc-gen-%s=%s", langPrefix, langPlugin.getExecutable().getExecPath());
+          "--plugin=protoc-gen-%s=%s", langPrefix, langPluginTarget.getExecutable().getExecPath());
     }
 
     if (langPluginParameter != null) {
