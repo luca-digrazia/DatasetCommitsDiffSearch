@@ -164,11 +164,11 @@ public class AarImport implements RuleConfiguredTargetFactory {
     Artifact depsCheckerResult =
         createAarArtifact(ruleContext, "aar_import_deps_checker_result.txt");
     ImportDepsCheckActionBuilder.newBuilder()
-        .bootclasspath(getBootclasspath(ruleContext))
+        .bootcalsspath(getBootclasspath(ruleContext))
         .declareDeps(getCompileTimeJarsFromCollection(targets, /*isDirect=*/ true))
         .transitiveDeps(getCompileTimeJarsFromCollection(targets, /*isDirect=*/ false))
         .checkJars(NestedSetBuilder.<Artifact>stableOrder().add(mergedJar).build())
-        .outputArtifact(depsCheckerResult)
+        .outputArtifiact(depsCheckerResult)
         .importDepsCheckingLevel(javaConfig.getImportDepsCheckingLevel())
         .jdepsOutputArtifact(jdepsArtifact)
         .ruleLabel(ruleContext.getLabel())
