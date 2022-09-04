@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.deployment.steps;
 
 import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
@@ -151,8 +167,7 @@ public class SubstrateAutoFeatureStep {
 
         final Map<String, ReflectionInfo> reflectiveClasses = new LinkedHashMap<>();
         for (ReflectiveClassBuildItem i : reflectiveClassBuildItems) {
-            addReflectiveClass(reflectiveClasses, i.isConstructors(), i.isMethods(), i.isFields(), i.areFinalFieldsWritable(),
-                    i.isWeak(),
+            addReflectiveClass(reflectiveClasses, i.isConstructors(), i.isMethods(), i.isFields(),
                     i.getClassNames().toArray(new String[0]));
         }
         for (ReflectiveFieldBuildItem i : reflectiveFields) {
@@ -163,8 +178,7 @@ public class SubstrateAutoFeatureStep {
         }
 
         for (ServiceProviderBuildItem i : serviceProviderBuildItems) {
-            addReflectiveClass(reflectiveClasses, true, false, false, false, false,
-                    i.providers().toArray(new String[] {}));
+            addReflectiveClass(reflectiveClasses, true, false, false, i.providers().toArray(new String[] {}));
         }
 
         for (Map.Entry<String, ReflectionInfo> entry : reflectiveClasses.entrySet()) {
@@ -183,13 +197,10 @@ public class SubstrateAutoFeatureStep {
             ResultHandle methods = tc.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredMethods", Method[].class), clazz);
             ResultHandle fields = tc.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredFields", Field[].class), clazz);
 
-            if (!entry.getValue().weak) {
-                ResultHandle carray = tc.newArray(Class.class, tc.load(1));
-                tc.writeArrayValue(carray, 0, clazz);
-                tc.invokeStaticMethod(
-                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Class[].class),
-                        carray);
-            }
+            ResultHandle carray = tc.newArray(Class.class, tc.load(1));
+            tc.writeArrayValue(carray, 0, clazz);
+            tc.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Class[].class),
+                    carray);
 
             if (entry.getValue().constructors) {
                 tc.invokeStaticMethod(
@@ -235,9 +246,7 @@ public class SubstrateAutoFeatureStep {
             }
             if (entry.getValue().fields) {
                 tc.invokeStaticMethod(
-                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class,
-                                boolean.class, Field[].class),
-                        tc.load(entry.getValue().finalFieldsWritable), fields);
+                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Field[].class), fields);
             } else if (!entry.getValue().fieldSet.isEmpty()) {
                 ResultHandle farray = tc.newArray(Field.class, tc.load(1));
                 for (String field : entry.getValue().fieldSet) {
@@ -267,7 +276,7 @@ public class SubstrateAutoFeatureStep {
         String cl = methodInfo.getDeclaringClass();
         ReflectionInfo existing = reflectiveClasses.get(cl);
         if (existing == null) {
-            reflectiveClasses.put(cl, existing = new ReflectionInfo(false, false, false, false, false));
+            reflectiveClasses.put(cl, existing = new ReflectionInfo(false, false, false));
         }
         if (methodInfo.getName().equals("<init>")) {
             existing.ctorSet.add(methodInfo);
@@ -277,12 +286,12 @@ public class SubstrateAutoFeatureStep {
     }
 
     public void addReflectiveClass(Map<String, ReflectionInfo> reflectiveClasses, boolean constructors, boolean method,
-            boolean fields, boolean finalFieldsWritable, boolean weak,
+            boolean fields,
             String... className) {
         for (String cl : className) {
             ReflectionInfo existing = reflectiveClasses.get(cl);
             if (existing == null) {
-                reflectiveClasses.put(cl, new ReflectionInfo(constructors, method, fields, finalFieldsWritable, weak));
+                reflectiveClasses.put(cl, new ReflectionInfo(constructors, method, fields));
             } else {
                 if (constructors) {
                     existing.constructors = true;
@@ -301,7 +310,7 @@ public class SubstrateAutoFeatureStep {
         String cl = fieldInfo.getDeclaringClass();
         ReflectionInfo existing = reflectiveClasses.get(cl);
         if (existing == null) {
-            reflectiveClasses.put(cl, existing = new ReflectionInfo(false, false, false, false, false));
+            reflectiveClasses.put(cl, existing = new ReflectionInfo(false, false, false));
         }
         existing.fieldSet.add(fieldInfo.getName());
     }
@@ -310,19 +319,14 @@ public class SubstrateAutoFeatureStep {
         boolean constructors;
         boolean methods;
         boolean fields;
-        boolean finalFieldsWritable;
-        boolean weak;
         Set<String> fieldSet = new HashSet<>();
         Set<ReflectiveMethodBuildItem> methodSet = new HashSet<>();
         Set<ReflectiveMethodBuildItem> ctorSet = new HashSet<>();
 
-        private ReflectionInfo(boolean constructors, boolean methods, boolean fields, boolean finalFieldsWritable,
-                boolean weak) {
+        private ReflectionInfo(boolean constructors, boolean methods, boolean fields) {
             this.methods = methods;
             this.fields = fields;
             this.constructors = constructors;
-            this.finalFieldsWritable = finalFieldsWritable;
-            this.weak = weak;
         }
     }
 }
