@@ -13,12 +13,11 @@ import android.view.View;
 import android.view.Window;
 
 import com.facebook.stetho.common.Accumulator;
-import com.facebook.stetho.inspector.elements.AbstractChainedDescriptor;
+import com.facebook.stetho.inspector.elements.ChainedDescriptor;
 
 import javax.annotation.Nullable;
 
-final class WindowDescriptor extends AbstractChainedDescriptor<Window>
-    implements HighlightableDescriptor {
+final class WindowDescriptor extends ChainedDescriptor<Window> implements HighlightableDescriptor {
   @Override
   protected void onGetChildren(Window element, Accumulator<Object> children) {
     View decorView = element.peekDecorView();
