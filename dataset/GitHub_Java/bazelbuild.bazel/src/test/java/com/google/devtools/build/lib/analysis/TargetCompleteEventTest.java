@@ -54,11 +54,12 @@ public class TargetCompleteEventTest extends AnalysisTestCase {
     assertThat(event.referencedLocalFiles())
         .contains(
             new BuildEvent.LocalFile(
-                tac.getConfiguration()
+                tac
+                    .getConfiguration()
                     .getTestLogsDirectory(RepositoryName.DEFAULT)
                     .getRoot()
                     .asPath()
                     .getRelative("java/a/Example/baseline_coverage.dat"),
-                LocalFileType.COVERAGE_OUTPUT));
+                LocalFileType.OUTPUT));
   }
 }

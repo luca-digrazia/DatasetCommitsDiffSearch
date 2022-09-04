@@ -57,7 +57,7 @@ public class AspectCompleteEvent
     this.aspectValue = aspectValue;
     this.rootCauses =
         (rootCauses == null) ? NestedSetBuilder.<Cause>emptySet(Order.STABLE_ORDER) : rootCauses;
-    ImmutableList.Builder<BuildEventId> postedAfterBuilder = ImmutableList.builder();
+    ImmutableList.Builder postedAfterBuilder = ImmutableList.builder();
     for (Cause cause : getRootCauses()) {
       postedAfterBuilder.add(BuildEventId.fromCause(cause));
     }

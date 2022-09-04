@@ -29,7 +29,7 @@ import com.google.common.eventbus.AllowConcurrentEvents;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent;
-import com.google.devtools.build.lib.actions.BuildConfigurationEvent;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CompletionContext;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts.ReportedArtifacts;
@@ -371,13 +371,11 @@ public class BuildEventStreamer {
     halfCloseFuturesMap = halfCloseFuturesMapBuilder.build();
   }
 
-  private void maybeReportArtifactSet(CompletionContext ctx, NestedSetView<?> view) {
+  private void maybeReportArtifactSet(CompletionContext ctx, NestedSetView<Artifact> view) {
     String name = artifactGroupNamer.maybeName(view);
     if (name == null) {
       return;
     }
-    view = NamedArtifactGroup.expandView(ctx, view);
-
     // We only split if the max number of entries is at least 2 (it must be at least a binary tree).
     // The method throws for smaller values.
     if (besOptions.maxNamedSetEntries >= 2) {
@@ -386,14 +384,14 @@ public class BuildEventStreamer {
       // double the memory consumption of large nested sets.
       view = view.splitIfExceedsMaximumSize(besOptions.maxNamedSetEntries);
     }
-    for (NestedSetView<?> transitive : view.transitives()) {
+    for (NestedSetView<Artifact> transitive : view.transitives()) {
       maybeReportArtifactSet(ctx, transitive);
     }
     post(new NamedArtifactGroup(name, ctx, view));
   }
 
-  private void maybeReportArtifactSet(CompletionContext ctx, NestedSet<?> set) {
-    maybeReportArtifactSet(ctx, new NestedSetView<>(set));
+  private void maybeReportArtifactSet(CompletionContext ctx, NestedSet<Artifact> set) {
+    maybeReportArtifactSet(ctx, new NestedSetView<Artifact>(set));
   }
 
   private void maybeReportConfiguration(BuildEvent configuration) {
@@ -428,7 +426,6 @@ public class BuildEventStreamer {
 
   @Subscribe
   @AllowConcurrentEvents
-  @SuppressWarnings("unchecked")
   public void buildEvent(BuildEvent event) {
     if (finalEventsToCome != null) {
       synchronized (this) {
@@ -459,9 +456,8 @@ public class BuildEventStreamer {
 
     if (event instanceof EventReportingArtifacts) {
       ReportedArtifacts reportedArtifacts = ((EventReportingArtifacts) event).reportedArtifacts();
-      for (NestedSet<?> artifactSet : reportedArtifacts.artifacts) {
-        maybeReportArtifactSet(
-            reportedArtifacts.completionContext, (NestedSet<Object>) artifactSet);
+      for (NestedSet<Artifact> artifactSet : reportedArtifacts.artifacts) {
+        maybeReportArtifactSet(reportedArtifacts.completionContext, artifactSet);
       }
     }
 
@@ -470,11 +466,7 @@ public class BuildEventStreamer {
       clearMissingStartEvent(event.getEventId());
     }
 
-    if (event instanceof BuildConfigurationEvent) {
-      maybeReportConfiguration(event);
-    } else {
-      post(event);
-    }
+    post(event);
 
     // Reconsider all events blocked by the event just posted.
     Collection<BuildEvent> toReconsider;
@@ -699,10 +691,6 @@ public class BuildEventStreamer {
     }
     if (event.getException() != null) {
       // Publish failed actions
-      return true;
-    }
-    if (!event.getActionMetadataLogs().isEmpty()) {
-      // Publish all new logs with inputs and input sizes
       return true;
     }
     return (event.getAction() instanceof ExtraAction);

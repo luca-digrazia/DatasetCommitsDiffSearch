@@ -44,16 +44,14 @@ import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
-import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
-import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CompletionContext.PathResolverFactory;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
@@ -1115,15 +1113,15 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
         : (WorkspaceStatusAction) workspaceStatusValue.getAction(0);
   }
 
-  public void injectCoverageReportData(Actions.GeneratingActions actions) {
-    PrecomputedValue.COVERAGE_REPORT_KEY.set(injectable(), actions.getActions());
+  public void injectCoverageReportData(ImmutableList<ActionAnalysisMetadata> actions) {
+    PrecomputedValue.COVERAGE_REPORT_KEY.set(injectable(), actions);
   }
 
   private void setDefaultVisibility(RuleVisibility defaultVisibility) {
     PrecomputedValue.DEFAULT_VISIBILITY.set(injectable(), defaultVisibility);
   }
 
-  private void setSkylarkSemantics(StarlarkSemantics starlarkSemantics) {
+  protected void setSkylarkSemantics(StarlarkSemantics starlarkSemantics) {
     PrecomputedValue.STARLARK_SEMANTICS.set(injectable(), starlarkSemantics);
   }
 
@@ -1389,7 +1387,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
 
     setShowLoadingProgress(packageCacheOptions.showLoadingProgress);
     setDefaultVisibility(packageCacheOptions.defaultVisibility);
-    setSkylarkSemantics(getEffectiveStarlarkSemantics(starlarkSemanticsOptions));
+    setSkylarkSemantics(starlarkSemanticsOptions.toSkylarkSemantics());
     setPackageLocator(pkgLocator);
 
     syscalls.set(getPerBuildSyscallCache(packageCacheOptions.globbingThreads));
@@ -1408,11 +1406,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
 
     // Reset the stateful SkyframeCycleReporter, which contains cycles from last run.
     cyclesReporter.set(createCyclesReporter());
-  }
-
-  public StarlarkSemantics getEffectiveStarlarkSemantics(
-      StarlarkSemanticsOptions starlarkSemanticsOptions) {
-    return starlarkSemanticsOptions.toSkylarkSemantics();
   }
 
   @SuppressWarnings("unchecked")
@@ -1565,9 +1558,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
               .setEventHander(reporter)
               .build();
       return buildDriver.evaluate(
-          Iterables.concat(
-              ArtifactSkyKey.mandatoryKeys(artifactsToBuild), targetKeys, aspectKeys, testKeys),
-          evaluationContext);
+          Iterables.concat(artifactsToBuild, targetKeys, aspectKeys, testKeys), evaluationContext);
     } finally {
       progressReceiver.executionProgressReceiver = null;
       // Also releases thread locks.
@@ -2466,8 +2457,13 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       return null;
     }
 
-    ActionLookupData generatingActionKey =
-        ((Artifact.DerivedArtifact) artifact).getGeneratingActionKey();
+    ArtifactOwner artifactOwner = artifact.getArtifactOwner();
+    Preconditions.checkState(
+        artifactOwner instanceof ActionLookupValue.ActionLookupKey,
+        "%s %s",
+        artifact,
+        artifactOwner);
+    SkyKey actionLookupKey = (ActionLookupValue.ActionLookupKey) artifactOwner;
 
     synchronized (valueLookupLock) {
       // Note that this will crash (attempting to run a configured target value builder after
@@ -2476,18 +2472,13 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       // this action. We don't expect callers to query generating actions in such cases.
       EvaluationResult<ActionLookupValue> result =
           evaluate(
-              ImmutableList.of(generatingActionKey.getActionLookupKey()),
+              ImmutableList.of(actionLookupKey),
               /*keepGoing=*/ false,
               /*numThreads=*/ ResourceUsage.getAvailableProcessors(),
               eventHandler);
-      if (result.hasError()) {
-        return null;
-      }
-      ActionLookupValue actionLookupValue = result.get(generatingActionKey.getActionLookupKey());
-      int actionIndex = generatingActionKey.getActionIndex();
-      return actionLookupValue.isActionTemplate(actionIndex)
-          ? actionLookupValue.getActionTemplate(actionIndex)
-          : actionLookupValue.getAction(actionIndex);
+      return result.hasError()
+          ? null
+          : result.get(actionLookupKey).getGeneratingActionDangerousReadJavadoc(artifact);
     }
   }
 
@@ -2613,11 +2604,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   @VisibleForTesting
   public BlazeDirectories getBlazeDirectoriesForTesting() {
     return directories;
-  }
-
-  @VisibleForTesting
-  ActionExecutionStatusReporter getActionExecutionStatusReporterForTesting() {
-    return statusReporterRef.get();
   }
 
   /**

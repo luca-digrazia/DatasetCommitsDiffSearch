@@ -352,8 +352,7 @@ public final class TargetCompleteEvent
     if (baselineCoverageArtifacts != null) {
       for (Artifact artifact : baselineCoverageArtifacts) {
         builder.add(
-            new LocalFile(
-                completionContext.pathResolver().toPath(artifact), LocalFileType.COVERAGE_OUTPUT));
+            new LocalFile(completionContext.pathResolver().toPath(artifact), LocalFileType.OUTPUT));
       }
     }
     return builder.build();

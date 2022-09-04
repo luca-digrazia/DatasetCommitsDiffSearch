@@ -140,11 +140,6 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     }
 
     @Override
-    public boolean mayBeSlow() {
-      return false;
-    }
-
-    @Override
     public synchronized void sendBuildEvent(BuildEvent event) {
       events.add(event);
       eventsAsProtos.add(
