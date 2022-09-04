@@ -27,7 +27,6 @@ import lib.BreadcrumbList;
 import lib.ExclusiveInputException;
 import models.Node;
 import models.NodeService;
-import models.Radio;
 import models.api.responses.system.InputTypeSummaryResponse;
 import models.api.results.MessageResult;
 import play.mvc.Result;
@@ -44,20 +43,23 @@ public class InputsController extends AuthenticatedController {
     private NodeService nodeService;
 
     public Result manage(String nodeId) {
+        // TODO: account field attributes using JS (greater than, listen_address, ...)
+        // TODO: persist inputs
+
+        Node node = nodeService.loadNode(nodeId);
+
+        if (node == null) {
+            String message = "Did not find node.";
+            return status(404, views.html.errors.error.render(message, new RuntimeException(), request()));
+        }
+
+        BreadcrumbList bc = new BreadcrumbList();
+        bc.addCrumb("System", routes.SystemController.index(0));
+        bc.addCrumb("Nodes", routes.SystemController.nodes());
+        bc.addCrumb(node.getShortNodeId(), routes.SystemController.node(node.getNodeId()));
+        bc.addCrumb("Inputs", routes.InputsController.manage(node.getNodeId()));
+
         try {
-            Node node = nodeService.loadNode(nodeId);
-
-            if (node == null) {
-                String message = "Did not find node.";
-                return status(404, views.html.errors.error.render(message, new RuntimeException(), request()));
-            }
-
-            BreadcrumbList bc = new BreadcrumbList();
-            bc.addCrumb("System", routes.SystemController.index(0));
-            bc.addCrumb("Nodes", routes.SystemController.nodes());
-            bc.addCrumb(node.getShortNodeId(), routes.SystemController.node(node.getNodeId()));
-            bc.addCrumb("Inputs", routes.InputsController.manage(node.getNodeId()));
-
             return ok(views.html.system.inputs.manage.render(
                     currentUser(),
                     bc,
@@ -69,39 +71,6 @@ public class InputsController extends AuthenticatedController {
         } catch (APIException e) {
             String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
-        }
-    }
-
-    public Result manageRadio(String radioId) {
-        try {
-            Radio radio = nodeService.loadRadio(radioId);
-
-            if (radio == null) {
-                String message = "Did not find radio.";
-                return status(404, views.html.errors.error.render(message, new RuntimeException(), request()));
-            }
-
-            BreadcrumbList bc = new BreadcrumbList();
-            bc.addCrumb("System", routes.SystemController.index(0));
-            bc.addCrumb("Nodes", routes.SystemController.nodes());
-            bc.addCrumb(radio.getShortNodeId(), routes.RadiosController.show(radio.getId()));
-            bc.addCrumb("Inputs", routes.InputsController.manageRadio(radio.getId()));
-
-            return ok(views.html.system.inputs.manage_radio.render(
-                    currentUser(),
-                    bc,
-                    radio,
-                    radio.getAllInputTypeInformation()
-            ));
-        } catch (IOException e) {
-            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        } catch (APIException e) {
-            String message = "Could not fetch system information. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
-            return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
     }
 
@@ -166,126 +135,34 @@ public class InputsController extends AuthenticatedController {
         } catch (APIException e) {
             String message = "Could not launch input. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
             return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
-        }
-    }
-
-    public Result launchRadio(String radioId) {
-        Map<String, Object> configuration = Maps.newHashMap();
-        Map<String, String[]> form = request().body().asFormUrlEncoded();
-
-        String inputType = form.get("type")[0];
-        String inputTitle = form.get("title")[0];
-
-        // TODO so duplicate. wow. #doge
-
-        try {
-            final Radio radio = nodeService.loadRadio(radioId);
-            InputTypeSummaryResponse inputInfo = radio.getInputTypeInformation(inputType);
-
-            for (Map.Entry<String, String[]> f : form.entrySet()) {
-                if (!f.getKey().startsWith("configuration_")) {
-                    continue;
-                }
-
-                String key = f.getKey().substring("configuration_".length());
-                Object value;
-
-                if (f.getValue().length > 0) {
-                    String stringValue = f.getValue()[0];
-
-                    // Decide what to cast to. (string, bool, number)
-                    switch((String) inputInfo.requestedConfiguration.get(key).get("type")) {
-                        case "text":
-                            value = stringValue;
-                            break;
-                        case "number":
-                            value = Integer.parseInt(stringValue);
-                            break;
-                        case "boolean":
-                            value = stringValue.equals("true");
-                            break;
-                        case "dropdown":
-                            value = stringValue;
-                            break;
-                        default: continue;
-                    }
-
-                } else {
-                    continue;
-                }
-
-                configuration.put(key, value);
-            }
-
-            try {
-                if (!radio.launchInput(inputTitle, inputType, configuration, currentUser(), inputInfo.isExclusive)) {
-                    return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, new RuntimeException("Could not launch input " + inputTitle), request()));
-                }
-            } catch (ExclusiveInputException e) {
-                flash("error", "This input is exclusive and already running.");
-                return redirect(routes.InputsController.manageRadio(radioId));
-            }
-
-            return redirect(routes.InputsController.manageRadio(radioId));
-        } catch (IOException e) {
-            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        } catch (APIException e) {
-            String message = "Could not launch input. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
-            return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
         }
     }
 
     public Result terminate(String nodeId, String inputId) {
-        try {
-            if (!nodeService.loadNode(nodeId).terminateInput(inputId)) {
-                flash("Could not terminate input " + inputId);
-            }
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
+        if (! nodeService.loadNode(nodeId).terminateInput(inputId)) {
+            flash("Could not terminate input " + inputId);
         }
-
         return redirect(routes.InputsController.manage(nodeId));
     }
 
-    public Result addStaticField(String nodeId, String inputId) {
-        Map<String, String[]> form = request().body().asFormUrlEncoded();
-
-        if(form.get("key") == null || form.get("value") == null) {
-            flash("error", "Missing parameters.");
-            return redirect(routes.InputsController.manage(nodeId));
-        }
-
-        String key = form.get("key")[0];
-        String value = form.get("value")[0];
-
+    public Result recentMessage(String nodeId, String inputId) {
         try {
-            nodeService.loadNode(nodeId).getInput(inputId).addStaticField(key, value);
-            return redirect(routes.InputsController.manage(nodeId));
-        } catch (IOException e) {
-            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        } catch (APIException e) {
-            String message = "Could not add static field. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
-            return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
-        }
-    }
+            Node node = nodeService.loadNode(nodeId);
+            MessageResult recentlyReceivedMessage = node.getInput(inputId).getRecentlyReceivedMessage(nodeId);
 
-    public Result removeStaticField(String nodeId, String inputId, String key) {
-        try {
-            nodeService.loadNode(nodeId).getInput(inputId).removeStaticField(key);
-            return redirect(routes.InputsController.manage(nodeId));
+            if (recentlyReceivedMessage == null) {
+                return notFound();
+            }
+
+            Map<String, Object> result = Maps.newHashMap();
+            result.put("id", recentlyReceivedMessage.getId());
+            result.put("fields", recentlyReceivedMessage.getFields());
+
+            return ok(new Gson().toJson(result)).as("application/json");
         } catch (IOException e) {
-            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+            return status(500);
         } catch (APIException e) {
-            String message = "Could not delete static field. We expected HTTP 204, but got a HTTP " + e.getHttpCode() + ".";
-            return status(500, views.html.errors.error.render(message, e, request()));
-        } catch (NodeService.NodeNotFoundException e) {
-            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
+            return status(e.getHttpCode());
         }
     }
 

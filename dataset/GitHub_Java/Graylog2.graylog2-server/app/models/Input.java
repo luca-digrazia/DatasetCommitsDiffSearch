@@ -24,15 +24,10 @@ import lib.APIException;
 import lib.ApiClient;
 import lib.timeranges.InvalidRangeParametersException;
 import lib.timeranges.RelativeRange;
-import models.api.requests.AddStaticFieldRequest;
-import models.api.responses.EmptyResponse;
 import models.api.responses.MessageSummaryResponse;
-import models.api.responses.metrics.GaugeResponse;
 import models.api.responses.system.InputSummaryResponse;
 import models.api.results.MessageResult;
 import org.joda.time.DateTime;
-import org.slf4j.LoggerFactory;
-import play.mvc.Http;
 
 import java.io.IOException;
 import java.util.List;
@@ -42,16 +37,11 @@ import java.util.Map;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class Input {
-
-    private static final org.slf4j.Logger log = LoggerFactory.getLogger(Input.class);
-
     public interface Factory {
-        Input fromSummaryResponse(InputSummaryResponse input, Node node);
+        Input fromSummaryResponse(InputSummaryResponse input);
     }
 
     private final ApiClient api;
-    private final UniversalSearch.Factory searchFactory;
-    private final Node node;
     private final String type;
     private final String id;
     private final String persistId;
@@ -60,22 +50,18 @@ public class Input {
     private final User creatorUser;
     private final DateTime startedAt;
     private final Map<String, Object> attributes;
-    private final Map<String, String> staticFields;
 
     @AssistedInject
-    private Input(ApiClient api, UniversalSearch.Factory searchFactory, UserService userService, @Assisted InputSummaryResponse is, @Assisted Node node) {
+    private Input(ApiClient api, @Assisted InputSummaryResponse is) {
         this.api = api;
-        this.searchFactory = searchFactory;
-        this.node = node;
         this.type = is.type;
         this.id = is.inputId;
         this.persistId = is.persistId;
         this.name = is.name;
         this.title = is.title;
         this.startedAt = DateTime.parse(is.startedAt);
-        this.creatorUser = userService.load(is.creatorUserId);
+        this.creatorUser = User.load(is.creatorUserId);
         this.attributes = is.attributes;
-        this.staticFields = is.staticFields;
 
         // We might get a double parsed from JSON here. Make sure to round it to Integer. (would be .0 anyways)
         for (Map.Entry<String, Object> e : attributes.entrySet()) {
@@ -94,9 +80,8 @@ public class Input {
 
         UniversalSearch search = null;
         try {
-            search = searchFactory.queryWithRange(query, new RelativeRange(60 * 60 * 24));
+            search = new UniversalSearch(new RelativeRange(60 * 60 * 24), query);
         } catch (InvalidRangeParametersException e) {
-            return null; // cannot happen(tm)
         }
         List<MessageSummaryResponse> messages = search.search().getMessages();
 
@@ -136,83 +121,6 @@ public class Input {
 
     public DateTime getStartedAt() {
         return startedAt;
-    }
-
-    public Map<String, String> getStaticFields() {
-        return staticFields;
-    }
-
-    public void addStaticField(String key, String value) throws APIException, IOException {
-        api.post().node(node)
-                .path("/system/inputs/{0}/staticfields", id)
-                .body(new AddStaticFieldRequest(key, value))
-                .expect(Http.Status.CREATED)
-                .execute();
-    }
-
-    public void removeStaticField(String key) throws APIException, IOException {
-        api.delete().node(node)
-                .path("/system/inputs/{0}/staticfields/{1}", id, key)
-                .expect(Http.Status.NO_CONTENT)
-                .execute();
-    }
-
-    public long getConnections() {
-        return getGaugeValue("open_connections");
-    }
-
-    public long getTotalConnections() {
-        return getGaugeValue("total_connections");
-    }
-
-    public long getReadBytes() {
-        return getGaugeValue(buildNetworkIOMetricName("read_bytes", false));
-    }
-
-    public long getWrittenBytes() {
-        return getGaugeValue(buildNetworkIOMetricName("written_bytes", false));
-    }
-
-    public long getTotalReadBytes() {
-        return getGaugeValue(buildNetworkIOMetricName("read_bytes", true));
-    }
-
-    public long getTotalWrittenBytes() {
-        return getGaugeValue(buildNetworkIOMetricName("written_bytes", true));
-    }
-
-    private String buildNetworkIOMetricName(String base, boolean total) {
-        StringBuilder metricName = new StringBuilder(base).append("_");
-
-        if (total) {
-            metricName.append("total");
-        } else {
-            metricName.append("1sec");
-        }
-
-        return metricName.toString();
-    }
-
-    private Long getGaugeValue(String name) {
-        try {
-            GaugeResponse response = api.get(GaugeResponse.class)
-                .node(node)
-                .path("/system/metrics/{0}.{1}.{2}", type, id, name)
-                .expect(200, 404)
-                .execute();
-
-            if (response == null) {
-                return -1L;
-            } else {
-                return (Long) response.value;
-            }
-        } catch (APIException e) {
-            log.error("Unable to read throughput info of input [{}]", this.id, e);
-        } catch (IOException e) {
-            log.error("Unexpected exception", e);
-        }
-
-        return -1L;
     }
 
     public Map<String, Object> getAttributes() {
