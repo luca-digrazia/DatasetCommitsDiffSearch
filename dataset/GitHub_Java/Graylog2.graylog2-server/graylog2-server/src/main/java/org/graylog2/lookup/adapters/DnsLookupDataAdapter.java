@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import com.google.inject.assistedinject.Assisted;
 import org.apache.commons.collections4.CollectionUtils;
@@ -101,8 +102,8 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
     @Override
     protected void doStart() {
 
-        dnsClient = new DnsClient();
-        dnsClient.start(config.serverIps(), config.requestTimeout());
+        dnsClient = new DnsClient(config.requestTimeout());
+        dnsClient.start(config.serverIps());
     }
 
     @Override
@@ -191,7 +192,7 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
         } catch (UnknownHostException e) {
             return LookupResult.empty(); // UnknownHostException is a valid case when the DNS record does not exist. Do not log an error.
         } catch (Exception e) {
-            LOG.error("Could not resolve [{}] records for hostname [{}]. Cause [{}]", A_RECORD_LABEL, key, ExceptionUtils.getRootCauseMessage(e));
+            LOG.error("Could not resolve [{}] records for hostname [{}]. Cause [{}]", A_RECORD_LABEL, key, ExceptionUtils.getRootCauseOrMessage(e));
             errorCounter.inc();
             return getEmptyResult();
         }
@@ -217,7 +218,7 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
         } catch (UnknownHostException e) {
             return getEmptyResult(); // UnknownHostException is a valid case when the DNS record does not exist. Do not log an error.
         } catch (Exception e) {
-            LOG.error("Could not resolve [{}] records for hostname [{}]. Cause [{}]", AAAA_RECORD_LABEL, key, ExceptionUtils.getRootCauseMessage(e));
+            LOG.error("Could not resolve [{}] records for hostname [{}]. Cause [{}]", AAAA_RECORD_LABEL, key, ExceptionUtils.getRootCauseOrMessage(e));
             errorCounter.inc();
             return getErrorResult();
         }
@@ -237,7 +238,8 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
         final String singleValue = aDnsAnswers.get(0).ipAddress();
         LookupResult.Builder builder = LookupResult.builder()
                                                    .single(singleValue)
-                                                   .multiValue(Collections.singletonMap(RESULTS_FIELD, aDnsAnswers));
+                                                   .multiValue(Collections.singletonMap(RESULTS_FIELD, aDnsAnswers))
+                                                   .stringListValue(ADnsAnswer.convertToStringListValue(aDnsAnswers));
 
         assignMinimumTTL(aDnsAnswers, builder);
 
@@ -289,14 +291,14 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
             allAnswers.addAll(ip6Answers);
 
             if (CollectionUtils.isNotEmpty(allAnswers)) {
-                builder.multiValue(Collections.singletonMap(RESULTS_FIELD, allAnswers));
+                builder.multiValue(Collections.singletonMap(RESULTS_FIELD, allAnswers)).stringListValue(ADnsAnswer.convertToStringListValue(allAnswers));
             }
 
             assignMinimumTTL(allAnswers, builder);
 
             return builder.build();
         } catch (Exception e) {
-            LOG.error("Could not resolve [A/AAAA] records for hostname [{}]. Cause [{}]", key, ExceptionUtils.getRootCauseMessage(e));
+            LOG.error("Could not resolve [A/AAAA] records for hostname [{}]. Cause [{}]", key, ExceptionUtils.getRootCauseOrMessage(e));
             errorCounter.inc();
             return getErrorResult();
         }
@@ -308,7 +310,7 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
         try {
             dnsResponse = dnsClient.reverseLookup(key.toString());
         } catch (Exception e) {
-            LOG.error("Could not perform reverse DNS lookup for [{}]. Cause [{}]", key, ExceptionUtils.getRootCauseMessage(e));
+            LOG.error("Could not perform reverse DNS lookup for [{}]. Cause [{}]", key, ExceptionUtils.getRootCauseOrMessage(e));
             errorCounter.inc();
             return getErrorResult();
         }
@@ -323,8 +325,9 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
                 multiValueResults.put(PtrDnsAnswer.FIELD_DNS_TTL, dnsResponse.dnsTTL());
 
                 final LookupResult.Builder builder = LookupResult.builder()
-                                                                 .single(dnsResponse.fullDomain())
-                                                                 .multiValue(multiValueResults);
+                        .single(dnsResponse.fullDomain())
+                        .multiValue(multiValueResults)
+                        .stringListValue(ImmutableList.of(dnsResponse.fullDomain()));
 
                 if (config.hasOverrideTTL()) {
                     builder.cacheTTL(config.getCacheTTLOverrideMillis());
@@ -348,14 +351,15 @@ public class DnsLookupDataAdapter extends LookupDataAdapter {
         try {
             txtDnsAnswers = dnsClient.txtLookup(key.toString());
         } catch (Exception e) {
-            LOG.error("Could not perform TXT DNS lookup for [{}]. Cause [{}]", key, ExceptionUtils.getRootCauseMessage(e));
+            LOG.error("Could not perform TXT DNS lookup for [{}]. Cause [{}]", key, ExceptionUtils.getRootCauseOrMessage(e));
             errorCounter.inc();
             return getErrorResult();
         }
 
         if (CollectionUtils.isNotEmpty(txtDnsAnswers)) {
             final LookupResult.Builder builder = LookupResult.builder();
-            builder.multiValue(Collections.singletonMap(RAW_RESULTS_FIELD, txtDnsAnswers));
+            builder.multiValue(Collections.singletonMap(RAW_RESULTS_FIELD, txtDnsAnswers))
+                    .stringListValue(TxtDnsAnswer.convertToStringListValue(txtDnsAnswers));
             assignMinimumTTL(txtDnsAnswers, builder);
 
             return builder.build();
