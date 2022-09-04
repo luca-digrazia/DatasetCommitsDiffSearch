@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.actions.ParameterFile.ParameterFileT
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.TRISTATE;
-import static com.google.devtools.build.lib.packages.SkylarkProviderIdentifier.forKey;
 import static com.google.devtools.build.lib.rules.android.AndroidCommon.getAndroidConfig;
 
 import com.google.common.base.Function;
@@ -41,11 +40,11 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.WrappingProvider;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
+import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -55,6 +54,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
@@ -111,7 +111,6 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
           "runtime_deps",
           ":android_sdk",
           "aidl_lib", // for the aidl runtime in the android_sdk rule
-          "$toolchain", // this is _toolchain in Skylark rules (b/78647825)
           // To get from proto_library through proto_lang_toolchain rule to proto runtime library.
           JavaProtoAspectCommon.LITE_PROTO_TOOLCHAIN_ATTR, "runtime");
 
@@ -129,9 +128,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
   public AspectDefinition getDefinition(AspectParameters params) {
     AspectDefinition.Builder result =
         new AspectDefinition.Builder(this)
-            .requireSkylarkProviders(forKey(JavaInfo.PROVIDER.getKey()))
-            // Latch onto Skylark toolchains in case they have a "runtime" (b/78647825)
-            .requireSkylarkProviders(forKey(ToolchainInfo.PROVIDER.getKey()))
+            .requireSkylarkProviders(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
             .requireProviderSets(
                 ImmutableList.of(
                     ImmutableSet.<Class<?>>of(ProtoSourcesProvider.class),
@@ -436,7 +433,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
       Set<String> incrementalDexopts,
       Artifact dexArchive) {
     CustomCommandLine args =
-        new CustomCommandLine.Builder()
+        new Builder()
             .addExecPath("--input_jar", jar)
             .addExecPath("--output_zip", dexArchive)
             .addAll(ImmutableList.copyOf(incrementalDexopts))
