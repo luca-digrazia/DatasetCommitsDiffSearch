@@ -15,8 +15,6 @@
  */
 package org.androidannotations.validation.rest;
 
-import java.lang.annotation.Annotation;
-
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -41,8 +39,8 @@ public class DeleteValidator implements ElementValidator {
 	}
 
 	@Override
-	public Class<? extends Annotation> getTarget() {
-		return Delete.class;
+	public String getTarget() {
+		return Delete.class.getName();
 	}
 
 	@Override
@@ -58,9 +56,9 @@ public class DeleteValidator implements ElementValidator {
 
 		validatorHelper.throwsOnlyRestClientException(executableElement, valid);
 
-		validatorHelper.returnTypeIsVoid(executableElement, valid);
+		validatorHelper.doesNotReturnPrimitive(executableElement, valid);
 
-		restAnnotationHelper.urlVariableNamesExistInParametersAndHasNoOneMoreParameter(executableElement, valid);
+		restAnnotationHelper.urlVariableNamesExistInParametersAndHasOnlyOneMoreParameter(executableElement, valid);
 
 		return valid.isValid();
 	}
