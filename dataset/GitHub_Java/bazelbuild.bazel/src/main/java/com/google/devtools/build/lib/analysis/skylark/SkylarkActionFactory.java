@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
-import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -35,7 +34,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -74,8 +72,6 @@ public class SkylarkActionFactory implements SkylarkValue {
   private final SkylarkRuleContext context;
   private final SkylarkSemanticsOptions skylarkSemanticsOptions;
   private RuleContext ruleContext;
-  /** Counter for actions.run_shell helper scripts. Every script must have a unique name. */
-  private int runShellOutputCounter = 0;
 
   public SkylarkActionFactory(
       SkylarkRuleContext context,
@@ -577,23 +573,7 @@ public class SkylarkActionFactory implements SkylarkValue {
     }
 
     if (commandUnchecked instanceof String) {
-      Map<String, String> executionInfo =
-          ImmutableMap.copyOf(TargetUtils.getExecutionInfo(ruleContext.getRule()));
-      String helperScriptSuffix = String.format(".run_shell_%d.sh", runShellOutputCounter++);
-      String command = (String) commandUnchecked;
-      Artifact helperScript =
-          CommandHelper.shellCommandHelperScriptMaybe(
-              ruleContext, command, helperScriptSuffix, executionInfo);
-      if (helperScript == null) {
-        builder.setShellCommand(command);
-      } else {
-        builder.setShellCommand(helperScript.getExecPathString());
-        builder.addInput(helperScript);
-        FilesToRunProvider provider = context.getExecutableRunfiles(helperScript);
-        if (provider != null) {
-          builder.addTool(provider);
-        }
-      }
+      builder.setShellCommand((String) commandUnchecked);
     } else if (commandUnchecked instanceof SkylarkList) {
       SkylarkList commandList = (SkylarkList) commandUnchecked;
       if (commandList.size() < 3) {
@@ -621,20 +601,18 @@ public class SkylarkActionFactory implements SkylarkValue {
   }
 
   /**
-   * Setup for spawn actions common between {@link #run} and {@link #runShell}.
+   * Stup for spawn actions common between {@link #run} and {@link #runShell}.
    *
-   * <p>{@code builder} should have either executable or a command set.
+   * {@code builder} should have either executable or a command set.
    */
   private void registerSpawnAction(
       SkylarkList outputs,
       Object inputs,
       Object mnemonicUnchecked,
       Object progressMessage,
-      Boolean useDefaultShellEnv,
-      Object envUnchecked,
+      Boolean useDefaultShellEnv, Object envUnchecked,
       Object executionRequirementsUnchecked,
-      Object inputManifestsUnchecked,
-      SpawnAction.Builder builder)
+      Object inputManifestsUnchecked, SpawnAction.Builder builder)
       throws EvalException {
     // TODO(bazel-team): builder still makes unnecessary copies of inputs, outputs and args.
     Iterable<Artifact> inputArtifacts;
