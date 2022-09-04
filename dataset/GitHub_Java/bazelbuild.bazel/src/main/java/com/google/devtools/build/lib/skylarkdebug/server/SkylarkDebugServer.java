@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.List;
 import java.util.function.Function;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /** Manages the network socket and debugging state for threads running Skylark code. */
@@ -64,8 +63,6 @@ public final class SkylarkDebugServer implements DebugServer {
         DebugServerTransport.createAndWaitForClient(eventHandler, serverSocket);
     return new SkylarkDebugServer(eventHandler, transport);
   }
-
-  private static final Logger logger = Logger.getLogger(SkylarkDebugServer.class.getName());
 
   private final EventHandler eventHandler;
   /** Handles all thread-related state. */
@@ -122,7 +119,7 @@ public final class SkylarkDebugServer implements DebugServer {
   @Override
   public void close() {
     try {
-      logger.fine("Closing debug server");
+      eventHandler.handle(Event.debug("Closing debug server"));
       transport.close();
 
     } catch (IOException e) {
