@@ -1,3 +1,18 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.quarkus.gradle.tasks;
 
 import java.io.BufferedReader;
@@ -267,15 +282,7 @@ public class QuarkusDev extends QuarkusTask {
 
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
-            final String outputClassDirectory = extension.outputDirectory().getAbsolutePath();
-            final String outputResourcesDirectory = extension.outputConfigDirectory().getAbsolutePath();
-            if (outputClassDirectory.equals(outputResourcesDirectory)) {
-                args.add(outputClassDirectory);
-            } else {
-                // we pass both the output class directory and the output config directory (which differ by default)
-                // so both can be added as classloader roots
-                args.add(outputClassDirectory + "," + outputResourcesDirectory);
-            }
+            args.add(extension.outputDirectory().getAbsolutePath());
             args.add(wiringClassesDirectory.getAbsolutePath());
             args.add(new File(getBuildDir(), "transformer-cache").getAbsolutePath());
             ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
