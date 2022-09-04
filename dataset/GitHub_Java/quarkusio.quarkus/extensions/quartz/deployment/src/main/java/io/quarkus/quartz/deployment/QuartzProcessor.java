@@ -29,7 +29,7 @@ import io.quarkus.agroal.deployment.JdbcDataSourceSchemaReadyBuildItem;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
-import io.quarkus.deployment.Capability;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -52,7 +52,7 @@ import io.quarkus.quartz.runtime.QuartzSupport;
 public class QuartzProcessor {
     @BuildStep
     CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.QUARTZ);
+        return new CapabilityBuildItem(Capabilities.QUARTZ);
     }
 
     @BuildStep
@@ -86,7 +86,7 @@ public class QuartzProcessor {
 
         if (!selectedJdbcDataSourceBuildItem.isPresent()) {
             String message = String.format(
-                    "JDBC Store configured but '%s' datasource is not configured properly. You can configure your datasource by following the guide available at: https://quarkus.io/guides/datasource",
+                    "JDBC Store configured but '%s' datasource is not configured properly. You can configure your datasource by following the guide available at: https://quarkus.io/guides/datasource-guide",
                     config.dataSourceName.isPresent() ? config.dataSourceName.get() : "default");
             throw new ConfigurationError(message);
         }

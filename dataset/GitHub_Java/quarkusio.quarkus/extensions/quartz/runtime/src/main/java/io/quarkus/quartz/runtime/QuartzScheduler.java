@@ -50,7 +50,6 @@ import io.quarkus.scheduler.Trigger;
 import io.quarkus.scheduler.runtime.ScheduledInvoker;
 import io.quarkus.scheduler.runtime.ScheduledMethodMetadata;
 import io.quarkus.scheduler.runtime.SchedulerContext;
-import io.quarkus.scheduler.runtime.SchedulerRuntimeConfig;
 import io.quarkus.scheduler.runtime.SimpleScheduler;
 
 @Singleton
@@ -60,27 +59,18 @@ public class QuartzScheduler implements Scheduler {
     private static final String INVOKER_KEY = "invoker";
 
     private final org.quartz.Scheduler scheduler;
-    private final boolean enabled;
 
     @Produces
     @Singleton
     org.quartz.Scheduler produceQuartzScheduler() {
-        if (scheduler == null) {
-            throw new IllegalStateException(
-                    "Cannot produce org.quartz.Scheduler - Quartz scheduler is disabled or no schedules were found");
-        }
         return scheduler;
     }
 
-    public QuartzScheduler(SchedulerContext context, QuartzSupport quartzSupport, Config config,
-            SchedulerRuntimeConfig schedulerRuntimeConfig) {
-        enabled = schedulerRuntimeConfig.enabled;
-        if (!enabled) {
-            LOGGER.info("Quartz scheduler is disabled by config property and will not be started");
+    public QuartzScheduler(SchedulerContext context, QuartzSupport quartzSupport, Config config) {
+        if (!quartzSupport.getRuntimeConfig().forceStart && context.getScheduledMethods().isEmpty()) {
+            LOGGER.infof("No scheduled business methods found - Quartz scheduler will not be started");
             this.scheduler = null;
-        } else if (!quartzSupport.getRuntimeConfig().forceStart && context.getScheduledMethods().isEmpty()) {
-            LOGGER.info("No scheduled business methods found - Quartz scheduler will not be started");
-            this.scheduler = null;
+
         } else {
             Map<String, ScheduledInvoker> invokers = new HashMap<>();
             UserTransaction transaction = null;
@@ -192,44 +182,23 @@ public class QuartzScheduler implements Scheduler {
 
     @Override
     public void pause() {
-        if (!enabled) {
-            LOGGER.warn("Quartz Scheduler is disabled and cannot be paused");
-        } else {
-            try {
-                if (scheduler != null) {
-                    scheduler.standby();
-                }
-            } catch (SchedulerException e) {
-                LOGGER.warn("Unable to pause scheduler", e);
+        try {
+            if (scheduler != null) {
+                scheduler.pauseAll();
             }
+        } catch (SchedulerException e) {
+            LOGGER.warn("Unable to pause scheduler", e);
         }
     }
 
     @Override
     public void resume() {
-        if (!enabled) {
-            LOGGER.warn("Quartz Scheduler is disabled and cannot be resumed");
-        } else {
-            try {
-                if (scheduler != null) {
-                    scheduler.start();
-                }
-            } catch (SchedulerException e) {
-                LOGGER.warn("Unable to resume scheduler", e);
+        try {
+            if (scheduler != null) {
+                scheduler.resumeAll();
             }
-        }
-    }
-
-    @Override
-    public boolean isRunning() {
-        if (!enabled || scheduler == null) {
-            return false;
-        } else {
-            try {
-                return !scheduler.isInStandbyMode();
-            } catch (SchedulerException e) {
-                throw new IllegalStateException("Could not evaluate standby mode", e);
-            }
+        } catch (SchedulerException e) {
+            LOGGER.warn("Unable to resume scheduler", e);
         }
     }
 
