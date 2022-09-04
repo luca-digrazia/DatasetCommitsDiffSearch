@@ -79,7 +79,6 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
     BuildEventStreamer streamer =
         tryCreateStreamer(
-            commandEnvironment.getRuntime().getStartupOptionsProvider(),
             commandEnvironment.getOptions(),
             commandEnvironment.getReporter(),
             commandEnvironment.getBlazeModuleEnvironment(),
@@ -92,11 +91,9 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
     if (streamer != null) {
       commandEnvironment.getReporter().addHandler(streamer);
       commandEnvironment.getEventBus().register(streamer);
-      long bufferSize =
-          commandEnvironment.getOptions().getOptions(optionsClass()).besOuterrBufferSize;
 
-      final SynchronizedOutputStream out = new SynchronizedOutputStream(bufferSize);
-      final SynchronizedOutputStream err = new SynchronizedOutputStream(bufferSize);
+      final SynchronizedOutputStream out = new SynchronizedOutputStream();
+      final SynchronizedOutputStream err = new SynchronizedOutputStream();
       this.outErr = OutErr.create(out, err);
       streamer.registerOutErrProvider(
           new BuildEventStreamer.OutErrProvider() {
@@ -132,7 +129,6 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   @Nullable
   @VisibleForTesting
   BuildEventStreamer tryCreateStreamer(
-      OptionsProvider startupOptionsProvider,
       OptionsProvider optionsProvider,
       EventHandler commandLineReporter,
       ModuleEnvironment moduleEnvironment,
@@ -166,8 +162,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
                 moduleEnvironment,
                 clock,
                 pathConverter,
-                commandLineReporter,
-                startupOptionsProvider);
+                commandLineReporter);
       } catch (Exception e) {
         if (besOptions.besBestEffort) {
           commandLineReporter.handle(Event.warn(format(UPLOAD_FAILED_MESSAGE, e.getMessage())));
@@ -189,9 +184,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
       transports = transportsBuilder.build();
       if (!transports.isEmpty()) {
-        BuildEventStreamOptions buildEventStreamOptions =
-            optionsProvider.getOptions(BuildEventStreamOptions.class);
-        return new BuildEventStreamer(transports, reporter, buildEventStreamOptions);
+        return new BuildEventStreamer(transports, reporter);
       }
     } catch (Exception e) {
       moduleEnvironment.exit(new AbruptExitException(ExitCode.LOCAL_ENVIRONMENTAL_ERROR, e));
@@ -209,8 +202,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       ModuleEnvironment moduleEnvironment,
       Clock clock,
       PathConverter pathConverter,
-      EventHandler commandLineReporter,
-      OptionsProvider startupOptionsProvider) throws IOException {
+      EventHandler commandLineReporter) throws IOException {
     if (isNullOrEmpty(besOptions.besBackend)) {
       logger.fine("BuildEventServiceTransport is disabled.");
       return null;
@@ -238,7 +230,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
               pathConverter,
               commandLineReporter,
               besOptions.projectId,
-              keywords(besOptions, startupOptionsProvider));
+              keywords(besOptions));
       logger.fine("BuildEventServiceTransport was created successfully");
       return besTransport;
     }
@@ -258,7 +250,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   protected abstract Set<String> whitelistedCommands();
 
-  protected Set<String> keywords(T besOptions, @Nullable OptionsProvider startupOptionsProvider) {
+  protected Set<String> keywords(T besOptions) {
     return besOptions
         .besKeywords
         .stream()

@@ -35,7 +35,6 @@ import com.google.devtools.build.v1.PublishLifecycleEventRequest.ServiceLevel;
 import com.google.devtools.build.v1.StreamId;
 import com.google.devtools.build.v1.StreamId.BuildComponent;
 import com.google.protobuf.Any;
-import com.google.protobuf.Timestamp;
 import com.google.protobuf.util.Timestamps;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -64,8 +63,8 @@ public class BuildEventServiceProtoUtilTest {
 
   @Test
   public void testBuildEnqueued() {
-    Timestamp expected = Timestamps.fromMillis(clock.advanceMillis(100));
-    assertThat(besProtocol.buildEnqueued(expected))
+    long expected = clock.advanceMillis(100);
+    assertThat(besProtocol.buildEnqueued())
         .isEqualTo(
             PublishLifecycleEventRequest.newBuilder()
                 .setServiceLevel(ServiceLevel.INTERACTIVE)
@@ -79,15 +78,15 @@ public class BuildEventServiceProtoUtilTest {
                         .setSequenceNumber(1)
                         .setEvent(
                             BuildEvent.newBuilder()
-                                .setEventTime(expected)
+                                .setEventTime(Timestamps.fromMillis(expected))
                                 .setBuildEnqueued(BuildEnqueued.newBuilder())))
                 .build());
   }
 
   @Test
   public void testInvocationAttemptStarted() {
-    Timestamp expected = Timestamps.fromMillis(clock.advanceMillis(100));
-    assertThat(besProtocol.invocationStarted(expected))
+    long expected = clock.advanceMillis(100);
+    assertThat(besProtocol.invocationStarted())
         .isEqualTo(
             PublishLifecycleEventRequest.newBuilder()
                 .setServiceLevel(ServiceLevel.INTERACTIVE)
@@ -102,7 +101,7 @@ public class BuildEventServiceProtoUtilTest {
                         .setSequenceNumber(1)
                         .setEvent(
                             BuildEvent.newBuilder()
-                                .setEventTime(expected)
+                                .setEventTime(Timestamps.fromMillis(expected))
                                 .setInvocationAttemptStarted(
                                     InvocationAttemptStarted.newBuilder().setAttemptNumber(1))))
                 .build());
@@ -110,8 +109,8 @@ public class BuildEventServiceProtoUtilTest {
 
   @Test
   public void testInvocationAttemptFinished() {
-    Timestamp expected = Timestamps.fromMillis(clock.advanceMillis(100));
-    assertThat(besProtocol.invocationFinished(expected, Result.COMMAND_SUCCEEDED))
+    long expected = clock.advanceMillis(100);
+    assertThat(besProtocol.invocationFinished(Result.COMMAND_SUCCEEDED))
         .isEqualTo(
             PublishLifecycleEventRequest.newBuilder()
                 .setServiceLevel(ServiceLevel.INTERACTIVE)
@@ -126,7 +125,7 @@ public class BuildEventServiceProtoUtilTest {
                         .setSequenceNumber(2)
                         .setEvent(
                             BuildEvent.newBuilder()
-                                .setEventTime(expected)
+                                .setEventTime(Timestamps.fromMillis(expected))
                                 .setInvocationAttemptFinished(
                                     InvocationAttemptFinished.newBuilder()
                                         .setInvocationStatus(
@@ -137,8 +136,8 @@ public class BuildEventServiceProtoUtilTest {
 
   @Test
   public void testBuildFinished() {
-    Timestamp expected = Timestamps.fromMillis(clock.advanceMillis(100));
-    assertThat(besProtocol.buildFinished(expected, Result.COMMAND_SUCCEEDED))
+    long expected = clock.advanceMillis(100);
+    assertThat(besProtocol.buildFinished(Result.COMMAND_SUCCEEDED))
         .isEqualTo(
             PublishLifecycleEventRequest.newBuilder()
                 .setServiceLevel(ServiceLevel.INTERACTIVE)
@@ -152,7 +151,7 @@ public class BuildEventServiceProtoUtilTest {
                         .setSequenceNumber(2)
                         .setEvent(
                             BuildEvent.newBuilder()
-                                .setEventTime(expected)
+                                .setEventTime(Timestamps.fromMillis(expected))
                                 .setBuildFinished(
                                     BuildFinished.newBuilder()
                                         .setStatus(
@@ -163,9 +162,9 @@ public class BuildEventServiceProtoUtilTest {
 
   @Test
   public void testStreamEvents() {
-    Timestamp firstEventTimestamp = Timestamps.fromMillis(clock.advanceMillis(100));
+    long firstEventTimestamp = clock.advanceMillis(100);
     Any anything = Any.getDefaultInstance();
-    assertThat(besProtocol.bazelEvent(1, firstEventTimestamp, anything))
+    assertThat(besProtocol.bazelEvent(1, anything))
         .isEqualTo(
             PublishBuildToolEventStreamRequest.newBuilder()
                 .addAllNotificationKeywords(EXPECTED_KEYWORDS)
@@ -179,13 +178,13 @@ public class BuildEventServiceProtoUtilTest {
                         .setSequenceNumber(1)
                         .setEvent(
                             BuildEvent.newBuilder()
-                                .setEventTime(firstEventTimestamp)
+                                .setEventTime(Timestamps.fromMillis(firstEventTimestamp))
                                 .setBazelEvent(anything))
                         .build())
                 .build());
 
-    Timestamp secondEventTimestamp = Timestamps.fromMillis(clock.advanceMillis(100));
-    assertThat(besProtocol.bazelEvent(2, secondEventTimestamp, anything))
+    long secondEventTimestamp = clock.advanceMillis(100);
+    assertThat(besProtocol.bazelEvent(2, anything))
         .isEqualTo(
             PublishBuildToolEventStreamRequest.newBuilder()
                 .setOrderedBuildEvent(
@@ -198,13 +197,13 @@ public class BuildEventServiceProtoUtilTest {
                         .setSequenceNumber(2)
                         .setEvent(
                             BuildEvent.newBuilder()
-                                .setEventTime(secondEventTimestamp)
+                                .setEventTime(Timestamps.fromMillis(secondEventTimestamp))
                                 .setBazelEvent(anything))
                         .build())
                 .build());
 
-    Timestamp thirdEventTimestamp = Timestamps.fromMillis(clock.advanceMillis(100));
-    assertThat(besProtocol.streamFinished(3, thirdEventTimestamp))
+    long thirdEventTimestamp = clock.advanceMillis(100);
+    assertThat(besProtocol.streamFinished(3))
         .isEqualTo(
             PublishBuildToolEventStreamRequest.newBuilder()
                 .setOrderedBuildEvent(
@@ -217,7 +216,7 @@ public class BuildEventServiceProtoUtilTest {
                         .setSequenceNumber(3)
                         .setEvent(
                             BuildEvent.newBuilder()
-                                .setEventTime(thirdEventTimestamp)
+                                .setEventTime(Timestamps.fromMillis(thirdEventTimestamp))
                                 .setComponentStreamFinished(
                                     BuildComponentStreamFinished.newBuilder()
                                         .setType(FinishType.FINISHED)))

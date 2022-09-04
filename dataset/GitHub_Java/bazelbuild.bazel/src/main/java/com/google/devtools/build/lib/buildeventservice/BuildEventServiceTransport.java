@@ -470,16 +470,8 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       final BlockingDeque<PublishBuildToolEventStreamRequest> pendingSend,
       final BuildEventServiceClient besClient)
       throws Exception {
-    logger.log(
-        Level.INFO,
-        String.format(
-            "Starting PublishBuildToolEventStream() RPC pendingSendCount=%s", pendingSend.size()));
     ListenableFuture<Status> streamDone = besClient
         .openStream(ackCallback(pendingAck, besClient));
-    logger.log(
-        Level.INFO,
-        String.format(
-            "Started PublishBuildToolEventStream() RPC pendingSendCount=%s", pendingSend.size()));
     try {
       @Nullable PublishBuildToolEventStreamRequest event;
       do {
