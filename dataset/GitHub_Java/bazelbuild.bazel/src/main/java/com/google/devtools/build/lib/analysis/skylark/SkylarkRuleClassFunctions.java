@@ -326,7 +326,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       if (implicitOutputs instanceof BaseFunction) {
         BaseFunction func = (BaseFunction) implicitOutputs;
         SkylarkCallbackFunction callback =
-            new SkylarkCallbackFunction(func, ast, funcallEnv.getSemantics(), context);
+            new SkylarkCallbackFunction(func, ast, funcallEnv.getSemantics());
         builder.setImplicitOutputsFunction(
             new SkylarkImplicitOutputsFunctionWithCallback(callback, ast.getLocation()));
       } else {

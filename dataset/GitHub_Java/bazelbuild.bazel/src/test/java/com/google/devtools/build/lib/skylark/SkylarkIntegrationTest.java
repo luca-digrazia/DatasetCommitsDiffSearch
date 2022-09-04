@@ -28,11 +28,8 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkAttributeTransitionProvider;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleTransitionProvider;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
 import com.google.devtools.build.lib.analysis.test.AnalysisTestResultInfo;
@@ -562,7 +559,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "  return struct(runfiles = rf)",
         "",
         "custom_rule = rule(implementation = custom_rule_impl, executable = True,",
-        "  attrs = {'data': attr.label_list(allow_files=True)})");
+        "  attrs = {'data': attr.label_list(cfg='data', allow_files=True)})");
 
     scratch.file(
         "test/skylark/BUILD",
@@ -1333,7 +1330,37 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testConflictingProviderKeys_fromStruct_allowed() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_disallow_conflicting_providers=false");
+    scratch.file(
+        "test/extension.bzl",
+        "my_provider = provider()",
+        "other_provider = provider()",
+        "def _impl(ctx):",
+        "   return struct(providers = [my_provider(x = 1), other_provider(), my_provider(x = 2)])",
+        "my_rule = rule(_impl)"
+    );
+
+    scratch.file(
+        "test/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "my_rule(name = 'r')"
+    );
+
+    ConfiguredTarget configuredTarget  = getConfiguredTarget("//test:r");
+    Provider.Key key =
+        new SkylarkProvider.SkylarkKey(
+            Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
+            "my_provider");
+    StructImpl declaredProvider = (StructImpl) configuredTarget.get(key);
+    assertThat(declaredProvider).isNotNull();
+    assertThat(declaredProvider.getProvider().getKey()).isEqualTo(key);
+    assertThat(declaredProvider.getValue("x")).isEqualTo(2);
+  }
+
+  @Test
   public void testConflictingProviderKeys_fromStruct_disallowed() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_disallow_conflicting_providers=true");
     scratch.file(
         "test/extension.bzl",
         "my_provider = provider()",
@@ -1352,7 +1379,37 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testConflictingProviderKeys_fromIterable_allowed() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_disallow_conflicting_providers=false");
+    scratch.file(
+        "test/extension.bzl",
+        "my_provider = provider()",
+        "other_provider = provider()",
+        "def _impl(ctx):",
+        "   return [my_provider(x = 1), other_provider(), my_provider(x = 2)]",
+        "my_rule = rule(_impl)"
+    );
+
+    scratch.file(
+        "test/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "my_rule(name = 'r')"
+    );
+
+    ConfiguredTarget configuredTarget  = getConfiguredTarget("//test:r");
+    Provider.Key key =
+        new SkylarkProvider.SkylarkKey(
+            Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
+            "my_provider");
+    StructImpl declaredProvider = (StructImpl) configuredTarget.get(key);
+    assertThat(declaredProvider).isNotNull();
+    assertThat(declaredProvider.getProvider().getKey()).isEqualTo(key);
+    assertThat(declaredProvider.getValue("x")).isEqualTo(2);
+  }
+
+  @Test
   public void testConflictingProviderKeys_fromIterable_disallowed() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_disallow_conflicting_providers=true");
     scratch.file(
         "test/extension.bzl",
         "my_provider = provider()",
@@ -2511,119 +2568,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:my_rule");
     assertContainsEvent("Use of function-based split transition without whitelist");
-  }
-
-  @Test
-  public void testPrintFromTransitionImpl() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions");
-    scratch.file(
-        "tools/whitelists/function_transition_whitelist/BUILD",
-        "package_group(",
-        "    name = 'function_transition_whitelist',",
-        "    packages = [",
-        "        '//test/...',",
-        "    ],",
-        ")");
-    scratch.file(
-        "test/rules.bzl",
-        "def _transition_impl(settings, attr):",
-        "  print('printing from transition impl', settings['//command_line_option:test_arg'])",
-        "  return {'//command_line_option:test_arg': "
-            + "settings['//command_line_option:test_arg']+['meow']}",
-        "my_transition = transition(",
-        "  implementation = _transition_impl,",
-        "  inputs = ['//command_line_option:test_arg'],",
-        "  outputs = ['//command_line_option:test_arg'],",
-        ")",
-        "def _rule_impl(ctx):",
-        "  return []",
-        "my_rule = rule(",
-        "  implementation = _rule_impl,",
-        "  cfg = my_transition,",
-        "  attrs = {",
-        "    'dep': attr.label(cfg = my_transition),",
-        "    '_whitelist_function_transition': attr.label(",
-        "        default = '//tools/whitelists/function_transition_whitelist',",
-        "    ),",
-        "  }",
-        ")");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:rules.bzl', 'my_rule')",
-        "my_rule(name = 'test', dep = ':dep')",
-        "my_rule(name = 'dep')");
-
-    useConfiguration("--test_arg=meow");
-
-    getConfiguredTarget("//test");
-    // Test print from top level transition
-    assertContainsEventWithFrequency("printing from transition impl [\"meow\"]", 1);
-    // Test print from dep transition
-    assertContainsEventWithFrequency("printing from transition impl [\"meow\", \"meow\"]", 1);
-    // Test print from (non-top level) rule class transition
-    assertContainsEventWithFrequency(
-        "printing from transition impl [\"meow\", \"meow\", \"meow\"]", 1);
-  }
-
-  @Test
-  public void testTransitionEquality() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions");
-    scratch.file(
-        "tools/whitelists/function_transition_whitelist/BUILD",
-        "package_group(",
-        "    name = 'function_transition_whitelist',",
-        "    packages = [",
-        "        '//test/...',",
-        "    ],",
-        ")");
-    scratch.file(
-        "test/rules.bzl",
-        "def _transition_impl(settings, attr):",
-        "  return {'//command_line_option:test_arg': ['meow']}",
-        "my_transition = transition(",
-        "  implementation = _transition_impl,",
-        "  inputs = [],",
-        "  outputs = ['//command_line_option:test_arg'],",
-        ")",
-        "def _rule_impl(ctx):",
-        "  return []",
-        "my_rule = rule(",
-        "  implementation = _rule_impl,",
-        "  cfg = my_transition,",
-        "  attrs = {",
-        "    'dep': attr.label(cfg = my_transition),",
-        "    '_whitelist_function_transition': attr.label(",
-        "        default = '//tools/whitelists/function_transition_whitelist',",
-        "    ),",
-        "  }",
-        ")");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:rules.bzl', 'my_rule')",
-        "my_rule(name = 'test', dep = ':dep')",
-        "my_rule(name = 'dep')");
-
-    useConfiguration("--test_arg=meow");
-
-    StarlarkDefinedConfigTransition ruleTransition =
-        ((StarlarkAttributeTransitionProvider)
-                getTarget("//test")
-                    .getAssociatedRule()
-                    .getRuleClassObject()
-                    .getAttributeByName("dep")
-                    .getSplitTransitionProviderForTesting())
-            .getStarlarkDefinedConfigTransitionForTesting();
-
-    StarlarkDefinedConfigTransition attrTransition =
-        ((StarlarkRuleTransitionProvider)
-                getTarget("//test").getAssociatedRule().getRuleClassObject().getTransitionFactory())
-            .getStarlarkDefinedConfigTransitionForTesting();
-
-    assertThat(ruleTransition).isEqualTo(attrTransition);
-    assertThat(attrTransition).isEqualTo(ruleTransition);
-    assertThat(ruleTransition.hashCode()).isEqualTo(attrTransition.hashCode());
   }
 
   @Test
