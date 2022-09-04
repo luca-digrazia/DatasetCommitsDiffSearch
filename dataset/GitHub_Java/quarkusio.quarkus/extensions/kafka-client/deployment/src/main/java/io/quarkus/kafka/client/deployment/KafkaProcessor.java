@@ -52,19 +52,13 @@ import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
-import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
-import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
-import io.quarkus.deployment.builditem.RuntimeConfigSetupCompleteBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -110,11 +104,6 @@ public class KafkaProcessor {
     static final DotName OBJECT_MAPPER = DotName.createSimple("com.fasterxml.jackson.databind.ObjectMapper");
 
     @BuildStep
-    FeatureBuildItem feature() {
-        return new FeatureBuildItem(Feature.KAFKA_CLIENT);
-    }
-
-    @BuildStep
     void contributeClassesToIndex(BuildProducer<AdditionalIndexedClassesBuildItem> additionalIndexedClasses,
             BuildProducer<IndexDependencyBuildItem> indexDependency) {
         // This is needed for SASL authentication
@@ -135,8 +124,7 @@ public class KafkaProcessor {
             BuildProducer<ServiceProviderBuildItem> serviceProviders,
             BuildProducer<NativeImageProxyDefinitionBuildItem> proxies,
             Capabilities capabilities, BuildProducer<UnremovableBeanBuildItem> beans,
-            BuildProducer<NativeImageResourceBuildItem> nativeLibs, NativeConfig nativeConfig,
-            BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport) {
+            BuildProducer<NativeImageResourceBuildItem> nativeLibs, NativeConfig nativeConfig) {
         final Set<DotName> toRegister = new HashSet<>();
 
         collectImplementors(toRegister, indexBuildItem, Serializer.class);
@@ -158,24 +146,21 @@ public class KafkaProcessor {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, i.getName()));
             collectSubclasses(toRegister, indexBuildItem, i);
         }
-
-        // Kafka requires Jackson as it uses Jackson to handle authentication and some JSON utilities.
-        // See https://github.com/quarkusio/quarkus/issues/16769
-        // So, enable the Jackson support unconditionally.
-        reflectiveClass.produce(
-                new ReflectiveClassBuildItem(false, false, ObjectMapperSerializer.class,
-                        ObjectMapperDeserializer.class));
-        collectSubclasses(toRegister, indexBuildItem, ObjectMapperSerializer.class);
-        collectSubclasses(toRegister, indexBuildItem, ObjectMapperDeserializer.class);
-
-        // Make the `io.quarkus.jackson.runtime.ObjectMapperProducer` bean cannot be removed.
-        beans.produce(UnremovableBeanBuildItem.beanTypes(OBJECT_MAPPER));
-
         if (capabilities.isPresent(Capability.JSONB)) {
             reflectiveClass.produce(
                     new ReflectiveClassBuildItem(false, false, JsonbSerializer.class, JsonbDeserializer.class));
             collectSubclasses(toRegister, indexBuildItem, JsonbSerializer.class);
             collectSubclasses(toRegister, indexBuildItem, JsonbDeserializer.class);
+        }
+        if (capabilities.isPresent(Capability.JACKSON)) {
+            reflectiveClass.produce(
+                    new ReflectiveClassBuildItem(false, false, ObjectMapperSerializer.class,
+                            ObjectMapperDeserializer.class));
+            collectSubclasses(toRegister, indexBuildItem, ObjectMapperSerializer.class);
+            collectSubclasses(toRegister, indexBuildItem, ObjectMapperDeserializer.class);
+
+            // Make the `io.quarkus.jackson.runtime.ObjectMapperProducer` bean cannot be removed.
+            beans.produce(UnremovableBeanBuildItem.beanTypes(OBJECT_MAPPER));
         }
 
         for (DotName s : toRegister) {
@@ -192,7 +177,7 @@ public class KafkaProcessor {
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "java.nio.DirectByteBuffer"));
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "sun.misc.Cleaner"));
 
-        handleAvro(reflectiveClass, proxies, serviceProviders, sslNativeSupport, capabilities);
+        handleAvro(reflectiveClass, proxies, serviceProviders);
         handleOpenTracing(reflectiveClass, capabilities);
         handleStrimziOAuth(reflectiveClass);
         if (config.snappyEnabled) {
@@ -230,15 +215,6 @@ public class KafkaProcessor {
     void loadSnappyIfEnabled(KafkaRecorder recorder, KafkaBuildTimeConfig config) {
         if (config.snappyEnabled) {
             recorder.loadSnappy();
-        }
-    }
-
-    @Consume(RuntimeConfigSetupCompleteBuildItem.class)
-    @BuildStep(onlyIf = IsNormal.class)
-    @Record(ExecutionTime.RUNTIME_INIT)
-    void checkBoostrapServers(KafkaRecorder recorder, Capabilities capabilities) {
-        if (capabilities.isPresent(Capability.KUBERNETES_SERVICE_BINDING)) {
-            recorder.checkBoostrapServers();
         }
     }
 
@@ -283,12 +259,8 @@ public class KafkaProcessor {
 
     private void handleAvro(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<NativeImageProxyDefinitionBuildItem> proxies,
-            BuildProducer<ServiceProviderBuildItem> serviceProviders,
-            BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
-            Capabilities capabilities) {
+            BuildProducer<ServiceProviderBuildItem> serviceProviders) {
         // Avro - for both Confluent and Apicurio
-
-        // --- Confluent ---
         try {
             Class.forName("io.confluent.kafka.serializers.KafkaAvroDeserializer", false,
                     Thread.currentThread().getContextClassLoader());
@@ -338,8 +310,6 @@ public class KafkaProcessor {
         } catch (ClassNotFoundException e) {
             // ignore, Confluent schema registry client not in the classpath
         }
-
-        // --- Apicurio Registry 1.x ---
         try {
             Class.forName("io.apicurio.registry.utils.serde.AvroKafkaDeserializer", false,
                     Thread.currentThread().getContextClassLoader());
@@ -349,7 +319,6 @@ public class KafkaProcessor {
                             "io.apicurio.registry.utils.serde.AvroKafkaSerializer"));
 
             reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, false,
-                    "io.apicurio.registry.utils.serde.avro.DefaultAvroDatumProvider",
                     "io.apicurio.registry.utils.serde.avro.ReflectAvroDatumProvider",
                     "io.apicurio.registry.utils.serde.strategy.AutoRegisterIdStrategy",
                     "io.apicurio.registry.utils.serde.strategy.CachedSchemaIdStrategy",
@@ -366,20 +335,7 @@ public class KafkaProcessor {
                     "java.lang.AutoCloseable"));
 
         } catch (ClassNotFoundException e) {
-            // ignore, Apicurio Avro is not in the classpath
-        }
-
-        // --- Apicurio Registry 2.x ---
-        try {
-            Class.forName("io.apicurio.registry.serde.avro.AvroKafkaDeserializer", false,
-                    Thread.currentThread().getContextClassLoader());
-
-            if (!capabilities.isPresent(Capability.APICURIO_REGISTRY_AVRO)) {
-                throw new RuntimeException(
-                        "Apicurio Registry 2.x Avro classes detected, please use the quarkus-apicurio-registry-avro extension");
-            }
-        } catch (ClassNotFoundException e) {
-            // ignore, Apicurio Avro is not in the classpath
+            //ignore, Apicurio Avro is not in the classpath
         }
     }
 
