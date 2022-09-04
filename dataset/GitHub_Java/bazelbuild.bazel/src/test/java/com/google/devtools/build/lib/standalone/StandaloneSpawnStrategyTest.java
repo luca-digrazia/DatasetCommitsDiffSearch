@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
@@ -43,7 +44,6 @@ import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
-import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
@@ -110,9 +110,7 @@ public class StandaloneSpawnStrategyTest {
 
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(outputBase, outputBase, outputBase),
-            workspaceDir,
-            "mock-product-name");
+            new ServerDirectories(outputBase, outputBase), workspaceDir, "mock-product-name");
     // This call implicitly symlinks the integration bin tools into the exec root.
     IntegrationMock.get()
         .getIntegrationBinTools(fileSystem, directories, TestConstants.WORKSPACE_NAME);
@@ -134,17 +132,16 @@ public class StandaloneSpawnStrategyTest {
             bus,
             BlazeClock.instance(),
             optionsParser,
-            SpawnActionContextMaps.createStub(
-                ImmutableList.of(),
-                ImmutableMap.<String, SpawnActionContext>of(
-                    "",
-                    new StandaloneSpawnStrategy(
+            ImmutableList.<ActionContext>of(),
+            ImmutableMap.<String, SpawnActionContext>of(
+                "",
+                new StandaloneSpawnStrategy(
+                    execRoot,
+                    new LocalSpawnRunner(
                         execRoot,
-                        new LocalSpawnRunner(
-                            execRoot,
-                            localExecutionOptions,
-                            resourceManager,
-                            LocalEnvProvider.UNMODIFIED)))),
+                        localExecutionOptions,
+                        resourceManager,
+                        LocalEnvProvider.UNMODIFIED))),
             ImmutableList.<ActionContextProvider>of());
 
     executor.getExecRoot().createDirectoryAndParents();
@@ -171,14 +168,14 @@ public class StandaloneSpawnStrategyTest {
   @Test
   public void testBinTrueExecutesFine() throws Exception {
     Spawn spawn = createSpawn(getTrueCommand());
-    executor.getSpawnActionContext(spawn).exec(spawn, createContext());
+    executor.getSpawnActionContext(spawn.getMnemonic()).exec(spawn, createContext());
 
     assertThat(out()).isEmpty();
     assertThat(err()).isEmpty();
   }
 
   private List<SpawnResult> run(Spawn spawn) throws Exception {
-    return executor.getSpawnActionContext(spawn).exec(spawn, createContext());
+    return executor.getSpawnActionContext(spawn.getMnemonic()).exec(spawn, createContext());
   }
 
   private ActionExecutionContext createContext() {
@@ -191,7 +188,6 @@ public class StandaloneSpawnStrategyTest {
         null,
         outErr,
         ImmutableMap.<String, String>of(),
-        ImmutableMap.of(),
         SIMPLE_ARTIFACT_EXPANDER);
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,41 +14,64 @@
 package com.google.devtools.build.lib.worker;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.ActionContextProvider;
-import com.google.devtools.build.lib.actions.ActionGraph;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Executor.ActionContext;
-import com.google.devtools.build.lib.actions.ExecutorInitException;
-import com.google.devtools.build.lib.buildtool.BuildRequest;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.devtools.build.lib.actions.ActionContext;
+import com.google.devtools.build.lib.actions.ResourceManager;
+import com.google.devtools.build.lib.analysis.test.TestActionContext;
+import com.google.devtools.build.lib.exec.ActionContextProvider;
+import com.google.devtools.build.lib.exec.SpawnRunner;
+import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
+import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
+import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
+import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
+import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
+import com.google.devtools.build.lib.exec.local.WindowsLocalEnvProvider;
+import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.util.OS;
 
 /**
  * Factory for the Worker-based execution strategy.
  */
-final class WorkerActionContextProvider implements ActionContextProvider {
+final class WorkerActionContextProvider extends ActionContextProvider {
   private final ImmutableList<ActionContext> strategies;
 
-  public WorkerActionContextProvider(BuildRequest buildRequest, WorkerPool workers) {
-    this.strategies = ImmutableList.<ActionContext>of(new WorkerSpawnStrategy(buildRequest,
-        workers));
+  public WorkerActionContextProvider(CommandEnvironment env, WorkerPool workers) {
+    ImmutableMultimap<String, String> extraFlags =
+        ImmutableMultimap.copyOf(env.getOptions().getOptions(WorkerOptions.class).workerExtraFlags);
+
+    WorkerSpawnRunner spawnRunner =
+        new WorkerSpawnRunner(
+            env.getExecRoot(),
+            workers,
+            extraFlags,
+            env.getReporter(),
+            createFallbackRunner(env));
+
+    WorkerSpawnStrategy workerSpawnStrategy =
+        new WorkerSpawnStrategy(env.getExecRoot(), spawnRunner);
+    TestActionContext workerTestStrategy =
+        new WorkerTestStrategy(env, env.getOptions(), workers, extraFlags);
+    this.strategies = ImmutableList.of(workerSpawnStrategy, workerTestStrategy);
+  }
+
+  private static SpawnRunner createFallbackRunner(CommandEnvironment env) {
+    LocalExecutionOptions localExecutionOptions =
+        env.getOptions().getOptions(LocalExecutionOptions.class);
+    LocalEnvProvider localEnvProvider =
+        OS.getCurrent() == OS.DARWIN
+            ? new XCodeLocalEnvProvider(env.getRuntime().getProductName(), env.getClientEnv())
+            : (OS.getCurrent() == OS.WINDOWS
+                ? new WindowsLocalEnvProvider(env.getClientEnv())
+                : new PosixLocalEnvProvider(env.getClientEnv()));
+    return new LocalSpawnRunner(
+        env.getExecRoot(),
+        localExecutionOptions,
+        ResourceManager.instance(),
+        localEnvProvider);
   }
 
   @Override
-  public Iterable<ActionContext> getActionContexts() {
+  public Iterable<? extends ActionContext> getActionContexts() {
     return strategies;
-  }
-
-  @Override
-  public void executorCreated(Iterable<ActionContext> usedContexts) throws ExecutorInitException {
-  }
-
-  @Override
-  public void executionPhaseStarting(ActionInputFileCache actionInputFileCache,
-      ActionGraph actionGraph, Iterable<Artifact> topLevelArtifacts)
-      throws ExecutorInitException, InterruptedException {
-  }
-
-  @Override
-  public void executionPhaseEnding() {
   }
 }

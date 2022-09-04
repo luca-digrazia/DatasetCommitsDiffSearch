@@ -135,7 +135,7 @@ final class ProcessWrapperSandboxedSpawnRunner extends AbstractSandboxSpawnRunne
   }
 
   @Override
-  public String getName() {
+  protected String getName() {
     return "processwrapper-sandbox";
   }
 }

@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.time.Duration;
-import javax.annotation.Nullable;
+import java.util.Optional;
 
 /** Strategy that uses sandboxing to execute a process. */
 // TODO(ulfjack): This class only exists for this annotation. Find a better way to handle this!
@@ -42,17 +42,48 @@ public final class LinuxSandboxedStrategy extends AbstractSpawnStrategy {
   }
 
   /**
+   * Creates a sandboxed spawn runner that uses the {@code linux-sandbox} tool. If a spawn exceeds
+   * its timeout, then it will be killed instantly.
+   *
+   * @param cmdEnv the command environment to use
+   * @param sandboxBase path to the sandbox base directory
+   * @param productName the product name to use
+   */
+  static LinuxSandboxedSpawnRunner create(
+      CommandEnvironment cmdEnv, Path sandboxBase, String productName) throws IOException {
+    return create(cmdEnv, sandboxBase, productName, Optional.empty());
+  }
+
+  /**
+   * Creates a sandboxed spawn runner that uses the {@code linux-sandbox} tool. If a spawn exceeds
+   * its timeout, then it will be killed after the specified delay.
+   *
+   * @param cmdEnv the command environment to use
+   * @param sandboxBase path to the sandbox base directory
+   * @param productName the product name to use
+   * @param timeoutKillDelay an additional grace period before killing timing out commands
+   */
+  static LinuxSandboxedSpawnRunner create(
+      CommandEnvironment cmdEnv, Path sandboxBase, String productName, Duration timeoutKillDelay)
+      throws IOException {
+    return create(cmdEnv, sandboxBase, productName, Optional.of(timeoutKillDelay));
+  }
+
+  /**
    * Creates a sandboxed spawn runner that uses the {@code linux-sandbox} tool.
    *
    * @param cmdEnv the command environment to use
    * @param sandboxBase path to the sandbox base directory
-   * @param timeoutKillDelay additional grace period before killing timing out commands
-   * @param sandboxfsProcess instance of the sandboxfs process to use; may be null for none, in
-   *     which case the runner uses a symlinked sandbox
+   * @param productName the product name to use
+   * @param timeoutKillDelay an optional, additional grace period before killing timing out
+   *     commands. If not present, then no grace period is used and commands are killed instantly.
    */
   static LinuxSandboxedSpawnRunner create(
-      CommandEnvironment cmdEnv, Path sandboxBase, Duration timeoutKillDelay,
-      @Nullable SandboxfsProcess sandboxfsProcess) throws IOException {
+      CommandEnvironment cmdEnv,
+      Path sandboxBase,
+      String productName,
+      Optional<Duration> timeoutKillDelay)
+      throws IOException {
     Path inaccessibleHelperFile = sandboxBase.getRelative("inaccessibleHelperFile");
     FileSystemUtils.touchFile(inaccessibleHelperFile);
     inaccessibleHelperFile.setReadable(false);
@@ -70,7 +101,6 @@ public final class LinuxSandboxedStrategy extends AbstractSpawnStrategy {
         sandboxBase,
         inaccessibleHelperFile,
         inaccessibleHelperDir,
-        timeoutKillDelay,
-        sandboxfsProcess);
+        timeoutKillDelay);
   }
 }

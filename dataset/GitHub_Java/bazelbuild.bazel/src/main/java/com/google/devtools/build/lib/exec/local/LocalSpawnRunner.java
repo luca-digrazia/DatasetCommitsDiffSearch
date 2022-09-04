@@ -114,19 +114,14 @@ public class LocalSpawnRunner implements SpawnRunner {
   }
 
   @Override
-  public String getName() {
-    return "local";
-  }
-
-  @Override
   public SpawnResult exec(
       Spawn spawn,
       SpawnExecutionPolicy policy) throws IOException, InterruptedException {
     ActionExecutionMetadata owner = spawn.getResourceOwner();
-    policy.report(ProgressStatus.SCHEDULING, getName());
+    policy.report(ProgressStatus.SCHEDULING, "local");
     try (ResourceHandle handle =
         resourceManager.acquireResources(owner, spawn.getLocalResources())) {
-      policy.report(ProgressStatus.EXECUTING, getName());
+      policy.report(ProgressStatus.EXECUTING, "local");
       policy.lockOutputFiles();
       return new SubprocessHandler(spawn, policy).run();
     }
@@ -232,7 +227,6 @@ public class LocalSpawnRunner implements SpawnRunner {
             ("Action type " + actionType + " is not allowed to run locally due to regex filter: "
                 + localExecutionOptions.allowedLocalAction + "\n").getBytes(UTF_8));
         return new SpawnResult.Builder()
-            .setRunnerName(getName())
             .setStatus(Status.EXECUTION_DENIED)
             .setExitCode(LOCAL_EXEC_ERROR)
             .setExecutorHostname(hostName)
@@ -316,7 +310,6 @@ public class LocalSpawnRunner implements SpawnRunner {
               .write(("Action failed to execute: " + msg + "\n").getBytes(UTF_8));
           outErr.getErrorStream().flush();
           return new SpawnResult.Builder()
-              .setRunnerName(getName())
               .setStatus(Status.EXECUTION_FAILED)
               .setExitCode(LOCAL_EXEC_ERROR)
               .setExecutorHostname(hostName)
@@ -338,7 +331,6 @@ public class LocalSpawnRunner implements SpawnRunner {
                 : (exitCode == 0 ? Status.SUCCESS : Status.NON_ZERO_EXIT);
         SpawnResult.Builder spawnResultBuilder =
             new SpawnResult.Builder()
-                .setRunnerName(getName())
                 .setStatus(status)
                 .setExitCode(exitCode)
                 .setExecutorHostname(hostName)

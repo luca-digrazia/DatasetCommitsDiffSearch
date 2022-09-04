@@ -331,7 +331,7 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   }
 
   @Override
-  public String getName() {
+  protected String getName() {
     return "darwin-sandbox";
   }
 }

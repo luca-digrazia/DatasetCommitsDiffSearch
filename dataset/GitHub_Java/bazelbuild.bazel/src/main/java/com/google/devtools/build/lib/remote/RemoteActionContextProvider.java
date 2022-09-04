@@ -21,16 +21,14 @@ import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnRunner;
-import com.google.devtools.build.lib.exec.apple.XcodeLocalEnvProvider;
+import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalSpawnRunner;
 import com.google.devtools.build.lib.exec.local.PosixLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.WindowsLocalEnvProvider;
-import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.vfs.Path;
 import javax.annotation.Nullable;
 
 /**
@@ -41,19 +39,16 @@ final class RemoteActionContextProvider extends ActionContextProvider {
   private final AbstractRemoteActionCache cache;
   private final GrpcRemoteExecutor executor;
   private final DigestUtil digestUtil;
-  private final Path logDir;
 
   RemoteActionContextProvider(
       CommandEnvironment env,
       @Nullable AbstractRemoteActionCache cache,
       @Nullable GrpcRemoteExecutor executor,
-      DigestUtil digestUtil,
-      Path logDir) {
+      DigestUtil digestUtil) {
     this.env = env;
     this.executor = executor;
     this.cache = cache;
     this.digestUtil = digestUtil;
-    this.logDir = logDir;
   }
 
   @Override
@@ -88,8 +83,7 @@ final class RemoteActionContextProvider extends ActionContextProvider {
               commandId,
               cache,
               executor,
-              digestUtil,
-              logDir);
+              digestUtil);
       return ImmutableList.of(new RemoteSpawnStrategy(env.getExecRoot(), spawnRunner));
     }
   }
@@ -99,7 +93,7 @@ final class RemoteActionContextProvider extends ActionContextProvider {
         env.getOptions().getOptions(LocalExecutionOptions.class);
     LocalEnvProvider localEnvProvider =
         OS.getCurrent() == OS.DARWIN
-            ? new XcodeLocalEnvProvider(env.getRuntime().getProductName(), env.getClientEnv())
+            ? new XCodeLocalEnvProvider(env.getRuntime().getProductName(), env.getClientEnv())
             : (OS.getCurrent() == OS.WINDOWS
                 ? new WindowsLocalEnvProvider(env.getClientEnv())
                 : new PosixLocalEnvProvider(env.getClientEnv()));
