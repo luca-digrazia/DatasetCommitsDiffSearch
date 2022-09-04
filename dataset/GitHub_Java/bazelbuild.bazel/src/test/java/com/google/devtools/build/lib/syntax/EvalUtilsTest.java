@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -111,10 +112,12 @@ public class EvalUtilsTest extends EvaluationTestCase {
     for (int i = 0; i < objects.length; ++i) {
       for (int j = 0; j < objects.length; ++j) {
         if (i != j) {
-          Object first = objects[i];
-          Object second = objects[j];
-          assertThrows(
-              ComparisonException.class, () -> EvalUtils.SKYLARK_COMPARATOR.compare(first, second));
+          try {
+            EvalUtils.SKYLARK_COMPARATOR.compare(objects[i], objects[j]);
+            fail("Shouldn't have compared different types");
+          } catch (ComparisonException e) {
+            // expected
+          }
         }
       }
     }
@@ -122,9 +125,12 @@ public class EvalUtilsTest extends EvaluationTestCase {
 
   @Test
   public void testComparatorWithNones() throws Exception {
-    assertThrows(
-        ComparisonException.class,
-        () -> EvalUtils.SKYLARK_COMPARATOR.compare(Runtime.NONE, Runtime.NONE));
+    try {
+      EvalUtils.SKYLARK_COMPARATOR.compare(Runtime.NONE, Runtime.NONE);
+      fail("Shouldn't have compared nones");
+    } catch (ComparisonException e) {
+      // expected
+    }
   }
 
   @SkylarkModule(

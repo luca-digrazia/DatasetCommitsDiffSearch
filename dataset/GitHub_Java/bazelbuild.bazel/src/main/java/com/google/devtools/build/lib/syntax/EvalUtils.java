@@ -83,6 +83,12 @@ public final class EvalUtils {
             return compareLists((SkylarkList) o1, (SkylarkList) o2);
           }
 
+          if (!(o1.getClass().isAssignableFrom(o2.getClass())
+              || o2.getClass().isAssignableFrom(o1.getClass()))) {
+            throw new ComparisonException(
+                "Cannot compare " + getDataTypeName(o1) + " with " + getDataTypeName(o2));
+          }
+
           if (o1 instanceof ClassObject) {
             throw new ComparisonException("Cannot compare structs");
           }
@@ -389,14 +395,14 @@ public final class EvalUtils {
   }
 
   public static void lock(Object object, Location loc) {
-    if (object instanceof StarlarkMutable) {
-      ((StarlarkMutable) object).lock(loc);
+    if (object instanceof SkylarkMutable) {
+      ((SkylarkMutable) object).lock(loc);
     }
   }
 
   public static void unlock(Object object, Location loc) {
-    if (object instanceof StarlarkMutable) {
-      ((StarlarkMutable) object).unlock(loc);
+    if (object instanceof SkylarkMutable) {
+      ((SkylarkMutable) object).unlock(loc);
     }
   }
 
