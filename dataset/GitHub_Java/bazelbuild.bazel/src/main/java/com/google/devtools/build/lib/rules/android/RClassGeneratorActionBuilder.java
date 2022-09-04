@@ -70,10 +70,10 @@ public class RClassGeneratorActionBuilder {
     return primary.toBuilder().setJavaClassJar(classJarOut).build();
   }
 
-  public ResourceApk build(ProcessedAndroidData data) {
+  public ValidatedAndroidResources build(ProcessedAndroidData data) {
     build(data.getRTxt(), data.getManifest());
 
-    return data.withValidatedResources(classJarOut);
+    return data.toValidatedResources(classJarOut);
   }
 
   private void build(Artifact rTxt, ProcessedAndroidManifest manifest) {

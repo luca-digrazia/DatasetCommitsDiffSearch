@@ -432,14 +432,13 @@ public class AndroidResourcesTest extends ResourceTestBase {
             /* dataBindingInfoZip = */ null,
             ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false));
 
-    ValidatedAndroidData validated =
-        processedData.generateRClass(ruleContext).getValidatedResources();
+    ValidatedAndroidResources validated = processedData.generateRClass(ruleContext);
 
     // An action to generate the R.class file should be registered.
     assertActionArtifacts(
         ruleContext,
         /* inputs = */ ImmutableList.of(rTxt, manifest.getManifest()),
-        /* outputs = */ ImmutableList.of(validated.getJavaClassJar()));
+        /* outputs = */ ImmutableList.of(validated.getClassJar()));
   }
 
   /**

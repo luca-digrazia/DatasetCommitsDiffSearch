@@ -88,10 +88,6 @@ public class MergedAndroidAssets extends ParsedAndroidAssets {
     return mergedAssets;
   }
 
-  public AssetDependencies getAssetDependencies() {
-    return assetDependencies;
-  }
-
   @Override
   public boolean equals(Object object) {
     if (!super.equals(object)) {

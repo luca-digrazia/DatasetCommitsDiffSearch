@@ -224,14 +224,14 @@ public abstract class ResourceTestBase extends AndroidBuildViewTestCase {
     return view.getRuleContextForTesting(
         eventHandler,
         dummyTarget,
-        /* env= */ new CachingAnalysisEnvironment(
+        new CachingAnalysisEnvironment(
             view.getArtifactFactory(),
             skyframeExecutor.getActionKeyContext(),
             ConfiguredTargetKey.of(dummyTarget.getLabel(), targetConfig),
             /*isSystemEnv=*/ false,
             targetConfig.extendedSanityChecks(),
             eventHandler,
-            null,
+            /*env=*/ null,
             targetConfig.isActionsEnabled()),
         new BuildConfigurationCollection(
             ImmutableList.of(dummy.getConfiguration()), dummy.getHostConfiguration()));

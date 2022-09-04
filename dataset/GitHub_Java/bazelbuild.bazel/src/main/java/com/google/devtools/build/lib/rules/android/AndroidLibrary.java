@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -165,13 +166,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         return null;
       }
     } else {
-      // Process transitive resources so we can build artifacts needed to export an aar.
-      resourceApk =
-          ResourceApk.processFromTransitiveLibraryData(
-              ruleContext,
-              resourceDeps,
-              assetDeps,
-              StampedAndroidManifest.createEmpty(ruleContext, /* exported = */ false));
+      resourceApk = ResourceApk.fromTransitiveResources(resourceDeps, assetDeps);
     }
 
     JavaTargetAttributes javaTargetAttributes =
@@ -192,19 +187,55 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR);
     Artifact aarOut = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_AAR);
 
+    final ResourceContainer primaryResources;
     final Aar aar;
     if (definesLocalResources) {
-      aar = Aar.create(aarOut, resourceApk.getManifest());
+      primaryResources = resourceApk.getPrimaryResources();
+      // applicationManifest has already been checked for nullness above in this method
+      ApplicationManifest applicationManifest =
+          ApplicationManifest.fromExplicitManifest(ruleContext, resourceApk.getManifest());
+
+      aar = Aar.create(aarOut, applicationManifest.getManifest());
       addAarToProvider(aar, transitiveAars, transitiveAarArtifacts);
     } else {
       aar = null;
+      ApplicationManifest applicationManifest =
+          ApplicationManifest.generatedManifest(ruleContext)
+              .renamePackage(ruleContext, AndroidCommon.getJavaPackage(ruleContext));
+
+      String javaPackage = AndroidCommon.getJavaPackage(ruleContext);
+
+      ResourceContainer resourceContainer =
+          ResourceContainer.builder()
+              .setLabel(ruleContext.getLabel())
+              .setJavaPackageFromString(javaPackage)
+              .setManifest(applicationManifest.getManifest())
+              .setJavaSourceJar(
+                  ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR))
+              .setManifestExported(AndroidCommon.getExportsManifest(ruleContext))
+              .setRTxt(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT))
+              .build();
+
+      primaryResources =
+          new AndroidResourcesProcessorBuilder(ruleContext)
+              .setLibrary(true)
+              .setRTxtOut(resourceContainer.getRTxt())
+              .setManifestOut(
+                  ruleContext.getImplicitOutputArtifact(
+                      AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))
+              .setSourceJarOut(resourceContainer.getJavaSourceJar())
+              .setJavaPackage(resourceContainer.getJavaPackage())
+              .withResourceDependencies(resourceApk.getResourceDependencies())
+              .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
+              .setThrowOnResourceConflict(
+                  ruleContext.getFragment(AndroidConfiguration.class).throwOnResourceConflict())
+              .build(resourceContainer);
     }
 
     new AarGeneratorBuilder(ruleContext)
-        .withPrimaryResources(resourceApk.getPrimaryResources())
-        .withPrimaryAssets(resourceApk.getPrimaryAssets())
-        .withManifest(resourceApk.getManifest())
-        .withRtxt(resourceApk.getRTxt())
+        .withPrimary(primaryResources)
+        .withManifest(aar != null ? aar.getManifest() : primaryResources.getManifest())
+        .withRtxt(primaryResources.getRTxt())
         .withClasses(classesJar)
         .setAAROut(aarOut)
         .setProguardSpecs(proguardLibrary.collectLocalProguardSpecs())
