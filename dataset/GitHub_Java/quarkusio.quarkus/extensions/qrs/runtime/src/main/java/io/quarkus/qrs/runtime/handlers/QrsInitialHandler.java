@@ -2,9 +2,7 @@ package io.quarkus.qrs.runtime.handlers;
 
 import java.util.Map;
 
-import io.quarkus.qrs.runtime.core.ExceptionMapping;
 import io.quarkus.qrs.runtime.core.RequestContext;
-import io.quarkus.qrs.runtime.core.Serialisers;
 import io.quarkus.qrs.runtime.mapping.RequestMapper;
 import io.quarkus.qrs.runtime.mapping.RuntimeResource;
 import io.vertx.core.Handler;
@@ -14,14 +12,9 @@ public class QrsInitialHandler implements Handler<RoutingContext> {
 
     //TODO: this by method approach does not work for sub resource locators
     final Map<String, RequestMapper<RuntimeResource>> mappers;
-    final ExceptionMapping exceptionMapping;
-    final Serialisers serialisers;
 
-    public QrsInitialHandler(Map<String, RequestMapper<RuntimeResource>> mappers, ExceptionMapping exceptionMapping,
-            Serialisers serialisers) {
+    public QrsInitialHandler(Map<String, RequestMapper<RuntimeResource>> mappers) {
         this.mappers = mappers;
-        this.exceptionMapping = exceptionMapping;
-        this.serialisers = serialisers;
     }
 
     @Override
@@ -36,7 +29,7 @@ public class QrsInitialHandler implements Handler<RoutingContext> {
             event.next();
             return;
         }
-        RequestContext requestContext = new RequestContext(event, target.value, exceptionMapping, serialisers);
+        RequestContext requestContext = new RequestContext(event, target.value);
         requestContext.setPathParamValues(target.pathParamValues);
         requestContext.run();
     }
