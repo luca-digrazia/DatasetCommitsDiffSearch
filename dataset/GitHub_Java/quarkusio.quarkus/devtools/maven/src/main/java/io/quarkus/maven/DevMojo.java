@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -310,7 +311,7 @@ public class DevMojo extends AbstractMojo {
 
             DevModeRunner runner = new DevModeRunner(args);
 
-            runner.prepare(false);
+            runner.prepare();
             Map<Path, Long> pomFiles = readPomFileTimestamps(runner);
             runner.run();
             long nextCheck = System.currentTimeMillis() + 100;
@@ -324,19 +325,18 @@ public class DevMojo extends AbstractMojo {
                     if (!runner.process.isAlive()) {
                         return;
                     }
-                    final Set<Path> changed = new HashSet<>();
+                    boolean changed = false;
                     for (Map.Entry<Path, Long> e : pomFiles.entrySet()) {
                         long t = Files.getLastModifiedTime(e.getKey()).toMillis();
                         if (t > e.getValue()) {
-                            changed.add(e.getKey());
+                            changed = true;
                             pomFiles.put(e.getKey(), t);
                         }
                     }
-                    if (!changed.isEmpty()) {
-                        getLog().info("Changes detected to " + changed + ", restarting dev mode");
+                    if (changed) {
                         DevModeRunner newRunner = new DevModeRunner(args);
                         try {
-                            newRunner.prepare(true);
+                            newRunner.prepare();
                         } catch (Exception e) {
                             getLog().info("Could not load changed pom.xml file, changes not applied", e);
                             continue;
@@ -369,23 +369,19 @@ public class DevMojo extends AbstractMojo {
 
         //if the user did not compile we run it for them
         if (compileNeeded) {
-            triggerCompile();
-        }
-    }
+            // compile the Kotlin sources if needed
+            final String kotlinMavenPluginKey = ORG_JETBRAINS_KOTLIN + ":" + KOTLIN_MAVEN_PLUGIN;
+            final Plugin kotlinMavenPlugin = project.getPlugin(kotlinMavenPluginKey);
+            if (kotlinMavenPlugin != null) {
+                executeCompileGoal(kotlinMavenPlugin, ORG_JETBRAINS_KOTLIN, KOTLIN_MAVEN_PLUGIN);
+            }
 
-    private void triggerCompile() throws MojoExecutionException {
-        // compile the Kotlin sources if needed
-        final String kotlinMavenPluginKey = ORG_JETBRAINS_KOTLIN + ":" + KOTLIN_MAVEN_PLUGIN;
-        final Plugin kotlinMavenPlugin = project.getPlugin(kotlinMavenPluginKey);
-        if (kotlinMavenPlugin != null) {
-            executeCompileGoal(kotlinMavenPlugin, ORG_JETBRAINS_KOTLIN, KOTLIN_MAVEN_PLUGIN);
-        }
-
-        // Compile the Java sources if needed
-        final String compilerPluginKey = ORG_APACHE_MAVEN_PLUGINS + ":" + MAVEN_COMPILER_PLUGIN;
-        final Plugin compilerPlugin = project.getPlugin(compilerPluginKey);
-        if (compilerPlugin != null) {
-            executeCompileGoal(compilerPlugin, ORG_APACHE_MAVEN_PLUGINS, MAVEN_COMPILER_PLUGIN);
+            // Compile the Java sources if needed
+            final String compilerPluginKey = ORG_APACHE_MAVEN_PLUGINS + ":" + MAVEN_COMPILER_PLUGIN;
+            final Plugin compilerPlugin = project.getPlugin(compilerPluginKey);
+            if (compilerPlugin != null) {
+                executeCompileGoal(compilerPlugin, ORG_APACHE_MAVEN_PLUGINS, MAVEN_COMPILER_PLUGIN);
+            }
         }
     }
 
@@ -499,10 +495,7 @@ public class DevMojo extends AbstractMojo {
         /**
          * Attempts to prepare the dev mode runner.
          */
-        void prepare(final boolean triggerCompile) throws Exception {
-            if (triggerCompile) {
-                triggerCompile();
-            }
+        void prepare() throws Exception {
             if (debug == null) {
                 // debug mode not specified
                 // make sure 5005 is not used, we don't want to just fail if something else is using it
@@ -554,26 +547,15 @@ public class DevMojo extends AbstractMojo {
             devModeContext.getBuildSystemProperties().putIfAbsent("quarkus.application.version", project.getVersion());
 
             devModeContext.setSourceEncoding(getSourceEncoding());
-            devModeContext.setSourceJavaVersion(source);
-            devModeContext.setTargetJvmVersion(target);
 
             // Set compilation flags.  Try the explicitly given configuration first.  Otherwise,
             // refer to the configuration of the Maven Compiler Plugin.
+            final Optional<Xpp3Dom> compilerPluginConfiguration = findCompilerPluginConfiguration();
             if (compilerArgs != null) {
                 devModeContext.setCompilerOptions(compilerArgs);
-            } else {
-                for (Plugin plugin : project.getBuildPlugins()) {
-                    if (!plugin.getKey().equals("org.apache.maven.plugins:maven-compiler-plugin")) {
-                        continue;
-                    }
-                    Xpp3Dom compilerPluginConfiguration = (Xpp3Dom) plugin.getConfiguration();
-                    if (compilerPluginConfiguration == null) {
-                        continue;
-                    }
-                    Xpp3Dom compilerPluginArgsConfiguration = compilerPluginConfiguration.getChild("compilerArgs");
-                    if (compilerPluginArgsConfiguration == null) {
-                        continue;
-                    }
+            } else if (compilerPluginConfiguration.isPresent()) {
+                final Xpp3Dom compilerPluginArgsConfiguration = compilerPluginConfiguration.get().getChild("compilerArgs");
+                if (compilerPluginArgsConfiguration != null) {
                     List<String> compilerPluginArgs = new ArrayList<>();
                     for (Xpp3Dom argConfiguration : compilerPluginArgsConfiguration.getChildren()) {
                         compilerPluginArgs.add(argConfiguration.getValue());
@@ -584,7 +566,24 @@ public class DevMojo extends AbstractMojo {
                         compilerPluginArgs.add(compilerPluginArgsConfiguration.getValue().trim());
                     }
                     devModeContext.setCompilerOptions(compilerPluginArgs);
-                    break;
+                }
+            }
+            if (source != null) {
+                devModeContext.setSourceJavaVersion(source);
+            } else if (compilerPluginConfiguration.isPresent()) {
+                final Xpp3Dom javacSourceVersion = compilerPluginConfiguration.get().getChild("source");
+                if (javacSourceVersion != null && javacSourceVersion.getValue() != null
+                        && !javacSourceVersion.getValue().trim().isEmpty()) {
+                    devModeContext.setSourceJavaVersion(javacSourceVersion.getValue().trim());
+                }
+            }
+            if (target != null) {
+                devModeContext.setTargetJvmVersion(target);
+            } else if (compilerPluginConfiguration.isPresent()) {
+                final Xpp3Dom javacTargetVersion = compilerPluginConfiguration.get().getChild("target");
+                if (javacTargetVersion != null && javacTargetVersion.getValue() != null
+                        && !javacTargetVersion.getValue().trim().isEmpty()) {
+                    devModeContext.setTargetJvmVersion(javacTargetVersion.getValue().trim());
                 }
             }
 
@@ -863,5 +862,18 @@ public class DevMojo extends AbstractMojo {
             }
         }
         return ret;
+    }
+
+    private Optional<Xpp3Dom> findCompilerPluginConfiguration() {
+        for (final Plugin plugin : project.getBuildPlugins()) {
+            if (!plugin.getKey().equals("org.apache.maven.plugins:maven-compiler-plugin")) {
+                continue;
+            }
+            final Xpp3Dom compilerPluginConfiguration = (Xpp3Dom) plugin.getConfiguration();
+            if (compilerPluginConfiguration != null) {
+                return Optional.of(compilerPluginConfiguration);
+            }
+        }
+        return Optional.empty();
     }
 }
