@@ -215,6 +215,11 @@ public class DigestHashFunction {
     return digestLength;
   }
 
+  public boolean isValidDigest(byte[] digest) {
+    // TODO(b/109764197): Remove this check to accept variable-length hashes.
+    return digest != null && digest.length * 8 == hashFunction.bits();
+  }
+
   @Override
   public String toString() {
     return name;

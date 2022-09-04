@@ -384,13 +384,11 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public byte[] getxattr(Path path, String name, boolean followSymlinks) throws IOException {
+  public byte[] getxattr(Path path, String name) throws IOException {
     String pathName = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      return followSymlinks
-          ? NativePosixFiles.getxattr(pathName, name)
-          : NativePosixFiles.lgetxattr(pathName, name);
+      return NativePosixFiles.getxattr(pathName, name);
     } catch (UnsupportedOperationException e) {
       // getxattr() syscall is not supported by the underlying filesystem (it returned ENOTSUP).
       // Per method contract, treat this as ENODATA.
