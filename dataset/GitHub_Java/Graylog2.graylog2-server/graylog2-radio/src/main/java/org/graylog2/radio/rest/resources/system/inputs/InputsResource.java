@@ -23,7 +23,7 @@ import com.google.common.collect.Maps;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
-import org.graylog2.plugin.IOState;
+import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.radio.cluster.InputService;
 import org.graylog2.radio.rest.resources.RestResource;
@@ -71,10 +71,10 @@ public class InputsResource extends RestResource {
     @GET
     @Timed
     public String list() {
-        final List<IOState<MessageInput>> inputStates = Lists.newArrayList();
+        final List<Map<String, Object>> inputStates = Lists.newArrayList();
 
-        for (IOState<MessageInput> inputState : inputRegistry.getInputStates()) {
-            inputStates.add(inputState);
+        for (InputState inputState : inputRegistry.getInputStates()) {
+            inputStates.add(inputState.asMap());
         }
 
         final Map<String, Object> result = ImmutableMap.of(
@@ -112,16 +112,17 @@ public class InputsResource extends RestResource {
         }
 
         // Build a proper configuration from POST data.
-        Configuration inputConfig = new Configuration(lr.configuration());
+        Configuration inputConfig = new Configuration(lr.configuration);
 
         // Build input.
         MessageInput input;
         try {
-            input = inputRegistry.create(lr.type(), inputConfig);
-            input.setTitle(lr.title());
-            input.setCreatorUserId(lr.creatorUserId());
+            input = inputRegistry.create(lr.type, inputConfig);
+            input.setTitle(lr.title);
+            input.setCreatorUserId(lr.creatorUserId);
             input.setCreatedAt(Tools.iso8601());
-            input.setGlobal(lr.global());
+            input.setGlobal(lr.global);
+
             input.setConfiguration(inputConfig);
 
             input.checkConfiguration();
@@ -213,13 +214,13 @@ public class InputsResource extends RestResource {
     @Timed
     @Path("/{inputId}/launch")
     public Response launchExisting(@PathParam("inputId") String inputId) {
-        final IOState<MessageInput> inputState = inputRegistry.getInputState(inputId);
+        final InputState inputState = inputRegistry.getInputState(inputId);
 
         final MessageInput input;
         if (inputState == null) {
             input = inputRegistry.getPersisted(inputId);
         } else {
-            input = inputState.getStoppable();
+            input = inputState.getMessageInput();
         }
 
         if (input == null) {

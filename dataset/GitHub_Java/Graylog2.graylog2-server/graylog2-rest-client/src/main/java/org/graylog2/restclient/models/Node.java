@@ -59,8 +59,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
-
 public class Node extends ClusterEntity {
 
     public interface Factory {
@@ -304,26 +302,25 @@ public class Node extends ClusterEntity {
     }
 
     // TODO nodes should not have state beyond their activity status
-    public synchronized SystemOverviewResponse loadSystemInformation() {
+    public synchronized void loadSystemInformation() {
         try {
-            return api.path(routes.SystemResource().system(), SystemOverviewResponse.class)
+            this.systemInfo = api.path(routes.SystemResource().system(), SystemOverviewResponse.class)
                     .node(this)
                     .execute();
         } catch (Exception e) {
             LOG.error("Unable to load system information for node " + this, e);
-            return null;
         }
     }
 
-    public synchronized NodeJVMStats loadJVMInformation() {
+    public synchronized void loadJVMInformation() {
         try {
-            return new NodeJVMStats(api.path(routes.SystemResource().jvm(), ClusterEntityJVMStatsResponse.class)
-                    .node(this)
-                    .execute()
+            jvmInfo = new NodeJVMStats(
+                    api.path(routes.SystemResource().jvm(), ClusterEntityJVMStatsResponse.class)
+                            .node(this)
+                            .execute()
             );
         } catch (Exception e) {
             LOG.error("Unable to load JVM information for node " + this, e);
-            return null;
         }
     }
 
@@ -564,11 +561,11 @@ public class Node extends ClusterEntity {
     }
 
     public void requireSystemInfo() {
-        this.systemInfo = firstNonNull(loadSystemInformation(), SystemOverviewResponse.buildEmpty());
+        loadSystemInformation();
     }
 
     public void requireJVMInfo() {
-        this.jvmInfo = firstNonNull(loadJVMInformation(), NodeJVMStats.buildEmpty());
+        loadJVMInformation();
     }
 
     @Override

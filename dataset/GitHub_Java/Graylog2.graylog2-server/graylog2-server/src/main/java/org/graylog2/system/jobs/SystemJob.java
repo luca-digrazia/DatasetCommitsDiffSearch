@@ -21,7 +21,6 @@ import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
 
-import javax.annotation.Nonnull;
 import java.util.Map;
 
 public abstract class SystemJob {
@@ -54,8 +53,12 @@ public abstract class SystemJob {
     protected String id;
     protected DateTime startedAt;
 
-    protected SystemJob(@Nonnull ServerStatus serverStatus) {
+    protected SystemJob(ServerStatus serverStatus) {
         this.serverStatus = serverStatus;
+    }
+
+    protected SystemJob() {
+        this.serverStatus = null;
     }
 
     public String getId() {

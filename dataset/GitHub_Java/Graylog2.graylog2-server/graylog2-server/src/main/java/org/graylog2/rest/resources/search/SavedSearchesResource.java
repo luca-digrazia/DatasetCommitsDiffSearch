@@ -17,7 +17,6 @@
 package org.graylog2.rest.resources.search;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.wordnik.swagger.annotations.Api;
@@ -27,7 +26,6 @@ import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.Tools;
@@ -40,7 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.validation.Valid;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -48,17 +45,21 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-import java.net.URI;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "Search/Saved", description = "Saved searches")
 @Path("/search/saved")
 public class SavedSearchesResource extends SearchResource {
+
     private static final Logger LOG = LoggerFactory.getLogger(SavedSearchesResource.class);
 
     private final SavedSearchService savedSearchService;
@@ -76,70 +77,97 @@ public class SavedSearchesResource extends SearchResource {
     @RequiresPermissions(RestPermissions.SAVEDSEARCHES_CREATE)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(name = "JSON body", required = true)
-                           @Valid CreateSavedSearchRequest cr) throws ValidationException {
+    public Response create(@ApiParam(name = "JSON body", required = true) String body) {
+        CreateSavedSearchRequest cr;
+
+        try {
+            cr = objectMapper.readValue(body, CreateSavedSearchRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
         // Create saved search
-        final Map<String, Object> searchData = Maps.newHashMap();
+        Map<String, Object> searchData = Maps.newHashMap();
         searchData.put("title", cr.title);
         searchData.put("query", cr.query);
         searchData.put("creator_user_id", getCurrentUser().getName());
         searchData.put("created_at", Tools.iso8601());
 
-        final SavedSearch search = new SavedSearchImpl(searchData);
-        final String id = savedSearchService.save(search);
+        SavedSearch search = new SavedSearchImpl(searchData);
+        String id;
+        try {
+            id = savedSearchService.save(search);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
-        final Map<String, String> result = ImmutableMap.of("search_id", id);
-        final URI searchUri = UriBuilder.fromResource(SavedSearchesResource.class)
-                .path("{searchId}")
-                .build(id);
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("search_id", id);
 
-        return Response.created(searchUri).entity(result).build();
+        return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "Get a list of all saved searches")
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Object> list() {
-        final List<Map<String, Object>> searches = Lists.newArrayList();
+    public String list() {
+        List<Map<String, Object>> searches = Lists.newArrayList();
         for (SavedSearch search : savedSearchService.all()) {
             if (isPermitted(RestPermissions.SAVEDSEARCHES_READ, search.getId())) {
                 searches.add(search.asMap());
             }
         }
 
-        return ImmutableMap.of(
-                "total", searches.size(),
-                "searches", searches);
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("total", searches.size());
+        result.put("searches", searches);
+
+        return json(result);
     }
 
-    @GET
-    @Path("/{searchId}")
-    @Timed
+    @GET @Path("/{searchId}") @Timed
     @ApiOperation(value = "Get a single saved search")
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Saved search not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Map<String, Object> get(@ApiParam(name = "searchId", required = true)
-                                   @PathParam("searchId") String searchId) throws NotFoundException {
+    public String get(@ApiParam(name = "searchId", required = true) @PathParam("searchId") String searchId) {
+        if (searchId == null || searchId.isEmpty()) {
+            LOG.error("Missing searchId. Returning HTTP 400.");
+            throw new WebApplicationException(400);
+        }
         checkPermission(RestPermissions.SAVEDSEARCHES_READ, searchId);
 
-        return savedSearchService.load(searchId).asMap();
+        try {
+            SavedSearch search = savedSearchService.load(searchId);
+            return json(search.asMap());
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
     }
 
-    @DELETE
-    @Path("/{searchId}")
-    @Timed
+    @DELETE @Path("/{searchId}") @Timed
     @ApiOperation(value = "Delete a saved search")
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Saved search not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public void delete(@ApiParam(name = "searchId", required = true)
-                       @PathParam("searchId") String searchId) throws NotFoundException {
+    public Response delete(@ApiParam(name = "searchId", required = true) @PathParam("searchId") String searchId) {
+        if (searchId == null || searchId.isEmpty()) {
+            LOG.error("Missing searchId. Returning HTTP 400.");
+            throw new WebApplicationException(400);
+        }
         checkPermission(RestPermissions.SAVEDSEARCHES_EDIT, searchId);
-        final SavedSearch search = savedSearchService.load(searchId);
-        savedSearchService.destroy(search);
+        try {
+            SavedSearch search = savedSearchService.load(searchId);
+            savedSearchService.destroy(search);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
+
+        return Response.status(Response.Status.fromStatusCode(204)).build();
     }
+
 }

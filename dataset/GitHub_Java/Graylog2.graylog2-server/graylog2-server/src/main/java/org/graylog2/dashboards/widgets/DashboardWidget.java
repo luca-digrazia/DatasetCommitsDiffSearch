@@ -50,8 +50,7 @@ public abstract class DashboardWidget implements EmbeddedPersistable {
         STREAM_SEARCH_RESULT_COUNT,
         FIELD_CHART,
         QUICKVALUES,
-        SEARCH_RESULT_CHART,
-        STATS_COUNT
+        SEARCH_RESULT_CHART
     }
 
     private static final String RESULT_CACHE_KEY = "result";
@@ -223,15 +222,6 @@ public abstract class DashboardWidget implements EmbeddedPersistable {
                         creatorUserId);
             case SEARCH_RESULT_CHART:
                 return new SearchResultChartWidget(metricRegistry, searches,
-                        widgetId,
-                        description,
-                        cacheTime,
-                        config,
-                        query,
-                        timeRange,
-                        creatorUserId);
-            case STATS_COUNT:
-                return new StatisticalCountWidget(metricRegistry, searches,
                         widgetId,
                         description,
                         cacheTime,

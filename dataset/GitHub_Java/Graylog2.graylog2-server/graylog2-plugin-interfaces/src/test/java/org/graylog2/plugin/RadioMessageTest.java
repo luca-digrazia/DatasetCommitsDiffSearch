@@ -23,6 +23,8 @@
 package org.graylog2.plugin;
 
 import com.google.common.collect.Maps;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.msgpack.MessagePack;
 import org.testng.annotations.Test;
 
@@ -49,7 +51,6 @@ public class RadioMessageTest {
         fields.put("string_val", "somestring");
         fields.put("char_val", Character.valueOf('c'));
         fields.put("boolean_val", Boolean.TRUE);
-        fields.put("_id", "someuuid");
 
         final Message msg = new Message(fields);
 

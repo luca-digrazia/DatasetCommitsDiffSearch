@@ -16,25 +16,30 @@
  */
 package org.graylog2.utilities;
 
-import com.beust.jcommander.internal.Lists;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.joda.JodaModule;
+import com.google.common.collect.Lists;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.streams.StreamService;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 
 public class MessageToJsonSerializerTest {
+    @Mock private ObjectMapper objectMapper;
     @Mock private StreamService streamService;
     @Mock private InputService inputService;
     @Mock private MessageInput messageInput;
@@ -43,8 +48,12 @@ public class MessageToJsonSerializerTest {
 
     @BeforeMethod
     public void setUp() throws Exception {
+        final ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JodaModule());
+
         MockitoAnnotations.initMocks(this);
 
+        when(objectMapper.copy()).thenReturn(mapper);
         when(stream.getId()).thenReturn("stream-id");
         when(messageInput.getId()).thenReturn("input-id");
         when(inputService.buildMessageInput(input)).thenReturn(messageInput);
@@ -54,12 +63,16 @@ public class MessageToJsonSerializerTest {
 
     @Test
     public void shouldSerializeMessageCorrectly() throws Exception {
-        final MessageToJsonSerializer serializer = new MessageToJsonSerializer(streamService, inputService);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
+        final MessageToJsonSerializer serializer = new MessageToJsonSerializer(objectMapper, streamService, inputService);
+        final DateTime now = Tools.iso8601();
         final Message message = new Message("test", "localhost", now);
 
         message.setSourceInput(messageInput);
         message.setStreams(Lists.newArrayList(stream));
+        message.addField("test1", "hello");
+        message.addField("test2", 1);
+        message.addField("test3", 1.2);
+        message.addField("test4", false);
 
         final String s = serializer.serializeToString(message);
 
@@ -70,9 +83,16 @@ public class MessageToJsonSerializerTest {
         assertEquals(newMessage.getSource(), message.getSource());
         assertEquals(newMessage.getSourceInput(), messageInput);
         assertEquals(newMessage.getStreams(), Lists.newArrayList(stream));
+        assertEquals(newMessage.getField("test1"), "hello");
+        assertEquals(newMessage.getField("test2"), 1);
+        assertEquals(newMessage.getField("test3"), 1.2);
+        assertEquals(newMessage.getField("test4"), false);
 
         // Just assert that the message id is not null because we cannot set the _id field on deserialize because the
         // Message object does not allow the _id field to be set.
         assertNotNull(newMessage.getId());
+
+        // Make sure the injected ObjectMapper instance is copied before adding custom config.
+        verify(objectMapper, times(1)).copy();
     }
 }

@@ -17,7 +17,6 @@
 package org.graylog2.outputs;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.inject.assistedinject.Assisted;
 import org.graylog2.gelfclient.GelfConfiguration;
 import org.graylog2.gelfclient.GelfMessage;
 import org.graylog2.gelfclient.GelfMessageBuilder;
@@ -34,18 +33,14 @@ import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
-import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class GelfOutput implements MessageOutput {
     private static final Logger LOG = LoggerFactory.getLogger(GelfOutput.class);
@@ -56,19 +51,13 @@ public class GelfOutput implements MessageOutput {
 
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
-    private final Configuration configuration;
-    private final GelfTransport transport;
+    private Configuration configuration;
+    private GelfTransport transport;
 
-    @Inject
-    public GelfOutput(@Assisted Stream stream, @Assisted Configuration configuration) throws MessageOutputConfigurationException {
-        this.configuration = configuration;
+    @Override
+    public void initialize(final Configuration config) throws MessageOutputConfigurationException {
+        configuration = config;
         transport = buildTransport(configuration);
-        isRunning.set(true);
-    }
-
-    public GelfOutput(Configuration configuration, GelfTransport gelfTransport) {
-        this.configuration = configuration;
-        this.transport = gelfTransport;
         isRunning.set(true);
     }
 
@@ -89,15 +78,12 @@ public class GelfOutput implements MessageOutput {
     }
 
     protected GelfTransport buildTransport(final Configuration configuration) throws MessageOutputConfigurationException {
-        final String protocol = configuration.getString(CK_PROTOCOL);
+        final String protocol = configuration.getString(CK_PROTOCOL).toUpperCase();
         final String hostname = configuration.getString(CK_HOSTNAME);
-        if (isNullOrEmpty(protocol) || isNullOrEmpty(hostname) || !configuration.intIsSet(CK_PORT))
-            throw new MessageOutputConfigurationException("Protocol and/or hostname missing!");
         final int port = configuration.getInt(CK_PORT);
 
-
         final GelfConfiguration gelfConfiguration = new GelfConfiguration(new InetSocketAddress(hostname, port))
-                .transport(GelfTransports.valueOf(protocol.toUpperCase()));
+                .transport(GelfTransports.valueOf(protocol));
 
         LOG.debug("Initializing GELF sender and connecting to {}://{}:{}", protocol, hostname, port);
 
@@ -115,6 +101,9 @@ public class GelfOutput implements MessageOutput {
 
     @Override
     public void write(final Message message) throws Exception {
+        if (transport == null) {
+            transport = buildTransport(this.configuration);
+        }
         transport.send(toGELFMessage(message));
     }
 
@@ -156,34 +145,30 @@ public class GelfOutput implements MessageOutput {
         return builder.build();
     }
 
-    public interface Factory extends MessageOutput.Factory<GelfOutput> {
-        @Override
-        GelfOutput create(Stream stream, Configuration configuration);
-
-        @Override
-        Config getConfig();
-
-        @Override
-        Descriptor getDescriptor();
+    @Override
+    public ConfigurationRequest getRequestedConfiguration() {
+        final ConfigurationRequest configurationRequest = new ConfigurationRequest();
+        configurationRequest.addField(new TextField(CK_HOSTNAME, "Destination host", "", "This is the hostname of the destination", ConfigurationField.Optional.NOT_OPTIONAL));
+        configurationRequest.addField(new NumberField(CK_PORT, "Destination port", 12201, "This is the port of the destination", ConfigurationField.Optional.NOT_OPTIONAL));
+        final Map<String, String> protocols = ImmutableMap.of(
+                "TCP", "TCP",
+                "UDP", "UDP");
+        configurationRequest.addField(new DropdownField(CK_PROTOCOL, "Protocol", "TCP", protocols, "The protocol used to connect", ConfigurationField.Optional.OPTIONAL));
+        return configurationRequest;
     }
 
-    public static class Config extends MessageOutput.Config {
-        @Override
-        public ConfigurationRequest getRequestedConfiguration() {
-            final ConfigurationRequest configurationRequest = new ConfigurationRequest();
-            configurationRequest.addField(new TextField(CK_HOSTNAME, "Destination host", "", "This is the hostname of the destination", ConfigurationField.Optional.NOT_OPTIONAL));
-            configurationRequest.addField(new NumberField(CK_PORT, "Destination port", 12201, "This is the port of the destination", ConfigurationField.Optional.NOT_OPTIONAL));
-            final Map<String, String> protocols = ImmutableMap.of(
-                    "TCP", "TCP",
-                    "UDP", "UDP");
-            configurationRequest.addField(new DropdownField(CK_PROTOCOL, "Protocol", "TCP", protocols, "The protocol used to connect", ConfigurationField.Optional.OPTIONAL));
-            return configurationRequest;
-        }
+    @Override
+    public String getName() {
+        return "GELF Output";
     }
 
-    public static class Descriptor extends MessageOutput.Descriptor {
-        public Descriptor() {
-            super("GELF Output", false, "", "An output sending GELF over TCP or UDP");
-        }
+    @Override
+    public String getHumanName() {
+        return "An output sending GELF over TCP or UDP";
+    }
+
+    @Override
+    public String getLinkToDocs() {
+        return null;
     }
 }

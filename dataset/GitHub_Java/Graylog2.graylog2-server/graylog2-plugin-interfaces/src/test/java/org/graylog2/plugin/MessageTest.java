@@ -24,7 +24,7 @@ package org.graylog2.plugin;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 import org.testng.annotations.BeforeMethod;
@@ -33,21 +33,22 @@ import org.testng.annotations.Test;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.testng.AssertJUnit.*;
+import static org.testng.AssertJUnit.assertEquals;
+import static org.testng.AssertJUnit.assertFalse;
+import static org.testng.AssertJUnit.assertNotNull;
+import static org.testng.AssertJUnit.assertNull;
+import static org.testng.AssertJUnit.assertTrue;
 
 public class MessageTest {
     private Message message;
-    private DateTime originalTimestamp;
 
     @BeforeMethod
     public void setUp() {
-        originalTimestamp = Tools.iso8601();
-        message = new Message("foo", "bar", originalTimestamp);
+        message = new Message("foo", "bar", Tools.iso8601());
     }
 
     @Test
@@ -204,21 +205,21 @@ public class MessageTest {
     }
 
     @Test
+    public void testGetAndSetSourceInput() throws Exception {
+        assertNull(message.getSourceInput());
+
+        final MessageInput input = mock(MessageInput.class);
+
+        message.setSourceInput(input);
+
+        assertEquals(input, message.getSourceInput());
+    }
+
+    @Test
     public void testGetId() throws Exception {
         final Pattern pattern = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 
         assertTrue(pattern.matcher(message.getId()).matches());
-    }
-
-    @Test
-    public void testGetTimestamp() {
-        try {
-            final DateTime timestamp = message.getTimestamp();
-            assertNotNull(timestamp);
-            assertEquals(originalTimestamp.getZone(), timestamp.getZone());
-        } catch (ClassCastException e) {
-            fail("timestamp wasn't a DateTime " + e.getMessage());
-        }
     }
 
     @Test
@@ -289,10 +290,10 @@ public class MessageTest {
         assertTrue(message.isComplete());
 
         message = new Message("message", "", Tools.iso8601());
-        assertTrue(message.isComplete());
+        assertFalse(message.isComplete());
 
         message = new Message("message", null, Tools.iso8601());
-        assertTrue(message.isComplete());
+        assertFalse(message.isComplete());
 
         message = new Message("", "source", Tools.iso8601());
         assertFalse(message.isComplete());
@@ -330,30 +331,5 @@ public class MessageTest {
         final Map<String, Object> fields = message.getFields();
 
         fields.put("foo", "bar");
-    }
-
-    @Test
-    public void testGetFieldNames() throws Exception {
-        assertTrue("Missing fields in set!", Sets.symmetricDifference(message.getFieldNames(), Sets.newHashSet("_id", "timestamp", "source", "message")).isEmpty());
-
-        message.addField("testfield", "testvalue");
-
-        assertTrue("Missing fields in set!", Sets.symmetricDifference(message.getFieldNames(), Sets.newHashSet("_id", "timestamp", "source", "message", "testfield")).isEmpty());
-    }
-
-    @Test(expectedExceptions = UnsupportedOperationException.class)
-    public void testGetFieldNamesReturnsUnmodifiableSet() throws Exception {
-        final Set<String> fieldNames = message.getFieldNames();
-
-        fieldNames.remove("_id");
-    }
-
-    @Test
-    public void testHasField() throws Exception {
-        assertFalse(message.hasField("__foo__"));
-
-        message.addField("__foo__", "bar");
-
-        assertTrue(message.hasField("__foo__"));
     }
 }

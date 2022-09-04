@@ -17,8 +17,6 @@
 package org.graylog2.periodical;
 
 import com.github.joschi.jadconfig.util.Duration;
-import com.sun.management.GarbageCollectionNotificationInfo;
-import com.sun.management.GcInfo;
 import org.graylog2.Configuration;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
@@ -29,9 +27,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.management.NotificationEmitter;
-import javax.management.NotificationListener;
-import javax.management.openmbean.CompositeData;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.List;
@@ -40,7 +35,8 @@ public class GarbageCollectionWarningThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(GarbageCollectionWarningThread.class);
 
     private final List<GarbageCollectorMXBean> garbageCollectors;
-    private final Duration gcWarningThreshold;
+    private final Duration gcCheckInterval;
+    private final long gcWarningThresholdMillis;
     private final NodeId nodeId;
     private final NotificationService notificationService;
 
@@ -48,28 +44,31 @@ public class GarbageCollectionWarningThread extends Periodical {
     public GarbageCollectionWarningThread(final Configuration configuration,
                                           final NodeId nodeId,
                                           final NotificationService notificationService) {
-        this(configuration.getGcWarningThreshold(), nodeId, notificationService);
+        this(configuration.getGcCheckInterval(), configuration.getGcWarningThreshold(), nodeId, notificationService);
     }
 
-    GarbageCollectionWarningThread(final Duration gcWarningThreshold,
-                                   final NodeId nodeId,
-                                   final NotificationService notificationService) {
-        this(ManagementFactory.getGarbageCollectorMXBeans(), gcWarningThreshold, nodeId, notificationService);
-    }
-
-    GarbageCollectionWarningThread(final List<GarbageCollectorMXBean> garbageCollectors,
+    GarbageCollectionWarningThread(final Duration gcCheckInterval,
                                    final Duration gcWarningThreshold,
                                    final NodeId nodeId,
                                    final NotificationService notificationService) {
+        this(ManagementFactory.getGarbageCollectorMXBeans(), gcCheckInterval, gcWarningThreshold.toMilliseconds(), nodeId, notificationService);
+    }
+
+    GarbageCollectionWarningThread(final List<GarbageCollectorMXBean> garbageCollectors,
+                                   final Duration gcCheckInterval,
+                                   final long gcWarningThresholdMillis,
+                                   final NodeId nodeId,
+                                   final NotificationService notificationService) {
         this.garbageCollectors = garbageCollectors;
-        this.gcWarningThreshold = gcWarningThreshold;
+        this.gcCheckInterval = gcCheckInterval;
+        this.gcWarningThresholdMillis = gcWarningThresholdMillis;
         this.nodeId = nodeId;
         this.notificationService = notificationService;
     }
 
     @Override
     public boolean runsForever() {
-        return true;
+        return false;
     }
 
     @Override
@@ -94,12 +93,12 @@ public class GarbageCollectionWarningThread extends Periodical {
 
     @Override
     public int getInitialDelaySeconds() {
-        return 0;
+        return 10;
     }
 
     @Override
     public int getPeriodSeconds() {
-        return 0;
+        return (int) gcCheckInterval.toSeconds();
     }
 
     @Override
@@ -110,37 +109,23 @@ public class GarbageCollectionWarningThread extends Periodical {
     @Override
     public void doRun() {
         for (final GarbageCollectorMXBean gc : garbageCollectors) {
-            final NotificationEmitter emitter = (NotificationEmitter) gc;
-            final NotificationListener listener = new NotificationListener() {
-                @Override
-                public void handleNotification(javax.management.Notification notification, Object handback) {
-                    if (GarbageCollectionNotificationInfo.GARBAGE_COLLECTION_NOTIFICATION.equals(notification.getType())) {
-                        final GcInfo gcInfo = GarbageCollectionNotificationInfo.from((CompositeData) notification.getUserData()).getGcInfo();
-                        final Duration duration = Duration.milliseconds(gcInfo.getDuration());
+            if (gc.getCollectionTime() >= gcWarningThresholdMillis) {
+                LOG.warn("Last GC run with {} took longer than {}ms (count={}, time={}ms)",
+                        gc.getName(), gcWarningThresholdMillis, gc.getCollectionCount(), gc.getCollectionTime());
 
-                        if (duration.compareTo(gcWarningThreshold) > 0) {
-                            LOG.warn("Last GC run with {} took longer than {} (last duration={})",
-                                    gc.getName(), gcWarningThreshold, duration);
+                final Notification notification = notificationService.buildNow()
+                        .addNode(nodeId.toString())
+                        .addTimestamp(Tools.iso8601())
+                        .addSeverity(Notification.Severity.URGENT)
+                        .addType(Notification.Type.GC_TOO_LONG)
+                        .addDetail("gc_name", gc.getName())
+                        .addDetail("gc_count", gc.getCollectionCount())
+                        .addDetail("gc_time", gc.getCollectionTime());
 
-                            final Notification systemNotification = notificationService.buildNow()
-                                    .addNode(nodeId.toString())
-                                    .addTimestamp(Tools.iso8601())
-                                    .addSeverity(Notification.Severity.URGENT)
-                                    .addType(Notification.Type.GC_TOO_LONG)
-                                    .addDetail("gc_name", gc.getName())
-                                    .addDetail("gc_duration_ms", duration.toMilliseconds())
-                                    .addDetail("gc_threshold_ms", gcWarningThreshold.toMilliseconds())
-                                    .addDetail("gc_collection_count", gc.getCollectionCount())
-                                    .addDetail("gc_collection_time", gc.getCollectionTime());
-
-                            if (!notificationService.publishIfFirst(systemNotification)) {
-                                LOG.debug("Couldn't publish notification: {}", notification);
-                            }
-                        }
-                    }
+                if (!notificationService.publishIfFirst(notification)) {
+                    LOG.debug("Couldn't publish notification: {}", notification);
                 }
-            };
-            emitter.addNotificationListener(listener, null, null);
+            }
         }
     }
 }
