@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
@@ -162,7 +161,6 @@ public final class CoverageReportActionBuilder {
       Collection<ConfiguredTarget> targetsToTest,
       Iterable<Artifact> baselineCoverageArtifacts,
       ArtifactFactory factory,
-      ActionKeyContext actionKeyContext,
       ArtifactOwner artifactOwner,
       String workspaceName,
       ArgsFunc argsFunction,
@@ -195,8 +193,7 @@ public final class CoverageReportActionBuilder {
           CoverageArgs.create(directories, coverageArtifacts, lcovArtifact, factory, artifactOwner,
               reportGenerator, workspaceName, htmlReport),
           argsFunction, locationFunc);
-      return new CoverageReportActionsWrapper(
-          lcovFileAction, coverageReportAction, actionKeyContext);
+      return new CoverageReportActionsWrapper(lcovFileAction, coverageReportAction);
     } else {
       reporter.handle(
           Event.error("Cannot generate coverage report - no coverage information was collected"));
@@ -243,21 +240,17 @@ public final class CoverageReportActionBuilder {
     Artifact lcovOutput = args.factory().getDerivedArtifact(
         coverageDir.getRelative("_coverage_report.dat"), root, args.artifactOwner());
     Artifact reportGeneratorExec = args.reportGenerator().getExecutable();
-    RunfilesSupport runfilesSupport = args.reportGenerator().getRunfilesSupport();
     args = CoverageArgs.createCopyWithCoverageDirAndLcovOutput(args, coverageDir, lcovOutput);
     ImmutableList<String> actionArgs = argsFunc.apply(args);
 
-    ImmutableList.Builder<Artifact> inputsBuilder =
-        ImmutableList.<Artifact>builder()
-            .addAll(args.coverageArtifacts())
-            .add(reportGeneratorExec)
-            .add(args.lcovArtifact());
-    if (runfilesSupport != null) {
-      inputsBuilder.add(runfilesSupport.getRunfilesMiddleman());
-    }
+    ImmutableList<Artifact> inputs = ImmutableList.<Artifact>builder()
+        .addAll(args.coverageArtifacts())
+        .add(reportGeneratorExec)
+        .add(args.lcovArtifact())
+        .build();
     return new CoverageReportAction(
         ACTION_OWNER,
-        inputsBuilder.build(),
+        inputs,
         ImmutableList.of(lcovOutput),
         actionArgs,
         locationFunc.apply(args),

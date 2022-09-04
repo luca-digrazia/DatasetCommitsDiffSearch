@@ -17,14 +17,12 @@ package com.google.devtools.build.lib.bazel.coverage;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
@@ -85,10 +83,9 @@ public class BazelCoverageReportModule extends BlazeModule {
           EventBus eventBus,
           BlazeDirectories directories,
           Collection<ConfiguredTarget> targetsToTest,
-          NestedSet<Artifact> baselineCoverageArtifacts,
+          Iterable<Artifact> baselineCoverageArtifacts,
           ArtifactFactory artifactFactory,
-          ActionKeyContext actionKeyContext,
-          ActionLookupValue.ActionLookupKey actionLookupKey,
+          ArtifactOwner artifactOwner,
           String workspaceName) {
         if (options == null || options.combinedReport == ReportType.NONE) {
           return null;
@@ -101,8 +98,7 @@ public class BazelCoverageReportModule extends BlazeModule {
             targetsToTest,
             baselineCoverageArtifacts,
             artifactFactory,
-            actionKeyContext,
-            actionLookupKey,
+            artifactOwner,
             workspaceName,
             this::getArgs,
             this::getLocationMessage,

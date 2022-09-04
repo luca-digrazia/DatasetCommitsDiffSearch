@@ -19,9 +19,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
 import com.google.devtools.build.lib.buildeventstream.BuildToolLogs;
-import com.google.devtools.build.lib.buildeventstream.BuildToolLogs.LogFileEntry;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Pair;
@@ -282,7 +280,7 @@ public final class BuildResult {
   public static final class BuildToolLogCollection {
     private final List<Pair<String, ByteString>> directValues = new ArrayList<>();
     private final List<Pair<String, String>> directUris = new ArrayList<>();
-    private final List<LogFileEntry> localFiles = new ArrayList<>();
+    private final List<Pair<String, Path>> localFiles = new ArrayList<>();
     private boolean frozen;
 
     public BuildToolLogCollection freeze() {
@@ -291,7 +289,7 @@ public final class BuildResult {
     }
 
     @VisibleForTesting
-    public List<LogFileEntry> getLocalFiles() {
+    public List<Pair<String, Path>> getLocalFiles() {
       return localFiles;
     }
 
@@ -308,13 +306,8 @@ public final class BuildResult {
     }
 
     public BuildToolLogCollection addLocalFile(String name, Path path) {
-      return addLocalFile(name, path, LocalFileType.LOG);
-    }
-
-    public BuildToolLogCollection addLocalFile(
-        String name, Path path, LocalFileType localFileType) {
       Preconditions.checkState(!frozen);
-      this.localFiles.add(new LogFileEntry(name, path, localFileType));
+      this.localFiles.add(Pair.of(name, path));
       return this;
     }
 
