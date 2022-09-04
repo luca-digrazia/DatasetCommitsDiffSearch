@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -82,7 +81,7 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
     for (Map.Entry<String, Object> e : values.entrySet()) {
       builder.put(
           Attribute.getSkylarkName(e.getKey()),
-          SkylarkType.convertToSkylark(e.getValue(), (Environment) null));
+          SkylarkType.convertToSkylark(e.getValue(), /*env=*/ null));
     }
     return builder.build();
   }
