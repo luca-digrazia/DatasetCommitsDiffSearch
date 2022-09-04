@@ -16,18 +16,19 @@
  */
 package org.graylog2.alarmcallbacks;
 
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.database.Persisted;
+import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
-
-import java.util.Map;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-public interface AlarmCallbackConfiguration {
-    String getId();
+public interface AlarmCallbackConfiguration extends Persisted {
+    void setStream(Stream stream);
     String getStreamId();
     String getType();
-    Map<String, Object> getConfiguration();
+    Configuration getConfiguration();
     DateTime getCreatedAt();
     String getCreatorUserId();
 }
