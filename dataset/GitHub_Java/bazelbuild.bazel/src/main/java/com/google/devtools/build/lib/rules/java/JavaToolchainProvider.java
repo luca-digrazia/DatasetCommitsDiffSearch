@@ -18,9 +18,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -47,7 +47,7 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
       List<String> defaultJavacFlags,
       Artifact javac,
       NestedSet<Artifact> tools,
-      FilesToRunProvider javaBuilder,
+      Artifact javaBuilder,
       @Nullable Artifact headerCompiler,
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
@@ -112,8 +112,8 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
   /** Returns the {@link Artifact}s of compilation tools. */
   public abstract NestedSet<Artifact> getTools();
 
-  /** Returns the {@link FilesToRunProvider} of JavaBuilder */
-  public abstract FilesToRunProvider getJavaBuilder();
+  /** Returns the {@link Artifact} of the JavaBuilder deploy jar */
+  public abstract Artifact getJavaBuilder();
 
   /** @return the {@link Artifact} of the Header Compiler deploy jar */
   @Nullable public abstract Artifact getHeaderCompiler();

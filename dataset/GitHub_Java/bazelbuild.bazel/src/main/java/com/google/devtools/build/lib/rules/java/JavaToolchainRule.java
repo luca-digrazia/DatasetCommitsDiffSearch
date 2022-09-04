@@ -115,6 +115,7 @@ public final class JavaToolchainRule implements RuleDefinition {
             attr("javabuilder", LABEL_LIST)
                 .mandatory()
                 .cfg(HOST)
+                .singleArtifact()
                 .allowedFileTypes(FileTypeSet.ANY_FILE)
                 .exec())
         /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(singlejar) -->
