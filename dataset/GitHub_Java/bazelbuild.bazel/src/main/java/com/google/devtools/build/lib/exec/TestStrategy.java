@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.io.FileWatcher;
 import com.google.devtools.build.lib.util.io.OutErr;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.TestCase;
@@ -85,7 +86,7 @@ public abstract class TestStrategy implements TestActionContext {
 
   /** Removes directory if it exists and recreates it. */
   private void recreateDirectory(Path directory) throws IOException {
-    directory.deleteTree();
+    FileSystemUtils.deleteTree(directory);
     directory.createDirectoryAndParents();
   }
 
