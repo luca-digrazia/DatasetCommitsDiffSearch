@@ -339,7 +339,7 @@ public class QuarkusTestExtension
 
             return result;
         } catch (Exception e) {
-            throw new IllegalStateException("Unable to handle profile " + profileInstance.getClass());
+            throw new IllegalStateException("Unable to handle profile " + profileInstance.getClass(), e);
         }
     }
 
@@ -647,25 +647,10 @@ public class QuarkusTestExtension
         T result;
         ClassLoader old = Thread.currentThread().getContextClassLoader();
         Class<?> requiredTestClass = extensionContext.getRequiredTestClass();
-
-        if (runningQuarkusApplication != null) {
-            try {
-                Thread.currentThread().setContextClassLoader(runningQuarkusApplication.getClassLoader());
-                for (Object beforeClassCallback : beforeClassCallbacks) {
-                    beforeClassCallback.getClass().getMethod("beforeClass", Class.class).invoke(beforeClassCallback,
-                            runningQuarkusApplication.getClassLoader().loadClass(requiredTestClass.getName()));
-                }
-            } finally {
-                Thread.currentThread().setContextClassLoader(old);
-            }
-        } else {
-            // can this ever happen?
-            for (Object beforeClassCallback : beforeClassCallbacks) {
-                beforeClassCallback.getClass().getMethod("beforeClass", Class.class).invoke(beforeClassCallback,
-                        requiredTestClass);
-            }
+        for (Object beforeClassCallback : beforeClassCallbacks) {
+            beforeClassCallback.getClass().getMethod("beforeClass", Class.class).invoke(beforeClassCallback,
+                    requiredTestClass);
         }
-
         try {
             Thread.currentThread().setContextClassLoader(requiredTestClass.getClassLoader());
             result = invocation.proceed();
