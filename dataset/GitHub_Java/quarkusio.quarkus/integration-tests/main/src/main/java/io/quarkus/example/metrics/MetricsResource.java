@@ -18,7 +18,6 @@ package io.quarkus.example.metrics;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 
 import org.eclipse.microprofile.metrics.Histogram;
@@ -83,13 +82,6 @@ public class MetricsResource {
     @Counted(monotonic = true, name = "counter_with_tags", tags = "foo=bar")
     public String counterWithTags() {
         return "TEST";
-    }
-
-    @GET
-    @Path("/counter-throwing-not-found-exception")
-    @Counted(monotonic = true, name = "counter_404")
-    public String counterWithTagsThrowingNotFound() {
-        throw new NotFoundException();
     }
 
 }
