@@ -29,6 +29,7 @@ import org.hibernate.event.internal.EntityCopyObserverFactoryInitiator;
 import org.hibernate.hql.internal.QueryTranslatorFactoryInitiator;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.integrator.spi.IntegratorService;
+import org.hibernate.internal.util.config.ConfigurationHelper;
 import org.hibernate.persister.internal.PersisterClassResolverInitiator;
 import org.hibernate.persister.internal.PersisterFactoryInitiator;
 import org.hibernate.property.access.internal.PropertyAccessStrategyResolverInitiator;
@@ -342,6 +343,7 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
         final Map settingsCopy = new HashMap();
         settingsCopy.putAll(settings);
         settingsCopy.put(org.hibernate.boot.cfgxml.spi.CfgXmlAccessService.LOADED_CONFIG_KEY, aggregatedCfgXml);
+        ConfigurationHelper.resolvePlaceHolders(settingsCopy);
 
         return new StandardServiceRegistryImpl(autoCloseRegistry, bootstrapServiceRegistry, initiators,
                 providedServices, settingsCopy);
