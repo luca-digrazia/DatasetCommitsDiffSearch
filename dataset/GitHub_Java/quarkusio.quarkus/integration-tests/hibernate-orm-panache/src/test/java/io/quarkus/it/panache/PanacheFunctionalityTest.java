@@ -3,14 +3,6 @@ package io.quarkus.it.panache;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.io.StringWriter;
-
-import javax.json.bind.Jsonb;
-import javax.json.bind.JsonbBuilder;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -84,22 +76,16 @@ public class PanacheFunctionalityTest {
     }
 
     /**
-     * _PanacheEntityBase_ has the method _isPersistent_. This method is used by Jackson to serialize the attribute *peristent*
-     * in the JSON which is not intended. This test ensures that the attribute *persistent* is not generated when using Jackson.
-     * 
-     * This test does not interact with the Quarkus application itself. It is just using the Jackson ObjectMapper with a
-     * PanacheEntity. Thus this test is disabled in native mode. The test code runs the JVM and not native.
+     * This test is disabled in native mode as there is no interaction with the quarkus integration test endpoint.
      */
     @DisabledOnNativeImage
     @Test
-    public void jacksonDeserializationIgnoresPersistentAttribute() throws JsonProcessingException {
+    public void jacksonDeserilazationIgnoresPersitantAttribute() throws JsonProcessingException {
         // set Up
         Person person = new Person();
         person.name = "max";
         // do
         ObjectMapper objectMapper = new ObjectMapper();
-        // make sure the Jaxb module is loaded
-        objectMapper.findAndRegisterModules();
         String personAsString = objectMapper.writeValueAsString(person);
         // check 
         // hence no 'persistence'-attribute
@@ -108,59 +94,8 @@ public class PanacheFunctionalityTest {
                 personAsString);
     }
 
-    /**
-     * This test is disabled in native mode as there is no interaction with the quarkus integration test endpoint.
-     */
-    @DisabledOnNativeImage
-    @Test
-    public void jaxbDeserializationHasAllFields() throws JsonProcessingException, JAXBException {
-        // set Up
-        Person person = new Person();
-        person.name = "max";
-        // do
-        JAXBContext jaxbContext = JAXBContext.newInstance(Person.class);
-
-        Marshaller marshaller = jaxbContext.createMarshaller();
-        StringWriter sw = new StringWriter();
-        marshaller.marshal(person, sw);
-        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-                + "<person><name>max</name><serialisationTrick>1</serialisationTrick></person>",
-                sw.toString());
-    }
-
-    /**
-     * This test is disabled in native mode as there is no interaction with the quarkus integration test endpoint.
-     */
-    @DisabledOnNativeImage
-    @Test
-    public void jsonbDeserializationHasAllFields() throws JsonProcessingException {
-        // set Up
-        Person person = new Person();
-        person.name = "max";
-        // do
-
-        Jsonb jsonb = JsonbBuilder.create();
-        String json = jsonb.toJson(person);
-        assertEquals(
-                "{\"dogs\":[],\"name\":\"max\",\"serialisationTrick\":1}",
-                json);
-    }
-
-    @Test
-    public void testCompositeKey() {
-        RestAssured.when()
-                .get("/test/composite")
-                .then()
-                .body(is("OK"));
-    }
-
     @Test
     public void testBug7721() {
         RestAssured.when().get("/test/7721").then().body(is("OK"));
-    }
-
-    @Test
-    public void testBug8254() {
-        RestAssured.when().get("/test/8254").then().body(is("OK"));
     }
 }
