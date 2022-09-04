@@ -81,7 +81,6 @@ public final class CcToolchainProvider extends ToolchainInfo implements CcToolch
           /* builtInIncludeDirectories= */ ImmutableList.<PathFragment>of(),
           /* sysroot= */ null,
           FdoMode.OFF,
-          /* fdoProvider= */ null,
           /* useLLVMCoverageMapFormat= */ false,
           /* codeCoverageEnabled= */ false,
           /* isHostConfiguration= */ false);
@@ -121,12 +120,6 @@ public final class CcToolchainProvider extends ToolchainInfo implements CcToolch
   private final boolean isHostConfiguration;
   private final boolean forcePic;
   private final boolean shouldStripBinaries;
-  /**
-   * WARNING: We don't like {@link FdoProvider}. Its {@link FdoProvider#fdoProfilePath} is pure
-   * path and that is horrible as it breaks many Bazel assumptions! Don't do bad stuff with it,
-   * don't take inspiration from it.
-   */
-  private final FdoProvider fdoProvider;
 
   public CcToolchainProvider(
       ImmutableMap<String, Object> values,
@@ -160,7 +153,6 @@ public final class CcToolchainProvider extends ToolchainInfo implements CcToolch
       ImmutableList<PathFragment> builtInIncludeDirectories,
       @Nullable PathFragment sysroot,
       FdoMode fdoMode,
-      FdoProvider fdoProvider,
       boolean useLLVMCoverageMapFormat,
       boolean codeCoverageEnabled,
       boolean isHostConfiguration) {
@@ -196,7 +188,6 @@ public final class CcToolchainProvider extends ToolchainInfo implements CcToolch
     this.builtInIncludeDirectories = builtInIncludeDirectories;
     this.sysroot = sysroot;
     this.fdoMode = fdoMode;
-    this.fdoProvider = fdoProvider;
     this.useLLVMCoverageMapFormat = useLLVMCoverageMapFormat;
     this.codeCoverageEnabled = codeCoverageEnabled;
     this.isHostConfiguration = isHostConfiguration;
@@ -700,10 +691,6 @@ public final class CcToolchainProvider extends ToolchainInfo implements CcToolch
    */
   public ImmutableMap<String, String> getAdditionalMakeVariables() {
     return toolchainInfo.getAdditionalMakeVariables();
-  }
-
-  public FdoProvider getFdoProvider() {
-    return fdoProvider;
   }
 
   /**

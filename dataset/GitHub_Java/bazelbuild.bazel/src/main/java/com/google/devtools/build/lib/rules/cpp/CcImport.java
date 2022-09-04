@@ -69,7 +69,8 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
         CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(ruleContext, ccToolchain);
-    FdoProvider fdoProvider = ccToolchain.getFdoProvider();
+    FdoProvider fdoProvider =
+        CppHelper.getFdoProviderUsingDefaultCcToolchainAttribute(ruleContext);
 
     // Add headers to compilation step.
     final CcCommon common = new CcCommon(ruleContext);

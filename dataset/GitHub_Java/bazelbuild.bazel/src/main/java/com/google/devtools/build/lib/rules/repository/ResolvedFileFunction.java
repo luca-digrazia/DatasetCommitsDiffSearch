@@ -87,7 +87,7 @@ public class ResolvedFileFunction implements SkyFunction {
                     "Failed to evaluate resolved file " + key.getPath()));
           }
         }
-        Object resolved = resolvedEnvironment.moduleLookup("resolved");
+        Object resolved = resolvedEnvironment.lookup("resolved");
         if (resolved == null) {
           throw new ResolvedFileFunctionException(
               new BuildFileContainsErrorsException(

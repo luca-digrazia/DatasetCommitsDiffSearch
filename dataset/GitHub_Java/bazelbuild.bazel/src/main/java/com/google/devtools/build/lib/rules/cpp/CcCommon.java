@@ -166,7 +166,9 @@ public final class CcCommon {
     this.ccToolchain =
         Preconditions.checkNotNull(
             CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext));
-    this.fdoProvider = ccToolchain.getFdoProvider();
+    this.fdoProvider =
+        Preconditions.checkNotNull(
+            CppHelper.getFdoProviderUsingDefaultCcToolchainAttribute(ruleContext));
   }
 
   /**
