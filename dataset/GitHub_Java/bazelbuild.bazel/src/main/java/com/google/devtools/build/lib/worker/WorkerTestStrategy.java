@@ -164,7 +164,6 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
         ErrorMessage errorMessage =
             ErrorMessage.builder()
                 .message("Worker process returned an unparseable WorkResponse:")
-                .exception(e)
                 .logText(data)
                 .build();
         executor.getEventHandler().handle(Event.warn(errorMessage.toString()));
@@ -174,15 +173,15 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
       worker.finishExecution(key);
 
       if (response == null) {
-        throw new UserExecException(
+        ErrorMessage errorMessage =
             ErrorMessage.builder()
                 .message(
                     "Worker process did not return a WorkResponse. This is usually caused by a bug"
                         + " in the worker, thus dumping its log file for debugging purposes:")
                 .logFile(worker.getLogFile())
                 .logSizeLimit(4096)
-                .build()
-                .toString());
+                .build();
+        throw new UserExecException(errorMessage.toString());
       }
 
       actionExecutionContext.getFileOutErr().getErrorStream().write(
