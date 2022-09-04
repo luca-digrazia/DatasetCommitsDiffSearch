@@ -1,17 +1,16 @@
 package io.dropwizard.validation;
 
+import com.google.common.collect.ImmutableList;
 import io.dropwizard.util.Size;
 import io.dropwizard.util.SizeUnit;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.validation.Valid;
 import javax.validation.Validator;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class SizeValidatorTest {
     @SuppressWarnings("unused")
@@ -27,15 +26,15 @@ public class SizeValidatorTest {
 
         @Valid
         private List<@MaxSize(value = 30, unit = SizeUnit.KILOBYTES) Size> maxSize =
-                Collections.singletonList(Size.gigabytes(2));
+            ImmutableList.of(Size.gigabytes(2));
 
         @Valid
         private List<@MinSize(value = 30, unit = SizeUnit.KILOBYTES) Size> minSize =
-                Collections.singletonList(Size.bytes(100));
+            ImmutableList.of(Size.bytes(100));
 
         @Valid
         private List<@SizeRange(min = 10, max = 100, unit = SizeUnit.KILOBYTES) Size> rangeSize =
-                Collections.singletonList(Size.megabytes(2));
+            ImmutableList.of(Size.megabytes(2));
 
         public void setTooBig(Size tooBig) {
             this.tooBig = tooBig;
@@ -61,17 +60,15 @@ public class SizeValidatorTest {
 
     @Test
     public void returnsASetOfErrorsForAnObject() throws Exception {
-        assumeTrue("en".equals(Locale.getDefault().getLanguage()),
-                "This test executes when the defined language is English ('en'). If not, it is skipped.");
-
-        assertThat(ConstraintViolations.format(validator.validate(new Example())))
+        if ("en".equals(Locale.getDefault().getLanguage())) {
+            assertThat(ConstraintViolations.format(validator.validate(new Example())))
                     .containsOnly("outOfRange must be between 10 KILOBYTES and 100 KILOBYTES",
                                   "tooBig must be less than or equal to 30 KILOBYTES",
                                   "tooSmall must be greater than or equal to 30 KILOBYTES",
-                                   "maxSize[0].<list element> must be less than or equal to 30 KILOBYTES",
-                                   "minSize[0].<list element> must be greater than or equal to 30 KILOBYTES",
-                                   "rangeSize[0].<list element> must be between 10 KILOBYTES and 100 KILOBYTES");
-
+                                   "maxSize[0] must be less than or equal to 30 KILOBYTES",
+                                   "minSize[0] must be greater than or equal to 30 KILOBYTES",
+                                   "rangeSize[0] must be between 10 KILOBYTES and 100 KILOBYTES");
+        }
     }
 
     @Test
@@ -80,9 +77,9 @@ public class SizeValidatorTest {
         example.setTooBig(Size.bytes(10));
         example.setTooSmall(Size.megabytes(10));
         example.setOutOfRange(Size.kilobytes(64));
-        example.setMaxSize(Collections.singletonList(Size.bytes(10)));
-        example.setMinSize(Collections.singletonList(Size.megabytes(10)));
-        example.setRangeSize(Collections.singletonList(Size.kilobytes(64)));
+        example.setMaxSize(ImmutableList.of(Size.bytes(10)));
+        example.setMinSize(ImmutableList.of(Size.megabytes(10)));
+        example.setRangeSize(ImmutableList.of(Size.kilobytes(64)));
 
         assertThat(validator.validate(example))
                 .isEmpty();

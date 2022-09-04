@@ -26,7 +26,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Documented
 @Constraint(validatedBy = MinDurationValidator.class)
 public @interface MinDuration {
-    String message() default "must be greater than (or equal to, if in 'inclusive' mode) {value} {unit}";
+    String message() default "must be greater than or equal to {value} {unit}";
 
     Class<?>[] groups() default { };
 
@@ -41,11 +41,4 @@ public @interface MinDuration {
      * @return unit of the value the element must be higher or equal to
      */
     TimeUnit unit() default TimeUnit.SECONDS;
-
-    /**
-     * @return {@code true} if the validation is to allow values equal to {@link #value()}.
-     * False if the validation is to be exclusive.
-     * Defaults to {@code true}.
-     */
-    boolean inclusive() default true;
 }
