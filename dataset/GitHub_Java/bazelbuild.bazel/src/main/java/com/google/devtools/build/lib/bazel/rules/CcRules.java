@@ -35,15 +35,13 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses.CcIncludeScanningRule;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses.CcLinkingRule;
 import com.google.devtools.build.lib.rules.cpp.CpuTransformer;
 import com.google.devtools.build.lib.rules.cpp.FdoPrefetchHintsRule;
 import com.google.devtools.build.lib.rules.cpp.FdoProfileRule;
 import com.google.devtools.build.lib.rules.cpp.GoogleLegacyStubs;
 import com.google.devtools.build.lib.rules.cpp.GraphNodeAspect;
-import com.google.devtools.build.lib.rules.cpp.PropellerOptimizeRule;
 import com.google.devtools.build.lib.rules.platform.PlatformRules;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcBootstrap;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcBootstrap;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import java.io.IOException;
 
@@ -83,9 +81,7 @@ public class CcRules implements RuleSet {
     builder.addRuleDefinition(new CcIncludeScanningRule());
     builder.addRuleDefinition(new FdoProfileRule());
     builder.addRuleDefinition(new FdoPrefetchHintsRule());
-    builder.addRuleDefinition(new CcLinkingRule());
-    builder.addRuleDefinition(new PropellerOptimizeRule());
-    builder.addStarlarkBootstrap(
+    builder.addSkylarkBootstrap(
         new CcBootstrap(
             new BazelCcModule(),
             CcInfo.PROVIDER,

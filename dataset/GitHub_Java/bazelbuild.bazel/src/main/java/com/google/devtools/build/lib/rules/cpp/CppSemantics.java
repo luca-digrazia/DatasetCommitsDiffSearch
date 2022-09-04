@@ -14,9 +14,11 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
@@ -33,6 +35,16 @@ public interface CppSemantics {
       BuildConfiguration configuration,
       FeatureConfiguration featureConfiguration,
       CppCompileActionBuilder actionBuilder);
+
+  /**
+   * Returns the set of includes which are not mandatory and may be pruned by include processing.
+   */
+  NestedSet<Artifact> getAdditionalPrunableIncludes();
+
+  /** Return an alternate source of inputs for constructing the include scanning data. */
+  default Iterable<Artifact> getAlternateIncludeScanningDataInputs() {
+    return null;
+  }
 
   /** Determines the applicable mode of headers checking for the passed in ruleContext. */
   HeadersCheckingMode determineHeadersCheckingMode(RuleContext ruleContext);
@@ -52,7 +64,4 @@ public interface CppSemantics {
 
   /** Provider for cc_shared_libraries * */
   StructImpl getCcSharedLibraryInfo(TransitiveInfoCollection dep);
-
-  /** No-op in Bazel */
-  void validateLayeringCheckFeatures(RuleContext ruleContext);
 }

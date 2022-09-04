@@ -14,10 +14,12 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.rules.objc.CompilationSupport.IncludeProcessingType.HEADER_THINNING;
 import static com.google.devtools.build.lib.rules.objc.CompilationSupport.IncludeProcessingType.INCLUDE_SCANNING;
 import static com.google.devtools.build.lib.rules.objc.CompilationSupport.IncludeProcessingType.NO_PROCESSING;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -29,10 +31,12 @@ import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
+import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery.DotdPruningMode;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.IncludeProcessingType;
+import com.google.devtools.build.lib.util.FileTypeSet;
 
 /**
  * CppSemantics for objc builds.
@@ -47,6 +51,17 @@ public class ObjcCppSemantics implements CppSemantics {
   private final IntermediateArtifacts intermediateArtifacts;
   private final BuildConfiguration buildConfiguration;
   private final boolean enableModules;
+
+  /**
+   * Set of {@link com.google.devtools.build.lib.util.FileType} of source artifacts that are
+   * compatible with header thinning.
+   */
+  private static final FileTypeSet SOURCES_FOR_HEADER_THINNING =
+      FileTypeSet.of(
+          CppFileTypes.OBJC_SOURCE,
+          CppFileTypes.OBJCPP_SOURCE,
+          CppFileTypes.CPP_SOURCE,
+          CppFileTypes.C_SOURCE);
 
   /**
    * Creates an instance of ObjcCppSemantics
@@ -95,27 +110,27 @@ public class ObjcCppSemantics implements CppSemantics {
         .addTransitiveMandatoryInputs(actionBuilder.getToolchain().getAllFilesMiddleman())
         .setShouldScanIncludes(includeProcessingType == INCLUDE_SCANNING);
 
-    if (includeProcessingType == NO_PROCESSING) {
+    if (includeProcessingType == HEADER_THINNING) {
+      Artifact sourceFile = actionBuilder.getSourceFile();
+      if (!sourceFile.isTreeArtifact()
+          && SOURCES_FOR_HEADER_THINNING.matches(sourceFile.getFilename())) {
+        actionBuilder.addMandatoryInputs(
+            ImmutableList.of(intermediateArtifacts.headersListFile(actionBuilder.getOutputFile())));
+      }
+    } else if (includeProcessingType == NO_PROCESSING) {
+      // Header thinning feature will make all generated files mandatory inputs to the
+      // ObjcHeaderScanning action so this is only required when that is disabled
       // TODO(b/62060839): Identify the mechanism used to add generated headers in c++, and recycle
       // it here.
-      //
-      // This is used to patch the action graph of missing dependencies.  We only need to do this
-      // for headers in depObjcProviderCompileInfo.  We can rid of this in the migraiton cl.
       actionBuilder.addTransitiveMandatoryInputs(objcProvider.getGeneratedHeaders());
     }
   }
 
   @Override
   public NestedSet<Artifact> getAdditionalPrunableIncludes() {
-    // This is a hook used when header processing is off, to supply CppCompilationAction with
-    // additional inputs that are not properly added to CcCompilationContext.  We will delete this
-    // in the migration cl.
     return objcProvider.get(HEADER);
   }
 
-  // This function now returns "additional" (not "alternate" include scanning data inputs, over
-  // those already accounted for in dependent CcCompilationContext.  We can delete this in the
-  // migration cl so no point renaming it.
   @Override
   public Iterable<Artifact> getAlternateIncludeScanningDataInputs() {
     // Include scanning data only cares about generated artifacts.  Since the generated headers from

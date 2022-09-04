@@ -14,10 +14,14 @@
 
 package com.google.devtools.build.lib.bazel.rules.cpp;
 
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
@@ -72,6 +76,11 @@ public class BazelCppSemantics implements AspectLegalCppSemantics {
   }
 
   @Override
+  public NestedSet<Artifact> getAdditionalPrunableIncludes() {
+    return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+  }
+
+  @Override
   public HeadersCheckingMode determineHeadersCheckingMode(RuleContext ruleContext) {
     return HeadersCheckingMode.STRICT;
   }
@@ -107,7 +116,4 @@ public class BazelCppSemantics implements AspectLegalCppSemantics {
     }
     return null;
   }
-
-  @Override
-  public void validateLayeringCheckFeatures(RuleContext ruleContext) {}
 }
