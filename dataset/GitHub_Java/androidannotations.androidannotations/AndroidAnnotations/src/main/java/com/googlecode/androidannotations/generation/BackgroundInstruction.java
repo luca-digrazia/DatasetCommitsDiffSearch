@@ -23,18 +23,14 @@ public class BackgroundInstruction implements Instruction {
 
 	private static final String FORMAT = //
 	"" + //
-			"    @Override\n" + //
-			"    protected void %s(%s) {\n" + //
-			"        new Thread() {\n" + //
-			"            public void run() {\n" + //
-			"                try {\n" + //
-			"                    %s.super.%s(%s);\n" + //
-			"                } catch (Exception e) {\n" + //
-			"                    android.util.Log.e(\"%s\", \"\", e);\n" + //
-			"                }\n" + //
-			"            }\n" + //
-			"        }.start();\n" + //
-			"    }\n" + //
+			"        @Override\n" + //
+			"        protected void %s(%s) {\n" + //
+			"		 	new Thread() {\n" + //
+			"		      public void run() {\n" + //
+			"               %s.super.%s(%s);\n" + //
+			"		      }\n" + //
+			"           }.start();\n" + //
+			"		 }\n" + //
 			"\n";
 
 	private final String methodName;
@@ -76,7 +72,7 @@ public class BackgroundInstruction implements Instruction {
 			parameters.append(parameter);
 		}
 
-		return String.format(FORMAT, methodName, arguments.toString(), className, methodName, parameters.toString(), className);
+		return String.format(FORMAT, methodName, arguments.toString(), className, methodName, parameters.toString());
 	}
 
 }
