@@ -33,6 +33,8 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.OutputFilter;
+import com.google.devtools.build.lib.flags.CommandNameCache;
+import com.google.devtools.build.lib.flags.InvocationPolicyParser;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
@@ -73,8 +75,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.windows.WindowsFileSystem;
 import com.google.devtools.build.lib.windows.WindowsSubprocessFactory;
-import com.google.devtools.common.options.CommandNameCache;
-import com.google.devtools.common.options.InvocationPolicyParser;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsBase;
@@ -199,7 +199,7 @@ public final class BlazeRuntime {
     Preconditions.checkState(this.workspace == null);
     WorkspaceBuilder builder = new WorkspaceBuilder(directories, binTools);
     for (BlazeModule module : blazeModules) {
-      module.workspaceInit(this, directories, builder);
+      module.workspaceInit(directories, builder);
     }
     this.workspace = builder.build(
         this, packageFactory, ruleClassProvider, getProductName(), eventBusExceptionHandler);
