@@ -36,7 +36,6 @@ import org.graylog2.audit.AuditActor;
 import org.graylog2.audit.AuditEventSender;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.shared.users.UserService;
-import org.jetbrains.annotations.NotNull;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,10 +43,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -196,13 +197,51 @@ public class SessionCreatorTest {
                 argThat(map -> StringUtils.containsIgnoreCase((String) map.get("message"), "unavailable")));
     }
 
-    private void setUpUserMock() {
-        User user = mock(User.class);
-        when(user.getSessionTimeoutMs()).thenReturn(SESSION_TIMEOUT);
-        when(userService.load("username")).thenReturn(user);
+    /**
+     * Test that the service unavailable exception is cleared when the service becomes available again
+     */
+    @Test
+    public void serviceUnavailableStateIsCleared() {
+        setUpUserMock();
+
+        assertFalse(SecurityUtils.getSubject().isAuthenticated());
+
+        final AtomicBoolean doThrow = new AtomicBoolean(true);
+        final SimpleAccountRealm switchableRealm = new SimpleAccountRealm() {
+            @Override
+            protected AuthenticationInfo doGetAuthenticationInfo(
+                    AuthenticationToken token) throws AuthenticationException {
+                if (doThrow.get()) {
+                    throw new AuthenticationServiceUnavailableException("not available");
+                } else {
+                    return super.doGetAuthenticationInfo(token);
+                }
+            }
+        };
+
+        securityManager.setRealms(ImmutableList.of(switchableRealm, new SimpleAccountRealm()));
+
+        // realm will throw an exception on auth attempt
+        assertThatThrownBy(() -> sessionCreator.create(null, "host", validToken)).isInstanceOf(
+                AuthenticationServiceUnavailableException.class);
+        assertThat(SecurityUtils.getSubject().isAuthenticated()).isFalse();
+
+        // switch realm to not throw an exception but simply reject the credentials
+        doThrow.set(false);
+
+        sessionCreator.create(null, "host", validToken);
+        assertThat(SecurityUtils.getSubject().isAuthenticated()).isFalse();
     }
 
-    @NotNull
+    private void setUpUserMock() {
+        User user = mock(User.class);
+        when(user.getName()).thenReturn("username");
+        when(user.getSessionTimeoutMs()).thenReturn(SESSION_TIMEOUT);
+        when(userService.load("username")).thenReturn(user);
+        when(userService.loadById("username")).thenReturn(user);
+    }
+
+    @Nonnull
     private SimpleAccountRealm throwingRealm() {
         return new SimpleAccountRealm() {
             @Override
