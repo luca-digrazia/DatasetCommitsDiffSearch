@@ -474,8 +474,7 @@ public class AndroidCommon {
       boolean addCoverageSupport,
       boolean collectJavaCompilationArgs,
       boolean isBinary,
-      NestedSet<Artifact> excludedRuntimeArtifacts,
-      boolean generateExtensionRegistry)
+      NestedSet<Artifact> excludedRuntimeArtifacts)
       throws InterruptedException, RuleErrorException {
 
     classJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR);
@@ -555,7 +554,7 @@ public class AndroidCommon {
         artifactsBuilder,
         collectJavaCompilationArgs,
         filesBuilder,
-        generateExtensionRegistry);
+        isBinary);
     if (ruleContext.hasErrors()) {
       return null;
     }
@@ -606,7 +605,7 @@ public class AndroidCommon {
       JavaCompilationArtifacts.Builder javaArtifactsBuilder,
       boolean collectJavaCompilationArgs,
       NestedSetBuilder<Artifact> filesBuilder,
-      boolean generateExtensionRegistry)
+      boolean isBinary)
       throws InterruptedException {
     JavaTargetAttributes attributes = helper.getAttributes();
     if (ruleContext.hasErrors()) {
@@ -652,7 +651,7 @@ public class AndroidCommon {
         javaArtifactsBuilder,
         nativeHeaderOutput);
 
-    if (generateExtensionRegistry) {
+    if (isBinary) {
       generatedExtensionRegistryProvider =
           javaSemantics.createGeneratedExtensionRegistry(
               ruleContext,
