@@ -628,10 +628,13 @@ public class JarResultBuildStep {
                 .map((s) -> new GeneratedClassBuildItem(true, s.getName(), s.getClassData()))
                 .collect(Collectors.toList()));
 
-        if (IS_WINDOWS) {
-            log.warn("Uber JAR strategy is used for native image source JAR generation on Windows. This is done " +
-                    "for the time being to work around a current GraalVM limitation on Windows concerning the " +
-                    "maximum command length (see https://github.com/oracle/graal/issues/2387).");
+        boolean uberJarRequested = !uberJarRequired.isEmpty() || packageConfig.uberJar;
+        if (uberJarRequested || IS_WINDOWS) {
+            if (!uberJarRequested) {
+                log.warn("Uber JAR strategy is used for native image source JAR generation on Windows. This is done " +
+                        "for the time being to work around a current GraalVM limitation on Windows concerning the " +
+                        "maximum command length (see https://github.com/oracle/graal/issues/2387).");
+            }
             // Native image source jar generation with the uber jar strategy is provided as a workaround for Windows and
             // will be removed once https://github.com/oracle/graal/issues/2387 is fixed.
             return buildNativeImageUberJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses,
