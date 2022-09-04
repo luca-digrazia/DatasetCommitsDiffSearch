@@ -1,7 +1,6 @@
 package io.quarkus.hibernate.orm.deployment;
 
 import java.util.Collection;
-import java.util.List;
 
 import org.hibernate.MultiTenancyStrategy;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
@@ -9,7 +8,6 @@ import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import io.quarkus.builder.item.MultiBuildItem;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.hibernate.orm.runtime.boot.QuarkusPersistenceUnitDefinition;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationStaticInitListener;
 
 /**
  * Not to be confused with PersistenceXmlDescriptorBuildItem, which holds
@@ -74,9 +72,8 @@ public final class PersistenceUnitDescriptorBuildItem extends MultiBuildItem {
         return multiTenancySchemaDataSource;
     }
 
-    public QuarkusPersistenceUnitDefinition asOutputPersistenceUnitDefinition(
-            List<HibernateOrmIntegrationStaticInitListener> integrationStaticInitListeners) {
+    public QuarkusPersistenceUnitDefinition asOutputPersistenceUnitDefinition() {
         return new QuarkusPersistenceUnitDefinition(descriptor, dataSource, multiTenancyStrategy, isReactive,
-                fromPersistenceXml, integrationStaticInitListeners, enversIsPresent);
+                fromPersistenceXml, enversIsPresent);
     }
 }

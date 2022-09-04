@@ -91,8 +91,7 @@ public final class HibernateReactiveProcessor {
     @BuildStep
     void reflections(BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
         String[] classes = {
-                "org.hibernate.reactive.persister.entity.impl.ReactiveSingleTableEntityPersister",
-                "org.hibernate.reactive.persister.collection.impl.ReactiveOneToManyPersister"
+                "org.hibernate.reactive.persister.entity.impl.ReactiveSingleTableEntityPersister"
         };
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, classes));
     }
