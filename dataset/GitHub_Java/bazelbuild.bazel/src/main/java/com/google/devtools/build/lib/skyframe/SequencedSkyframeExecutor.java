@@ -17,7 +17,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -356,7 +355,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     for (PackageIdentifier deletedPackage : deletedPackages) {
       packagesToInvalidate.add(PackageLookupValue.key(deletedPackage));
     }
-    memoizingEvaluator.delete(Predicates.in(packagesToInvalidate));
+    recordingDiffer.invalidate(packagesToInvalidate);
   }
 
   /**

@@ -73,6 +73,7 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
@@ -292,6 +293,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   protected SkyframeIncrementalBuildMonitor incrementalBuildMonitor =
       new SkyframeIncrementalBuildMonitor();
 
+  private MutableSupplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments =
+      new MutableSupplier<>();
+
   private final ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes;
   private final PathFragment additionalBlacklistedPackagePrefixesFile;
 
@@ -342,7 +346,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Preconditions.checkState(shouldCreatePathResolverForArtifactValues());
       return outputService.createPathResolverForArtifactValues(
           directories.getExecRoot().asFragment(),
-          directories.getRelativeOutputPath(),
           fileSystem,
           getPathEntries(),
           actionInputMap,
@@ -527,6 +530,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(
         SkyFunctions.BUILD_CONFIGURATION,
         new BuildConfigurationFunction(directories, ruleClassProvider, defaultBuildOptions));
+    map.put(
+        SkyFunctions.CONFIGURATION_FRAGMENT,
+        new ConfigurationFragmentFunction(configurationFragments));
     map.put(SkyFunctions.WORKSPACE_NAME, new WorkspaceNameFunction());
     map.put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider));
     map.put(
@@ -828,6 +834,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   /** Computes statistics on heap-resident rules and aspects. */
   public abstract List<RuleStat> getRuleStats(ExtendedEventHandler eventHandler);
+
+  /** Removes ConfigurationFragmentValues from the cache. */
+  @VisibleForTesting
+  public void resetConfigurationCollectionForTesting() {
+    memoizingEvaluator.delete(
+        SkyFunctionName.functionIsIn(ImmutableSet.of(SkyFunctions.CONFIGURATION_FRAGMENT)));
+  }
 
   /**
    * Decides if graph edges should be stored during this evaluation and checks if the state from the
@@ -1290,6 +1303,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
+   * Sets the factories for all configuration fragments known to the build.
+   */
+  public void setConfigurationFragmentFactories(
+      List<ConfigurationFragmentFactory> configurationFragmentFactories) {
+    this.configurationFragments.set(ImmutableList.copyOf(configurationFragmentFactories));
+  }
+
+  /**
    * Asks the Skyframe evaluator to build the value for BuildConfigurationCollection and returns the
    * result.
    */
@@ -1547,6 +1568,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
 
     EvaluationResult<SkyValue> result = evaluateSkyKeys(eventHandler, skyKeys);
+    for (Map.Entry<SkyKey, ErrorInfo> entry : result.errorMap().entrySet()) {
+      reportCycles(eventHandler, entry.getValue().getCycleInfo(), entry.getKey());
+    }
 
     ImmutableMultimap.Builder<Dependency, ConfiguredTargetAndData> cts =
         ImmutableMultimap.builder();
@@ -1624,10 +1648,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       aliasPackageValues = evaluateSkyKeys(eventHandler, aliasPackagesToFetch);
       keysToProcess = aliasKeysToRedo;
     }
-    // We ignore the return value here because tests effectively run with --keep_going, and the
-    // loading-phase-error bit is only needed if we're constructing a SkyframeAnalysisResult.
-    SkyframeBuildView.processErrors(
-        result, this, eventHandler, /*keepGoing=*/ true, /*eventBus=*/ null);
 
     return cts.build();
   }
@@ -1681,7 +1701,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     // Prepare the Skyframe inputs.
     // TODO(gregce): support trimmed configs.
     ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> allFragments =
-        ruleClassProvider.getConfigurationFragments().stream()
+        configurationFragments
+            .get()
+            .stream()
             .map(factory -> factory.creates())
             .collect(
                 ImmutableSortedSet.toImmutableSortedSet(BuildConfiguration.lexicalFragmentSorter));
@@ -2426,7 +2448,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       throws InvalidConfigurationException, InterruptedException {
     FragmentClassSet allFragments =
         FragmentClassSet.of(
-            ruleClassProvider.getConfigurationFragments().stream()
+            configurationFragments
+                .get()
+                .stream()
                 .map(factory -> factory.creates())
                 .collect(
                     ImmutableSortedSet.toImmutableSortedSet(
