@@ -219,81 +219,16 @@ public class DevMojoIT extends MojoTestBase {
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/foo").contains("bar"));
     }
 
-    @Test
-    public void testThatClassFileAreCleanedUp() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic", "projects/project-class-file-deletion");
-
-        File source = new File(testDir, "src/main/java/org/acme/ClassDeletionResource.java");
-        String classDeletionResource = "package org.acme;\n" +
-                "\n" +
-                "import javax.ws.rs.GET;\n" +
-                "import javax.ws.rs.Path;\n" +
-                "import javax.ws.rs.Produces;\n" +
-                "import javax.ws.rs.core.MediaType;\n" +
-                "\n" +
-                "@Path(\"/deletion\")\n" +
-                "public class ClassDeletionResource {\n" +
-                "    public static class InnerClass {} \n" +
-                "    @GET\n" +
-                "    @Produces(MediaType.TEXT_PLAIN)\n" +
-                "    public String toDelete() {\n" +
-                "        return Hello.message();\n" +
-                "    }\n" +
-                "}\n " +
-                "class Hello {\n" +
-                "    public static String message() {\n" +
-                "        return \"to be deleted\";\n" +
-                "    }\n" +
-                "}";
-        FileUtils.write(source, classDeletionResource, Charset.forName("UTF-8"));
-
-        runAndCheck();
-        // Wait until source file is compiled
-        await()
-                .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> getHttpResponse("/app/deletion").contains("to be deleted"));
-
-        // Remove InnerClass
-        filter(source, ImmutableMap.of("public static class InnerClass {}", ""));
-
-        File helloClassFile = new File(testDir, "target/classes/org/acme/Hello.class");
-        File innerClassFile = new File(testDir, "target/classes/org/acme/ClassDeletionResource$InnerClass.class");
-        File classDeletionResourceClassFile = new File(testDir, "target/classes/org/acme/ClassDeletionResource.class");
-
-        // Make sure that other class files have not been deleted.
-        await()
-                .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> getHttpResponse("/app/hello/package", 200));
-
-        // Verify that only ClassDeletionResource$InnerClass.class to be deleted
-        assertThat(innerClassFile).doesNotExist();
-        assertThat(helloClassFile).exists();
-        assertThat(classDeletionResourceClassFile).exists();
-
-        // Delete source file
-        source.delete();
-
-        // Wait until we get "404 Not Found" because ClassDeletionResource.class have been deleted.
-        await()
-                .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> getHttpResponse("/app/deletion", 404));
-
-        // Make sure that class files for the deleted source file have also been deleted
-        assertThat(helloClassFile).doesNotExist();
-        assertThat(classDeletionResourceClassFile).doesNotExist();
-    }
-
     private void runAndCheck(String... options) throws FileNotFoundException, MavenInvocationException {
         assertThat(testDir).isDirectory();
         running = new RunningInvoker(testDir, false);
         final List<String> args = new ArrayList<>(2 + options.length);
         args.add("compile");
         args.add("quarkus:dev");
-        for (String option : options) {
-            args.add(option);
+        if (options.length > 0) {
+            for (String s : options) {
+                args.add(s);
+            }
         }
         running.execute(args, Collections.emptyMap());
 
@@ -304,14 +239,6 @@ public class DevMojoIT extends MojoTestBase {
 
         String greeting = getHttpResponse("/app/hello");
         assertThat(greeting).containsIgnoringCase("hello");
-    }
-
-    private void runAndExpectError() throws FileNotFoundException, MavenInvocationException {
-        assertThat(testDir).isDirectory();
-        running = new RunningInvoker(testDir, false);
-        running.execute(Arrays.asList("compile", "quarkus:dev"), Collections.emptyMap());
-
-        getHttpErrorResponse();
     }
 
     @Test
@@ -445,39 +372,6 @@ public class DevMojoIT extends MojoTestBase {
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("carambar"));
-    }
-
-    @Test
-    public void testThatApplicationRecoversStartupIssue() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic", "projects/project-classic-run-startup-issue");
-
-        // Edit the JAX-RS resource to be package private
-        File source = new File(testDir, "src/main/java/org/acme/HelloResource.java");
-        filter(source, ImmutableMap.of("public class HelloResource", "class HelloResource"));
-
-        runAndExpectError();
-        // Wait until we get the error page
-        AtomicReference<String> last = new AtomicReference<>();
-        await()
-                .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> {
-                    String content = getHttpResponse("/app/hello", true);
-                    last.set(content);
-                    return content.contains("Error restarting Quarkus");
-                });
-
-        assertThat(last.get()).containsIgnoringCase("Error restarting Quarkus");
-
-        filter(source, ImmutableMap.of("class HelloResource", "public class HelloResource"));
-
-        await()
-                .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> {
-                    String content = getHttpResponse("/app/hello", true);
-                    last.set(content);
-                    return content.equals("hello");
-                });
-        assertThat(last.get()).isEqualTo("hello");
     }
 
     @Test
