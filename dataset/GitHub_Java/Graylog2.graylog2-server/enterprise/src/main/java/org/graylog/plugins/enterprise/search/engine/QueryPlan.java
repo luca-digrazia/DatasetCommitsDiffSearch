@@ -10,7 +10,6 @@ import org.graylog.plugins.enterprise.search.QueryMetadata;
 import org.graylog.plugins.enterprise.search.Search;
 import org.graylog.plugins.enterprise.search.SearchJob;
 
-import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
@@ -43,12 +42,9 @@ public class QueryPlan {
         for (Query currentQuery : search.queries()) {
             // if this query does not reference any others explicitly, we will use the rootNode as its source
             final QueryMetadata queryMetadata = queryEngine.parse(search, currentQuery);
-            final Set<String> referencedQueries = queryMetadata.referencedQueries().isEmpty()
-                    ? Collections.singleton(rootNode.id())
-                    : queryMetadata.referencedQueries();
 
             // add edges from each source node to this one, typically this will be only a single source
-            for (String sourceQueryId : referencedQueries) {
+            for (String sourceQueryId : queryMetadata.referencedQueries()) {
                 final Query sourceQuery = search.getQuery(sourceQueryId).orElse(rootNode);
                 planGraph.addNode(sourceQuery);
                 planGraph.addNode(currentQuery);
