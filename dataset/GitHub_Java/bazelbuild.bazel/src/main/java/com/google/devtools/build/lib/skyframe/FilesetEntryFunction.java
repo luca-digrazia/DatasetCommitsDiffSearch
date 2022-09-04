@@ -33,6 +33,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -236,13 +237,10 @@ public final class FilesetEntryFunction implements SkyFunction {
   private static RecursiveFilesystemTraversalValue traverse(
       Environment env, String errorInfo, DirectTraversal traversal)
       throws MissingDepException, InterruptedException {
-    RecursiveFilesystemTraversalValue.TraversalRequest depKey =
-        RecursiveFilesystemTraversalValue.TraversalRequest.create(
-            traversal.getRoot(),
-            traversal.isGenerated(),
-            traversal.getPackageBoundaryMode(),
-            traversal.isPackage(),
-            errorInfo);
+    SkyKey depKey = RecursiveFilesystemTraversalValue.key(
+        new RecursiveFilesystemTraversalValue.TraversalRequest(traversal.getRoot(),
+            traversal.isGenerated(), traversal.getPackageBoundaryMode(), traversal.isPackage(),
+            errorInfo));
     RecursiveFilesystemTraversalValue v = (RecursiveFilesystemTraversalValue) env.getValue(depKey);
     if (env.valuesMissing()) {
       throw new MissingDepException();
@@ -325,15 +323,13 @@ public final class FilesetEntryFunction implements SkyFunction {
           });
 
       // 2. Extract the iterables of the true subdirectories.
-      Iterable<Iterable<ResolvedFile>> subdirIters =
-          Iterables.transform(
-              noDirSymlinkes,
-              new Function<Map.Entry<String, DirectoryTree>, Iterable<ResolvedFile>>() {
-                @Override
-                public Iterable<ResolvedFile> apply(Map.Entry<String, DirectoryTree> input) {
-                  return input.getValue().iterateFiles();
-                }
-              });
+      Iterable<Iterable<ResolvedFile>> subdirIters = Iterables.transform(noDirSymlinkes,
+          new Function<Map.Entry<String, DirectoryTree>, Iterable<ResolvedFile>>() {
+            @Override
+            public Iterable<ResolvedFile> apply(Entry<String, DirectoryTree> input) {
+              return input.getValue().iterateFiles();
+            }
+          });
 
       // 3. Just concat all subdirectory iterations for one, seamless iteration.
       Iterable<ResolvedFile> dirsIter = Iterables.concat(subdirIters);
