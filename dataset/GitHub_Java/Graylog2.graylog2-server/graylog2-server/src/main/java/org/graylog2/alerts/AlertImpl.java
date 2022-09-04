@@ -16,125 +16,89 @@
  */
 package org.graylog2.alerts;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.auto.value.AutoValue;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
+import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
-import org.graylog2.plugin.alarms.AlertCondition;
+import org.graylog2.database.PersistedImpl;
+import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.database.validators.Validator;
 import org.joda.time.DateTime;
-import org.mongojack.Id;
-import org.mongojack.ObjectId;
+import org.joda.time.DateTimeZone;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
+import java.util.Collections;
 import java.util.Map;
 
-@AutoValue
-@JsonAutoDetect
 @CollectionName("alerts")
-public abstract class AlertImpl implements Alert {
-    static final String FIELD_ID = "_id";
-    static final String FIELD_CONDITION_ID = "condition_id";
-    static final String FIELD_STREAM_ID = "stream_id";
-    static final String FIELD_DESCRIPTION = "description";
-    static final String FIELD_CONDITION_PARAMETERS = "condition_parameters";
-    static final String FIELD_TRIGGERED_AT = "triggered_at";
-    static final String FIELD_RESOLVED_AT = "resolved_at";
-    static final String FIELD_IS_INTERVAL = "is_interval";
+public class AlertImpl extends PersistedImpl implements Alert {
+    private static final String FIELD_ID = "_id";
+    private static final String FIELD_CONDITION_ID = "condition_id";
+    private static final String FIELD_STREAM_ID = "stream_id";
+    private static final String FIELD_DESCRIPTION = "description";
+    private static final String FIELD_CONDITION_PARAMETERS = "condition_parameters";
+    private static final String FIELD_TRIGGERED_AT = "triggered_at";
 
-    @JsonProperty(FIELD_ID)
-    @Override
-    @ObjectId
-    @Id
-    public abstract String getId();
+    private static final Logger LOG = LoggerFactory.getLogger(AlertImpl.class);
 
-    @JsonProperty(FIELD_STREAM_ID)
-    @Override
-    public abstract String getStreamId();
+    public static final int MAX_LIST_COUNT = 300;
+    public static final int REST_CHECK_CACHE_SECONDS = 30;
 
-    @JsonProperty(FIELD_CONDITION_ID)
-    @Override
-    public abstract String getConditionId();
-
-    @JsonProperty(FIELD_TRIGGERED_AT)
-    @Override
-    public abstract DateTime getTriggeredAt();
-
-    @JsonProperty(FIELD_RESOLVED_AT)
-    @Override
-    @Nullable
-    public abstract DateTime getResolvedAt();
-
-    @JsonProperty(FIELD_DESCRIPTION)
-    @Override
-    public abstract String getDescription();
-
-    @JsonProperty(FIELD_CONDITION_PARAMETERS)
-    @Override
-    public abstract Map<String, Object> getConditionParameters();
-
-    @JsonProperty(FIELD_IS_INTERVAL)
-    @Override
-    public abstract boolean isInterval();
-
-    static Builder builder() {
-        return new AutoValue_AlertImpl.Builder();
+    protected AlertImpl(Map<String, Object> fields) {
+        super(fields);
     }
 
-    public abstract Builder toBuilder();
-
-    @JsonCreator
-    public static AlertImpl create(@JsonProperty(FIELD_ID) @ObjectId @Id String id,
-                                   @JsonProperty(FIELD_STREAM_ID) String streamId,
-                                   @JsonProperty(FIELD_CONDITION_ID) String conditionId,
-                                   @JsonProperty(FIELD_TRIGGERED_AT) DateTime triggeredAt,
-                                   @JsonProperty(FIELD_RESOLVED_AT) @Nullable DateTime resolvedAt,
-                                   @JsonProperty(FIELD_DESCRIPTION) String description,
-                                   @JsonProperty(FIELD_CONDITION_PARAMETERS) Map<String, Object> conditionParameters,
-                                   @JsonProperty(FIELD_IS_INTERVAL) boolean isInterval) {
-        return builder()
-                .id(id)
-                .streamId(streamId)
-                .conditionId(conditionId)
-                .triggeredAt(triggeredAt)
-                .resolvedAt(resolvedAt)
-                .description(description)
-                .conditionParameters(conditionParameters)
-                .interval(isInterval)
-                .build();
+    protected AlertImpl(ObjectId id, Map<String, Object> fields) {
+        super(id, fields);
     }
 
-    public static AlertImpl fromCheckResult(AlertCondition.CheckResult checkResult) {
-        return create(new org.bson.types.ObjectId().toHexString(),
-                checkResult.getTriggeredCondition().getStream().getId(),
-                checkResult.getTriggeredCondition().getId(),
-                checkResult.getTriggeredAt(),
-                null,
-                checkResult.getResultDescription(),
-                ImmutableMap.copyOf(checkResult.getTriggeredCondition().getParameters()),
-                true);
+    public Map<String,Object> toMap() {
+        Map<String, Object> map = Maps.newHashMap();
+
+        DateTime triggeredAt = new DateTime(fields.get(FIELD_TRIGGERED_AT), DateTimeZone.UTC);
+
+        map.put("id", fields.get(FIELD_ID).toString());
+        map.put(FIELD_CONDITION_ID, fields.get(FIELD_CONDITION_ID));
+        map.put(FIELD_STREAM_ID, fields.get(FIELD_STREAM_ID));
+        map.put(FIELD_DESCRIPTION, fields.get(FIELD_DESCRIPTION));
+        map.put(FIELD_CONDITION_PARAMETERS, fields.get(FIELD_CONDITION_PARAMETERS));
+        map.put(FIELD_TRIGGERED_AT, Tools.getISO8601String(triggeredAt));
+
+        return map;
     }
 
+    @Override
+    public Map<String, Validator> getValidations() {
+        return Collections.emptyMap();
+    }
 
-    @AutoValue.Builder
-    public interface Builder {
-        Builder id(String id);
+    @Override
+    public Map<String, Validator> getEmbeddedValidations(String key) {
+        return Collections.emptyMap();
+    }
 
-        Builder streamId(String streamId);
+    @Override
+    public String getStreamId() {
+        return (String) fields.get(FIELD_STREAM_ID);
+    }
 
-        Builder conditionId(String conditionId);
+    @Override
+    public String getConditionId() {
+        return (String) fields.get(FIELD_CONDITION_ID);
+    }
 
-        Builder triggeredAt(DateTime triggeredAt);
+    @Override
+    public DateTime getTriggeredAt() {
+        return (DateTime) fields.get(FIELD_TRIGGERED_AT);
+    }
 
-        Builder resolvedAt(DateTime resolvedAt);
+    @Override
+    public String getDescription() {
+        return (String) fields.get(FIELD_DESCRIPTION);
+    }
 
-        Builder description(String description);
-
-        Builder conditionParameters(Map<String, Object> conditionParameters);
-
-        Builder interval(boolean isInterval);
-
-        AlertImpl build();
+    @Override
+    public Map<String, Object> getConditionParameters() {
+        return (Map<String, Object>) fields.get(FIELD_CONDITION_PARAMETERS);
     }
 }

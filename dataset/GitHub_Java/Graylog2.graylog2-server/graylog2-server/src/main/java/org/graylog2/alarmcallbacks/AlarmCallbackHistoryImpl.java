@@ -97,6 +97,6 @@ public abstract class AlarmCallbackHistoryImpl implements AlarmCallbackHistory {
                                               Alert alert,
                                               AlertCondition alertCondition,
                                               AlarmCallbackResult result) {
-        return create(id, alarmCallbackConfiguration, alert, alertCondition, result, Tools.nowUTC());
+        return create(id, alarmCallbackConfiguration, alert, alertCondition, result, Tools.iso8601());
     }
 }
