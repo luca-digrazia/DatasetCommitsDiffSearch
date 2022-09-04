@@ -5,7 +5,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.spi.AppenderAttachableImpl;
-import com.yammer.metrics.core.Clock;
+import com.google.common.base.Ticker;
 import org.eclipse.jetty.http.HttpHeaders;
 import org.eclipse.jetty.server.Authentication;
 import org.eclipse.jetty.server.Request;
@@ -17,6 +17,7 @@ import org.eclipse.jetty.util.component.AbstractLifeCycle;
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -59,7 +60,7 @@ public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
         }
     }
 
-    private final Clock clock;
+    private final Ticker ticker;
     @SuppressWarnings("ThreadLocalNotStaticFinal")
     private final ThreadLocal<DateCache> dateCache;
     private final BlockingQueue<String> queue;
@@ -67,10 +68,10 @@ public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
     private final Thread dispatchThread;
     private final AppenderAttachableImpl<ILoggingEvent> appenders;
 
-    public AsyncRequestLog(Clock clock,
+    public AsyncRequestLog(Ticker ticker,
                            AppenderAttachableImpl<ILoggingEvent> appenders,
                            final TimeZone timeZone) {
-        this.clock = clock;
+        this.ticker = ticker;
         this.queue = new LinkedBlockingQueue<String>();
         this.dispatcher = new Dispatcher();
         this.dispatchThread = new Thread(dispatcher);
@@ -175,7 +176,7 @@ public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
             buf.append(" -");
         }
 
-        final long now = clock.time();
+        final long now = TimeUnit.NANOSECONDS.toMillis(ticker.read());
         final long dispatchTime = request.getDispatchTime();
 
         buf.append(' ');
