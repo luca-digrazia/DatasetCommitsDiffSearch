@@ -122,20 +122,7 @@ public class OutputConsumer implements ClassFileConsumer {
           out,
           entryName ->
               ("module-info.class".equals(entryName) || entryName.startsWith("META-INF/versions/"))
-                  || ArchiveProgramResourceProvider.includeClassFileEntries(entryName),
-          name -> {
-            final String metainfServicesPrefix = "META-INF/services/";
-            if (name.startsWith(metainfServicesPrefix)) {
-              String serviceName = name.substring(metainfServicesPrefix.length());
-              if (serviceName.startsWith("java.time.")) {
-                name =
-                    metainfServicesPrefix
-                        + "j$.time."
-                        + serviceName.substring("java.time.".length());
-              }
-            }
-            return name;
-          });
+                  || ArchiveProgramResourceProvider.includeClassFileEntries(entryName));
 
     } catch (IOException e) {
       handler.error(new ExceptionDiagnostic(e, origin));
