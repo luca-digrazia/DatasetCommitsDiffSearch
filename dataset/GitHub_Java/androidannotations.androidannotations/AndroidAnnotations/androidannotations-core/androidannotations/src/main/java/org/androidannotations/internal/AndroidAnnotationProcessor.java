@@ -134,7 +134,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 
 		LOGGER.info("Finish processing");
 
-		LoggerContext.getInstance().close(roundEnv.processingOver());
+		LoggerContext.getInstance().close();
 		return true;
 	}
 
