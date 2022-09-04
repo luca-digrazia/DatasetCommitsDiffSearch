@@ -21,21 +21,12 @@ import java.util.SortedSet;
 
 public class SessionFactoryFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(SessionFactoryFactory.class);
-    private static final String DEFAULT_NAME = "hibernate";
 
     public SessionFactory build(HibernateBundle<?> bundle,
                                 Environment environment,
                                 DataSourceFactory dbConfig,
                                 List<Class<?>> entities) {
-        return build(bundle, environment, dbConfig, entities, DEFAULT_NAME);
-    }
-
-    public SessionFactory build(HibernateBundle<?> bundle,
-                                Environment environment,
-                                DataSourceFactory dbConfig,
-                                List<Class<?>> entities,
-                                String name) {
-        final ManagedDataSource dataSource = dbConfig.build(environment.metrics(), name);
+        final ManagedDataSource dataSource = dbConfig.build(environment.metrics(), "hibernate");
         return build(bundle, environment, dbConfig, dataSource, entities);
     }
 
