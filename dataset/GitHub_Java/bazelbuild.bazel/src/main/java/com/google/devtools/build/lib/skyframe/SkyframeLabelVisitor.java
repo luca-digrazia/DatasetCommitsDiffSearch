@@ -13,27 +13,26 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.SkyframeTransitivePackageLoader;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.CyclesReporter;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
  * Skyframe-based transitive package loader.
  */
-public final class SkyframeLabelVisitor implements TransitivePackageLoader {
+final class SkyframeLabelVisitor implements TransitivePackageLoader {
 
   private final SkyframeTransitivePackageLoader transitivePackageLoader;
   private final AtomicReference<CyclesReporter> skyframeCyclesReporter;
@@ -44,23 +43,13 @@ public final class SkyframeLabelVisitor implements TransitivePackageLoader {
     this.skyframeCyclesReporter = skyframeCyclesReporter;
   }
 
+  // The only remaining non-test caller of this code is BlazeQueryEnvironment.
   @Override
   public boolean sync(
       ExtendedEventHandler eventHandler,
       Set<Label> labelsToVisit,
       boolean keepGoing,
       int parallelThreads)
-      throws InterruptedException {
-    return sync(eventHandler, labelsToVisit, keepGoing, parallelThreads, true);
-  }
-
-  // The only remaining non-test caller of this code is BlazeQueryEnvironment.
-  public boolean sync(
-      ExtendedEventHandler eventHandler,
-      Set<Label> labelsToVisit,
-      boolean keepGoing,
-      int parallelThreads,
-      boolean errorOnCycles)
       throws InterruptedException {
     EvaluationResult<TransitiveTargetValue> result = transitivePackageLoader.loadTransitiveTargets(
         eventHandler, labelsToVisit, keepGoing, parallelThreads);
@@ -69,23 +58,12 @@ public final class SkyframeLabelVisitor implements TransitivePackageLoader {
       return true;
     }
 
-    Set<Map.Entry<SkyKey, ErrorInfo>> errors = result.errorMap().entrySet();
-    if (!errorOnCycles) {
-      errors =
-          errors
-              .stream()
-              .filter(error -> Iterables.isEmpty(error.getValue().getCycleInfo()))
-              .collect(Collectors.toSet());
-      if (errors.isEmpty()) {
-        return true;
-      }
-    }
-
+    Set<Entry<SkyKey, ErrorInfo>> errors = result.errorMap().entrySet();
     if (!keepGoing) {
       // We may have multiple errors, but in non keep_going builds, we're obligated to print only
       // one of them.
       Preconditions.checkState(!errors.isEmpty(), result);
-      Map.Entry<SkyKey, ErrorInfo> error = errors.iterator().next();
+      Entry<SkyKey, ErrorInfo> error = errors.iterator().next();
       ErrorInfo errorInfo = error.getValue();
       SkyKey topLevel = error.getKey();
       Label topLevelLabel = ((TransitiveTargetKey) topLevel).getLabel();
@@ -102,7 +80,7 @@ public final class SkyframeLabelVisitor implements TransitivePackageLoader {
       return false;
     }
 
-    for (Map.Entry<SkyKey, ErrorInfo> errorEntry : errors) {
+    for (Entry<SkyKey, ErrorInfo> errorEntry : errors) {
       SkyKey key = errorEntry.getKey();
       ErrorInfo errorInfo = errorEntry.getValue();
       Preconditions.checkState(key.functionName().equals(SkyFunctions.TRANSITIVE_TARGET), errorEntry);

@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -125,14 +126,14 @@ public class TransitiveTargetFunction
       TransitiveTargetValueBuilder builder,
       EventHandler eventHandler,
       TargetAndErrorIfAny targetAndErrorIfAny,
-      Iterable<Map.Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>>>
+      Iterable<Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>>>
           depEntries)
       throws InterruptedException {
     boolean successfulTransitiveLoading = builder.isSuccessfulTransitiveLoading();
     Target target = targetAndErrorIfAny.getTarget();
     NestedSetBuilder<Label> transitiveRootCauses = builder.getTransitiveRootCauses();
 
-    for (Map.Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>> entry :
+    for (Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>> entry :
         depEntries) {
       Label depLabel = ((TransitiveTargetKey) entry.getKey()).getLabel();
       TransitiveTargetValue transitiveTargetValue;
@@ -217,10 +218,8 @@ public class TransitiveTargetFunction
       addFragmentsIfNew(builder, getFragmentsFromRequiredOptions(rule));
 
       // Fragments to unconditionally include:
-      for (Class<? extends BuildConfiguration.Fragment> universalFragment :
-          ruleClassProvider.getUniversalFragments()) {
-        addFragmentIfNew(builder, universalFragment);
-      }
+      addFragmentIfNew(builder,
+          ruleClassProvider.getUniversalFragment().asSubclass(BuildConfiguration.Fragment.class));
     }
 
     return builder.build(errorLoadingTarget);

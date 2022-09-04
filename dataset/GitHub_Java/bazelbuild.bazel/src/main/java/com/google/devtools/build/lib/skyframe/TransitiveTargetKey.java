@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 
@@ -27,7 +27,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 @Immutable
 @ThreadSafe
 public final class TransitiveTargetKey implements SkyKey {
-  public static TransitiveTargetKey of(Label label) {
+  public static SkyKey of(Label label) {
     Preconditions.checkArgument(!label.getPackageIdentifier().getRepository().isDefault());
     return new TransitiveTargetKey(label);
   }
