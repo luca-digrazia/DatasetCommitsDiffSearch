@@ -16,30 +16,36 @@
 
 package org.jboss.shamrock.runtime;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
 
-import org.jboss.shamrock.runtime.graal.ShutdownHookThread;
+import org.graalvm.nativeimage.ImageInfo;
+import org.jboss.logging.Logger;
+import org.jboss.shamrock.runtime.graal.DiagnosticPrinter;
 import org.jboss.threads.Locks;
 import org.wildfly.common.Assert;
+import sun.misc.Signal;
+import sun.misc.SignalHandler;
 
 /**
  * The application base class, which is extended and implemented by a generated class which implements the application
  * setup logic.  The base class does some basic error checking.
  */
+@SuppressWarnings("restriction")
 public abstract class Application {
     private static final int ST_INITIAL = 0;
     private static final int ST_STARTING = 1;
     private static final int ST_STARTED = 2;
     private static final int ST_STOPPING = 3;
     private static final int ST_STOPPED = 4;
+    private static final int ST_EXIT = 5;
 
     private final Lock stateLock = Locks.reentrantLock();
     private final Condition stateCond = stateLock.newCondition();
 
     private int state = ST_INITIAL;
+    private volatile boolean shutdownRequested;
 
     /**
      * Construct a new instance.
@@ -133,19 +139,22 @@ public abstract class Application {
                     }
                     break;
                 }
-                case ST_STOPPED: return; // all good
+                case ST_STOPPED:
+                case ST_EXIT: return; // all good
                 default: throw Assert.impossibleSwitchCase(state);
             }
             state = ST_STOPPING;
         } finally {
             stateLock.unlock();
         }
+        Timing.staticInitStopped();
         try {
             doStop();
         } finally {
             stateLock.lock();
             try {
                 state = ST_STOPPED;
+                Timing.printStopTime();
                 stateCond.signalAll();
             } finally {
                 stateLock.unlock();
@@ -159,17 +168,49 @@ public abstract class Application {
      * Run the application as if it were in a standalone JVM.
      */
     public final void run(String[] args) {
-        final AtomicBoolean flag = new AtomicBoolean();
-        final ShutdownHookThread shutdownHookThread = new ShutdownHookThread(flag, Thread.currentThread());
-        Runtime.getRuntime().addShutdownHook(shutdownHookThread);
-        start(args);
         try {
-            while (! flag.get()) {
-                Thread.interrupted();
-                LockSupport.park(shutdownHookThread);
+            if (ImageInfo.inImageRuntimeCode()) {
+                final SignalHandler handler = new SignalHandler() {
+                    @Override
+                    public void handle(final Signal signal) {
+                        System.exit(0);
+                    }
+                };
+                Signal.handle(new Signal("INT"), handler);
+                Signal.handle(new Signal("TERM"), handler);
+                Signal.handle(new Signal("QUIT"), new SignalHandler() {
+                    @Override
+                    public void handle(final Signal signal) {
+                        DiagnosticPrinter.printDiagnostics(System.out);
+                    }
+                });
+            }
+            final ShutdownHookThread shutdownHookThread = new ShutdownHookThread(Thread.currentThread());
+            Runtime.getRuntime().addShutdownHook(shutdownHookThread);
+            start(args);
+            try {
+                while (! shutdownRequested) {
+                    Thread.interrupted();
+                    LockSupport.park(shutdownHookThread);
+                }
+            } finally {
+                stop();
             }
         } finally {
-            stop();
+            exit();
+        }
+    }
+
+    private void exit() {
+        stateLock.lock();
+        try {
+            System.out.flush();
+            System.err.flush();
+            state = ST_EXIT;
+            stateCond.signalAll();
+            // code beyond this point may not run
+        } finally {
+            stateLock.unlock();
         }
     }
 
@@ -179,5 +220,36 @@ public abstract class Application {
 
     private static IllegalStateException interruptedOnAwaitStop() {
         return new IllegalStateException("Interrupted while waiting for another thread to stop the application");
+    }
+
+    class ShutdownHookThread extends Thread {
+        private final Thread mainThread;
+
+        ShutdownHookThread(Thread mainThread) {
+            super("Shutdown thread");
+            this.mainThread = mainThread;
+            setDaemon(false);
+        }
+
+        @Override
+        public void run() {
+            shutdownRequested = true;
+            LockSupport.unpark(mainThread);
+            final Lock stateLock = Application.this.stateLock;
+            final Condition stateCond = Application.this.stateCond;
+            stateLock.lock();
+            try {
+                while (state != ST_EXIT) {
+                    stateCond.awaitUninterruptibly();
+                }
+            } finally {
+                stateLock.unlock();
+            }
+        }
+
+        @Override
+        public String toString() {
+            return getName();
+        }
     }
 }
