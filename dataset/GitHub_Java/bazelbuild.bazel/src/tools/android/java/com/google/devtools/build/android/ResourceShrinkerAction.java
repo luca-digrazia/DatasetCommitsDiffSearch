@@ -68,7 +68,6 @@ import org.xml.sax.SAXException;
  *       --shrunkResources path to write shrunk resources zip
  * </pre>
  */
-@Deprecated
 public class ResourceShrinkerAction {
   private static final StdLogger stdLogger = new StdLogger(StdLogger.Level.WARNING);
   private static final Logger logger = Logger.getLogger(ResourceShrinkerAction.class.getName());
@@ -131,14 +130,15 @@ public class ResourceShrinkerAction {
     public Path primaryManifest;
 
     @Option(
-        name = "dependencyManifest",
-        allowMultiple = true,
-        defaultValue = "null",
-        category = "input",
-        converter = PathConverter.class,
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help = "Paths to the manifests of the dependencies. Specify one path per flag.")
+      name = "dependencyManifest",
+      allowMultiple = true,
+      defaultValue = "",
+      category = "input",
+      converter = PathConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "Paths to the manifests of the dependencies. Specify one path per flag."
+    )
     public List<Path> dependencyManifests;
 
     @Option(
