@@ -44,8 +44,8 @@ public class MaxentTest {
     @SuppressWarnings("unused")
     Dataset load(String resource) {
         int p = 0;
-        ArrayList<int[]> x = new ArrayList<>();
-        ArrayList<Integer> y = new ArrayList<>();
+        ArrayList<int[]> x = new ArrayList<int[]>();
+        ArrayList<Integer> y = new ArrayList<Integer>();
 
         try (BufferedReader input = new BufferedReader(new InputStreamReader(this.getClass().getResourceAsStream(resource)))) {
             String[] words = input.readLine().split(" ");
