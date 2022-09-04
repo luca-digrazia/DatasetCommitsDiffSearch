@@ -19,6 +19,7 @@
  */
 package org.graylog2.alerts;
 
+import com.google.common.collect.Maps;
 import org.graylog2.Core;
 import org.graylog2.alerts.types.MessageCountAlertCondition;
 import org.graylog2.plugin.Tools;
@@ -49,7 +50,6 @@ public abstract class AlertCondition implements EmbeddedPersistable {
     protected final Type type;
     protected final DateTime createdAt;
     protected final String creatorUserId;
-    protected final int grace;
     protected final Core core;
 
     private final Map<String, Object> parameters;
@@ -66,12 +66,6 @@ public abstract class AlertCondition implements EmbeddedPersistable {
         this.createdAt = createdAt;
         this.creatorUserId = creatorUserId;
         this.parameters = parameters;
-
-        if (this.parameters.containsKey("grace")) {
-            this.grace = (Integer) this.parameters.get("grace");
-        } else {
-            this.grace = 0;
-        }
 
         this.core = core;
     }
@@ -128,13 +122,7 @@ public abstract class AlertCondition implements EmbeddedPersistable {
     }
 
     public CheckResult triggered() {
-        LOG.debug("Checking alert condition [{}]", this);
-
-        if(inGracePeriod()) {
-            LOG.debug("Alert condition [{}] is in grace period. Not triggered.", this);
-            return new CheckResult(false);
-        }
-
+        LOG.debug("Checking alert condition [" + this + "]");
         return runCheck();
     }
 
@@ -148,16 +136,6 @@ public abstract class AlertCondition implements EmbeddedPersistable {
 
     public Map<String, Object> getParameters() {
         return parameters;
-    }
-
-    public boolean inGracePeriod() {
-        int lastAlertSecondsAgo = Alert.triggeredSecondsAgo(stream.getId(), getId(), core);
-
-        if (lastAlertSecondsAgo == -1) {
-            return false;
-        }
-
-        return lastAlertSecondsAgo < grace*60;
     }
 
     @Override
@@ -186,7 +164,6 @@ public abstract class AlertCondition implements EmbeddedPersistable {
             put("creator_user_id", creatorUserId);
             put("created_at", Tools.getISO8601String(createdAt));
             put("parameters", parameters);
-            put("in_grace", inGracePeriod());
         }};
     }
 
