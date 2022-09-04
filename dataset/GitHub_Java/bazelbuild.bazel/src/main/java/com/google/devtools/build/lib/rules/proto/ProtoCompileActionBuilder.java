@@ -25,13 +25,13 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineItem;
 import com.google.devtools.build.lib.actions.CommandLineItem.CapturingMapFn;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -62,13 +62,15 @@ public class ProtoCompileActionBuilder {
       "--direct_dependencies_violation_msg=" + StrictProtoDepsViolationMessage.MESSAGE;
 
   private static final String MNEMONIC = "GenProto";
+  private static final ResourceSet GENPROTO_RESOURCE_SET =
+      ResourceSet.createWithRamCpuIo(100, .1, .0);
   private static final Action[] NO_ACTIONS = new Action[0];
 
-  private final RuleContext ruleContext;
-  private final ProtoSourcesProvider protoSourcesProvider;
-  private final String language;
-  private final String langPrefix;
-  private final Iterable<Artifact> outputs;
+  private RuleContext ruleContext;
+  private SupportData supportData;
+  private String language;
+  private String langPrefix;
+  private Iterable<Artifact> outputs;
   private Iterable<Artifact> inputs;
   private String langParameter;
   private String langPluginName;
@@ -129,12 +131,12 @@ public class ProtoCompileActionBuilder {
 
   public ProtoCompileActionBuilder(
       RuleContext ruleContext,
-      ProtoSourcesProvider protoSourcesProvider,
+      SupportData supportData,
       String language,
       String langPrefix,
       Iterable<Artifact> outputs) {
     this.ruleContext = ruleContext;
-    this.protoSourcesProvider = protoSourcesProvider;
+    this.supportData = supportData;
     this.language = language;
     this.langPrefix = langPrefix;
     this.outputs = outputs;
@@ -220,7 +222,7 @@ public class ProtoCompileActionBuilder {
 
   private SpawnAction.Builder createAction() throws MissingPrerequisiteException {
     SpawnAction.Builder result =
-        new SpawnAction.Builder().addTransitiveInputs(protoSourcesProvider.getTransitiveImports());
+        new SpawnAction.Builder().addTransitiveInputs(supportData.getTransitiveImports());
 
     FilesToRunProvider langPluginTarget = getLangPluginTarget();
     if (langPluginTarget != null) {
@@ -245,7 +247,7 @@ public class ProtoCompileActionBuilder {
 
     result
         .addOutputs(outputs)
-        .setResources(AbstractAction.DEFAULT_RESOURCE_SET)
+        .setResources(GENPROTO_RESOURCE_SET)
         .useDefaultShellEnvironment()
         .setExecutable(compilerTarget)
         .addCommandLine(
@@ -302,9 +304,9 @@ public class ProtoCompileActionBuilder {
     // Add include maps
     addIncludeMapArguments(
         result,
-        areDepsStrict ? protoSourcesProvider.getProtosInDirectDeps() : null,
-        protoSourcesProvider.getDirectProtoSourceRoots(),
-        protoSourcesProvider.getTransitiveImports());
+        areDepsStrict ? supportData.getProtosInDirectDeps() : null,
+        supportData.getDirectProtoSourceRoots(),
+        supportData.getTransitiveImports());
 
     if (areDepsStrict) {
       // Note: the %s in the line below is used by proto-compiler. That is, the string we create
@@ -312,7 +314,7 @@ public class ProtoCompileActionBuilder {
       result.addFormatted(STRICT_DEPS_FLAG_TEMPLATE, ruleContext.getLabel());
     }
 
-    for (Artifact src : protoSourcesProvider.getDirectProtoSources()) {
+    for (Artifact src : supportData.getDirectProtoSources()) {
       result.addPath(src.getRootRelativePath());
     }
 
@@ -320,7 +322,7 @@ public class ProtoCompileActionBuilder {
       result.add("--disallow_services");
     }
     if (checkStrictImportPublic) {
-      NestedSet<Artifact> protosInExports = protoSourcesProvider.getProtosInExports();
+      NestedSet<Artifact> protosInExports = supportData.getProtosInExports();
       if (protosInExports.isEmpty()) {
         // This line is necessary to trigger the check.
         result.add("--allowed_public_imports=");
@@ -329,7 +331,7 @@ public class ProtoCompileActionBuilder {
             "--allowed_public_imports",
             VectorArg.join(":")
                 .each(protosInExports)
-                .mapped(new ExpandToPathFn(protoSourcesProvider.getTransitiveProtoSourceRoots())));
+                .mapped(new ExpandToPathFn(supportData.getTransitiveProtoPathFlags())));
       }
     }
 
@@ -511,7 +513,7 @@ public class ProtoCompileActionBuilder {
 
     result
         .addOutputs(outputs)
-        .setResources(AbstractAction.DEFAULT_RESOURCE_SET)
+        .setResources(GENPROTO_RESOURCE_SET)
         .useDefaultShellEnvironment()
         .setExecutable(compilerTarget)
         .addCommandLine(
