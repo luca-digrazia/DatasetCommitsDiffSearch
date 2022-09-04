@@ -576,8 +576,6 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
     return ruleContext.getHostConfiguration();
   }
 
-  // TODO(juliexxia): special-case label-typed build settings so they return the providers of the
-  // target represented by the label instead of the actual label.
   @Override
   @Nullable
   public Object getBuildSettingValue() throws EvalException {
@@ -588,13 +586,13 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
               "attempting to access 'build_setting_value' of non-build setting %s",
               ruleLabelCanonicalName));
     }
-    ImmutableMap<Label, Object> skylarkFlagSettings =
+    ImmutableMap<String, Object> skylarkFlagSettings =
         ruleContext.getConfiguration().getOptions().getStarlarkOptions();
 
     Type<?> buildSettingType =
         ruleContext.getRule().getRuleClassObject().getBuildSetting().getType();
-    if (skylarkFlagSettings.containsKey(ruleContext.getLabel())) {
-      return skylarkFlagSettings.get(ruleContext.getLabel());
+    if (skylarkFlagSettings.containsKey(ruleLabelCanonicalName)) {
+      return skylarkFlagSettings.get(ruleLabelCanonicalName);
     } else {
       return ruleContext
           .attributes()
@@ -1071,18 +1069,6 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
     return Tuple.<Object>of(
         MutableList.copyOf(env, inputs),
         MutableList.copyOf(env, argv),
-        helper.getToolsRunfilesSuppliers());
-  }
-
-  @Override
-  public Tuple<Object> resolveTools(SkylarkList tools) throws ConversionException, EvalException {
-    checkMutable("resolve_tools");
-    CommandHelper helper =
-        CommandHelper.builder(getRuleContext())
-            .addToolDependencies(tools.getContents(TransitiveInfoCollection.class, "tools"))
-            .build();
-    return Tuple.<Object>of(
-        SkylarkNestedSet.of(Artifact.class, helper.getResolvedTools()),
         helper.getToolsRunfilesSuppliers());
   }
 
