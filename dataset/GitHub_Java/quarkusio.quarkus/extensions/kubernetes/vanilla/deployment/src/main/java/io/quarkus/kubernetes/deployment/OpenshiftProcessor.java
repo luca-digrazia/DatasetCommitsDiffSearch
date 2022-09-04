@@ -8,7 +8,6 @@ import static io.quarkus.kubernetes.deployment.Constants.HTTP_PORT;
 import static io.quarkus.kubernetes.deployment.Constants.OPENSHIFT;
 import static io.quarkus.kubernetes.deployment.Constants.OPENSHIFT_APP_RUNTIME;
 import static io.quarkus.kubernetes.deployment.Constants.QUARKUS;
-import static io.quarkus.kubernetes.deployment.OpenshiftConfig.OpenshiftFlavor.v3;
 import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.DEFAULT_PRIORITY;
 
 import java.util.ArrayList;
@@ -34,7 +33,6 @@ import io.quarkus.container.spi.BaseImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageLabelBuildItem;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
@@ -90,8 +88,8 @@ public class OpenshiftProcessor {
         result.addAll(KubernetesCommonHelper.createPlatformConfigurators(config));
         result.addAll(KubernetesCommonHelper.createGlobalConfigurators(ports));
 
-        if (!capabilities.isPresent(Capability.CONTAINER_IMAGE_S2I)
-                && !capabilities.isPresent(Capability.CONTAINER_IMAGE_OPENSHIFT)) {
+        if (!capabilities.isCapabilityPresent(Capabilities.CONTAINER_IMAGE_S2I)
+                && !capabilities.isCapabilityPresent(Capabilities.CONTAINER_IMAGE_OPENSHIFT)) {
             result.add(new ConfiguratorBuildItem(new DisableS2iConfigurator()));
 
             image.flatMap(ContainerImageInfoBuildItem::getRegistry).ifPresent(r -> {
@@ -127,24 +125,10 @@ public class OpenshiftProcessor {
         List<DecoratorBuildItem> result = new ArrayList<>();
         String name = ResourceNameUtil.getResourceName(config, applicationInfo);
 
-        Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
+        Project project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
         result.addAll(KubernetesCommonHelper.createDecorators(project, OPENSHIFT, name, config, metricsConfiguration,
                 annotations, labels, command,
                 ports, livenessPath, readinessPath, roles, roleBindings));
-
-        if (config.flavor == v3) {
-            //Openshift 3.x doesn't recognize 'app.kubernetes.io/name', it uses 'app' instead.
-            //The decorator will be applied even on non-openshift resources is it may affect for example: knative
-            result.add(new DecoratorBuildItem(new AddLabelDecorator(name, "app", name)));
-
-            // The presence of optional is causing issues in OCP 3.11, so we better remove them.
-            // The following 4 decorator will set the optional property to null, so that it won't make it into the file.
-            //The decorators will be applied even on non-openshift resources is they may affect for example: knative
-            result.add(new DecoratorBuildItem(new RemoveOptionalFromSecretEnvSourceDecorator()));
-            result.add(new DecoratorBuildItem(new RemoveOptionalFromConfigMapEnvSourceDecorator()));
-            result.add(new DecoratorBuildItem(new RemoveOptionalFromSecretKeySelectorDecorator()));
-            result.add(new DecoratorBuildItem(new RemoveOptionalFromConfigMapKeySelectorDecorator()));
-        }
 
         if (config.getReplicas() != 1) {
             result.add(new DecoratorBuildItem(OPENSHIFT, new ApplyReplicasDecorator(name, config.getReplicas())));
@@ -191,8 +175,8 @@ public class OpenshiftProcessor {
         result.add(new DecoratorBuildItem(OPENSHIFT, new ApplyHttpGetActionPortDecorator(port)));
 
         // Hanlde non-s2i
-        if (!capabilities.isPresent(Capability.CONTAINER_IMAGE_S2I)
-                && !capabilities.isPresent(Capability.CONTAINER_IMAGE_OPENSHIFT)) {
+        if (!capabilities.isCapabilityPresent(Capabilities.CONTAINER_IMAGE_S2I)
+                && !capabilities.isCapabilityPresent(Capabilities.CONTAINER_IMAGE_OPENSHIFT)) {
             result.add(new DecoratorBuildItem(OPENSHIFT, new RemoveDeploymentTriggerDecorator()));
         }
 
