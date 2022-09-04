@@ -27,7 +27,9 @@ import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.ning.http.client.*;
 import lib.security.Graylog2ServerUnavailableException;
-import models.*;
+import models.Node;
+import models.User;
+import models.UserService;
 import models.api.requests.ApiRequest;
 import models.api.responses.EmptyResponse;
 import org.slf4j.Logger;
@@ -37,7 +39,10 @@ import play.mvc.Http;
 
 import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
-import java.net.*;
+import java.net.ConnectException;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -144,7 +149,6 @@ class ApiClientImpl implements ApiClient {
     public class ApiRequestBuilder<T> {
         private String pathTemplate;
         private Node node;
-        private Radio radio;
         private Collection<Node> nodes;
         private String username;
         private String password;
@@ -188,12 +192,6 @@ class ApiClientImpl implements ApiClient {
             this.node = node;
             return this;
         }
-
-        public ApiRequestBuilder<T> radio(Radio radio) {
-            this.radio = radio;
-            return this;
-        }
-
         public ApiRequestBuilder<T> nodes(Node... nodes) {
             if (this.nodes != null) {
                 // TODO makes this sane
@@ -217,7 +215,7 @@ class ApiClientImpl implements ApiClient {
             return this;
         }
 
-        public ApiRequestBuilder<T> onlyMasterNode() {
+        public ApiRequestBuilder<T> fromMasterNode() {
             this.node = serverNodes.master();
             return this;
         }
@@ -270,26 +268,13 @@ class ApiClientImpl implements ApiClient {
         }
 
         public T execute() throws APIException, IOException {
-            if (radio != null && (node != null || nodes != null)) {
-                throw new RuntimeException("You set both and a Node and a Radio as target. This is not possible.");
-            }
-
-            final ClusterEntity target;
-
-            if (radio == null) {
-                if (node == null) {
-                    if (nodes != null) {
-                        log.error("Multiple nodes are set, but execute() was called. This is most likely a bug and you meant to call executeOnAll()!");
-                    }
-                    node(serverNodes.any());
+            if (node == null) {
+                if (nodes != null) {
+                    log.error("Multiple nodes are set, but execute() was called. This is most likely a bug and you meant to call executeOnAll()!");
                 }
-
-                target = node;
-            } else {
-                target = radio;
+                node(serverNodes.any());
             }
-
-            final URL url = prepareUrl(target);
+            final URL url = prepareUrl(node);
             final AsyncHttpClient.BoundRequestBuilder requestBuilder = requestBuilderForUrl(url);
 
             final Request request = requestBuilder.build();
@@ -305,7 +290,7 @@ class ApiClientImpl implements ApiClient {
             try {
                 Response response = requestBuilder.execute().get(timeoutValue, timeoutUnit);
 
-                target.touch();
+                node.touch();
 
                 // TODO this is wrong, shouldn't it accept some callback instead of throwing an exception?
                 if (!expectedResponseCodes.contains(response.getStatusCode())) {
@@ -334,14 +319,14 @@ class ApiClientImpl implements ApiClient {
                 }
             } catch (InterruptedException e) {
                 // TODO
-                target.markFailure();
+                node.markFailure();
             } catch (MalformedURLException e) {
                 log.error("Malformed URL", e);
                 throw new RuntimeException("Malformed URL.", e);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof ConnectException) {
                     log.warn("Graylog2 server unavailable. Connection refused.");
-                    target.markFailure();
+                    node.markFailure();
                     throw new Graylog2ServerUnavailableException(e);
                 }
                 log.error("REST call failed", e.getCause());
@@ -349,11 +334,11 @@ class ApiClientImpl implements ApiClient {
             } catch (IOException e) {
                 // TODO
                 log.error("unhandled IOException", e);
-                target.markFailure();
+                node.markFailure();
                 throw e;
             } catch (TimeoutException e) {
                 log.warn("Timed out requesting {}", request);
-                target.markFailure();
+                node.markFailure();
             }
             // TODO should this throw an exception instead?
             return null;
@@ -365,7 +350,7 @@ class ApiClientImpl implements ApiClient {
                 nodes = serverNodes.all();
             }
 
-            Collection<F.Tuple<ListenableFuture<Response>, Node>> requests = Lists.newArrayList();
+            Collection<F.Tuple> requests = Lists.newArrayList();
             final Collection<Response> responses = Lists.newArrayList();
             for (Node currentNode : nodes) {
                 final URL url = prepareUrl(currentNode);
@@ -381,7 +366,7 @@ class ApiClientImpl implements ApiClient {
                             return response;
                         }
                     });
-                    requests.add(new F.Tuple<>(future, currentNode));
+                    requests.add(new F.Tuple(future, currentNode));
                 } catch (IOException e) {
                     log.error("Cannot execute request", e);
                     currentNode.markFailure();
@@ -416,14 +401,6 @@ class ApiClientImpl implements ApiClient {
         private AsyncHttpClient.BoundRequestBuilder requestBuilderForUrl(URL url) {
             // *sigh* the generic requestBuilder methods are protected/private making this verbose :(
             final AsyncHttpClient.BoundRequestBuilder requestBuilder;
-            final String userInfo = url.getUserInfo();
-            // have to hack around here, because the userInfo will unescape the @ in usernames :(
-            try {
-                url = UriBuilder.fromUri(url.toURI()).userInfo(null).build().toURL();
-            } catch (URISyntaxException | MalformedURLException ignore) {
-                // cannot happen, because it was a valid url before
-            }
-
             switch (method) {
                 case GET:
                     requestBuilder = client.prepareGet(url.toString());
@@ -441,7 +418,7 @@ class ApiClientImpl implements ApiClient {
                     throw new IllegalStateException("Illegal method " + method.toString());
             }
 
-            applyBasicAuthentication(requestBuilder, userInfo);
+            applyBasicAuthentication(requestBuilder, url.getUserInfo());
             requestBuilder.setPerRequestConfig(new PerRequestConfig(null, (int)timeoutUnit.toMillis(timeoutValue)));
 
             if (body != null) {
@@ -462,15 +439,14 @@ class ApiClientImpl implements ApiClient {
             return requestBuilder;
         }
 
-        // default visibility for tests
-        URL prepareUrl(ClusterEntity target) {
+        URL prepareUrl(Node node) {
             // if this is null there's not much we can do anyway...
             Preconditions.checkNotNull(pathTemplate, "path() needs to be set to a non-null value.");
 
             URI builtUrl;
             try {
                 String path = MessageFormat.format(pathTemplate, pathParams.toArray());
-                final UriBuilder uriBuilder = UriBuilder.fromUri(target.getTransportAddress());
+                final UriBuilder uriBuilder = UriBuilder.fromUri(node.getTransportAddressUri());
                 uriBuilder.path(path);
                 for (F.Tuple<String, String> queryParam : queryParams) {
                     uriBuilder.queryParam(queryParam._1, queryParam._2);

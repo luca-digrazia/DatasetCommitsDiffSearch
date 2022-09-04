@@ -22,6 +22,7 @@ import com.google.common.collect.*;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.google.inject.name.Named;
+import lib.security.Graylog2ServerUnavailableException;
 import models.Node;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +45,7 @@ public class ServerNodes {
             configuredNodes.put(configuredNode, configuredNode);
         }
 
-        log.debug("Creating ServerNodes with initial nodes {}", configuredNodes.keySet());
+        log.info("Creating ServerNodes with initial nodes {}", configuredNodes.keySet());
         // resolve the configured nodes:
         // we only know a transport address where we can reach them, but we don't know any node ids yet.
         // thus we do not know anything about them, and cannot even match them to node information coming
@@ -91,7 +92,7 @@ public class ServerNodes {
         }
 
         // No active master node was found.
-        throw new Graylog2MasterUnavailableException();
+        throw new Graylog2ServerUnavailableException();
     }
 
     /**
