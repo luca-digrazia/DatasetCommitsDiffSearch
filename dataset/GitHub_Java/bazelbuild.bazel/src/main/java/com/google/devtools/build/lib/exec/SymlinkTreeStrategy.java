@@ -27,8 +27,6 @@ import com.google.devtools.build.lib.actions.RunningActionEvent;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeActionContext;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
-import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -67,10 +65,7 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
             "running " + action.prettyPrint(), logger, /*minTimeForLoggingInMilliseconds=*/ 100)) {
       try {
         if (outputService != null && outputService.canCreateSymlinkTree()) {
-          Path inputManifest =
-              action.getInputManifest() == null
-                  ? null
-                  : actionExecutionContext.getInputPath(action.getInputManifest());
+          Path inputManifest = actionExecutionContext.getInputPath(action.getInputManifest());
           Map<PathFragment, PathFragment> symlinks;
           if (action.getRunfiles() != null) {
             try {
@@ -88,7 +83,6 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
             }
           } else {
             Preconditions.checkState(action.isFilesetTree());
-            Preconditions.checkNotNull(inputManifest);
             try {
               symlinks = SymlinkTreeHelper.readSymlinksFromFilesetManifest(inputManifest);
             } catch (IOException e) {
@@ -101,34 +95,19 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
               symlinks,
               action.getOutputManifest().getExecPath().getParentDirectory());
 
+          // Link output manifest on success. We avoid a file copy as these manifests may be large.
+          // Note that this step has to come last because the OutputService may delete any
+          // pre-existing symlink tree before creating a new one.
           Path outputManifest = actionExecutionContext.getInputPath(action.getOutputManifest());
-          if (inputManifest == null) {
-            // If we don't have an input manifest, then create a file containing a fingerprint of
-            // the runfiles object.
-            Fingerprint fp = new Fingerprint();
-            action.getRunfiles().fingerprint(fp);
-            String hexDigest = fp.hexDigestAndReset();
-            try {
-              FileSystemUtils.writeContentAsLatin1(outputManifest, hexDigest);
-            } catch (IOException e) {
-              throw new EnvironmentalExecException(
-                  "Failed to link output manifest '" + outputManifest.getPathString() + "'", e);
-            }
-          } else {
-            // Link output manifest on success. We avoid a file copy as these manifests may be
-            // large. Note that this step has to come last because the OutputService may delete any
-            // pre-existing symlink tree before creating a new one.
-            try {
-              outputManifest.createSymbolicLink(inputManifest);
-            } catch (IOException e) {
-              throw new EnvironmentalExecException(
-                  "Failed to link output manifest '" + outputManifest.getPathString() + "'", e);
-            }
+          try {
+            outputManifest.createSymbolicLink(inputManifest);
+          } catch (IOException e) {
+            throw new EnvironmentalExecException(
+                "Failed to link output manifest '" + outputManifest.getPathString() + "'", e);
           }
         } else if (!action.isRunfilesEnabled()) {
           createSymlinkTreeHelper(action, actionExecutionContext).copyManifest();
-        } else if (action.getInputManifest() == null
-            || (action.inprocessSymlinkCreation() && !action.isFilesetTree())) {
+        } else if (action.inprocessSymlinkCreation() && !action.isFilesetTree()) {
           try {
             createSymlinkTreeHelper(action, actionExecutionContext)
                 .createSymlinksDirectly(

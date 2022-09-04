@@ -40,13 +40,12 @@ public final class SymlinkTreeAction extends AbstractAction {
 
   private static final String GUID = "63412bda-4026-4c8e-a3ad-7deb397728d4";
 
-  @Nullable private final Artifact inputManifest;
+  private final Artifact inputManifest;
   private final Runfiles runfiles;
   private final Artifact outputManifest;
   private final boolean filesetTree;
   private final boolean enableRunfiles;
   private final boolean inprocessSymlinkCreation;
-  private final boolean skipRunfilesManifests;
 
   /**
    * Creates SymlinkTreeAction instance.
@@ -74,8 +73,7 @@ public final class SymlinkTreeAction extends AbstractAction {
         filesetTree,
         config.getActionEnvironment(),
         config.runfilesEnabled(),
-        config.inprocessSymlinkCreation(),
-        config.skipRunfilesManifests());
+        config.inprocessSymlinkCreation());
   }
 
   /**
@@ -99,26 +97,17 @@ public final class SymlinkTreeAction extends AbstractAction {
       boolean filesetTree,
       ActionEnvironment env,
       boolean enableRunfiles,
-      boolean inprocessSymlinkCreation,
-      boolean skipRunfilesManifests) {
-    super(
-        owner,
-        skipRunfilesManifests && enableRunfiles && !filesetTree
-            ? ImmutableList.of()
-            : ImmutableList.of(inputManifest),
-        ImmutableList.of(outputManifest),
-        env);
+      boolean inprocessSymlinkCreation) {
+    super(owner, ImmutableList.of(inputManifest), ImmutableList.of(outputManifest), env);
     Preconditions.checkArgument(outputManifest.getPath().getBaseName().equals("MANIFEST"));
     Preconditions.checkArgument(
         (runfiles == null) == filesetTree, "Runfiles must be null iff this is a fileset action");
-    this.inputManifest =
-        skipRunfilesManifests && enableRunfiles && !filesetTree ? null : inputManifest;
+    this.inputManifest = inputManifest;
     this.runfiles = runfiles;
     this.outputManifest = outputManifest;
     this.filesetTree = filesetTree;
     this.enableRunfiles = enableRunfiles;
     this.inprocessSymlinkCreation = inprocessSymlinkCreation;
-    this.skipRunfilesManifests = skipRunfilesManifests && enableRunfiles && !filesetTree;
   }
 
   public Artifact getInputManifest() {
@@ -146,10 +135,6 @@ public final class SymlinkTreeAction extends AbstractAction {
     return inprocessSymlinkCreation;
   }
 
-  public boolean skipRunfilesManifests() {
-    return skipRunfilesManifests;
-  }
-
   @Override
   public String getMnemonic() {
     return "SymlinkTree";
@@ -167,7 +152,6 @@ public final class SymlinkTreeAction extends AbstractAction {
     fp.addBoolean(filesetTree);
     fp.addBoolean(enableRunfiles);
     fp.addBoolean(inprocessSymlinkCreation);
-    fp.addBoolean(skipRunfilesManifests);
     env.addTo(fp);
     // We need to ensure that the fingerprints for two different instances of this action are
     // different. Consider the hypothetical scenario where we add a second runfiles object to this
