@@ -236,7 +236,7 @@ public class CppCompileAction extends AbstractAction
       @Nullable Artifact grepIncludes) {
     super(
         owner,
-        createInputsBuilder(mandatoryInputs, inputsForInvalidation).build(),
+        NestedSetBuilder.fromNestedSet(mandatoryInputs).addAll(inputsForInvalidation).build(),
         CollectionUtils.asSetWithoutNulls(
             outputFile,
             dotdFile == null ? null : dotdFile.artifact(),
@@ -274,12 +274,14 @@ public class CppCompileAction extends AbstractAction
     this.actionName = actionName;
     this.featureConfiguration = featureConfiguration;
     this.needsDotdInputPruning =
-        cppSemantics.needsDotdInputPruning() && !sourceFile.isFileType(CppFileTypes.CPP_MODULE);
+        !shareable
+            && cppSemantics.needsDotdInputPruning()
+            && !sourceFile.isFileType(CppFileTypes.CPP_MODULE);
     this.needsIncludeValidation = cppSemantics.needsIncludeValidation();
     this.includeProcessing = cppSemantics.getIncludeProcessing();
     this.actionClassId = actionClassId;
     this.builtInIncludeDirectories = builtInIncludeDirectories;
-    this.additionalInputs = null;
+    this.additionalInputs = discoversInputs() ? null : ImmutableList.of();
     this.usedModules = null;
     this.topLevelModules = null;
     this.overwrittenVariables = null;
@@ -345,7 +347,9 @@ public class CppCompileAction extends AbstractAction
 
   /** Clears the discovered {@link #additionalInputs}. */
   public void clearAdditionalInputs() {
-    additionalInputs = null;
+    if (discoversInputs()) {
+      additionalInputs = null;
+    }
   }
 
   @Override
@@ -937,22 +941,16 @@ public class CppCompileAction extends AbstractAction
     }
   }
 
-  /**
-   * Recalculates this action's live input collection, including sources, middlemen.
-   *
-   * <p>Can only be called if {@link #discoversInputs}, and must be called after execution in that
-   * case.
-   */
+  /** Recalculates this action's live input collection, including sources, middlemen. */
   @VisibleForTesting // productionVisibility = Visibility.PRIVATE
   @ThreadCompatible
-  final void updateActionInputs(NestedSet<Artifact> discoveredInputs) {
-    Preconditions.checkState(
-        discoversInputs(), "Can't call if not discovering inputs: %s %s", discoveredInputs, this);
+  public final void updateActionInputs(NestedSet<Artifact> discoveredInputs) {
+    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
     try (SilentCloseable c = Profiler.instance().profile(ProfilerTask.ACTION_UPDATE, describe())) {
-      super.updateInputs(
-          createInputsBuilder(mandatoryInputs, inputsForInvalidation)
-              .addTransitive(discoveredInputs)
-              .build());
+      inputs.addTransitive(mandatoryInputs);
+      inputs.addAll(inputsForInvalidation);
+      inputs.addTransitive(discoveredInputs);
+      super.updateInputs(inputs.build());
     }
   }
 
@@ -1116,7 +1114,7 @@ public class CppCompileAction extends AbstractAction
     setModuleFileFlags();
     CppCompileActionContext.Reply reply;
 
-    if (!shouldScanDotdFiles()) {
+    if (discoversInputs() && !shouldScanDotdFiles()) {
       updateActionInputs(NestedSetBuilder.wrap(Order.STABLE_ORDER, additionalInputs));
     }
 
@@ -1211,17 +1209,9 @@ public class CppCompileAction extends AbstractAction
     }
     reply = null; // Clear in-memory .d files early.
 
-    if (discoversInputs()) {
-      // Post-execute "include scanning", which modifies the action inputs to match what the compile
-      // action actually used by incorporating the results of .d file parsing.
-      updateActionInputs(discoveredInputs);
-    } else {
-      Preconditions.checkState(
-          discoveredInputs.isEmpty(),
-          "Discovered inputs without discovering inputs? %s %s",
-          discoveredInputs,
-          this);
-    }
+    // Post-execute "include scanning", which modifies the action inputs to match what the compile
+    // action actually used by incorporating the results of .d file parsing.
+    updateActionInputs(discoveredInputs);
 
     // hdrs_check: This cannot be switched off for C++ build actions,
     // because doing so would allow for incorrect builds.
@@ -1495,13 +1485,6 @@ public class CppCompileAction extends AbstractAction
             "%s missing action index for module %s",
             lookupValue,
             module));
-  }
-
-  private static NestedSetBuilder<Artifact> createInputsBuilder(
-      NestedSet<Artifact> mandatoryInputs, Iterable<Artifact> inputsForInvalidation) {
-    return NestedSetBuilder.<Artifact>stableOrder()
-        .addTransitive(mandatoryInputs)
-        .addAll(inputsForInvalidation);
   }
 
   /**
