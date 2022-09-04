@@ -345,8 +345,7 @@ public abstract class TestStrategy implements TestActionContext {
       throws IOException {
     boolean isPassed = testResultData.getTestPassed();
     try {
-      if (testResultData.getStatus() != BlazeTestStatus.INCOMPLETE
-          && TestLogHelper.shouldOutputTestLog(executionOptions.testOutput, isPassed)) {
+      if (TestLogHelper.shouldOutputTestLog(executionOptions.testOutput, isPassed)) {
         TestLogHelper.writeTestLog(
             testLog, testName, actionExecutionContext.getFileOutErr().getOutputStream());
       }
@@ -363,10 +362,6 @@ public abstract class TestStrategy implements TestActionContext {
           actionExecutionContext
               .getEventHandler()
               .handle(Event.of(EventKind.TIMEOUT, null, testName + " (see " + testLog + ")"));
-        } else if (testResultData.getStatus() == BlazeTestStatus.INCOMPLETE) {
-          actionExecutionContext
-              .getEventHandler()
-              .handle(Event.of(EventKind.CANCELLED, null, testName));
         } else {
           actionExecutionContext
               .getEventHandler()

@@ -758,7 +758,6 @@ public class TestRunnerAction extends AbstractAction
       TestAttemptContinuation testAttemptContinuation =
           beginIfNotCancelled(testRunnerSpawn, cancelFuture);
       if (testAttemptContinuation == null) {
-        testRunnerSpawn.finalizeCancelledTest(ImmutableList.of());
         return ActionContinuationOrResult.of(ActionResult.create(ImmutableList.of()));
       }
       return new RunAttemptsContinuation(
@@ -1021,11 +1020,10 @@ public class TestRunnerAction extends AbstractAction
         } catch (InterruptedException e) {
           if (cancelFuture != null && cancelFuture.isCancelled()) {
             // Clear the interrupt bit.
-            Thread.interrupted();
+            Thread.currentThread().isInterrupted();
             for (Artifact output : TestRunnerAction.this.getMandatoryOutputs()) {
               FileSystemUtils.touchFile(output.getPath());
             }
-            testRunnerSpawn.finalizeCancelledTest(failedAttempts);
             return ActionContinuationOrResult.of(ActionResult.create(spawnResults));
           }
           throw e;
@@ -1079,7 +1077,6 @@ public class TestRunnerAction extends AbstractAction
 
           TestAttemptContinuation nextContinuation = beginIfNotCancelled(nextRunner, cancelFuture);
           if (nextContinuation == null) {
-            testRunnerSpawn.finalizeCancelledTest(failedAttempts);
             return ActionContinuationOrResult.of(ActionResult.create(spawnResults));
           }
           return new RunAttemptsContinuation(
