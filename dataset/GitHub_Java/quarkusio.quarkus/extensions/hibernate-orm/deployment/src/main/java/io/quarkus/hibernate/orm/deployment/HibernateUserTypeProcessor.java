@@ -5,6 +5,9 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.hibernate.annotations.Type;
+import org.hibernate.annotations.TypeDef;
+import org.hibernate.annotations.TypeDefs;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
@@ -13,11 +16,14 @@ import org.jboss.jandex.IndexView;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 
 public final class HibernateUserTypeProcessor {
     private static final String TYPE_VALUE = "type";
     private static final String TYPE_CLASS_VALUE = "typeClass";
+    private static final DotName TYPE = DotName.createSimple(Type.class.getName());
+    private static final DotName TYPE_DEFINITION = DotName.createSimple(TypeDef.class.getName());
+    private static final DotName TYPE_DEFINITIONS = DotName.createSimple(TypeDefs.class.getName());
 
     @BuildStep
     public void build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass, CombinedIndexBuildItem combinedIndexBuildItem) {
@@ -25,9 +31,9 @@ public final class HibernateUserTypeProcessor {
 
         final Set<String> userTypes = new HashSet<>();
 
-        Collection<AnnotationInstance> typeAnnotationInstances = index.getAnnotations(ClassNames.TYPE);
-        Collection<AnnotationInstance> typeDefinitionAnnotationInstances = index.getAnnotations(ClassNames.TYPE_DEFINITION);
-        Collection<AnnotationInstance> typeDefinitionsAnnotationInstances = index.getAnnotations(ClassNames.TYPE_DEFINITIONS);
+        Collection<AnnotationInstance> typeAnnotationInstances = index.getAnnotations(TYPE);
+        Collection<AnnotationInstance> typeDefinitionAnnotationInstances = index.getAnnotations(TYPE_DEFINITION);
+        Collection<AnnotationInstance> typeDefinitionsAnnotationInstances = index.getAnnotations(TYPE_DEFINITIONS);
 
         userTypes.addAll(getUserTypes(typeDefinitionAnnotationInstances));
 
