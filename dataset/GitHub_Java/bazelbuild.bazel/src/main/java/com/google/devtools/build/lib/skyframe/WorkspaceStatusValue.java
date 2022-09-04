@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 
 /**
  * Value that stores the workspace status artifacts and their generating action. There should be
@@ -30,15 +30,12 @@ public class WorkspaceStatusValue extends ActionLookupValue {
   private final Artifact volatileArtifact;
 
   // There should only ever be one BuildInfo value in the graph.
-  public static final BuildInfoKey BUILD_INFO_KEY = new BuildInfoKey();
+  static final ArtifactOwner ARTIFACT_OWNER = new BuildInfoKey();
+  public static final SkyKey SKY_KEY = SkyKey.create(SkyFunctions.BUILD_INFO, ARTIFACT_OWNER);
 
-  WorkspaceStatusValue(
-      ActionKeyContext actionKeyContext,
-      Artifact stableArtifact,
-      Artifact volatileArtifact,
-      WorkspaceStatusAction action,
-      boolean removeActionAfterEvaluation) {
-    super(actionKeyContext, action, removeActionAfterEvaluation);
+  public WorkspaceStatusValue(Artifact stableArtifact, Artifact volatileArtifact,
+      WorkspaceStatusAction action) {
+    super(action);
     this.stableArtifact = stableArtifact;
     this.volatileArtifact = volatileArtifact;
   }
@@ -51,13 +48,15 @@ public class WorkspaceStatusValue extends ActionLookupValue {
     return volatileArtifact;
   }
 
-  static class BuildInfoKey extends ActionLookupKey {
-    private BuildInfoKey() {}
-
+  private static class BuildInfoKey extends ActionLookupKey {
     @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.BUILD_INFO;
+    SkyFunctionName getType() {
+      throw new UnsupportedOperationException();
     }
 
+    @Override
+    SkyKey getSkyKeyInternal() {
+      return SKY_KEY;
+    }
   }
 }

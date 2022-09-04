@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,15 +16,16 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -33,40 +34,38 @@ import java.util.Map;
  * actions of target completion values and build info artifacts also fall into this category.
  */
 public class ActionLookupValue implements SkyValue {
-  protected final ImmutableMap<Artifact, Action> generatingActionMap;
+  protected final ImmutableMap<Artifact, ActionAnalysisMetadata> generatingActionMap;
 
-  ActionLookupValue(Iterable<Action> actions) {
-    // Duplicate/shared actions get passed in all the time. Blaze is weird. We can't double-register
-    // the generated artifacts in an immutable map builder, so we double-register them in a more
-    // forgiving map, and then use that map to create the immutable one.
-    Map<Artifact, Action> generatingActions = new HashMap<>();
-    for (Action action : actions) {
-      for (Artifact artifact : action.getOutputs()) {
-        generatingActions.put(artifact, action);
-      }
+  private static ImmutableMap<Artifact, ActionAnalysisMetadata>
+      filterSharedActionsAndThrowRuntimeIfConflict(
+      Iterable<ActionAnalysisMetadata> actions) {
+    try {
+      return Actions.filterSharedActionsAndThrowActionConflict(actions);
+    } catch (ActionConflictException e) {
+      // Programming bug.
+      throw new IllegalStateException(e);
     }
-    generatingActionMap = ImmutableMap.copyOf(generatingActions);
   }
 
-  ActionLookupValue(Action action) {
+  ActionLookupValue(Iterable<ActionAnalysisMetadata> actions) {
+    this(filterSharedActionsAndThrowRuntimeIfConflict(actions));
+  }
+
+  ActionLookupValue(ActionAnalysisMetadata action) {
     this(ImmutableList.of(action));
   }
 
-  Action getGeneratingAction(Artifact artifact) {
+  ActionLookupValue(Map<Artifact, ActionAnalysisMetadata> generatingActionMap) {
+    this.generatingActionMap = ImmutableMap.copyOf(generatingActionMap);
+  }
+
+  public ActionAnalysisMetadata getGeneratingAction(Artifact artifact) {
     return generatingActionMap.get(artifact);
   }
 
   /** To be used only when checking consistency of the action graph -- not by other values. */
-  ImmutableMap<Artifact, Action> getMapForConsistencyCheck() {
+  ImmutableMap<Artifact, ActionAnalysisMetadata> getMapForConsistencyCheck() {
     return generatingActionMap;
-  }
-
-  /**
-   * To be used only when setting the owners of deserialized artifacts whose owners were unknown at
-   * creation time -- not by other callers or values.
-   */
-  Iterable<Action> getActionsForFindingArtifactOwners() {
-    return generatingActionMap.values();
   }
 
   @VisibleForTesting
@@ -82,7 +81,7 @@ public class ActionLookupValue implements SkyValue {
    *
    * <p>The methods of this class should only be called by {@link ActionLookupValue#key}.
    */
-  protected abstract static class ActionLookupKey implements ArtifactOwner {
+  public abstract static class ActionLookupKey implements ArtifactOwner {
     @Override
     public Label getLabel() {
       return null;
@@ -94,13 +93,24 @@ public class ActionLookupValue implements SkyValue {
      */
     abstract SkyFunctionName getType();
 
+    SkyKey getSkyKeyInternal() {
+      return SkyKey.create(getType(), this);
+    }
+
     /**
      * Prefer {@link ActionLookupValue#key} to calling this method directly.
      *
-     * <p>Subclasses may override if the value key contents should not be the key itself.
+     * <p>Subclasses may override {@link #getSkyKeyInternal} if the {@link SkyKey} argument should
+     * not be this {@link ActionLookupKey} itself.
      */
-    SkyKey getSkyKey() {
-      return new SkyKey(getType(), this);
+    final SkyKey getSkyKey() {
+      SkyKey result = getSkyKeyInternal();
+      Preconditions.checkState(
+          result.argument() instanceof ActionLookupKey,
+          "Not ActionLookupKey for %s: %s",
+          this,
+          result);
+      return result;
     }
   }
 }

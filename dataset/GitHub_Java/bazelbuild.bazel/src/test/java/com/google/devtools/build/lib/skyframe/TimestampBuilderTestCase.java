@@ -53,8 +53,6 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
-import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
-import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
@@ -244,8 +242,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
             false,
             new ActionCacheChecker(actionCache, null, ALWAYS_EXECUTE_FILTER, null),
             null);
-        skyframeActionExecutor.setActionExecutionProgressReportingObjects(
-            EMPTY_PROGRESS_SUPPLIER, EMPTY_COMPLETION_RECEIVER);
 
         List<SkyKey> keys = new ArrayList<>();
         for (Artifact artifact : artifacts) {
@@ -465,18 +461,4 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
       return actionTemplateExpansionFunction.extractTag(skyKey);
     }
   }
-
-  private static final ProgressSupplier EMPTY_PROGRESS_SUPPLIER =
-      new ProgressSupplier() {
-        @Override
-        public String getProgressString() {
-          return "";
-        }
-      };
-
-  private static final ActionCompletedReceiver EMPTY_COMPLETION_RECEIVER =
-      new ActionCompletedReceiver() {
-        @Override
-        public void actionCompleted(Action action) {}
-      };
 }

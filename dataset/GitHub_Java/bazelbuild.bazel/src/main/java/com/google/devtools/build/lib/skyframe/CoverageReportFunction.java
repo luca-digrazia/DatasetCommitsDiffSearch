@@ -14,13 +14,11 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -29,22 +27,13 @@ import com.google.devtools.build.skyframe.SkyValue;
  * A Skyframe function to calculate the coverage report Action and Artifacts.
  */
 public class CoverageReportFunction implements SkyFunction {
-  private final ActionKeyContext actionKeyContext;
-  private final Supplier<Boolean> removeActionsAfterEvaluation;
-
-  CoverageReportFunction(
-      ActionKeyContext actionKeyContext, Supplier<Boolean> removeActionsAfterEvaluation) {
-    this.actionKeyContext = actionKeyContext;
-    this.removeActionsAfterEvaluation = Preconditions.checkNotNull(removeActionsAfterEvaluation);
-  }
+  CoverageReportFunction() {}
 
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
     Preconditions.checkState(
-        CoverageReportValue.COVERAGE_REPORT_KEY.equals(skyKey),
-        String.format(
-            "Expected %s for SkyKey but got %s instead",
-            CoverageReportValue.COVERAGE_REPORT_KEY, skyKey));
+        CoverageReportValue.SKY_KEY.equals(skyKey), String.format(
+            "Expected %s for SkyKey but got %s instead", CoverageReportValue.SKY_KEY, skyKey));
 
     ImmutableList<ActionAnalysisMetadata> actions = PrecomputedValue.COVERAGE_REPORT_KEY.get(env);
     if (actions == null) {
@@ -57,7 +46,7 @@ public class CoverageReportFunction implements SkyFunction {
       outputs.addAll(action.getOutputs());
     }
 
-    return new CoverageReportValue(actionKeyContext, actions, removeActionsAfterEvaluation.get());
+    return new CoverageReportValue(actions);
   }
 
   @Override
