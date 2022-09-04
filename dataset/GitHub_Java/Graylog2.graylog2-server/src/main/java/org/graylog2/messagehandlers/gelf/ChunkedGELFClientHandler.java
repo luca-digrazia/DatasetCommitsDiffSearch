@@ -20,7 +20,6 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import indexer.Indexer;
 import org.apache.log4j.Logger;
 import org.graylog2.Tools;
 import org.graylog2.blacklists.Blacklist;
@@ -149,6 +148,10 @@ public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements G
                 return false;
             }
 
+            // Store in MongoDB.
+            // Connect to database.
+            MongoBridge m = new MongoBridge();
+
             if (!this.message.convertedFromSyslog()) {
                 LOG.info("Got GELF message: " + this.message.toString());
             }
@@ -161,8 +164,7 @@ public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements G
             // PreProcess message based on filters. Insert message into MongoDB.
             ReceiveHookManager.preProcess(new MessageParserHook(), message);
             if(!message.getFilterOut()) {
-                ////////////////////////////m.insertGelfMessage(message);
-                Indexer.index(message);
+                m.insertGelfMessage(message);
                 // This is doing the upcounting for statistics.
                 ReceiveHookManager.postProcess(new MessageCounterHook(), message);
 
