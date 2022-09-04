@@ -15,14 +15,13 @@ package com.google.devtools.build.lib.rules.python;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashMap;
@@ -39,15 +38,13 @@ public final class PythonUtils {
 
   private static final FileType REQUIRES_INIT_PY = FileType.of(".py", ".so", ".pyc");
 
-  static class GetInitPyFiles implements Runfiles.EmptyFilesSupplier {
+  public static final Runfiles.EmptyFilesSupplier GET_INIT_PY_FILES =
+      new Runfiles.EmptyFilesSupplier() {
     @Override
     public Iterable<PathFragment> getExtraPaths(Set<PathFragment> manifestPaths) {
       return getInitPyFiles(manifestPaths);
     }
-  }
-
-  @AutoCodec
-  public static final Runfiles.EmptyFilesSupplier GET_INIT_PY_FILES = new GetInitPyFiles();
+  };
 
   private PythonUtils() {
     // This is a utility class, not to be instantiated
@@ -85,8 +82,8 @@ public final class PythonUtils {
    * subdirectory to avoid conflicts (eg. when the input file is generated).
    */
   private static Artifact get2to3OutputArtifact(RuleContext ruleContext, Artifact input) {
-    ArtifactRoot root =
-        ruleContext.getConfiguration().getGenfilesDirectory(ruleContext.getRule().getRepository());
+    Root root = ruleContext.getConfiguration().getGenfilesDirectory(
+        ruleContext.getRule().getRepository());
     PathFragment path = PathFragment.create("python3").getRelative(input.getRootRelativePath());
     return ruleContext.getShareableArtifact(path, root);
   }
@@ -128,7 +125,7 @@ public final class PythonUtils {
             .setExecutable(py2to3converter)
             .setProgressMessage("Converting to Python 3: %s", input.prettyPrint())
             .setMnemonic("2to3")
-            .addCommandLine(commandLine.build())
+            .setCommandLine(commandLine.build())
             .build(ruleContext));
     return output;
   }
