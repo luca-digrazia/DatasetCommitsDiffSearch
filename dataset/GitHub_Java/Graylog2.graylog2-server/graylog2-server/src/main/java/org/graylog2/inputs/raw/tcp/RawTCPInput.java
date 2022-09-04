@@ -57,8 +57,12 @@ public class RawTCPInput extends RawInputBase {
     public void launch() throws MisfireException {
         // Register throughput counter gauges.
         for(Map.Entry<String,Gauge<Long>> gauge : throughputCounter.gauges().entrySet()) {
-            core.metrics().register(MetricRegistry.name(RawTCPInput.class, gauge.getKey()), gauge.getValue());
+            core.metrics().register(MetricRegistry.name(getUniqueReadableId(), gauge.getKey()), gauge.getValue());
         }
+
+        // Register connection counter gauges.
+        core.metrics().register(MetricRegistry.name(getUniqueReadableId(), "open_connections"), connectionCounter.gaugeCurrent());
+        core.metrics().register(MetricRegistry.name(getUniqueReadableId(), "total_connections"), connectionCounter.gaugeTotal());
 
         final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
@@ -74,7 +78,7 @@ public class RawTCPInput extends RawInputBase {
                 new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)
         );
 
-        bootstrap.setPipelineFactory(new RawTCPPipelineFactory(core, config, this, throughputCounter));
+        bootstrap.setPipelineFactory(new RawTCPPipelineFactory(core, config, this, throughputCounter, connectionCounter));
 
         try {
             channel = ((ServerBootstrap) bootstrap).bind(socketAddress);
