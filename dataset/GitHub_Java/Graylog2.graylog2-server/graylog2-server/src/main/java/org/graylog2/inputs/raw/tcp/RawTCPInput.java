@@ -60,10 +60,6 @@ public class RawTCPInput extends RawInputBase {
             core.metrics().register(MetricRegistry.name(RawTCPInput.class, gauge.getKey()), gauge.getValue());
         }
 
-        // Register connection counter gauges.
-        core.metrics().register(MetricRegistry.name(RawTCPInput.class, "open_connections"), connectionCounter.gaugeCurrent());
-        core.metrics().register(MetricRegistry.name(RawTCPInput.class, "total_connections"), connectionCounter.gaugeTotal());
-
         final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
                         .setNameFormat("input-" + inputId + "-rawtcp-boss-%d")
@@ -78,7 +74,7 @@ public class RawTCPInput extends RawInputBase {
                 new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)
         );
 
-        bootstrap.setPipelineFactory(new RawTCPPipelineFactory(core, config, this, throughputCounter, connectionCounter));
+        bootstrap.setPipelineFactory(new RawTCPPipelineFactory(core, config, this, throughputCounter));
 
         try {
             channel = ((ServerBootstrap) bootstrap).bind(socketAddress);
