@@ -59,9 +59,6 @@ public class ASTFileLookupFunction implements SkyFunction {
     PathFragment filePathFragment = fileLabel.toPathFragment();
 
     // Determine whether the package designated by fileLabel exists.
-    // TODO(bazel-team): After --incompatible_disallow_load_labels_to_cross_package_boundaries is
-    // removed and the new behavior is unconditional, we can instead safely assume the package
-    // exists and pass in the Root in the SkyKey and therefore this dep can be removed.
     SkyKey pkgSkyKey = PackageLookupValue.key(fileLabel.getPackageIdentifier());
     PackageLookupValue pkgLookupValue = null;
     try {
@@ -95,9 +92,6 @@ public class ASTFileLookupFunction implements SkyFunction {
     }
     if (fileValue == null) {
       return null;
-    }
-    if (!fileValue.exists()) {
-      return ASTFileLookupValue.forMissingFile(fileLabel);
     }
     if (!fileValue.isFile()) {
       return ASTFileLookupValue.forBadFile(fileLabel);
