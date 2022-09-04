@@ -83,11 +83,6 @@ public final class SkylarkJavaMethodDoc extends SkylarkMethodDoc {
   }
 
   @Override
-  public String getShortName() {
-    return name;
-  }
-
-  @Override
   public String getDocumentation() {
     return SkylarkDocUtils.substituteVariables(callable.doc());
   }
