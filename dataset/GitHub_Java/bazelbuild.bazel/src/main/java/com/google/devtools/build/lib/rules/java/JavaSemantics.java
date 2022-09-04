@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.Runfiles.Builder;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.Substitution.ComputedSubstitution;
@@ -320,19 +321,9 @@ public interface JavaSemantics {
    */
   boolean isJavaExecutableSubstitution();
 
-  /**
-   * Returns true if target is a test target, has TestConfiguration, and persistent test runner set.
-   *
-   * <p>Note that no TestConfiguration implies the TestConfiguration was pruned in some parent of
-   * the rule. Therefore, TestTarget not currently being analyzed as part of top-level and thus
-   * persistent test runner is not especially relevant.
-   */
   static boolean isTestTargetAndPersistentTestRunner(RuleContext ruleContext) {
-    if (!ruleContext.isTestTarget()) {
-      return false;
-    }
-    TestConfiguration testConfiguration = ruleContext.getFragment(TestConfiguration.class);
-    return testConfiguration != null && testConfiguration.isPersistentTestRunner();
+    return ruleContext.isTestTarget()
+        && ruleContext.getFragment(TestConfiguration.class).isPersistentTestRunner();
   }
 
   static Runfiles getTestSupportRunfiles(RuleContext ruleContext) {
@@ -364,7 +355,8 @@ public interface JavaSemantics {
 
     boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
     if (createExecutable && ruleContext.attributes().get("use_testrunner", Type.BOOLEAN)) {
-      return Iterables.getOnlyElement(ruleContext.getPrerequisites("$testsupport"));
+      return Iterables.getOnlyElement(
+          ruleContext.getPrerequisites("$testsupport", TransitionMode.TARGET));
     } else {
       return null;
     }
@@ -511,6 +503,4 @@ public interface JavaSemantics {
   Artifact getObfuscatedConstantStringMap(RuleContext ruleContext) throws InterruptedException;
 
   void checkDependencyRuleKinds(RuleContext ruleContext);
-
-  boolean shouldSetupJavaBuilderTemporaryDirectories();
 }
