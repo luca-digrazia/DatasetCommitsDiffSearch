@@ -14,10 +14,11 @@
 package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Fact.simpleFact;
-import static com.google.common.truth.Truth.assertWithMessage;
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.skyframe.ErrorInfoSubjectFactory.assertThatErrorInfo;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.truth.DefaultSubject;
 import com.google.common.truth.FailureMetadata;
 import com.google.common.truth.IterableSubject;
 import com.google.common.truth.Subject;
@@ -44,8 +45,8 @@ public class EvaluationResultSubject extends Subject<EvaluationResultSubject, Ev
     }
   }
 
-  public Subject<?, ?> hasEntryThat(SkyKey key) {
-    return assertWithMessage("Entry for " + actualAsString()).that(getSubject().get(key));
+  public DefaultSubject hasEntryThat(SkyKey key) {
+    return assertThat(getSubject().get(key)).named("Entry for " + actualAsString());
   }
 
   public ErrorInfoSubject hasErrorEntryForKeyThat(SkyKey key) {
@@ -54,12 +55,14 @@ public class EvaluationResultSubject extends Subject<EvaluationResultSubject, Ev
   }
 
   public IterableSubject hasDirectDepsInGraphThat(SkyKey parent) throws InterruptedException {
-    return assertWithMessage("Direct deps for " + parent + " in " + actualAsString())
-        .that(getSubject().getWalkableGraph().getDirectDeps(ImmutableList.of(parent)).get(parent));
+    return assertThat(
+            getSubject().getWalkableGraph().getDirectDeps(ImmutableList.of(parent)).get(parent))
+        .named("Direct deps for " + parent + " in " + actualAsString());
   }
 
   public IterableSubject hasReverseDepsInGraphThat(SkyKey child) throws InterruptedException {
-    return assertWithMessage("Reverse deps for " + child + " in " + actualAsString())
-        .that(getSubject().getWalkableGraph().getReverseDeps(ImmutableList.of(child)).get(child));
+    return assertThat(
+            getSubject().getWalkableGraph().getReverseDeps(ImmutableList.of(child)).get(child))
+        .named("Reverse deps for " + child + " in " + actualAsString());
   }
 }
