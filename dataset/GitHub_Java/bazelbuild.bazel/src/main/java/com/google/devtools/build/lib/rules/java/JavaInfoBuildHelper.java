@@ -153,8 +153,9 @@ final class JavaInfoBuildHelper {
    * @param outputJar name of output Jar artifact.
    * @param outputSourceJar name of output source Jar artifact, or {@code null}. If unset, defaults
    *     to base name of the output jar with the suffix {@code -src.jar}.
-   * @return generated artifact (can also be empty)
+   * @return generated artifact, or null if there's nothing to pack
    */
+  @Nullable
   Artifact packSourceFiles(
       StarlarkActionFactory actions,
       Artifact outputJar,
@@ -164,9 +165,9 @@ final class JavaInfoBuildHelper {
       JavaToolchainProvider javaToolchain,
       JavaRuntimeInfo hostJavabase)
       throws EvalException {
-    if (outputJar == null && outputSourceJar == null) {
-      throw Starlark.errorf(
-          "pack_sources requires at least one of the parameters output_jar or output_source_jar");
+    // No sources to pack, return None
+    if (sourceFiles.isEmpty() && sourceJars.isEmpty()) {
+      return null;
     }
     // If we only have one source jar, return it directly to avoid action creation
     if (sourceFiles.isEmpty() && sourceJars.size() == 1) {

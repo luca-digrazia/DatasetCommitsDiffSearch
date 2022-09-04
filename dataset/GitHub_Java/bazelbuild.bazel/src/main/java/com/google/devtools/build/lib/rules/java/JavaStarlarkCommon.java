@@ -135,8 +135,7 @@ public class JavaStarlarkCommon
   @Override
   public Artifact packSources(
       StarlarkActionFactory actions,
-      Object outputJar,
-      Object outputSourceJar,
+      Artifact outputJar,
       Sequence<?> sourceFiles, // <Artifact> expected.
       Sequence<?> sourceJars, // <Artifact> expected.
       JavaToolchainProvider javaToolchain,
@@ -145,8 +144,8 @@ public class JavaStarlarkCommon
     return JavaInfoBuildHelper.getInstance()
         .packSourceFiles(
             actions,
-            outputJar instanceof Artifact ? (Artifact) outputJar : null,
-            outputSourceJar instanceof Artifact ? (Artifact) outputSourceJar : null,
+            outputJar,
+            /* outputSourceJar= */ null,
             Sequence.cast(sourceFiles, Artifact.class, "sources"),
             Sequence.cast(sourceJars, Artifact.class, "source_jars"),
             javaToolchain,
