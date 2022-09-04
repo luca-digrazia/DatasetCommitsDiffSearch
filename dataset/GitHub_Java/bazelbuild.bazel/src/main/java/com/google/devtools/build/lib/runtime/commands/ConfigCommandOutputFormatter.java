@@ -14,14 +14,17 @@
 package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommand.ConfigurationDiffForOutput;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommand.ConfigurationForOutput;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommand.FragmentDiffForOutput;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommand.FragmentForOutput;
+import com.google.devtools.build.lib.runtime.commands.ConfigCommand.FragmentOptionsForOutput;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.gson.Gson;
 import java.io.PrintWriter;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Formats output for {@link ConfigCommand}.
@@ -39,7 +42,7 @@ abstract class ConfigCommandOutputFormatter {
   }
 
   /** Outputs a list of configuration hash IDs. * */
-  public abstract void writeConfigurationIDs(Iterable<String> configurationIDs);
+  public abstract void writeConfigurationIDs(Iterable<ConfigurationForOutput> configurations);
 
   /** Outputs a single configuration. * */
   public abstract void writeConfiguration(ConfigurationForOutput configuration);
@@ -57,17 +60,34 @@ abstract class ConfigCommandOutputFormatter {
     }
 
     @Override
-    public void writeConfigurationIDs(Iterable<String> configurationIDs) {
+    public void writeConfigurationIDs(Iterable<ConfigurationForOutput> configurations) {
       writer.println("Available configurations:");
-      configurationIDs.forEach(id -> writer.println(id));
+      configurations.forEach(
+          config ->
+              writer.printf(
+                  "%s%s%s%n",
+                  config.configHash,
+                  (config.isHost ? " (host)" : ""),
+                  (config.isExec ? " (exec)" : "")));
     }
 
     @Override
     public void writeConfiguration(ConfigurationForOutput configuration) {
       writer.println("BuildConfiguration " + configuration.configHash + ":");
       writer.println("Skyframe Key: " + configuration.skyKey);
+
+      StringBuilder fragments = new StringBuilder();
       for (FragmentForOutput fragment : configuration.fragments) {
-        writer.println("Fragment " + fragment.name + " {");
+        fragments
+            .append(fragment.name)
+            .append(": [")
+            .append(String.join(",", fragment.fragmentOptions))
+            .append("], ");
+      }
+
+      writer.println("Fragments: " + fragments);
+      for (FragmentOptionsForOutput fragment : configuration.fragmentOptions) {
+        writer.println("FragmentOptions " + fragment.name + " {");
         for (Map.Entry<String, String> optionSetting : fragment.options.entrySet()) {
           writer.printf("  %s: %s\n", optionSetting.getKey(), optionSetting.getValue());
         }
@@ -87,7 +107,7 @@ abstract class ConfigCommandOutputFormatter {
       writer.printf(
           "Displaying diff between configs %s and %s\n", diff.configHash1, diff.configHash2);
       for (FragmentDiffForOutput fragmentDiff : diff.fragmentsDiff) {
-        writer.println("Fragment " + fragmentDiff.name + " {");
+        writer.println("FragmentOptions " + fragmentDiff.name + " {");
         for (Map.Entry<String, Pair<String, String>> optionDiff :
             fragmentDiff.optionsDiff.entrySet()) {
           writer.printf(
@@ -109,7 +129,11 @@ abstract class ConfigCommandOutputFormatter {
     }
 
     @Override
-    public void writeConfigurationIDs(Iterable<String> configurationIDs) {
+    public void writeConfigurationIDs(Iterable<ConfigurationForOutput> configurations) {
+      Iterable<String> configurationIDs =
+          Streams.stream(configurations)
+              .map(config -> config.configHash)
+              .collect(Collectors.toList());
       writer.println(gson.toJson(ImmutableMap.of("configuration-IDs", configurationIDs)));
     }
 

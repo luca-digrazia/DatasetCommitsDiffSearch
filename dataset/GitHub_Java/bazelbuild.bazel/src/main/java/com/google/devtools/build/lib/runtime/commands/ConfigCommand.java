@@ -13,12 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime.commands;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.ImmutableSortedMap.toImmutableSortedMap;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Comparator.comparing;
-import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 
 import com.google.common.base.Verify;
@@ -26,16 +23,15 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
@@ -54,9 +50,11 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
+import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -65,7 +63,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
+import java.util.Optional;
 import javax.annotation.Nullable;
 
 /** Handles the 'config' command on the Blaze command line. */
@@ -146,18 +144,6 @@ public class ConfigCommand implements BlazeCommand {
       this.fragmentOptions = fragmentOptions;
     }
 
-    @Nullable
-    public FragmentOptionsForOutput fragment(String fragmentName) {
-      return this.fragmentOptions.stream()
-          .filter(fo -> fo.name.equals(fragmentName))
-          .findFirst()
-          .orElse(null);
-    }
-
-    public Set<String> fragmentOptionNames() {
-      return this.fragmentOptions.stream().map(fragment -> fragment.name).collect(toImmutableSet());
-    }
-
     @Override
     public boolean equals(Object o) {
       if (o instanceof ConfigurationForOutput) {
@@ -173,10 +159,6 @@ public class ConfigCommand implements BlazeCommand {
     @Override
     public int hashCode() {
       return Objects.hash(skyKey, configHash, fragments, fragmentOptions);
-    }
-
-    String checksum() {
-      return configHash;
     }
   }
 
@@ -228,14 +210,6 @@ public class ConfigCommand implements BlazeCommand {
     FragmentOptionsForOutput(String name, Map<String, String> options) {
       this.name = name;
       this.options = options;
-    }
-
-    public Set<String> optionNames() {
-      return this.options.keySet();
-    }
-
-    public String getOption(String optionName) {
-      return this.options.get(optionName);
     }
 
     @Override
@@ -356,11 +330,7 @@ public class ConfigCommand implements BlazeCommand {
         String configHash1 = options.getResidue().get(0);
         String configHash2 = options.getResidue().get(1);
         return reportConfigurationDiff(
-            forOutput(configurations, fragmentDefs),
-            configHash1,
-            configHash2,
-            outputFormatter,
-            env);
+            configurations.values(), configHash1, configHash2, outputFormatter, env);
       } else {
         String message = "Too many config ids.";
         env.getReporter().handle(Event.error(message));
@@ -401,11 +371,12 @@ public class ConfigCommand implements BlazeCommand {
     ImmutableSortedMap.Builder<
             Class<? extends Fragment>, ImmutableSortedSet<Class<? extends FragmentOptions>>>
         fragments = ImmutableSortedMap.orderedBy((c1, c2) -> c1.getName().compareTo(c2.getName()));
-    for (Class<? extends Fragment> fragmentClass : ruleClassProvider.getConfigurationFragments()) {
+    for (ConfigurationFragmentFactory fragmentFactory :
+        ruleClassProvider.getConfigurationFragments()) {
       fragments.put(
-          fragmentClass,
+          fragmentFactory.creates(),
           ImmutableSortedSet.copyOf(
-              comparing(Class::getName), Fragment.requiredOptions(fragmentClass)));
+              (c1, c2) -> c1.getName().compareTo(c2.getName()), fragmentFactory.requiredOptions()));
     }
     return fragments.build();
   }
@@ -484,37 +455,6 @@ public class ConfigCommand implements BlazeCommand {
   }
 
   /**
-   * Returns the configuration matching a hash prefix.
-   *
-   * @param configurations collection of configurations to search
-   * @param configPrefix prefix or exact value of the matching configuration's hash
-   * @throws InvalidConfigurationException if not exactly one configuration matches
-   */
-  private static ConfigurationForOutput getConfiguration(
-      Collection<ConfigurationForOutput> configurations, String configPrefix)
-      throws InvalidConfigurationException {
-    ImmutableList<ConfigurationForOutput> matches =
-        configurations.stream()
-            .filter(config -> config.checksum().startsWith(configPrefix))
-            .collect(toImmutableList());
-    if (matches.isEmpty()) {
-      throw new InvalidConfigurationException(
-          String.format("No configuration found with ID prefix %s", configPrefix));
-    } else if (matches.size() > 1) {
-      throw new InvalidConfigurationException(
-          String.format(
-              "Configuration identifier '%s' is ambiguous.\n"
-                  + "'%s' is a prefix of multiple configurations:\n "
-                  + matches.stream().map(ConfigurationForOutput::checksum).collect(joining("\n "))
-                  + "\n\n"
-                  + "Use a sufficient prefix to uniquely identify one configuration.",
-              configPrefix,
-              configPrefix));
-    }
-    return Iterables.getOnlyElement(matches);
-  }
-
-  /**
    * Returns a {@link FragmentOptions}'s native option settings in canonical order.
    *
    * <p>While actual option values are objects, we serialize them to strings to prevent command
@@ -587,13 +527,18 @@ public class ConfigCommand implements BlazeCommand {
       ImmutableSortedSet<ConfigurationForOutput> allConfigurations,
       String configHash) {
     env.getReporter().handle(Event.info(String.format("Displaying config with id %s", configHash)));
-    try {
-      writer.writeConfiguration(getConfiguration(allConfigurations, configHash));
-      return BlazeCommandResult.success();
-    } catch (InvalidConfigurationException e) {
-      env.getReporter().handle(Event.error(e.getMessage()));
-      return createFailureResult(e.getMessage(), Code.CONFIGURATION_NOT_FOUND);
+
+    Optional<ConfigurationForOutput> match =
+        allConfigurations.stream().filter(entry -> entry.configHash.equals(configHash)).findFirst();
+
+    if (!match.isPresent()) {
+      String message = String.format("No configuration found with id: %s", configHash);
+      env.getReporter().handle(Event.error(message));
+      return createFailureResult(message, Code.CONFIGURATION_NOT_FOUND);
     }
+
+    writer.writeConfiguration(match.get());
+    return BlazeCommandResult.success();
   }
 
   /**
@@ -601,7 +546,7 @@ public class ConfigCommand implements BlazeCommand {
    * appropriate command exit code.
    */
   private static BlazeCommandResult reportConfigurationDiff(
-      ImmutableSortedSet<ConfigurationForOutput> allConfigs,
+      Collection<BuildConfiguration> allConfigs,
       String configHash1,
       String configHash2,
       ConfigCommandOutputFormatter writer,
@@ -612,16 +557,27 @@ public class ConfigCommand implements BlazeCommand {
                 String.format(
                     "Displaying diff between configs" + " %s and" + " %s",
                     configHash1, configHash2)));
-    try {
-      ConfigurationForOutput config1 = getConfiguration(allConfigs, configHash1);
-      ConfigurationForOutput config2 = getConfiguration(allConfigs, configHash2);
-      Table<String, String, Pair<Object, Object>> diffs = diffConfigurations(config1, config2);
-      writer.writeConfigurationDiff(getConfigurationDiffForOutput(configHash1, configHash2, diffs));
-      return BlazeCommandResult.success();
-    } catch (InvalidConfigurationException e) {
-      env.getReporter().handle(Event.error(e.getMessage()));
-      return createFailureResult(e.getMessage(), Code.CONFIGURATION_NOT_FOUND);
+
+    Optional<BuildConfiguration> config1 =
+        allConfigs.stream().filter(config -> config.checksum().equals(configHash1)).findFirst();
+
+    if (!config1.isPresent()) {
+      String message = String.format("No configuration found with id: %s", configHash1);
+      env.getReporter().handle(Event.error(message));
+      return createFailureResult(message, Code.CONFIGURATION_NOT_FOUND);
     }
+    Optional<BuildConfiguration> config2 =
+        allConfigs.stream().filter(config -> config.checksum().equals(configHash2)).findFirst();
+    if (!config2.isPresent()) {
+      String message = String.format("No configuration found with id: %s", configHash2);
+      env.getReporter().handle(Event.error(message));
+      return createFailureResult(message, Code.CONFIGURATION_NOT_FOUND);
+    }
+
+    Table<Class<? extends FragmentOptions>, String, Pair<Object, Object>> diffs =
+        diffConfigurations(config1.get(), config2.get());
+    writer.writeConfigurationDiff(getConfigurationDiffForOutput(configHash1, configHash2, diffs));
+    return BlazeCommandResult.success();
   }
 
   /**
@@ -633,44 +589,71 @@ public class ConfigCommand implements BlazeCommand {
     // Intentionally empty: we read the actual options directly from BuildOptions.
   }
 
-  private static Table<String, String, Pair<Object, Object>> diffConfigurations(
-      ConfigurationForOutput config1, ConfigurationForOutput config2) {
-    Table<String, String, Pair<Object, Object>> diffs = HashBasedTable.create();
+  private static Table<Class<? extends FragmentOptions>, String, Pair<Object, Object>>
+      diffConfigurations(BuildConfiguration config1, BuildConfiguration config2) {
+    Table<Class<? extends FragmentOptions>, String, Pair<Object, Object>> diffs =
+        HashBasedTable.create();
 
-    for (String fragmentName :
-        Sets.union(config1.fragmentOptionNames(), config2.fragmentOptionNames())) {
-      FragmentOptionsForOutput options1 = config1.fragment(fragmentName);
-      FragmentOptionsForOutput options2 = config2.fragment(fragmentName);
-      diffs.row(fragmentName).putAll(diffOptions(options1, options2));
+    for (Class<? extends FragmentOptions> fragment :
+        Sets.union(
+            config1.getOptions().getFragmentClasses(), config2.getOptions().getFragmentClasses())) {
+      FragmentOptions options1 = config1.getOptions().get(fragment);
+      FragmentOptions options2 = config2.getOptions().get(fragment);
+      diffs.row(fragment).putAll(diffOptions(fragment, options1, options2));
     }
+
+    diffs.row(UserDefinedFragment.class).putAll(diffStarlarkOptions(config1, config2));
     return diffs;
   }
 
   private static Map<String, Pair<Object, Object>> diffOptions(
-      @Nullable FragmentOptionsForOutput options1, @Nullable FragmentOptionsForOutput options2) {
+      Class<? extends FragmentOptions> fragment,
+      @Nullable FragmentOptions options1,
+      @Nullable FragmentOptions options2) {
     Map<String, Pair<Object, Object>> diffs = new HashMap<>();
 
-    for (String optionName : Sets.union(options1.optionNames(), options2.optionNames())) {
-      String value1 = options1 == null ? null : options1.getOption(optionName);
-      String value2 = options2 == null ? null : options2.getOption(optionName);
+    for (OptionDefinition option : OptionsParser.getOptionDefinitions(fragment)) {
+      Object value1 = options1 == null ? null : options1.getValueFromDefinition(option);
+      Object value2 = options2 == null ? null : options2.getValueFromDefinition(option);
 
       if (!Objects.equals(value1, value2)) {
-        diffs.put(optionName, Pair.of(value1, value2));
+        diffs.put(option.getOptionName(), Pair.of(value1, value2));
       }
     }
 
     return diffs;
   }
 
+  private static Map<String, Pair<Object, Object>> diffStarlarkOptions(
+      BuildConfiguration config1, BuildConfiguration config2) {
+    Map<Label, Object> starlarkOptions1 = config1.getOptions().getStarlarkOptions();
+    Map<Label, Object> starlarkOptions2 = config2.getOptions().getStarlarkOptions();
+    Map<String, Pair<Object, Object>> diffs = new HashMap<>();
+    for (Label option : Sets.union(starlarkOptions1.keySet(), starlarkOptions2.keySet())) {
+      Object value1 = starlarkOptions1.get(option);
+      Object value2 = starlarkOptions2.get(option);
+      if (!Objects.equals(value1, value2)) {
+        diffs.put(option.toString(), Pair.of(value1, value2));
+      }
+    }
+    return diffs;
+  }
+
   private static ConfigurationDiffForOutput getConfigurationDiffForOutput(
-      String configHash1, String configHash2, Table<String, String, Pair<Object, Object>> diffs) {
+      String configHash1,
+      String configHash2,
+      Table<Class<? extends FragmentOptions>, String, Pair<Object, Object>> diffs) {
     ImmutableSortedSet.Builder<FragmentDiffForOutput> fragmentDiffs =
         ImmutableSortedSet.orderedBy(comparing(e -> e.name));
     diffs.rowKeySet().stream()
         .forEach(
-            fragmentName -> {
+            fragmentClass -> {
+              String fragmentName =
+                  fragmentClass.equals(UserDefinedFragment.class)
+                      ? UserDefinedFragment.DESCRIPTIVE_NAME
+                      : fragmentClass.getName();
               ImmutableSortedMap<String, Pair<String, String>> sortedOptionDiffs =
-                  diffs.row(fragmentName).entrySet().stream()
+                  diffs.row(fragmentClass).entrySet().stream()
                       .collect(
                           toImmutableSortedMap(
                               Ordering.natural(),
