@@ -14,9 +14,6 @@ public final class GeneratedClassBuildItem extends MultiBuildItem {
     }
 
     public GeneratedClassBuildItem(boolean applicationClass, String name, byte[] classData, String source) {
-        if (name.startsWith("/")) {
-            throw new IllegalArgumentException("Name cannot start with '/':" + name);
-        }
         this.applicationClass = applicationClass;
         this.name = name;
         this.classData = classData;

@@ -31,7 +31,7 @@ import org.jboss.logging.Logger;
  * <li>{@link #registerCustomContexts()}</li>
  * <li>{@link #registerBeans()}</li>
  * <li>{@link #initialize(Consumer)}</li>
- * <li>{@link #validate(Consumer)}</li>
+ * <li>{@link #validate()}</li>
  * <li>{@link #processValidationErrors(io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext)}</li>
  * <li>{@link #generateResources(ReflectionRegistration)}</li>
  * </ol>
@@ -76,7 +76,7 @@ public class BeanProcessor {
             List<Predicate<BeanInfo>> unusedExclusions,
             Map<DotName, Collection<AnnotationInstance>> additionalStereotypes,
             List<InterceptorBindingRegistrar> interceptorBindingRegistrars,
-            boolean transformUnproxyableClasses,
+            boolean removeFinalForProxyableMethods,
             boolean jtaCapabilities,
             boolean generateSources) {
         this.reflectionRegistration = reflectionRegistration;
@@ -100,8 +100,8 @@ public class BeanProcessor {
                 initAndSort(observerTransformers, buildContext),
                 resourceAnnotations, buildContext,
                 unusedBeansRemovalEnabled, unusedExclusions,
-                additionalStereotypes, interceptorBindingRegistrars,
-                transformUnproxyableClasses, jtaCapabilities);
+                additionalStereotypes, interceptorBindingRegistrars, removeFinalForProxyableMethods,
+                jtaCapabilities);
     }
 
     public ContextRegistrar.RegistrationContext registerCustomContexts() {
@@ -122,21 +122,12 @@ public class BeanProcessor {
         return beanDeployment.registerSyntheticObservers(observerRegistrars);
     }
 
-    /**
-     * 
-     * @param bytecodeTransformerConsumer Used to register a bytecode transformation
-     */
     public void initialize(Consumer<BytecodeTransformer> bytecodeTransformerConsumer) {
         beanDeployment.init(bytecodeTransformerConsumer);
     }
 
-    /**
-     * 
-     * @param bytecodeTransformerConsumer Used to register a bytecode transformation
-     * @return the validation context
-     */
-    public BeanDeploymentValidator.ValidationContext validate(Consumer<BytecodeTransformer> bytecodeTransformerConsumer) {
-        return beanDeployment.validate(beanDeploymentValidators, bytecodeTransformerConsumer);
+    public BeanDeploymentValidator.ValidationContext validate() {
+        return beanDeployment.validate(beanDeploymentValidators);
     }
 
     public void processValidationErrors(BeanDeploymentValidator.ValidationContext validationContext) {
@@ -231,17 +222,16 @@ public class BeanProcessor {
     }
 
     public BeanDeployment process() throws IOException {
-        Consumer<BytecodeTransformer> unsupportedBytecodeTransformer = new Consumer<BytecodeTransformer>() {
-            @Override
-            public void accept(BytecodeTransformer transformer) {
-                throw new UnsupportedOperationException();
-            }
-        };
         registerCustomContexts();
         registerBeans();
         registerSyntheticObservers();
-        initialize(unsupportedBytecodeTransformer);
-        ValidationContext validationContext = validate(unsupportedBytecodeTransformer);
+        initialize(new Consumer<BytecodeTransformer>() {
+            @Override
+            public void accept(BytecodeTransformer transformer) {
+
+            }
+        });
+        ValidationContext validationContext = validate();
         processValidationErrors(validationContext);
         generateResources(null);
         return beanDeployment;
@@ -274,11 +264,10 @@ public class BeanProcessor {
         private final List<BeanDeploymentValidator> beanDeploymentValidators = new ArrayList<>();
 
         private boolean removeUnusedBeans = false;
+        private boolean jtaCapabilities = false;
         private final List<Predicate<BeanInfo>> removalExclusions = new ArrayList<>();
 
         private boolean generateSources = false;
-        private boolean jtaCapabilities = false;
-        private boolean transformUnproxyableClasses = false;
 
         private Predicate<DotName> applicationClassPredicate = new Predicate<DotName>() {
             @Override
@@ -286,6 +275,8 @@ public class BeanProcessor {
                 return true;
             }
         };
+
+        private boolean removeFinalForProxyableMethods;
 
         public Builder setName(String name) {
             this.name = name;
@@ -413,25 +404,8 @@ public class BeanProcessor {
             return this;
         }
 
-        /**
-         * 
-         * @param removeFinalForProxyableMethods
-         * @return self
-         * @deprecated This method will be removed at some point post Quarkus 1.4
-         */
-        @Deprecated
         public Builder setRemoveFinalFromProxyableMethods(boolean removeFinalForProxyableMethods) {
-            return this;
-        }
-
-        /**
-         * If set to true the container will transform unproxyable bean classes during validation.
-         * 
-         * @param value
-         * @return self
-         */
-        public Builder setTransformUnproxyableClasses(boolean value) {
-            this.transformUnproxyableClasses = value;
+            this.removeFinalForProxyableMethods = removeFinalForProxyableMethods;
             return this;
         }
 
@@ -452,7 +426,7 @@ public class BeanProcessor {
                     reflectionRegistration, annotationTransformers, injectionPointTransformers, observerTransformers,
                     resourceAnnotations, beanRegistrars, observerRegistrars, contextRegistrars, beanDeploymentValidators,
                     applicationClassPredicate, removeUnusedBeans, removalExclusions, additionalStereotypes,
-                    additionalInterceptorBindingRegistrars, transformUnproxyableClasses, jtaCapabilities, generateSources);
+                    additionalInterceptorBindingRegistrars, removeFinalForProxyableMethods, jtaCapabilities, generateSources);
         }
 
     }

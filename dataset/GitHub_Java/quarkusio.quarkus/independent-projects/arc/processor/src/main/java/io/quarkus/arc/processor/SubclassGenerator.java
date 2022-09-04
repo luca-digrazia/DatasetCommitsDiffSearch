@@ -26,7 +26,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -95,11 +94,9 @@ public class SubclassGenerator extends AbstractGenerator {
      *
      * @param bean
      * @param beanClassName Fully qualified class name
-     * @param existingClasses
      * @return a java file
      */
-    Collection<Resource> generate(BeanInfo bean, String beanClassName, ReflectionRegistration reflectionRegistration,
-            Set<String> existingClasses) {
+    Collection<Resource> generate(BeanInfo bean, String beanClassName, ReflectionRegistration reflectionRegistration) {
 
         ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()),
                 generateSources);
@@ -109,9 +106,6 @@ public class SubclassGenerator extends AbstractGenerator {
         String providerTypeName = providerClass.name().toString();
         String baseName = getBaseName(bean, beanClassName);
         String generatedName = generatedName(providerType.name(), baseName);
-        if (existingClasses.contains(generatedName)) {
-            return Collections.emptyList();
-        }
 
         // Foo_Subclass extends Foo implements Subclass
         ClassCreator subclass = ClassCreator.builder().classOutput(classOutput).className(generatedName)

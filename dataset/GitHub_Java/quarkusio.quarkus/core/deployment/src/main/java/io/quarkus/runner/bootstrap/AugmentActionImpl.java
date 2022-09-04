@@ -37,8 +37,6 @@ import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.LiveReloadBuildItem;
-import io.quarkus.deployment.builditem.MainClassBuildItem;
-import io.quarkus.deployment.builditem.RawCommandLineArgumentsBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.JarBuildItem;
@@ -83,8 +81,7 @@ public class AugmentActionImpl implements AugmentAction {
             if (launchMode != LaunchMode.NORMAL) {
                 throw new IllegalStateException("Can only create a production application when using NORMAL launch mode");
             }
-            ClassLoader classLoader = curatedApplication.createDeploymentClassLoader();
-            BuildResult result = runAugment(true, Collections.emptySet(), classLoader, ArtifactResultBuildItem.class);
+            BuildResult result = runAugment(true, Collections.emptySet(), ArtifactResultBuildItem.class);
 
             String debugSourcesDir = BootstrapDebug.DEBUG_SOURCES_DIR;
             if (debugSourcesDir != null) {
@@ -126,11 +123,9 @@ public class AugmentActionImpl implements AugmentAction {
         if (launchMode == LaunchMode.NORMAL) {
             throw new IllegalStateException("Cannot launch a runtime application with NORMAL launch mode");
         }
-        ClassLoader classLoader = curatedApplication.createDeploymentClassLoader();
-        BuildResult result = runAugment(true, Collections.emptySet(), classLoader, GeneratedClassBuildItem.class,
-                GeneratedResourceBuildItem.class, BytecodeTransformerBuildItem.class, ApplicationClassNameBuildItem.class,
-                MainClassBuildItem.class);
-        return new StartupActionImpl(curatedApplication, result, classLoader);
+        BuildResult result = runAugment(true, Collections.emptySet(), GeneratedClassBuildItem.class,
+                GeneratedResourceBuildItem.class, BytecodeTransformerBuildItem.class, ApplicationClassNameBuildItem.class);
+        return new StartupActionImpl(curatedApplication, result);
     }
 
     @Override
@@ -138,10 +133,9 @@ public class AugmentActionImpl implements AugmentAction {
         if (launchMode != LaunchMode.DEVELOPMENT) {
             throw new IllegalStateException("Only application with launch mode DEVELOPMENT can restart");
         }
-        ClassLoader classLoader = curatedApplication.createDeploymentClassLoader();
-        BuildResult result = runAugment(false, changedResources, classLoader, GeneratedClassBuildItem.class,
+        BuildResult result = runAugment(false, changedResources, GeneratedClassBuildItem.class,
                 GeneratedResourceBuildItem.class, BytecodeTransformerBuildItem.class, ApplicationClassNameBuildItem.class);
-        return new StartupActionImpl(curatedApplication, result, classLoader);
+        return new StartupActionImpl(curatedApplication, result);
     }
 
     /**
@@ -160,7 +154,6 @@ public class AugmentActionImpl implements AugmentAction {
             Thread.currentThread().setContextClassLoader(classLoader);
 
             final BuildChainBuilder chainBuilder = BuildChain.builder();
-            chainBuilder.setClassLoader(classLoader);
 
             ExtensionLoader.loadStepsFrom(classLoader).accept(chainBuilder);
             chainBuilder.loadProviders(classLoader);
@@ -172,7 +165,6 @@ public class AugmentActionImpl implements AugmentAction {
                     .addInitial(ShutdownContextBuildItem.class)
                     .addInitial(LaunchModeBuildItem.class)
                     .addInitial(LiveReloadBuildItem.class)
-                    .addInitial(RawCommandLineArgumentsBuildItem.class)
                     .addFinal(ConfigDescriptionBuildItem.class);
             chainBuild.accept(chainBuilder);
 
@@ -181,7 +173,6 @@ public class AugmentActionImpl implements AugmentAction {
             BuildExecutionBuilder execBuilder = chain.createExecutionBuilder("main")
                     .produce(new LaunchModeBuildItem(launchMode))
                     .produce(new ShutdownContextBuildItem())
-                    .produce(new RawCommandLineArgumentsBuildItem())
                     .produce(new LiveReloadBuildItem());
             executionBuild.accept(execBuilder);
             return execBuilder
@@ -198,8 +189,7 @@ public class AugmentActionImpl implements AugmentAction {
         }
     }
 
-    private BuildResult runAugment(boolean firstRun, Set<String> changedResources, ClassLoader deploymentClassLoader,
-            Class<? extends BuildItem>... finalOutputs) {
+    private BuildResult runAugment(boolean firstRun, Set<String> changedResources, Class<? extends BuildItem>... finalOutputs) {
         ClassLoader old = Thread.currentThread().getContextClassLoader();
         try {
             Thread.currentThread().setContextClassLoader(curatedApplication.getAugmentClassLoader());
@@ -212,7 +202,7 @@ public class AugmentActionImpl implements AugmentAction {
                     .setClassLoader(classLoader)
                     .addFinal(ApplicationClassNameBuildItem.class)
                     .setTargetDir(quarkusBootstrap.getTargetDirectory())
-                    .setDeploymentClassLoader(deploymentClassLoader)
+                    .setDeploymentClassLoader(curatedApplication.createDeploymentClassLoader())
                     .setBuildSystemProperties(quarkusBootstrap.getBuildSystemProperties())
                     .setEffectiveModel(curatedApplication.getAppModel());
             if (quarkusBootstrap.getBaseName() != null) {
