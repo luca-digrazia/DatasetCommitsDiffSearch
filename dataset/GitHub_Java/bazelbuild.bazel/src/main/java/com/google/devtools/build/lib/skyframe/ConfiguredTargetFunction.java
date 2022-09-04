@@ -54,7 +54,7 @@ import com.google.devtools.build.lib.analysis.config.DependencyEvaluationExcepti
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.causes.AnalysisFailedCause;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LoadingFailedCause;
@@ -339,15 +339,13 @@ public final class ConfiguredTargetFunction implements SkyFunction {
             ToolchainCollection.builder();
         for (Map.Entry<String, UnloadedToolchainContext> unloadedContext :
             unloadedToolchainContexts.getContextMap().entrySet()) {
-          Set<ConfiguredTargetAndData> toolchainDependencies =
-              depValueMap.get(DependencyKind.forExecGroup(unloadedContext.getKey()));
           contextsBuilder.addContext(
               unloadedContext.getKey(),
               ResolvedToolchainContext.load(
                   target.getPackage().getRepositoryMapping(),
                   unloadedContext.getValue(),
                   targetDescription,
-                  toolchainDependencies));
+                  depValueMap.get(DependencyKind.TOOLCHAIN_DEPENDENCY)));
         }
         toolchainContexts = contextsBuilder.build();
       }

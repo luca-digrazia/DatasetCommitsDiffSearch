@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.devtools.build.lib.analysis.DependencyKind.OUTPUT_FILE_RULE_DEPENDENCY;
+import static com.google.devtools.build.lib.analysis.DependencyKind.TOOLCHAIN_DEPENDENCY;
 import static com.google.devtools.build.lib.analysis.DependencyKind.VISIBILITY_DEPENDENCY;
 
 import com.google.auto.value.AutoValue;
@@ -24,7 +25,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.AspectCollection.AspectCycleOnPathException;
 import com.google.devtools.build.lib.analysis.DependencyKind.AttributeDependencyKind;
-import com.google.devtools.build.lib.analysis.DependencyKind.ToolchainDependencyKind;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
@@ -56,6 +56,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.ToolchainContextKey;
+import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -63,8 +64,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Starlark;
 
 /**
  * Resolver for dependencies between configured targets.
@@ -80,17 +79,6 @@ public abstract class DependencyResolver {
   // TODO(#10523): Remove this when the migration period for toolchain transitions has ended.
   public static boolean shouldUseToolchainTransition(
       @Nullable BuildConfiguration configuration, Target target) {
-    return shouldUseToolchainTransition(
-        configuration, target instanceof Rule ? (Rule) target : null);
-  }
-
-  /**
-   * Returns whether or not to use the new toolchain transition. Checks the global incompatible
-   * change flag and the rule's toolchain transition readiness attribute.
-   */
-  // TODO(#10523): Remove this when the migration period for toolchain transitions has ended.
-  public static boolean shouldUseToolchainTransition(
-      @Nullable BuildConfiguration configuration, @Nullable Rule rule) {
     // Check whether the global incompatible change flag is set.
     if (configuration != null) {
       PlatformOptions platformOptions = configuration.getOptions().get(PlatformOptions.class);
@@ -100,7 +88,7 @@ public abstract class DependencyResolver {
     }
 
     // Check the rule definition to see if it is ready.
-    if (rule != null && rule.getRuleClassObject().useToolchainTransition()) {
+    if (target instanceof Rule && ((Rule) target).getRuleClassObject().useToolchainTransition()) {
       return true;
     }
 
@@ -317,30 +305,30 @@ public abstract class DependencyResolver {
     for (Map.Entry<DependencyKind, Label> entry : outgoingLabels.entries()) {
       Label toLabel = entry.getValue();
 
-      if (DependencyKind.isToolchain(entry.getKey())) {
+      if (entry.getKey() == TOOLCHAIN_DEPENDENCY) {
         // This dependency is a toolchain. Its package has not been loaded and therefore we can't
         // determine which aspects and which rule configuration transition we should use, so just
         // use sensible defaults. Not depending on their package makes the error message reporting
         // a missing toolchain a bit better.
         // TODO(lberki): This special-casing is weird. Find a better way to depend on toolchains.
         // TODO(#10523): Remove check when this is fully released.
-        // This logic needs to stay in sync with the dep finding logic in
-        // //third_party/bazel/src/main/java/com/google/devtools/build/lib/analysis/Util.java#findImplicitDeps.
         if (useToolchainTransition) {
-          ToolchainDependencyKind tdk = (ToolchainDependencyKind) entry.getKey();
-          ToolchainContext toolchainContext =
-              toolchainContexts.getToolchainContext(tdk.getExecGroupName());
-          partiallyResolvedDeps.put(
-              entry.getKey(),
-              PartiallyResolvedDependency.builder()
-                  .setLabel(toLabel)
-                  .setTransition(NoTransition.INSTANCE)
-                  .setToolchainContextKey(toolchainContext.key())
-                  .build());
+          // We need to create an individual PRD for each distinct toolchain context that contains
+          // this toolchain, because each has a different ToolchainContextKey.
+          for (ToolchainContext toolchainContext :
+              toolchainContexts.getContextsForResolvedToolchain(toLabel)) {
+            partiallyResolvedDeps.put(
+                TOOLCHAIN_DEPENDENCY,
+                PartiallyResolvedDependency.builder()
+                    .setLabel(toLabel)
+                    .setTransition(NoTransition.INSTANCE)
+                    .setToolchainContextKey(toolchainContext.key())
+                    .build());
+          }
         } else {
           // Legacy approach: use a HostTransition.
           partiallyResolvedDeps.put(
-              entry.getKey(),
+              TOOLCHAIN_DEPENDENCY,
               PartiallyResolvedDependency.builder()
                   .setLabel(toLabel)
                   .setTransition(HostTransition.INSTANCE)
@@ -390,7 +378,7 @@ public abstract class DependencyResolver {
             if (fromRule != null) {
               throw new EvalException(fromRule.getLocation(), error);
             } else {
-              throw Starlark.errorf("%s", error);
+              throw new EvalException(error);
             }
           }
           if (toolchainContexts.getToolchainContext(execGroup).executionPlatform() != null) {
@@ -525,12 +513,7 @@ public abstract class DependencyResolver {
     }
 
     if (toolchainContexts != null) {
-      for (Map.Entry<String, ToolchainContext> entry :
-          toolchainContexts.getContextMap().entrySet()) {
-        outgoingLabels.putAll(
-            DependencyKind.forExecGroup(entry.getKey()),
-            entry.getValue().resolvedToolchainLabels());
-      }
+      outgoingLabels.putAll(TOOLCHAIN_DEPENDENCY, toolchainContexts.getResolvedToolchains());
     }
 
     if (!rule.isAttributeValueExplicitlySpecified(RuleClass.APPLICABLE_LICENSES_ATTR)) {
