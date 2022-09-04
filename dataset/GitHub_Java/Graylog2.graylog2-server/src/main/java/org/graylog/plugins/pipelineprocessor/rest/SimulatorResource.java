@@ -21,7 +21,6 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.elasticsearch.common.Strings;
 import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
 import org.graylog.plugins.pipelineprocessor.simulator.PipelineInterpreterTracer;
 import org.graylog2.database.NotFoundException;
@@ -70,9 +69,6 @@ public class SimulatorResource extends RestResource implements PluginRestResourc
             final Stream stream = streamService.load(request.streamId());
             message.addStream(stream);
         }
-        if (!Strings.isNullOrEmpty(request.inputId())) {
-            message.setSourceInputId(request.inputId());
-        }
 
         final List<ResultMessageSummary> simulationResults = new ArrayList<>();
         final PipelineInterpreterTracer pipelineInterpreterTracer = new PipelineInterpreterTracer();
@@ -82,8 +78,6 @@ public class SimulatorResource extends RestResource implements PluginRestResourc
         for (Message processedMessage : processedMessages) {
             simulationResults.add(ResultMessageSummary.create(null, processedMessage.getFields(), ""));
         }
-
-        pipelineInterpreter.stop();
         return SimulationResponse.create(simulationResults,
                                          pipelineInterpreterTracer.getExecutionTrace(),
                                          pipelineInterpreterTracer.took());
