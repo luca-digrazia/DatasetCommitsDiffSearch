@@ -28,7 +28,6 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.rest.MoreMediaTypes;
 import org.graylog2.rest.models.system.config.ClusterConfigList;
-import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.hibernate.validator.constraints.NotBlank;
@@ -59,12 +58,10 @@ import static java.util.Objects.requireNonNull;
 @Produces(MediaType.APPLICATION_JSON)
 public class ClusterConfigResource extends RestResource {
     private final ClusterConfigService clusterConfigService;
-    private final ChainingClassLoader chainingClassLoader;
 
     @Inject
-    public ClusterConfigResource(ClusterConfigService clusterConfigService, ChainingClassLoader chainingClassLoader) {
+    public ClusterConfigResource(ClusterConfigService clusterConfigService) {
         this.clusterConfigService = requireNonNull(clusterConfigService);
-        this.chainingClassLoader = chainingClassLoader;
     }
 
     @GET
@@ -154,7 +151,7 @@ public class ClusterConfigResource extends RestResource {
     @Nullable
     private Class<?> classFromName(String className) {
         try {
-            return chainingClassLoader.classForName(className);
+            return Class.forName(className);
         } catch (ClassNotFoundException e) {
             return null;
         }
