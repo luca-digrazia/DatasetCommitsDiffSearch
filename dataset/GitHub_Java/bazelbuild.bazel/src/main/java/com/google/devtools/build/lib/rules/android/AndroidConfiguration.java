@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigu
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion.AndroidRobolectricTestDeprecationLevel;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.DynamicModeConverter;
@@ -235,20 +234,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         if (ruleContext.getRule().isAttrDefined("aapt_version", STRING)) {
           // On rules that can choose a version, test attribute then flag choose the aapt version
           // target.
-          AndroidAaptVersion flag =
-              AndroidCommon.getAndroidConfig(ruleContext).getAndroidAaptVersion();
-
-          AndroidAaptVersion version =
-              fromString(ruleContext.attributes().get("aapt_version", STRING));
-          // version is null if the value is "auto"
-          version = version == AndroidAaptVersion.AUTO ? flag : version;
-
-          if (version == AAPT2 && !hasAapt2) {
-            ruleContext.throwWithRuleError(
-                "aapt2 processing requested but not available on the android_sdk");
-            return null;
-          }
-          return version == AndroidAaptVersion.AUTO ? AAPT : version;
+          return chooseTargetAaptVersion(
+              ruleContext,
+              ruleContext.getFragment(AndroidConfiguration.class),
+              ruleContext.attributes().get("aapt_version", STRING));
         } else {
           // On rules can't choose, assume aapt2 if aapt2 is present in the sdk.
           return hasAapt2 ? AAPT2 : AAPT;
@@ -259,20 +248,18 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
     @Nullable
     public static AndroidAaptVersion chooseTargetAaptVersion(
-        AndroidDataContext dataContext,
-        RuleErrorConsumer errorConsumer,
-        @Nullable String versionString)
+        RuleContext ruleContext, AndroidConfiguration androidConfig, @Nullable String versionString)
         throws RuleErrorException {
 
-      boolean hasAapt2 = dataContext.getSdk().getAapt2() != null;
-      AndroidAaptVersion flag = dataContext.getAndroidConfig().getAndroidAaptVersion();
+      boolean hasAapt2 = AndroidSdkProvider.fromRuleContext(ruleContext).getAapt2() != null;
+      AndroidAaptVersion flag = androidConfig.getAndroidAaptVersion();
 
       AndroidAaptVersion version = fromString(versionString);
       // version is null if the value is "auto"
       version = version == AndroidAaptVersion.AUTO ? flag : version;
 
       if (version == AAPT2 && !hasAapt2) {
-        errorConsumer.throwWithRuleError(
+        ruleContext.throwWithRuleError(
             "aapt2 processing requested but not available on the android_sdk");
         return null;
       }
@@ -830,6 +817,16 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
                 + "when possible. Otherwise, they will all be processed together.")
     public boolean decoupleDataProcessing;
 
+    // TODO(cushon): make this the default, and delete it
+    @Option(
+      name = "experimental_android_enforce_strict_deps_for_binaries_under_test",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      help = "If enabled, strict dependencies are enforced for android_test.binary_under_test"
+    )
+    public boolean enforceStrictDepsForBinariesUnderTest;
+
     @Option(
       name = "android_migration_tag_check",
       defaultValue = "false",
@@ -878,6 +875,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       host.manifestMerger = manifestMerger;
       host.androidAaptVersion = androidAaptVersion;
       host.allowAndroidLibraryDepsWithoutSrcs = allowAndroidLibraryDepsWithoutSrcs;
+      host.enforceStrictDepsForBinariesUnderTest = enforceStrictDepsForBinariesUnderTest;
       host.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
           oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
       return host;
@@ -937,6 +935,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean fixedResourceNeverlinking;
   private final AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel;
   private final boolean decoupleDataProcessing;
+  private final boolean enforceStrictDepsForBinariesUnderTest;
   private final boolean checkForMigrationTag;
   private final boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
 
@@ -978,6 +977,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.fixedResourceNeverlinking = options.fixedResourceNeverlinking;
     this.robolectricTestDeprecationLevel = options.robolectricTestDeprecationLevel;
     this.decoupleDataProcessing = options.decoupleDataProcessing;
+    this.enforceStrictDepsForBinariesUnderTest = options.enforceStrictDepsForBinariesUnderTest;
     this.checkForMigrationTag = options.checkForMigrationTag;
     this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
         options.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
@@ -1033,6 +1033,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       boolean fixedResourceNeverlinking,
       AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel,
       boolean decoupleDataProcessing,
+      boolean enforceStrictDepsForBinariesUnderTest,
       boolean checkForMigrationTag,
       boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest) {
     this.enableAndroidCpuMakeVariable = enableAndroidCpuMakeVariable;
@@ -1069,6 +1070,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.fixedResourceNeverlinking = fixedResourceNeverlinking;
     this.robolectricTestDeprecationLevel = robolectricTestDeprecationLevel;
     this.decoupleDataProcessing = decoupleDataProcessing;
+    this.enforceStrictDepsForBinariesUnderTest = enforceStrictDepsForBinariesUnderTest;
     this.checkForMigrationTag = checkForMigrationTag;
     this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
         oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
@@ -1221,6 +1223,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean decoupleDataProcessing() {
     return decoupleDataProcessing;
+  }
+
+  public boolean getEnforceStrictDepsForBinariesUnderTest() {
+    return enforceStrictDepsForBinariesUnderTest;
   }
 
   public boolean checkForMigrationTag() {
