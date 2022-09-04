@@ -19,8 +19,6 @@ package smile.base.mlp;
 
 import smile.feature.FeatureTransform;
 
-import java.io.IOException;
-
 /**
  * An input layer in the neural network.
  *
@@ -56,23 +54,8 @@ public class InputLayer extends Layer {
      * @param transformer the optional input feature transformation.
      */
     public InputLayer(int p, double dropout, FeatureTransform transformer) {
-        super(p, dropout);
+        super(p, p, dropout);
         this.transformer = transformer;
-    }
-
-    /**
-     * Initializes the workspace when deserializing the object.
-     * @param in the input stream.
-     * @throws IOException when fails to read the stream.
-     * @throws ClassNotFoundException when fails to load the class.
-     */
-    private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
-        in.defaultReadObject();
-        output = ThreadLocal.withInitial(() -> new double[n]);
-
-        if (dropout > 0.0) {
-            mask = ThreadLocal.withInitial(() -> new byte[n]);
-        }
     }
 
     @Override
