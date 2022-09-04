@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.query2.query.output.OutputFormatter;
 import com.google.devtools.build.lib.query2.query.output.OutputFormatter.PossibleAttributeValues;
 import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.skyframe.BuildDriver;
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -41,7 +42,7 @@ class BuildOutputFormatterCallback extends CqueryThreadsafeCallback {
       ExtendedEventHandler eventHandler,
       CqueryOptions options,
       OutputStream out,
-      SkyframeExecutor skyframeExecutor,
+      SkyframeExecutor<? extends BuildDriver> skyframeExecutor,
       TargetAccessor<ConfiguredTarget> accessor) {
     super(eventHandler, options, out, skyframeExecutor, accessor);
   }
