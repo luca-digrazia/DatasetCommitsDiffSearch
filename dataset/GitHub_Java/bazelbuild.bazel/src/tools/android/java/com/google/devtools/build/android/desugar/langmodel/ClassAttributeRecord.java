@@ -17,68 +17,69 @@
 package com.google.devtools.build.android.desugar.langmodel;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static java.util.stream.Collectors.toMap;
 
+import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 /** Tracks {@link ClassAttributes} for all classes under investigation. */
-public final class ClassAttributeRecord implements TypeMappable<ClassAttributeRecord> {
+@AutoValue
+public abstract class ClassAttributeRecord implements TypeMappable<ClassAttributeRecord> {
 
-  private final Map<ClassName, ClassAttributes> record;
+  public abstract ImmutableMap<ClassName, ClassAttributes> record();
 
-  public static ClassAttributeRecord create() {
-    return new ClassAttributeRecord(new HashMap<>());
+  public static ClassAttributeRecordBuilder builder() {
+    return new AutoValue_ClassAttributeRecord.Builder();
   }
 
-  private ClassAttributeRecord(Map<ClassName, ClassAttributes> record) {
-    this.record = record;
+  public final boolean hasAttributeRecordFor(ClassName className) {
+    return record().containsKey(className);
   }
 
-  public ClassAttributes setClassAttributes(ClassAttributes classAttributes) {
-    ClassName classBinaryName = classAttributes.classBinaryName();
-    if (record.containsKey(classBinaryName)) {
-      throw new IllegalStateException(
-          String.format(
-              "Expected the ClassAttributes of a class to be put into this record only once during"
-                  + " {@link ClassVisitor#visitEnd}: Pre-existing: (%s), Now (%s)",
-              record.get(classBinaryName), classAttributes));
-    }
-    return record.put(classBinaryName, classAttributes);
+  public final Optional<ClassName> getNestHost(ClassName className) {
+    return requireClassAttributes(className).nestHost();
   }
 
-  public Optional<ClassName> getNestHost(ClassName className) {
-    ClassAttributes classAttributes = record.get(className);
-    checkNotNull(
-        classAttributes,
-        "Expected recorded ClassAttributes for (%s). Available record: %s",
+  public final ImmutableSet<ClassName> getNestMembers(ClassName className) {
+    return requireClassAttributes(className).nestMembers();
+  }
+
+  public final ImmutableSet<MethodKey> getPrivateInstanceMethods(ClassName className) {
+    return requireClassAttributes(className).privateInstanceMethods();
+  }
+
+  public final ImmutableSet<MethodKey> getDesugarIgnoredMethods(ClassName className) {
+    return requireClassAttributes(className).desugarIgnoredMethods();
+  }
+
+  /** Gets the non-null class attributes record for the specified className. */
+  private ClassAttributes requireClassAttributes(ClassName className) {
+    return checkNotNull(
+        record().get(className),
+        "Expected recorded ClassAttributes for (%s). Available in record: (%s)",
         className,
-        record.keySet());
-    return classAttributes.nestHost();
-  }
-
-  public ImmutableSet<ClassName> getNestMembers(ClassName className) {
-    ClassAttributes classAttributes = record.get(className);
-    checkNotNull(
-        classAttributes,
-        "Expected recorded ClassAttributes for (%s). Available record: %s",
-        className,
-        record.keySet());
-    return classAttributes.nestMembers();
+        record().keySet());
   }
 
   @Override
-  public ClassAttributeRecord acceptTypeMapper(TypeMapper typeMapper) {
-    return new ClassAttributeRecord(
-        this.record.values().stream()
-            .map(attr -> attr.acceptTypeMapper(typeMapper))
-            .collect(
-                toMap(
-                    ClassAttributes::classBinaryName,
-                    attr -> attr,
-                    (prev, next) -> next,
-                    HashMap::new)));
+  public final ClassAttributeRecord acceptTypeMapper(TypeMapper typeMapper) {
+    return ClassAttributeRecord.builder().setRecord(typeMapper.map(record())).build();
+  }
+
+  /** The builder for {@link ClassAttributeRecord}. */
+  @AutoValue.Builder
+  public abstract static class ClassAttributeRecordBuilder {
+
+    abstract ImmutableMap.Builder<ClassName, ClassAttributes> recordBuilder();
+
+    abstract ClassAttributeRecordBuilder setRecord(ImmutableMap<ClassName, ClassAttributes> record);
+
+    public final ClassAttributeRecordBuilder addClassAttributes(ClassAttributes classAttributes) {
+      recordBuilder().put(classAttributes.classBinaryName(), classAttributes);
+      return this;
+    }
+
+    public abstract ClassAttributeRecord build();
   }
 }
