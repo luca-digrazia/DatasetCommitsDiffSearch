@@ -9,7 +9,7 @@ import static org.jboss.shamrock.deployment.util.StringUtil.camelHumpsIterator;
 import static org.jboss.shamrock.deployment.util.StringUtil.hyphenate;
 import static org.jboss.shamrock.deployment.util.StringUtil.join;
 import static org.jboss.shamrock.deployment.util.StringUtil.lowerCase;
-import static org.jboss.shamrock.deployment.util.StringUtil.lowerCastFirst;
+import static org.jboss.shamrock.deployment.util.StringUtil.lowerCaseFirst;
 import static org.jboss.shamrock.deployment.util.StringUtil.withoutSuffix;
 
 import java.lang.reflect.AnnotatedElement;
@@ -134,7 +134,7 @@ public class ConfigDefinition extends CompoundConfigType {
         if (configRoot.isAnnotationPresent(ConfigGroup.class)) {
             throw reportError(configRoot, "Roots cannot have a @ConfigGroup annotation");
         }
-        final String containingName = join(withoutSuffix(lowerCastFirst(camelHumpsIterator(configRoot.getSimpleName())), "config", "configuration"));
+        final String containingName = join(withoutSuffix(lowerCaseFirst(camelHumpsIterator(configRoot.getSimpleName())), "Config", "Configuration"));
         final String name = configRootAnnotation.name();
         final String rootName;
         if (name.equals(ConfigItem.PARENT)) {
@@ -189,6 +189,12 @@ public class ConfigDefinition extends CompoundConfigType {
                     gct.addField(leaf = new BooleanConfigType(field.getName(), gct, consume, defaultValue.equals(ConfigItem.NO_DEFAULT) ? "false" : defaultValue));
                 } else if (fieldClass == int.class) {
                     gct.addField(leaf = new IntConfigType(field.getName(), gct, consume, defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue));
+                } else if (fieldClass == long.class) {
+                    gct.addField(leaf = new LongConfigType(field.getName(), gct, consume, defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue));
+                } else if (fieldClass == double.class) {
+                    gct.addField(leaf = new DoubleConfigType(field.getName(), gct, consume, defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue));
+                } else if (fieldClass == float.class) {
+                    gct.addField(leaf = new FloatConfigType(field.getName(), gct, consume, defaultValue.equals(ConfigItem.NO_DEFAULT) ? "0" : defaultValue));
                 } else {
                     throw reportError(field, "Unsupported primitive field type");
                 }
@@ -212,7 +218,7 @@ public class ConfigDefinition extends CompoundConfigType {
             } else {
                 final LeafConfigType leaf;
                 // it's a plain config property
-                gct.addField(leaf = new ObjectConfigType(field.getName(), gct, consume, defaultValue.equals(ConfigItem.NO_DEFAULT) ? "" : defaultValue, fieldClass));
+                gct.addField(leaf = new ObjectConfigType(field.getName(), gct, consume, mapDefaultValue(defaultValue, fieldClass), fieldClass));
                 container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
             }
         }
@@ -222,7 +228,7 @@ public class ConfigDefinition extends CompoundConfigType {
     private MapConfigType processMap(final String containingName, final CompoundConfigType container, final AnnotatedElement containingElement, final boolean consumeSegment, final String baseKey, final Type mapValueType, final AccessorFinder accessorFinder) {
         MapConfigType mct = new MapConfigType(containingName, container, consumeSegment);
         final Class<?> valueClass = rawTypeOf(mapValueType);
-        final String subKey = baseKey + ".{**}";
+        final String subKey = baseKey + ".{*}";
         if (valueClass == Map.class) {
             if (! (mapValueType instanceof ParameterizedType)) throw reportError(containingElement, "Map must be parameterized");
             processMap(NO_CONTAINING_NAME, mct, containingElement, true, subKey, typeOfParameter(mapValueType, 1), accessorFinder);
@@ -235,9 +241,23 @@ public class ConfigDefinition extends CompoundConfigType {
             throw reportError(containingElement, "Optionals are not allowed as a map value type");
         } else {
             // treat as a plain object, hope for the best
-            new ObjectConfigType(NO_CONTAINING_NAME, mct, true, "", valueClass);
+            // TODO, REVISIT THIS
+            final ObjectConfigType leaf = new ObjectConfigType(NO_CONTAINING_NAME, mct, true, "", valueClass);
+            //container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
         }
         return mct;
+    }
+
+    private String mapDefaultValue(String defaultValue, Class<?> fieldClass) {
+        String mappedDefault = defaultValue;
+        if (defaultValue.equals(ConfigItem.NO_DEFAULT)) {
+            if(Number.class.isAssignableFrom(fieldClass)) {
+                mappedDefault = "0";
+            } else {
+                mappedDefault = "";
+            }
+        }
+        return mappedDefault;
     }
 
     private static IllegalArgumentException reportError(AnnotatedElement e, String msg) {
