@@ -15,13 +15,11 @@
  *******************************************************************************/
 package smile.classification;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import smile.data.Attribute;
 import smile.data.NumericAttribute;
 import smile.math.Math;
@@ -70,10 +68,7 @@ import smile.validation.ClassificationMeasure;
  * 
  * @author Haifeng Li
  */
-public class RandomForest implements SoftClassifier<double[]>, Serializable {
-    private static final long serialVersionUID = 1L;
-    private static final Logger logger = LoggerFactory.getLogger(RandomForest.class);
-
+public class RandomForest implements Classifier<double[]> {
     /**
      * Decision tree wrapper with a weight. Currently, the weight is the accuracy of
      * tree on the OOB samples, which can be used when aggregating
@@ -195,7 +190,7 @@ public class RandomForest implements SoftClassifier<double[]>, Serializable {
          */
         public Trainer setNumTrees(int ntrees) {
             if (ntrees < 1) {
-                throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+                throw new IllegalArgumentException("Invlaid number of trees: " + ntrees);
             }
 
             this.ntrees = ntrees;
@@ -403,9 +398,9 @@ public class RandomForest implements SoftClassifier<double[]>, Serializable {
             double accuracy = 1.0;
             if (oob != 0) {
                 accuracy = (double) correct / oob;
-                logger.info("Random forest tree OOB accuracy: {}%", accuracy);
+                //System.out.println("Random forest tree OOB accuracy: " + accuracy);
             } else {
-                logger.error("Random forest has a tree trained without OOB samples.");
+                System.err.println("Random forest has a tree trained without OOB samples.");
             }
 
             return new Tree(tree, accuracy);
@@ -589,7 +584,7 @@ public class RandomForest implements SoftClassifier<double[]>, Serializable {
         try {
             trees = MulticoreExecutor.run(tasks);
         } catch (Exception ex) {
-            logger.error("Failed to train random forest on multi-core", ex);
+            System.err.println(ex);
 
             trees = new ArrayList<Tree>(ntrees);
             for (int i = 0; i < ntrees; i++) {
