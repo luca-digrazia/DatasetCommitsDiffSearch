@@ -2,12 +2,14 @@ package org.jboss.resteasy.reactive.server.vertx;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.EventLoop;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.util.concurrent.ScheduledFuture;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.net.impl.ConnectionBase;
 import io.vertx.ext.web.RoutingContext;
 import java.io.InputStream;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jboss.resteasy.reactive.server.core.Deployment;
@@ -29,11 +32,15 @@ import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
 import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
 
 public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequestContext
-        implements ServerHttpRequest, ServerHttpResponse {
+        implements ServerHttpRequest, ServerHttpResponse, Handler<Void> {
 
+    public static final String CONTINUE = "100-continue";
     protected final RoutingContext context;
     protected final HttpServerRequest request;
     protected final HttpServerResponse response;
+    private final Executor contextExecutor;
+    protected Consumer<ResteasyReactiveRequestContext> preCommitTask;
+    ContinueState continueState = ContinueState.NONE;
 
     public VertxResteasyReactiveRequestContext(Deployment deployment, ProvidersImpl providers,
             RoutingContext context,
@@ -42,6 +49,29 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
         this.context = context;
         this.request = context.request();
         this.response = context.response();
+        context.addHeadersEndHandler(this);
+        String expect = request.getHeader(HttpHeaderNames.EXPECT);
+        ContextInternal internal = ((ConnectionBase) context.request().connection()).getContext();
+        if (expect != null && expect.equalsIgnoreCase(CONTINUE)) {
+            continueState = ContinueState.REQUIRED;
+        }
+        this.contextExecutor = new Executor() {
+            @Override
+            public void execute(Runnable command) {
+                internal.execute(command);
+            }
+        };
+    }
+
+    @Override
+    public ServerHttpResponse addCloseHandler(Runnable onClose) {
+        this.response.closeHandler(new Handler<Void>() {
+            @Override
+            public void handle(Void v) {
+                onClose.run();
+            }
+        });
+        return this;
     }
 
     public RoutingContext getContext() {
@@ -61,6 +91,10 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
     @Override
     protected EventLoop getEventLoop() {
         return ((ConnectionBase) context.request().connection()).channel().eventLoop();
+    }
+
+    protected Executor getContextExecutor() {
+        return contextExecutor;
     }
 
     @Override
@@ -101,7 +135,7 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
 
     @Override
     public String getRequestMethod() {
-        return request.rawMethod();
+        return request.method().name();
     }
 
     @Override
@@ -171,7 +205,15 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
 
     @Override
     public InputStream createInputStream(ByteBuffer existingData) {
-        return new VertxInputStream(context, 10000, Unpooled.wrappedBuffer(existingData));
+        if (existingData == null) {
+            return createInputStream();
+        }
+        return new VertxInputStream(context, 10000, Unpooled.wrappedBuffer(existingData), this);
+    }
+
+    @Override
+    public InputStream createInputStream() {
+        return new VertxInputStream(context, 10000, this);
     }
 
     @Override
@@ -182,12 +224,21 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
 
     @Override
     public ServerHttpResponse resumeRequestInput() {
+        if (continueState == ContinueState.REQUIRED) {
+            continueState = ContinueState.SENT;
+            response.writeContinue();
+        }
         request.resume();
         return this;
     }
 
     @Override
     public ServerHttpResponse setReadListener(ReadCallback callback) {
+        request.pause();
+        if (continueState == ContinueState.REQUIRED) {
+            continueState = ContinueState.SENT;
+            response.writeContinue();
+        }
         request.handler(new Handler<Buffer>() {
             @Override
             public void handle(Buffer event) {
@@ -200,9 +251,11 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
                 callback.done();
             }
         });
+        request.resume();
         return this;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <T> T unwrap(Class<T> theType) {
         if (theType == RoutingContext.class) {
@@ -211,13 +264,17 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
             return (T) request;
         } else if (theType == HttpServerResponse.class) {
             return (T) response;
+        } else if (theType == ResteasyReactiveRequestContext.class) {
+            return (T) this;
         }
         return null;
     }
 
     @Override
     public ServerHttpResponse setStatusCode(int code) {
-        response.setStatusCode(code);
+        if (!response.headWritten()) {
+            response.setStatusCode(code);
+        }
         return this;
     }
 
@@ -312,5 +369,31 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
     @Override
     public OutputStream createResponseOutputStream() {
         return new ResteasyReactiveOutputStream(this);
+    }
+
+    @Override
+    public void setPreCommitListener(Consumer<ResteasyReactiveRequestContext> task) {
+        preCommitTask = task;
+    }
+
+    @Override
+    public void handle(Void event) {
+        if (preCommitTask != null) {
+            preCommitTask.accept(this);
+        }
+    }
+
+    public HttpServerRequest vertxServerRequest() {
+        return request;
+    }
+
+    public HttpServerResponse vertxServerResponse() {
+        return response;
+    }
+
+    enum ContinueState {
+        NONE,
+        REQUIRED,
+        SENT;
     }
 }
