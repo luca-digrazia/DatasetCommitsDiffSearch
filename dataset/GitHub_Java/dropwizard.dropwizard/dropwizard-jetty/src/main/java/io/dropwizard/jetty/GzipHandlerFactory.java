@@ -1,9 +1,9 @@
 package io.dropwizard.jetty;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.dropwizard.util.DataSize;
+import com.google.common.collect.Iterables;
+import io.dropwizard.util.Size;
 import org.eclipse.jetty.server.Handler;
-import org.eclipse.jetty.server.handler.gzip.GzipHandler;
 
 import javax.annotation.Nullable;
 import javax.validation.constraints.Max;
@@ -29,19 +29,19 @@ import static java.util.Objects.requireNonNull;
  *     <tr>
  *         <td>{@code enabled}</td>
  *         <td>true</td>
- *         <td>If true, all requests with `gzip` in the `Accept-Encoding` header will have their
- *             response entities compressed and requests with `gzip` in the `Content-Encoding`
+ *         <td>If true, all requests with `gzip` or `deflate` in the `Accept-Encoding` header will have their
+ *             response entities compressed and requests with `gzip` or `deflate` in the `Content-Encoding`
  *             header will have their request entities decompressed.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code minimumEntitySize}</td>
  *         <td>256 bytes</td>
- *         <td>All response entities under this DataSize are not compressed.</td>
+ *         <td>All response entities under this size are not compressed.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code bufferSize}</td>
  *         <td>8KiB</td>
- *         <td>The DataSize of the buffer to use when compressing.</td>
+ *         <td>The size of the buffer to use when compressing.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code excludedUserAgentPatterns}</td>
@@ -82,12 +82,12 @@ import static java.util.Objects.requireNonNull;
  *     <tr>
  *         <td>{@code deflateCompressionLevel}</td>
  *         <td>-1</td>
- *         <td>The compression level used for deflation(compression).</td>
+ *         <td>The compression level used for ZLIB deflation(compression).</td>
  *     </tr>
  *     <tr>
  *         <td>{@code gzipCompatibleInflation}</td>
  *         <td>true</td>
- *         <td>This option is unused and deprecated as compressed requests without header info are unsupported</td>
+ *         <td>If true, then ZLIB inflation(decompression) will be performed in the GZIP-compatible mode.</td>
  *     </tr>
  * </table>
  */
@@ -96,10 +96,10 @@ public class GzipHandlerFactory {
     private boolean enabled = true;
 
     @NotNull
-    private DataSize minimumEntitySize = DataSize.bytes(256);
+    private Size minimumEntitySize = Size.bytes(256);
 
     @NotNull
-    private DataSize bufferSize = DataSize.kibibytes(8);
+    private Size bufferSize = Size.kilobytes(8);
 
     // By default compress responses for all user-agents
     private Set<String> excludedUserAgentPatterns = new HashSet<>();
@@ -138,22 +138,22 @@ public class GzipHandlerFactory {
     }
 
     @JsonProperty
-    public DataSize getMinimumEntitySize() {
+    public Size getMinimumEntitySize() {
         return minimumEntitySize;
     }
 
     @JsonProperty
-    public void setMinimumEntitySize(DataSize size) {
+    public void setMinimumEntitySize(Size size) {
         this.minimumEntitySize = requireNonNull(size);
     }
 
     @JsonProperty
-    public DataSize getBufferSize() {
+    public Size getBufferSize() {
         return bufferSize;
     }
 
     @JsonProperty
-    public void setBufferSize(DataSize size) {
+    public void setBufferSize(Size size) {
         this.bufferSize = requireNonNull(size);
     }
 
@@ -168,18 +168,12 @@ public class GzipHandlerFactory {
         this.compressedMimeTypes = mimeTypes;
     }
 
-    /**
-     * @since 2.0
-     */
     @JsonProperty
     @Nullable
     public Set<String> getExcludedMimeTypes() {
         return excludedMimeTypes;
     }
 
-    /**
-     * @since 2.0
-     */
     @JsonProperty
     public void setExcludedMimeTypes(Set<String> mimeTypes) {
         this.excludedMimeTypes = mimeTypes;
@@ -195,18 +189,11 @@ public class GzipHandlerFactory {
         this.deflateCompressionLevel = level;
     }
 
-    /**
-     * @deprecated  gzip handler no longer supports inflate streams
-     */
     @JsonProperty
     public boolean isGzipCompatibleInflation() {
         return gzipCompatibleInflation;
     }
 
-    /**
-     * @deprecated  gzip handler no longer supports inflate streams
-     */
-    @Deprecated
     @JsonProperty
     public void setGzipCompatibleInflation(boolean gzipCompatibleInflation) {
         this.gzipCompatibleInflation = gzipCompatibleInflation;
@@ -231,35 +218,23 @@ public class GzipHandlerFactory {
         this.includedMethods = methods;
     }
 
-    /**
-     * @since 2.0
-     */
     @JsonProperty
     @Nullable
     public Set<String> getExcludedPaths() {
         return excludedPaths;
     }
 
-    /**
-     * @since 2.0
-     */
     @JsonProperty
     public void setExcludedPaths(Set<String> paths) {
         this.excludedPaths = paths;
     }
 
-    /**
-     * @since 2.0
-     */
     @JsonProperty
     @Nullable
     public Set<String> getIncludedPaths() {
         return includedPaths;
     }
 
-    /**
-     * @since 2.0
-     */
     @JsonProperty
     public void setIncludedPaths(Set<String> paths) {
         this.includedPaths = paths;
@@ -275,35 +250,36 @@ public class GzipHandlerFactory {
         this.syncFlush = syncFlush;
     }
 
-    public GzipHandler build(@Nullable Handler handler) {
-        final GzipHandler gzipHandler = new GzipHandler();
+    public BiDiGzipHandler build(@Nullable Handler handler) {
+        final BiDiGzipHandler gzipHandler = new BiDiGzipHandler();
         gzipHandler.setHandler(handler);
         gzipHandler.setMinGzipSize((int) minimumEntitySize.toBytes());
-        gzipHandler.setInflateBufferSize((int) bufferSize.toBytes());
+        gzipHandler.setInputBufferSize((int) bufferSize.toBytes());
         gzipHandler.setCompressionLevel(deflateCompressionLevel);
         gzipHandler.setSyncFlush(syncFlush);
 
         if (compressedMimeTypes != null) {
-            gzipHandler.setIncludedMimeTypes(compressedMimeTypes.toArray(new String[0]));
+            gzipHandler.setIncludedMimeTypes(Iterables.toArray(compressedMimeTypes, String.class));
         }
 
         if (excludedMimeTypes != null) {
-            gzipHandler.setExcludedMimeTypes(excludedMimeTypes.toArray(new String[0]));
+            gzipHandler.setExcludedMimeTypes(Iterables.toArray(excludedMimeTypes, String.class));
         }
 
         if (includedMethods != null) {
-            gzipHandler.setIncludedMethods(includedMethods.toArray(new String[0]));
+            gzipHandler.setIncludedMethods(Iterables.toArray(includedMethods, String.class));
         }
 
         if (excludedPaths != null) {
-            gzipHandler.setExcludedPaths(excludedPaths.toArray(new String[0]));
+            gzipHandler.setExcludedPaths(Iterables.toArray(excludedPaths, String.class));
         }
 
         if (includedPaths != null) {
-            gzipHandler.setIncludedPaths(includedPaths.toArray(new String[0]));
+            gzipHandler.setIncludedPaths(Iterables.toArray(includedPaths, String.class));
         }
 
-        gzipHandler.setExcludedAgentPatterns(excludedUserAgentPatterns.toArray(new String[0]));
+        gzipHandler.setExcludedAgentPatterns(Iterables.toArray(excludedUserAgentPatterns, String.class));
+        gzipHandler.setInflateNoWrap(gzipCompatibleInflation);
 
         return gzipHandler;
     }
