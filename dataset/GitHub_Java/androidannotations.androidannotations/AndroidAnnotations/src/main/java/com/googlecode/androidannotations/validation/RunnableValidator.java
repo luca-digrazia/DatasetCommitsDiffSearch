@@ -20,20 +20,19 @@ import java.lang.annotation.Annotation;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 
-import com.googlecode.androidannotations.helper.TargetAnnotationHelper;
 import com.googlecode.androidannotations.helper.ValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
 
-public class RunnableValidator implements ElementValidator {
+public class RunnableValidator extends ValidatorHelper implements ElementValidator {
 
 	private final Class<? extends Annotation> target;
-	private ValidatorHelper validatorHelper;
 
 	public RunnableValidator(Class<? extends Annotation> target, ProcessingEnvironment processingEnv) {
+		super(processingEnv);
 		this.target = target;
-		TargetAnnotationHelper annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
-		validatorHelper = new ValidatorHelper(annotationHelper);
 	}
 
 	@Override
@@ -46,22 +45,27 @@ public class RunnableValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEnhance(element, validatedElements, valid);
+		validateHasLayout(element, validatedElements, valid);
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
-		validatorHelper.voidReturnType(executableElement, valid);
+		validateHasVoidReturnType(element, executableElement, valid);
 
-		validatorHelper.isNotPrivate(element, valid);
+		validateIsNotPrivate(element, valid);
 		
-		validatorHelper.doesntThrowException(element, valid);
+		validateDoesntThrowException(element, valid);
 
-		validatorHelper.isNotFinal(element, valid);
-		
-		validatorHelper.isNotSynchronized(element, valid);
+		validateIsNotFinal(element, valid);
 
 		return valid.isValid();
 	}
 
+	private void validateHasVoidReturnType(Element element, ExecutableElement executableElement, IsValid valid) {
+		TypeMirror returnType = executableElement.getReturnType();
 
+		if (returnType.getKind() != TypeKind.VOID) {
+			valid.invalidate();
+			printAnnotationError(element, annotationName() + " should only be used on a method with a void return type ");
+		}
+	}
 }

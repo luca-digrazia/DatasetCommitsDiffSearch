@@ -25,7 +25,7 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
-import com.googlecode.androidannotations.annotations.ItemClick;
+import com.googlecode.androidannotations.annotations.ItemSelect;
 import com.googlecode.androidannotations.helper.ValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.rclass.IRClass;
@@ -33,21 +33,20 @@ import com.googlecode.androidannotations.rclass.IRInnerClass;
 import com.googlecode.androidannotations.rclass.RClass.Res;
 
 /**
- * @author Benjamin Fellous
  * @author Pierre-Yves Ricau
  */
-public class ItemClickValidator extends ValidatorHelper implements ElementValidator {
+public class ItemSelectedValidator extends ValidatorHelper implements ElementValidator {
 
 	private final IRClass rClass;
 
-	public ItemClickValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
+	public ItemSelectedValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
 		super(processingEnv);
 		this.rClass = rClass;
 	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
-		return ItemClick.class;
+		return ItemSelect.class;
 	}
 
 	@Override
@@ -75,18 +74,27 @@ public class ItemClickValidator extends ValidatorHelper implements ElementValida
 	private void validateParameters(Element element, IsValid valid, ExecutableElement executableElement) {
 		List<? extends VariableElement> parameters = executableElement.getParameters();
 
-		if (parameters.size() > 1) {
+		if (parameters.size()<1 || parameters.size() > 2) {
 			valid.invalidate();
-			printAnnotationError(element, annotationName() + " should only be used on a method with 0 or 1 parameter, instead of " + parameters.size());
+			printAnnotationError(element, annotationName() + " should only be used on a method with 1 or 2 parameter, instead of " + parameters.size());
+		} else {
+			VariableElement firstParameter = parameters.get(0);
+			
+			TypeKind parameterKind = firstParameter.asType().getKind();
+			
+			if (parameterKind != TypeKind.BOOLEAN && !firstParameter.toString().equals("java.lang.Boolean")) {
+				valid.invalidate();
+				printAnnotationError(element, "the first parameter should be a boolean");
+			}
 		}
 	}
 
 	private void validateRFieldName(Element element, IsValid valid) {
-		ItemClick annotation = element.getAnnotation(ItemClick.class);
+		ItemSelect annotation = element.getAnnotation(ItemSelect.class);
 		int idValue = annotation.value();
 
 		IRInnerClass rInnerClass = rClass.get(Res.ID);
-		if (idValue == ItemClick.DEFAULT_VALUE) {
+		if (idValue == ItemSelect.DEFAULT_VALUE) {
 			String methodName = element.getSimpleName().toString();
 			int lastIndex = methodName.lastIndexOf(actionName());
 			if (lastIndex != -1) {
