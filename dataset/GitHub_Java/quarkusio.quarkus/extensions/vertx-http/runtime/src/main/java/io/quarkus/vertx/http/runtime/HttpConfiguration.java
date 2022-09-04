@@ -1,5 +1,8 @@
 package io.quarkus.vertx.http.runtime;
 
+import java.time.Duration;
+import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 
 import io.quarkus.runtime.LaunchMode;
@@ -14,7 +17,7 @@ public class HttpConfiguration {
     /**
      * Enable the CORS filter.
      */
-    @ConfigItem(name = "cors", defaultValue = "false")
+    @ConfigItem(name = "cors")
     public boolean corsEnabled;
 
     /**
@@ -31,9 +34,21 @@ public class HttpConfiguration {
 
     /**
      * The HTTP host
+     *
+     * In dev/test mode this defaults to localhost, in prod mode this defaults to 0.0.0.0
+     *
+     * Defaulting to 0.0.0.0 makes it easier to deploy Quarkus to container, however it
+     * is not suitable for dev/test mode as other people on the network can connect to your
+     * development machine.
      */
-    @ConfigItem(defaultValue = "0.0.0.0")
+    @ConfigItem
     public String host;
+
+    /**
+     * Enable listening to host:port
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean hostEnabled;
 
     /**
      * The HTTPS port
@@ -46,6 +61,45 @@ public class HttpConfiguration {
      */
     @ConfigItem(defaultValue = "8444")
     public int testSslPort;
+
+    /**
+     * If this is true then the address, scheme etc will be set from headers forwarded by the proxy server, such as
+     * {@code X-Forwarded-For}. This should only be set if you are behind a proxy that sets these headers.
+     * 
+     * @deprecated use quarkus.http.proxy.proxy-address-forwarding instead.
+     */
+    @Deprecated
+    @ConfigItem
+    public Optional<Boolean> proxyAddressForwarding;
+
+    /**
+     * If this is true and proxy address forwarding is enabled then the standard {@code Forwarded} header will be used,
+     * rather than the more common but not standard {@code X-Forwarded-For}.
+     * 
+     * @deprecated use quarkus.http.proxy.allow-forwarded instead.
+     */
+    @Deprecated
+    @ConfigItem
+    public Optional<Boolean> allowForwarded;
+
+    /**
+     * If insecure (i.e. http rather than https) requests are allowed. If this is {@code enabled}
+     * then http works as normal. {@code redirect} will still open the http port, but
+     * all requests will be redirected to the HTTPS port. {@code disabled} will prevent the HTTP
+     * port from opening at all.
+     */
+    @ConfigItem(defaultValue = "enabled")
+    public InsecureRequests insecureRequests;
+
+    /**
+     * If this is true (the default) then HTTP/2 will be enabled.
+     *
+     * Note that for browsers to be able to use it HTTPS must be enabled,
+     * and you must be running on JDK11 or above, as JDK8 does not support
+     * ALPN.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean http2;
 
     /**
      * The CORS config
@@ -69,16 +123,24 @@ public class HttpConfiguration {
     public OptionalInt ioThreads;
 
     /**
-     * If this is true then only a virtual channel will be set up for vertx web.
-     * We have this switch for testing purposes.
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean virtual;
-
-    /**
      * Server limits configuration
      */
     public ServerLimitsConfig limits;
+
+    /**
+     * Http connection idle timeout
+     */
+    @ConfigItem(defaultValue = "30M", name = "idle-timeout")
+    public Duration idleTimeout;
+
+    /**
+     * Http connection read timeout for blocking IO. This is the maximum amount of time
+     * a thread will wait for data, before an IOException will be thrown and the connection
+     * closed.
+     *
+     */
+    @ConfigItem(defaultValue = "60s", name = "read-timeout")
+    public Duration readTimeout;
 
     /**
      * Request body related settings
@@ -93,7 +155,74 @@ public class HttpConfiguration {
      * is not suitable for production environments. This must be more than 16 characters long for security reasons
      */
     @ConfigItem(name = "auth.session.encryption-key")
-    public String encryptionKey;
+    public Optional<String> encryptionKey;
+
+    /**
+     * Enable socket reuse port (linux/macOs native transport only)
+     */
+    @ConfigItem
+    public boolean soReusePort;
+
+    /**
+     * Enable tcp quick ack (linux native transport only)
+     */
+    @ConfigItem
+    public boolean tcpQuickAck;
+
+    /**
+     * Enable tcp cork (linux native transport only)
+     */
+    @ConfigItem
+    public boolean tcpCork;
+
+    /**
+     * Enable tcp fast open (linux native transport only)
+     */
+    @ConfigItem
+    public boolean tcpFastOpen;
+
+    /**
+     * Path to a unix domain socket
+     */
+    @ConfigItem(defaultValue = "/var/run/io.quarkus.app.socket")
+    public String domainSocket;
+
+    /**
+     * Enable listening to host:port
+     */
+    @ConfigItem
+    public boolean domainSocketEnabled;
+
+    /**
+     * If this is true then the request start time will be recorded to enable logging of total request time.
+     *
+     * This has a small performance penalty, so is disabled by default.
+     */
+    @ConfigItem
+    public boolean recordRequestStartTime;
+
+    AccessLogConfig accessLog;
+
+    /**
+     * Configuration that allows setting the same site attributes for cookies.
+     */
+    @ConfigItem
+    public Map<String, SameSiteCookieConfig> sameSiteCookie;
+
+    /**
+     * If responses should be compressed.
+     *
+     * Note that this will attempt to compress all responses, to avoid compressing
+     * already compressed content (such as images) you need to set the following header:
+     * 
+     * Content-Encoding: identity
+     * 
+     * Which will tell vert.x not to compress the response.
+     */
+    @ConfigItem
+    public boolean enableCompression;
+
+    public ProxyConfig proxy;
 
     public int determinePort(LaunchMode launchMode) {
         return launchMode == LaunchMode.TEST ? testPort : port;
@@ -103,4 +232,9 @@ public class HttpConfiguration {
         return launchMode == LaunchMode.TEST ? testSslPort : sslPort;
     }
 
+    public enum InsecureRequests {
+        ENABLED,
+        REDIRECT,
+        DISABLED;
+    }
 }

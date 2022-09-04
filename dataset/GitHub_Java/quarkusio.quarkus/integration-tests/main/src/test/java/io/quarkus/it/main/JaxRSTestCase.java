@@ -5,10 +5,18 @@ import static org.hamcrest.Matchers.emptyString;
 import static org.hamcrest.Matchers.is;
 
 import java.io.ByteArrayOutputStream;
+import java.io.StringWriter;
 import java.util.zip.GZIPOutputStream;
 
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.Marshaller;
+
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.it.rest.TestResource;
+import io.quarkus.test.common.http.TestHTTPEndpoint;
+import io.quarkus.test.junit.DisabledOnNativeImage;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
 import io.restassured.parsing.Parser;
@@ -22,13 +30,16 @@ public class JaxRSTestCase {
     }
 
     @Test
+    @TestHTTPEndpoint(TestResource.class)
     public void testInteger() {
-        RestAssured.when().get("/test/int/10").then().body(is("11"));
+        RestAssured.when().get("/int/10").then().body(is("11"));
     }
 
     @Test
+    @DisabledOnNativeImage //the native image tests will bind to 0.0.0.0 as the image is a production image, but the test datasource in the JVM will want to use localhost
     public void testConfigInjectionOfPort() {
-        RestAssured.when().get("/test/config/host").then().body(is("0.0.0.0"));
+        String host = ConfigProvider.getConfig().getOptionalValue("quarkus.http.host", String.class).orElse("0.0.0.0");
+        RestAssured.when().get("/test/config/host").then().body(is(host));
     }
 
     @Test
@@ -81,6 +92,27 @@ public class JaxRSTestCase {
 
             RestAssured.when().get("/test/xml").then()
                     .body("xmlObject.value.text()", is("A Value"));
+        } finally {
+            RestAssured.reset();
+        }
+    }
+
+    @Test
+    public void testJaxbConsumption() throws Exception {
+        TestResource.XmlObject xmlObject = new TestResource.XmlObject();
+        xmlObject.setValue("test");
+
+        StringWriter writer = new StringWriter();
+        JAXBContext context = JAXBContext.newInstance(TestResource.XmlObject.class);
+        Marshaller m = context.createMarshaller();
+        m.marshal(xmlObject, writer);
+
+        try {
+            // in the native image case, the right parser is not chosen, despite the content-type being correct
+            RestAssured.defaultParser = Parser.XML;
+
+            RestAssured.given().contentType("application/xml").body(writer.toString()).when().post("/test/consumeXml").then()
+                    .body(is("test"));
         } finally {
             RestAssured.reset();
         }
@@ -205,10 +237,16 @@ public class JaxRSTestCase {
             sb.append("q");
         }
 
-        RestAssured.given()
-                .body(sb.toString())
-                .post("/test/max-body-size")
-                .then().statusCode(413);
+        try {
+            RestAssured.given()
+                    .body(sb.toString())
+                    .post("/test/max-body-size")
+                    .then().statusCode(413);
+        } catch (Exception ignore) {
+            //because the connection is force closed after sending the 413
+            //sometimes the client can return an IOException if it is still
+            //trying to send the body
+        }
 
         // while sending a payload within the limit should return 200
         RestAssured.given()

@@ -79,11 +79,6 @@ class VertxHttpProcessor {
     }
 
     @BuildStep
-    NonApplicationRootPathBuildItem frameworkRoot(HttpBuildTimeConfig httpBuildTimeConfig) {
-        return new NonApplicationRootPathBuildItem(httpBuildTimeConfig.frameworkRootPath);
-    }
-
-    @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     FilterBuildItem cors(CORSRecorder recorder, HttpConfiguration configuration) {
         return new FilterBuildItem(recorder.corsHandler(configuration), FilterBuildItem.CORS);
@@ -122,28 +117,11 @@ class VertxHttpProcessor {
     VertxWebRouterBuildItem initializeRouter(VertxHttpRecorder recorder,
             CoreVertxBuildItem vertx,
             List<RouteBuildItem> routes,
-            NonApplicationRootPathBuildItem nonApplicationRootPath,
-            BuildProducer<VertxNonApplicationRouterBuildItem> frameworkRouterBuildProducer,
             ShutdownContextBuildItem shutdown) {
 
         RuntimeValue<Router> router = recorder.initializeRouter(vertx.getVertx());
-        RuntimeValue<Router> frameworkRouter = recorder.initializeRouter(vertx.getVertx());
-        boolean frameworkRouterFound = false;
-
         for (RouteBuildItem route : routes) {
-            if (nonApplicationRootPath.isSeparateRoot() && route.isFrameworkRoute()) {
-                frameworkRouterFound = true;
-                recorder.addRoute(frameworkRouter, route.getRouteFunction(), route.getHandler(), route.getType());
-            } else {
-                recorder.addRoute(router, route.getRouteFunction(), route.getHandler(), route.getType());
-            }
-        }
-
-        if (frameworkRouterFound && nonApplicationRootPath.isSeparateRoot()) {
-            // Handle redirects from old paths to new non application endpoint root
-            recorder.addNonApplicationPathRedirect(router, frameworkRouter, nonApplicationRootPath.getFrameworkRootPath());
-
-            frameworkRouterBuildProducer.produce(new VertxNonApplicationRouterBuildItem(frameworkRouter));
+            recorder.addRoute(router, route.getRouteFunction(), route.getHandler(), route.getType());
         }
 
         return new VertxWebRouterBuildItem(router);
@@ -162,8 +140,6 @@ class VertxHttpProcessor {
             LaunchModeBuildItem launchMode,
             List<DefaultRouteBuildItem> defaultRoutes, List<FilterBuildItem> filters,
             VertxWebRouterBuildItem router,
-            Optional<VertxNonApplicationRouterBuildItem> frameworkRouter,
-            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
             HttpBuildTimeConfig httpBuildTimeConfig, HttpConfiguration httpConfiguration,
             List<RequireBodyHandlerBuildItem> requireBodyHandlerBuildItems,
             BodyHandlerBuildItem bodyHandlerBuildItem,
@@ -197,12 +173,6 @@ class VertxHttpProcessor {
         //if the body handler is required then we know it is installed for all routes, so we don't need to register it here
         Handler<RoutingContext> bodyHandler = !requireBodyHandlerBuildItems.isEmpty() ? bodyHandlerBuildItem.getHandler()
                 : null;
-
-        if (frameworkRouter.isPresent()) {
-            recorder.mountFrameworkRouter(router.getRouter(),
-                    frameworkRouter.get().getRouter(),
-                    nonApplicationRootPathBuildItem.getFrameworkRootPath());
-        }
 
         recorder.finalizeRouter(beanContainer.getValue(),
                 defaultRoute.map(DefaultRouteBuildItem::getRoute).orElse(null),

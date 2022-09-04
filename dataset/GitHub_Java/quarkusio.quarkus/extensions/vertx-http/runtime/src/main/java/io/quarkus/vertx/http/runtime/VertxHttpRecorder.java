@@ -123,7 +123,6 @@ public class VertxHttpRecorder {
     private static volatile int actualHttpPort = -1;
     private static volatile int actualHttpsPort = -1;
 
-    public static final String GET = "GET";
     private static final Handler<HttpServerRequest> ACTUAL_ROOT = new Handler<HttpServerRequest>() {
         @Override
         public void handle(HttpServerRequest httpServerRequest) {
@@ -136,10 +135,7 @@ public class VertxHttpRecorder {
             //as it is possible filters such as the auth filter can do blocking tasks
             //as the underlying handler has not had a chance to install a read handler yet
             //and data that arrives while the blocking task is being processed will be lost
-            if (!httpServerRequest.rawMethod().equals(GET)) {
-                //we don't pause for GET requests, as there is no data
-                httpServerRequest.pause();
-            }
+            httpServerRequest.pause();
             Handler<HttpServerRequest> rh = VertxHttpRecorder.rootHandler;
             if (rh != null) {
                 rh.handle(httpServerRequest);
@@ -248,11 +244,6 @@ public class VertxHttpRecorder {
                 }
             }
         }
-    }
-
-    public void mountFrameworkRouter(RuntimeValue<Router> mainRouter, RuntimeValue<Router> frameworkRouter,
-            String frameworkPath) {
-        mainRouter.getValue().mountSubRouter(frameworkPath, frameworkRouter.getValue());
     }
 
     public void finalizeRouter(BeanContainer container, Consumer<Route> defaultRouteHandler,
@@ -795,30 +786,6 @@ public class VertxHttpRecorder {
             vr.failureHandler(requestHandler);
         } else {
             vr.handler(requestHandler);
-        }
-    }
-
-    public void addNonApplicationPathRedirect(RuntimeValue<Router> mainRouter, RuntimeValue<Router> nonApplicationRouter,
-            String nonApplicationPath) {
-        List<Route> allRoutes = nonApplicationRouter.getValue().getRoutes();
-
-        Handler<RoutingContext> handler = new Handler<RoutingContext>() {
-            @Override
-            public void handle(RoutingContext context) {
-                String absoluteURI = context.request().absoluteURI();
-                int pathStart = absoluteURI.indexOf(context.request().path());
-                String redirectTo = absoluteURI.substring(0, pathStart - 1) + nonApplicationPath
-                        + absoluteURI.substring(pathStart);
-
-                context.response()
-                        .setStatusCode(HttpResponseStatus.MOVED_PERMANENTLY.code())
-                        .putHeader(HttpHeaderNames.LOCATION, redirectTo)
-                        .end();
-            }
-        };
-
-        for (Route route : allRoutes) {
-            addRoute(mainRouter, router -> router.route(route.getPath()), handler, HandlerType.NORMAL);
         }
     }
 

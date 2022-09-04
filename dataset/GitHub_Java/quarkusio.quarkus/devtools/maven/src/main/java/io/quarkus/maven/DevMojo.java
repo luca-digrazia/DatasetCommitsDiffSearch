@@ -35,7 +35,6 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Plugin;
-import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.BuildPluginManager;
@@ -420,39 +419,24 @@ public class DevMojo extends AbstractMojo {
                         version(plugin.getVersion()),
                         plugin.getDependencies()),
                 goal(goal),
-                getPluginConfig(plugin, goal),
+                getPluginConfig(plugin),
                 executionEnvironment(
                         project,
                         session,
                         pluginManager));
     }
 
-    private Xpp3Dom getPluginConfig(Plugin plugin, String goal) {
-        Xpp3Dom mergedConfig = null;
-        if (!plugin.getExecutions().isEmpty()) {
-            for (PluginExecution exec : plugin.getExecutions()) {
-                if (exec.getConfiguration() != null && exec.getGoals().contains(goal)) {
-                    mergedConfig = mergedConfig == null ? (Xpp3Dom) exec.getConfiguration()
-                            : Xpp3Dom.mergeXpp3Dom(mergedConfig, (Xpp3Dom) exec.getConfiguration(), true);
-                }
-            }
-        }
-
-        if ((Xpp3Dom) plugin.getConfiguration() != null) {
-            mergedConfig = mergedConfig == null ? (Xpp3Dom) plugin.getConfiguration()
-                    : Xpp3Dom.mergeXpp3Dom(mergedConfig, (Xpp3Dom) plugin.getConfiguration(), true);
-        }
-
-        final Xpp3Dom configuration = configuration();
-        if (mergedConfig != null) {
-            // Filter out `test*` configurations
-            for (Xpp3Dom child : mergedConfig.getChildren()) {
+    private Xpp3Dom getPluginConfig(Plugin plugin) {
+        Xpp3Dom configuration = configuration();
+        Xpp3Dom pluginConfiguration = (Xpp3Dom) plugin.getConfiguration();
+        if (pluginConfiguration != null) {
+            //Filter out `test*` configurations
+            for (Xpp3Dom child : pluginConfiguration.getChildren()) {
                 if (!child.getName().startsWith("test")) {
                     configuration.addChild(child);
                 }
             }
         }
-
         return configuration;
     }
 
@@ -712,9 +696,6 @@ public class DevMojo extends AbstractMojo {
 
         modifyDevModeContext(builder);
 
-        if (argsString != null) {
-            builder.applicationArgs(argsString);
-        }
         propagateUserProperties(builder);
 
         return builder.build();
@@ -778,12 +759,7 @@ public class DevMojo extends AbstractMojo {
             //we only use the launcher for launching from the IDE, we need to exclude it
             if (!(appDep.getArtifact().getGroupId().equals("io.quarkus")
                     && appDep.getArtifact().getArtifactId().equals("quarkus-ide-launcher"))) {
-                if (appDep.getArtifact().getGroupId().equals("io.quarkus")
-                        && appDep.getArtifact().getArtifactId().equals("quarkus-class-change-agent")) {
-                    builder.jvmArgs("-javaagent:" + appDep.getArtifact().getFile().getAbsolutePath());
-                } else {
-                    builder.classpathEntry(appDep.getArtifact().getFile());
-                }
+                builder.classpathEntry(appDep.getArtifact().getFile());
             }
         }
     }

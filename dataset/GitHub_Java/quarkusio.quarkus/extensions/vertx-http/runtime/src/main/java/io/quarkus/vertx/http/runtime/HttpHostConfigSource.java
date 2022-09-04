@@ -17,7 +17,6 @@ import io.quarkus.runtime.LaunchMode;
 public class HttpHostConfigSource implements ConfigSource, Serializable {
 
     public static final String QUARKUS_HTTP_HOST = "quarkus.http.host";
-    private static final String ALL_INTERFACES = "0.0.0.0";
 
     private final int priority;
 
@@ -38,11 +37,7 @@ public class HttpHostConfigSource implements ConfigSource, Serializable {
     @Override
     public String getValue(String propertyName) {
         if (propertyName.equals(QUARKUS_HTTP_HOST)) {
-            if (LaunchMode.current().isRemoteDev()) {
-                // in remote-dev mode we need to listen on all interfaces
-                return ALL_INTERFACES;
-            }
-            return LaunchMode.current().isDevOrTest() ? "localhost" : ALL_INTERFACES;
+            return LaunchMode.current().isDevOrTest() ? "localhost" : "0.0.0.0";
         }
         return null;
     }

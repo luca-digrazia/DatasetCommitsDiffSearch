@@ -387,7 +387,7 @@ public abstract class QuarkusDevModeLauncher {
         devModeContext.setDevModeRunnerJarFile(tempFile);
 
         if (remoteDev) {
-            devModeContext.setMode(QuarkusBootstrap.Mode.REMOTE_DEV_CLIENT);
+            devModeContext.setMode(QuarkusBootstrap.Mode.PROD);
             devModeContext.setAlternateEntryPoint(IsolatedRemoteDevModeMain.class.getName());
         }
 

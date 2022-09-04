@@ -1,15 +1,14 @@
 package io.quarkus.test.common;
 
-import static io.quarkus.test.common.LauncherUtil.installAndGetSomeConfig;
-import static io.quarkus.test.common.LauncherUtil.updateConfigForPort;
-import static io.quarkus.test.common.LauncherUtil.waitForCapturedListeningData;
-
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,13 +18,21 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.ServiceLoader;
-import java.util.function.Supplier;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
+import org.wildfly.common.lock.Locks;
 
+import io.quarkus.runtime.configuration.ConfigUtils;
+import io.quarkus.runtime.configuration.QuarkusConfigFactory;
 import io.quarkus.test.common.http.TestHTTPResourceManager;
+import io.smallrye.config.SmallRyeConfig;
 
-public class NativeImageLauncher implements ArtifactLauncher {
+public class NativeImageLauncher implements Closeable {
 
     private static final int DEFAULT_PORT = 8081;
     private static final int DEFAULT_HTTPS_PORT = 8444;
@@ -36,13 +43,11 @@ public class NativeImageLauncher implements ArtifactLauncher {
     private final Class<?> testClass;
     private final String profile;
     private Process quarkusProcess;
-    private final int httpPort;
+    private int port;
     private final int httpsPort;
-    private final long waitTimeSeconds;
+    private final long imageWaitTime;
     private final Map<String, String> systemProps = new HashMap<>();
-    private Supplier<Boolean> startedSupplier = null;
-
-    private boolean isSsl;
+    private List<NativeImageStartedNotifier> startedNotifiers;
 
     private NativeImageLauncher(Class<?> testClass, Config config) {
         this(testClass,
@@ -58,30 +63,35 @@ public class NativeImageLauncher implements ArtifactLauncher {
         this(testClass, installAndGetSomeConfig());
     }
 
-    public NativeImageLauncher(Class<?> testClass, int httpPort, int httpsPort, long waitTimeSeconds, String profile) {
+    private static Config installAndGetSomeConfig() {
+        final SmallRyeConfig config = ConfigUtils.configBuilder(false).build();
+        QuarkusConfigFactory.setConfig(config);
+        final ConfigProviderResolver cpr = ConfigProviderResolver.instance();
+        try {
+            final Config installed = cpr.getConfig();
+            if (installed != config) {
+                cpr.releaseConfig(installed);
+            }
+        } catch (IllegalStateException ignored) {
+        }
+        return config;
+    }
+
+    public NativeImageLauncher(Class<?> testClass, int port, int httpsPort, long imageWaitTime, String profile) {
         this.testClass = testClass;
-        this.httpPort = httpPort;
+        this.port = port;
         this.httpsPort = httpsPort;
-        this.waitTimeSeconds = waitTimeSeconds;
+        this.imageWaitTime = imageWaitTime;
         List<NativeImageStartedNotifier> startedNotifiers = new ArrayList<>();
         for (NativeImageStartedNotifier i : ServiceLoader.load(NativeImageStartedNotifier.class)) {
             startedNotifiers.add(i);
         }
+        this.startedNotifiers = startedNotifiers;
         this.profile = profile;
-        if (!startedNotifiers.isEmpty()) {
-            this.startedSupplier = () -> {
-                for (NativeImageStartedNotifier i : startedNotifiers) {
-                    if (i.isNativeImageStarted()) {
-                        return true;
-                    }
-                }
-                return false;
-            };
-        }
-
     }
 
     public void start() throws IOException {
+
         System.setProperty("test.url", TestHTTPResourceManager.getUri());
 
         String path = System.getProperty("native.image.path");
@@ -90,14 +100,12 @@ public class NativeImageLauncher implements ArtifactLauncher {
         }
         List<String> args = new ArrayList<>();
         args.add(path);
-        args.add("-Dquarkus.http.port=" + httpPort);
+        args.add("-Dquarkus.http.port=" + port);
         args.add("-Dquarkus.http.ssl-port=" + httpsPort);
         // this won't be correct when using the random port but it's really only used by us for the rest client tests
         // in the main module, since those tests hit the application itself
         args.add("-Dtest.url=" + TestHTTPResourceManager.getUri());
-        Path logFile = PropertyTestUtil.getLogFilePath();
-        args.add("-Dquarkus.log.file.path=" + logFile.toAbsolutePath().toString());
-        args.add("-Dquarkus.log.file.enable=true");
+        args.add("-Dquarkus.log.file.path=" + PropertyTestUtil.getLogFileLocation());
         if (profile != null) {
             args.add("-Dquarkus.profile=" + profile);
         }
@@ -107,39 +115,38 @@ public class NativeImageLauncher implements ArtifactLauncher {
 
         System.out.println("Executing " + args);
 
-        Files.deleteIfExists(logFile);
-        quarkusProcess = LauncherUtil.launchProcess(args);
+        quarkusProcess = Runtime.getRuntime().exec(args.toArray(new String[args.size()]));
 
-        if (startedSupplier != null) {
-            waitForStartedSupplier(quarkusProcess, startedSupplier, waitTimeSeconds);
-        } else {
-            ListeningAddress result = waitForCapturedListeningData(quarkusProcess, logFile, waitTimeSeconds);
-            updateConfigForPort(result.getPort());
-            isSsl = result.isSsl();
+        PortCapturingProcessReader portCapturingProcessReader = null;
+        if (port == 0) {
+            // when the port is 0, then the application starts on a random port and the only way for us to figure it out
+            // is to capture the output
+            portCapturingProcessReader = new PortCapturingProcessReader(quarkusProcess.getInputStream());
         }
-    }
+        new Thread(portCapturingProcessReader != null ? portCapturingProcessReader
+                : new ProcessReader(quarkusProcess.getInputStream())).start();
+        new Thread(new ProcessReader(quarkusProcess.getErrorStream())).start();
 
-    private void waitForStartedSupplier(Process quarkusProcess, Supplier<Boolean> startedSupplier, long waitTime) {
-        long bailout = System.currentTimeMillis() + waitTime * 1000;
-        boolean started = false;
-        while (System.currentTimeMillis() < bailout) {
-            if (!quarkusProcess.isAlive()) {
-                throw new RuntimeException("Failed to start target quarkus application, process has exited");
-            }
+        if (portCapturingProcessReader != null) {
             try {
-                Thread.sleep(100);
-                if (startedSupplier.get()) {
-                    isSsl = false;
-                    started = true;
-                    break;
-                }
-            } catch (Exception ignored) {
+                portCapturingProcessReader.awaitForPort();
+            } catch (InterruptedException ignored) {
 
             }
-        }
-        if (!started) {
-            quarkusProcess.destroyForcibly();
-            throw new RuntimeException("Unable to start target quarkus application " + this.waitTimeSeconds + "s");
+            if (portCapturingProcessReader.port == null) {
+                quarkusProcess.destroy();
+                throw new RuntimeException("Unable to determine actual running port as dynamic port was used");
+            }
+
+            waitForQuarkus(portCapturingProcessReader.port);
+
+            System.setProperty("quarkus.http.port", portCapturingProcessReader.port.toString()); //set the port as a system property in order to have it applied to Config
+            System.setProperty("quarkus.http.test-port", portCapturingProcessReader.port.toString()); // needed for RestAssuredManager
+            port = portCapturingProcessReader.port;
+            installAndGetSomeConfig(); // reinitialize the configuration to make sure the actual port is used
+            System.setProperty("test.url", TestHTTPResourceManager.getUri());
+        } else {
+            waitForQuarkus(port);
         }
     }
 
@@ -226,12 +233,154 @@ public class NativeImageLauncher implements ArtifactLauncher {
         System.err.println("======================================================================================");
     }
 
-    public boolean listensOnSsl() {
-        return isSsl;
+    private void waitForQuarkus(int port) {
+        long bailout = System.currentTimeMillis() + imageWaitTime * 1000;
+
+        while (System.currentTimeMillis() < bailout) {
+            if (!quarkusProcess.isAlive()) {
+                throw new RuntimeException("Failed to start native image, process has exited");
+            }
+            try {
+                Thread.sleep(100);
+                for (NativeImageStartedNotifier i : startedNotifiers) {
+                    if (i.isNativeImageStarted()) {
+                        return;
+                    }
+                }
+                try {
+                    try (Socket s = new Socket()) {
+                        s.connect(new InetSocketAddress("localhost", port));
+                        //SSL is bound after https
+                        //we add a small delay to make sure SSL is available if installed
+                        Thread.sleep(100);
+                        return;
+                    }
+                } catch (Exception expected) {
+                }
+                try (Socket s = new Socket()) {
+                    s.connect(new InetSocketAddress("localhost", httpsPort));
+                    return;
+                }
+            } catch (Exception expected) {
+            }
+        }
+        quarkusProcess.destroyForcibly();
+        throw new RuntimeException("Unable to start native image in " + imageWaitTime + "s");
+    }
+
+    public boolean isDefaultSsl() {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress("localhost", port));
+            return false;
+        } catch (IOException e) {
+            return true;
+        }
     }
 
     public void addSystemProperties(Map<String, String> systemProps) {
         this.systemProps.putAll(systemProps);
+    }
+
+    private static class ProcessReader implements Runnable {
+
+        private final InputStream inputStream;
+
+        private ProcessReader(InputStream inputStream) {
+            this.inputStream = inputStream;
+        }
+
+        @Override
+        public void run() {
+            handleStart();
+            byte[] b = new byte[100];
+            int i;
+            try {
+                while ((i = inputStream.read(b)) > 0) {
+                    String str = new String(b, 0, i, StandardCharsets.UTF_8);
+                    System.out.print(str);
+                    handleString(str);
+                }
+            } catch (IOException e) {
+                handleError(e);
+            }
+        }
+
+        protected void handleStart() {
+
+        }
+
+        protected void handleString(String str) {
+
+        }
+
+        protected void handleError(IOException e) {
+
+        }
+    }
+
+    private static final class PortCapturingProcessReader extends ProcessReader {
+        private Integer port;
+
+        private boolean portDetermined = false;
+        private StringBuilder sb = new StringBuilder();
+        private final Lock lock = Locks.reentrantLock();
+        private final Condition portDeterminedCondition = lock.newCondition();
+        private final Pattern portRegex = Pattern.compile("Listening on:\\s+https?://.*:(\\d+)");
+
+        private PortCapturingProcessReader(InputStream inputStream) {
+            super(inputStream);
+        }
+
+        @Override
+        protected void handleStart() {
+            lock.lock();
+        }
+
+        @Override
+        protected void handleString(String str) {
+            if (portDetermined) { // we are done with determining the port
+                return;
+            }
+            sb.append(str);
+            String currentOutput = sb.toString();
+            Matcher regexMatcher = portRegex.matcher(currentOutput);
+            if (!regexMatcher.find()) { // haven't read enough data yet
+                if (currentOutput.contains("Exception")) {
+                    portDetermined(null);
+                }
+                return;
+            }
+            portDetermined(Integer.valueOf(regexMatcher.group(1)));
+        }
+
+        private void portDetermined(Integer portValue) {
+            this.port = portValue;
+            try {
+                portDetermined = true;
+                sb = null;
+                portDeterminedCondition.signal();
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        @Override
+        protected void handleError(IOException e) {
+            if (!portDetermined) {
+                portDetermined(null);
+            }
+        }
+
+        public void awaitForPort() throws InterruptedException {
+            lock.lock();
+            try {
+                while (!portDetermined) {
+                    portDeterminedCondition.await();
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
     }
 
     @Override

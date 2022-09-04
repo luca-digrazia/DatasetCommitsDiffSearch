@@ -47,7 +47,6 @@ import org.junit.jupiter.api.extension.TestInstantiationException;
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.app.RunningQuarkusApplication;
-import io.quarkus.bootstrap.classloading.ClassLoaderEventListener;
 import io.quarkus.bootstrap.classloading.ClassPathElement;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.bootstrap.model.AppArtifact;
@@ -96,7 +95,7 @@ public class QuarkusUnitTest
     private InMemoryLogHandler inMemoryLogHandler = new InMemoryLogHandler((r) -> false);
     private Consumer<List<LogRecord>> assertLogRecords;
 
-    private Timer timeoutTimer;
+    private static final Timer timeoutTimer = new Timer("Test thread dump timer");
     private volatile TimerTask timeoutTask;
     private Properties customApplicationProperties;
     private Runnable beforeAllCustomizer;
@@ -113,7 +112,6 @@ public class QuarkusUnitTest
     private String[] commandLineParameters = new String[0];
 
     private boolean allowTestClassOutsideDeployment;
-    private List<ClassLoaderEventListener> classLoadListeners = new ArrayList<>();
 
     public QuarkusUnitTest setExpectedException(Class<? extends Throwable> expectedException) {
         return assertException(t -> {
@@ -164,11 +162,6 @@ public class QuarkusUnitTest
 
     public QuarkusUnitTest addBuildChainCustomizer(Consumer<BuildChainBuilder> customizer) {
         this.buildChainCustomizers.add(customizer);
-        return this;
-    }
-
-    public QuarkusUnitTest addClassLoaderEventListener(ClassLoaderEventListener listener) {
-        this.classLoadListeners.add(listener);
         return this;
     }
 
@@ -243,7 +236,6 @@ public class QuarkusUnitTest
         try {
             JavaArchive archive = getArchiveProducerOrDefault();
             Class<?> c = testClass;
-            archive.addClasses(c.getClasses());
             while (c != Object.class) {
                 archive.addClass(c);
                 c = c.getSuperclass();
@@ -371,7 +363,6 @@ public class QuarkusUnitTest
                 }
             }
         };
-        timeoutTimer = new Timer("Test thread dump timer");
         timeoutTimer.schedule(timeoutTask, 1000 * 60 * 5);
         if (logFileName != null) {
             PropertyTestUtil.setLogFileProperty(logFileName);
@@ -447,13 +438,11 @@ public class QuarkusUnitTest
                             .setBaseClassLoader(
                                     QuarkusClassLoader
                                             .builder("QuarkusUnitTest ClassLoader", getClass().getClassLoader(), false)
-                                            .addClassLoaderEventListeners(this.classLoadListeners)
                                             .addBannedElement(ClassPathElement.fromPath(testLocation)).build());
                 }
-                builder.addClassLoaderEventListeners(this.classLoadListeners);
                 curatedApplication = builder.build().bootstrap();
 
-                runningQuarkusApplication = new AugmentActionImpl(curatedApplication, customizers, classLoadListeners)
+                runningQuarkusApplication = new AugmentActionImpl(curatedApplication, customizers)
                         .createInitialRuntimeApplication()
                         .run(commandLineParameters);
                 //we restore the CL at the end of the test
@@ -519,8 +508,6 @@ public class QuarkusUnitTest
 
     @Override
     public void afterAll(ExtensionContext extensionContext) throws Exception {
-        actualTestClass = null;
-        actualTestInstance = null;
         if (assertLogRecords != null) {
             assertLogRecords.accept(inMemoryLogHandler.records);
         }
@@ -530,22 +517,18 @@ public class QuarkusUnitTest
         try {
             if (runningQuarkusApplication != null) {
                 runningQuarkusApplication.close();
-                runningQuarkusApplication = null;
             }
             if (afterUndeployListener != null) {
                 afterUndeployListener.run();
             }
             if (curatedApplication != null) {
                 curatedApplication.close();
-                curatedApplication = null;
             }
         } finally {
             System.clearProperty("test.url");
             Thread.currentThread().setContextClassLoader(originalClassLoader);
-            originalClassLoader = null;
             timeoutTask.cancel();
             timeoutTask = null;
-            timeoutTimer = null;
             if (deploymentDir != null) {
                 FileUtil.deleteDirectory(deploymentDir);
             }
