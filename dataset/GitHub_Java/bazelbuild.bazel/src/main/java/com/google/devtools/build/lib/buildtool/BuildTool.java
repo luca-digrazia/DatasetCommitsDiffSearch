@@ -218,9 +218,7 @@ public class BuildTool {
         reportTargets(analysisResult);
 
         for (ConfiguredTarget target : analysisResult.getTargetsToSkip()) {
-          BuildConfiguration config =
-              env.getSkyframeExecutor()
-                  .getConfiguration(env.getReporter(), target.getConfigurationKey());
+          BuildConfiguration config = target.getConfiguration();
           Label label = target.getLabel();
           env.getEventBus().post(
               new AbortedEvent(
