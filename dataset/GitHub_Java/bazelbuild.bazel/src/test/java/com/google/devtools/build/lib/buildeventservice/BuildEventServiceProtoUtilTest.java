@@ -168,7 +168,6 @@ public class BuildEventServiceProtoUtilTest {
         .isEqualTo(
             PublishBuildToolEventStreamRequest.newBuilder()
                 .addAllNotificationKeywords(EXPECTED_KEYWORDS)
-                .setProjectId(PROJECT_ID)
                 .setOrderedBuildEvent(
                     OrderedBuildEvent.newBuilder()
                         .setStreamId(
@@ -188,7 +187,6 @@ public class BuildEventServiceProtoUtilTest {
     assertThat(besProtocol.bazelEvent(2, secondEventTimestamp, anything))
         .isEqualTo(
             PublishBuildToolEventStreamRequest.newBuilder()
-                .setProjectId(PROJECT_ID)
                 .setOrderedBuildEvent(
                     OrderedBuildEvent.newBuilder()
                         .setStreamId(
@@ -208,7 +206,6 @@ public class BuildEventServiceProtoUtilTest {
     assertThat(besProtocol.streamFinished(3, thirdEventTimestamp))
         .isEqualTo(
             PublishBuildToolEventStreamRequest.newBuilder()
-                .setProjectId(PROJECT_ID)
                 .setOrderedBuildEvent(
                     OrderedBuildEvent.newBuilder()
                         .setStreamId(

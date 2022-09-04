@@ -108,7 +108,6 @@ public final class BuildEventServiceProtoUtil {
   public PublishBuildToolEventStreamRequest bazelEvent(
       long sequenceNumber, Timestamp timestamp, Any packedEvent) {
     return publishBuildToolEventStreamRequest(
-        projectId,
         sequenceNumber,
         timestamp,
         com.google.devtools.build.v1.BuildEvent.newBuilder().setBazelEvent(packedEvent));
@@ -117,7 +116,6 @@ public final class BuildEventServiceProtoUtil {
   public PublishBuildToolEventStreamRequest streamFinished(
       long sequenceNumber, Timestamp timestamp) {
     return publishBuildToolEventStreamRequest(
-        projectId,
         sequenceNumber,
         timestamp,
         BuildEvent.newBuilder()
@@ -127,10 +125,7 @@ public final class BuildEventServiceProtoUtil {
 
   @VisibleForTesting
   public PublishBuildToolEventStreamRequest publishBuildToolEventStreamRequest(
-      @Nullable String projectId,
-      long sequenceNumber,
-      Timestamp timestamp,
-      BuildEvent.Builder besEvent) {
+      long sequenceNumber, Timestamp timestamp, BuildEvent.Builder besEvent) {
     PublishBuildToolEventStreamRequest.Builder builder =
         PublishBuildToolEventStreamRequest.newBuilder()
             .setOrderedBuildEvent(
@@ -140,9 +135,6 @@ public final class BuildEventServiceProtoUtil {
                     .setStreamId(streamId(besEvent.getEventCase())));
     if (sequenceNumber == 1) {
       builder.addAllNotificationKeywords(getKeywords());
-    }
-    if (projectId != null) {
-      builder.setProjectId(projectId);
     }
     return builder.build();
   }

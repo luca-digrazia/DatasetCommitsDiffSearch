@@ -19,24 +19,29 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.String.format;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceTransport.BuildEventLogger;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceTransport.ExitFunction;
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceClient;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
+import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploaderFactoryMap;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.LargeBuildEventSerializedEvent;
 import com.google.devtools.build.lib.buildeventstream.transports.BuildEventStreamOptions;
+import com.google.devtools.build.lib.buildeventstream.transports.BuildEventTransportFactory;
+import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BuildEventStreamer;
-import com.google.devtools.build.lib.runtime.BuildEventTransportFactory;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.SynchronizedOutputStream;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -94,7 +99,19 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       return;
     }
 
-    BuildEventStreamer streamer = tryCreateStreamer(commandEnvironment);
+    BuildEventStreamer streamer =
+        tryCreateStreamer(
+            commandEnvironment.getRuntime().getStartupOptionsProvider(),
+            commandEnvironment.getOptions(),
+            commandEnvironment.getReporter(),
+            commandEnvironment.getBlazeModuleEnvironment(),
+            commandEnvironment.getRuntime().getClock(),
+            commandEnvironment.getRuntime().getBuildEventArtifactUploaderFactoryMap(),
+            commandEnvironment.getReporter(),
+            commandEnvironment.getBuildRequestId(),
+            commandEnvironment.getCommandId().toString(),
+            commandEnvironment.getCommandName(),
+            commandEnvironment.getEventBus());
     if (streamer != null) {
       commandEnvironment.getReporter().addHandler(streamer);
       commandEnvironment.getEventBus().register(streamer);
@@ -130,28 +147,52 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   @Override
   public void afterCommand() {
     this.outErr = null;
-    this.transports = ImmutableSet.of();
   }
 
   /** Returns {@code null} if no stream could be created. */
   @Nullable
   @VisibleForTesting
-  BuildEventStreamer tryCreateStreamer(CommandEnvironment env) {
+  BuildEventStreamer tryCreateStreamer(
+      OptionsParsingResult startupOptionsProvider,
+      OptionsParsingResult optionsProvider,
+      EventHandler commandLineReporter,
+      ModuleEnvironment moduleEnvironment,
+      Clock clock,
+      BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap,
+      Reporter reporter,
+      String buildRequestId,
+      String invocationId,
+      String commandName,
+      EventBus eventbus) {
+    Preconditions.checkNotNull(buildEventArtifactUploaderFactoryMap);
+
     try {
       BuildEventTransport besTransport = null;
       try {
-        besTransport = tryCreateBesTransport(env);
+        besTransport =
+            tryCreateBesTransport(
+                buildRequestId,
+                invocationId,
+                commandName,
+                moduleEnvironment,
+                clock,
+                buildEventArtifactUploaderFactoryMap,
+                commandLineReporter,
+                startupOptionsProvider,
+                optionsProvider,
+                eventbus);
       } catch (Exception e) {
         reportError(
-            env.getReporter(),
-            env.getBlazeModuleEnvironment(),
+            commandLineReporter,
+            moduleEnvironment,
             new AbruptExitException(
                 "Failed while creating BuildEventTransport", ExitCode.PUBLISH_ERROR));
         return null;
       }
 
       ImmutableSet<BuildEventTransport> bepTransports =
-          BuildEventTransportFactory.createFromOptions(env, env.getBlazeModuleEnvironment()::exit);
+          BuildEventTransportFactory.createFromOptions(
+              optionsProvider, buildEventArtifactUploaderFactoryMap, moduleEnvironment::exit);
 
       ImmutableSet.Builder<BuildEventTransport> transportsBuilder =
           ImmutableSet.<BuildEventTransport>builder().addAll(bepTransports);
@@ -162,22 +203,31 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       transports = transportsBuilder.build();
       if (!transports.isEmpty()) {
         BuildEventStreamOptions buildEventStreamOptions =
-            env.getOptions().getOptions(BuildEventStreamOptions.class);
-        return new BuildEventStreamer(transports, env.getReporter(), buildEventStreamOptions);
+            optionsProvider.getOptions(BuildEventStreamOptions.class);
+        return new BuildEventStreamer(transports, reporter, buildEventStreamOptions);
       }
     } catch (Exception e) {
       reportError(
-          env.getReporter(),
-          env.getBlazeModuleEnvironment(),
+          commandLineReporter,
+          moduleEnvironment,
           new AbruptExitException(ExitCode.LOCAL_ENVIRONMENTAL_ERROR, e));
     }
     return null;
   }
 
   @Nullable
-  private BuildEventTransport tryCreateBesTransport(CommandEnvironment env)
+  private BuildEventTransport tryCreateBesTransport(
+      String buildRequestId,
+      String invocationId,
+      String commandName,
+      ModuleEnvironment moduleEnvironment,
+      Clock clock,
+      BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap,
+      EventHandler commandLineReporter,
+      OptionsParsingResult startupOptionsProvider,
+      OptionsParsingResult optionsProvider,
+      EventBus eventbus)
       throws IOException, OptionsParsingException {
-    OptionsParsingResult optionsProvider = env.getOptions();
     T besOptions =
         checkNotNull(
             optionsProvider.getOptions(optionsClass()), "Could not get BuildEventServiceOptions.");
@@ -198,50 +248,47 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
           format(
               "Will create BuildEventServiceTransport streaming to '%s'", besOptions.besBackend));
 
-      String invocationId = env.getCommandId().toString();
       final String besResultsUrl;
       if (!Strings.isNullOrEmpty(besOptions.besResultsUrl)) {
         besResultsUrl =
             besOptions.besResultsUrl.endsWith("/")
                 ? besOptions.besResultsUrl + invocationId
                 : besOptions.besResultsUrl + "/" + invocationId;
-        env.getReporter().handle(Event.info("Streaming Build Event Protocol to " + besResultsUrl));
+        commandLineReporter.handle(
+            Event.info("Streaming Build Event Protocol to " + besResultsUrl));
       } else {
         besResultsUrl = null;
-        env.getReporter()
-            .handle(
-                Event.info(
-                    format(
-                        "Streaming Build Event Protocol to %s build_request_id: %s "
-                            + "invocation_id: %s",
-                        besOptions.besBackend, env.getBuildRequestId(), invocationId)));
+        commandLineReporter.handle(
+            Event.info(
+                format(
+                    "Streaming Build Event Protocol to %s build_request_id: %s "
+                        + "invocation_id: %s",
+                    besOptions.besBackend, buildRequestId, invocationId)));
       }
 
       BuildEventServiceClient client = createBesClient(besOptions, authTlsOptions);
       BuildEventArtifactUploader artifactUploader =
-          env.getRuntime()
-              .getBuildEventArtifactUploaderFactoryMap()
+          buildEventArtifactUploaderFactoryMap
               .select(protocolOptions.buildEventUploadStrategy)
-              .create(env);
+              .create(optionsProvider);
 
       BuildEventLogger buildEventLogger =
           (BuildEventStreamProtos.BuildEvent bepEvent) -> {
             if (bepEvent.getSerializedSize()
                 > LargeBuildEventSerializedEvent.SIZE_OF_LARGE_BUILD_EVENTS_IN_BYTES) {
-              env.getEventBus()
-                  .post(
-                      new LargeBuildEventSerializedEvent(
-                          bepEvent.getId().toString(), bepEvent.getSerializedSize()));
+              eventbus.post(
+                  new LargeBuildEventSerializedEvent(
+                      bepEvent.getId().toString(), bepEvent.getSerializedSize()));
             }
           };
 
       BuildEventServiceProtoUtil besProtoUtil =
           new BuildEventServiceProtoUtil(
-              env.getBuildRequestId(),
+              buildRequestId,
               invocationId,
               besOptions.projectId,
-              env.getCommandName(),
-              keywords(besOptions, env.getRuntime().getStartupOptionsProvider()));
+              commandName,
+              keywords(besOptions, startupOptionsProvider));
 
       BuildEventTransport besTransport =
           new BuildEventServiceTransport.Builder()
@@ -253,9 +300,8 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
                   artifactUploader,
                   protocolOptions,
                   besProtoUtil,
-                  env.getRuntime().getClock(),
-                  bazelExitFunction(
-                      env.getReporter(), env.getBlazeModuleEnvironment(), besResultsUrl));
+                  clock,
+                  bazelExitFunction(commandLineReporter, moduleEnvironment, besResultsUrl));
       logger.fine("BuildEventServiceTransport was created successfully");
       return besTransport;
     }
