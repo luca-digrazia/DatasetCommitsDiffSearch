@@ -119,10 +119,9 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
   }
 
   /** Puts all entries of the given map into the dict, without calling {@link #checkMutable}. */
-  @SuppressWarnings("unchecked")
   private <KK extends K, VV extends V> SkylarkDict<K, V> putAllUnsafe(Map<KK, VV> m) {
     for (Map.Entry<KK, VV> e : m.entrySet()) {
-      contents.put(e.getKey(), (VV) SkylarkType.convertToSkylark(e.getValue(), mutability));
+      contents.put(e.getKey(), e.getValue());
     }
     return this;
   }
