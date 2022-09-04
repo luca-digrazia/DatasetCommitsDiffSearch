@@ -37,6 +37,8 @@ import com.google.devtools.build.lib.analysis.DefaultInfo;
 import com.google.devtools.build.lib.analysis.ExecGroupCollection;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.LabelExpander;
+import com.google.devtools.build.lib.analysis.LabelExpander.NotUniqueExpansionException;
 import com.google.devtools.build.lib.analysis.LocationExpander;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -130,6 +132,9 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
   private StarlarkAttributesCollection attributesCollection;
   private StarlarkAttributesCollection ruleAttributesCollection;
   private StructImpl splitAttributes;
+
+  // TODO(bazel-team): we only need this because of the css_binary rule.
+  private ImmutableMap<Artifact, Label> artifactsLabelMap;
   private Outputs outputsObject;
 
   /**
@@ -172,6 +177,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
         }
       }
 
+      ImmutableMap.Builder<Artifact, Label> artifactLabelMapBuilder = ImmutableMap.builder();
       for (Attribute a : attributes) {
         String attrName = a.getName();
         Type<?> type = a.getType();
@@ -180,7 +186,9 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
         }
         ImmutableList.Builder<Artifact> artifactsBuilder = ImmutableList.builder();
         for (OutputFile outputFile : ruleContext.getRule().getOutputFileMap().get(attrName)) {
-          artifactsBuilder.add(ruleContext.createOutputArtifact(outputFile));
+          Artifact artifact = ruleContext.createOutputArtifact(outputFile);
+          artifactsBuilder.add(artifact);
+          artifactLabelMapBuilder.put(artifact, outputFile.getLabel());
         }
         StarlarkList<Artifact> artifacts = StarlarkList.immutableCopyOf(artifactsBuilder.build());
 
@@ -198,6 +206,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
         }
       }
 
+      this.artifactsLabelMap = artifactLabelMapBuilder.build();
       this.outputsObject = outputs;
 
       StarlarkAttributesCollection.Builder builder = StarlarkAttributesCollection.builder(this);
@@ -211,6 +220,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
       this.ruleAttributesCollection = null;
     } else { // ASPECT
       this.isForAspect = true;
+      this.artifactsLabelMap = ImmutableMap.of();
       this.outputsObject = null;
 
       ImmutableCollection<Attribute> attributes =
@@ -383,6 +393,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
     attributesCollection = null;
     ruleAttributesCollection = null;
     splitAttributes = null;
+    artifactsLabelMap = null;
     outputsObject = null;
   }
 
@@ -704,6 +715,24 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
       throw Starlark.errorf("%s while tokenizing '%s'", e.getMessage(), optionString);
     }
     return StarlarkList.immutableCopyOf(options);
+  }
+
+  @Override
+  public String expand(
+      @Nullable String expression,
+      Sequence<?> artifacts, // <Artifact>
+      Label labelResolver)
+      throws EvalException {
+    checkMutable("expand");
+    try {
+      Map<Label, Iterable<Artifact>> labelMap = new HashMap<>();
+      for (Artifact artifact : Sequence.cast(artifacts, Artifact.class, "artifacts")) {
+        labelMap.put(artifactsLabelMap.get(artifact), ImmutableList.of(artifact));
+      }
+      return LabelExpander.expand(expression, labelMap, labelResolver);
+    } catch (NotUniqueExpansionException e) {
+      throw Starlark.errorf("%s while expanding '%s'", e.getMessage(), expression);
+    }
   }
 
   boolean isForAspect() {
