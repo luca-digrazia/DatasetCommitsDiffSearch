@@ -19,30 +19,30 @@ import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /** Info object about outputs of a Java rule. */
 @SkylarkModule(
     name = "java_output_jars",
     category = SkylarkModuleCategory.PROVIDER,
     doc = "Information about outputs of a Java rule.")
-public interface JavaRuleOutputJarsProviderApi<OutputJarT extends OutputJarApi<?>>
-    extends StarlarkValue {
+public interface JavaRuleOutputJarsProviderApi<OutputJarT extends OutputJarApi<?>> {
 
   @SkylarkCallable(name = "jars", doc = "A list of jars the rule outputs.", structField = true)
-  ImmutableList<OutputJarT> getOutputJars();
+  public ImmutableList<OutputJarT> getOutputJars();
 
   @SkylarkCallable(
-      name = "jdeps",
-      doc = "The jdeps file for rule outputs.",
-      structField = true,
-      allowReturnNones = true)
-  FileApi getJdeps();
+    name = "jdeps",
+    doc = "The jdeps file for rule outputs.",
+    structField = true,
+    allowReturnNones = true
+  )
+  public FileApi getJdeps();
 
   @SkylarkCallable(
-      name = "native_headers",
-      doc = "An archive of native header files.",
-      structField = true,
-      allowReturnNones = true)
-  FileApi getNativeHeaders();
+    name = "native_headers",
+    doc = "An archive of native header files.",
+    structField = true,
+    allowReturnNones = true
+  )
+  public FileApi getNativeHeaders();
 }

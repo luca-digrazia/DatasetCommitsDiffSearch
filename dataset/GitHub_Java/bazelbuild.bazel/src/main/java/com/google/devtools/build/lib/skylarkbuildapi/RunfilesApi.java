@@ -19,18 +19,13 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 
 /** An interface for a set of runfiles. */
 @SkylarkModule(
     name = "runfiles",
     category = SkylarkModuleCategory.BUILTIN,
-    doc =
-        "A container of information regarding a set of files required at runtime execution. This"
-            + " object should be passed via <a href=\"DefaultInfo.html\">DefaultInfo</a> in order"
-            + " to tell the build system about the runfiles needed by the outputs produced by the"
-            + " rule. See <a href=\"../rules.html#runfiles\">runfiles guide</a> for details.")
-public interface RunfilesApi extends SkylarkValue {
+    doc = "An interface for a set of runfiles.")
+public interface RunfilesApi {
 
   @SkylarkCallable(
     name = "files",

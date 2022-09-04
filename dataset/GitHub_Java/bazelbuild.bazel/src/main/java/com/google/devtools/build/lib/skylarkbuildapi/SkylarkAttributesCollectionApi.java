@@ -14,38 +14,38 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi;
 
-import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /** Interface for a type containing information about the attributes of a rule. */
 @SkylarkModule(
     name = "rule_attributes",
     category = SkylarkModuleCategory.BUILTIN,
     doc = "Information about attributes of a rule an aspect is applied to.")
-public interface SkylarkAttributesCollectionApi extends StarlarkValue {
+public interface SkylarkAttributesCollectionApi extends SkylarkValue {
 
   @SkylarkCallable(name = "attr", structField = true, doc = SkylarkRuleContextApi.ATTR_DOC)
-  StructApi getAttr() throws EvalException;
+  public StructApi getAttr() throws EvalException;
 
   @SkylarkCallable(
       name = "executable",
       structField = true,
       doc = SkylarkRuleContextApi.EXECUTABLE_DOC)
-  StructApi getExecutable() throws EvalException;
+  public StructApi getExecutable() throws EvalException;
 
   @SkylarkCallable(name = "file", structField = true, doc = SkylarkRuleContextApi.FILE_DOC)
-  StructApi getFile() throws EvalException;
+  public StructApi getFile() throws EvalException;
 
   @SkylarkCallable(name = "files", structField = true, doc = SkylarkRuleContextApi.FILES_DOC)
-  StructApi getFiles() throws EvalException;
+  public StructApi getFiles() throws EvalException;
 
   @SkylarkCallable(
-      name = "kind",
-      structField = true,
-      doc = "The kind of a rule, such as 'cc_library'")
-  String getRuleClassName() throws EvalException;
+    name = "kind",
+    structField = true,
+    doc = "The kind of a rule, such as 'cc_library'"
+  )
+  public String getRuleClassName() throws EvalException;
 }

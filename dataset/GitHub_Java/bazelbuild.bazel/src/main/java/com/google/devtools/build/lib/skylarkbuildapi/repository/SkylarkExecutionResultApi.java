@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.skylarkbuildapi.repository;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /**
  * A structure callable from Skylark that stores the result of repository_ctx.execute() method. It
@@ -31,7 +30,7 @@ import com.google.devtools.build.lib.syntax.StarlarkValue;
         "A structure storing result of repository_ctx.execute() method. It contains the standard"
             + " output stream content, the standard error stream content and the execution return"
             + " code.")
-public interface SkylarkExecutionResultApi extends StarlarkValue {
+public interface SkylarkExecutionResultApi {
   @SkylarkCallable(
       name = "return_code",
       structField = true,
@@ -39,17 +38,19 @@ public interface SkylarkExecutionResultApi extends StarlarkValue {
           "The return code returned after the execution of the program. 256 if the process was"
               + " terminated by a time out; values larger than 128 indicate termination by a"
               + " signal.")
-  int getReturnCode();
+  public int getReturnCode();
 
   @SkylarkCallable(
       name = "stdout",
       structField = true,
-      doc = "The content of the standard output returned by the execution.")
-  String getStdout();
+      doc = "The content of the standard output returned by the execution."
+  )
+  public String getStdout();
 
   @SkylarkCallable(
       name = "stderr",
       structField = true,
-      doc = "The content of the standard error output returned by the execution.")
-  String getStderr();
+      doc = "The content of the standard error output returned by the execution."
+  )
+  public String getStderr();
 }

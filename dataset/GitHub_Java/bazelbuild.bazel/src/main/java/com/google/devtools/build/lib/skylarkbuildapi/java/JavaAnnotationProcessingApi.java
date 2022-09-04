@@ -15,12 +15,11 @@
 package com.google.devtools.build.lib.skylarkbuildapi.java;
 
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import javax.annotation.Nullable;
 
 /**
@@ -31,7 +30,7 @@ import javax.annotation.Nullable;
     name = "java_annotation_processing",
     category = SkylarkModuleCategory.BUILTIN,
     doc = "Information about jars that are a result of annotation processing for a Java rule.")
-public interface JavaAnnotationProcessingApi<FileTypeT extends FileApi> extends SkylarkValue {
+public interface JavaAnnotationProcessingApi<FileTypeT extends FileApi> {
 
   @SkylarkCallable(
     name = "enabled",
@@ -59,26 +58,29 @@ public interface JavaAnnotationProcessingApi<FileTypeT extends FileApi> extends 
   public FileTypeT getGenSourceJar();
 
   @SkylarkCallable(
-      name = "transitive_class_jars",
-      structField = true,
-      doc =
-          "Returns a transitive set of class file jars resulting from annotation "
-              + "processing of this rule and its dependencies.")
-  public SkylarkNestedSet /*<FileTypeT>*/ getTransitiveGenClassJarsForStarlark();
+    name = "transitive_class_jars",
+    structField = true,
+    doc =
+        "Returns a transitive set of class file jars resulting from annotation "
+            + "processing of this rule and its dependencies."
+  )
+  public NestedSet<FileTypeT> getTransitiveGenClassJars();
 
   @SkylarkCallable(
-      name = "transitive_source_jars",
-      structField = true,
-      doc =
-          "Returns a transitive set of source archives resulting from annotation processing "
-              + "of this rule and its dependencies.")
-  public SkylarkNestedSet /*<FileTypeT>*/ getTransitiveGenSourceJarsForStarlark();
+    name = "transitive_source_jars",
+    structField = true,
+    doc =
+        "Returns a transitive set of source archives resulting from annotation processing "
+            + "of this rule and its dependencies."
+  )
+  public NestedSet<FileTypeT> getTransitiveGenSourceJars();
 
   @SkylarkCallable(
-      name = "processor_classpath",
-      structField = true,
-      doc = "Returns a classpath of annotation processors applied to this rule.")
-  public SkylarkNestedSet /*<FileTypeT>*/ getProcessorClasspathForStarlark();
+    name = "processor_classpath",
+    structField = true,
+    doc = "Returns a classpath of annotation processors applied to this rule."
+  )
+  public NestedSet<FileTypeT> getProcessorClasspath();
 
   @SkylarkCallable(
     name = "processor_classnames",
