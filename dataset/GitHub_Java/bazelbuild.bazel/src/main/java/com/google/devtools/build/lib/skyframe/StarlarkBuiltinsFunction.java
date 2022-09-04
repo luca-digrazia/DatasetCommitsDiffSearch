@@ -202,7 +202,7 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
               ruleClassProvider, packageFactory, exportedToplevels, exportedRules);
       return new StarlarkBuiltinsValue(predeclared, exportedToJava, transitiveDigest);
     } catch (EvalException ex) {
-      ex = new EvalException(EXPORTS_ENTRYPOINT_LOC, ex.getMessage());
+      ex.ensureLocation(EXPORTS_ENTRYPOINT_LOC);
       throw BuiltinsFailedException.errorApplyingExports(ex);
     }
   }
@@ -309,7 +309,8 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
       throws EvalException {
     Object value = module.get(dictName);
     if (value == null) {
-      throw new EvalException(String.format("expected a '%s' dictionary to be defined", dictName));
+      throw new EvalException(
+          /*location=*/ null, String.format("expected a '%s' dictionary to be defined", dictName));
     }
     return ImmutableMap.copyOf(Dict.cast(value, String.class, Object.class, dictName + " dict"));
   }
