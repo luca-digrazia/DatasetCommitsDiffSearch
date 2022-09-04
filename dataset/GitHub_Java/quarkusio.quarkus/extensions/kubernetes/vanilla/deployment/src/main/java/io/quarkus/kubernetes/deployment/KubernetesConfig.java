@@ -13,10 +13,10 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 public class KubernetesConfig implements PlatformConfiguration {
 
     /**
-     * The name of the group this component belongs too
+     * The group of the application.
      */
-    @ConfigItem
-    Optional<String> partOf;
+    @ConfigItem(defaultValue = "${quarkus.container-image.group}")
+    Optional<String> group;
 
     /**
      * The name of the application. This value will be used for naming Kubernetes
@@ -96,12 +96,6 @@ public class KubernetesConfig implements PlatformConfiguration {
     Map<String, PortConfig> ports;
 
     /**
-     * The number of desired pods
-     */
-    @ConfigItem(defaultValue = "1")
-    Integer replicas;
-
-    /**
      * The type of service that will be generated for the application
      */
     @ConfigItem(defaultValue = "ClusterIP")
@@ -123,13 +117,13 @@ public class KubernetesConfig implements PlatformConfiguration {
      * The liveness probe
      */
     @ConfigItem
-    ProbeConfig livenessProbe;
+    Optional<ProbeConfig> livenessProbe;
 
     /**
      * The readiness probe
      */
     @ConfigItem
-    ProbeConfig readinessProbe;
+    Optional<ProbeConfig> readinessProbe;
 
     /**
      * Volume mounts
@@ -199,14 +193,8 @@ public class KubernetesConfig implements PlatformConfiguration {
     @ConfigItem(defaultValue = "kubernetes")
     List<String> deploymentTarget;
 
-    /**
-     * If true, a Kubernetes Ingress will be created
-     */
-    @ConfigItem
-    boolean expose;
-
-    public Optional<String> getPartOf() {
-        return partOf;
+    public Optional<String> getGroup() {
+        return group;
     }
 
     public Optional<String> getName() {
@@ -258,10 +246,6 @@ public class KubernetesConfig implements PlatformConfiguration {
         return ports;
     }
 
-    public Integer getReplicas() {
-        return replicas;
-    }
-
     public ServiceType getServiceType() {
         return serviceType;
     }
@@ -274,11 +258,11 @@ public class KubernetesConfig implements PlatformConfiguration {
         return imagePullSecrets;
     }
 
-    public ProbeConfig getLivenessProbe() {
+    public Optional<ProbeConfig> getLivenessProbe() {
         return livenessProbe;
     }
 
-    public ProbeConfig getReadinessProbe() {
+    public Optional<ProbeConfig> getReadinessProbe() {
         return readinessProbe;
     }
 
@@ -322,8 +306,4 @@ public class KubernetesConfig implements PlatformConfiguration {
         return containers;
     }
 
-    @Override
-    public boolean isExpose() {
-        return expose;
-    }
 }

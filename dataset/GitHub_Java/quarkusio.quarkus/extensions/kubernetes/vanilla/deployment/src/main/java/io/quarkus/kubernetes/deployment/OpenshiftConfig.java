@@ -14,10 +14,10 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 public class OpenshiftConfig implements PlatformConfiguration {
 
     /**
-     * The name of the group this component belongs too
+     * The group of the application.
      */
-    @ConfigItem
-    Optional<String> partOf;
+    @ConfigItem(defaultValue = "${quarkus.container-image.group}")
+    Optional<String> group;
 
     /**
      * The name of the application. This value will be used for naming Kubernetes
@@ -97,12 +97,6 @@ public class OpenshiftConfig implements PlatformConfiguration {
     Map<String, PortConfig> ports;
 
     /**
-     * The number of desired pods
-     */
-    @ConfigItem(defaultValue = "1")
-    Integer replicas;
-
-    /**
      * The type of service that will be generated for the application
      */
     @ConfigItem(defaultValue = "ClusterIP")
@@ -124,13 +118,13 @@ public class OpenshiftConfig implements PlatformConfiguration {
      * The liveness probe
      */
     @ConfigItem
-    ProbeConfig livenessProbe;
+    Optional<ProbeConfig> livenessProbe;
 
     /**
      * The readiness probe
      */
     @ConfigItem
-    ProbeConfig readinessProbe;
+    Optional<ProbeConfig> readinessProbe;
 
     /**
      * Volume mounts
@@ -192,14 +186,8 @@ public class OpenshiftConfig implements PlatformConfiguration {
     @ConfigItem
     Map<String, ContainerConfig> containers;
 
-    /**
-     * If true, an Openshift Route will be created
-     */
-    @ConfigItem
-    boolean expose;
-
-    public Optional<String> getPartOf() {
-        return partOf;
+    public Optional<String> getGroup() {
+        return group;
     }
 
     public Optional<String> getName() {
@@ -247,10 +235,6 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return host;
     }
 
-    public Integer getReplicas() {
-        return replicas;
-    }
-
     public Map<String, PortConfig> getPorts() {
         return ports;
     }
@@ -267,11 +251,11 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return imagePullSecrets;
     }
 
-    public ProbeConfig getLivenessProbe() {
+    public Optional<ProbeConfig> getLivenessProbe() {
         return livenessProbe;
     }
 
-    public ProbeConfig getReadinessProbe() {
+    public Optional<ProbeConfig> getReadinessProbe() {
         return readinessProbe;
     }
 
@@ -315,8 +299,4 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return containers;
     }
 
-    @Override
-    public boolean isExpose() {
-        return false;
-    }
 }
