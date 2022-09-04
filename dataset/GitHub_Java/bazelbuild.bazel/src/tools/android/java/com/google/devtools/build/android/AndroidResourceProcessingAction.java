@@ -30,7 +30,6 @@ import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.UnvalidatedAndroidDataConverter;
 import com.google.devtools.build.android.Converters.VariantTypeConverter;
 import com.google.devtools.build.android.SplitConfigurationFilter.UnrecognizedSplitsException;
-import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
@@ -39,7 +38,6 @@ import com.google.devtools.common.options.TriState;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -205,13 +203,6 @@ public class AndroidResourceProcessingAction {
         category = "config",
         help = "Version code to stamp into the packaged manifest.")
     public int versionCode;
-
-    @Option(name = "prefilteredResources",
-        defaultValue = "",
-        converter = Converters.CommaSeparatedOptionListConverter.class,
-        category = "config",
-        help = "A list of resources that were filtered out in analysis.")
-    public List<String> prefilteredResources;
   }
 
   private static AaptConfigOptions aaptConfigOptions;
@@ -262,20 +253,14 @@ public class AndroidResourceProcessingAction {
               mergedAssets,
               selectPngCruncher(),
               options.packageType,
-              options.symbolsOut,
-              options.prefilteredResources);
+              options.symbolsOut);
 
       logger.fine(String.format("Merging finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
-
-      final List<String> densitiesToFilter =
-          options.prefilteredResources.isEmpty()
-              ? options.densities
-              : Collections.<String>emptyList();
 
       final DensityFilteredAndroidData filteredData =
           mergedData.filter(
               new DensitySpecificResourceFilter(
-                  densitiesToFilter, filteredResources, mergedResources),
+                  options.densities, filteredResources, mergedResources),
               new DensitySpecificManifestProcessor(options.densities, densityManifest));
 
       logger.fine(

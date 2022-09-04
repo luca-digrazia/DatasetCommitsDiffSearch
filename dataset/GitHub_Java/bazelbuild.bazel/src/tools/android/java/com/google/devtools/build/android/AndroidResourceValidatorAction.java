@@ -23,10 +23,8 @@ import com.google.devtools.build.android.AndroidResourceProcessor.FlagAaptOption
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -58,8 +56,6 @@ public class AndroidResourceValidatorAction {
       defaultValue = "null",
       converter = ExistingPathConverter.class,
       category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Path to the read merged resources archive."
     )
     public Path mergedResources;
@@ -69,8 +65,6 @@ public class AndroidResourceValidatorAction {
       defaultValue = "null",
       converter = ExistingPathConverter.class,
       category = "input",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Path for the AndroidManifest.xml."
     )
     public Path manifest;
@@ -79,8 +73,6 @@ public class AndroidResourceValidatorAction {
       name = "packageForR",
       defaultValue = "null",
       category = "config",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Custom java package to generate the R symbols files."
     )
     public String packageForR;
@@ -90,8 +82,6 @@ public class AndroidResourceValidatorAction {
       defaultValue = "null",
       converter = PathConverter.class,
       category = "output",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Path for the generated java source jar."
     )
     public Path srcJarOutput;
@@ -101,8 +91,6 @@ public class AndroidResourceValidatorAction {
       defaultValue = "null",
       converter = PathConverter.class,
       category = "output",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Path to where the R.txt should be written."
     )
     public Path rOutput;
@@ -138,7 +126,6 @@ public class AndroidResourceValidatorAction {
       resourceProcessor.writeDummyManifestForAapt(dummyManifest, options.packageForR);
 
       resourceProcessor.runAapt(
-          tmp,
           aaptConfigOptions.aapt,
           aaptConfigOptions.androidJar,
           aaptConfigOptions.buildToolsVersion,

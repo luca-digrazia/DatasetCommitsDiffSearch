@@ -15,14 +15,10 @@ package com.google.devtools.build.android;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Ordering;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.FileVisitResult;
@@ -33,8 +29,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.GregorianCalendar;
-import java.util.List;
 import java.util.Objects;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
@@ -48,73 +42,10 @@ import java.util.zip.ZipOutputStream;
 /** Collects all the functionationality for an action to create the final output artifacts. */
 public class AndroidResourceOutputs {
 
-  @VisibleForTesting
-  static class ZipBuilder implements Closeable {
-    // ZIP timestamps have a resolution of 2 seconds.
-    // see http://www.info-zip.org/FAQ.html#limits
-    private static final long MINIMUM_TIMESTAMP_INCREMENT = 2000L;
-
-    // The earliest date representable in a zip file, 1-1-1980 (the DOS epoch).
-    private static final long ZIP_EPOCH =
-        new GregorianCalendar(1980, 01, 01, 0, 0).getTimeInMillis();
-
-    private final ZipOutputStream zip;
-
-    private ZipBuilder(ZipOutputStream zip) {
-      this.zip = zip;
-    }
-
-    public static ZipBuilder createFor(Path archivePath) throws IOException {
-      return wrap(
-          new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(archivePath))));
-    }
-
-    public static ZipBuilder wrap(ZipOutputStream zip) {
-      return new ZipBuilder(zip);
-    }
-
-    /**
-     * Normalize timestamps for deterministic builds. Stamp .class files to be a bit newer than
-     * .java files. See: {@link
-     * com.google.devtools.build.buildjar.jarhelper.JarHelper#normalizedTimestamp(String)}
-     */
-    protected long normalizeTime(String filename) {
-      if (filename.endsWith(".class")) {
-        return ZIP_EPOCH + MINIMUM_TIMESTAMP_INCREMENT;
-      } else {
-        return ZIP_EPOCH;
-      }
-    }
-
-    protected void addEntry(String rawName, byte[] content, int storageMethod) throws IOException {
-      // Fix the path for windows.
-      String relativeName = rawName.replace('\\', '/');
-      // Make sure the zip entry is not absolute.
-      Preconditions.checkArgument(
-          !relativeName.startsWith("/"), "Cannot add absolute resources %s", relativeName);
-      ZipEntry entry = new ZipEntry(relativeName);
-      entry.setMethod(storageMethod);
-      entry.setTime(normalizeTime(relativeName));
-      entry.setSize(content.length);
-      CRC32 crc32 = new CRC32();
-      crc32.update(content);
-      entry.setCrc(crc32.getValue());
-
-      zip.putNextEntry(entry);
-      zip.write(content);
-      zip.closeEntry();
-    }
-
-    @Override
-    public void close() throws IOException {
-      zip.close();
-    }
-  }
-
   /** A FileVisitor that will add all R class files to be stored in a zip archive. */
   static final class ClassJarBuildingVisitor extends ZipBuilderVisitor {
 
-    ClassJarBuildingVisitor(ZipBuilder zip, Path root) {
+    ClassJarBuildingVisitor(ZipOutputStream zip, Path root) {
       super(zip, root, null);
     }
 
@@ -158,8 +89,8 @@ public class AndroidResourceOutputs {
 
     private final boolean staticIds;
 
-    private SymbolFileSrcJarBuildingVisitor(ZipBuilder zipBuilder, Path root, boolean staticIds) {
-      super(zipBuilder, root, null);
+    private SymbolFileSrcJarBuildingVisitor(ZipOutputStream zip, Path root, boolean staticIds) {
+      super(zip, root, null);
       this.staticIds = staticIds;
     }
 
@@ -208,21 +139,51 @@ public class AndroidResourceOutputs {
   /** A FileVisitor that will add all files to be stored in a zip archive. */
   static class ZipBuilderVisitor extends SimpleFileVisitor<Path> {
 
-    protected final String directoryPrefix;
+    // ZIP timestamps have a resolution of 2 seconds.
+    // see http://www.info-zip.org/FAQ.html#limits
+    private static final long MINIMUM_TIMESTAMP_INCREMENT = 2000L;
+    // The earliest date representable in a zip file, 1-1-1980 (the DOS epoch).
+    private static final long ZIP_EPOCH = 315561600000L;
+
+    private final String directoryPrefix;
     private final Collection<Path> paths = new ArrayList<>();
     protected final Path root;
     private int storageMethod = ZipEntry.STORED;
-    private ZipBuilder zipBuilder;
+    private final ZipOutputStream zip;
 
-    ZipBuilderVisitor(ZipBuilder zipBuilder, Path root, String directory) {
+    ZipBuilderVisitor(ZipOutputStream zip, Path root, String directory) {
+      this.zip = zip;
       this.root = root;
-      this.directoryPrefix = directory != null ? (directory + File.separator) : "";
-      this.zipBuilder = zipBuilder;
+      this.directoryPrefix = directory;
     }
 
     protected void addEntry(Path file, byte[] content) throws IOException {
-      Preconditions.checkArgument(file.startsWith(root), "%s does not start with %s", file, root);
-      zipBuilder.addEntry(directoryPrefix + root.relativize(file), content, storageMethod);
+      String prefix = directoryPrefix != null ? (directoryPrefix + "/") : "";
+      String relativeName = root.relativize(file).toString();
+      ZipEntry entry = new ZipEntry(prefix + relativeName);
+      entry.setMethod(storageMethod);
+      entry.setTime(normalizeTime(relativeName));
+      entry.setSize(content.length);
+      CRC32 crc32 = new CRC32();
+      crc32.update(content);
+      entry.setCrc(crc32.getValue());
+
+      zip.putNextEntry(entry);
+      zip.write(content);
+      zip.closeEntry();
+    }
+
+    /**
+     * Normalize timestamps for deterministic builds. Stamp .class files to be a bit newer than
+     * .java files. See: {@link
+     * com.google.devtools.build.buildjar.jarhelper.JarHelper#normalizedTimestamp(String)}
+     */
+    protected long normalizeTime(String filename) {
+      if (filename.endsWith(".class")) {
+        return ZIP_EPOCH + MINIMUM_TIMESTAMP_INCREMENT;
+      } else {
+        return ZIP_EPOCH;
+      }
     }
 
     public void setCompress(boolean compress) {
@@ -257,13 +218,14 @@ public class AndroidResourceOutputs {
   /**
    * Copies the AndroidManifest.xml to the specified output location.
    *
-   * @param provider The MergedAndroidData which contains the manifest to be written to manifestOut.
+   * @param androidData The MergedAndroidData which contains the manifest to be written to
+   *     manifestOut.
    * @param manifestOut The Path to write the AndroidManifest.xml.
    */
-  public static void copyManifestToOutput(ManifestContainer provider, Path manifestOut) {
+  public static void copyManifestToOutput(MergedAndroidData androidData, Path manifestOut) {
     try {
       Files.createDirectories(manifestOut.getParent());
-      Files.copy(provider.getManifest(), manifestOut);
+      Files.copy(androidData.getManifest(), manifestOut);
       // Set to the epoch for caching purposes.
       Files.setLastModifiedTime(manifestOut, FileTime.fromMillis(0L));
     } catch (IOException e) {
@@ -308,31 +270,16 @@ public class AndroidResourceOutputs {
   public static void createClassJar(Path generatedClassesRoot, Path classJar) {
     try {
       Files.createDirectories(classJar.getParent());
-      try (final ZipBuilder zip = ZipBuilder.createFor(classJar)) {
-        ClassJarBuildingVisitor visitor = new ClassJarBuildingVisitor(zip, generatedClassesRoot);
+      try (final ZipOutputStream zip =
+          new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(classJar)))) {
+        ClassJarBuildingVisitor visitor =
+            new ClassJarBuildingVisitor(zip, generatedClassesRoot);
         Files.walkFileTree(generatedClassesRoot, visitor);
         visitor.writeEntries();
         visitor.writeManifestContent();
       }
       // Set to the epoch for caching purposes.
       Files.setLastModifiedTime(classJar, FileTime.fromMillis(0L));
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  /** Creates a zip archive from all files under the provided root. */
-  public static void archiveDirectory(Path root, Path archive) {
-    try {
-      Files.createDirectories(archive.getParent());
-      try (final ZipBuilder zip = ZipBuilder.createFor(archive)) {
-        ZipBuilderVisitor visitor = new ZipBuilderVisitor(zip, root, null);
-        visitor.setCompress(false);
-        Files.walkFileTree(root, visitor);
-        visitor.writeEntries();
-      }
-      // Set to the epoch for caching purposes.
-      Files.setLastModifiedTime(archive, FileTime.fromMillis(0L));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -349,15 +296,18 @@ public class AndroidResourceOutputs {
    */
   public static void createResourcesZip(
       Path resourcesRoot, Path assetsRoot, Path output, boolean compress) throws IOException {
-    try (final ZipBuilder zip = ZipBuilder.createFor(output)) {
+    try (ZipOutputStream zout =
+        new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(output)))) {
       if (Files.exists(resourcesRoot)) {
-        ZipBuilderVisitor visitor = new ZipBuilderVisitor(zip, resourcesRoot, "res");
+        ZipBuilderVisitor visitor =
+            new ZipBuilderVisitor(zout, resourcesRoot, "res");
         visitor.setCompress(compress);
         Files.walkFileTree(resourcesRoot, visitor);
         visitor.writeEntries();
       }
       if (Files.exists(assetsRoot)) {
-        ZipBuilderVisitor visitor = new ZipBuilderVisitor(zip, assetsRoot, "assets");
+        ZipBuilderVisitor visitor =
+            new ZipBuilderVisitor(zout, assetsRoot, "assets");
         visitor.setCompress(compress);
         Files.walkFileTree(assetsRoot, visitor);
         visitor.writeEntries();
@@ -369,9 +319,11 @@ public class AndroidResourceOutputs {
   public static void createSrcJar(Path generatedSourcesRoot, Path srcJar, boolean staticIds) {
     try {
       Files.createDirectories(srcJar.getParent());
-      try (final ZipBuilder zip = ZipBuilder.createFor(srcJar)) {
+      try (final ZipOutputStream zip =
+          new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(srcJar)))) {
         SymbolFileSrcJarBuildingVisitor visitor =
-            new SymbolFileSrcJarBuildingVisitor(zip, generatedSourcesRoot, staticIds);
+            new SymbolFileSrcJarBuildingVisitor(
+                zip, generatedSourcesRoot, staticIds);
         Files.walkFileTree(generatedSourcesRoot, visitor);
         visitor.writeEntries();
       }
@@ -380,36 +332,5 @@ public class AndroidResourceOutputs {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-  }
-
-  /** Collects all the compiled resources into an archive, normalizing the paths to the root. */
-  public static Path archiveCompiledResources(
-      final Path archiveOut,
-      final Path databindingResourcesRoot,
-      final Path compiledRoot,
-      final List<Path> compiledArtifacts)
-      throws IOException {
-    final Path relativeDatabindingProcessedResources =
-        databindingResourcesRoot.getRoot().relativize(databindingResourcesRoot);
-
-    try (ZipBuilder builder = ZipBuilder.createFor(archiveOut)) {
-      for (Path artifact : compiledArtifacts) {
-        Path relativeName = artifact;
-        // remove compiled resources prefix
-        if (artifact.startsWith(compiledRoot)) {
-          relativeName = compiledRoot.relativize(relativeName);
-        }
-        // remove databinding prefix
-        if (relativeName.startsWith(relativeDatabindingProcessedResources)) {
-          relativeName =
-              relativeName.subpath(
-                  relativeDatabindingProcessedResources.getNameCount(),
-                  relativeName.getNameCount());
-        }
-
-        builder.addEntry(relativeName.toString(), Files.readAllBytes(artifact), ZipEntry.STORED);
-      }
-    }
-    return archiveOut;
   }
 }
