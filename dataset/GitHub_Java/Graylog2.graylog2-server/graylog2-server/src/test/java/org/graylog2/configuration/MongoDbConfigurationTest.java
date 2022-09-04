@@ -81,7 +81,7 @@ public class MongoDbConfigurationTest {
     }
 
     @Test
-    public void validateSucceedsIfUriIsValid() throws Exception {
+    public void validateFailsIfUriIsValid() throws Exception {
         MongoDbConfiguration configuration = new MongoDbConfiguration();
         final Map<String, String> properties = singletonMap(
                 "mongodb_uri", "mongodb://example.com:1234,127.0.0.1:5678/TEST"
@@ -89,16 +89,5 @@ public class MongoDbConfigurationTest {
         new JadConfig(new InMemoryRepository(properties), configuration).process();
 
         assertEquals("mongodb://example.com:1234,127.0.0.1:5678/TEST", configuration.getMongoClientURI().toString());
-    }
-
-    @Test
-    public void validateSucceedsWithIPv6Address() throws Exception {
-        MongoDbConfiguration configuration = new MongoDbConfiguration();
-        final Map<String, String> properties = singletonMap(
-                "mongodb_uri", "mongodb://[2001:DB8::DEAD:BEEF:CAFE:BABE]:1234,127.0.0.1:5678/TEST"
-        );
-        new JadConfig(new InMemoryRepository(properties), configuration).process();
-
-        assertEquals("mongodb://[2001:DB8::DEAD:BEEF:CAFE:BABE]:1234,127.0.0.1:5678/TEST", configuration.getMongoClientURI().toString());
     }
 }

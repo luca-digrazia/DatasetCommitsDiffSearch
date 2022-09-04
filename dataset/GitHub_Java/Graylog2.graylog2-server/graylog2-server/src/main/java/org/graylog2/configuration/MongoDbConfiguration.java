@@ -24,6 +24,8 @@ import com.github.joschi.jadconfig.validators.StringNotBlankValidator;
 import com.mongodb.MongoClientOptions;
 import com.mongodb.MongoClientURI;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 public class MongoDbConfiguration {
     @Parameter(value = "mongodb_max_connections", validator = PositiveIntegerValidator.class)
     private int maxConnections = 1000;
