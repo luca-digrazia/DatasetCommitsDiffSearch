@@ -48,6 +48,9 @@ import org.junit.runners.JUnit4;
 /** Tests Starlark API for Java rules. */
 @RunWith(JUnit4.class)
 public class JavaStarlarkApiTest extends BuildViewTestCase {
+  private static final String HOST_JAVA_RUNTIME_LABEL =
+      TestConstants.TOOLS_REPOSITORY + "//tools/jdk:current_host_java_runtime";
+
   @Before
   public void setupMyInfo() throws Exception {
     scratch.file("myinfo/myinfo.bzl", "MyInfo = provider()");
@@ -105,7 +108,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  )",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration("--extra_toolchains=//a:all", "--platforms=//a:platform");
+    useConfiguration(
+        "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     StructImpl myInfo = getMyInfoFromTarget(ct);
     String javaHomeExecPath = (String) myInfo.getValue("java_home_exec_path");
@@ -161,7 +165,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  )",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration("--extra_toolchains=//a:all", "--platforms=//a:platform");
+    useConfiguration(
+        "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     StructImpl myInfo = getMyInfoFromTarget(ct);
     String javaHomeExecPath = (String) myInfo.getValue("java_home_exec_path");
@@ -218,7 +223,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  )",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration("--extra_toolchains=//a:all", "--platforms=//a:platform");
+    useConfiguration(
+        "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
     // TODO(b/129637690): the runtime shouldn't be resolved in the host config
     ConfiguredTarget genrule = getHostConfiguredTarget("//a:gen");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
@@ -233,6 +239,45 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
     assertThat(javaHomeRunfilesPath).isEqualTo("a/foo/bar");
     String javaExecutableRunfiles = (String) myInfo.getValue("java_executable_runfiles_path");
     assertThat(javaExecutableRunfiles).startsWith("a/foo/bar/bin/java");
+  }
+
+  @Test
+  public void testInvalidHostJavabase() throws Exception {
+    writeBuildFileForJavaToolchain();
+
+    scratch.file(
+        "a/BUILD",
+        "load(':rule.bzl', 'jrule')",
+        "filegroup(name='fg')",
+        "jrule(name='r', srcs=['S.java'])");
+
+    scratch.file(
+        "a/rule.bzl",
+        "def _impl(ctx):",
+        "  output_jar = ctx.actions.declare_file('lib' + ctx.label.name + '.jar')",
+        "  java_common.compile(",
+        "    ctx,",
+        "    source_files = ctx.files.srcs,",
+        "    output = output_jar,",
+        "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase",
+        "  )",
+        "  return []",
+        "jrule = rule(",
+        "  implementation = _impl,",
+        "  outputs = {",
+        "    'my_output': 'lib%{name}.jar'",
+        "  },",
+        "  attrs = {",
+        "    'srcs': attr.label_list(allow_files=['.java']),",
+        "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(default = Label('//a:fg'))",
+        "  },",
+        "  fragments = ['java'])");
+
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//a:r");
+    assertContainsEvent("got value of type 'Target', want 'JavaRuntimeInfo'");
   }
 
   @Test
@@ -296,37 +341,6 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
   }
 
   @Test
-  public void javaToolchainInfo_jacocoRunnerAttribute() throws Exception {
-    writeBuildFileForJavaToolchain();
-    scratch.file("java/test/B.jar");
-    scratch.file(
-        "java/test/BUILD",
-        "load(':custom_rule.bzl', 'java_custom_library')",
-        "java_custom_library(name = 'dep')");
-    scratch.file(
-        "java/test/custom_rule.bzl",
-        "def _impl(ctx):",
-        "  jacoco = ctx.attr._java_toolchain[java_common.JavaToolchainInfo].jacocorunner",
-        "  return [",
-        "      DefaultInfo(",
-        "          files = depset([jacoco.executable]),",
-        "      ),",
-        "  ]",
-        "java_custom_library = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
-        "  },",
-        "  fragments = ['java']",
-        ")");
-
-    ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:dep");
-
-    assertThat(ActionsTestUtil.baseArtifactNames(getFilesToBuild(configuredTarget)))
-        .containsExactly("jacocorunner.jar");
-  }
-
-  @Test
   public void testJavaCommonCompileExposesOutputJarProvider() throws Exception {
     writeBuildFileForJavaToolchain();
     scratch.file("java/test/B.jar");
@@ -369,6 +383,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    sourcepath = ctx.files.sourcepath,",
         "    strict_deps = 'ERROR',",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -385,6 +400,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    'sourcepath': attr.label_list(allow_files=['.jar']),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -430,6 +447,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    plugins = [p[JavaInfo] for p in ctx.attr.plugins],",
         "    output = output_jar,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "java_custom_library = rule(",
         "  implementation = _impl,",
@@ -442,6 +460,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'exports': attr.label_list(),",
         "    'plugins': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -477,6 +497,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo],",
         "    javac_opts = ['-XDone -XDtwo'],",
         "  )",
         "  return [",
@@ -495,6 +516,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    'deps': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -538,6 +561,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -555,6 +579,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    'deps': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -598,6 +624,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  other_compilation_provider = java_common.compile(",
         "    ctx,",
@@ -605,6 +632,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = other_output_jar,",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  result_provider = java_common.merge([compilation_provider, other_compilation_provider])",
         "  return [",
@@ -623,6 +651,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    'deps': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -657,6 +687,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    source_jars = ctx.files.srcs,",
         "    output = output_jar,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -672,6 +703,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  attrs = {",
         "    'srcs': attr.label_list(allow_files=['.jar']),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -706,6 +739,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    output = output_jar,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -720,6 +754,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  },",
         "  attrs = {",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -754,6 +790,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    source_jars = ctx.files.srcs,",
         "    output = output_jar,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -769,6 +806,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  attrs = {",
         "    'srcs': attr.label_list(allow_files=['.jar']),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -807,6 +846,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    output_source_jar = output_source_jar,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -822,6 +862,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  attrs = {",
         "    'srcs': attr.label_list(allow_files=['.jar']),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -856,6 +898,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    ctx,",
         "    output = output_jar,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -870,6 +913,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  },",
         "  attrs = {",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -908,6 +953,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    exported_plugins = [p[JavaInfo] for p in ctx.attr.exported_plugins],",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [DefaultInfo(files=depset([output_jar])), compilation_provider]",
         "java_custom_library = rule(",
@@ -918,6 +964,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  attrs = {",
         "    'exported_plugins': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -953,6 +1001,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    annotation_processor_additional_inputs = ctx.files.additional_inputs,",
         "    annotation_processor_additional_outputs = [ctx.outputs.additional_output],",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo],",
         "  )",
         "  return [DefaultInfo(files = depset([output_jar]))]",
         "java_custom_library = rule(",
@@ -964,6 +1013,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'srcs': attr.label_list(allow_files=['.jar']),",
         "    'additional_inputs': attr.label_list(allow_files=['.bin']),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -1140,6 +1191,29 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
     assertThat(myCompileJars == jlCompileJars).isTrue();
     assertThat(myTransitiveRuntimeJars == jlTransitiveRuntimeJars).isTrue();
     assertThat(myTransitiveCompileTimeJars).isEqualTo(jlTransitiveCompileTimeJars);
+  }
+
+  @Test
+  public void testStarlarkApiProviderReexported() throws Exception {
+    scratch.file(
+        "java/test/extension.bzl",
+        "def impl(ctx):",
+        "   dep_java = ctx.attr.dep.java",
+        "   return struct(java = dep_java)",
+        "my_rule = rule(impl, attrs = { ",
+        "  'dep' : attr.label(), ",
+        "})");
+    scratch.file(
+        "java/test/BUILD",
+        "load(':extension.bzl', 'my_rule')",
+        "java_library(name = 'jl', srcs = ['Jl.java'])",
+        "my_rule(name = 'my', dep = ':jl')");
+    // Now, get that information and ensure it is equal to what the jl java_library
+    // was presenting
+    ConfiguredTarget myConfiguredTarget = getConfiguredTarget("//java/test:my");
+    ConfiguredTarget javaLibraryTarget = getConfiguredTarget("//java/test:jl");
+
+    assertThat(myConfiguredTarget.get("java")).isSameInstanceAs(javaLibraryTarget.get("java"));
   }
 
   @Test
@@ -1577,6 +1651,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    neverlink = ctx.attr.neverlink,",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -1594,6 +1669,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'neverlink': attr.bool(),",
         "     'deps': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -1831,6 +1907,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "java_toolchain_alias(name='alias')",
         "myrule(name='myrule')");
     useConfiguration(
+        "--java_toolchain=//java/com/google/test:toolchain",
         "--extra_toolchains=//java/com/google/test:all",
         "--platforms=//java/com/google/test:platform");
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
@@ -1905,6 +1982,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    exports = exports,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [",
         "      DefaultInfo(",
@@ -1921,6 +1999,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    'exports': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java']",
         ")");
@@ -1947,6 +2027,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    source_files = ctx.files.srcs,",
         "    output = output_jar,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [compilation_provider]",
         "java_custom_library = rule(",
@@ -1954,6 +2035,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  attrs = {",
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java'],",
         ")");
@@ -1984,6 +2067,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [compilation_provider]",
         "java_custom_library = rule(",
@@ -1992,6 +2076,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    'deps': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java'],",
         ")");
@@ -2025,6 +2111,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    exports = exports,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return [compilation_provider]",
         "java_custom_library = rule(",
@@ -2033,6 +2120,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    'exports': attr.label_list(),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(",
+        "        default = Label('" + HOST_JAVA_RUNTIME_LABEL + "'))",
         "  },",
         "  fragments = ['java'],",
         ")");
@@ -2056,6 +2145,45 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testConfiguredTargetHostJavabase() throws Exception {
+    writeBuildFileForJavaToolchain();
+
+    scratch.file(
+        "a/BUILD",
+        "load(':rule.bzl', 'jrule')",
+        "java_runtime(name='jvm', srcs=[], java_home='/foo/bar')",
+        "jrule(name='r', srcs=['S.java'])");
+
+    scratch.file(
+        "a/rule.bzl",
+        "def _impl(ctx):",
+        "  output_jar = ctx.actions.declare_file('lib' + ctx.label.name + '.jar')",
+        "  java_common.compile(",
+        "    ctx,",
+        "    source_files = ctx.files.srcs,",
+        "    output = output_jar,",
+        "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
+        "    host_javabase = ctx.attr._host_javabase",
+        "  )",
+        "  return []",
+        "jrule = rule(",
+        "  implementation = _impl,",
+        "  outputs = {",
+        "    'my_output': 'lib%{name}.jar'",
+        "  },",
+        "  attrs = {",
+        "    'srcs': attr.label_list(allow_files=['.java']),",
+        "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(default = Label('//a:jvm'))",
+        "  },",
+        "  fragments = ['java'])");
+
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//a:r");
+    assertContainsEvent("got value of type 'Target', want 'JavaRuntimeInfo'");
+  }
+
+  @Test
   public void testConfiguredTargetToolchain() throws Exception {
     writeBuildFileForJavaToolchain();
 
@@ -2074,6 +2202,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "    source_files = ctx.files.srcs,",
         "    output = output_jar,",
         "    java_toolchain = ctx.attr._java_toolchain,",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return []",
         "jrule = rule(",
@@ -2084,6 +2213,7 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  attrs = {",
         "    'srcs': attr.label_list(allow_files=['.java']),",
         "    '_java_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),",
+        "    '_host_javabase': attr.label(default = Label('//a:jvm'))",
         "  },",
         "  fragments = ['java'])");
 
@@ -2221,7 +2351,8 @@ public class JavaStarlarkApiTest extends BuildViewTestCase {
         "  )",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration("--extra_toolchains=//a:all", "--platforms=//a:platform");
+    useConfiguration(
+        "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     Depset files = (Depset) ct.get("files");
     assertThat(prettyArtifactNames(files.toList(Artifact.class))).containsExactly("a/a.txt");
