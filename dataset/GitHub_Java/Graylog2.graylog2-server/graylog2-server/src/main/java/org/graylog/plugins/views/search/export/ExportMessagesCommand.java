@@ -18,9 +18,7 @@ package org.graylog.plugins.views.search.export;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableSet;
-import org.elasticsearch.search.sort.SortOrder;
 import org.graylog.plugins.views.search.elasticsearch.ElasticsearchQueryString;
-import org.graylog.plugins.views.search.searchtypes.Sort;
 import org.graylog2.decorators.Decorator;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
@@ -36,17 +34,15 @@ import static org.graylog.plugins.views.search.export.LinkedHashSetUtil.linkedHa
 
 @AutoValue
 public abstract class ExportMessagesCommand {
-    public static final AbsoluteRange DEFAULT_TIME_RANGE = lastFiveMinutes();
     public static final ElasticsearchQueryString DEFAULT_QUERY = ElasticsearchQueryString.empty();
     public static final Set<String> DEFAULT_STREAMS = ImmutableSet.of();
     public static final LinkedHashSet<String> DEFAULT_FIELDS = linkedHashSetOf("timestamp", "source", "message");
-    public static final LinkedHashSet<Sort> DEFAULT_SORT = linkedHashSetOf(Sort.create("timestamp", SortOrder.DESC));
     public static final int DEFAULT_CHUNK_SIZE = 1000;
 
-    public static AbsoluteRange lastFiveMinutes() {
+    public static AbsoluteRange defaultTimeRange() {
         try {
-            RelativeRange relativeRange = RelativeRange.create(300);
-            return AbsoluteRange.create(relativeRange.getFrom(), relativeRange.getTo());
+            RelativeRange lastFiveMinutes = RelativeRange.create(300);
+            return AbsoluteRange.create(lastFiveMinutes.getFrom(), lastFiveMinutes.getTo());
         } catch (InvalidRangeParametersException e) {
             throw new RuntimeException("Error creating default time range", e);
         }
@@ -59,8 +55,6 @@ public abstract class ExportMessagesCommand {
     public abstract Set<String> streams();
 
     public abstract LinkedHashSet<String> fieldsInOrder();
-
-    public abstract LinkedHashSet<Sort> sort();
 
     public abstract List<Decorator> decorators();
 
@@ -84,6 +78,10 @@ public abstract class ExportMessagesCommand {
 
         public abstract Builder streams(Set<String> streams);
 
+        public Builder streams(String... streams) {
+            return streams(ImmutableSet.copyOf(streams));
+        }
+
         public abstract Builder queryString(ElasticsearchQueryString queryString);
 
         public abstract Builder fieldsInOrder(LinkedHashSet<String> fieldsInOrder);
@@ -91,8 +89,6 @@ public abstract class ExportMessagesCommand {
         public Builder fieldsInOrder(String... fieldsInOrder) {
             return fieldsInOrder(linkedHashSetOf(fieldsInOrder));
         }
-
-        public abstract Builder sort(LinkedHashSet<Sort> sort);
 
         public abstract Builder decorators(List<Decorator> decorators);
 
@@ -108,11 +104,10 @@ public abstract class ExportMessagesCommand {
 
         public static Builder create() {
             return new AutoValue_ExportMessagesCommand.Builder()
-                    .timeRange(DEFAULT_TIME_RANGE)
+                    .timeRange(defaultTimeRange())
                     .streams(DEFAULT_STREAMS)
                     .queryString(DEFAULT_QUERY)
                     .fieldsInOrder(DEFAULT_FIELDS)
-                    .sort(DEFAULT_SORT)
                     .decorators(Collections.emptyList())
                     .chunkSize(DEFAULT_CHUNK_SIZE);
         }
