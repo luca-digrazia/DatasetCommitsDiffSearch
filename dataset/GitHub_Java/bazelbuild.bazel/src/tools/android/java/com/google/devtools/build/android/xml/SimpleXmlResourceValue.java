@@ -258,8 +258,7 @@ public class SimpleXmlResourceValue implements XmlResourceValue {
     } else if (resourceType == ResourceType.BOOL && item.hasPrim()) {
       stringValue = item.getPrim().getData() == 0 ? "false" : "true";
     } else if (resourceType == ResourceType.FRACTION
-        || resourceType == ResourceType.DIMEN
-        || resourceType == ResourceType.STRING) {
+        || resourceType == ResourceType.DIMEN) {
       stringValue = Integer.toString(item.getPrim().getData());
     } else {
       throw new IllegalArgumentException(

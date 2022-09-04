@@ -84,7 +84,7 @@ public class ResourcesZip {
   public static ResourcesZip fromApk(Path resourcesRoot, Path apkWithAssets, Path resourceIds) {
     return new ResourcesZip(
         resourcesRoot,
-        /* assetsRoot= */ null,
+        null /* assetsRoot */,
         Optional.of(resourceIds).filter(Files::exists),
         Optional.of(apkWithAssets));
   }

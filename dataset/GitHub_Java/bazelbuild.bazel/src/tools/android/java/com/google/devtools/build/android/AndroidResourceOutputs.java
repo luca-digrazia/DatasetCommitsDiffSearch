@@ -30,8 +30,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collection;
 import java.util.GregorianCalendar;
 import java.util.List;
@@ -56,7 +56,7 @@ public class AndroidResourceOutputs {
 
     // The earliest date representable in a zip file, 1-1-1980 (the DOS epoch).
     private static final long ZIP_EPOCH =
-        new GregorianCalendar(1980, Calendar.JANUARY, 01, 0, 0).getTimeInMillis();
+        new GregorianCalendar(1980, 01, 01, 0, 0).getTimeInMillis();
 
     private final ZipOutputStream zip;
 
@@ -299,6 +299,8 @@ public class AndroidResourceOutputs {
     try {
       Files.createDirectories(manifestOut.getParent());
       Files.copy(provider.getManifest(), manifestOut);
+      // Set to the epoch for caching purposes.
+      Files.setLastModifiedTime(manifestOut, FileTime.fromMillis(0L));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -330,6 +332,8 @@ public class AndroidResourceOutputs {
         // outputs. This state occurs when there are no resource directories.
         Files.createFile(rOutput);
       }
+      // Set to the epoch for caching purposes.
+      Files.setLastModifiedTime(rOutput, FileTime.fromMillis(0L));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -345,6 +349,8 @@ public class AndroidResourceOutputs {
         visitor.writeEntries();
         visitor.writeManifestContent();
       }
+      // Set to the epoch for caching purposes.
+      Files.setLastModifiedTime(classJar, FileTime.fromMillis(0L));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -360,6 +366,8 @@ public class AndroidResourceOutputs {
         Files.walkFileTree(root, visitor);
         visitor.writeEntries();
       }
+      // Set to the epoch for caching purposes.
+      Files.setLastModifiedTime(archive, FileTime.fromMillis(0L));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -375,6 +383,8 @@ public class AndroidResourceOutputs {
         Files.walkFileTree(generatedSourcesRoot, visitor);
         visitor.writeEntries();
       }
+      // Set to the epoch for caching purposes.
+      Files.setLastModifiedTime(srcJar, FileTime.fromMillis(0L));
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
