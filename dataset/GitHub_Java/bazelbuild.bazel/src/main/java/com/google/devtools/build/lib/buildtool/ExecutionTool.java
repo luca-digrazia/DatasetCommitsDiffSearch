@@ -225,6 +225,7 @@ public class ExecutionTool {
 
     ActionGraph actionGraph = analysisResult.getActionGraph();
 
+
     OutputService outputService = env.getOutputService();
     ModifiedFileSet modifiedOutputFiles = ModifiedFileSet.EVERYTHING_MODIFIED;
     if (outputService != null) {
@@ -240,10 +241,8 @@ public class ExecutionTool {
       }
     }
 
-   if (outputService == null || !outputService.supportsActionFileSystem()) {
-     // Must be created after the output path is created above.
-     createActionLogDirectory();
-   }
+    // Must be created after the output path is created above.
+    createActionLogDirectory();
 
     // Create convenience symlinks from the configurations actually used by the requested targets.
     // Symlinks will be created if all such configurations would point the symlink to the same path;
@@ -350,7 +349,7 @@ public class ExecutionTool {
           executor,
           builtTargets,
           builtAspects,
-          request,
+          request.getBuildOptions().explanationPath != null,
           env.getBlazeWorkspace().getLastExecutionTimeRange(),
           topLevelArtifactContext);
       buildCompleted = true;
@@ -590,6 +589,7 @@ public class ExecutionTool {
       SkyframeExecutor skyframeExecutor,
       ModifiedFileSet modifiedOutputFiles) {
     BuildRequestOptions options = request.getBuildOptions();
+    boolean keepGoing = request.getKeepGoing();
 
     Path actionOutputRoot = env.getActionConsoleOutputDirectory();
     Predicate<Action> executionFilter = CheckUpToDateFilter.fromOptions(
@@ -597,6 +597,7 @@ public class ExecutionTool {
 
     // jobs should have been verified in BuildRequest#validateOptions().
     Preconditions.checkState(options.jobs >= -1);
+    int actualJobs = options.jobs == 0 ? 1 : options.jobs;  // Treat 0 jobs as a single task.
 
     skyframeExecutor.setActionOutputRoot(actionOutputRoot);
     ArtifactFactory artifactFactory = env.getSkyframeBuildView().getArtifactFactory();
@@ -611,11 +612,15 @@ public class ExecutionTool {
                 .setEnabled(options.useActionCache)
                 .setVerboseExplanations(options.verboseExplanations)
                 .build()),
+        keepGoing,
+        actualJobs,
         request.getPackageCacheOptions().checkOutputFiles
             ? modifiedOutputFiles
             : ModifiedFileSet.NOTHING_MODIFIED,
+        options.finalizeActions,
         fileCache,
-        prefetcher);
+        prefetcher,
+        request.getBuildOptions().progressReportInterval);
   }
 
   private void configureResourceManager(BuildRequest request) {

@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import java.util.Collection;
+import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -40,7 +41,7 @@ public final class AnalysisResult {
   private final ImmutableSet<AspectValue> aspects;
   private final PackageRoots packageRoots;
   private final String workspaceName;
-  private final Collection<TargetAndConfiguration> topLevelTargetsWithConfigs;
+  private final List<TargetAndConfiguration> topLevelTargetsWithConfigs;
 
   AnalysisResult(
       BuildConfigurationCollection configurations,
@@ -56,7 +57,7 @@ public final class AnalysisResult {
       TopLevelArtifactContext topLevelContext,
       PackageRoots packageRoots,
       String workspaceName,
-      Collection<TargetAndConfiguration> topLevelTargetsWithConfigs) {
+      List<TargetAndConfiguration> topLevelTargetsWithConfigs) {
     this.configurations = configurations;
     this.targetsToBuild = ImmutableSet.copyOf(targetsToBuild);
     this.aspects = aspects;
@@ -156,7 +157,7 @@ public final class AnalysisResult {
     return workspaceName;
   }
 
-  public Collection<TargetAndConfiguration> getTopLevelTargetsWithConfigs() {
+  public List<TargetAndConfiguration> getTopLevelTargetsWithConfigs() {
     return topLevelTargetsWithConfigs;
   }
 }

@@ -15,11 +15,13 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
@@ -32,8 +34,6 @@ import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.constraints.TopLevelConstraintSemantics;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
@@ -55,14 +55,11 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.PackageManager.PackageManagerStatistics;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.CoverageReportValue;
-import com.google.devtools.build.lib.skyframe.PrepareAnalysisPhaseValue;
 import com.google.devtools.build.lib.skyframe.SkyframeAnalysisResult;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
@@ -185,8 +182,7 @@ public class BuildView {
   @ThreadCompatible
   public AnalysisResult update(
       TargetPatternPhaseValue loadingResult,
-      BuildOptions targetOptions,
-      Set<String> multiCpu,
+      BuildConfigurationCollection configurations,
       List<String> aspects,
       AnalysisOptions viewOptions,
       boolean keepGoing,
@@ -194,7 +190,7 @@ public class BuildView {
       TopLevelArtifactContext topLevelOptions,
       ExtendedEventHandler eventHandler,
       EventBus eventBus)
-      throws ViewCreationFailedException, InvalidConfigurationException, InterruptedException {
+      throws ViewCreationFailedException, InterruptedException {
     logger.info("Starting analysis");
     pollInterruptedStatus();
 
@@ -206,49 +202,12 @@ public class BuildView {
         loadingResult.getTargets(eventHandler, skyframeExecutor.getPackageManager());
     eventBus.post(new AnalysisPhaseStartedEvent(targets));
 
-    // Prepare the analysis phase
-    BuildConfigurationCollection configurations;
-    Collection<TargetAndConfiguration> topLevelTargetsWithConfigs;
-    if (viewOptions.skyframePrepareAnalysis) {
-      PrepareAnalysisPhaseValue prepareAnalysisPhaseValue;
-      try (SilentCloseable c = Profiler.instance().profile("Prepare analysis phase")) {
-        prepareAnalysisPhaseValue = skyframeExecutor.prepareAnalysisPhase(
-            eventHandler, targetOptions, multiCpu, loadingResult.getTargetLabels());
-  
-        // Determine the configurations
-        configurations =
-            prepareAnalysisPhaseValue.getConfigurations(eventHandler, skyframeExecutor);
-        topLevelTargetsWithConfigs =
-            prepareAnalysisPhaseValue.getTopLevelCts(eventHandler, skyframeExecutor);
-      }
-    } else {
-      // Configuration creation.
-      // TODO(gregce): Consider dropping this phase and passing on-the-fly target / host configs as
-      // needed. This requires cleaning up the invalidation in SkyframeBuildView.setConfigurations.
-      try (SilentCloseable c = Profiler.instance().profile("createConfigurations")) {
-        configurations =
-            skyframeExecutor
-                .createConfigurations(
-                    eventHandler,
-                    targetOptions,
-                    multiCpu,
-                    keepGoing);
-      }
-      try (SilentCloseable c = Profiler.instance().profile("AnalysisUtils.getTargetsWithConfigs")) {
-        topLevelTargetsWithConfigs =
-            AnalysisUtils.getTargetsWithConfigs(
-                configurations, targets, eventHandler, ruleClassProvider, skyframeExecutor);
-      }
-    }
-
     skyframeBuildView.setConfigurations(eventHandler, configurations);
 
-    if (configurations.getTargetConfigurations().size() == 1) {
-      eventBus
-          .post(
-              new MakeEnvironmentEvent(
-                  configurations.getTargetConfigurations().get(0).getMakeEnvironment()));
-    }
+    // Determine the configurations.
+    List<TargetAndConfiguration> topLevelTargetsWithConfigs =
+        AnalysisUtils.getTargetsWithConfigs(
+            configurations, targets, eventHandler, ruleClassProvider, skyframeExecutor);
 
     // Report the generated association of targets to configurations
     Multimap<Label, BuildConfiguration> byLabel =
@@ -261,10 +220,14 @@ public class BuildView {
     }
 
     List<ConfiguredTargetKey> topLevelCtKeys =
-        topLevelTargetsWithConfigs
-            .stream()
-            .map(node -> ConfiguredTargetKey.of(node.getLabel(), node.getConfiguration()))
-            .collect(Collectors.toList());
+        Lists.transform(
+            topLevelTargetsWithConfigs,
+            new Function<TargetAndConfiguration, ConfiguredTargetKey>() {
+              @Override
+              public ConfiguredTargetKey apply(TargetAndConfiguration node) {
+                return ConfiguredTargetKey.of(node.getLabel(), node.getConfiguration());
+              }
+            });
 
     Multimap<Pair<Label, String>, BuildConfiguration> aspectConfigurations =
         ArrayListMultimap.create();
@@ -399,7 +362,7 @@ public class BuildView {
       AnalysisOptions viewOptions,
       SkyframeAnalysisResult skyframeAnalysisResult,
       Set<ConfiguredTarget> targetsToSkip,
-      Collection<TargetAndConfiguration> topLevelTargetsWithConfigs)
+      List<TargetAndConfiguration> topLevelTargetsWithConfigs)
       throws InterruptedException {
     Set<Label> testsToRun = loadingResult.getTestsToRunLabels();
     Set<ConfiguredTarget> configuredTargets =

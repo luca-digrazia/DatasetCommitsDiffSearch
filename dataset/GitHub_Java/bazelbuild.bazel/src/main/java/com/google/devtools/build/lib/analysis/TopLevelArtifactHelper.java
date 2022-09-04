@@ -156,7 +156,7 @@ public final class TopLevelArtifactHelper {
   }
 
   static void addArtifactsWithOwnerLabel(
-      Iterable<? extends Artifact> artifacts,
+      Iterable<Artifact> artifacts,
       @Nullable RegexFilter filter,
       Label ownerLabel,
       ArtifactsToOwnerLabels.Builder artifactsToOwnerLabelsBuilder) {
