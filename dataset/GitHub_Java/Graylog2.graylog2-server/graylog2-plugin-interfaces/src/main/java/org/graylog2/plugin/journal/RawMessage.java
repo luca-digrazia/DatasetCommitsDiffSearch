@@ -186,7 +186,6 @@ public class RawMessage implements Serializable {
                 .array(); // TODO PERFORMANCE object creation
     }
 
-    @Nullable
     public ResolvableInetSocketAddress getRemoteAddress() {
         if (msgBuilder.hasRemote()) {
             final JournalMessages.RemoteAddress address = msgBuilder.getRemote();

@@ -22,7 +22,6 @@
  */
 package org.graylog2.plugin.buffers;
 
-import com.google.common.base.MoreObjects;
 import com.lmax.disruptor.EventFactory;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.journal.RawMessage;
@@ -68,20 +67,8 @@ public class MessageEvent {
         setMessage(null);
     }
 
-    public void clearRaw() {
-        this.raw = null;
-    }
-
     @Nonnull
     public RawMessage getRaw() {
         return raw;
-    }
-
-    @Override
-    public String toString() {
-        return MoreObjects.toStringHelper(this)
-                .add("raw", raw)
-                .add("message", msg)
-                .toString();
     }
 }

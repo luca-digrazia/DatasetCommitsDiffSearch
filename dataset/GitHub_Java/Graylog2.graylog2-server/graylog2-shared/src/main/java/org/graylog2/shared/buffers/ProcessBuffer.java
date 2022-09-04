@@ -16,10 +16,7 @@
  */
 package org.graylog2.shared.buffers;
 
-import com.codahale.metrics.InstrumentedExecutorService;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
+import com.codahale.metrics.*;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -80,8 +77,13 @@ public class ProcessBuffer extends Buffer {
     }
 
     private ExecutorService executorService(MetricRegistry metricRegistry) {
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("processbufferprocessor-%d").build();
-        return new InstrumentedExecutorService(Executors.newCachedThreadPool(threadFactory), metricRegistry);
+        return new InstrumentedExecutorService(
+                Executors.newCachedThreadPool(threadFactory(metricRegistry)), metricRegistry);
+    }
+
+    private ThreadFactory threadFactory(MetricRegistry metricRegistry) {
+        return new InstrumentedThreadFactory(
+                new ThreadFactoryBuilder().setNameFormat("processbufferprocessor-%d").build(), metricRegistry);
     }
 
     public void initialize(ProcessBufferProcessor[] processors,
