@@ -342,16 +342,4 @@ public class PipelineInterpreter implements MessageProcessor {
         scheduler.schedule((Runnable) this::reload, 0, TimeUnit.SECONDS);
     }
 
-    public static class Descriptor implements MessageProcessor.Descriptor {
-        @Override
-        public String name() {
-            return "Pipeline Processor";
-        }
-
-        @Override
-        public String className() {
-            return PipelineInterpreter.class.getCanonicalName();
-        }
-    }
-
 }
