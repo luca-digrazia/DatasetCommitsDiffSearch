@@ -31,7 +31,7 @@ import smile.util.SparseArray;
  * 
  * @author Haifeng Li
  */
-public class SparsePolynomialKernel implements MercerKernel<SparseArray>, DotProductKernel {
+public class SparsePolynomialKernel implements MercerKernel<SparseArray> {
     private static final long serialVersionUID = 1L;
 
     private int degree;
@@ -65,11 +65,6 @@ public class SparsePolynomialKernel implements MercerKernel<SparseArray>, DotPro
     @Override
     public String toString() {
         return String.format("Sparse Polynomial Kernel (scale = %.4f, offset = %.4f)", scale, offset);
-    }
-
-    @Override
-    public double k(double dot) {
-        return Math.pow(scale * dot + offset, degree);
     }
 
     @Override

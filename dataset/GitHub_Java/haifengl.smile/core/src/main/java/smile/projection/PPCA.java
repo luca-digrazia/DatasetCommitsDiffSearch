@@ -19,8 +19,10 @@ package smile.projection;
 
 import java.io.Serializable;
 import smile.math.MathEx;
-import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.Cholesky;
+import smile.math.matrix.EVD;
 
 /**
  * Probabilistic principal component analysis. Probabilistic PCA is
@@ -65,11 +67,11 @@ public class PPCA implements LinearProjection, Serializable {
     /**
      * The loading matrix.
      */
-    private Matrix loading;
+    private DenseMatrix loading;
     /**
      * The projection matrix.
      */
-    private Matrix projection;
+    private DenseMatrix projection;
 
     /**
      * Constructor.
@@ -78,21 +80,21 @@ public class PPCA implements LinearProjection, Serializable {
      * @param loading the loading matrix.
      * @param projection the projection matrix.
      */
-    public PPCA(double noise, double[] mu, Matrix loading, Matrix projection) {
+    public PPCA(double noise, double[] mu, DenseMatrix loading, DenseMatrix projection) {
         this.noise = noise;
         this.mu = mu;
         this.loading = loading;
         this.projection = projection;
 
         pmu = new double[projection.nrows()];
-        projection.mv(mu, pmu);
+        projection.ax(mu, pmu);
     }
 
     /**
      * Returns the variable loading matrix, ordered from largest to smallest
      * by corresponding eigenvalues.
      */
-    public Matrix getLoadings() {
+    public DenseMatrix getLoadings() {
         return loading;
     }
 
@@ -115,7 +117,7 @@ public class PPCA implements LinearProjection, Serializable {
      * latent model.
      */
     @Override
-    public Matrix getProjection() {
+    public DenseMatrix getProjection() {
         return projection;
     }
 
@@ -126,7 +128,7 @@ public class PPCA implements LinearProjection, Serializable {
         }
 
         double[] y = new double[projection.nrows()];
-        projection.mv(x, y);
+        projection.ax(x, y);
         MathEx.sub(y, pmu);
         return y;
     }
@@ -139,7 +141,7 @@ public class PPCA implements LinearProjection, Serializable {
 
         double[][] y = new double[x.length][projection.nrows()];
         for (int i = 0; i < x.length; i++) {
-            projection.mv(x[i], y[i]);
+            projection.ax(x[i], y[i]);
             MathEx.sub(y[i], pmu);
         }
         return y;
@@ -155,7 +157,7 @@ public class PPCA implements LinearProjection, Serializable {
         int n = data[0].length;
 
         double[] mu = MathEx.colMeans(data);
-        Matrix cov = new Matrix(n, n);
+        DenseMatrix cov = Matrix.zeros(n, n);
         for (int l = 0; l < m; l++) {
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j <= i; j++) {
@@ -171,10 +173,10 @@ public class PPCA implements LinearProjection, Serializable {
             }
         }
 
-        cov.uplo(UPLO.LOWER);
-        Matrix.EVD eigen = cov.eigen().sort();
-        double[] evalues = eigen.wr;
-        Matrix evectors = eigen.Vr;
+        cov.setSymmetric(true);
+        EVD eigen = cov.eigen();
+        double[] evalues = eigen.getEigenValues();
+        DenseMatrix evectors = eigen.getEigenVectors();
 
         double noise = 0.0;
         for (int i = k; i < n; i++) {
@@ -182,21 +184,21 @@ public class PPCA implements LinearProjection, Serializable {
         }
         noise /= (n - k);
 
-        Matrix loading = new Matrix(n, k);
+        DenseMatrix loading = Matrix.zeros(n, k);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < k; j++) {
                 loading.set(i, j, evectors.get(i, j) * Math.sqrt(evalues[j] - noise));
             }
         }
 
-        Matrix M = loading.ata();
+        DenseMatrix M = loading.ata();
         for (int i = 0; i < k; i++) {
             M.add(i, i, noise);
         }
 
-        Matrix.Cholesky chol = M.cholesky();
-        Matrix Mi = chol.inverse();
-        Matrix projection = Mi.mt(loading);
+        Cholesky chol = M.cholesky();
+        DenseMatrix Mi = chol.inverse();
+        DenseMatrix projection = Mi.abtmm(loading);
 
         return new PPCA(noise, mu, loading, projection);
     }

@@ -29,7 +29,7 @@ package smile.math.kernel;
  * 
  * @author Haifeng Li
  */
-public class BinarySparseThinPlateSplineKernel implements MercerKernel<int[]>, IsotropicKernel {
+public class BinarySparseThinPlateSplineKernel implements MercerKernel<int[]> {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -42,9 +42,8 @@ public class BinarySparseThinPlateSplineKernel implements MercerKernel<int[]>, I
      * @param sigma the smooth/width parameter of Thin Plate Spline kernel.
      */
     public BinarySparseThinPlateSplineKernel(double sigma) {
-        if (sigma <= 0) {
+        if (sigma <= 0)
             throw new IllegalArgumentException("sigma is not positive.");
-        }
 
         this.sigma = sigma;
     }
@@ -52,11 +51,6 @@ public class BinarySparseThinPlateSplineKernel implements MercerKernel<int[]>, I
     @Override
     public String toString() {
         return String.format("Sparse Linear Thin Plate Spline Kernel (\u02E0 = %.4f)", sigma);
-    }
-
-    @Override
-    public double k(double dist) {
-        return dist/(sigma*sigma) * Math.log(Math.sqrt(dist)/sigma);
     }
 
     @Override

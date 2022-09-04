@@ -1,40 +1,39 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
-package smile.math.matrix;
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ ******************************************************************************/
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import smile.math.Complex;
-import smile.math.Math;
+package smile.math.matrix;
 
 /**
  * Eigen decomposition of a real matrix. Eigen decomposition is the factorization
  * of a matrix into a canonical form, whereby the matrix is represented in terms
  * of its eigenvalues and eigenvectors:
  * <p>
- * A = V*D*V<sup>-1</sup>
- * <p>
+ * <pre>
+ *     A = V*D*V<sup>-1</sup>
+ * </pre>
  * If A is symmetric, then A = V*D*V' where the eigenvalue matrix D is
  * diagonal and the eigenvector matrix V is orthogonal.
  * <p>
  * Given a linear transformation A, a non-zero vector x is defined to be an
  * eigenvector of the transformation if it satisfies the eigenvalue equation
  * <p>
- * A x = &lambda; x
- * <p>
+ * <pre>
+ *     A x = &lambda; x
+ * </pre>
  * for some scalar &lambda;. In this situation, the scalar &lambda; is called
  * an eigenvalue of A corresponding to the eigenvector x.
  * <p>

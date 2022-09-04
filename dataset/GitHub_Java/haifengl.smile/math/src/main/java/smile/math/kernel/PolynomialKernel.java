@@ -30,7 +30,7 @@ import smile.math.MathEx;
  * 
  * @author Haifeng Li
  */
-public class PolynomialKernel implements MercerKernel<double[]>, DotProductKernel {
+public class PolynomialKernel implements MercerKernel<double[]> {
     private static final long serialVersionUID = 1L;
 
     private int degree;
@@ -67,15 +67,9 @@ public class PolynomialKernel implements MercerKernel<double[]>, DotProductKerne
     }
 
     @Override
-    public double k(double dot) {
-        return Math.pow(scale * dot + offset, degree);
-    }
-
-    @Override
     public double k(double[] x, double[] y) {
-        if (x.length != y.length) {
+        if (x.length != y.length)
             throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
 
         double dot = MathEx.dot(x, y);
         return Math.pow(scale * dot + offset, degree);

@@ -30,7 +30,7 @@ package smile.math.kernel;
  * 
  * @author Haifeng Li
  */
-public class BinarySparsePolynomialKernel implements MercerKernel<int[]>, DotProductKernel {
+public class BinarySparsePolynomialKernel implements MercerKernel<int[]> {
     private static final long serialVersionUID = 1L;
 
     private int degree;
@@ -64,11 +64,6 @@ public class BinarySparsePolynomialKernel implements MercerKernel<int[]>, DotPro
     @Override
     public String toString() {
         return String.format("Sparse Binary Polynomial Kernel (scale = %.4f, offset = %.4f)", scale, offset);
-    }
-
-    @Override
-    public double k(double dot) {
-        return Math.pow(scale * dot + offset, degree);
     }
 
     @Override

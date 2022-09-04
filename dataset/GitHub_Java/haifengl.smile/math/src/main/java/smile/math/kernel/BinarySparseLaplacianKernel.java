@@ -29,7 +29,7 @@ package smile.math.kernel;
  *
  * @author Haifeng Li
  */
-public class BinarySparseLaplacianKernel implements MercerKernel<int[]>, IsotropicKernel {
+public class BinarySparseLaplacianKernel implements MercerKernel<int[]> {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -42,9 +42,8 @@ public class BinarySparseLaplacianKernel implements MercerKernel<int[]>, Isotrop
      * @param sigma the smooth/width parameter of Laplacian kernel.
      */
     public BinarySparseLaplacianKernel(double sigma) {
-        if (sigma <= 0) {
+        if (sigma <= 0)
             throw new IllegalArgumentException("sigma is not positive.");
-        }
 
         this.gamma = 1.0 / sigma;
     }
@@ -55,15 +54,9 @@ public class BinarySparseLaplacianKernel implements MercerKernel<int[]>, Isotrop
     }
 
     @Override
-    public double k(double dist) {
-        return Math.exp(-gamma * Math.sqrt(dist));
-    }
-
-    @Override
     public double k(int[] x, int[] y) {
-        if (x.length != y.length) {
+        if (x.length != y.length)
             throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
 
         double d = 0.0;
         int p1 = 0, p2 = 0;

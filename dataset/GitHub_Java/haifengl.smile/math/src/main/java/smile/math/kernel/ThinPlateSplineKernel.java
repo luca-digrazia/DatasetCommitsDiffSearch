@@ -17,8 +17,6 @@
 
 package smile.math.kernel;
 
-import smile.math.MathEx;
-
 /**
  * The Thin Plate Spline Kernel.
  * <p>
@@ -29,7 +27,7 @@ import smile.math.MathEx;
  * 
  * @author Haifeng Li
  */
-public class ThinPlateSplineKernel implements MercerKernel<double[]>, IsotropicKernel {
+public class ThinPlateSplineKernel implements MercerKernel<double[]> {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -42,9 +40,8 @@ public class ThinPlateSplineKernel implements MercerKernel<double[]>, IsotropicK
      * @param sigma the smooth/width parameter of Thin Plate Spline kernel.
      */
     public ThinPlateSplineKernel(double sigma) {
-        if (sigma <= 0) {
+        if (sigma <= 0)
             throw new IllegalArgumentException("sigma is not positive.");
-        }
 
         this.sigma = sigma;
     }
@@ -55,17 +52,17 @@ public class ThinPlateSplineKernel implements MercerKernel<double[]>, IsotropicK
     }
 
     @Override
-    public double k(double dist) {
-        return dist/(sigma*sigma) * Math.log(Math.sqrt(dist)/sigma);
-    }
-
-    @Override
     public double k(double[] x, double[] y) {
-        if (x.length != y.length) {
+        if (x.length != y.length)
             throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
+        
+        double d = 0.0;
 
-        double d = MathEx.squaredDistance(x, y);
+        for (int i = 0; i < x.length; i++) {
+            double dxy = x[i] - y[i];
+            d += dxy * dxy;
+        }
+            
         return d/(sigma*sigma) * Math.log(Math.sqrt(d)/sigma);
     }
 }
