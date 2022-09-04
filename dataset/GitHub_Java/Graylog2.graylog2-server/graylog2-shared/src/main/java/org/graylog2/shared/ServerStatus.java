@@ -21,24 +21,18 @@ package org.graylog2.shared;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.common.eventbus.EventBus;
-import com.google.inject.Inject;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 
-import javax.inject.Singleton;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-@Singleton
 public class ServerStatus {
-    private final EventBus eventBus;
-
     public enum Capability {
         SERVER,
         RADIO,
@@ -55,14 +49,11 @@ public class ServerStatus {
     private final AtomicBoolean isProcessing = new AtomicBoolean(true);
     private final AtomicBoolean processingPauseLocked = new AtomicBoolean(false);
 
-    @Inject
-    public ServerStatus(BaseConfiguration configuration, Set<Capability> capabilities, EventBus eventBus) {
-        this.eventBus = eventBus;
+    public ServerStatus(BaseConfiguration configuration) {
         this.nodeId = new NodeId(configuration.getNodeIdFile());
+        this.lifecycle = Lifecycle.UNINITIALIZED;
         this.startedAt = new DateTime(DateTimeZone.UTC);
-        this.capabilitySet = Sets.newHashSet(capabilities); // copy, because we support adding more capabilities later
-
-        setLifecycle(Lifecycle.UNINITIALIZED);
+        this.capabilitySet = Sets.newHashSet();
     }
 
     public NodeId getNodeId() {
@@ -74,19 +65,7 @@ public class ServerStatus {
     }
 
     public void setLifecycle(Lifecycle lifecycle) {
-        // special case the two lifecycle states that influence whether processing is enabled or not.
-        switch (lifecycle) {
-            case RUNNING:
-                isProcessing.set(true);
-                break;
-            case UNINITIALIZED:
-            case STARTING:
-            case PAUSED:
-                isProcessing.set(false);
-                break;
-        }
         this.lifecycle = lifecycle;
-        eventBus.post(this.lifecycle);
     }
 
     public DateTime getStartedAt() {
@@ -115,15 +94,24 @@ public class ServerStatus {
         return this.capabilitySet.containsAll(Lists.newArrayList(capabilities));
     }
 
-    public boolean isProcessing() {
-        return isProcessing.get();
+    public void setPaused() {
+        this.lifecycle = Lifecycle.PAUSED;
     }
 
     public void pauseMessageProcessing() {
         pauseMessageProcessing(true);
     }
 
+    public void setRunning() {
+        this.lifecycle = Lifecycle.RUNNING;
+    }
+
+    public boolean isProcessing() {
+        return this.lifecycle == Lifecycle.RUNNING;
+    }
+
     public void pauseMessageProcessing(boolean locked) {
+        isProcessing.set(false);
         setLifecycle(Lifecycle.PAUSED);
 
         // Never override pause lock if already locked.
@@ -138,6 +126,7 @@ public class ServerStatus {
                     "or manually unlock if you know what you are doing.");
         }
 
+        isProcessing.set(true);
         setLifecycle(Lifecycle.RUNNING);
     }
 
