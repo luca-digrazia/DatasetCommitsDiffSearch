@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,15 +15,15 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.periodical;
 
-import com.google.inject.Inject;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.graylog2.Configuration;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.NoTargetIndexException;
+import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.indexer.retention.RetentionStrategyFactory;
 import org.graylog2.plugin.indexer.retention.RetentionStrategy;
@@ -31,28 +31,31 @@ import org.graylog2.system.activities.Activity;
 import org.graylog2.system.jobs.SystemJobConcurrencyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
 
 import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class IndexRetentionThread extends Periodical {
+public class IndexRetentionThread implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(IndexRetentionThread.class);
 
-    private final Configuration configuration;
+    private final Core server;
+    
+    public static final int INITIAL_DELAY = 0;
+    public static final int PERIOD = 300; // Run every five minutes.
 
-    @Inject
-    public IndexRetentionThread(Configuration configuration) {
-        this.configuration = configuration;
+    public IndexRetentionThread(Core server) {
+        this.server = server;
     }
 
     @Override
     public void run() {
-        Map<String, IndexStats> indices = core.getDeflector().getAllDeflectorIndices();
+        Map<String, IndexStats> indices = server.getDeflector().getAllDeflectorIndices();
         int indexCount = indices.size();
-        int maxIndices = configuration.getMaxNumberOfIndices();
+        int maxIndices = server.getConfiguration().getMaxNumberOfIndices();
 
         // Do we have more indices than the configured maximum?
         if (indexCount <= maxIndices) {
@@ -66,11 +69,11 @@ public class IndexRetentionThread extends Periodical {
         String msg = "Number of indices (" + indexCount + ") higher than limit (" + maxIndices + "). " +
                 "Running retention for " + removeCount + " indices.";
         LOG.info(msg);
-        core.getActivityWriter().write(new Activity(msg, IndexRetentionThread.class));
+        server.getActivityWriter().write(new Activity(msg, IndexRetentionThread.class));
 
         try {
             runRetention(
-                    RetentionStrategyFactory.fromString(core, configuration.getRetentionStrategy()),
+                    RetentionStrategyFactory.fromString(server, server.getConfiguration().getRetentionStrategy()),
                     indices,
                     removeCount
             );
@@ -84,7 +87,7 @@ public class IndexRetentionThread extends Periodical {
     public void runRetention(RetentionStrategy strategy, Map<String, IndexStats> indices, int removeCount) throws NoTargetIndexException {
         for (String indexName : IndexHelper.getOldestIndices(indices.keySet(), removeCount)) {
             // Never run against the current deflector target.
-            if (core.getDeflector().getCurrentActualTargetIndex().equals(indexName)) {
+            if (server.getDeflector().getCurrentActualTargetIndex().equals(indexName)) {
                 LOG.info("Not running retention against current deflector target <{}>.", indexName);
                 continue;
             }
@@ -93,7 +96,7 @@ public class IndexRetentionThread extends Periodical {
              * Never run against a re-opened index. Indices are marked as re-opened by storing a setting
              * attribute and we can check for that here.
              */
-            if (core.getIndexer().indices().isReopened(indexName)) {
+            if (server.getIndexer().indices().isReopened(indexName)) {
                 LOG.info("Not running retention against reopened index <{}>.", indexName);
                 continue;
             }
@@ -101,7 +104,7 @@ public class IndexRetentionThread extends Periodical {
             String msg = "Running retention strategy [" + strategy.getClass().getCanonicalName() + "] " +
                     "for index <" + indexName + ">";
             LOG.info(msg);
-            core.getActivityWriter().write(new Activity(msg, IndexRetentionThread.class));
+            server.getActivityWriter().write(new Activity(msg, IndexRetentionThread.class));
 
             // Sorry if this should ever go mad. Run retention strategy!
             strategy.runStrategy(indexName);
@@ -109,48 +112,12 @@ public class IndexRetentionThread extends Periodical {
 
         // Re-calculate index ranges.
         try {
-            core.getSystemJobManager().submit(new RebuildIndexRangesJob(core));
+            server.getSystemJobManager().submit(new RebuildIndexRangesJob(server));
         } catch (SystemJobConcurrencyException e) {
             String msg = "Could not re-calculate index ranges after running retention: Maximum concurrency of job is reached.";
-            core.getActivityWriter().write(new Activity(msg, IndexRetentionThread.class));
+            server.getActivityWriter().write(new Activity(msg, IndexRetentionThread.class));
             LOG.error(msg);
         }
-    }
-
-    @Override
-    public boolean runsForever() {
-        return false;
-    }
-
-    @Override
-    public boolean stopOnGracefulShutdown() {
-        return true;
-    }
-
-    @Override
-    public boolean masterOnly() {
-        return true;
-    }
-
-    @Override
-    public boolean startOnThisNode() {
-        return core.getConfiguration().performRetention();
-    }
-
-    @Override
-    public boolean isDaemon() {
-        return false;
-    }
-
-    @Override
-    public int getInitialDelaySeconds() {
-        return 0;
-    }
-
-    @Override
-    public int getPeriodSeconds() {
-        // Five minutes.
-        return 300;
     }
 
 }
