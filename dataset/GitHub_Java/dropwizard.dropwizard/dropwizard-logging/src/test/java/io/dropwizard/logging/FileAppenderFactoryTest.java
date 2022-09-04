@@ -1,5 +1,21 @@
 package io.dropwizard.logging;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+import javax.validation.Validator;
+
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.io.Files;
+
 import ch.qos.logback.classic.AsyncAppender;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
@@ -10,8 +26,6 @@ import ch.qos.logback.core.rolling.FixedWindowRollingPolicy;
 import ch.qos.logback.core.rolling.RollingFileAppender;
 import ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP;
 import ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy;
-import com.google.common.collect.ImmutableList;
-import com.google.common.io.Files;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.logging.async.AsyncLoggingEventAppenderFactory;
 import io.dropwizard.logging.filter.NullLevelFilterFactory;
@@ -19,17 +33,6 @@ import io.dropwizard.logging.layout.DropwizardLayoutFactory;
 import io.dropwizard.util.Size;
 import io.dropwizard.validation.BaseValidator;
 import io.dropwizard.validation.ConstraintViolations;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.slf4j.LoggerFactory;
-
-import javax.validation.Validator;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 public class FileAppenderFactoryTest {
 
@@ -77,7 +80,7 @@ public class FileAppenderFactoryTest {
     }
 
     @Test
-    public void hasArchivedLogFilenamePattern() throws Exception {
+    public void hasArchivedLogFilenamePattern() throws Exception{
         FileAppenderFactory fileAppenderFactory = new FileAppenderFactory();
         fileAppenderFactory.setCurrentLogFilename(folder.newFile("logfile.log").toString());
         ImmutableList<String> errors =
@@ -91,7 +94,7 @@ public class FileAppenderFactoryTest {
     }
 
     @Test
-    public void isValidForInfiniteRolledFiles() throws Exception {
+    public void isValidForInfiniteRolledFiles() throws Exception{
         FileAppenderFactory fileAppenderFactory = new FileAppenderFactory();
         fileAppenderFactory.setCurrentLogFilename(folder.newFile("logfile.log").toString());
         fileAppenderFactory.setArchivedFileCount(0);
@@ -103,7 +106,7 @@ public class FileAppenderFactoryTest {
     }
 
     @Test
-    public void isValidForMaxFileSize() throws Exception {
+    public void isValidForMaxFileSize() throws Exception{
         FileAppenderFactory fileAppenderFactory = new FileAppenderFactory();
         fileAppenderFactory.setCurrentLogFilename(folder.newFile("logfile.log").toString());
         fileAppenderFactory.setMaxFileSize(Size.kilobytes(1));
@@ -118,7 +121,7 @@ public class FileAppenderFactoryTest {
     }
 
     @Test
-    public void hasMaxFileSizeValidation() throws Exception {
+    public void hasMaxFileSizeValidation() throws Exception{
         FileAppenderFactory fileAppenderFactory = new FileAppenderFactory();
         fileAppenderFactory.setCurrentLogFilename(folder.newFile("logfile.log").toString());
         fileAppenderFactory.setArchivedLogFilenamePattern(folder.newFile("example-%i.log.gz").toString());
@@ -130,7 +133,7 @@ public class FileAppenderFactoryTest {
         errors = ConstraintViolations.format(validator.validate(fileAppenderFactory));
         assertThat(errors).isEmpty();
     }
-
+    
     @Test
     public void testCurrentFileNameErrorWhenArchiveIsNotEnabled() throws Exception {
         FileAppenderFactory fileAppenderFactory = new FileAppenderFactory();
@@ -143,7 +146,7 @@ public class FileAppenderFactoryTest {
         errors = ConstraintViolations.format(validator.validate(fileAppenderFactory));
         assertThat(errors).isEmpty();
     }
-
+    
     @Test
     public void testCurrentFileNameCanBeNullWhenArchiveIsEnabled() throws Exception {
         FileAppenderFactory fileAppenderFactory = new FileAppenderFactory();
@@ -190,13 +193,10 @@ public class FileAppenderFactoryTest {
         RollingFileAppender<ILoggingEvent> appender = (RollingFileAppender<ILoggingEvent>) fileAppenderFactory.buildAppender(new LoggerContext());
 
         assertThat(appender.getRollingPolicy()).isInstanceOf(FixedWindowRollingPolicy.class);
-        assertThat(appender.getRollingPolicy().isStarted()).isTrue();
-        
         assertThat(appender.getTriggeringPolicy()).isInstanceOf(SizeBasedTriggeringPolicy.class);
-        assertThat(appender.getTriggeringPolicy().isStarted()).isTrue();
         assertThat(((SizeBasedTriggeringPolicy) appender.getTriggeringPolicy()).getMaxFileSize()).isEqualTo("1024");
     }
-
+    
     @Test
     public void appenderContextIsSet() throws Exception {
         final Logger root = (Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
