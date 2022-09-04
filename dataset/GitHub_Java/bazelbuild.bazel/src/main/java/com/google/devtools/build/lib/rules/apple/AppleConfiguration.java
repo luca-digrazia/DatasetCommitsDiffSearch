@@ -95,7 +95,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   private final boolean enableAppleCrosstool;
   @Nullable private final String xcodeToolchain;
   @Nullable private final Label defaultProvisioningProfileLabel;
-  private final boolean mandatoryMinimumVersion;
 
   AppleConfiguration(
       AppleCommandLineOptions appleOptions,
@@ -147,7 +146,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     this.enableAppleCrosstool = appleOptions.enableAppleCrosstoolTransition;
     this.defaultProvisioningProfileLabel = appleOptions.defaultProvisioningProfile;
     this.xcodeToolchain = appleOptions.xcodeToolchain;
-    this.mandatoryMinimumVersion = appleOptions.mandatoryMinimumVersion;
   }
 
   /** Determines cpu value from apple-specific toolchain identifier. */
@@ -616,11 +614,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   )
   public String getXcodeToolchain() {
     return xcodeToolchain;
-  }
-
-  /** Returns true if the minimum_os_version attribute should be mandatory on rules with linking. */
-  public boolean isMandatoryMinimumVersion() {
-    return mandatoryMinimumVersion;
   }
 
   /** Returns true if {@link AppleCrosstoolTransition} should be applied to every apple rule. */
