@@ -17,7 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.remote.util.DigestUtil.toBinaryDigest;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.cache.MetadataInjector;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.remote.AbstractRemoteActionCache.UploadManifest;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
@@ -755,8 +754,8 @@ public class AbstractRemoteActionCacheTests {
             .addOutputFiles(OutputFile.newBuilder().setPath("outputs/file2").setDigest(d2))
             .build();
 
-    Artifact a1 = ActionsTestUtil.createArtifact(artifactRoot, "file1");
-    Artifact a2 = ActionsTestUtil.createArtifact(artifactRoot, "file2");
+    Artifact a1 = new Artifact(PathFragment.create("file1"), artifactRoot);
+    Artifact a2 = new Artifact(PathFragment.create("file2"), artifactRoot);
 
     MetadataInjector injector = mock(MetadataInjector.class);
 
@@ -946,8 +945,8 @@ public class AbstractRemoteActionCacheTests {
             .addOutputFiles(OutputFile.newBuilder().setPath("outputs/file1").setDigest(d1))
             .addOutputFiles(OutputFile.newBuilder().setPath("outputs/file2").setDigest(d2))
             .build();
-    Artifact a1 = ActionsTestUtil.createArtifact(artifactRoot, "file1");
-    Artifact a2 = ActionsTestUtil.createArtifact(artifactRoot, "file2");
+    Artifact a1 = new Artifact(PathFragment.create("file1"), artifactRoot);
+    Artifact a2 = new Artifact(PathFragment.create("file2"), artifactRoot);
     MetadataInjector injector = mock(MetadataInjector.class);
     // a1 should be provided as an InMemoryOutput
     PathFragment inMemoryOutputPathFragment = a1.getPath().relativeTo(execRoot);

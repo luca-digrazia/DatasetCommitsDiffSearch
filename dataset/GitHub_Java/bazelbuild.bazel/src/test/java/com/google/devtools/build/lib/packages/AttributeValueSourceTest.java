@@ -15,9 +15,10 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -34,10 +35,10 @@ public class AttributeValueSourceTest {
   @Test
   public void testValidateSkylarkName() throws Exception {
     // Success means "no exception is being thrown".
-    AttributeValueSource.COMPUTED_DEFAULT.validateSkylarkName("_name");
-    AttributeValueSource.LATE_BOUND.validateSkylarkName("_name");
-    AttributeValueSource.DIRECT.validateSkylarkName("_name");
-    AttributeValueSource.DIRECT.validateSkylarkName("name");
+    AttributeValueSource.COMPUTED_DEFAULT.validateSkylarkName("_name", Location.BUILTIN);
+    AttributeValueSource.LATE_BOUND.validateSkylarkName("_name", Location.BUILTIN);
+    AttributeValueSource.DIRECT.validateSkylarkName("_name", Location.BUILTIN);
+    AttributeValueSource.DIRECT.validateSkylarkName("name", Location.BUILTIN);
   }
 
   @Test
@@ -58,7 +59,8 @@ public class AttributeValueSourceTest {
 
   private void assertNameIsNotValid(
       AttributeValueSource source, String name, String expectedExceptionMessage) throws Exception {
-    EvalException ex = assertThrows(EvalException.class, () -> source.validateSkylarkName(name));
+    EvalException ex =
+        assertThrows(EvalException.class, () -> source.validateSkylarkName(name, Location.BUILTIN));
     assertThat(ex).hasMessageThat().isEqualTo(expectedExceptionMessage);
   }
 
@@ -72,7 +74,8 @@ public class AttributeValueSourceTest {
 
   private void assertConvertsToCorrectNativeName(
       AttributeValueSource source, String skylarkName, String expectedNativeName) throws Exception {
-    assertThat(source.convertToNativeName(skylarkName)).isEqualTo(expectedNativeName);
+    assertThat(source.convertToNativeName(skylarkName, Location.BUILTIN))
+        .isEqualTo(expectedNativeName);
   }
 
   @Test
@@ -84,7 +87,8 @@ public class AttributeValueSourceTest {
   private void assertTranslationFails(AttributeValueSource source, String invalidName)
       throws Exception {
     EvalException ex =
-        assertThrows(EvalException.class, () -> source.convertToNativeName(invalidName));
+        assertThrows(
+            EvalException.class, () -> source.convertToNativeName(invalidName, Location.BUILTIN));
     assertThat(ex)
         .hasMessageThat()
         .isEqualTo(

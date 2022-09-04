@@ -259,8 +259,7 @@ public class AttributeTest {
     assertThat(attr.getTransitionFactory().isSplit()).isTrue();
     ConfigurationTransition transition =
         attr.getTransitionFactory()
-            .create(
-                AttributeTransitionData.builder().attributes(FakeAttributeMapper.empty()).build());
+            .create(AttributeTransitionData.create(FakeAttributeMapper.empty()));
     assertThat(transition).isEqualTo(splitTransition);
   }
 
@@ -272,8 +271,7 @@ public class AttributeTest {
     assertThat(attr.getTransitionFactory().isSplit()).isTrue();
     ConfigurationTransition transition =
         attr.getTransitionFactory()
-            .create(
-                AttributeTransitionData.builder().attributes(FakeAttributeMapper.empty()).build());
+            .create(AttributeTransitionData.create(FakeAttributeMapper.empty()));
     assertThat(transition).isInstanceOf(TestSplitTransition.class);
   }
 

@@ -71,14 +71,14 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
             /*env=*/ null,
             new AttributeContainer(ruleClass));
 
-    assertThat(rule.getAssociatedRule()).isSameInstanceAs(rule);
+    assertThat(rule.getAssociatedRule()).isSameAs(rule);
 
     // pkg.getRules() = [rule]
     Package pkg = pkgBuilder.build();
     assertThat(Sets.newHashSet(pkg.getTargets(Rule.class))).hasSize(1);
     assertThat(pkg.getTargets(Rule.class).iterator().next()).isEqualTo(rule);
 
-    assertThat(pkg.getTarget("foo")).isSameInstanceAs(rule);
+    assertThat(pkg.getTarget("foo")).isSameAs(rule);
 
     assertThat(rule.getLabel()).isEqualTo(Label.parseAbsolute("//mypkg:foo", ImmutableMap.of()));
     assertThat(rule.getName()).isEqualTo("foo");

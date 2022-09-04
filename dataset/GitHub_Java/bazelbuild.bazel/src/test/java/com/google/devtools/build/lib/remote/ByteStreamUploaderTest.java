@@ -141,13 +141,8 @@ public class ByteStreamUploaderTest {
     Context prevContext = withEmptyMetadata.attach();
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> mockBackoff, (e) -> true, retryService);
-    ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
+        new ReferenceCountedChannel(channel), null, 3, retrier);
 
     byte[] blob = new byte[CHUNK_SIZE * 2 + 1];
     new Random().nextBytes(blob);
@@ -218,13 +213,8 @@ public class ByteStreamUploaderTest {
     Context prevContext = withEmptyMetadata.attach();
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> new FixedBackoff(1, 0), (e) -> true, retryService);
-    ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
+        new ReferenceCountedChannel(channel), null, 3, retrier);
 
     int numUploads = 10;
     Map<String, byte[]> blobsByHash = new HashMap<>();
@@ -256,13 +246,8 @@ public class ByteStreamUploaderTest {
     // We verify that the correct metadata is passed to the server with every blob.
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> new FixedBackoff(5, 0), (e) -> true, retryService);
-    ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
+        new ReferenceCountedChannel(channel), null, 3, retrier);
 
     List<String> toUpload = ImmutableList.of("aaaaaaaaaa", "bbbbbbbbbb", "cccccccccc");
     List<Chunker> builders = new ArrayList<>(toUpload.size());
@@ -354,13 +339,8 @@ public class ByteStreamUploaderTest {
     Context prevContext = withEmptyMetadata.attach();
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> mockBackoff, (e) -> true, retryService);
-    ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
+        new ReferenceCountedChannel(channel), null, 3, retrier);
 
     byte[] blob = new byte[CHUNK_SIZE * 10];
     Chunker chunker = Chunker.builder(DIGEST_UTIL).setInput(blob).setChunkSize(CHUNK_SIZE).build();
@@ -421,13 +401,8 @@ public class ByteStreamUploaderTest {
     Context prevContext = withEmptyMetadata.attach();
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> new FixedBackoff(1, 10), (e) -> true, retryService);
-    ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
+        new ReferenceCountedChannel(channel), null, 3, retrier);
 
     byte[] blob = new byte[CHUNK_SIZE];
     Chunker chunker = Chunker.builder(DIGEST_UTIL).setInput(blob).setChunkSize(CHUNK_SIZE).build();
@@ -451,13 +426,8 @@ public class ByteStreamUploaderTest {
     Context prevContext = withEmptyMetadata.attach();
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> new FixedBackoff(1, 10), (e) -> true, retryService);
-    ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
+        new ReferenceCountedChannel(channel), null, 3, retrier);
 
     CountDownLatch cancellations = new CountDownLatch(2);
 
@@ -518,13 +488,8 @@ public class ByteStreamUploaderTest {
         MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> new FixedBackoff(1, 10), (e) -> true, retryService);
-    ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
+        new ReferenceCountedChannel(channel), null, 3, retrier);
 
     serviceRegistry.addService(new ByteStreamImplBase() {
       @Override
@@ -554,12 +519,8 @@ public class ByteStreamUploaderTest {
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> mockBackoff, (e) -> true, retryService);
     ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            /* instanceName */ null,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+        new ByteStreamUploader(/* instanceName */ null,
+            new ReferenceCountedChannel(channel), null, 3, retrier);
 
     serviceRegistry.addService(new ByteStreamImplBase() {
       @Override
@@ -600,12 +561,8 @@ public class ByteStreamUploaderTest {
         TestUtils.newRemoteRetrier(
             () -> new FixedBackoff(1, 0), /* No Status is retriable. */ (e) -> false, retryService);
     ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            /* instanceName */ null,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+        new ByteStreamUploader(/* instanceName */ null,
+            new ReferenceCountedChannel(channel), null, 3, retrier);
 
     AtomicInteger numCalls = new AtomicInteger();
 
@@ -634,11 +591,7 @@ public class ByteStreamUploaderTest {
         TestUtils.newRemoteRetrier(() -> Retrier.RETRIES_DISABLED, (e) -> false, retryService);
     ByteStreamUploader uploader =
         new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+            INSTANCE_NAME, new ReferenceCountedChannel(channel), null, 3, retrier);
 
     byte[] blob = new byte[CHUNK_SIZE * 2 + 1];
     new Random().nextBytes(blob);
@@ -712,13 +665,8 @@ public class ByteStreamUploaderTest {
     Context prevContext = withEmptyMetadata.attach();
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(() -> mockBackoff, (e) -> true, retryService);
-    ByteStreamUploader uploader =
-        new ByteStreamUploader(
-            INSTANCE_NAME,
-            new ReferenceCountedChannel(channel),
-            null, /* timeout seconds */
-            60,
-            retrier);
+    ByteStreamUploader uploader = new ByteStreamUploader(INSTANCE_NAME,
+        new ReferenceCountedChannel(channel), null, 3, retrier);
 
     byte[] blob = new byte[CHUNK_SIZE * 2 + 1];
     new Random().nextBytes(blob);

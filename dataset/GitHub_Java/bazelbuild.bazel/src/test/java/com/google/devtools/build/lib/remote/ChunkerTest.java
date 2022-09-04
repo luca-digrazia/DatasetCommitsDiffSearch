@@ -16,7 +16,10 @@ package com.google.devtools.build.lib.remote;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
+import build.bazel.remote.execution.v2.Digest;
 import com.google.devtools.build.lib.remote.Chunker.Chunk;
+import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.protobuf.ByteString;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -35,13 +38,16 @@ import org.mockito.Mockito;
 @RunWith(JUnit4.class)
 public class ChunkerTest {
 
+  private final DigestUtil digestUtil = new DigestUtil(DigestHashFunction.SHA256);
+
   @Test
   public void chunkingShouldWork() throws IOException {
     Random rand = new Random();
     byte[] expectedData = new byte[21];
     rand.nextBytes(expectedData);
+    Digest expectedDigest = digestUtil.compute(expectedData);
 
-    Chunker chunker = Chunker.builder().setInput(expectedData).setChunkSize(10).build();
+    Chunker chunker = Chunker.builder(digestUtil).setInput(expectedData).setChunkSize(10).build();
 
     ByteArrayOutputStream actualData = new ByteArrayOutputStream();
 
@@ -49,18 +55,21 @@ public class ChunkerTest {
     Chunk next = chunker.next();
     assertThat(next.getOffset()).isEqualTo(0);
     assertThat(next.getData()).hasSize(10);
+    assertThat(next.getDigest()).isEqualTo(expectedDigest);
     next.getData().writeTo(actualData);
 
     assertThat(chunker.hasNext()).isTrue();
     next = chunker.next();
     assertThat(next.getOffset()).isEqualTo(10);
     assertThat(next.getData()).hasSize(10);
+    assertThat(next.getDigest()).isEqualTo(expectedDigest);
     next.getData().writeTo(actualData);
 
     assertThat(chunker.hasNext()).isTrue();
     next = chunker.next();
     assertThat(next.getOffset()).isEqualTo(20);
     assertThat(next.getData()).hasSize(1);
+    assertThat(next.getDigest()).isEqualTo(expectedDigest);
     next.getData().writeTo(actualData);
 
     assertThat(chunker.hasNext()).isFalse();
@@ -71,7 +80,7 @@ public class ChunkerTest {
   @Test
   public void nextShouldThrowIfNoMoreData() throws IOException {
     byte[] data = new byte[10];
-    Chunker chunker = Chunker.builder().setInput(data).setChunkSize(10).build();
+    Chunker chunker = Chunker.builder(digestUtil).setInput(data).setChunkSize(10).build();
 
     assertThat(chunker.hasNext()).isTrue();
     assertThat(chunker.next()).isNotNull();
@@ -84,7 +93,7 @@ public class ChunkerTest {
   @Test
   public void emptyData() throws Exception {
     byte[] data = new byte[0];
-    Chunker chunker = Chunker.builder().setInput(data).build();
+    Chunker chunker = Chunker.builder(digestUtil).setInput(data).build();
 
     assertThat(chunker.hasNext()).isTrue();
 
@@ -102,7 +111,7 @@ public class ChunkerTest {
   @Test
   public void reset() throws Exception {
     byte[] data = new byte[]{1, 2, 3};
-    Chunker chunker = Chunker.builder().setInput(data).setChunkSize(1).build();
+    Chunker chunker = Chunker.builder(digestUtil).setInput(data).setChunkSize(1).build();
 
     assertNextEquals(chunker, (byte) 1);
     assertNextEquals(chunker, (byte) 2);
@@ -129,8 +138,9 @@ public class ChunkerTest {
       in.set(Mockito.spy(new ByteArrayInputStream(data)));
       return in.get();
     };
+    Digest digest = digestUtil.compute(data);
 
-    Chunker chunker = new Chunker(supplier, data.length, 1);
+    Chunker chunker = new Chunker(supplier, digest, 1, digestUtil);
     assertThat(in.get()).isNull();
     assertNextEquals(chunker, (byte) 1);
     Mockito.verify(in.get(), Mockito.never()).close();
@@ -141,22 +151,6 @@ public class ChunkerTest {
     chunker.next();
     chunker.reset();
     Mockito.verify(in.get()).close();
-  }
-
-  @Test
-  public void seekAfterReset() throws IOException {
-    // Test that seek() works on an uninitialized chunker
-
-    byte[] data = new byte[10];
-    Chunker chunker = Chunker.builder().setInput(data).setChunkSize(10).build();
-
-    chunker.reset();
-    chunker.seek(2);
-
-    Chunk next = chunker.next();
-    assertThat(next).isNotNull();
-    assertThat(next.getOffset()).isEqualTo(2);
-    assertThat(next.getData()).hasSize(8);
   }
 
   private void assertNextEquals(Chunker chunker, byte... data) throws IOException {

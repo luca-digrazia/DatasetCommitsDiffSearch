@@ -26,12 +26,13 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildType.LabelConversionContext;
 import com.google.devtools.build.lib.packages.BuildType.Selector;
-import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SelectorList;
 import com.google.devtools.build.lib.syntax.SelectorValue;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -537,8 +538,7 @@ public class BuildTypeTest {
   }
 
   /**
-   * Tests that {@link com.google.devtools.build.lib.packages.Type#convert} fails on selector
-   * inputs.
+   * Tests that {@link com.google.devtools.build.lib.syntax.Type#convert} fails on selector inputs.
    */
   @Test
   public void testConvertDoesNotAcceptSelectables() throws Exception {
@@ -655,7 +655,7 @@ public class BuildTypeTest {
     // with a List<Label> even though this isn't a valid datatype in the
     // interpreter.
     // Fileset isn't part of bazel, even though FilesetEntry is.
-    assertThat(Starlark.repr(createTestFilesetEntry()))
+    assertThat(Printer.repr(createTestFilesetEntry()))
         .isEqualTo(createExpectedFilesetEntryString('"'));
   }
 
@@ -664,7 +664,7 @@ public class BuildTypeTest {
     FilesetEntry entryDereference =
       createTestFilesetEntry(FilesetEntry.SymlinkBehavior.DEREFERENCE);
 
-    assertThat(Starlark.repr(entryDereference))
+    assertThat(Printer.repr(entryDereference))
         .isEqualTo(createExpectedFilesetEntryString(FilesetEntry.SymlinkBehavior.DEREFERENCE, '"'));
   }
 
@@ -684,8 +684,8 @@ public class BuildTypeTest {
     FilesetEntry withoutStripPrefix = createStripPrefixFilesetEntry(".");
     FilesetEntry withStripPrefix = createStripPrefixFilesetEntry("orange");
 
-    String prettyWithout = Starlark.repr(withoutStripPrefix);
-    String prettyWith = Starlark.repr(withStripPrefix);
+    String prettyWithout = Printer.repr(withoutStripPrefix);
+    String prettyWith = Printer.repr(withStripPrefix);
 
     assertThat(prettyWithout).contains("strip_prefix = \".\"");
     assertThat(prettyWith).contains("strip_prefix = \"orange\"");
@@ -694,7 +694,7 @@ public class BuildTypeTest {
   @Test
   public void testPrintFilesetEntry() throws Exception {
     assertThat(
-            Starlark.repr(
+            Printer.repr(
                 new FilesetEntry(
                     /* srcLabel */ Label.parseAbsolute("//foo:BUILD", ImmutableMap.of()),
                     /* files */ ImmutableList.of(

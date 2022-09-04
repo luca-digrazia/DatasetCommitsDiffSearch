@@ -18,9 +18,6 @@ import static com.google.devtools.build.lib.remote.util.Utils.getFromFuture;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.fail;
-import static org.mockito.AdditionalAnswers.answerVoid;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 import build.bazel.remote.execution.v2.Action;
@@ -40,8 +37,6 @@ import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import com.google.api.client.json.GenericJson;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.bytestream.ByteStreamGrpc.ByteStreamImplBase;
-import com.google.bytestream.ByteStreamProto.QueryWriteStatusRequest;
-import com.google.bytestream.ByteStreamProto.QueryWriteStatusResponse;
 import com.google.bytestream.ByteStreamProto.ReadRequest;
 import com.google.bytestream.ByteStreamProto.ReadResponse;
 import com.google.bytestream.ByteStreamProto.WriteRequest;
@@ -57,7 +52,6 @@ import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
 import com.google.devtools.build.lib.authandtls.GoogleAuthUtils;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.remote.RemoteRetrier.ExponentialBackoff;
-import com.google.devtools.build.lib.remote.Retrier.Backoff;
 import com.google.devtools.build.lib.remote.merkletree.MerkleTree;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
@@ -94,7 +88,6 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -102,7 +95,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -188,11 +180,6 @@ public class GrpcRemoteCacheTest {
   }
 
   private GrpcRemoteCache newClient(RemoteOptions remoteOptions) throws IOException {
-    return newClient(remoteOptions, () -> new ExponentialBackoff(remoteOptions));
-  }
-
-  private GrpcRemoteCache newClient(RemoteOptions remoteOptions, Supplier<Backoff> backoffSupplier)
-      throws IOException {
     AuthAndTLSOptions authTlsOptions = Options.getDefaults(AuthAndTLSOptions.class);
     authTlsOptions.useGoogleDefaultCredentials = true;
     authTlsOptions.googleCredentials = "/exec/root/creds.json";
@@ -212,7 +199,9 @@ public class GrpcRemoteCacheTest {
     }
     RemoteRetrier retrier =
         TestUtils.newRemoteRetrier(
-            backoffSupplier, RemoteRetrier.RETRIABLE_GRPC_ERRORS, retryService);
+            () -> new ExponentialBackoff(remoteOptions),
+            RemoteRetrier.RETRIABLE_GRPC_ERRORS,
+            retryService);
     ReferenceCountedChannel channel =
         new ReferenceCountedChannel(InProcessChannelBuilder.forName(fakeServerName).directExecutor()
             .intercept(new CallCredentialsInterceptor(creds)).build());
@@ -513,16 +502,17 @@ public class GrpcRemoteCacheTest {
   static class TestChunkedRequestObserver implements StreamObserver<WriteRequest> {
     private final StreamObserver<WriteResponse> responseObserver;
     private final String contents;
-    private final Chunker chunker;
-    private final Digest digest;
+    private Chunker chunker;
 
     public TestChunkedRequestObserver(
         StreamObserver<WriteResponse> responseObserver, String contents, int chunkSizeBytes) {
       this.responseObserver = responseObserver;
       this.contents = contents;
-      byte[] blob = contents.getBytes(UTF_8);
-      chunker = Chunker.builder().setInput(blob).setChunkSize(chunkSizeBytes).build();
-      digest = DIGEST_UTIL.compute(blob);
+      chunker =
+          Chunker.builder(DIGEST_UTIL)
+              .setInput(contents.getBytes(UTF_8))
+              .setChunkSize(chunkSizeBytes)
+              .build();
     }
 
     @Override
@@ -530,6 +520,7 @@ public class GrpcRemoteCacheTest {
       assertThat(chunker.hasNext()).isTrue();
       try {
         Chunker.Chunk chunk = chunker.next();
+        Digest digest = chunk.getDigest();
         long offset = chunk.getOffset();
         ByteString data = chunk.getData();
         if (offset == 0) {
@@ -591,12 +582,12 @@ public class GrpcRemoteCacheTest {
     for (int chunkSize = 1; chunkSize <= 6; ++chunkSize) {
       GrpcRemoteCache client = newClient();
       Chunker.setDefaultChunkSizeForTesting(chunkSize);
-      when(mockByteStreamImpl.write(ArgumentMatchers.<StreamObserver<WriteResponse>>any()))
+      when(mockByteStreamImpl.write(Mockito.<StreamObserver<WriteResponse>>anyObject()))
           .thenAnswer(blobChunkedWriteAnswer("abcdef", chunkSize));
       assertThat(client.uploadBlob("abcdef".getBytes(UTF_8))).isEqualTo(digest);
     }
     Mockito.verify(mockByteStreamImpl, Mockito.times(6))
-        .write(ArgumentMatchers.<StreamObserver<WriteResponse>>any());
+        .write(Mockito.<StreamObserver<WriteResponse>>anyObject());
   }
 
   @Test
@@ -894,7 +885,7 @@ public class GrpcRemoteCacheTest {
         });
     ByteStreamImplBase mockByteStreamImpl = Mockito.mock(ByteStreamImplBase.class);
     serviceRegistry.addService(mockByteStreamImpl);
-    when(mockByteStreamImpl.write(ArgumentMatchers.<StreamObserver<WriteResponse>>any()))
+    when(mockByteStreamImpl.write(Mockito.<StreamObserver<WriteResponse>>anyObject()))
         .thenAnswer(
             new Answer<StreamObserver<WriteRequest>>() {
               private int numErrors = 4;
@@ -944,19 +935,6 @@ public class GrpcRemoteCacheTest {
                 };
               }
             });
-    doAnswer(
-            answerVoid(
-                (QueryWriteStatusRequest request,
-                    StreamObserver<QueryWriteStatusResponse> responseObserver) -> {
-                  responseObserver.onNext(
-                      QueryWriteStatusResponse.newBuilder()
-                          .setCommittedSize(0)
-                          .setComplete(false)
-                          .build());
-                  responseObserver.onCompleted();
-                }))
-        .when(mockByteStreamImpl)
-        .queryWriteStatus(any(), any());
     client.upload(
         actionKey,
         Action.getDefaultInstance(),
@@ -966,7 +944,7 @@ public class GrpcRemoteCacheTest {
         outErr);
     // 4 times for the errors, 3 times for the successful uploads.
     Mockito.verify(mockByteStreamImpl, Mockito.times(7))
-        .write(ArgumentMatchers.<StreamObserver<WriteResponse>>any());
+        .write(Mockito.<StreamObserver<WriteResponse>>anyObject());
   }
 
   @Test
@@ -989,9 +967,7 @@ public class GrpcRemoteCacheTest {
 
   @Test
   public void downloadBlobIsRetriedWithProgress() throws IOException, InterruptedException {
-    Backoff mockBackoff = Mockito.mock(Backoff.class);
-    final GrpcRemoteCache client =
-        newClient(Options.getDefaults(RemoteOptions.class), () -> mockBackoff);
+    final GrpcRemoteCache client = newClient();
     final Digest digest = DIGEST_UTIL.computeAsUtf8("abcdefg");
     serviceRegistry.addService(
         new ByteStreamImplBase() {
@@ -1014,16 +990,12 @@ public class GrpcRemoteCacheTest {
           }
         });
     assertThat(new String(getFromFuture(client.downloadBlob(digest)), UTF_8)).isEqualTo("abcdefg");
-    Mockito.verify(mockBackoff, Mockito.never()).nextDelayMillis();
   }
 
   @Test
   public void downloadBlobPassesThroughDeadlineExceededWithoutProgress()
       throws IOException, InterruptedException {
-    Backoff mockBackoff = Mockito.mock(Backoff.class);
-    Mockito.when(mockBackoff.nextDelayMillis()).thenReturn(-1L);
-    final GrpcRemoteCache client =
-        newClient(Options.getDefaults(RemoteOptions.class), () -> mockBackoff);
+    final GrpcRemoteCache client = newClient();
     final Digest digest = DIGEST_UTIL.computeAsUtf8("abcdefg");
     serviceRegistry.addService(
         new ByteStreamImplBase() {
@@ -1042,7 +1014,6 @@ public class GrpcRemoteCacheTest {
         assertThrows(IOException.class, () -> getFromFuture(client.downloadBlob(digest)));
     Status st = Status.fromThrowable(e);
     assertThat(st.getCode()).isEqualTo(Status.Code.DEADLINE_EXCEEDED);
-    Mockito.verify(mockBackoff, Mockito.times(1)).nextDelayMillis();
   }
 
   @Test
