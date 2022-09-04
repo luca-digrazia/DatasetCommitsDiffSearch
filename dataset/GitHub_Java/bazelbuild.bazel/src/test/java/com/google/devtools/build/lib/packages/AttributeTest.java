@@ -28,12 +28,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransitionProvider;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassNamePredicate;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.testutil.FakeAttributeMapper;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.util.Arrays;
@@ -279,7 +279,7 @@ public class AttributeTest {
     TestSplitTransition splitTransition = new TestSplitTransition();
     Attribute attr = attr("foo", LABEL).cfg(splitTransition).allowedFileTypes().build();
     assertThat(attr.hasSplitConfigurationTransition()).isTrue();
-    assertThat(attr.getSplitTransition(FakeAttributeMapper.empty())).isEqualTo(splitTransition);
+    assertThat(attr.getSplitTransition(null)).isEqualTo(splitTransition);
   }
 
   @Test
@@ -288,8 +288,7 @@ public class AttributeTest {
     Attribute attr =
         attr("foo", LABEL).cfg(splitTransitionProvider).allowedFileTypes().build();
     assertThat(attr.hasSplitConfigurationTransition()).isTrue();
-    assertThat(attr.getSplitTransition(FakeAttributeMapper.empty()) instanceof TestSplitTransition)
-        .isTrue();
+    assertThat(attr.getSplitTransition(null) instanceof TestSplitTransition).isTrue();
   }
 
   @Test
@@ -306,17 +305,14 @@ public class AttributeTest {
     }
   }
 
-  private static class TestSplitTransitionProvider
-      implements TransitionFactory<RuleTransitionData> {
+  private static class TestSplitTransitionProvider implements SplitTransitionProvider {
     @Override
-    public SplitTransition create(RuleTransitionData data) {
+    public SplitTransition apply(AttributeMap attrMapper) {
       return new TestSplitTransition();
     }
 
     @Override
-    public boolean isSplit() {
-      return true;
-    }
+    public void repr(SkylarkPrinter printer) {}
   }
 
   @Test

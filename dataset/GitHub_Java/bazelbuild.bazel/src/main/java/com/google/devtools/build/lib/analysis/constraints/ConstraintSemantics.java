@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
 import com.google.devtools.build.lib.syntax.Type.LabelVisitor;
@@ -871,15 +870,7 @@ public class ConstraintSemantics {
         // checking, but for now just pass them by.
         if (dep.getProvider(SupportedEnvironmentsProvider.class) != null) {
           depsToCheck.add(dep);
-          // For normal configured targets the target's label is the same label appearing in the
-          // select(). But for AliasConfiguredTargets the label in the select() refers to the alias,
-          // while dep.getLabel() refers to the target the alias points to. So add this quick check
-          // to make sure we're comparing the same labels.
-          Label depLabelInSelect =
-              (dep instanceof AliasConfiguredTarget)
-                  ? ((AliasConfiguredTarget) dep).getOriginalLabel()
-                  : dep.getLabel();
-          if (!selectOnlyDepsForThisAttribute.contains(depLabelInSelect)) {
+          if (!selectOnlyDepsForThisAttribute.contains(dep.getLabel())) {
             depsOutsideSelects.add(dep);
           }
         }
