@@ -67,7 +67,6 @@ import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit.ActionCached
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.TargetOutOfDateException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
-import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
@@ -80,7 +79,6 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.rules.cpp.IncludeScannable;
-import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -90,7 +88,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
-import com.google.devtools.common.options.OptionsProvider;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collection;
@@ -132,6 +129,7 @@ public final class SkyframeActionExecutor {
   private ActionLogBufferPathGenerator actionLogBufferPathGenerator;
   private ActionCacheChecker actionCacheChecker;
   private final Profiler profiler = Profiler.instance();
+  private boolean explain;
 
   // We keep track of actions already executed this build in order to avoid executing a shared
   // action twice. Note that we may still unnecessarily re-execute the action on a subsequent
@@ -154,7 +152,7 @@ public final class SkyframeActionExecutor {
   // thrown when execution of the action is requested. This field is set during each call to
   // findAndStoreArtifactConflicts, and is preserved across builds otherwise.
   private ImmutableMap<ActionAnalysisMetadata, ConflictException> badActionMap = ImmutableMap.of();
-  private OptionsProvider options;
+  private boolean keepGoing;
   private boolean hadExecutionError;
   private MetadataProvider perBuildFileCache;
   private ActionInputPrefetcher actionInputPrefetcher;
@@ -164,7 +162,6 @@ public final class SkyframeActionExecutor {
 
   private final AtomicReference<ActionExecutionStatusReporter> statusReporterRef;
   private OutputService outputService;
-  private boolean finalizeActions;
   private final Supplier<ImmutableList<Root>> sourceRootSupplier;
 
   SkyframeActionExecutor(
@@ -343,23 +340,18 @@ public final class SkyframeActionExecutor {
     };
   }
 
-  void prepareForExecution(
-      Reporter reporter,
-      Executor executor,
-      OptionsProvider options,
-      ActionCacheChecker actionCacheChecker,
-      OutputService outputService) {
+  void prepareForExecution(Reporter reporter, Executor executor, boolean keepGoing,
+      boolean explain, ActionCacheChecker actionCacheChecker, OutputService outputService) {
     this.reporter = Preconditions.checkNotNull(reporter);
     this.executorEngine = Preconditions.checkNotNull(executor);
 
     // Start with a new map each build so there's no issue with internal resizing.
     this.buildActionMap = Maps.newConcurrentMap();
+    this.keepGoing = keepGoing;
     this.hadExecutionError = false;
     this.actionCacheChecker = Preconditions.checkNotNull(actionCacheChecker);
     // Don't cache possibly stale data from the last build.
-    this.options = options;
-    // Cache the finalizeActions value for performance, since we consult it on every action.
-    this.finalizeActions = options.getOptions(BuildRequestOptions.class).finalizeActions;
+    this.explain = explain;
     this.outputService = outputService;
   }
 
@@ -549,9 +541,7 @@ public final class SkyframeActionExecutor {
               action,
               resolvedCacheArtifacts,
               clientEnv,
-              options.getOptions(BuildRequestOptions.class).explanationPath != null
-                  ? reporter
-                  : null,
+              explain ? reporter : null,
               metadataHandler);
     }
     if (token == null) {
@@ -699,7 +689,7 @@ public final class SkyframeActionExecutor {
    * </ul>
    */
   private boolean isBuilderAborting() {
-    return hadExecutionError && !options.getOptions(KeepGoingOption.class).keepGoing;
+    return hadExecutionError && !keepGoing;
   }
 
   void configure(MetadataProvider fileCache, ActionInputPrefetcher actionInputPrefetcher) {
@@ -1025,7 +1015,7 @@ public final class SkyframeActionExecutor {
         }
       }
 
-      if (outputService != null && finalizeActions) {
+      if (outputService != null) {
         try {
           outputService.finalizeAction(action, metadataHandler);
         } catch (EnvironmentalExecException | IOException e) {
@@ -1164,7 +1154,7 @@ public final class SkyframeActionExecutor {
    */
   private void printError(String message, Action action, FileOutErr actionOutput) {
     synchronized (reporter) {
-      if (options.getOptions(KeepGoingOption.class).keepGoing) {
+      if (keepGoing) {
         message = "Couldn't " + describeAction(action) + ": " + message;
       }
       Event event = Event.error(action.getOwner().getLocation(), message);
