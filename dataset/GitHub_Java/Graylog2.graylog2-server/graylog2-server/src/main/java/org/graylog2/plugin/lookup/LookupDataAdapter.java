@@ -16,29 +16,29 @@
  */
 package org.graylog2.plugin.lookup;
 
-import com.google.common.util.concurrent.AbstractIdleService;
-
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import org.graylog2.lookup.LookupTable;
 import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+import javax.inject.Named;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-
-import javax.annotation.Nullable;
-import javax.inject.Named;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static com.google.common.base.Preconditions.checkState;
 
-public abstract class LookupDataAdapter extends AbstractIdleService {
+public abstract class LookupDataAdapter {
     private static final Logger LOG = LoggerFactory.getLogger(LookupDataAdapter.class);
 
     private String id;
+    private volatile boolean started = false;
+    private volatile boolean failed = false;
     private LookupTable lookupTable;
+    private ReentrantLock lock = new ReentrantLock();
 
     private final LookupDataAdapterConfiguration config;
     private final ScheduledExecutorService scheduler;
@@ -50,26 +50,61 @@ public abstract class LookupDataAdapter extends AbstractIdleService {
         this.scheduler = scheduler;
     }
 
-    @Override
-    protected void startUp() throws Exception {
-        final Duration interval = refreshInterval();
-        if (!interval.equals(Duration.ZERO)) {
-            LOG.debug("Schedule data adapter refresh method every {}ms", interval.getMillis());
-            this.refreshFuture = scheduler.scheduleAtFixedRate(this::refresh, interval.getMillis(), interval.getMillis(), TimeUnit.MILLISECONDS);
-        }
-        doStart();
+    public boolean isStarted() {
+        return started;
     }
 
+    public boolean isFailed() {
+        return failed;
+    }
+
+    public void start() {
+        if (started) {
+            return;
+        }
+        lock.lock();
+        try {
+            doStart();
+            started = true;
+            failed = false;
+
+            try {
+                final Duration interval = refreshInterval();
+                if (!interval.equals(Duration.ZERO)) {
+                    LOG.debug("Schedule data adapter refresh method every {}ms", interval.getMillis());
+                    this.refreshFuture = scheduler.scheduleAtFixedRate(this::refresh, interval.getMillis(), interval.getMillis(), TimeUnit.MILLISECONDS);
+                }
+            } catch (Exception e) {
+                // XXX Should this set the data adapter into failed state?
+                LOG.error("Couldn't start data adapter refresh job", e);
+            }
+        } catch (Exception e) {
+            LOG.error("Couldn't start data adapter", e);
+            failed = true;
+        } finally {
+            lock.unlock();
+        }
+    }
     protected abstract void doStart() throws Exception;
 
-    @Override
-    protected void shutDown() throws Exception {
-        if (refreshFuture != null && !refreshFuture.isCancelled()) {
-            refreshFuture.cancel(true);
+    public void stop() {
+        if (!started) {
+            return;
         }
-        doStop();
+        lock.lock();
+        try {
+            if (refreshFuture != null && !refreshFuture.isCancelled()) {
+                refreshFuture.cancel(true);
+            }
+            doStop();
+            started = false;
+        } catch (Exception e) {
+            LOG.error("Couldn't stop data adapter", e);
+            failed = true;
+        } finally {
+            lock.unlock();
+        }
     }
-
     protected abstract void doStop() throws Exception;
 
     /**
@@ -106,10 +141,10 @@ public abstract class LookupDataAdapter extends AbstractIdleService {
     }
 
     public LookupResult get(Object key) {
-        if (state() == State.FAILED) {
+        if (failed) {
             return LookupResult.empty();
         }
-        checkState(isRunning(), "Data adapter needs to be started before it can be used");
+        checkState(started, "Data adapter needs to be started before it can be used");
         return doGet(key);
     }
     protected abstract LookupResult doGet(Object key);
