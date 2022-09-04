@@ -23,13 +23,11 @@ import android.widget.Toast;
 
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.R;
-import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
 
 import java.io.File;
-import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -122,9 +120,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     //是否需要锁定屏幕
     protected boolean mNeedLockFull;
 
-    //lazy的setup
-    protected boolean mSetUpLazy = false;
-
     //播放按键
     protected View mStartButton;
 
@@ -176,7 +171,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     //触摸显示消失定时任务
     protected DismissControlViewTimerTask mDismissControlViewTimerTask;
 
-    protected GSYVideoProgressListener mGSYVideoProgressListener;
 
     public GSYVideoControlView(@NonNull Context context) {
         super(context);
@@ -409,7 +403,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     /**
      * 双击
      */
-    protected GestureDetector gestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
+    protected GestureDetector gestureDetector = new GestureDetector(getContext(),new GestureDetector.SimpleOnGestureListener(){
         @Override
         public boolean onDoubleTap(MotionEvent e) {
             touchDoubleUp();
@@ -543,6 +537,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
         return false;
     }
 
+
     @Override
     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
     }
@@ -599,21 +594,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
                 loopSetProgressAndTime();
             }
         }
-    }
-
-    /**
-     * 增对列表优化，在播放前的时候才进行setup
-     */
-    @Override
-    protected void prepareVideo() {
-        if (mSetUpLazy) {
-            super.setUp(mOriginUrl,
-                    mCache,
-                    mCachePath,
-                    mMapHeadData,
-                    mTitle);
-        }
-        super.prepareVideo();
     }
 
     protected void touchSurfaceDown(float x, float y) {
@@ -707,11 +687,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
         dismissVolumeDialog();
         dismissBrightnessDialog();
         if (mChangePosition && GSYVideoManager.instance().getMediaPlayer() != null && (mCurrentState == CURRENT_STATE_PLAYING || mCurrentState == CURRENT_STATE_PAUSE)) {
-            try {
-                GSYVideoManager.instance().getMediaPlayer().seekTo(mSeekTimePosition);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            GSYVideoManager.instance().getMediaPlayer().seekTo(mSeekTimePosition);
             int duration = getDuration();
             int progress = mSeekTimePosition * 100 / (duration == 0 ? 1 : duration);
             if (mProgressBar != null) {
@@ -799,11 +775,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             }
             startButtonLogic();
         } else if (mCurrentState == CURRENT_STATE_PLAYING) {
-            try {
-                GSYVideoManager.instance().getMediaPlayer().pause();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            GSYVideoManager.instance().getMediaPlayer().pause();
             setStateAndUi(CURRENT_STATE_PAUSE);
             if (mVideoAllCallBack != null && isCurrentMediaListener()) {
                 if (mIfCurrentIsFullscreen) {
@@ -824,11 +796,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
                     mVideoAllCallBack.onClickResume(mOriginUrl, mTitle, this);
                 }
             }
-            try {
-                GSYVideoManager.instance().getMediaPlayer().start();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            GSYVideoManager.instance().getMediaPlayer().start();
             setStateAndUi(CURRENT_STATE_PLAYING);
         } else if (mCurrentState == CURRENT_STATE_AUTO_COMPLETE) {
             startButtonLogic();
@@ -876,10 +844,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     }
 
     protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime) {
-
-        if (mGSYVideoProgressListener != null) {
-            mGSYVideoProgressListener.onProgress(progress, secProgress, currentTime, totalTime);
-        }
 
         if (mProgressBar == null || mTotalTimeTextView == null || mCurrentTimeTextView == null) {
             return;
@@ -1069,22 +1033,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
 
     /************************* 开放接口 *************************/
-
-
-    /**
-     * 在点击播放的时候才进行真正setup
-     */
-    public boolean setUpLazy(String url, boolean cacheWithPlay, File cachePath, Map<String, String> mapHeadData, String title) {
-        mOriginUrl = url;
-        mUrl = "waiting";
-        mCurrentState = CURRENT_STATE_NORMAL;
-        mCache = cacheWithPlay;
-        mCachePath = cachePath;
-        mMapHeadData = mapHeadData;
-        mTitle = title;
-        mSetUpLazy = true;
-        return true;
-    }
 
     /**
      * 初始化为正常状态
@@ -1290,10 +1238,4 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
         return mDismissControlTime;
     }
 
-    /**
-     * 进度回调
-     */
-    public void setGSYVideoProgressListener(GSYVideoProgressListener videoProgressListener) {
-        this.mGSYVideoProgressListener = videoProgressListener;
-    }
 }

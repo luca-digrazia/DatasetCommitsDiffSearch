@@ -3,8 +3,6 @@ package com.shuyu.gsyvideoplayer.builder;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 
-import com.shuyu.gsyvideoplayer.GSYVideoGLView;
-import com.shuyu.gsyvideoplayer.effect.NoEffect;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.listener.StandardVideoAllCallBack;
 import com.shuyu.gsyvideoplayer.listener.VideoAllCallBack;
@@ -136,9 +134,6 @@ public class GSYVideoOptionBuilder {
 
     //滑动dialog进度条样式
     protected Drawable mDialogProgressBarDrawable;
-
-    //滤镜
-    protected GSYVideoGLView.ShaderInterface mEffectFilter = new NoEffect();
 
     /**
      * 全屏动画
@@ -465,14 +460,6 @@ public class GSYVideoOptionBuilder {
         return this;
     }
 
-    /**
-     * 设置滤镜效果
-     */
-    public GSYVideoOptionBuilder setEffectFilter(GSYVideoGLView.ShaderInterface effectFilter) {
-        this.mEffectFilter = effectFilter;
-        return this;
-    }
-
     public void build(StandardGSYVideoPlayer gsyVideoPlayer) {
         if (mStandardVideoAllCallBack != null) {
             gsyVideoPlayer.setStandardVideoAllCallBack(mStandardVideoAllCallBack);
@@ -534,7 +521,6 @@ public class GSYVideoOptionBuilder {
         gsyVideoPlayer.setIsTouchWiget(mIsTouchWiget);
         gsyVideoPlayer.setIsTouchWigetFull(mIsTouchWigetFull);
         gsyVideoPlayer.setNeedShowWifiTip(mNeedShowWifiTip);
-        gsyVideoPlayer.setEffectFilter(mEffectFilter);
         if (mEnlargeImageRes > 0) {
             gsyVideoPlayer.setEnlargeImageRes(mEnlargeImageRes);
         }
