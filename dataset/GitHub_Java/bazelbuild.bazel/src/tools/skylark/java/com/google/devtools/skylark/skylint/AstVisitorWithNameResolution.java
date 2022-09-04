@@ -14,7 +14,6 @@
 
 package com.google.devtools.skylark.skylint;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.syntax.ASTNode;
 import com.google.devtools.build.lib.syntax.AbstractComprehension;
 import com.google.devtools.build.lib.syntax.AugmentedAssignmentStatement;
@@ -30,8 +29,10 @@ import com.google.devtools.build.lib.syntax.LoadStatement;
 import com.google.devtools.build.lib.syntax.Parameter;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.SyntaxTreeVisitor;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * AST visitor that keeps track of which symbols are in scope.
@@ -77,7 +78,7 @@ public class AstVisitorWithNameResolution extends SyntaxTreeVisitor {
   @Override
   public void visit(LoadStatement node) {
     Map<Identifier, String> symbolMap = node.getSymbolMap();
-    for (Map.Entry<Identifier, String> entry : symbolMap.entrySet()) {
+    for (Entry<Identifier, String> entry : symbolMap.entrySet()) {
       String name = entry.getKey().getName();
       env.addImported(name, entry.getKey());
       declare(name, entry.getKey());

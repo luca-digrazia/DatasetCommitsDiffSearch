@@ -39,9 +39,6 @@ import java.util.Set;
 
 /** Checks that every import, private function or variable definition is used somewhere. */
 public class UsageChecker extends AstVisitorWithNameResolution {
-  private static final String UNUSED_BINDING_CATEGORY = "unused-binding";
-  private static final String UNINITIALIZED_VARIABLE_CATEGORY = "uninitialized-variable";
-
   private final List<Issue> issues = new ArrayList<>();
   private UsageInfo ui = UsageInfo.empty();
   private final SetMultimap<Integer, Wrapper<ASTNode>> idToAllDefinitions =
@@ -162,7 +159,7 @@ public class UsageChecker extends AstVisitorWithNameResolution {
       // symbol might be loaded in another file
       return;
     }
-    String message = "unused binding of '" + name + "'";
+    String message = "unused definition of '" + name + "'";
     if (nameInfo.kind == Kind.PARAMETER) {
       message +=
           ". If this is intentional, "
@@ -171,18 +168,15 @@ public class UsageChecker extends AstVisitorWithNameResolution {
       message += ". If this is intentional, you can use '_' or rename it to '_" + name + "'.";
     }
     for (Wrapper<ASTNode> definition : unusedDefinitions) {
-      issues.add(
-          Issue.create(UNUSED_BINDING_CATEGORY, message, unwrapNode(definition).getLocation()));
+      issues.add(new Issue(message, unwrapNode(definition).getLocation()));
     }
   }
 
   private void checkInitialized(NameInfo info, Identifier node) {
     if (ui.reachable && !ui.initializedIdentifiers.contains(info.id) && info.kind != Kind.BUILTIN) {
       issues.add(
-          Issue.create(
-              UNINITIALIZED_VARIABLE_CATEGORY,
-              "variable '" + info.name + "' may not have been initialized",
-              node.getLocation()));
+          new Issue(
+              "identifier '" + info.name + "' may not have been initialized", node.getLocation()));
     }
   }
 
