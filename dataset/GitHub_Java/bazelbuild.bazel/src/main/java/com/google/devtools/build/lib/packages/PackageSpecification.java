@@ -15,26 +15,22 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.LinkedHashMap;
 import java.util.stream.Stream;
 
 /**
  * Represents one of the following:
  *
  * <ul>
- *   <li>A single package (e.g. "//foo/bar")
- *   <li>All transitive subpackages of a package, inclusive (e.g. "//foo/bar/...", which includes
- *       "//foo/bar")
- *   <li>All packages (i.e. "//...")
+ * <li>A single package (e.g. "//foo/bar")
+ * <li>All transitive subpackages of a package, inclusive (e.g. "//foo/bar/...", which includes
+ *     "//foo/bar")
+ * <li>All packages (i.e. "//...")
  * </ul>
  *
  * <p>Typically (exclusively?) used for package visibility, as part of a {@link PackageGroup}
@@ -47,7 +43,6 @@ public abstract class PackageSpecification {
   private static final String PACKAGE_LABEL = "__pkg__";
   private static final String SUBTREE_LABEL = "__subpackages__";
   private static final String ALL_BENEATH_SUFFIX = "/...";
-  private static final String NEGATIVE_PREFIX = "-";
 
   /** Returns {@code true} if the package spec includes the provided {@code packageName}. */
   protected abstract boolean containsPackage(PackageIdentifier packageName);
@@ -84,18 +79,6 @@ public abstract class PackageSpecification {
    * <p>Throws {@link InvalidPackageSpecificationException} if the {@link String} cannot be parsed.
    */
   public static PackageSpecification fromString(RepositoryName repositoryName, String spec)
-      throws InvalidPackageSpecificationException {
-    String result = spec;
-    boolean negative = false;
-    if (result.startsWith(NEGATIVE_PREFIX)) {
-      negative = true;
-      result = result.substring(NEGATIVE_PREFIX.length());
-    }
-    PackageSpecification packageSpecification = fromStringPositive(repositoryName, result);
-    return negative ? new NegativePackageSpecification(packageSpecification) : packageSpecification;
-  }
-
-  private static PackageSpecification fromStringPositive(RepositoryName repositoryName, String spec)
       throws InvalidPackageSpecificationException {
     String result = spec;
     boolean allBeneath = false;
@@ -158,14 +141,11 @@ public abstract class PackageSpecification {
     return AllPackages.EVERYTHING;
   }
 
-  @AutoCodec
-  @VisibleForSerialization
-  static final class SinglePackage extends PackageSpecification {
+  private static class SinglePackage extends PackageSpecification {
     private PackageIdentifier singlePackageName;
 
-    @VisibleForSerialization
-    SinglePackage(PackageIdentifier singlePackageName) {
-      this.singlePackageName = singlePackageName;
+    private SinglePackage(PackageIdentifier packageName) {
+      this.singlePackageName = packageName;
     }
 
     @Override
@@ -201,13 +181,10 @@ public abstract class PackageSpecification {
     }
   }
 
-  @AutoCodec
-  @VisibleForSerialization
-  static final class AllPackagesBeneath extends PackageSpecification {
+  private static class AllPackagesBeneath extends PackageSpecification {
     private PackageIdentifier prefix;
 
-    @VisibleForSerialization
-    AllPackagesBeneath(PackageIdentifier prefix) {
+    private AllPackagesBeneath(PackageIdentifier prefix) {
       this.prefix = prefix;
     }
 
@@ -248,49 +225,8 @@ public abstract class PackageSpecification {
     }
   }
 
-  /** A package specification for a negative match, e.g. {@code -//pkg/sub/...}. */
-  @AutoCodec
-  @VisibleForSerialization
-  static final class NegativePackageSpecification extends PackageSpecification {
-    private final PackageSpecification delegate;
+  private static class AllPackages extends PackageSpecification {
 
-    NegativePackageSpecification(PackageSpecification delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    protected boolean containsPackage(PackageIdentifier packageName) {
-      return delegate.containsPackage(packageName);
-    }
-
-    @Override
-    protected String toStringWithoutRepository() {
-      return "-" + delegate.toStringWithoutRepository();
-    }
-
-    @Override
-    public int hashCode() {
-      return delegate.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      return obj instanceof NegativePackageSpecification
-          && delegate.equals(((NegativePackageSpecification) obj).delegate);
-    }
-
-    @Override
-    public String toString() {
-      return "-" + delegate;
-    }
-  }
-
-  @AutoCodec
-  @VisibleForSerialization
-  static final class AllPackages extends PackageSpecification {
     private static final PackageSpecification EVERYTHING = new AllPackages();
 
     @Override
@@ -331,25 +267,12 @@ public abstract class PackageSpecification {
    * testing a given package for containment (see {@link #containedPackages()}}.
    */
   @Immutable
-  @AutoCodec
   public static final class PackageGroupContents {
-    private final ImmutableMap<PackageIdentifier, PackageSpecification> singlePackages;
-    private final ImmutableList<PackageSpecification> negativePackageSpecifications;
-    private final ImmutableList<PackageSpecification> allSpecifications;
 
-    @VisibleForSerialization
-    PackageGroupContents(
-        ImmutableMap<PackageIdentifier, PackageSpecification> singlePackages,
-        ImmutableList<PackageSpecification> negativePackageSpecifications,
-        ImmutableList<PackageSpecification> allSpecifications) {
+    private final ImmutableList<PackageSpecification> packageSpecifications;
 
-      this.singlePackages = singlePackages;
-      this.negativePackageSpecifications = negativePackageSpecifications;
-      this.allSpecifications = allSpecifications;
-    }
-
-    public ImmutableList<PackageSpecification> getPackageSpecifications() {
-      throw new UnsupportedOperationException();
+    private PackageGroupContents(ImmutableList<PackageSpecification> packageSpecifications) {
+      this.packageSpecifications = packageSpecifications;
     }
 
     /**
@@ -358,51 +281,15 @@ public abstract class PackageSpecification {
      */
     public static PackageGroupContents create(
         ImmutableList<PackageSpecification> packageSpecifications) {
-      LinkedHashMap<PackageIdentifier, PackageSpecification> singlePackageBuilder =
-          new LinkedHashMap<>();
-      ImmutableList.Builder<PackageSpecification> negativePackageSpecificationsBuilder =
-          ImmutableList.builder();
-      ImmutableList.Builder<PackageSpecification> allSpecificationsBuilder =
-          ImmutableList.builder();
-
-      for (PackageSpecification packageSpecification : packageSpecifications) {
-        if (packageSpecification instanceof SinglePackage) {
-          singlePackageBuilder.put(
-              ((SinglePackage) packageSpecification).singlePackageName, packageSpecification);
-        } else if (packageSpecification instanceof NegativePackageSpecification) {
-          negativePackageSpecificationsBuilder.add(packageSpecification);
-        } else {
-          allSpecificationsBuilder.add(packageSpecification);
-          if (!(packageSpecification instanceof AllPackages)
-              && !(packageSpecification instanceof AllPackagesBeneath)) {
-            throw new IllegalStateException(
-                "Instance of unhandled class " + packageSpecification.getClass());
-          }
-        }
-      }
-      return new PackageGroupContents(
-          ImmutableMap.copyOf(singlePackageBuilder),
-          negativePackageSpecificationsBuilder.build(),
-          allSpecificationsBuilder.build());
+      return new PackageGroupContents(packageSpecifications);
     }
 
     /**
      * Returns {@code true} if the package specifications include the provided {@code packageName}.
-     * That is, at least one positive package specification matches, and no negative package
-     * specifications match.
+     * That is, at least one positive package specification matches.
      */
     public boolean containsPackage(PackageIdentifier packageIdentifier) {
-      // if some negative matches, returns false immediately.
-      if (negativePackageSpecifications.stream()
-          .anyMatch(p -> p.containsPackage(packageIdentifier))) {
-        return false;
-      }
-
-      if (singlePackages.containsKey(packageIdentifier)) {
-        return true;
-      }
-
-      return allSpecifications.stream().anyMatch(p -> p.containsPackage(packageIdentifier));
+      return packageSpecifications.stream().anyMatch(p -> p.containsPackage(packageIdentifier));
     }
 
     /**
@@ -410,7 +297,7 @@ public abstract class PackageSpecification {
      * same format accepted by {@link #fromString}.
      */
     public Stream<String> containedPackages() {
-      return getStream().map(PackageSpecification::toString);
+      return packageSpecifications.stream().map(PackageSpecification::toString);
     }
 
     /**
@@ -421,13 +308,7 @@ public abstract class PackageSpecification {
      * the {@link PackageSpecification}.
      */
     public Stream<String> containedPackagesWithoutRepository() {
-      return getStream().map(PackageSpecification::toStringWithoutRepository);
-    }
-
-    private Stream<PackageSpecification> getStream() {
-      return Stream.concat(
-          Stream.concat(allSpecifications.stream(), negativePackageSpecifications.stream()),
-          singlePackages.values().stream());
+      return packageSpecifications.stream().map(PackageSpecification::toStringWithoutRepository);
     }
   }
 }

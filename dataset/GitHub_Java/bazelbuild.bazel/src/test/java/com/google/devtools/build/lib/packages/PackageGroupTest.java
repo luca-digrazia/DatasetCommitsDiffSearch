@@ -21,9 +21,6 @@ import com.google.devtools.build.lib.packages.util.PackageFactoryApparatus;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -36,12 +33,6 @@ public class PackageGroupTest {
   private Scratch scratch = new Scratch("/workspace");
   private EventCollectionApparatus events = new EventCollectionApparatus();
   private PackageFactoryApparatus packages = new PackageFactoryApparatus(events.reporter());
-  private Root root;
-
-  @Before
-  public void setUp() throws Exception {
-    root = Root.fromPath(scratch.dir(""));
-  }
 
   @Test
   public void testDoesNotFailHorribly() throws Exception {
@@ -153,93 +144,6 @@ public class PackageGroupTest {
   }
 
   @Test
-  public void testNegative() throws Exception {
-    scratch.file("one/BUILD");
-    scratch.file("two/BUILD");
-    scratch.file("three/BUILD");
-    scratch.file("four/BUILD");
-    scratch.file(
-        "test/BUILD",
-        "package_group(",
-        "  name = 'packages',",
-        "    packages = [",
-        "        '//one',",
-        "        '//two',",
-        "        '-//three',",
-        "        '-//four',",
-        "    ],",
-        ")");
-
-    PackageGroup grp = getPackageGroup("test", "packages");
-    assertThat(grp.contains(getPackage("one"))).isTrue();
-    assertThat(grp.contains(getPackage("two"))).isTrue();
-    assertThat(grp.contains(getPackage("three"))).isFalse();
-    assertThat(grp.contains(getPackage("four"))).isFalse();
-  }
-
-  @Test
-  public void testNegative_noSubpackages() throws Exception {
-    scratch.file("pkg/BUILD");
-    scratch.file("pkg/one/BUILD");
-    scratch.file("pkg/one/two/BUILD");
-    scratch.file(
-        "test/BUILD",
-        "package_group(",
-        "  name = 'packages',",
-        "    packages = [",
-        "        '//pkg/...',",
-        "        '-//pkg/one',",
-        "    ],",
-        ")");
-
-    PackageGroup grp = getPackageGroup("test", "packages");
-    assertThat(grp.contains(getPackage("pkg"))).isTrue();
-    assertThat(grp.contains(getPackage("pkg/one"))).isFalse();
-    assertThat(grp.contains(getPackage("pkg/one/two"))).isTrue();
-  }
-
-  @Test
-  public void testNegative_subpackages() throws Exception {
-    scratch.file("pkg/BUILD");
-    scratch.file("pkg/one/BUILD");
-    scratch.file("pkg/one/two/BUILD");
-    scratch.file(
-        "test/BUILD",
-        "package_group(",
-        "  name = 'packages',",
-        "    packages = [",
-        "        '//pkg/...',",
-        "        '-//pkg/one/...',",
-        "    ],",
-        ")");
-
-    PackageGroup grp = getPackageGroup("test", "packages");
-    assertThat(grp.contains(getPackage("pkg"))).isTrue();
-    assertThat(grp.contains(getPackage("pkg/one"))).isFalse();
-    assertThat(grp.contains(getPackage("pkg/one/two"))).isFalse();
-  }
-
-  @Test
-  public void testNegative_everything() throws Exception {
-    scratch.file("pkg/BUILD");
-    scratch.file("pkg/one/BUILD");
-    scratch.file("pkg/one/two/BUILD");
-    scratch.file(
-        "test/BUILD",
-        "package_group(",
-        "  name = 'packages',",
-        "    packages = [",
-        "        '-//...',",
-        "    ],",
-        ")");
-
-    PackageGroup grp = getPackageGroup("test", "packages");
-    assertThat(grp.contains(getPackage("pkg"))).isFalse();
-    assertThat(grp.contains(getPackage("pkg/one"))).isFalse();
-    assertThat(grp.contains(getPackage("pkg/one/two"))).isFalse();
-  }
-
-  @Test
   public void testEverythingSpecificationWorks() throws Exception {
     scratch.file("fruits/BUILD", "package_group(name = 'mango', packages = ['//...'])");
     PackageGroup packageGroup = getPackageGroup("fruits", "mango");
@@ -252,7 +156,7 @@ public class PackageGroupTest {
     PathFragment buildFileFragment = PathFragment.create(packageName).getRelative("BUILD");
 
     Path buildFile = scratch.resolve(buildFileFragment.getPathString());
-    return packages.createPackage(packageName, RootedPath.toRootedPath(root, buildFile));
+    return packages.createPackage(packageName, buildFile);
   }
 
   private PackageGroup getPackageGroup(String pkg, String name) throws Exception {
