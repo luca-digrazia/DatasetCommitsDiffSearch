@@ -29,12 +29,12 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
@@ -44,6 +44,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -59,7 +60,6 @@ import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
@@ -200,16 +200,16 @@ public final class CcCommon {
     return mergedOutputGroups;
   }
 
-  public static void checkRuleWhitelisted(StarlarkRuleContext starlarkRuleContext)
+  public static void checkRuleWhitelisted(SkylarkRuleContext skylarkRuleContext)
       throws EvalException, InterruptedException {
-    RuleContext context = starlarkRuleContext.getRuleContext();
+    RuleContext context = skylarkRuleContext.getRuleContext();
     Rule rule = context.getRule();
 
     RuleClass ruleClass = rule.getRuleClassObject();
     Label label = ruleClass.getRuleDefinitionEnvironmentLabel();
     if (label != null) {
       checkLocationWhitelisted(
-          context.getAnalysisEnvironment().getStarlarkSemantics(),
+          context.getAnalysisEnvironment().getSkylarkSemantics(),
           rule.getLocation(),
           label.getPackageFragment().toString());
     }
@@ -217,7 +217,7 @@ public final class CcCommon {
 
   public static void checkLocationWhitelisted(
       StarlarkSemantics semantics, Location location, String callPath) throws EvalException {
-    List<String> whitelistedPackagesList = semantics.experimentalCcStarlarkApiEnabledPackages();
+    List<String> whitelistedPackagesList = semantics.experimentalCcSkylarkApiEnabledPackages();
     if (whitelistedPackagesList.stream().noneMatch(path -> callPath.startsWith(path))) {
       throwWhiteListError(location, callPath, whitelistedPackagesList);
     }
@@ -289,7 +289,7 @@ public final class CcCommon {
   List<Pair<Artifact, Label>> getPrivateHeaders() {
     Map<Artifact, Label> map = Maps.newLinkedHashMap();
     Iterable<? extends TransitiveInfoCollection> providers =
-        ruleContext.getPrerequisitesIf("srcs", TransitionMode.TARGET, FileProvider.class);
+        ruleContext.getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class);
     for (TransitiveInfoCollection provider : providers) {
       for (Artifact artifact :
           provider.getProvider(FileProvider.class).getFilesToBuild().toList()) {
@@ -313,7 +313,7 @@ public final class CcCommon {
   List<Pair<Artifact, Label>> getSources() {
     Map<Artifact, Label> map = Maps.newLinkedHashMap();
     Iterable<? extends TransitiveInfoCollection> providers =
-        ruleContext.getPrerequisitesIf("srcs", TransitionMode.TARGET, FileProvider.class);
+        ruleContext.getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class);
     for (TransitiveInfoCollection provider : providers) {
       for (Artifact artifact :
           provider.getProvider(FileProvider.class).getFilesToBuild().toList()) {
@@ -350,7 +350,7 @@ public final class CcCommon {
   public static List<Pair<Artifact, Label>> getHeaders(RuleContext ruleContext) {
     Map<Artifact, Label> map = Maps.newLinkedHashMap();
     for (TransitiveInfoCollection target :
-        ruleContext.getPrerequisitesIf("hdrs", TransitionMode.TARGET, FileProvider.class)) {
+        ruleContext.getPrerequisitesIf("hdrs", Mode.TARGET, FileProvider.class)) {
       FileProvider provider = target.getProvider(FileProvider.class);
       for (Artifact artifact : provider.getFilesToBuild().toList()) {
         if (CppRuleClasses.DISALLOWED_HDRS_FILES.matches(artifact.getFilename())) {
@@ -436,7 +436,7 @@ public final class CcCommon {
         return CcCommon.computeCcFlags(
             ruleContext,
             ruleContext.getPrerequisite(
-                CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, TransitionMode.TARGET));
+                CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, Mode.TARGET));
       } catch (RuleErrorException e) {
         throw new ExpansionException(e.getMessage());
       }
@@ -605,7 +605,7 @@ public final class CcCommon {
             .getExecPath(
                 ruleContext
                     .getAnalysisEnvironment()
-                    .getStarlarkSemantics()
+                    .getSkylarkSemantics()
                     .experimentalSiblingRepositoryLayout());
     result.add(rulePackage);
 
@@ -622,7 +622,7 @@ public final class CcCommon {
               .getExecPath(
                   ruleContext
                       .getAnalysisEnvironment()
-                      .getStarlarkSemantics()
+                      .getSkylarkSemantics()
                       .experimentalSiblingRepositoryLayout());
       // For now, anything with an 'includes' needs a blanket declaration
       result.add(packageFragment.getRelative("**"));
@@ -634,7 +634,7 @@ public final class CcCommon {
     boolean siblingRepositoryLayout =
         ruleContext
             .getAnalysisEnvironment()
-            .getStarlarkSemantics()
+            .getSkylarkSemantics()
             .experimentalSiblingRepositoryLayout();
     List<PathFragment> result = new ArrayList<>();
     PackageIdentifier packageIdentifier = ruleContext.getLabel().getPackageIdentifier();
@@ -691,7 +691,7 @@ public final class CcCommon {
     NestedSetBuilder<Artifact> prerequisites = NestedSetBuilder.stableOrder();
     if (ruleContext.attributes().has("srcs", BuildType.LABEL_LIST)) {
       for (FileProvider provider :
-          ruleContext.getPrerequisites("srcs", TransitionMode.TARGET, FileProvider.class)) {
+          ruleContext.getPrerequisites("srcs", Mode.TARGET, FileProvider.class)) {
         prerequisites.addAll(
             FileType.filter(
                 provider.getFilesToBuild().toList(), SourceCategory.CC_AND_OBJC.getSourceTypes()));
@@ -709,9 +709,7 @@ public final class CcCommon {
    * the rule.
    */
   List<Artifact> getAdditionalLinkerInputs() {
-    return ruleContext
-        .getPrerequisiteArtifacts("additional_linker_inputs", TransitionMode.TARGET)
-        .list();
+    return ruleContext.getPrerequisiteArtifacts("additional_linker_inputs", Mode.TARGET).list();
   }
 
   /**
@@ -741,7 +739,7 @@ public final class CcCommon {
   /** Returns any linker scripts found in the "deps" attribute of the rule. */
   List<Artifact> getLinkerScripts() {
     return ruleContext
-        .getPrerequisiteArtifacts("deps", TransitionMode.TARGET)
+        .getPrerequisiteArtifacts("deps", Mode.TARGET)
         .filter(CppFileTypes.LINKER_SCRIPT)
         .list();
   }
@@ -753,7 +751,7 @@ public final class CcCommon {
       return null;
     }
 
-    return ruleContext.getPrerequisiteArtifact("win_def_file", TransitionMode.TARGET);
+    return ruleContext.getPrerequisiteArtifact("win_def_file", Mode.TARGET);
   }
 
   /**
@@ -765,7 +763,7 @@ public final class CcCommon {
       return null;
     }
 
-    return ruleContext.getPrerequisiteArtifact("$def_parser", TransitionMode.HOST);
+    return ruleContext.getPrerequisiteArtifact("$def_parser", Mode.HOST);
   }
 
   /** Provides support for instrumentation. */
@@ -876,12 +874,6 @@ public final class CcCommon {
         throw new EvalException(/* location= */ null, PIC_CONFIGURATION_ERROR);
       }
       allRequestedFeaturesBuilder.add(CppRuleClasses.SUPPORTS_PIC);
-    }
-
-    if (cppConfiguration.appleGenerateDsym()) {
-      allRequestedFeaturesBuilder.add(CppRuleClasses.GENERATE_DSYM_FILE_FEATURE_NAME);
-    } else {
-      allRequestedFeaturesBuilder.add(CppRuleClasses.NO_GENERATE_DEBUG_SYMBOLS_FEATURE_NAME);
     }
 
     ImmutableSet<String> allUnsupportedFeatures = unsupportedFeaturesBuilder.build();

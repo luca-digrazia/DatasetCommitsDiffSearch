@@ -17,7 +17,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.devtools.build.android.desugar.LambdaClassMaker.LAMBDA_METAFACTORY_DUMPER_PROPERTY;
-import static com.google.devtools.build.android.desugar.io.FileBasedTypeReferenceClosure.findReachableReferencedTypes;
 import static com.google.devtools.build.android.desugar.strconcat.IndyStringConcatDesugaring.INVOKE_JDK11_STRING_CONCAT;
 
 import com.google.auto.value.AutoValue;
@@ -578,9 +577,7 @@ public class Desugar {
 
   private static void copyTypeConverterClasses(
       OutputFileProvider outputFileProvider, ImmutableList<ClassName> converterClasses) {
-    for (ClassName className :
-        findReachableReferencedTypes(
-            ImmutableSet.copyOf(converterClasses), ClassName::isInDesugarRuntimeLibrary)) {
+    for (ClassName className : converterClasses) {
       String resourceName = className.classFilePathName();
       try (InputStream stream = Resources.getResource(resourceName).openStream()) {
         outputFileProvider.write(resourceName, ByteStreams.toByteArray(stream));

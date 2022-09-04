@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
@@ -63,7 +64,6 @@ import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -82,7 +82,7 @@ import java.util.Locale;
 import java.util.Set;
 import javax.annotation.Nullable;
 
-/** A module that contains Starlark utilities for C++ support. */
+/** A module that contains Skylark utilities for C++ support. */
 public abstract class CcModule
     implements CcModuleApi<
         SkylarkActionFactory,
@@ -134,36 +134,36 @@ public abstract class CcModule
       Sequence<?> unsupportedFeatures)
       throws EvalException {
     SkylarkRuleContext ruleContext = nullIfNone(ruleContextOrNone, SkylarkRuleContext.class);
+    if (ruleContext == null
+        && toolchain
+            .requireCtxInConfigureFeatures()) {
+      throw Starlark.errorf(
+          "Incompatible flag --incompatible_require_ctx_in_configure_features has been flipped, "
+              + "and the mandatory parameter 'ctx' of cc_common.configure_features is missing. "
+              + "Please add 'ctx' as a named parameter. See "
+              + "https://github.com/bazelbuild/bazel/issues/7793 for details.");
+    }
+    if (ruleContext != null
+        && !ruleContext.getRuleContext().isLegalFragment(CppConfiguration.class)) {
+      throw Starlark.errorf(
+          "%s must declare '%s' as a required configuration fragment to access it.",
+          ruleContext.getRuleContext().getRuleClassNameForLogging(),
+          CppConfiguration.class.getSimpleName());
+    }
+    CppConfiguration cppConfiguration =
+        ruleContext == null
+            ? toolchain.getCppConfigurationEvenThoughItCanBeDifferentThanWhatTargetHas()
+            : ruleContext.getRuleContext().getFragment(CppConfiguration.class);
+    // buildOptions are only used when --incompatible_enable_cc_toolchain_resolution is flipped,
+    // and that will only be flipped when --incompatible_require_ctx_in_configure_features is
+    // flipped.
+    BuildOptions buildOptions =
+        ruleContext == null ? null : ruleContext.getConfiguration().getOptions();
     ImmutableSet<String> unsupportedFeaturesSet =
         ImmutableSet.copyOf(unsupportedFeatures.getContents(String.class, "unsupported_features"));
-    final CppConfiguration cppConfiguration;
-    final BuildOptions buildOptions;
-    if (ruleContext == null) {
-      if (toolchain.requireCtxInConfigureFeatures()) {
-        throw Starlark.errorf(
-            "Incompatible flag --incompatible_require_ctx_in_configure_features has been flipped, "
-                + "and the mandatory parameter 'ctx' of cc_common.configure_features is missing. "
-                + "Please add 'ctx' as a named parameter. See "
-                + "https://github.com/bazelbuild/bazel/issues/7793 for details.");
-      }
-      cppConfiguration = toolchain.getCppConfigurationEvenThoughItCanBeDifferentThanWhatTargetHas();
-      buildOptions = null;
-    } else {
-      if (!ruleContext.getRuleContext().isLegalFragment(CppConfiguration.class)) {
-        throw Starlark.errorf(
-            "%s must declare '%s' as a required configuration fragment to access it.",
-            ruleContext.getRuleContext().getRuleClassNameForLogging(),
-            CppConfiguration.class.getSimpleName());
-      }
-      cppConfiguration = ruleContext.getRuleContext().getFragment(CppConfiguration.class);
-      // buildOptions are only used when --incompatible_enable_cc_toolchain_resolution is flipped,
-      // and that will only be flipped when --incompatible_require_ctx_in_configure_features is
-      // flipped.
-      buildOptions = ruleContext.getConfiguration().getOptions();
-      getSemantics()
-          .validateLayeringCheckFeatures(
-              ruleContext.getRuleContext(), toolchain, unsupportedFeaturesSet);
-    }
+    getSemantics()
+        .validateLayeringCheckFeatures(
+            ruleContext.getRuleContext(), toolchain, unsupportedFeaturesSet);
     return FeatureConfigurationForStarlark.from(
         CcCommon.configureFeaturesOrThrowEvalException(
             ImmutableSet.copyOf(requestedFeatures.getContents(String.class, "requested_features")),

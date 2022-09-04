@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.SpawnResult.MetadataLog;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
@@ -30,17 +29,18 @@ import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.ProgressLike;
-import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * This event is fired during the build, when an action is executed. It contains information about
  * the action: the Action itself, and the output file names its stdout and stderr are recorded in.
  */
 public class ActionExecutedEvent implements BuildEventWithConfiguration, ProgressLike {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(ActionExecutedEvent.class.getName());
 
   private final PathFragment actionId;
   private final Action action;
@@ -158,25 +158,19 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
   }
 
   @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters)
-      throws InterruptedException {
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
     PathConverter pathConverter = converters.pathConverter();
     BuildEventStreamProtos.ActionExecuted.Builder actionBuilder =
         BuildEventStreamProtos.ActionExecuted.newBuilder()
             .setSuccess(getException() == null)
             .setType(action.getMnemonic());
 
-    if (exception != null) {
+    if (exception != null && exception.getExitCode() != null) {
       // TODO(b/150405553): This statement seems to be confused. The exit_code field of
       //  ActionExecuted is documented as "The exit code of the action, if it is available."
       //  However, the value returned by exception.getExitCode().getNumericExitCode() is intended as
       //  an exit code that this Bazel invocation might return to the user.
       actionBuilder.setExitCode(exception.getExitCode().getNumericExitCode());
-      FailureDetails.FailureDetail failureDetail =
-          exception.getDetailedExitCode().getFailureDetail();
-      if (failureDetail != null) {
-        actionBuilder.setFailureDetail(failureDetail);
-      }
     }
     if (stdout != null) {
       String uri = pathConverter.apply(stdout);
@@ -225,7 +219,7 @@ public class ActionExecutedEvent implements BuildEventWithConfiguration, Progres
       }
     } catch (CommandLineExpansionException e) {
       // Command-line not available, so just not report it
-      logger.atInfo().withCause(e).log("Could not compute commandline of reported action");
+      logger.log(Level.INFO, "Could no compute commandline of reported action", e);
     }
     return GenericBuildEvent.protoChaining(this).setAction(actionBuilder.build()).build();
   }
