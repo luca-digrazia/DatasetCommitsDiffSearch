@@ -1,25 +1,19 @@
 package org.jboss.protean.arc;
 
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.context.RequestScoped;
+import javax.enterprise.context.spi.AlterableContext;
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 
-/**
- *
- * @author Martin Kouba
- */
-class RequestContext implements ManagedContext {
+public class RequestContext implements AlterableContext {
 
     // It's a normal scope so there may be no more than one mapped instance per contextual type per thread
-    private final ThreadLocal<Map<Contextual<?>, InstanceHandle<?>>> currentContext = new ThreadLocal<>();
+    private final ThreadLocal<Map<Contextual<?>, InstanceHandleImpl<?>>> currentContext = new ThreadLocal<>();
 
     @Override
     public Class<? extends Annotation> getScope() {
@@ -28,12 +22,11 @@ class RequestContext implements ManagedContext {
 
     @Override
     public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
-        Map<Contextual<?>, InstanceHandle<?>> ctx = currentContext.get();
+        Map<Contextual<?>, InstanceHandleImpl<?>> ctx = currentContext.get();
         if (ctx == null) {
             // Thread local not set - context is not active!
             throw new ContextNotActiveException();
         }
-        @SuppressWarnings("unchecked")
         InstanceHandleImpl<T> instance = (InstanceHandleImpl<T>) ctx.get(contextual);
         if (instance == null && creationalContext != null) {
             // Bean instance does not exist - create one if we have CreationalContext
@@ -49,66 +42,46 @@ class RequestContext implements ManagedContext {
     }
 
     @Override
-    public Collection<InstanceHandle<?>> getAll() {
-        Map<Contextual<?>, InstanceHandle<?>> ctx = currentContext.get();
-        if (ctx == null) {
-            return Collections.emptyList();
-        }
-        return new ArrayList<>(ctx.values());
-    }
-
-    @Override
     public boolean isActive() {
         return currentContext.get() != null;
     }
 
     @Override
     public void destroy(Contextual<?> contextual) {
-        Map<Contextual<?>, InstanceHandle<?>> ctx = currentContext.get();
+        Map<Contextual<?>, InstanceHandleImpl<?>> ctx = currentContext.get();
         if (ctx == null) {
-            // Thread local not set - context is not active!
-            throw new ContextNotActiveException();
+            return;
         }
-        InstanceHandle<?> instance = ctx.remove(contextual);
+        InstanceHandleImpl<?> instance = ctx.remove(contextual);
         if (instance != null) {
-            InstanceHandleImpl.unwrap(instance).destroyInternal();
+            instance.destroy();
         }
     }
 
-    @Override
-    public synchronized void activate(Collection<InstanceHandle<?>> initialState) {
-        Map<Contextual<?>, InstanceHandle<?>> state = new HashMap<>();
-        if (initialState != null) {
-            for (InstanceHandle<?> instanceHandle : initialState) {
-                if (!instanceHandle.getBean().getScope().equals(getScope())) {
-                    throw new IllegalArgumentException("Invalid bean scope: " + instanceHandle.getBean());
-                }
-                state.put(instanceHandle.getBean(), instanceHandle);
-            }
-        }
-        currentContext.set(state);
+    public void activate() {
+        currentContext.set(new HashMap<>());
     }
 
-    @Override
-    public synchronized void deactivate() {
-        currentContext.remove();
-    }
-
-    @Override
-    public void destroy() {
-        Map<Contextual<?>, InstanceHandle<?>> ctx = currentContext.get();
+    public void invalidate() {
+        Map<Contextual<?>, InstanceHandleImpl<?>> ctx = currentContext.get();
         if (ctx != null) {
             synchronized (ctx) {
-                for (InstanceHandle<?> instance : ctx.values()) {
+                for (InstanceHandleImpl<?> instance : ctx.values()) {
                     try {
-                        InstanceHandleImpl.unwrap(instance).destroyInternal();
+                        instance.destroy();
                     } catch (Exception e) {
                         throw new IllegalStateException("Unable to destroy instance" + instance.get(), e);
                     }
                 }
-                ctx.clear();
             }
+            ctx.clear();
         }
+    }
+
+    public void deactivate() {
+        // TODO maybe change if context propagation is supported
+        invalidate();
+        currentContext.remove();
     }
 
 }
