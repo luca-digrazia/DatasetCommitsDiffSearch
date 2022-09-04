@@ -472,7 +472,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         "    srcs = ['a.m'],",
         "    deps = ['//protos:objc_protos_low_level',]",
         ")");
-
+    
     if (depBinaryType == BinaryType.DYLIB) {
       scratchFrameworkSkylarkStub("frameworkstub/framework_stub.bzl");
       scratch.file(
@@ -1416,11 +1416,6 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCustomModuleMap() throws Exception {
-    checkCustomModuleMap(RULE_TYPE);
-  }
-
-  @Test
-  public void testMinimumOsDifferentTargets() throws Exception {
-    checkMinimumOsDifferentTargets(RULE_TYPE, "_lipobin", "_bin");
+    checkCustomModuleMap(RULE_TYPE, true);
   }
 }

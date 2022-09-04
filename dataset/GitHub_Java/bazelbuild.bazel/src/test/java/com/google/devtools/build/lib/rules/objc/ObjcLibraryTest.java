@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
-import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.Collections;
@@ -136,13 +135,15 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testObjcPlusPlusCompileDarwin() throws Exception {
-    useConfiguration(ObjcCrosstoolMode.ALL,
+    useConfiguration(
+        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
         "--experimental_disable_go",
         "--cpu=darwin_x86_64",
         "--macos_minimum_os=9.10.11",
         // TODO(b/36126423): Darwin should imply macos, so the
         // following line should not be necessary.
-        "--apple_platform_type=macos");
+        "--apple_platform_type=macos",
+        "--experimental_objc_crosstool=all");
     createLibraryTargetWriter("//objc:lib")
         .setList("srcs", "a.mm")
         .write();
@@ -1548,8 +1549,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   public void testSysrootArgSpecifiedWithGrteTopFlag() throws Exception {
     MockObjcSupport.setup(mockToolsConfig, "default_grte_top : '//x'");
     useConfiguration(
-        ObjcCrosstoolMode.ALL,
+        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
         "--experimental_disable_go",
+        "--experimental_objc_crosstool=all",
         "--cpu=ios_x86_64",
         "--ios_cpu=x86_64");
     scratch.file(
@@ -1580,8 +1582,9 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         "  }",
         "}");
     useConfiguration(
-        ObjcCrosstoolMode.ALL,
+        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
         "--experimental_disable_go",
+        "--experimental_objc_crosstool=all",
         "--cpu=ios_x86_64",
         "--ios_cpu=x86_64");
     scratch.file(
@@ -1596,6 +1599,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCustomModuleMap() throws Exception {
-    checkCustomModuleMap(RULE_TYPE);
+    checkCustomModuleMap(RULE_TYPE, false);
   }
 }
