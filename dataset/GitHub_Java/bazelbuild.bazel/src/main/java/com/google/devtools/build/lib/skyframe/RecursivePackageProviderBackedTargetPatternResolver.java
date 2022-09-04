@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static com.google.devtools.build.lib.pkgcache.FilteringPolicies.NO_FILTER;
 
 import com.google.common.base.Function;
@@ -314,19 +313,15 @@ public class RecursivePackageProviderBackedTargetPatternResolver
           }
         }));
     }
-    return Futures.whenAllSucceed(futures)
-        .call(
-            new Callable<Void>() {
-              @Override
-              public Void call() throws TargetParsingException {
-                if (!foundTarget.get()) {
-                  throw new TargetParsingException(
-                      "no targets found beneath '" + pathFragment + "'");
-                }
-                return null;
-              }
-            },
-            directExecutor());
+    return Futures.whenAllSucceed(futures).call(new Callable<Void>() {
+      @Override
+      public Void call() throws TargetParsingException {
+        if (!foundTarget.get()) {
+          throw new TargetParsingException("no targets found beneath '" + pathFragment + "'");
+        }
+        return null;
+      }
+    });
   }
 
   private static <T> int calculateSize(Iterable<ResolvedTargets<T>> resolvedTargets) {
