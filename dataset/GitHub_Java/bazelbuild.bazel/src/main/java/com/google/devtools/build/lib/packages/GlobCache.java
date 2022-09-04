@@ -227,14 +227,15 @@ public class GlobCache {
   }
 
   /**
-   * Helper for evaluating the build language expression "glob(includes, excludes)" in the context
-   * of this package.
+   * Helper for evaluating the build language expression "glob(includes, excludes)" in the
+   * context of this package.
    *
    * <p>Called by PackageFactory via Package.
    */
   public List<String> globUnsorted(
-      List<String> includes, List<String> excludes, boolean excludeDirs, boolean allowEmpty)
-      throws IOException, BadGlobException, InterruptedException {
+      List<String> includes,
+      List<String> excludes,
+      boolean excludeDirs) throws IOException, BadGlobException, InterruptedException {
     // Start globbing all patterns in parallel. The getGlob() calls below will
     // block on an individual pattern's results, but the other globs can
     // continue in the background.
@@ -246,20 +247,9 @@ public class GlobCache {
     HashSet<String> results = new HashSet<>();
     Preconditions.checkState(!results.contains(null), "glob returned null");
     for (String pattern : includes) {
-      List<String> items = getGlobUnsorted(pattern, excludeDirs);
-      if (!allowEmpty && items.isEmpty()) {
-        throw new BadGlobException(
-            "glob pattern '"
-                + pattern
-                + "' didn't match anything, but allow_empty is set to False.");
-      }
-      results.addAll(items);
+      results.addAll(getGlobUnsorted(pattern, excludeDirs));
     }
     UnixGlob.removeExcludes(results, excludes);
-    if (!allowEmpty && results.isEmpty()) {
-      throw new BadGlobException(
-          "all files in the glob have been excluded, but allow_empty is set to False.");
-    }
     return new ArrayList<>(results);
   }
 
