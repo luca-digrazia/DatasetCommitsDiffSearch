@@ -3,10 +3,11 @@ package io.dropwizard.client;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.httpclient.InstrumentedClientConnManager;
 import com.codahale.metrics.httpclient.InstrumentedHttpClient;
+
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.Duration;
+
 import org.apache.http.HttpResponse;
-import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.params.AllClientPNames;
@@ -20,6 +21,7 @@ import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.conn.SchemeRegistryFactory;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.CoreProtocolPNames;
 import org.apache.http.protocol.HttpContext;
 
 import java.io.IOException;
@@ -48,7 +50,6 @@ public class HttpClientBuilder {
     private DnsResolver resolver = new SystemDefaultDnsResolver();
     private HttpRequestRetryHandler httpRequestRetryHandler;
     private SchemeRegistry registry = SchemeRegistryFactory.createSystemDefault();
-    private CredentialsProvider credentialsProvider = null;
 
     public HttpClientBuilder(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
@@ -93,7 +94,7 @@ public class HttpClientBuilder {
     }
 
     /**
-     * Uses the {@link HttpRequestRetryHandler} for handling request retries.
+     * Uses the {@link httpRequestRetryHandler} for handling request retries.
      *
      * @param httpRequestRetryHandler an httpRequestRetryHandler
      * @return {@code this}
@@ -115,17 +116,6 @@ public class HttpClientBuilder {
     }
 
     /**
-     * Use the given {@link CredentialsProvider} instance.
-     *
-     * @param credentialsProvider    a {@link CredentialsProvider} instance
-     * @return {@code this}
-     */
-    public HttpClientBuilder using(CredentialsProvider credentialsProvider) {
-        this.credentialsProvider = credentialsProvider;
-        return this;
-    }
-
-    /**
      * Builds the {@link HttpClient}.
      *
      * @return an {@link HttpClient}
@@ -134,7 +124,6 @@ public class HttpClientBuilder {
         final BasicHttpParams params = createHttpParams(name);
         final InstrumentedClientConnManager manager = createConnectionManager(registry, name);
         final InstrumentedHttpClient client = new InstrumentedHttpClient(metricRegistry, manager, params, name);
-        client.setCredentialsProvider(credentialsProvider);
         setStrategiesForClient(client);
 
         return client;
