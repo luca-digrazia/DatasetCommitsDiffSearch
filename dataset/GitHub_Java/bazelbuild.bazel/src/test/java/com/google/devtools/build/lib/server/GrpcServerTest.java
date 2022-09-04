@@ -14,13 +14,12 @@
 package com.google.devtools.build.lib.server;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
+import static junit.framework.TestCase.fail;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.common.util.concurrent.Uninterruptibles;
@@ -30,6 +29,7 @@ import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -210,14 +210,17 @@ public class GrpcServerTest {
   public void testInterruptsCommandThreadOnCancellation() throws Exception {
     final CountDownLatch safety = new CountDownLatch(1);
     final AtomicBoolean interrupted = new AtomicBoolean(false);
-    TestThread victim =
-        new TestThread() {
-          @Override
-          public void runTest() throws Exception {
-            assertThrows(InterruptedException.class, () -> safety.await());
-            interrupted.set(true);
-          }
-        };
+    TestThread victim = new TestThread() {
+      @Override
+      public void runTest() throws Exception {
+        try {
+          safety.await();
+          fail("Test thread finished unexpectedly");
+        } catch (InterruptedException e) {
+          interrupted.set(true);
+        }
+      }
+    };
 
     victim.setDaemon(true);
     victim.start();
