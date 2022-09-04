@@ -29,14 +29,12 @@ import java.util.List;
  * as opaque from the outside.
  *
  * @param <FRAGMENT>
- * @param <DIALOG_FRAGMENT>
  * @param <FRAGMENT_MANAGER>
  * @param <FRAGMENT_ACTIVITY>
  */
 @NotThreadSafe
 public abstract class FragmentCompat<
     FRAGMENT,
-    DIALOG_FRAGMENT,
     FRAGMENT_MANAGER,
     FRAGMENT_ACTIVITY extends Activity> {
   private static FragmentCompat sFrameworkInstance;
@@ -71,12 +69,8 @@ public abstract class FragmentCompat<
   }
 
   public abstract Class<FRAGMENT> getFragmentClass();
-  public abstract Class<DIALOG_FRAGMENT> getDialogFragmentClass();
   public abstract Class<FRAGMENT_ACTIVITY> getFragmentActivityClass();
-
   public abstract FragmentAccessor<FRAGMENT, FRAGMENT_MANAGER> forFragment();
-  public abstract DialogFragmentAccessor<DIALOG_FRAGMENT, FRAGMENT, FRAGMENT_MANAGER>
-      forDialogFragment();
   public abstract FragmentManagerAccessor<FRAGMENT_MANAGER, FRAGMENT> forFragmentManager();
   public abstract FragmentActivityAccessor<FRAGMENT_ACTIVITY, FRAGMENT_MANAGER> forFragmentActivity();
 
@@ -106,4 +100,5 @@ public abstract class FragmentCompat<
           : null;
     }
   }
+
 }
