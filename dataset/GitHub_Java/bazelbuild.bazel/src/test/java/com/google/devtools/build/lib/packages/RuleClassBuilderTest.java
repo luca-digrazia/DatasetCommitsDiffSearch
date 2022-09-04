@@ -23,7 +23,6 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassNamePredicate;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
@@ -37,12 +36,11 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class RuleClassBuilderTest extends PackageLoadingTestCase {
-  private static final RuleClass.ConfiguredTargetFactory<Object, Object, Exception>
+  private static final RuleClass.ConfiguredTargetFactory<Object, Object>
       DUMMY_CONFIGURED_TARGET_FACTORY =
-          new RuleClass.ConfiguredTargetFactory<Object, Object, Exception>() {
+          new RuleClass.ConfiguredTargetFactory<Object, Object>() {
             @Override
-            public Object create(Object ruleContext)
-                throws InterruptedException, RuleErrorException, ActionConflictException {
+            public Object create(Object ruleContext) throws InterruptedException {
               throw new IllegalStateException();
             }
           };
@@ -166,9 +164,7 @@ public class RuleClassBuilderTest extends PackageLoadingTestCase {
       new RuleClass.Builder("ruleC", RuleClassType.NORMAL, false, a, b).build();
       fail();
     } catch (IllegalArgumentException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("Attribute a is inherited multiple times in ruleC ruleclass");
+      assertThat(e).hasMessage("Attribute a is inherited multiple times in ruleC ruleclass");
     }
   }
 

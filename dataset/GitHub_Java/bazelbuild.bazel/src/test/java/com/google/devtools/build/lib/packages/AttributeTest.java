@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.SPLIT;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
@@ -26,7 +27,6 @@ import static org.junit.Assert.fail;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
@@ -96,9 +96,7 @@ public class AttributeTest {
 
   @Test
   public void testDoublePropertySet() {
-    Attribute.Builder<String> builder = attr("x", STRING).mandatory()
-        .cfg(HostTransition.INSTANCE)
-        .undocumented("")
+    Attribute.Builder<String> builder = attr("x", STRING).mandatory().cfg(HOST).undocumented("")
         .value("y");
     try {
       builder.mandatory();
@@ -107,7 +105,7 @@ public class AttributeTest {
       // expected
     }
     try {
-      builder.cfg(HostTransition.INSTANCE);
+      builder.cfg(HOST);
       fail();
     } catch (IllegalStateException expected) {
       // expected
@@ -290,8 +288,8 @@ public class AttributeTest {
 
   @Test
   public void testHostTransition() throws Exception {
-    Attribute attr = attr("foo", LABEL).cfg(HostTransition.INSTANCE).allowedFileTypes().build();
-    assertThat(attr.getConfigurationTransition().isHostTransition()).isTrue();
+    Attribute attr = attr("foo", LABEL).cfg(HOST).allowedFileTypes().build();
+    assertThat(attr.getConfigurationTransition()).isEqualTo(HOST);
     assertThat(attr.hasSplitConfigurationTransition()).isFalse();
   }
 
