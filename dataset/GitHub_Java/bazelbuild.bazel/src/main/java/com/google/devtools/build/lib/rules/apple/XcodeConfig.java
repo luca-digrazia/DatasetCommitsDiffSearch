@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Streams;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
@@ -51,7 +50,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     AppleConfiguration appleConfig = ruleContext.getFragment(AppleConfiguration.class);
     AppleCommandLineOptions appleOptions = appleConfig.getOptions();
     XcodeVersionRuleData defaultVersion = ruleContext.getPrerequisite(
@@ -178,10 +177,10 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
         return explicitVersion;
       } else {
         throw new XcodeConfigException(String.format(
-            "--xcode_version=%1$s specified, but '%1$s' is not an available Xcode version. "
-            + "available versions: [%2$s]. If you believe you have '%1$s' installed, try running "
-            + "\"blaze clean --expunge\", and then re-run your command.",
-            versionOverrideFlag, printableXcodeVersions(xcodeVersionRules)));
+            "--xcode_version=%s specified, but '%s' is not an available Xcode version. "
+            + "available versions: [%s]",
+            versionOverrideFlag, versionOverrideFlag,
+            printableXcodeVersions(xcodeVersionRules)));
       }
     }
 
