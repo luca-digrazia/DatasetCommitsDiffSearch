@@ -12,7 +12,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileInputStream;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 
@@ -21,10 +20,9 @@ public class HttpConfigurationTest {
 
     @Before
     public void setUp() throws Exception {
-        File httpFile = new File(Resources.getResource("yaml/http.yml").toURI());
         this.http = ConfigurationFactory.forClass(HttpConfiguration.class,
                                                   new Validator())
-                                        .build(httpFile.toString(), new FileInputStream(httpFile));
+                                        .build(new File(Resources.getResource("yaml/http.yml").toURI()));
     }
 
     @Test
@@ -72,7 +70,7 @@ public class HttpConfigurationTest {
     @Test
     public void hasAConnectorType() throws Exception {
         assertThat(http.getConnectorType())
-                .isEqualTo(HttpConfiguration.ConnectorType.LEGACY);
+                .isEqualTo(HttpConfiguration.ConnectorType.SOCKET);
     }
 
     @Test
@@ -83,7 +81,7 @@ public class HttpConfigurationTest {
 
     @Test
     public void hasAnAcceptorThreadCount() throws Exception {
-        assertThat(http.getAcceptorThreads())
+        assertThat(http.getAcceptorThreadCount())
                 .isEqualTo(2);
     }
 
