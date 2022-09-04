@@ -102,8 +102,7 @@ public class FakeHttpMessageInput extends MessageInput {
                 "Sleep time",
                 25,
                 "How many milliseconds to sleep between generating messages.",
-                ConfigurationField.Optional.NOT_OPTIONAL,
-                NumberField.Attribute.ONLY_POSITIVE
+                ConfigurationField.Optional.NOT_OPTIONAL
         ));
 
         c.addField(new NumberField(
@@ -111,8 +110,7 @@ public class FakeHttpMessageInput extends MessageInput {
                 "Maximum random sleep time deviation",
                 30,
                 "The deviation is used to generate a more realistic and non-steady message flow.",
-                ConfigurationField.Optional.NOT_OPTIONAL,
-                NumberField.Attribute.ONLY_POSITIVE
+                ConfigurationField.Optional.NOT_OPTIONAL
         ));
 
         c.addField(new TextField(
