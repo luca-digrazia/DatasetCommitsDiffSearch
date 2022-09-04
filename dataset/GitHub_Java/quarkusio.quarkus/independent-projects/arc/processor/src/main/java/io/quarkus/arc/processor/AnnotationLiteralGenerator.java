@@ -46,13 +46,6 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(AnnotationLiteralGenerator.class);
 
-    private final boolean generateSources;
-
-    AnnotationLiteralGenerator(boolean generateSources) {
-        super(generateSources);
-        this.generateSources = generateSources;
-    }
-
     /**
      *
      * @param beanDeployment
@@ -63,7 +56,7 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
             ComputingCache<Key, Literal> annotationLiteralsCache) {
         List<Resource> resources = new ArrayList<>();
         annotationLiteralsCache.forEachEntry((key, literal) -> {
-            ResourceClassOutput classOutput = new ResourceClassOutput(literal.isApplicationClass, generateSources);
+            ResourceClassOutput classOutput = new ResourceClassOutput(literal.isApplicationClass);
             createSharedAnnotationLiteral(classOutput, key, literal);
             resources.addAll(classOutput.getResources());
         });
@@ -206,13 +199,6 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
                 retValue = valueMethod.newArray(componentType(method), valueMethod.load(stringArray.length));
                 for (int i = 0; i < stringArray.length; i++) {
                     valueMethod.writeArrayValue(retValue, i, valueMethod.load(stringArray[i]));
-                }
-                break;
-            case SHORT:
-                short[] shortArray = value.asShortArray();
-                retValue = valueMethod.newArray(componentType(method), valueMethod.load(shortArray.length));
-                for (int i = 0; i < shortArray.length; i++) {
-                    valueMethod.writeArrayValue(retValue, i, valueMethod.load(shortArray[i]));
                 }
                 break;
             case INTEGER:
