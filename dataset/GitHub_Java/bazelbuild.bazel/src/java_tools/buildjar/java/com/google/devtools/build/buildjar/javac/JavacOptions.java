@@ -17,7 +17,6 @@ package com.google.devtools.build.buildjar.javac;
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.primitives.Ints;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -231,7 +230,6 @@ public final class JavacOptions {
     private String source;
     private String target;
     private String release;
-    private final List<String> modular = new ArrayList<>();
 
     @Override
     public boolean processOption(String option, Iterator<String> remaining) {
@@ -255,13 +253,6 @@ public final class JavacOptions {
             target = null;
           }
           return true;
-        case "--add-exports":
-        case "--add-opens":
-          if (remaining.hasNext()) {
-            modular.add(option);
-            modular.add(remaining.next());
-          }
-          return true;
         default: // fall out
       }
       if (option.startsWith("--release=")) {
@@ -270,35 +261,11 @@ public final class JavacOptions {
         target = null;
         return true;
       }
-      if (option.startsWith("--add-exports=") || option.startsWith("--add-opens=")) {
-        modular.add(option);
-        return true;
-      }
       return false;
-    }
-
-    private void addModular(List<String> normalized) {
-      String value;
-      if (release != null) {
-        value = release;
-      } else if (target != null) {
-        value = target;
-      } else {
-        return;
-      }
-      boolean hasPrefix = value.startsWith("1.");
-      Integer version = Ints.tryParse(hasPrefix ? value.substring("1.".length()) : value);
-      if (version == null) {
-        return;
-      }
-      if (version > 8) {
-        normalized.addAll(modular);
-      }
     }
 
     @Override
     public void normalize(List<String> normalized) {
-      addModular(normalized);
       if (release != null) {
         normalized.add("--release");
         normalized.add(release);
