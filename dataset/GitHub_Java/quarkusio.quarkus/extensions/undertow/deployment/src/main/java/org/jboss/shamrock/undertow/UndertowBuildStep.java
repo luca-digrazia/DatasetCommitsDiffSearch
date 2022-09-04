@@ -19,8 +19,8 @@ package org.jboss.shamrock.undertow;
 import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.DENY;
 import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.PERMIT;
 import static javax.servlet.DispatcherType.REQUEST;
-import static org.jboss.shamrock.deployment.annotations.ExecutionTime.RUNTIME_INIT;
-import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
+import static org.jboss.shamrock.annotations.ExecutionTime.RUNTIME_INIT;
+import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -45,6 +45,7 @@ import javax.servlet.annotation.WebServlet;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamReader;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.annotation.javaee.Descriptions;
 import org.jboss.annotation.javaee.DisplayNames;
 import org.jboss.annotation.javaee.Icons;
@@ -85,9 +86,9 @@ import org.jboss.metadata.web.spec.ServletSecurityMetaData;
 import org.jboss.metadata.web.spec.ServletsMetaData;
 import org.jboss.metadata.web.spec.TransportGuaranteeType;
 import org.jboss.metadata.web.spec.WebMetaData;
-import org.jboss.shamrock.deployment.annotations.BuildProducer;
-import org.jboss.shamrock.deployment.annotations.BuildStep;
-import org.jboss.shamrock.deployment.annotations.Record;
+import org.jboss.shamrock.annotations.BuildProducer;
+import org.jboss.shamrock.annotations.BuildStep;
+import org.jboss.shamrock.annotations.Record;
 import org.jboss.shamrock.deployment.ApplicationArchive;
 import org.jboss.shamrock.deployment.builditem.ApplicationArchivesBuildItem;
 import org.jboss.shamrock.deployment.builditem.ArchiveRootBuildItem;
@@ -95,18 +96,15 @@ import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import org.jboss.shamrock.deployment.builditem.HttpServerBuiltItem;
 import org.jboss.shamrock.deployment.builditem.InjectionFactoryBuildItem;
-import org.jboss.shamrock.deployment.builditem.ObjectSubstitutionBuildItem;
 import org.jboss.shamrock.deployment.builditem.ServiceStartBuildItem;
 import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import org.jboss.shamrock.deployment.cdi.BeanDefiningAnnotationBuildItem;
 import org.jboss.shamrock.deployment.recording.RecorderContext;
 import org.jboss.shamrock.runtime.RuntimeValue;
-import org.jboss.shamrock.runtime.annotations.ConfigItem;
 import org.jboss.shamrock.undertow.runtime.HttpConfig;
-import org.jboss.shamrock.undertow.runtime.ServletSecurityInfoProxy;
-import org.jboss.shamrock.undertow.runtime.ServletSecurityInfoSubstitution;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
 import io.undertow.Undertow;
@@ -119,22 +117,20 @@ import io.undertow.servlet.handlers.DefaultServlet;
 
 public class UndertowBuildStep {
 
-    public static final DotName WEB_FILTER = DotName.createSimple(WebFilter.class.getName());
-    public static final DotName WEB_LISTENER = DotName.createSimple(WebListener.class.getName());
-    public static final DotName WEB_SERVLET = DotName.createSimple(WebServlet.class.getName());
-    public static final DotName RUN_AS = DotName.createSimple(RunAs.class.getName());
-    public static final DotName DECLARE_ROLES = DotName.createSimple(DeclareRoles.class.getName());
-    public static final DotName MULTIPART_CONFIG = DotName.createSimple(MultipartConfig.class.getName());
-    public static final DotName SERVLET_SECURITY = DotName.createSimple(ServletSecurity.class.getName());
-    public static final String WEB_XML = "META-INF/web.xml";
+
+    private static final DotName webFilter = DotName.createSimple(WebFilter.class.getName());
+    private static final DotName webListener = DotName.createSimple(WebListener.class.getName());
+    private static final DotName webServlet = DotName.createSimple(WebServlet.class.getName());
+    private static final DotName runAs = DotName.createSimple(RunAs.class.getName());
+    private static final DotName declareRoles = DotName.createSimple(DeclareRoles.class.getName());
+    private static final DotName multipartConfig = DotName.createSimple(MultipartConfig.class.getName());
+    private static final DotName servletSecurity = DotName.createSimple(ServletSecurity.class.getName());
+    private static final String WEB_XML = "META-INF/web.xml";
 
     @Inject
     CombinedIndexBuildItem combinedIndexBuildItem;
 
-    /**
-     * Configuration which applies to the HTTP server.
-     */
-    @ConfigItem(name = "http")
+    @ConfigProperty(name = "shamrock.http")
     HttpConfig config;
 
     @BuildStep
@@ -143,11 +139,11 @@ public class UndertowBuildStep {
                                       ServletDeploymentBuildItem servletDeploymentBuildItem,
                                       List<HttpHandlerWrapperBuildItem> wrappers,
                                       ShutdownContextBuildItem shutdown,
-                                      Consumer<UndertowBuildItem> undertowProducer,
-                                      Consumer<HttpServerBuiltItem> serverProducer) throws Exception {
+                                      BuildProducer<UndertowBuildItem> undertowProducer,
+                                      BuildProducer<HttpServerBuiltItem> serverProducer) throws Exception {
         RuntimeValue<Undertow> ut = template.startUndertow(shutdown, servletDeploymentBuildItem.getDeployment(), config, wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
-        undertowProducer.accept(new UndertowBuildItem(ut));
-        serverProducer.accept(new HttpServerBuiltItem(config.host, config.port));
+        undertowProducer.produce(new UndertowBuildItem(ut));
+        serverProducer.produce(new HttpServerBuiltItem(config.host, config.port));
         return new ServiceStartBuildItem("undertow");
     }
 
@@ -162,12 +158,22 @@ public class UndertowBuildStep {
     }
     
     @BuildStep
+    List<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations() {
+        List<BeanDefiningAnnotationBuildItem> annotations = new ArrayList<>();
+        annotations.add(new BeanDefiningAnnotationBuildItem(webFilter));
+        annotations.add(new BeanDefiningAnnotationBuildItem(webServlet));
+        annotations.add(new BeanDefiningAnnotationBuildItem(webListener));
+        return annotations;
+    }
+
+
+    @BuildStep
     HotDeploymentConfigFileBuildItem configFile() {
         return new HotDeploymentConfigFileBuildItem(WEB_XML);
     }
 
     @Record(STATIC_INIT)
-    @BuildStep()
+    @BuildStep
     public ServletDeploymentBuildItem build(ApplicationArchivesBuildItem applicationArchivesBuildItem,
                                             List<ServletBuildItem> servlets,
                                             List<FilterBuildItem> filters,
@@ -177,12 +183,9 @@ public class UndertowBuildStep {
                                             List<ServletExtensionBuildItem> extensions,
                                             InjectionFactoryBuildItem injectionFactory,
                                             InjectionFactoryBuildItem bc,
-                                            BuildProducer<ObjectSubstitutionBuildItem> substitutions,
-                                            Consumer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
+                                            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
 
-        ObjectSubstitutionBuildItem.Holder holder = new ObjectSubstitutionBuildItem.Holder(ServletSecurityInfo.class, ServletSecurityInfoProxy.class, ServletSecurityInfoSubstitution.class);
-        substitutions.produce(new ObjectSubstitutionBuildItem(holder));
-        reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName(), "io.undertow.server.protocol.http.HttpRequestParser$$generated"));
+        reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName(), "io.undertow.server.protocol.http.HttpRequestParser$$generated"));
 
         //we need to check for web resources in order to get welcome files to work
         //this kinda sucks
@@ -231,7 +234,7 @@ public class UndertowBuildStep {
         //add servlets
         if (result.getServlets() != null) {
             for (ServletMetaData servlet : result.getServlets()) {
-                reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
+                reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
                 RuntimeValue<ServletInfo> sref = template.registerServlet(deployment, servlet.getServletName(),
                         context.classProxy(servlet.getServletClass()),
                         servlet.isAsyncSupported(),
@@ -287,7 +290,7 @@ public class UndertowBuildStep {
         //filters
         if (result.getFilters() != null) {
             for (FilterMetaData filter : result.getFilters()) {
-                reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, filter.getFilterClass()));
+                reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, filter.getFilterClass()));
                 RuntimeValue<FilterInfo> sref = template.registerFilter(deployment,
                         filter.getFilterName(),
                         context.classProxy(filter.getFilterClass()),
@@ -318,7 +321,7 @@ public class UndertowBuildStep {
         //listeners
         if (result.getListeners() != null) {
             for (ListenerMetaData listener : result.getListeners()) {
-                reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, listener.getListenerClass()));
+                reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, listener.getListenerClass()));
                 template.registerListener(deployment, context.classProxy(listener.getListenerClass()), injectionFactory.getFactory());
             }
         }
@@ -326,7 +329,7 @@ public class UndertowBuildStep {
         for (ServletBuildItem servlet : servlets) {
             String servletClass = servlet.getServletClass();
             if (servlet.getLoadOnStartup() == 0) {
-                reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
+                reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
             }
             template.registerServlet(deployment, servlet.getName(), context.classProxy(servletClass), servlet.isAsyncSupported(), servlet.getLoadOnStartup(), injectionFactory.getFactory());
 
@@ -337,7 +340,7 @@ public class UndertowBuildStep {
 
         for (FilterBuildItem filter : filters) {
             String filterClass = filter.getFilterClass();
-            reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, filterClass));
+            reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, filterClass));
             template.registerFilter(deployment, filter.getName(), context.classProxy(filterClass), filter.isAsyncSupported(), injectionFactory.getFactory());
             for (FilterBuildItem.FilterMappingInfo m : filter.getMappings()) {
                 if (m.getMappingType() == FilterBuildItem.FilterMappingInfo.MappingType.URL) {
@@ -385,7 +388,7 @@ public class UndertowBuildStep {
      */
     private void processAnnotations(IndexView index, WebMetaData metaData) {
         // @WebServlet
-        final Collection<AnnotationInstance> webServletAnnotations = index.getAnnotations(WEB_SERVLET);
+        final Collection<AnnotationInstance> webServletAnnotations = index.getAnnotations(webServlet);
         if (webServletAnnotations != null && webServletAnnotations.size() > 0) {
             ServletsMetaData servlets = new ServletsMetaData();
             List<ServletMappingMetaData> servletMappings = new ArrayList<ServletMappingMetaData>();
@@ -468,7 +471,7 @@ public class UndertowBuildStep {
             metaData.setServletMappings(servletMappings);
         }
         // @WebFilter
-        final Collection<AnnotationInstance> webFilterAnnotations = index.getAnnotations(WEB_FILTER);
+        final Collection<AnnotationInstance> webFilterAnnotations = index.getAnnotations(webFilter);
         if (webFilterAnnotations != null && webFilterAnnotations.size() > 0) {
             FiltersMetaData filters = new FiltersMetaData();
             List<FilterMappingMetaData> filterMappings = new ArrayList<FilterMappingMetaData>();
@@ -569,7 +572,7 @@ public class UndertowBuildStep {
             metaData.setFilterMappings(filterMappings);
         }
         // @WebListener
-        final Collection<AnnotationInstance> webListenerAnnotations = index.getAnnotations(WEB_LISTENER);
+        final Collection<AnnotationInstance> webListenerAnnotations = index.getAnnotations(webListener);
         if (webListenerAnnotations != null && webListenerAnnotations.size() > 0) {
             List<ListenerMetaData> listeners = new ArrayList<ListenerMetaData>();
             for (final AnnotationInstance annotation : webListenerAnnotations) {
@@ -589,7 +592,7 @@ public class UndertowBuildStep {
             metaData.setListeners(listeners);
         }
         // @RunAs
-        final Collection<AnnotationInstance> runAsAnnotations = index.getAnnotations(RUN_AS);
+        final Collection<AnnotationInstance> runAsAnnotations = index.getAnnotations(runAs);
         if (runAsAnnotations != null && runAsAnnotations.size() > 0) {
             AnnotationsMetaData annotations = metaData.getAnnotations();
             if (annotations == null) {
@@ -614,7 +617,7 @@ public class UndertowBuildStep {
             }
         }
         // @DeclareRoles
-        final Collection<AnnotationInstance> declareRolesAnnotations = index.getAnnotations(DECLARE_ROLES);
+        final Collection<AnnotationInstance> declareRolesAnnotations = index.getAnnotations(declareRoles);
         if (declareRolesAnnotations != null && declareRolesAnnotations.size() > 0) {
             SecurityRolesMetaData securityRoles = metaData.getSecurityRoles();
             if (securityRoles == null) {
@@ -630,7 +633,7 @@ public class UndertowBuildStep {
             }
         }
         // @MultipartConfig
-        final Collection<AnnotationInstance> multipartConfigAnnotations = index.getAnnotations(MULTIPART_CONFIG);
+        final Collection<AnnotationInstance> multipartConfigAnnotations = index.getAnnotations(multipartConfig);
         if (multipartConfigAnnotations != null && multipartConfigAnnotations.size() > 0) {
             AnnotationsMetaData annotations = metaData.getAnnotations();
             if (annotations == null) {
@@ -667,7 +670,7 @@ public class UndertowBuildStep {
             }
         }
         // @ServletSecurity
-        final Collection<AnnotationInstance> servletSecurityAnnotations = index.getAnnotations(SERVLET_SECURITY);
+        final Collection<AnnotationInstance> servletSecurityAnnotations = index.getAnnotations(servletSecurity);
         if (servletSecurityAnnotations != null && servletSecurityAnnotations.size() > 0) {
             AnnotationsMetaData annotations = metaData.getAnnotations();
             if (annotations == null) {
