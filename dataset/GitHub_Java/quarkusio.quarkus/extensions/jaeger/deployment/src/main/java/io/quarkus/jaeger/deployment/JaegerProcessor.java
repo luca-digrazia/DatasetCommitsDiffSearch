@@ -2,7 +2,6 @@ package io.quarkus.jaeger.deployment;
 
 import javax.inject.Inject;
 
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -22,19 +21,13 @@ public class JaegerProcessor {
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     void setupTracer(JaegerDeploymentRecorder jdr, JaegerBuildTimeConfig buildTimeConfig, JaegerConfig jaeger,
-            ApplicationConfig appConfig, Capabilities capabilities) {
+            ApplicationConfig appConfig) {
 
         // Indicates that this extension would like the SSL support to be enabled
         extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.JAEGER));
 
         if (buildTimeConfig.enabled) {
-            boolean metricsEnabled = capabilities.isCapabilityPresent(Capabilities.METRICS);
-
-            if (metricsEnabled) {
-                jdr.registerTracerWithMetrics(jaeger, appConfig);
-            } else {
-                jdr.registerTracerWithoutMetrics(jaeger, appConfig);
-            }
+            jdr.registerTracer(jaeger, appConfig);
         }
     }
 

@@ -6,7 +6,6 @@ import static org.hamcrest.Matchers.is;
 import java.io.IOException;
 import java.io.PrintWriter;
 
-import javax.servlet.MultipartConfigElement;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.annotation.WebServlet;
@@ -18,38 +17,22 @@ import javax.servlet.http.Part;
 import org.apache.commons.codec.Charsets;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
-import io.quarkus.builder.BuildContext;
-import io.quarkus.builder.BuildStep;
 import io.quarkus.test.QuarkusUnitTest;
-import io.quarkus.undertow.deployment.ServletBuildItem;
 
 public class MultipartConfigTestCase {
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(MultipartServlet.class))
-            .addBuildChainCustomizer(b -> {
-                b.addBuildStep(new BuildStep() {
-                    @Override
-                    public void execute(BuildContext context) {
-                        context.produce(ServletBuildItem.builder("Test Servlet", MultipartServlet.class.getName())
-                                .addMapping("/servlet-item")
-                                .setMultipartConfig(new MultipartConfigElement(""))
-                                .build());
-                    }
-                }).produces(ServletBuildItem.class).build();
-            });
+                    .addClasses(MultipartServlet.class));
 
-    @ParameterizedTest
-    @ValueSource(strings = { "/foo", "/servlet-item" })
-    public void testMultipartConfig(String path) {
+    @Test
+    public void testMultipartConfig() {
         given().multiPart("file", "random.txt", "Some random file".getBytes(Charsets.UTF_8))
-                .when().post(path).then()
+                .when().post("/foo").then()
                 .statusCode(201)
                 .body(is("OK"));
     }
