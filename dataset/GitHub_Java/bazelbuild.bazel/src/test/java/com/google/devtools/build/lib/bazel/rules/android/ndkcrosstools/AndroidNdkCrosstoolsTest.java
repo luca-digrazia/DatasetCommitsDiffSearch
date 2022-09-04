@@ -35,7 +35,7 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolP
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -75,10 +75,6 @@ public class AndroidNdkCrosstoolsTest {
 
     NdkMajorRevision getNdkMajorRevision() {
       return AndroidNdkCrosstools.KNOWN_NDK_MAJOR_REVISIONS.get(ndkRelease.majorRevision);
-    }
-
-    Integer getNdkMajorRevisionNumber() {
-      return ndkRelease.majorRevision;
     }
 
     ImmutableSet<String> getNdkFiles() throws IOException {
@@ -141,7 +137,7 @@ public class AndroidNdkCrosstoolsTest {
 
     ImmutableList.Builder<CrosstoolRelease> crosstools = ImmutableList.builder();
     ImmutableMap.Builder<String, String> stlFilegroupsBuilder = ImmutableMap.builder();
-    for (StlImpl ndkStlImpl : StlImpls.get(ndkPaths, params.getNdkMajorRevisionNumber())) {
+    for (StlImpl ndkStlImpl : StlImpls.get(ndkPaths)) {
       // Protos are immutable, so this can be shared between tests.
       CrosstoolRelease crosstool =
           params.getNdkMajorRevision().crosstoolRelease(ndkPaths, ndkStlImpl, HOST_PLATFORM);
@@ -285,7 +281,7 @@ public class AndroidNdkCrosstoolsTest {
       }
 
       // Collect all the duplicate triples.
-      for (Map.Entry<String, Collection<CToolchain>> entry : triples.build().asMap().entrySet()) {
+      for (Entry<String, Collection<CToolchain>> entry : triples.build().asMap().entrySet()) {
         if (entry.getValue().size() > 1) {
           errorBuilder.append(entry.getKey() + ": " + Joiner.on(", ").join(
               Collections2.transform(entry.getValue(), new Function<CToolchain, String>() {
