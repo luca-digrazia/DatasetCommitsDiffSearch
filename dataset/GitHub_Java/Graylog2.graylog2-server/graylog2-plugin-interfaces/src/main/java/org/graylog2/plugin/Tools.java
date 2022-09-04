@@ -235,7 +235,7 @@ public final class Tools {
     
     public static String generateServerId() {
         UUID id = UUID.randomUUID();
-
+        
         return getLocalHostname() + "-" + id.toString();
     }
     
@@ -262,10 +262,6 @@ public final class Tools {
         DateTime dt = formatter.parseDateTime(field.toString());
 
         return (int) (dt.getMillis()/1000);
-    }
-
-    public static DateTime iso8601() {
-        return new DateTime(DateTimeZone.UTC);
     }
 
     public static String getISO8601String(DateTime time) {
