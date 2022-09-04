@@ -18,8 +18,6 @@ import org.hibernate.proxy.pojo.ProxyFactoryHelper;
 import org.hibernate.proxy.pojo.bytebuddy.ByteBuddyProxyHelper;
 import org.jboss.logging.Logger;
 
-import net.bytebuddy.ClassFileVersion;
-
 /**
  * Runtime proxies are used by Hibernate ORM to handle a number of corner cases;
  * in particular Enhanced Proxies need special consideration in Quarkus as
@@ -193,7 +191,7 @@ public final class ProxyDefinitions {
         @Override
         public ByteBuddyProxyHelper get() {
             if (helper == null) {
-                bytecodeProvider = new BytecodeProviderImpl(ClassFileVersion.JAVA_V8);
+                bytecodeProvider = new BytecodeProviderImpl();
                 helper = bytecodeProvider.getByteBuddyProxyHelper();
             }
             return helper;
