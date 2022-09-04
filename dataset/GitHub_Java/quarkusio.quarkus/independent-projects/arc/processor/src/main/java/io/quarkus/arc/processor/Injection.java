@@ -1,26 +1,14 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+package io.quarkus.arc.processor;
 
-package org.jboss.quarkus.arc.processor;
+import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
+import java.util.Set;
+import java.util.stream.Collectors;
+import javax.enterprise.inject.spi.DefinitionException;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationTarget.Kind;
@@ -53,100 +41,124 @@ public class Injection {
      * @param beanDeployment
      * @return the list of injections
      */
-    static List<Injection> forBean(AnnotationTarget beanTarget, BeanDeployment beanDeployment) {
+    static List<Injection> forBean(AnnotationTarget beanTarget, BeanInfo declaringBean, BeanDeployment beanDeployment,
+            InjectionPointModifier transformer) {
         if (Kind.CLASS.equals(beanTarget.kind())) {
             List<Injection> injections = new ArrayList<>();
-            forClassBean(beanTarget.asClass(), beanDeployment, injections, true);
+            forClassBean(beanTarget.asClass(), beanTarget.asClass(), beanDeployment, injections, transformer, false);
+            Set<AnnotationTarget> injectConstructors = injections.stream().filter(Injection::isConstructor)
+                    .map(Injection::getTarget).collect(Collectors.toSet());
+            if (injectConstructors.size() > 1) {
+                throw new DefinitionException(
+                        "Multiple @Inject constructors found on " + beanTarget.asClass().name() + ":\n"
+                                + injectConstructors.stream().map(Object::toString).collect(Collectors.joining("\n")));
+            }
             return injections;
         } else if (Kind.METHOD.equals(beanTarget.kind())) {
             if (beanTarget.asMethod().parameters().isEmpty()) {
                 return Collections.emptyList();
             }
             // All parameters are injection points
-            return Collections.singletonList(new Injection(beanTarget.asMethod(), InjectionPointInfo.fromMethod(beanTarget.asMethod(), beanDeployment)));
+            return Collections.singletonList(
+                    new Injection(beanTarget.asMethod(),
+                            InjectionPointInfo.fromMethod(beanTarget.asMethod(), declaringBean.getImplClazz(),
+                                    beanDeployment, transformer)));
         }
         throw new IllegalArgumentException("Unsupported annotation target");
     }
 
-    private static void forClassBean(ClassInfo beanTarget, BeanDeployment beanDeployment, List<Injection> injections, boolean isFirstLevel) {
+    private static void forClassBean(ClassInfo beanClass, ClassInfo classInfo, BeanDeployment beanDeployment,
+            List<Injection> injections, InjectionPointModifier transformer, boolean skipConstructors) {
 
-        List<AnnotationInstance> injectAnnotations = getAllInjectionPoints(beanDeployment, beanTarget, DotNames.INJECT);
+        List<AnnotationInstance> injectAnnotations = getAllInjectionPoints(beanDeployment, classInfo, DotNames.INJECT,
+                skipConstructors);
 
         for (AnnotationInstance injectAnnotation : injectAnnotations) {
             AnnotationTarget injectTarget = injectAnnotation.target();
             switch (injectAnnotation.target().kind()) {
                 case FIELD:
                     injections
-                            .add(new Injection(injectTarget, Collections.singletonList(InjectionPointInfo.fromField(injectTarget.asField(), beanDeployment))));
+                            .add(new Injection(injectTarget, Collections
+                                    .singletonList(
+                                            InjectionPointInfo.fromField(injectTarget.asField(), beanClass, beanDeployment,
+                                                    transformer))));
                     break;
                 case METHOD:
-                    injections.add(new Injection(injectTarget, InjectionPointInfo.fromMethod(injectTarget.asMethod(), beanDeployment)));
+                    injections.add(new Injection(injectTarget,
+                            InjectionPointInfo.fromMethod(injectTarget.asMethod(), beanClass, beanDeployment, transformer)));
                     break;
                 default:
                     LOGGER.warn("Unsupported @Inject target ignored: " + injectAnnotation.target());
                     continue;
             }
         }
-        // if the class has a single non no-arg constructor that is not annotated with @Inject,
-        // the class is not a non-static inner or and it not a superclass of of a bean
-        // we consider that constructor as an injection
-        if (isFirstLevel) {
-            boolean constrInjectionExists = false;
-            for (Injection injection : injections) {
-                if (injection.isConstructor()) {
-                    constrInjectionExists = true;
-                    break;
-                }
-            }
-
-            final boolean isNonStaticInnerClass = beanTarget.name().isInner()
-                    && !Modifier.isStatic(beanTarget.flags());
-            if (!isNonStaticInnerClass && !constrInjectionExists) {
+        // if the class has no no-arg constructor and has a single non no-arg constructor that is not annotated with @Inject,
+        // the class is not a non-static inner or a superclass of a bean we consider that constructor as an injection
+        if (beanClass.equals(classInfo)) {
+            final boolean isNonStaticInnerClass = classInfo.name().isInner()
+                    && !Modifier.isStatic(classInfo.flags());
+            if (!isNonStaticInnerClass && !hasConstructorInjection(injections) && !beanClass.hasNoArgsConstructor()) {
                 List<MethodInfo> nonNoargConstrs = new ArrayList<>();
-                for (MethodInfo constr : beanTarget.methods()) {
+                for (MethodInfo constr : classInfo.methods()) {
                     if (Methods.INIT.equals(constr.name()) && constr.parameters().size() > 0) {
                         nonNoargConstrs.add(constr);
                     }
                 }
-                if(nonNoargConstrs.size() == 1) {
+                if (nonNoargConstrs.size() == 1) {
                     final MethodInfo injectTarget = nonNoargConstrs.get(0);
-                    injections.add(new Injection(injectTarget, InjectionPointInfo.fromMethod(injectTarget.asMethod(), beanDeployment)));
+                    injections.add(new Injection(injectTarget,
+                            InjectionPointInfo.fromMethod(injectTarget.asMethod(), beanClass, beanDeployment, transformer)));
                 }
             }
         }
 
         for (DotName resourceAnnotation : beanDeployment.getResourceAnnotations()) {
-            List<AnnotationInstance> resourceAnnotations = getAllInjectionPoints(beanDeployment, beanTarget, resourceAnnotation);
-            if (resourceAnnotations != null) {
-                for (AnnotationInstance resourceAnnotationInstance : resourceAnnotations) {
-                    if (Kind.FIELD == resourceAnnotationInstance.target().kind()
-                            && resourceAnnotationInstance.target().asField().annotations().stream().noneMatch(a -> DotNames.INJECT.equals(a.name()))) {
-                        // Add special injection for a resource field
-                        injections.add(new Injection(resourceAnnotationInstance.target(), Collections
-                                .singletonList(InjectionPointInfo.fromResourceField(resourceAnnotationInstance.target().asField(), beanDeployment))));
-                    }
-                    // TODO setter injection
+            List<AnnotationInstance> resourceAnnotations = getAllInjectionPoints(beanDeployment, classInfo,
+                    resourceAnnotation, true);
+            for (AnnotationInstance resourceAnnotationInstance : resourceAnnotations) {
+                if (Kind.FIELD == resourceAnnotationInstance.target().kind()
+                        && resourceAnnotationInstance.target().asField().annotations().stream()
+                                .noneMatch(a -> DotNames.INJECT.equals(a.name()))) {
+                    // Add special injection for a resource field
+                    injections.add(new Injection(resourceAnnotationInstance.target(), Collections
+                            .singletonList(InjectionPointInfo
+                                    .fromResourceField(resourceAnnotationInstance.target().asField(), beanClass,
+                                            beanDeployment, transformer))));
                 }
+                // TODO setter injection
             }
         }
 
-        if (!beanTarget.superName().equals(DotNames.OBJECT)) {
-            ClassInfo info = beanDeployment.getIndex().getClassByName(beanTarget.superName());
+        if (!classInfo.superName().equals(DotNames.OBJECT)) {
+            ClassInfo info = getClassByName(beanDeployment.getBeanArchiveIndex(), classInfo.superName());
             if (info != null) {
-                forClassBean(info, beanDeployment, injections, false);
+                forClassBean(beanClass, info, beanDeployment, injections, transformer, true);
             }
         }
 
     }
 
-    static Injection forDisposer(MethodInfo disposerMethod, BeanDeployment beanDeployment) {
-        return new Injection(disposerMethod, InjectionPointInfo.fromMethod(disposerMethod, beanDeployment,
-                annotations -> annotations.stream().anyMatch(a -> a.name().equals(DotNames.DISPOSES))));
+    private static boolean hasConstructorInjection(List<Injection> injections) {
+        for (Injection injection : injections) {
+            if (injection.isConstructor()) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    static Injection forObserver(MethodInfo observerMethod, BeanDeployment beanDeployment) {
-        return new Injection(observerMethod, InjectionPointInfo.fromMethod(observerMethod, beanDeployment,
-                annotations -> annotations.stream().anyMatch(a -> a.name().equals(DotNames.OBSERVES) || a.name().equals(DotNames.OBSERVES_ASYNC))));
+    static Injection forDisposer(MethodInfo disposerMethod, ClassInfo beanClass, BeanDeployment beanDeployment,
+            InjectionPointModifier transformer) {
+        return new Injection(disposerMethod, InjectionPointInfo.fromMethod(disposerMethod, beanClass, beanDeployment,
+                annotations -> annotations.stream().anyMatch(a -> a.name().equals(DotNames.DISPOSES)), transformer));
+    }
+
+    static Injection forObserver(MethodInfo observerMethod, ClassInfo beanClass, BeanDeployment beanDeployment,
+            InjectionPointModifier transformer) {
+        return new Injection(observerMethod, InjectionPointInfo.fromMethod(observerMethod, beanClass, beanDeployment,
+                annotations -> annotations.stream()
+                        .anyMatch(a -> a.name().equals(DotNames.OBSERVES) || a.name().equals(DotNames.OBSERVES_ASYNC)),
+                transformer));
     }
 
     final AnnotationTarget target;
@@ -170,15 +182,29 @@ public class Injection {
         return Kind.FIELD == target.kind();
     }
 
-    private static List<AnnotationInstance> getAllInjectionPoints(BeanDeployment beanDeployment, ClassInfo beanClass, DotName name) {
+    public AnnotationTarget getTarget() {
+        return target;
+    }
+
+    private static List<AnnotationInstance> getAllInjectionPoints(BeanDeployment beanDeployment, ClassInfo beanClass,
+            DotName name, boolean skipConstructors) {
         List<AnnotationInstance> injectAnnotations = new ArrayList<>();
         for (FieldInfo field : beanClass.fields()) {
             AnnotationInstance inject = beanDeployment.getAnnotation(field, name);
             if (inject != null) {
-                injectAnnotations.add(inject);
+                if (Modifier.isFinal(field.flags()) || Modifier.isStatic(field.flags())) {
+                    LOGGER.warn("An injection field must be non-static and non-final - ignoring: "
+                            + field.declaringClass().name() + "#"
+                            + field.name());
+                } else {
+                    injectAnnotations.add(inject);
+                }
             }
         }
         for (MethodInfo method : beanClass.methods()) {
+            if (skipConstructors && method.name().equals(Methods.INIT)) {
+                continue;
+            }
             AnnotationInstance inject = beanDeployment.getAnnotation(method, name);
             if (inject != null) {
                 injectAnnotations.add(inject);
