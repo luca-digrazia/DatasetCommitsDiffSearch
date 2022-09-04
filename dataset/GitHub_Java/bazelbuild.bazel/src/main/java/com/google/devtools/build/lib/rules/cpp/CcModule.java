@@ -250,8 +250,7 @@ public abstract class CcModule
         asStringNestedSet(quoteIncludeDirs),
         asStringNestedSet(systemIncludeDirs),
         asStringNestedSet(frameworkIncludeDirs),
-        asStringNestedSet(defines),
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER));
+        asStringNestedSet(defines));
   }
 
   @Override
@@ -509,8 +508,7 @@ public abstract class CcModule
       Object includes,
       Object quoteIncludes,
       Object frameworkIncludes,
-      Object defines,
-      Object localDefines)
+      Object defines)
       throws EvalException {
     CcCompilationContext.Builder ccCompilationContext =
         CcCompilationContext.builder(
@@ -538,8 +536,6 @@ public abstract class CcModule
             .map(x -> PathFragment.create(x))
             .collect(ImmutableList.toImmutableList()));
     ccCompilationContext.addDefines(toNestedSetOfStrings(defines, "defines").getSet(String.class));
-    ccCompilationContext.addNonTransitiveDefines(
-        toNestedSetOfArtifacts(localDefines, "local_defines").getSet(String.class));
     return ccCompilationContext.build();
   }
 
@@ -1517,7 +1513,6 @@ public abstract class CcModule
       SkylarkList<String> systemIncludes,
       SkylarkList<String> frameworkIncludes,
       SkylarkList<String> defines,
-      SkylarkList<String> localDefines,
       SkylarkList<String> userCompileFlags,
       SkylarkList<CcCompilationContext> ccCompilationContexts,
       String name,
@@ -1590,7 +1585,6 @@ public abstract class CcModule
                     .map(PathFragment::create)
                     .collect(ImmutableList.toImmutableList()))
             .addDefines(defines)
-            .addNonTransitiveDefines(localDefines)
             .setCopts(userCompileFlags)
             .addAdditionalCompilationInputs(headersForClifDoNotUseThisParam)
             .addAditionalIncludeScanningRoots(headersForClifDoNotUseThisParam);
