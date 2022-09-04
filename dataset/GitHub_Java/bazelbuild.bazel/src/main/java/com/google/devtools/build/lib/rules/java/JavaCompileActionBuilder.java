@@ -123,12 +123,12 @@ public final class JavaCompileActionBuilder {
       JavaCompileInfo.Builder info =
           JavaCompileInfo.newBuilder()
               .addAllSourceFile(Artifact.toExecPaths(sourceFiles))
-              .addAllClasspath(Artifact.toExecPaths(classpathEntries.toList()))
-              .addAllBootclasspath(Artifact.toExecPaths(bootclasspathEntries.toList()))
+              .addAllClasspath(Artifact.toExecPaths(classpathEntries))
+              .addAllBootclasspath(Artifact.toExecPaths(bootclasspathEntries))
               .addAllSourcepath(Artifact.toExecPaths(sourceJars))
               .addAllJavacOpt(javacOpts)
-              .addAllProcessor(processorNames.toList())
-              .addAllProcessorpath(Artifact.toExecPaths(processorPath.toList()))
+              .addAllProcessor(processorNames)
+              .addAllProcessorpath(Artifact.toExecPaths(processorPath))
               .setOutputjar(outputJar.getExecPathString());
       info.addAllArgument(arguments);
       builder.setExtension(JavaCompileInfo.javaCompileInfo, info.build());
@@ -157,7 +157,7 @@ public final class JavaCompileActionBuilder {
   private NestedSet<Artifact> bootclasspathEntries =
       NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
   private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
-  private NestedSet<Artifact> extdirInputs = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
+  private ImmutableList<Artifact> extdirInputs = ImmutableList.of();
   private FilesToRunProvider javaBuilder;
   private NestedSet<Artifact> toolsJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
   private PathFragment sourceGenDirectory;
@@ -240,7 +240,7 @@ public final class JavaCompileActionBuilder {
         .addTransitive(javabaseInputs)
         .addTransitive(bootclasspathEntries)
         .addAll(sourcePathEntries)
-        .addTransitive(extdirInputs);
+        .addAll(extdirInputs);
     if (coverageArtifact != null) {
       mandatoryInputs.add(coverageArtifact);
     }
@@ -463,8 +463,8 @@ public final class JavaCompileActionBuilder {
     return this;
   }
 
-  public JavaCompileActionBuilder setExtdirInputs(NestedSet<Artifact> extdirEntries) {
-    this.extdirInputs = extdirEntries;
+  public JavaCompileActionBuilder setExtdirInputs(Iterable<Artifact> extdirEntries) {
+    this.extdirInputs = ImmutableList.copyOf(extdirEntries);
     return this;
   }
 
