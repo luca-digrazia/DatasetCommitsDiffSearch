@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -41,7 +40,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.io.IOException;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -110,10 +108,6 @@ public final class ExtraAction extends SpawnAction {
     return shadowedAction.discoversInputs();
   }
 
-  /**
-   * This method returns null when a required SkyValue is missing and a Skyframe restart is
-   * required.
-   */
   @Nullable
   @Override
   public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
@@ -126,13 +120,11 @@ public final class ExtraAction extends SpawnAction {
     // We need to update our inputs to take account of any additional
     // inputs the shadowed action may need to do its work.
     Iterable<Artifact> oldInputs = getInputs();
-    Iterable<Artifact> inputFilesForExtraAction =
-        shadowedAction.getInputFilesForExtraAction(actionExecutionContext);
-    if (inputFilesForExtraAction == null) {
-      return null;
-    }
     updateInputs(
-        createInputs(shadowedAction.getInputs(), inputFilesForExtraAction, extraActionInputs));
+        createInputs(
+            shadowedAction.getInputs(),
+            shadowedAction.getInputFilesForExtraAction(actionExecutionContext),
+            extraActionInputs));
     return Sets.<Artifact>difference(
         ImmutableSet.<Artifact>copyOf(getInputs()), ImmutableSet.<Artifact>copyOf(oldInputs));
   }
@@ -159,9 +151,7 @@ public final class ExtraAction extends SpawnAction {
   }
 
   @Override
-  protected void afterExecute(
-      ActionExecutionContext actionExecutionContext, List<SpawnResult> spawnResults)
-      throws IOException {
+  protected void afterExecute(ActionExecutionContext actionExecutionContext) throws IOException {
     // PHASE 3: create dummy output.
     // If the user didn't specify output, we need to create dummy output
     // to make blaze schedule this action.

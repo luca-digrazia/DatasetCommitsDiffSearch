@@ -110,11 +110,6 @@ public final class StarlarkAction extends SpawnAction {
   }
 
   @Override
-  public boolean isShareable() {
-    return !unusedInputsList.isPresent();
-  }
-
-  @Override
   public boolean discoversInputs() {
     return unusedInputsList.isPresent();
   }

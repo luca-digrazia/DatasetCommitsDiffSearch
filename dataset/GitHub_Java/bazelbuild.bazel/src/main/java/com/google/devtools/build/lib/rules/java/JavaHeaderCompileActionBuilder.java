@@ -39,19 +39,15 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.LazyString;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.proto.Deps;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
-import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 /**
@@ -308,15 +304,33 @@ public class JavaHeaderCompileActionBuilder {
 
     JavaConfiguration javaConfiguration =
         ruleContext.getConfiguration().getFragment(JavaConfiguration.class);
-    if (javaConfiguration.getReduceJavaClasspath() == JavaClasspathMode.BAZEL) {
-      if (javaConfiguration.inmemoryJdepsFiles()) {
-        builder.setExecutionInfo(
-            ImmutableMap.of(
-                ExecutionRequirements.REMOTE_EXECUTION_INLINE_OUTPUTS,
-                outputDepsProto.getExecPathString()));
-      }
-      builder.addResultConsumer(createResultConsumer(outputDepsProto));
+    if (javaConfiguration.inmemoryJdepsFiles()) {
+      builder.setExecutionInfo(
+          ImmutableMap.of(
+              ExecutionRequirements.REMOTE_EXECUTION_INLINE_OUTPUTS,
+              outputDepsProto.getExecPathString()));
     }
+    builder.addResultConsumer(
+        contextAndResults -> {
+          ActionExecutionContext context = contextAndResults.getFirst();
+          JavaCompileActionContext javaContext = context.getContext(JavaCompileActionContext.class);
+          if (javaContext == null) {
+            return;
+          }
+          SpawnResult spawnResult = Iterables.getOnlyElement(contextAndResults.getSecond());
+          try {
+            InputStream inMemoryOutput = spawnResult.getInMemoryOutput(outputDepsProto);
+            try (InputStream input =
+                inMemoryOutput == null
+                    ? context.getInputPath(outputDepsProto).getInputStream()
+                    : inMemoryOutput) {
+              javaContext.insertDependencies(outputDepsProto, Deps.Dependencies.parseFrom(input));
+            }
+          } catch (IOException e) {
+            // Left empty. If we cannot read the .jdeps file now, we will read it later or throw
+            // an appropriate error then.
+          }
+        });
 
     // The action doesn't require annotation processing, so use the non-javac-based turbine
     // implementation.
@@ -372,34 +386,6 @@ public class JavaHeaderCompileActionBuilder {
                 ParamFileInfo.builder(ParameterFileType.UNQUOTED).setCharset(ISO_8859_1).build())
             .setMnemonic("JavacTurbine")
             .build(ruleContext));
-  }
-
-  /**
-   * Creates a consumer that reads the produced .jdeps file into memory. Pulled out into a separate
-   * function to avoid capturing a data member, which would keep the entire builder instance alive.
-   */
-  private static Consumer<Pair<ActionExecutionContext, List<SpawnResult>>> createResultConsumer(
-      Artifact outputDepsProto) {
-    return contextAndResults -> {
-      ActionExecutionContext context = contextAndResults.getFirst();
-      JavaCompileActionContext javaContext = context.getContext(JavaCompileActionContext.class);
-      if (javaContext == null) {
-        return;
-      }
-      SpawnResult spawnResult = Iterables.getOnlyElement(contextAndResults.getSecond());
-      try {
-        InputStream inMemoryOutput = spawnResult.getInMemoryOutput(outputDepsProto);
-        try (InputStream input =
-            inMemoryOutput == null
-                ? context.getInputPath(outputDepsProto).getInputStream()
-                : inMemoryOutput) {
-          javaContext.insertDependencies(outputDepsProto, Deps.Dependencies.parseFrom(input));
-        }
-      } catch (IOException e) {
-        // Left empty. If we cannot read the .jdeps file now, we will read it later or throw
-        // an appropriate error then.
-      }
-    };
   }
 
   /** Static class to avoid keeping a reference to this builder after build() is called. */
