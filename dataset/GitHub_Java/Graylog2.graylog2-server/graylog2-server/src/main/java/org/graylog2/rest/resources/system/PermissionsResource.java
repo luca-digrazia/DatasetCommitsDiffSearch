@@ -28,7 +28,6 @@ import org.graylog2.rest.models.system.responses.ReaderPermissionResponse;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 
-import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -43,19 +42,12 @@ import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
 @Path("/system/permissions")
 @Produces(APPLICATION_JSON)
 public class PermissionsResource extends RestResource {
-    private final RestPermissions permissions;
-
-    @Inject
-    public PermissionsResource(final RestPermissions permissions) {
-        this.permissions = permissions;
-    }
-
     @GET
     @Timed
     @RequiresGuest // turns off authentication for this action
     @ApiOperation(value = "Get all available user permissions.")
     public Map<String, Map<String, Collection<String>>> permissions() {
-        return ImmutableMap.of("permissions", permissions.allPermissions());
+        return ImmutableMap.of("permissions", RestPermissions.allPermissions());
     }
 
     @GET
@@ -68,6 +60,6 @@ public class PermissionsResource extends RestResource {
             @ApiParam(name = "username", required = true)
             @PathParam("username") String username) {
         return ReaderPermissionResponse.create(
-                Ordering.natural().sortedCopy(permissions.userSelfEditPermissions(username)));
+                Ordering.natural().sortedCopy(RestPermissions.userSelfEditPermissions(username)));
     }
 }
