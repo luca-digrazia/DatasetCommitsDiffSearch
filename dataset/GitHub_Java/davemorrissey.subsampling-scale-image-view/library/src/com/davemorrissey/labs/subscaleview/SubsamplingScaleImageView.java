@@ -128,9 +128,6 @@ public class SubsamplingScaleImageView extends View {
     // Whether the bitmap is a preview image
     private boolean preview;
 
-    // Specifies if a cache handler is also referencing the bitmap. Do not recycle if so.
-    private boolean isCached = false;
-
     // Sample size used to display the whole image when fully zoomed out
     private int fullImageSampleSize;
 
@@ -444,7 +441,7 @@ public class SubsamplingScaleImageView extends View {
                     decoder = null;
                 }
             }
-            if (bitmap != null && !isCached) {
+            if (bitmap != null) {
                 bitmap.recycle();
             }
             sWidth = 0;
@@ -1408,7 +1405,7 @@ public class SubsamplingScaleImageView extends View {
         if (this.sWidth > 0 && this.sHeight > 0 && (this.sWidth != sWidth || this.sHeight != sHeight)) {
             reset(false);
             if (bitmap != null) {
-                if (!isCached) bitmap.recycle();
+                bitmap.recycle();
                 bitmap = null;
                 preview = false;
             }
@@ -1487,7 +1484,7 @@ public class SubsamplingScaleImageView extends View {
         checkReady();
         checkImageLoaded();
         if (isBaseLayerReady() && bitmap != null) {
-            if (!isCached) bitmap.recycle();
+            bitmap.recycle();
             bitmap = null;
             preview = false;
         }
@@ -1581,7 +1578,7 @@ public class SubsamplingScaleImageView extends View {
         if (this.sWidth > 0 && this.sHeight > 0 && (this.sWidth != bitmap.getWidth() || this.sHeight != bitmap.getHeight())) {
             reset(false);
         }
-        if (this.bitmap != null && !isCached) {
+        if (this.bitmap != null) {
             this.bitmap.recycle();
         }
         this.preview = false;
@@ -2350,14 +2347,6 @@ public class SubsamplingScaleImageView extends View {
             throw new IllegalArgumentException("Invalid zoom style: " + doubleTapZoomStyle);
         }
         this.doubleTapZoomStyle = doubleTapZoomStyle;
-    }
-
-    /**
-     * Set whether the view will be using cached bitmaps. No recyling should be performed
-     * as this will conflict with image loaders like Picasso or Volley.
-     */
-    protected final void setCacheEnabled(boolean isCached) {
-        this.isCached = isCached;
     }
 
     /**
