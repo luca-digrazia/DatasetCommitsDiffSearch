@@ -167,15 +167,16 @@ public class ProtoConfiguration extends Fragment {
     )
     public boolean correctRollupTransitiveProtoRuntimes;
 
-    // TODO(b/62710272): Remove once there's no 'jplNonStrictDepsLikePl' in the global blazerc.
     @Option(
       name = "jplNonStrictDepsLikePl",
-      defaultValue = "true",
+      defaultValue = "false",
       category = "rollout",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      help = "ignored"
+      help =
+          "Roll-out flag for changing behavior of non-strict java_xxx_proto_library. "
+              + "See commit description for details. DO NOT USE."
     )
     public boolean jplNonStrictDepsLikePl;
 
@@ -192,6 +193,7 @@ public class ProtoConfiguration extends Fragment {
       host.strictProtoDeps = strictProtoDeps;
       host.ccProtoLibraryHeaderSuffixes = ccProtoLibraryHeaderSuffixes;
       host.ccProtoLibrarySourceSuffixes = ccProtoLibrarySourceSuffixes;
+      host.jplNonStrictDepsLikePl = jplNonStrictDepsLikePl;
       return host;
     }
   }
@@ -270,4 +272,7 @@ public class ProtoConfiguration extends Fragment {
     return ccProtoLibrarySourceSuffixes;
   }
 
+  public boolean jplNonStrictDepsLikePl() {
+    return options.jplNonStrictDepsLikePl;
+  }
 }
