@@ -1,41 +1,49 @@
 /**
- * Copyright (c) 2012 Lennart Koopmann <lennart@torch.sh>
+ * The MIT License
+ * Copyright (c) 2012 Graylog, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is furnished to do
- * so, subject to the following conditions:
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
 package org.graylog2.plugin;
 
+import com.google.common.collect.ComparisonChain;
 import com.google.common.io.Resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileReader;
+import java.io.StringReader;
 import java.net.URL;
+import java.util.Objects;
 import java.util.Properties;
+
+import static com.google.common.base.Charsets.UTF_8;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static com.google.common.base.Strings.nullToEmpty;
 
 /**
  * Following semantic versioning.
- *
+ * <p/>
  * http://semver.org/
  */
-public class Version {
-    private static final Logger log = LoggerFactory.getLogger(Version.class);
+public class Version implements Comparable<Version> {
+    private static final Logger LOG = LoggerFactory.getLogger(Version.class);
 
     public final int major;
     public final int minor;
@@ -47,13 +55,14 @@ public class Version {
      * Reads the current version from the classpath, using version.properties and git.properties.
      */
     public static final Version CURRENT_CLASSPATH;
+
     static {
         Version tmpVersion;
         try {
             final URL resource = Resources.getResource("version.properties");
-            final FileReader versionProperties = new FileReader(resource.getFile());
+            final String versionProperties = Resources.toString(resource, UTF_8);
             final Properties version = new Properties();
-            version.load(versionProperties);
+            version.load(new StringReader(versionProperties));
 
             final int major = Integer.parseInt(version.getProperty("version.major", "0"));
             final int minor = Integer.parseInt(version.getProperty("version.minor", "0"));
@@ -63,16 +72,18 @@ public class Version {
             String commitSha = null;
             try {
                 final Properties git = new Properties();
-                git.load(new FileReader(Resources.getResource("git.properties").getFile()));
+                final URL gitResource = Resources.getResource("git.properties");
+                final String gitProperties = Resources.toString(gitResource, UTF_8);
+                git.load(new StringReader(gitProperties));
                 commitSha = git.getProperty("git.commit.id.abbrev");
             } catch (Exception e) {
-                log.debug("Git commit details are not available, skipping.", e);
+                LOG.debug("Git commit details are not available, skipping.", e);
             }
 
             tmpVersion = new Version(major, minor, incremental, qualifier, commitSha);
         } catch (Exception e) {
             tmpVersion = new Version(0, 0, 0, "unknown");
-            log.error("Unable to read version.properties file, this build has no version number. If you get this message during development, you need to run 'Generate Sources' in IDEA or run 'mvn process-resources'.", e);
+            LOG.error("Unable to read version.properties file, this build has no version number. If you get this message during development, you need to run 'Generate Sources' in IDEA or run 'mvn process-resources'.", e);
         }
         CURRENT_CLASSPATH = tmpVersion;
     }
@@ -99,11 +110,11 @@ public class Version {
 
         sb.append(major).append(".").append(minor).append(".").append(patch);
 
-        if (additional != null && !additional.isEmpty()) {
+        if (!isNullOrEmpty(additional)) {
             sb.append("-").append(additional);
         }
 
-        if (abbrevCommitSha != null) {
+        if (!isNullOrEmpty(abbrevCommitSha)) {
             sb.append(" (").append(abbrevCommitSha).append(')');
         }
 
@@ -117,29 +128,46 @@ public class Version {
      * @return
      */
     public boolean greaterMinor(Version other) {
-        if (other.major < this.major) {
-            return true;
-        }
-
-        if (other.major == this.major && other.minor < this.minor) {
-            return true;
-        }
-
-        return false;
+        return (other.major < this.major) || (other.major == this.major && other.minor < this.minor);
     }
 
-    public boolean equals(Object obj) {
-        if (obj == null || getClass() != obj.getClass()) {
-            return false;
-        }
-
-        if (this == obj) {
-            return true;
-        }
-
-        Version version = (Version) obj;
-
-        return toString().equals(version.toString());
+    public boolean sameOrHigher(Version other) {
+        return (this.major > other.major) ||
+                (this.major == other.major && (this.minor > other.minor || (this.minor == other.minor && this.patch >= other.patch)));
     }
 
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Version that = (Version) o;
+
+        return Objects.equals(this.major, that.major)
+                && Objects.equals(this.minor, that.minor)
+                && Objects.equals(this.patch, that.patch)
+                && Objects.equals(this.additional, that.additional)
+                && Objects.equals(this.abbrevCommitSha, that.abbrevCommitSha);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(major, minor, patch, additional, abbrevCommitSha);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int compareTo(Version that) {
+        checkNotNull(that);
+        return ComparisonChain.start()
+                .compare(this.major, that.major)
+                .compare(this.minor, that.minor)
+                .compare(this.patch, that.patch)
+                .compareFalseFirst(isNullOrEmpty(this.additional), isNullOrEmpty(that.additional))
+                .compare(nullToEmpty(this.additional), nullToEmpty(that.additional))
+                .result();
+    }
 }
