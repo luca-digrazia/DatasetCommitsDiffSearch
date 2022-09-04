@@ -74,6 +74,7 @@ public class RuleResource extends RestResource implements PluginRestResource {
 
     @ApiOperation(value = "Create a processing rule from source", notes = "")
     @POST
+    @Path("/")
     public RuleSource createFromParser(@ApiParam(name = "rule", required = true) @NotNull RuleSource ruleSource) throws ParseException {
         final Rule rule;
         try {
@@ -117,6 +118,7 @@ public class RuleResource extends RestResource implements PluginRestResource {
 
     @ApiOperation(value = "Get all processing rules")
     @GET
+    @Path("/")
     public Collection<RuleSource> getAll() {
         final Collection<RuleDao> ruleDaos = ruleService.loadAll();
         return ruleDaos.stream()
