@@ -1,11 +1,11 @@
 package io.dropwizard.testing.app;
 
 import com.codahale.metrics.annotation.Timed;
-import io.dropwizard.testing.Person;
+import io.dropwizard.jersey.PATCH;
 
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -19,4 +19,15 @@ public class ContextInjectionResource {
     public String getUriPath(@Context UriInfo uriInfo) {
         return uriInfo.getPath();
     }
+
+    @POST
+    public String getThis() {
+        throw new RuntimeException("Can't touch this");
+    }
+
+    @PATCH
+    public String echoPatch(String patchMessage) {
+        return patchMessage;
+    }
+
 }
