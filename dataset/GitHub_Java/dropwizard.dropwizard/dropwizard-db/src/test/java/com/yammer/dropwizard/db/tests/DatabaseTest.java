@@ -14,12 +14,10 @@ import org.skife.jdbi.v2.Handle;
 import org.skife.jdbi.v2.Query;
 import org.skife.jdbi.v2.util.StringMapper;
 
-import java.sql.SQLException;
 import java.sql.Types;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -30,7 +28,6 @@ public class DatabaseTest {
         hsqlConfig.setUrl("jdbc:hsqldb:mem:DbTest-"+System.currentTimeMillis());
         hsqlConfig.setUser("sa");
         hsqlConfig.setDriverClass("org.hsqldb.jdbcDriver");
-        hsqlConfig.setValidationQuery("SELECT 1 FROM INFORMATION_SCHEMA.SYSTEM_USERS");
     }
     private final Environment environment = mock(Environment.class);
     private final DatabaseFactory factory = new DatabaseFactory(environment);
@@ -111,17 +108,6 @@ public class DatabaseTest {
                        is(ImmutableList.of("Coda Hale", "Kris Gale", "Old Guy")));
         } finally {
             database.close(dao);
-        }
-    }
-
-    @Test
-    @SuppressWarnings("CallToPrintStackTrace")
-    public void pingWorks() throws Exception {
-        try {
-            database.ping();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            fail("shouldn't have thrown an exception but did");
         }
     }
 }
