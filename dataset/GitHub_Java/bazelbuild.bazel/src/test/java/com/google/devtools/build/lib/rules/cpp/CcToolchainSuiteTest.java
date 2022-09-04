@@ -67,6 +67,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  abi_libc_version: ''",
         "  target_libc: 'local'",
         "  builtin_sysroot: 'sysroot'",
+        "  default_grte_top: '//cc:grtetop'",
         "}",
         // Stub toolchain to make default cc toolchains happy
         // TODO(b/113849758): Remove once CppConfiguration doesn't load packages
@@ -80,6 +81,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  abi_libc_version: ''",
         "  target_libc: 'local'",
         "  builtin_sysroot: 'sysroot'",
+        "  default_grte_top: '//cc:grtetop'",
         "}",
         "\"\"\"",
         ")");
@@ -89,7 +91,8 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
     useConfiguration("--crosstool_top=//cc:suite", "--cpu=k8", "--host_cpu=k8");
     ConfiguredTarget c = getConfiguredTarget("//a:b");
     CppConfiguration config = getConfiguration(c).getFragment(CppConfiguration.class);
-    assertThat(config.getRuleProvidingCcToolchainProvider().toString()).isEqualTo("//cc:suite");
+    assertThat(config.getRuleProvidingCcToolchainProvider().toString())
+        .isEqualTo("//cc:cc-compiler-fruitie");
 
     useConfiguration(
         "--crosstool_top=//cc:suite",
@@ -141,6 +144,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  abi_libc_version: ''",
         "  target_libc: 'local'",
         "  builtin_sysroot: 'sysroot'",
+        "  default_grte_top: '//cc:grtetop'",
         "}",
         "toolchain {",
         "  compiler: 'orange'",
@@ -152,6 +156,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  abi_libc_version: ''",
         "  target_libc: 'local'",
         "  builtin_sysroot: 'sysroot'",
+        "  default_grte_top: '//cc:grtetop'",
         "}",
         // Stub toolchain to make default cc toolchains happy
         // TODO(b/113849758): Remove once CppConfiguration doesn't load packages
@@ -165,6 +170,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  abi_libc_version: ''",
         "  target_libc: 'local'",
         "  builtin_sysroot: 'sysroot'",
+        "  default_grte_top: '//cc:grtetop'",
         "}",
         "\"\"\"",
         ")");

@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
@@ -1118,6 +1119,13 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.strictSystemIncludes;
   }
 
+  @Override
+  public Map<String, Object> lateBoundOptionDefaults() {
+    // --compiler initially defaults to null because its *actual* default isn't known
+    // until it's read from the CROSSTOOL. Feed the CROSSTOOL defaults in here.
+    return ImmutableMap.of("compiler", cppToolchainInfo.getCompiler());
+  }
+
   public String getFdoInstrument() {
     return cppOptions.fdoInstrumentForBuild;
   }
@@ -1250,9 +1258,5 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean provideCcToolchainInfoFromCcToolchainSuite() {
     return cppOptions.provideCcToolchainInfoFromCcToolchainSuite;
-  }
-
-  public boolean disableSysrootFromConfiguration() {
-    return cppOptions.disableSysrootFromConfiguration;
   }
 }

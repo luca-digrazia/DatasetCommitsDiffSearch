@@ -113,6 +113,7 @@ public final class BazelMockCcSupport extends MockCcSupport {
         "    module_map = 'crosstool.cppmap', supports_header_parsing = 1,",
         "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
         ")",
+        // No toolchain entry for cc-compiler-local so it can't be selected by toolchain resolution.
         "toolchain(name = 'cc-toolchain-local',",
         // Needs to be compatible with all execution environments for tests to work properly.
         "    exec_compatible_with = [],",

@@ -82,6 +82,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
     TemplateVariableInfo templateVariableInfo =
         createMakeVariableProvider(
+            ccToolchainProvider.getCppConfiguration(),
             ccToolchainProvider,
             ccToolchainProvider.getSysrootPathFragment(),
             ruleContext.getRule().getLocation());
@@ -95,12 +96,13 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   }
 
   static TemplateVariableInfo createMakeVariableProvider(
+      CppConfiguration cppConfiguration,
       CcToolchainProvider toolchainProvider,
       PathFragment sysroot,
       Location location) {
 
     HashMap<String, String> makeVariables =
-        new HashMap<>(toolchainProvider.getAdditionalMakeVariables());
+        new HashMap<>(cppConfiguration.getAdditionalMakeVariables());
 
     // Add make variables from the toolchainProvider, also.
     ImmutableMap.Builder<String, String> ccProviderMakeVariables = new ImmutableMap.Builder<>();
