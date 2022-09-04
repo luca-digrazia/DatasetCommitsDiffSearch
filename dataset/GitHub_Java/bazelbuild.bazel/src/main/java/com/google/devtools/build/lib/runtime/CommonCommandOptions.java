@@ -300,7 +300,7 @@ public class CommonCommandOptions extends OptionsBase {
       defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.LOGGING,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.BAZEL_MONITORING},
-      converter = OptionsUtils.AbsolutePathFragmentConverter.class,
+      converter = OptionsUtils.PathFragmentConverter.class,
       help =
           "If set, profile Bazel and write data to the specified "
               + "file. Use bazel analyze-profile to analyze the profile.")
@@ -331,7 +331,7 @@ public class CommonCommandOptions extends OptionsBase {
       defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.BAZEL_MONITORING},
-      converter = OptionsUtils.AbsolutePathFragmentConverter.class,
+      converter = OptionsUtils.PathFragmentConverter.class,
       help =
           "If set, write memory usage data to the specified file at phase ends and stable heap to"
               + " master log at end of build.")
@@ -360,17 +360,15 @@ public class CommonCommandOptions extends OptionsBase {
   public int oomMoreEagerlyThreshold;
 
   @Option(
-      name = "heap_dump_on_oom",
+      name = "heap_dump_on_eager_oom",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.LOGGING,
       effectTags = {OptionEffectTag.BAZEL_MONITORING},
       help =
-          "Whether to manually output a heap dump if an OOM is thrown (including OOMs due to"
-              + " --experimental_oom_more_eagerly_threshold). The dump will be written to"
-              + " <output_base>/<invocation_id>.heapdump.hprof. This option effectively replaces"
-              + " -XX:+HeapDumpOnOutOfMemoryError, which has no effect because OOMs are caught and"
-              + " redirected to Runtime#halt.")
-  public boolean heapDumpOnOom;
+          "Whether to manually output a heap dump if an OOM is thrown due to"
+              + " --experimental_oom_more_eagerly_threshold. The dump will be written to"
+              + " <invocation_id>.heapdump.hprof")
+  public boolean heapDumpOnEagerOom;
 
   @Option(
       name = "startup_time",
