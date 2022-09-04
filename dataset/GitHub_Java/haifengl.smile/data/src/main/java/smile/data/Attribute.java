@@ -156,10 +156,10 @@ public abstract class Attribute implements Serializable {
             Attribute a = (Attribute) o;
 
             if (name.equals(a.name) && type == a.type) {
-                if (description != null && a.description != null) {
-                    return description.equals(a.description);
+                if (description != null && a.description != null && description.equals(a.description)) {
+                    return true;
                 } else {
-                    return description == a.description;
+                    return false;
                 }
             } else {
                 return false;
