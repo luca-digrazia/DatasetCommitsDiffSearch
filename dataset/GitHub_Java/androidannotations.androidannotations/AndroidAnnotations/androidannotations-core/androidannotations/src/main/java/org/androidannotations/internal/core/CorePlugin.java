@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -60,7 +60,7 @@ import org.androidannotations.internal.core.handler.FullscreenHandler;
 import org.androidannotations.internal.core.handler.HierarchyViewerSupportHandler;
 import org.androidannotations.internal.core.handler.HtmlResHandler;
 import org.androidannotations.internal.core.handler.HttpsClientHandler;
-import org.androidannotations.internal.core.handler.IgnoreWhenHandler;
+import org.androidannotations.internal.core.handler.IgnoredWhenDetachedHandler;
 import org.androidannotations.internal.core.handler.InjectMenuHandler;
 import org.androidannotations.internal.core.handler.InstanceStateHandler;
 import org.androidannotations.internal.core.handler.ItemClickHandler;
@@ -94,7 +94,6 @@ import org.androidannotations.internal.core.handler.SeekBarTouchStopHandler;
 import org.androidannotations.internal.core.handler.ServiceActionHandler;
 import org.androidannotations.internal.core.handler.SharedPrefHandler;
 import org.androidannotations.internal.core.handler.SupposeBackgroundHandler;
-import org.androidannotations.internal.core.handler.SupposeThreadHandler;
 import org.androidannotations.internal.core.handler.SupposeUiThreadHandler;
 import org.androidannotations.internal.core.handler.SystemServiceHandler;
 import org.androidannotations.internal.core.handler.TextChangeHandler;
@@ -113,6 +112,9 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 
 	private static final String NAME = "AndroidAnnotations";
 
+	private static final Option OPTION_TRACE = new Option("trace", "false");
+	private static final Option OPTION_THREAD_CONTROL = new Option("threadControl", "true");
+
 	@Override
 	public String getName() {
 		return NAME;
@@ -120,7 +122,7 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 
 	@Override
 	public List<Option> getSupportedOptions() {
-		return Arrays.asList(TraceHandler.OPTION_TRACE, SupposeThreadHandler.OPTION_THREAD_CONTROL);
+		return Arrays.asList(OPTION_TRACE, OPTION_THREAD_CONTROL);
 	}
 
 	@Override
@@ -204,7 +206,7 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 		annotationHandlers.add(new PageScrollStateChangedHandler(androidAnnotationEnv));
 		annotationHandlers.add(new PageSelectedHandler(androidAnnotationEnv));
 
-		annotationHandlers.add(new IgnoreWhenHandler(androidAnnotationEnv));
+		annotationHandlers.add(new IgnoredWhenDetachedHandler(androidAnnotationEnv));
 
 		annotationHandlers.add(new AfterInjectHandler(androidAnnotationEnv));
 		annotationHandlers.add(new AfterExtrasHandler(androidAnnotationEnv));
@@ -217,7 +219,9 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 		annotationHandlers.add(new PreferenceClickHandler(androidAnnotationEnv));
 		annotationHandlers.add(new AfterPreferencesHandler(androidAnnotationEnv));
 
-		annotationHandlers.add(new TraceHandler(androidAnnotationEnv));
+		if (androidAnnotationEnv.getOptionBooleanValue(OPTION_TRACE)) {
+			annotationHandlers.add(new TraceHandler(androidAnnotationEnv));
+		}
 
 		/*
 		 * WakeLockHandler must be after TraceHandler but before UiThreadHandler
@@ -227,7 +231,7 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 
 		/*
 		 * UIThreadHandler and BackgroundHandler must be after TraceHandler and
-		 * IgnoreWhen
+		 * IgnoredWhenDetached
 		 */
 		annotationHandlers.add(new UiThreadHandler(androidAnnotationEnv));
 		annotationHandlers.add(new BackgroundHandler(androidAnnotationEnv));
@@ -236,8 +240,10 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 		 * SupposeUiThreadHandler and SupposeBackgroundHandler must be after all
 		 * handlers that modifies generated method body
 		 */
-		annotationHandlers.add(new SupposeUiThreadHandler(androidAnnotationEnv));
-		annotationHandlers.add(new SupposeBackgroundHandler(androidAnnotationEnv));
+		if (androidAnnotationEnv.getOptionBooleanValue(OPTION_THREAD_CONTROL)) {
+			annotationHandlers.add(new SupposeUiThreadHandler(androidAnnotationEnv));
+			annotationHandlers.add(new SupposeBackgroundHandler(androidAnnotationEnv));
+		}
 
 		return annotationHandlers;
 	}
