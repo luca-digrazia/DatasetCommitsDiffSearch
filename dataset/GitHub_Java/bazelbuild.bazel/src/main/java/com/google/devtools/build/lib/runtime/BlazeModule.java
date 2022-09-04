@@ -140,13 +140,10 @@ public abstract class BlazeModule {
   }
 
   /**
-   * Called to notify modules that the given command is about to be executed. This allows capturing
-   * the {@link com.google.common.eventbus.EventBus}, {@link Command}, or {@link OptionsProvider}.
-   *
-   * @param env the command
-   * @throws AbruptExitException modules can throw this exception to abort the command
+   * Called before each command.
    */
-  public void beforeCommand(CommandEnvironment env) throws AbruptExitException {
+  @SuppressWarnings("unused")
+  public void beforeCommand(Command command, CommandEnvironment env) throws AbruptExitException {
   }
 
   /**
