@@ -33,7 +33,6 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Type;
 
 import io.quarkus.deployment.annotations.BuildProducer;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
 import io.quarkus.hibernate.orm.deployment.xml.QuarkusMappingFileParser;
@@ -57,19 +56,16 @@ public final class JpaJandexScavenger {
     private static final String XML_MAPPING_DEFAULT_ORM_XML = "META-INF/orm.xml";
     private static final String XML_MAPPING_NO_FILE = "no-file";
 
-    private final BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
-    private final BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeploymentWatchedFiles;
     private final List<JpaModelPersistenceUnitContributionBuildItem> persistenceUnitContributions;
+    private final BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
     private final IndexView index;
     private final Set<String> ignorableNonIndexedClasses;
 
     JpaJandexScavenger(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeploymentWatchedFiles,
             List<JpaModelPersistenceUnitContributionBuildItem> persistenceUnitContributions,
             IndexView index,
             Set<String> ignorableNonIndexedClasses) {
         this.reflectiveClass = reflectiveClass;
-        this.hotDeploymentWatchedFiles = hotDeploymentWatchedFiles;
         this.persistenceUnitContributions = persistenceUnitContributions;
         this.index = index;
         this.ignorableNonIndexedClasses = ignorableNonIndexedClasses;
@@ -144,8 +140,6 @@ public final class JpaJandexScavenger {
         }
         try (QuarkusMappingFileParser parser = QuarkusMappingFileParser.create()) {
             for (String mappingFileName : mappingFileNames) {
-                hotDeploymentWatchedFiles.produce(new HotDeploymentWatchedFileBuildItem(mappingFileName));
-
                 Optional<RecordableXmlMapping> mappingOptional = parser.parse(persistenceUnitContribution.persistenceUnitName,
                         persistenceUnitContribution.persistenceUnitRootURL, mappingFileName);
                 if (!mappingOptional.isPresent()) {

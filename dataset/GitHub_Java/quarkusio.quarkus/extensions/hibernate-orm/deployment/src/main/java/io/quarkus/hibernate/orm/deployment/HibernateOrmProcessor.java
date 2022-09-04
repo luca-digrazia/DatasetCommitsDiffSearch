@@ -340,7 +340,8 @@ public final class HibernateOrmProcessor {
             BuildProducer<JpaModelBuildItem> domainObjectsProducer,
             List<IgnorableNonIndexedClasses> ignorableNonIndexedClassesBuildItems,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            List<JpaModelPersistenceUnitContributionBuildItem> jpaModelPuContributions) {
+            BuildProducer<UnremovableBeanBuildItem> unremovableBean,
+            List<JpaModelPersistenceUnitContributionBuildItem> jpaModelPuContributions) throws Exception {
 
         Set<String> ignorableNonIndexedClasses = Collections.emptySet();
         if (!ignorableNonIndexedClassesBuildItems.isEmpty()) {
