@@ -448,13 +448,13 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
 
     // Configuration a:
     useConfiguration("--test_arg=a");
-    ConfiguredTargetAndData binary = getConfiguredTargetAndData("//test:the_rule");
+    ConfiguredTargetAndData binary = getConfiguredTargetAndTarget("//test:the_rule");
     AttributeMap attributes = getMapperFromConfiguredTargetAndTarget(binary);
     assertThat(attributes.get("$computed_attr", Type.STRING)).isEqualTo("a2");
 
     // configuration b:
     useConfiguration("--test_arg=b");
-    binary = getConfiguredTargetAndData("//test:the_rule");
+    binary = getConfiguredTargetAndTarget("//test:the_rule");
     attributes = getMapperFromConfiguredTargetAndTarget(binary);
     assertThat(attributes.get("$computed_attr", Type.STRING)).isEqualTo("b2");
   }
@@ -549,19 +549,6 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
     assertThat(getConfiguredTarget("//java/hello:hello")).isNull();
     assertContainsEvent("//conditions:b is not a valid configuration key for //java/hello:hello");
     assertDoesNotContainEvent("//conditions:a"); // This one is legitimate..
-  }
-
-  @Test
-  public void configKeyNonexistentTarget() throws Exception {
-    reporter.removeHandler(failFastHandler); // Expect errors.
-    scratch.file("foo/BUILD",
-        "genrule(",
-        "    name = 'g',",
-        "    outs = ['g.out'],",
-        "    cmd = select({':fake': ''})",
-        ")");
-    assertThat(getConfiguredTarget("//foo:g")).isNull();
-    assertContainsEvent("//foo:fake is not a valid configuration key for //foo:g");
   }
 
   /**
@@ -1107,7 +1094,7 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         "    }))");
 
     useConfiguration("--test_arg=a");
-    ConfiguredTargetAndData ctad = getConfiguredTargetAndData("//srctest:gen");
+    ConfiguredTargetAndData ctad = getConfiguredTargetAndTarget("//srctest:gen");
     AttributeMap attributes = getMapperFromConfiguredTargetAndTarget(ctad);
     assertThat(attributes.get("srcs", BuildType.LABEL_LIST)).isEmpty();
   }
@@ -1126,7 +1113,7 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         "    boolean_attr = 1)");
 
     useConfiguration("--test_arg=a");
-    ConfiguredTargetAndData ctad = getConfiguredTargetAndData("//foo:rule");
+    ConfiguredTargetAndData ctad = getConfiguredTargetAndTarget("//foo:rule");
     AttributeMap attributes = getMapperFromConfiguredTargetAndTarget(ctad);
     assertThat(attributes.get("dep", BuildType.LABEL)).isEqualTo(
         Label.parseAbsolute("//foo:default"));
