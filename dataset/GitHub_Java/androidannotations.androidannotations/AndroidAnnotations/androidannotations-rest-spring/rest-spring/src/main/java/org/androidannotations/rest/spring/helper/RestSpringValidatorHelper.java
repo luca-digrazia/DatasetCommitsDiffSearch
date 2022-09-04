@@ -569,10 +569,10 @@ public class RestSpringValidatorHelper extends ValidatorHelper {
 
 		boolean formConverterFound = false;
 
-		TypeMirror formConverter = annotationHelper.getElementUtils().getTypeElement(FORM_HTTP_MESSAGE_CONVERTER).asType();
+		TypeElement formConverter = annotationHelper.getElementUtils().getTypeElement(FORM_HTTP_MESSAGE_CONVERTER);
 
 		for (DeclaredType converter : converters) {
-			if (formConverter != null && annotationHelper.isSubtype(converter, formConverter)) {
+			if (formConverter != null && annotationHelper.isSubtype(formConverter.asType(), converter)) {
 				formConverterFound = true;
 				break;
 			}

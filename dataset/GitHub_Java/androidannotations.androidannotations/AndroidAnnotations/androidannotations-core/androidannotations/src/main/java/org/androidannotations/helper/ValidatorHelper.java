@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2018 the AndroidAnnotations project
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -73,7 +73,7 @@ public class ValidatorHelper {
 
 	private static final List<String> VALID_PREFERENCE_CLASSES = asList(CanonicalNameConstants.PREFERENCE_ACTIVITY, CanonicalNameConstants.PREFERENCE_FRAGMENT,
 			CanonicalNameConstants.SUPPORT_V4_PREFERENCE_FRAGMENT, CanonicalNameConstants.MACHINARIUS_V4_PREFERENCE_FRAGMENT, CanonicalNameConstants.SUPPORT_V7_PREFERENCE_FRAGMENTCOMPAT,
-			CanonicalNameConstants.SUPPORT_V14_PREFERENCE_FRAGMENT, CanonicalNameConstants.ANDROIDX_PREFERENCE_FRAGMENT, CanonicalNameConstants.ANDROIDX_PREFERENCE_FRAGMENTCOMPAT);
+			CanonicalNameConstants.SUPPORT_V14_PREFERENCE_FRAGMENT);
 
 	protected final TargetAnnotationHelper annotationHelper;
 	private final ParcelerHelper parcelerHelper;
@@ -500,7 +500,7 @@ public class ValidatorHelper {
 	}
 
 	public void extendsPreference(Element element, ElementValidation validation) {
-		extendsOneOfTypes(element, asList(CanonicalNameConstants.PREFERENCE, CanonicalNameConstants.SUPPORT_V7_PREFERENCE, CanonicalNameConstants.ANDROIDX_PREFERENCE), validation);
+		extendsOneOfTypes(element, asList(CanonicalNameConstants.PREFERENCE, CanonicalNameConstants.SUPPORT_V7_PREFERENCE), validation);
 	}
 
 	public void extendsOneOfTypes(Element element, List<String> typeQualifiedNames, ElementValidation valid) {
