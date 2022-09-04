@@ -310,7 +310,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   protected SkyframeIncrementalBuildMonitor incrementalBuildMonitor =
       new SkyframeIncrementalBuildMonitor();
 
-  private final SkyFunction blacklistedPackagePrefixesFunction;
+  private final ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes;
+  private final PathFragment additionalBlacklistedPackagePrefixesFile;
 
   private final ConfiguredRuleClassProvider ruleClassProvider;
 
@@ -385,7 +386,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Factory workspaceStatusActionFactory,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ExternalFileAction externalFileAction,
-      SkyFunction blacklistedPackagePrefixesFunction,
+      ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes,
+      PathFragment additionalBlacklistedPackagePrefixesFile,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
       List<BuildFileName> buildFilesByPriority,
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
@@ -419,8 +421,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.fileSystem = fileSystem;
     this.directories = Preconditions.checkNotNull(directories);
     this.actionKeyContext = Preconditions.checkNotNull(actionKeyContext);
-    this.blacklistedPackagePrefixesFunction = blacklistedPackagePrefixesFunction;
     this.extraSkyFunctions = extraSkyFunctions;
+    this.hardcodedBlacklistedPackagePrefixes = hardcodedBlacklistedPackagePrefixes;
+    this.additionalBlacklistedPackagePrefixesFile = additionalBlacklistedPackagePrefixesFile;
 
     this.ruleClassProvider = (ConfiguredRuleClassProvider) pkgFactory.getRuleClassProvider();
     this.defaultBuildOptions = defaultBuildOptions;
@@ -499,7 +502,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(
         SkyFunctions.COLLECT_PACKAGES_UNDER_DIRECTORY,
         newCollectPackagesUnderDirectoryFunction(directories));
-    map.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES, blacklistedPackagePrefixesFunction);
+    map.put(
+        SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
+        new BlacklistedPackagePrefixesFunction(
+            hardcodedBlacklistedPackagePrefixes, additionalBlacklistedPackagePrefixesFile));
     map.put(SkyFunctions.TESTS_IN_SUITE, new TestExpansionFunction());
     map.put(SkyFunctions.TEST_SUITE_EXPANSION, new TestsForTargetPatternFunction());
     map.put(SkyFunctions.TARGET_PATTERN_PHASE, new TargetPatternPhaseFunction());
@@ -2074,13 +2080,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       }
     }
     return builder.build();
-  }
-
-  /** Returns every {@link BuildConfigurationValue.Key} in the graph. */
-  public Collection<SkyKey> getTransitiveConfigurationKeys() {
-    return memoizingEvaluator.getDoneValues().keySet().stream()
-        .filter(key -> SkyFunctions.BUILD_CONFIGURATION.equals(key.functionName()))
-        .collect(ImmutableList.toImmutableList());
   }
 
   /**
