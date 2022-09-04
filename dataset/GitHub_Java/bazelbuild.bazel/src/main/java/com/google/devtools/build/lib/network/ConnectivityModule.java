@@ -63,12 +63,17 @@ public class ConnectivityModule extends BlazeModule implements ConnectivityStatu
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return ImmutableList.of(ConnectivityOptions.class);
+    return "build".equals(command.name())
+        ? ImmutableList.of(ConnectivityOptions.class)
+        : ImmutableList.of();
   }
 
   @Override
   public void beforeCommand(CommandEnvironment env) throws AbruptExitException {
     ConnectivityOptions options = env.getOptions().getOptions(ConnectivityOptions.class);
+    if (options == null) {
+      return;
+    }
     Duration newCacheLifetime = options.cacheLifetime;
     // Initialize the cache if we haven't yet, or if the options have changed.
     // TODO(steinman): Make this a LoadingCache where load() calls determineConnectivity().
