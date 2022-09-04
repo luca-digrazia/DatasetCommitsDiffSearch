@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.events.Location;
 import java.util.Arrays;
 import javax.annotation.Nullable;
@@ -83,7 +84,7 @@ public class AttributeContainer {
   }
 
   /**
-   * See {@link #isAttributeValueExplicitlySpecified(String)}.
+   * {@see #isAttributeValueExplicitlySpecified(String)}
    */
   public boolean isAttributeValueExplicitlySpecified(Attribute attribute) {
     return isAttributeValueExplicitlySpecified(attribute.getName());
@@ -216,5 +217,11 @@ public class AttributeContainer {
       attributeLocations = Arrays.copyOf(attributeLocations, attributeLocations.length + 2);
     }
     attributeLocations[locationIndex] = location;
+  }
+
+  @VisibleForTesting
+  void setAttributeLocation(Attribute attribute, Location location) {
+    Integer index = ruleClass.getAttributeIndex(attribute.getName());
+    setAttributeLocation(index, location);
   }
 }

@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static org.junit.Assert.fail;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
@@ -50,7 +49,8 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
     Path myPkgPath = scratch.resolve("/foo/workspace/mypkg/BUILD");
     Package.Builder pkgBuilder =
         packageFactory.newPackageBuilder(PackageIdentifier.createInMainRepo("mypkg"), "TESTING")
-            .setFilename(myPkgPath);
+            .setFilename(myPkgPath)
+            .setMakeEnv(new MakeEnvironment.Builder());
 
     Map<String, Object> attributeValues = new HashMap<>();
     attributeValues.put("name", "foo");
@@ -77,7 +77,7 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
 
     assertThat(pkg.getTarget("foo")).isSameAs(rule);
 
-    assertThat(rule.getLabel()).isEqualTo(Label.parseAbsolute("//mypkg:foo", ImmutableMap.of()));
+    assertThat(rule.getLabel()).isEqualTo(Label.parseAbsolute("//mypkg:foo"));
     assertThat(rule.getName()).isEqualTo("foo");
 
     assertThat(rule.getRuleClass()).isEqualTo("cc_library");
@@ -136,7 +136,8 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
     Path myPkgPath = scratch.resolve("/foo/workspace/mypkg/BUILD");
     Package.Builder pkgBuilder =
         packageFactory.newPackageBuilder(PackageIdentifier.createInMainRepo("mypkg"), "TESTING")
-            .setFilename(myPkgPath);
+            .setFilename(myPkgPath)
+            .setMakeEnv(new MakeEnvironment.Builder());
 
     Map<String, Object> attributeValues = new HashMap<>();
     attributeValues.put("name", "foo");
@@ -164,7 +165,8 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
     Path myPkgPath = scratch.resolve("/foo/workspace/WORKSPACE");
     Package.Builder pkgBuilder =
         packageFactory.newPackageBuilder(Label.EXTERNAL_PACKAGE_IDENTIFIER, "TESTING")
-            .setFilename(myPkgPath);
+            .setFilename(myPkgPath)
+            .setMakeEnv(new MakeEnvironment.Builder());
 
     Map<String, Object> attributeValues = new HashMap<>();
     attributeValues.put("name", "foo");
@@ -205,7 +207,8 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
     Path myPkgPath = scratch.resolve("/foo");
     Package.Builder pkgBuilder =
         packageFactory.newPackageBuilder(PackageIdentifier.createInMainRepo("mypkg"), "TESTING")
-            .setFilename(myPkgPath);
+            .setFilename(myPkgPath)
+            .setMakeEnv(new MakeEnvironment.Builder());
 
     Map<String, Object> attributeValues = new HashMap<>();
     attributeValues.put("outs", Lists.newArrayList("."));
@@ -240,6 +243,7 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
     Package pkg =
         packageFactory.newPackageBuilder(PackageIdentifier.createInMainRepo("mypkg"), "TESTING")
             .setFilename(myPkgPath)
+            .setMakeEnv(new MakeEnvironment.Builder())
             .build();
 
     for (String name : ruleFactory.getRuleClassNames()) {

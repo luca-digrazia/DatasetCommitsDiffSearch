@@ -19,6 +19,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
@@ -36,7 +37,6 @@ import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -115,7 +115,6 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
       ExtendedEventHandler eventHandler,
       RepositoryName repository,
       PathFragment directory,
-      ImmutableSet<PathFragment> blacklistedSubdirectories,
       ImmutableSet<PathFragment> excludedSubdirectories)
       throws MissingDepException, InterruptedException {
     PathPackageLocator packageLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
@@ -141,11 +140,11 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
       roots.add(repositoryValue.getPath());
     }
 
-    LinkedHashSet<PathFragment> packageNames = new LinkedHashSet<>();
+    NestedSetBuilder<String> packageNames = NestedSetBuilder.stableOrder();
     for (Path root : roots) {
-      PathFragment.checkAllPathsAreUnder(blacklistedSubdirectories, directory);
+      PathFragment.checkAllPathsAreUnder(excludedSubdirectories, directory);
       RecursivePkgValue lookup = (RecursivePkgValue) env.getValue(RecursivePkgValue.key(
-          repository, RootedPath.toRootedPath(root, directory), blacklistedSubdirectories));
+          repository, RootedPath.toRootedPath(root, directory), excludedSubdirectories));
       if (lookup == null) {
         // Typically a null value from Environment.getValue(k) means that either the key k is
         // missing a dependency or an exception was thrown during evaluation of k. Here, if this
@@ -157,19 +156,11 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
         throw new MissingDepException();
       }
 
-      for (String packageName : lookup.getPackages()) {
-        // TODO(bazel-team): Make RecursivePkgValue return NestedSet<PathFragment> so this transform
-        // is unnecessary.
-        PathFragment packageNamePathFragment = PathFragment.create(packageName);
-        if (!Iterables.any(
-            excludedSubdirectories,
-            excludedSubdirectory -> packageNamePathFragment.startsWith(excludedSubdirectory))) {
-          packageNames.add(packageNamePathFragment);
-        }
-      }
+      packageNames.addTransitive(lookup.getPackages());
     }
-
-    return packageNames;
+    // TODO(bazel-team): Make RecursivePkgValue return NestedSet<PathFragment> so this transform is
+    // unnecessary.
+    return Iterables.transform(packageNames.build(), PathFragment::create);
   }
 
   @Override

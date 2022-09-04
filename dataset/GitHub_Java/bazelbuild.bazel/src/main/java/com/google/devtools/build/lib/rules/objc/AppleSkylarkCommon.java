@@ -22,10 +22,10 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -112,7 +112,7 @@ public class AppleSkylarkCommon {
   )
   public SkylarkClassObject getPlatformStruct() {
     if (platform == null) {
-      platform = ApplePlatform.getSkylarkStruct();
+      platform = Platform.getSkylarkStruct();
     }
     return platform;
   }
@@ -126,23 +126,6 @@ public class AppleSkylarkCommon {
   )
   public ClassObjectConstructor getXcodeVersionPropertiesConstructor() {
     return XcodeVersionProperties.SKYLARK_CONSTRUCTOR;
-  }
-
-  @SkylarkCallable(
-    // TODO(b/63899207): This currently does not match ObjcProvider.SKYLARK_NAME as it requires
-    // a migration of existing skylark rules.
-    name = "Objc",
-    doc = "The constructor/key for the <code>Objc</code> provider.<p>"
-        + "If a target propagates the <code>Objc</code> provider, use this as the"
-        + "key with which to retrieve it. Example:<br>"
-        + "<pre class='language-python'>\n"
-        + "dep = ctx.attr.deps[0]\n"
-        + "p = dep[apple_common.Objc]\n"
-        + "</pre>",
-    structField = true
-  )
-  public ClassObjectConstructor getObjcProviderConstructor() {
-    return ObjcProvider.SKYLARK_CONSTRUCTOR;
   }
 
   @SkylarkCallable(
