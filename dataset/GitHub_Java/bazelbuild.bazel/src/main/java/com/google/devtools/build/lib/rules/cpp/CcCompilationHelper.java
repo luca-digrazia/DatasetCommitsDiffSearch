@@ -21,6 +21,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -225,6 +226,7 @@ public final class CcCompilationHelper {
   private final FeatureConfiguration featureConfiguration;
   private final CcToolchainProvider ccToolchain;
   private final FdoSupportProvider fdoSupport;
+  private final ImmutableSet<String> features;
   private boolean useDeps = true;
   private boolean generateModuleMap = true;
   private String purpose = null;
@@ -289,6 +291,7 @@ public final class CcCompilationHelper {
     this.configuration = Preconditions.checkNotNull(configuration);
     this.cppConfiguration =
         Preconditions.checkNotNull(ruleContext.getFragment(CppConfiguration.class));
+    this.features = ruleContext.getFeatures();
     setGenerateNoPicAction(
         !CppHelper.usePicForDynamicLibraries(ruleContext, ccToolchain)
             || !CppHelper.usePicForBinaries(ruleContext, ccToolchain));
@@ -1478,7 +1481,7 @@ public final class CcCompilationHelper {
       Artifact ltoIndexingFile,
       ImmutableMap<String, String> additionalBuildVariables) {
     Artifact sourceFile = builder.getSourceFile();
-    ImmutableList.Builder<String> userCompileFlags = ImmutableList.builder();
+    Builder<String> userCompileFlags = ImmutableList.builder();
     userCompileFlags.addAll(getCoptsFromOptions(cppConfiguration, sourceFile.getExecPathString()));
     userCompileFlags.addAll(copts);
     if (sourceFile != null && sourceLabel != null) {
@@ -1523,7 +1526,8 @@ public final class CcCompilationHelper {
         CppHelper.getFdoBuildStamp(ruleContext, fdoSupport.getFdoSupport()),
         dotdFileExecPath,
         ImmutableList.copyOf(variablesExtensions),
-        allAdditionalBuildVariables.build());
+        allAdditionalBuildVariables.build(),
+        features);
   }
 
   /**

@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.License.LicenseType;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationInfo;
 import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,7 +41,7 @@ public class AliasTest extends BuildViewTestCase {
         "alias(name='b', actual='a')");
 
     ConfiguredTarget b = getConfiguredTarget("//a:b");
-    assertThat(b.get(CcInfo.PROVIDER).getCcCompilationContext()).isNotNull();
+    assertThat(b.get(CcCompilationInfo.PROVIDER).getCcCompilationContextInfo()).isNotNull();
   }
 
   @Test
@@ -106,7 +106,7 @@ public class AliasTest extends BuildViewTestCase {
         "alias(name='al', actual='//a:af')",
         "filegroup(name='ta', srcs=[':al'])");
 
-    getConfiguredTarget("//b:ta");
+    getConfiguredTarget("//b:tf");
   }
 
   @Test
@@ -147,10 +147,7 @@ public class AliasTest extends BuildViewTestCase {
     assertThat(getLicenses("//a:e", "//a:a")).containsExactly(LicenseType.RESTRICTED);
     assertThat(getLicenses("//a:b", "//a:a")).containsExactly(LicenseType.RESTRICTED);
     assertThat(
-            getConfiguredTarget("//a:b")
-                .getProvider(LicensesProvider.class)
-                .getTransitiveLicenses()
-                .toList())
+        getConfiguredTarget("//a:b").getProvider(LicensesProvider.class).getTransitiveLicenses())
         .hasSize(1);
   }
 
@@ -169,7 +166,7 @@ public class AliasTest extends BuildViewTestCase {
       throws Exception {
     LicensesProvider licenses =
         getConfiguredTarget(topLevelTarget).getProvider(LicensesProvider.class);
-    for (TargetLicense license : licenses.getTransitiveLicenses().toList()) {
+    for (TargetLicense license : licenses.getTransitiveLicenses()) {
       if (license.getLabel().toString().equals(licenseTarget)) {
         return license.getLicense().getLicenseTypes();
       }

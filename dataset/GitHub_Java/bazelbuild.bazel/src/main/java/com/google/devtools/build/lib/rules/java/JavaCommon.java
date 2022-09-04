@@ -467,10 +467,6 @@ public class JavaCommon {
     return JavaRuntimeInfo.forHost(ruleContext).javaBinaryExecPath();
   }
 
-  public static PathFragment getHostJavaExecutable(JavaRuntimeInfo javaRuntime) {
-    return javaRuntime.javaBinaryExecPath();
-  }
-
   public static PathFragment getJavaExecutable(RuleContext ruleContext) {
     return JavaRuntimeInfo.from(ruleContext).javaBinaryExecPath();
   }

@@ -24,12 +24,9 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.bazel.rules.cpp.proto.BazelCcProtoAspect;
-import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationContextInfo;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationInfo;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -111,27 +108,27 @@ public class CcProtoLibraryTest extends BuildViewTestCase {
         "proto_library(name = 'alias_proto', deps = [':foo_proto'])",
         "proto_library(name = 'foo_proto', srcs = ['foo.proto'])");
 
-    CcCompilationContext ccCompilationContext =
+    CcCompilationContextInfo ccCompilationContextInfo =
         getConfiguredTarget("//x:foo_cc_proto")
             .get(CcCompilationInfo.PROVIDER)
-            .getCcCompilationContext();
-    assertThat(prettyArtifactNames(ccCompilationContext.getDeclaredIncludeSrcs()))
+            .getCcCompilationContextInfo();
+    assertThat(prettyArtifactNames(ccCompilationContextInfo.getDeclaredIncludeSrcs()))
         .containsExactly("x/foo.pb.h");
   }
 
   @Test
-  public void ccCompilationContext() throws Exception {
+  public void ccCompilationContextInfo() throws Exception {
     scratch.file(
         "x/BUILD",
         "cc_proto_library(name = 'foo_cc_proto', deps = ['foo_proto'])",
         "proto_library(name = 'foo_proto', srcs = ['foo.proto'], deps = [':bar_proto'])",
         "proto_library(name = 'bar_proto', srcs = ['bar.proto'])");
 
-    CcCompilationContext ccCompilationContext =
+    CcCompilationContextInfo ccCompilationContextInfo =
         getConfiguredTarget("//x:foo_cc_proto")
             .get(CcCompilationInfo.PROVIDER)
-            .getCcCompilationContext();
-    assertThat(prettyArtifactNames(ccCompilationContext.getDeclaredIncludeSrcs()))
+            .getCcCompilationContextInfo();
+    assertThat(prettyArtifactNames(ccCompilationContextInfo.getDeclaredIncludeSrcs()))
         .containsExactly("x/foo.pb.h", "x/bar.pb.h");
   }
 
@@ -180,17 +177,10 @@ public class CcProtoLibraryTest extends BuildViewTestCase {
                 "--cpp_out=%s/external/bla",
                 getTargetConfiguration().getGenfilesFragment().toString()));
 
-    Artifact headerFile =
-        getDerivedArtifact(
-            PathFragment.create("external/bla/foo/bar.pb.h"),
-            targetConfig.getGenfilesDirectory(),
-            getOwnerForAspect(
-                getConfiguredTarget("@bla//foo:bar_proto"),
-                ruleClassProvider.getNativeAspectClass(BazelCcProtoAspect.class.getSimpleName()),
-                AspectParameters.EMPTY));
-    CcCompilationContext ccCompilationContext =
-        target.get(CcCompilationInfo.PROVIDER).getCcCompilationContext();
-    assertThat(ccCompilationContext.getDeclaredIncludeSrcs()).containsExactly(headerFile);
+    Artifact headerFile = getGenfilesArtifactWithNoOwner("external/bla/foo/bar.pb.h");
+    CcCompilationContextInfo ccCompilationContextInfo =
+        target.get(CcCompilationInfo.PROVIDER).getCcCompilationContextInfo();
+    assertThat(ccCompilationContextInfo.getDeclaredIncludeSrcs()).containsExactly(headerFile);
   }
 
   @Test
