@@ -1,7 +1,5 @@
 package io.quarkus.camel.core.runtime.graal;
 
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.InetAddress;
@@ -10,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
 
 import org.apache.camel.Producer;
 import org.apache.camel.builder.xml.XPathBuilder;
@@ -29,43 +26,10 @@ class CamelSubstitutions {
 }
 
 @TargetClass(className = "com.sun.beans.WeakCache")
-@Substitute
 final class Target_com_sun_beans_WeakCache<K, V> {
-
-    @Substitute
-    private Map<K, Reference<V>> map = new WeakHashMap<>();
-
-    @Substitute
+    @Alias
     public Target_com_sun_beans_WeakCache() {
     }
-
-    @Substitute
-    public V get(K key) {
-        Reference<V> reference = this.map.get(key);
-        if (reference == null) {
-            return null;
-        }
-        V value = reference.get();
-        if (value == null) {
-            this.map.remove(key);
-        }
-        return value;
-    }
-
-    @Substitute
-    public void put(K key, V value) {
-        if (value != null) {
-            this.map.put(key, new WeakReference<V>(value));
-        } else {
-            this.map.remove(key);
-        }
-    }
-
-    @Substitute
-    public void clear() {
-        this.map.clear();
-    }
-
 }
 
 @TargetClass(className = "java.beans.Introspector")
