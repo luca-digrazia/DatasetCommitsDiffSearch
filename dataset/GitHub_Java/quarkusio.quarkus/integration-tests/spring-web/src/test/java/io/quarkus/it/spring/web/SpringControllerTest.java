@@ -19,12 +19,6 @@ public class SpringControllerTest {
     }
 
     @Test
-    public void testInvalidJsonInputAndResult() {
-        RestAssured.given().contentType("application/json").body("{\"name\":\"\"}").post("/greeting/person").then()
-                .statusCode(400);
-    }
-
-    @Test
     public void testJsonInputAndResult() {
         RestAssured.given().contentType("application/json").body("{\"name\":\"George\"}").post("/greeting/person").then()
                 .contentType("application/json")
@@ -59,7 +53,7 @@ public class SpringControllerTest {
     public void testExceptionHandlerResponseEntityType() {
         RestAssured.when().get("/exception/responseEntity").then()
                 .contentType("application/json")
-                .body(containsString("bad state"), containsString("responseEntity"))
+                .body(containsString("bad state"))
                 .statusCode(402);
     }
 
