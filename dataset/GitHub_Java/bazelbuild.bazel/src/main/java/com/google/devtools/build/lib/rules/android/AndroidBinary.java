@@ -65,7 +65,6 @@ import com.google.devtools.build.lib.rules.android.AndroidBinaryMobileInstall.Mo
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
 import com.google.devtools.build.lib.rules.android.ZipFilterBuilder.CheckHashMismatchMode;
-import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
@@ -199,41 +198,35 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                     ? ruleContext.attributes().get("manifest_merger", STRING)
                     : null);
 
-    boolean shrinkResourceCycles =
-        shouldShrinkResourceCycles(dataContext.getAndroidConfig(), ruleContext, shrinkResources);
     AndroidAaptVersion aaptVersion = AndroidAaptVersion.chooseTargetAaptVersion(ruleContext);
-    ProcessedAndroidData processedAndroidData =
-        ProcessedAndroidData.processBinaryDataFrom(
-            dataContext,
-            ruleContext,
-            manifest,
-            /* conditionalKeepRules= */ shrinkResourceCycles,
-            manifestValues,
-            aaptVersion,
-            AndroidResources.from(ruleContext, "resource_files"),
-            AndroidAssets.from(ruleContext),
-            resourceDeps,
-            AssetDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
-            ResourceFilterFactory.fromRuleContextAndAttrs(ruleContext),
-            ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"),
-            ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
-            ruleContext.attributes().isAttributeValueExplicitlySpecified("feature_of")
-                ? ruleContext.getPrerequisite("feature_of", Mode.TARGET, ApkInfo.PROVIDER).getApk()
-                : null,
-            ruleContext.attributes().isAttributeValueExplicitlySpecified("feature_after")
-                ? ruleContext
-                    .getPrerequisite("feature_after", Mode.TARGET, ApkInfo.PROVIDER)
-                    .getApk()
-                : null,
-            DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()));
     final ResourceApk resourceApk =
-        new RClassGeneratorActionBuilder()
-            .targetAaptVersion(aaptVersion)
-            .withDependencies(resourceDeps)
-            .finalFields(!shrinkResourceCycles)
-            .setClassJarOut(
-                dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
-            .build(dataContext, processedAndroidData);
+        ProcessedAndroidData.processBinaryDataFrom(
+                dataContext,
+                ruleContext,
+                manifest,
+                /* conditionalKeepRules = */ shouldShrinkResourceCycles(
+                    dataContext.getAndroidConfig(), ruleContext, shrinkResources),
+                manifestValues,
+                aaptVersion,
+                AndroidResources.from(ruleContext, "resource_files"),
+                AndroidAssets.from(ruleContext),
+                resourceDeps,
+                AssetDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
+                ResourceFilterFactory.fromRuleContextAndAttrs(ruleContext),
+                ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"),
+                ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
+                ruleContext.attributes().isAttributeValueExplicitlySpecified("feature_of")
+                    ? ruleContext
+                        .getPrerequisite("feature_of", Mode.TARGET, ApkInfo.PROVIDER)
+                        .getApk()
+                    : null,
+                ruleContext.attributes().isAttributeValueExplicitlySpecified("feature_after")
+                    ? ruleContext
+                        .getPrerequisite("feature_after", Mode.TARGET, ApkInfo.PROVIDER)
+                        .getApk()
+                    : null,
+                DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()))
+            .generateRClass(dataContext, aaptVersion);
 
     ruleContext.assertNoErrors();
 
