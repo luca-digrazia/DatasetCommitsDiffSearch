@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -52,9 +52,9 @@ public class NestedSetImplTest {
 
   @Test
   public void flatToString() {
-    assertThat(nestedSetBuilder().build().toString()).isEqualTo("[]");
-    assertThat(nestedSetBuilder("a").build().toString()).isEqualTo("[a]");
-    assertThat(nestedSetBuilder("a", "b").build().toString()).isEqualTo("[a, b]");
+    assertThat(nestedSetBuilder().build().toString()).isEqualTo("{}");
+    assertThat(nestedSetBuilder("a").build().toString()).isEqualTo("{a}");
+    assertThat(nestedSetBuilder("a", "b").build().toString()).isEqualTo("{a, b}");
   }
 
   @Test
@@ -62,36 +62,12 @@ public class NestedSetImplTest {
     NestedSet<String> b = nestedSetBuilder("b1", "b2").build();
     NestedSet<String> c = nestedSetBuilder("c1", "c2").build();
 
-    assertThat(nestedSetBuilder("a").addTransitive(b).build().toString()).isEqualTo("[b1, b2, a]");
+    assertThat(nestedSetBuilder("a").addTransitive(b).build().toString())
+        .isEqualTo("{{b1, b2}, a}");
     assertThat(nestedSetBuilder("a").addTransitive(b).addTransitive(c).build().toString())
-        .isEqualTo("[b1, b2, c1, c2, a]");
-    NestedSet<String> linkOrderSet =
-        NestedSetBuilder.<String>linkOrder().add("a").addTransitive(b).addTransitive(c).build();
-    assertThat(linkOrderSet.toString()).isEqualTo("[a, b2, b1, c2, c1]");
-    // Stable order when printing children directly.
-    assertThat(NestedSet.childrenToString(linkOrderSet.getChildren()))
-        .isEqualTo("[c1, c2, b1, b2, a]");
+        .isEqualTo("{{b1, b2}, {c1, c2}, a}");
 
-    assertThat(nestedSetBuilder().addTransitive(b).build().toString()).isEqualTo("[b1, b2]");
-  }
-
-  @Test
-  public void tooLongToString() {
-    NestedSetBuilder<Integer> builder = NestedSetBuilder.stableOrder();
-    for (int i = 0; i < NestedSet.MAX_ELEMENTS_TO_STRING + 3; i++) {
-      builder.add(i);
-    }
-    String stringRep = builder.build().toString();
-    assertThat(stringRep).contains("[0, 1, 2, 3");
-    assertThat(stringRep)
-        .containsMatch(
-            "\\[0, 1, 2, 3, .*"
-                + (NestedSet.MAX_ELEMENTS_TO_STRING - 2)
-                + ", "
-                + (NestedSet.MAX_ELEMENTS_TO_STRING - 1)
-                + "] \\(truncated, full size "
-                + (NestedSet.MAX_ELEMENTS_TO_STRING + 3)
-                + "\\)");
+    assertThat(nestedSetBuilder().addTransitive(b).build().toString()).isEqualTo("{b1, b2}");
   }
 
   @Test
