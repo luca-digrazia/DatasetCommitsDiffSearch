@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
@@ -174,16 +173,17 @@ public class JarCreator extends JarHelper {
    * @throws IOException if the Jar cannot be written or any of the entries cannot be read.
    */
   public void execute() throws IOException {
-    try (OutputStream os = new FileOutputStream(jarFile);
-        BufferedOutputStream bos = new BufferedOutputStream(os);
-        JarOutputStream out = new JarOutputStream(bos)) {
+    out = new JarOutputStream(new BufferedOutputStream(new FileOutputStream(jarFile)));
 
-      // Create the manifest entry in the Jar file
-      writeManifestEntry(out, manifestContent());
-
+    // Create the manifest entry in the Jar file
+    writeManifestEntry(manifestContent());
+    try {
       for (Map.Entry<String, Path> entry : jarEntries.entrySet()) {
-        copyEntry(out, entry.getKey(), entry.getValue());
+        copyEntry(entry.getKey(), entry.getValue());
       }
+    } finally {
+      out.closeEntry();
+      out.close();
     }
   }
 
