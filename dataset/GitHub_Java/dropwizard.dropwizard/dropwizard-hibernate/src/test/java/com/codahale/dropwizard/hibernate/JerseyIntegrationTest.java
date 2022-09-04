@@ -1,11 +1,12 @@
 package com.codahale.dropwizard.hibernate;
 
-import com.codahale.dropwizard.config.Environment;
 import com.codahale.dropwizard.db.DatabaseConfiguration;
 import com.codahale.dropwizard.jackson.Jackson;
 import com.codahale.dropwizard.jersey.DropwizardResourceConfig;
 import com.codahale.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
-import com.codahale.dropwizard.setup.LifecycleEnvironment;
+import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
+import com.codahale.dropwizard.logging.LoggingFactory;
+import com.codahale.dropwizard.setup.Environment;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
@@ -19,11 +20,11 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.After;
 import org.junit.Test;
-import org.slf4j.bridge.SLF4JBridgeHandler;
 
 import javax.validation.Validation;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
+import java.util.TimeZone;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 import static org.fest.assertions.api.Assertions.failBecauseExceptionWasNotThrown;
@@ -32,8 +33,7 @@ import static org.mockito.Mockito.when;
 
 public class JerseyIntegrationTest extends JerseyTest {
     static {
-        SLF4JBridgeHandler.removeHandlersForRootLogger();
-        SLF4JBridgeHandler.install();
+        LoggingFactory.bootstrap();
     }
 
     public static class PersonDAO extends AbstractDAO<Person> {
@@ -74,15 +74,25 @@ public class JerseyIntegrationTest extends JerseyTest {
     }
 
     private SessionFactory sessionFactory;
+    private TimeZone defaultTZ;
 
     @Override
     @After
     public void tearDown() throws Exception {
+        TimeZone.setDefault(defaultTZ);
         super.tearDown();
 
         if (sessionFactory != null) {
             sessionFactory.close();
         }
+    }
+
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+
+        this.defaultTZ = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
     }
 
     @Override
@@ -93,8 +103,8 @@ public class JerseyIntegrationTest extends JerseyTest {
         final HibernateBundle<?> bundle = mock(HibernateBundle.class);
         final Environment environment = mock(Environment.class);
         final LifecycleEnvironment lifecycleEnvironment = mock(LifecycleEnvironment.class);
-        when(environment.getLifecycleEnvironment()).thenReturn(lifecycleEnvironment);
-        when(environment.getMetricRegistry()).thenReturn(metricRegistry);
+        when(environment.lifecycle()).thenReturn(lifecycleEnvironment);
+        when(environment.metrics()).thenReturn(metricRegistry);
 
         dbConfig.setUrl("jdbc:hsqldb:mem:DbTest-" + System.nanoTime());
         dbConfig.setUser("sa");
@@ -113,27 +123,21 @@ public class JerseyIntegrationTest extends JerseyTest {
         try {
             session.createSQLQuery("DROP TABLE people IF EXISTS").executeUpdate();
             session.createSQLQuery(
-                    "CREATE TABLE people (name varchar(100) primary key, email varchar(100), birthday timestamp)")
+                    "CREATE TABLE people (name varchar(100) primary key, email varchar(100), birthday timestamp with time zone)")
                    .executeUpdate();
             session.createSQLQuery(
-                    "INSERT INTO people VALUES ('Coda', 'coda@example.com', '1979-01-02 00:22:00')")
+                    "INSERT INTO people VALUES ('Coda', 'coda@example.com', '1979-01-02 00:22:00+0:00')")
                    .executeUpdate();
         } finally {
             session.close();
         }
 
-        final DropwizardResourceConfig config = new DropwizardResourceConfig(true,
-                                                                             new MetricRegistry());
+        final DropwizardResourceConfig config = DropwizardResourceConfig.forTesting(new MetricRegistry());
         config.getSingletons().add(new UnitOfWorkResourceMethodDispatchAdapter(sessionFactory));
         config.getSingletons().add(new PersonResource(new PersonDAO(sessionFactory)));
         config.getSingletons().add(new JacksonMessageBodyProvider(Jackson.newObjectMapper(),
                                                                   Validation.buildDefaultValidatorFactory().getValidator()));
         return new LowLevelAppDescriptor.Builder(config).build();
-    }
-
-    @Override
-    public void setUp() throws Exception {
-        super.setUp();
     }
 
     @Test
