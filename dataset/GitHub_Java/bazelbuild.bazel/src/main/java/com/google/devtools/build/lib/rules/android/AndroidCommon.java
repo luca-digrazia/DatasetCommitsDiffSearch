@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
-import com.google.devtools.build.lib.rules.java.JavaCompileOutputs;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -141,15 +140,19 @@ public class AndroidCommon {
   private JavaCompilationArgsProvider javaCompilationArgs = JavaCompilationArgsProvider.EMPTY;
   private NestedSet<Artifact> jarsProducedForRuntime;
   private Artifact classJar;
-  private JavaCompileOutputs<Artifact> outputs;
+  private Artifact nativeHeaderOutput;
   private Artifact iJar;
   private Artifact srcJar;
+  private Artifact genClassJar;
+  private Artifact genSourceJar;
   private Artifact resourceSourceJar;
+  private Artifact outputDepsProto;
   private GeneratedExtensionRegistryProvider generatedExtensionRegistryProvider;
   private final JavaSourceJarsProvider.Builder javaSourceJarsProviderBuilder =
       JavaSourceJarsProvider.builder();
   private final JavaRuleOutputJarsProvider.Builder javaRuleOutputJarsProviderBuilder =
       JavaRuleOutputJarsProvider.builder();
+  private Artifact manifestProtoOutput;
   private AndroidIdlHelper idlHelper;
 
   public AndroidCommon(JavaCommon javaCommon) {
@@ -488,8 +491,7 @@ public class AndroidCommon {
     JavaTargetAttributes.Builder attributes =
         javaCommon
             .initCommon(idlHelper.getIdlGeneratedJavaSources(), javacopts.build())
-            .setBootClassPath(
-                NestedSetBuilder.<Artifact>wrap(Order.NAIVE_LINK_ORDER, bootclasspath));
+            .setBootClassPath(bootclasspath);
 
     resourceApk
         .asDataBindingContext()
@@ -608,16 +610,31 @@ public class AndroidCommon {
 
     filesBuilder.add(classJar);
 
-    outputs = helper.createOutputs(classJar);
-    javaArtifactsBuilder.setCompileTimeDependencies(outputs.depsProto());
+    manifestProtoOutput = helper.createManifestProtoOutput(classJar);
+
+    // The gensrc jar is created only if the target uses annotation processing. Otherwise,
+    // it is null, and the source jar action will not depend on the compile action.
+    if (helper.usesAnnotationProcessing()) {
+      genClassJar = helper.createGenJar(classJar);
+      genSourceJar = helper.createGensrcJar(classJar);
+    }
 
     srcJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR);
     javaSourceJarsProviderBuilder
         .addSourceJar(srcJar)
         .addAllTransitiveSourceJars(javaCommon.collectTransitiveSourceJars(srcJar));
-    helper.createSourceJarAction(srcJar, outputs.genSource());
+    helper.createSourceJarAction(srcJar, genSourceJar);
 
-    helper.createCompileAction(outputs);
+    nativeHeaderOutput = helper.createNativeHeaderJar(classJar);
+
+    outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
+    helper.createCompileAction(
+        classJar,
+        manifestProtoOutput,
+        outputDepsProto,
+        genSourceJar,
+        genClassJar,
+        nativeHeaderOutput);
 
     if (generateExtensionRegistry) {
       generatedExtensionRegistryProvider =
@@ -670,7 +687,7 @@ public class AndroidCommon {
       boolean isNeverlink,
       boolean isLibrary) {
 
-    idlHelper.addTransitiveInfoProviders(builder, classJar, outputs.manifestProto());
+    idlHelper.addTransitiveInfoProviders(builder, classJar, manifestProtoOutput);
 
     if (generatedExtensionRegistryProvider != null) {
       builder.addNativeDeclaredProvider(generatedExtensionRegistryProvider);
@@ -681,16 +698,16 @@ public class AndroidCommon {
           new OutputJar(
               resourceApk.getResourceJavaClassJar(),
               null /* ijar */,
-              outputs.manifestProto(),
+              manifestProtoOutput,
               ImmutableList.of(resourceSourceJar));
       javaRuleOutputJarsProviderBuilder.addOutputJar(resourceJar);
     }
 
     JavaRuleOutputJarsProvider ruleOutputJarsProvider =
         javaRuleOutputJarsProviderBuilder
-            .addOutputJar(classJar, iJar, outputs.manifestProto(), ImmutableList.of(srcJar))
-            .setJdeps(outputs.depsProto())
-            .setNativeHeaders(outputs.nativeHeader())
+            .addOutputJar(classJar, iJar, manifestProtoOutput, ImmutableList.of(srcJar))
+            .setJdeps(outputDepsProto)
+            .setNativeHeaders(nativeHeaderOutput)
             .build();
     JavaSourceJarsProvider sourceJarsProvider = javaSourceJarsProviderBuilder.build();
     JavaCompilationArgsProvider compilationArgsProvider = javaCompilationArgs;
@@ -700,8 +717,7 @@ public class AndroidCommon {
     javaCommon.addTransitiveInfoProviders(
         builder, javaInfoBuilder, filesToBuild, classJar, ANDROID_COLLECTION_SPEC);
 
-    javaCommon.addGenJarsProvider(
-        builder, javaInfoBuilder, outputs.genClass(), outputs.genSource());
+    javaCommon.addGenJarsProvider(builder, javaInfoBuilder, genClassJar, genSourceJar);
 
     resourceApk.asDataBindingContext().addProvider(builder, ruleContext);
 

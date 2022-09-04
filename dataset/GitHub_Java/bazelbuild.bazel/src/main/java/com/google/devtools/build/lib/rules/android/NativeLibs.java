@@ -166,22 +166,23 @@ public final class NativeLibs {
       return null;
     }
 
-    Runfiles runfiles =
+    Runfiles.Builder runfiles =
         new Runfiles.Builder(
-                ruleContext.getWorkspaceName(),
-                ruleContext.getConfiguration().legacyExternalRunfiles())
-            .addRootSymlinks(symlinks)
-            .build();
+            ruleContext.getWorkspaceName(),
+            ruleContext.getConfiguration().legacyExternalRunfiles());
+    runfiles.addRootSymlinks(symlinks);
     if (!ruleContext.getConfiguration().buildRunfilesManifests()) {
-      return new ManifestAndRunfiles(/*manifest=*/ null, runfiles);
+      return new ManifestAndRunfiles(/*manifest=*/ null, runfiles.build());
     }
 
     Artifact inputManifest = AndroidBinary.getDxArtifact(ruleContext, "native_symlinks.manifest");
-    ruleContext.registerAction(
-        new SourceManifestAction(
-            ManifestType.SOURCE_SYMLINKS, ruleContext.getActionOwner(), inputManifest, runfiles));
-
+    SourceManifestAction sourceManifestAction =
+        new SourceManifestAction.Builder(
+                ManifestType.SOURCE_SYMLINKS, ruleContext.getActionOwner(), inputManifest, runfiles)
+            .build();
+    ruleContext.registerAction(sourceManifestAction);
     Artifact outputManifest = AndroidBinary.getDxArtifact(ruleContext, "native_symlinks/MANIFEST");
+
     ruleContext.registerAction(
         new SymlinkTreeAction(
             ruleContext.getActionOwner(),
@@ -190,7 +191,7 @@ public final class NativeLibs {
             false,
             ruleContext.getConfiguration().getActionEnvironment(),
             ruleContext.getConfiguration().runfilesEnabled()));
-    return new ManifestAndRunfiles(outputManifest, runfiles);
+    return new ManifestAndRunfiles(outputManifest, sourceManifestAction.getGeneratedRunfiles());
   }
 
   /**

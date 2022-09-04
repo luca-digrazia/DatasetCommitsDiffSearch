@@ -26,14 +26,10 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.LinkerInputApi;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.Arrays;
@@ -156,9 +152,8 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   /**
    * Wraps any input to the linker, be it libraries, linker scripts, linkstamps or linking options.
    */
-  @Immutable
-  public static class LinkerInput implements LinkerInputApi<LibraryToLink, Artifact> {
-    // Identifies which target created the LinkerInput. It doesn't have to be unique between
+  public static class LinkerInput {
+    // Identifier which target created the LinkerInput. It doesn't have to be unique between
     // LinkerInputs.
     private final Label owner;
     private final ImmutableList<LibraryToLink> libraries;
@@ -179,54 +174,8 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
       this.linkstamps = linkstamps;
     }
 
-    @Override
-    public Label getSkylarkOwner(Location location) throws EvalException {
-      if (owner == null) {
-        throw new EvalException(
-            location,
-            "Owner is null. This means that some target upstream is of a rule type that uses the"
-                + " old API of create_linking_context");
-      }
-      return owner;
-    }
-
     public Label getOwner() {
       return owner;
-    }
-
-    public List<LibraryToLink> getLibraries() {
-      return libraries;
-    }
-
-    @Override
-    public Sequence<LibraryToLink> getSkylarkLibrariesToLink(StarlarkThread thread) {
-      return StarlarkList.immutableCopyOf(getLibraries());
-    }
-
-    public List<LinkOptions> getUserLinkFlags() {
-      return userLinkFlags;
-    }
-
-    @Override
-    public Sequence<String> getSkylarkUserLinkFlags() {
-      return StarlarkList.immutableCopyOf(
-          getUserLinkFlags().stream()
-              .map(LinkOptions::get)
-              .flatMap(Collection::stream)
-              .collect(ImmutableList.toImmutableList()));
-    }
-
-    public List<Artifact> getNonCodeInputs() {
-      return nonCodeInputs;
-    }
-
-    @Override
-    public Sequence<Artifact> getSkylarkNonCodeInputs() {
-      return StarlarkList.immutableCopyOf(getNonCodeInputs());
-    }
-
-    public List<Linkstamp> getLinkstamps() {
-      return linkstamps;
     }
 
     public static Builder builder() {
@@ -388,13 +337,8 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   }
 
   @Override
-  public SkylarkNestedSet getSkylarkLinkerInputs() {
-    return SkylarkNestedSet.of(LinkerInput.class, linkerInputs);
-  }
-
-  @Override
-  public Sequence<String> getSkylarkUserLinkFlags() {
-    return StarlarkList.immutableCopyOf(getFlattenedUserLinkFlags());
+  public SkylarkList<String> getSkylarkUserLinkFlags() {
+    return SkylarkList.createImmutable(getFlattenedUserLinkFlags());
   }
 
   @Override
@@ -403,7 +347,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
     if (thread.getSemantics().incompatibleDepsetForLibrariesToLinkGetter()) {
       return SkylarkNestedSet.of(LibraryToLink.class, getLibraries());
     } else {
-      return StarlarkList.immutableCopyOf(getLibraries().toList());
+      return SkylarkList.createImmutable(getLibraries().toList());
     }
   }
 
@@ -415,7 +359,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   public NestedSet<LinkOptions> getUserLinkFlags() {
     NestedSetBuilder<LinkOptions> userLinkFlags = NestedSetBuilder.linkOrder();
     for (LinkerInput linkerInput : linkerInputs) {
-      userLinkFlags.addAll(linkerInput.getUserLinkFlags());
+      userLinkFlags.addAll(linkerInput.userLinkFlags);
     }
     return userLinkFlags.build();
   }
@@ -430,7 +374,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   public NestedSet<Linkstamp> getLinkstamps() {
     NestedSetBuilder<Linkstamp> linkstamps = NestedSetBuilder.linkOrder();
     for (LinkerInput linkerInput : linkerInputs) {
-      linkstamps.addAll(linkerInput.getLinkstamps());
+      linkstamps.addAll(linkerInput.linkstamps);
     }
     return linkstamps.build();
   }
@@ -438,7 +382,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   public NestedSet<Artifact> getNonCodeInputs() {
     NestedSetBuilder<Artifact> nonCodeInputs = NestedSetBuilder.linkOrder();
     for (LinkerInput linkerInput : linkerInputs) {
-      nonCodeInputs.addAll(linkerInput.getNonCodeInputs());
+      nonCodeInputs.addAll(linkerInput.nonCodeInputs);
     }
     return nonCodeInputs.build();
   }
