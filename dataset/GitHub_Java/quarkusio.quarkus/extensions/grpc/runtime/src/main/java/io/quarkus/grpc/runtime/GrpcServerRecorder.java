@@ -33,7 +33,6 @@ import io.grpc.ServerInterceptors;
 import io.grpc.ServerMethodDefinition;
 import io.grpc.ServerServiceDefinition;
 import io.quarkus.arc.Arc;
-import io.quarkus.arc.Subclass;
 import io.quarkus.grpc.runtime.config.GrpcConfiguration;
 import io.quarkus.grpc.runtime.config.GrpcServerConfiguration;
 import io.quarkus.grpc.runtime.config.GrpcServerNettyConfig;
@@ -68,11 +67,6 @@ public class GrpcServerRecorder {
     private Map<String, List<String>> blockingMethodsPerService = Collections.emptyMap();
 
     private static volatile DevModeWrapper devModeWrapper;
-    private static volatile List<GrpcServiceDefinition> services = Collections.emptyList();
-
-    public static List<GrpcServiceDefinition> getServices() {
-        return services;
-    }
 
     public void initializeGrpcServer(RuntimeValue<Vertx> vertxSupplier,
             GrpcConfiguration cfg,
@@ -248,15 +242,10 @@ public class GrpcServerRecorder {
             ServerServiceDefinition definition = service.bindService();
             definitions.add(new GrpcServiceDefinition(service, definition));
         }
-
-        // Set the last service definitions in use, referenced in the Dev UI
-        GrpcServerRecorder.services = definitions;
-
         return definitions;
     }
 
-    public static final class GrpcServiceDefinition {
-
+    private static class GrpcServiceDefinition {
         public final BindableService service;
         public final ServerServiceDefinition definition;
 
@@ -266,11 +255,9 @@ public class GrpcServerRecorder {
         }
 
         public String getImplementationClassName() {
-            if (service instanceof Subclass) {
-                // All intercepted services are represented by a generated subclass 
-                return service.getClass().getSuperclass().getName();
-            }
-            return service.getClass().getName();
+            // all grpc services have a io.quarkus.grpc.runtime.supports.context.GrpcRequestContextCdiInterceptor
+            // this means Arc passes a subclass to grpc internals. That's why we take superclass here
+            return service.getClass().getSuperclass().getName();
         }
     }
 
