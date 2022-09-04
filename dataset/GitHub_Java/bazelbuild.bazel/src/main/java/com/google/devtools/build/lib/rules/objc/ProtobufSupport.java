@@ -253,7 +253,7 @@ final class ProtobufSupport {
    * Returns the ObjcProvider for this target, or Optional.absent() if there were no protos to
    * generate.
    */
-  public Optional<ObjcProvider> getObjcProvider() throws InterruptedException {
+  public Optional<ObjcProvider> getObjcProvider() {
     if (inputsToOutputsMap.isEmpty()) {
       return Optional.absent();
     }
@@ -398,8 +398,7 @@ final class ProtobufSupport {
   }
 
   private ObjcCommon getCommon(
-      IntermediateArtifacts intermediateArtifacts, CompilationArtifacts compilationArtifacts)
-      throws InterruptedException {
+      IntermediateArtifacts intermediateArtifacts, CompilationArtifacts compilationArtifacts) {
     ObjcCommon.Builder commonBuilder =
         new ObjcCommon.Builder(ruleContext)
             .setIntermediateArtifacts(intermediateArtifacts)
