@@ -17,15 +17,13 @@ package com.google.devtools.build.buildjar;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Locale.ENGLISH;
 
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.Iterables;
+import com.google.common.io.MoreFiles;
+import com.google.common.io.RecursiveDeleteOption;
 import com.google.devtools.build.buildjar.jarhelper.JarCreator;
 import com.google.devtools.build.buildjar.javac.JavacOptions;
 import com.google.devtools.build.buildjar.proto.JavaCompilation.Manifest;
-import com.google.devtools.build.buildjar.resourcejar.ResourceJarBuilder;
-import com.google.devtools.build.buildjar.resourcejar.ResourceJarOptions;
 import com.google.devtools.build.lib.view.proto.Deps;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
@@ -53,7 +51,6 @@ import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
 import javax.tools.JavaCompiler.CompilationTask;
 import javax.tools.JavaFileObject;
-import javax.tools.JavaFileObject.Kind;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
@@ -67,7 +64,6 @@ import javax.tools.ToolProvider;
  * <ul>
  *   <li>Error Prone
  *   <li>strict Java deps
- *   <li>header compilation
  *   <li>Android desugaring
  *   <li>coverage instrumentation
  *   <li>genclass handling for IDEs
@@ -81,7 +77,7 @@ public class VanillaJavaBuilder implements Closeable {
   private FileSystem getJarFileSystem(Path sourceJar) throws IOException {
     FileSystem fs = filesystems.get(sourceJar);
     if (fs == null) {
-      filesystems.put(sourceJar, fs = FileSystems.newFileSystem(sourceJar, null));
+      filesystems.put(sourceJar, fs = FileSystems.newFileSystem(sourceJar, (ClassLoader) null));
     }
     return fs;
   }
@@ -105,15 +101,21 @@ public class VanillaJavaBuilder implements Closeable {
         if (request == null) {
           break;
         }
+        VanillaJavaBuilderResult result;
         try (VanillaJavaBuilder builder = new VanillaJavaBuilder()) {
-          VanillaJavaBuilderResult result = builder.run(request.getArgumentsList());
-          WorkResponse response =
-              WorkResponse.newBuilder()
-                  .setOutput(result.output())
-                  .setExitCode(result.ok() ? 0 : 1)
-                  .build();
-          response.writeDelimitedTo(System.out);
+          result = builder.run(request.getArgumentsList());
         }
+        /* As soon as we write the response, bazel will start cleaning
+         * up the working tree. The VanillaJavaBuilder must be fully
+         * closed at this point.
+         */
+        WorkResponse response =
+            WorkResponse.newBuilder()
+                .setOutput(result.output())
+                .setExitCode(result.ok() ? 0 : 1)
+                .setRequestId(request.getRequestId())
+                .build();
+        response.writeDelimitedTo(System.out);
         System.out.flush();
       } catch (IOException e) {
         e.printStackTrace();
@@ -154,29 +156,38 @@ public class VanillaJavaBuilder implements Closeable {
     DiagnosticCollector<JavaFileObject> diagnosticCollector = new DiagnosticCollector<>();
     StringWriter output = new StringWriter();
     JavaCompiler javaCompiler = ToolProvider.getSystemJavaCompiler();
-    StandardJavaFileManager fileManager =
-        javaCompiler.getStandardFileManager(diagnosticCollector, ENGLISH, UTF_8);
-    setLocations(optionsParser, fileManager);
-    ImmutableList<JavaFileObject> sources = getSources(optionsParser, fileManager);
+    Path tempDir = Files.createTempDirectory("_tmp");
+    Path nativeHeaderDir = tempDir.resolve("native_headers");
+    Files.createDirectories(nativeHeaderDir);
+    Path sourceGenDir = tempDir.resolve("sources");
+    Files.createDirectories(sourceGenDir);
+    Path classDir = tempDir.resolve("classes");
+    Files.createDirectories(classDir);
     boolean ok;
-    if (sources.isEmpty()) {
-      ok = true;
-    } else {
-      CompilationTask task =
-          javaCompiler.getTask(
-              new PrintWriter(output, true),
-              fileManager,
-              diagnosticCollector,
-              JavacOptions.removeBazelSpecificFlags(optionsParser.getJavacOpts()),
-              ImmutableList.<String>of() /*classes*/,
-              sources);
-      setProcessors(optionsParser, fileManager, task);
-      ok = task.call();
+    try (StandardJavaFileManager fileManager =
+        javaCompiler.getStandardFileManager(diagnosticCollector, ENGLISH, UTF_8)) {
+      setLocations(optionsParser, fileManager, nativeHeaderDir, sourceGenDir, classDir);
+      ImmutableList<JavaFileObject> sources = getSources(optionsParser, fileManager);
+      if (sources.isEmpty()) {
+        ok = true;
+      } else {
+        CompilationTask task =
+            javaCompiler.getTask(
+                new PrintWriter(output, true),
+                fileManager,
+                diagnosticCollector,
+                JavacOptions.removeBazelSpecificFlags(optionsParser.getJavacOpts()),
+                ImmutableList.<String>of() /*classes*/,
+                sources);
+        setProcessors(optionsParser, fileManager, task);
+        ok = task.call();
+      }
     }
     if (ok) {
-      writeOutput(optionsParser);
+      writeOutput(classDir, optionsParser);
+      writeNativeHeaderOutput(optionsParser, nativeHeaderDir);
     }
-    writeGeneratedSourceOutput(optionsParser);
+    writeGeneratedSourceOutput(sourceGenDir, optionsParser);
     // the jdeps output doesn't include any information about dependencies, but Bazel still expects
     // the file to be created
     if (optionsParser.getOutputDepsProtoFile() != null) {
@@ -198,11 +209,21 @@ public class VanillaJavaBuilder implements Closeable {
     }
 
     for (Diagnostic<? extends JavaFileObject> diagnostic : diagnosticCollector.getDiagnostics()) {
-      StringBuilder message = new StringBuilder(diagnostic.getSource().getName());
-      if (diagnostic.getLineNumber() != -1) {
-        message.append(':').append(diagnostic.getLineNumber());
+      String code = diagnostic.getCode();
+      if (code.startsWith("compiler.note.deprecated")
+          || code.startsWith("compiler.note.unchecked")
+          || code.equals("compiler.warn.sun.proprietary")) {
+        continue;
       }
-      message.append(": ").append(diagnostic.getKind().toString().toLowerCase(ENGLISH));
+      StringBuilder message = new StringBuilder();
+      if (diagnostic.getSource() != null) {
+        message.append(diagnostic.getSource().getName());
+        if (diagnostic.getLineNumber() != -1) {
+          message.append(':').append(diagnostic.getLineNumber());
+        }
+        message.append(": ");
+      }
+      message.append(diagnostic.getKind().toString().toLowerCase(ENGLISH));
       message.append(": ").append(diagnostic.getMessage(ENGLISH)).append(System.lineSeparator());
       output.write(message.toString());
     }
@@ -234,24 +255,33 @@ public class VanillaJavaBuilder implements Closeable {
   }
 
   /** Sets the compilation search paths and output directories. */
-  private static void setLocations(OptionsParser optionsParser, StandardJavaFileManager fileManager)
+  private static void setLocations(
+      OptionsParser optionsParser,
+      StandardJavaFileManager fileManager,
+      Path nativeHeaderDir,
+      Path sourceGenDir,
+      Path classDir)
       throws IOException {
     fileManager.setLocation(StandardLocation.CLASS_PATH, toFiles(optionsParser.getClassPath()));
-    fileManager.setLocation(
-        StandardLocation.PLATFORM_CLASS_PATH,
-        Iterables.concat(
-            toFiles(optionsParser.getBootClassPath()), toFiles(optionsParser.getExtdir())));
+    Iterable<File> bootClassPath = toFiles(optionsParser.getBootClassPath());
+    // The bootclasspath may legitimately be empty if --release is being used.
+    if (!Iterables.isEmpty(bootClassPath)) {
+      fileManager.setLocation(StandardLocation.PLATFORM_CLASS_PATH, bootClassPath);
+    }
     fileManager.setLocation(
         StandardLocation.ANNOTATION_PROCESSOR_PATH, toFiles(optionsParser.getProcessorPath()));
-    if (optionsParser.getSourceGenDir() != null) {
-      Path sourceGenDir = Paths.get(optionsParser.getSourceGenDir());
-      Files.createDirectories(sourceGenDir);
-      fileManager.setLocation(
-          StandardLocation.SOURCE_OUTPUT, ImmutableList.of(sourceGenDir.toFile()));
+    setOutputLocation(fileManager, StandardLocation.SOURCE_OUTPUT, sourceGenDir);
+    if (optionsParser.getNativeHeaderOutput() != null) {
+      setOutputLocation(fileManager, StandardLocation.NATIVE_HEADER_OUTPUT, nativeHeaderDir);
     }
-    Path classDir = Paths.get(optionsParser.getClassDir());
-    Files.createDirectories(classDir);
-    fileManager.setLocation(StandardLocation.CLASS_OUTPUT, ImmutableList.of(classDir.toFile()));
+    setOutputLocation(fileManager, StandardLocation.CLASS_OUTPUT, classDir);
+  }
+
+  private static void setOutputLocation(
+      StandardJavaFileManager fileManager, StandardLocation location, Path path)
+      throws IOException {
+    createOutputDirectory(path);
+    fileManager.setLocation(location, ImmutableList.of(path.toFile()));
   }
 
   /** Sets the compilation's annotation processors. */
@@ -259,7 +289,7 @@ public class VanillaJavaBuilder implements Closeable {
       OptionsParser optionsParser, StandardJavaFileManager fileManager, CompilationTask task) {
     ClassLoader processorLoader =
         fileManager.getClassLoader(StandardLocation.ANNOTATION_PROCESSOR_PATH);
-    Builder<Processor> processors = ImmutableList.builder();
+    ImmutableList.Builder<Processor> processors = ImmutableList.builder();
     for (String processor : optionsParser.getProcessorNames()) {
       try {
         processors.add(
@@ -272,43 +302,48 @@ public class VanillaJavaBuilder implements Closeable {
   }
 
   /** Writes a jar containing any sources generated by annotation processors. */
-  private static void writeGeneratedSourceOutput(OptionsParser optionsParser) throws IOException {
+  private static void writeGeneratedSourceOutput(Path sourceGenDir, OptionsParser optionsParser)
+      throws IOException {
     if (optionsParser.getGeneratedSourcesOutputJar() == null) {
       return;
     }
     JarCreator jar = new JarCreator(optionsParser.getGeneratedSourcesOutputJar());
     jar.setNormalize(true);
     jar.setCompression(optionsParser.compressJar());
-    jar.addDirectory(optionsParser.getSourceGenDir());
+    jar.addDirectory(sourceGenDir);
     jar.execute();
+  }
+
+  private static void writeNativeHeaderOutput(OptionsParser optionsParser, Path nativeHeaderDir)
+      throws IOException {
+    if (optionsParser.getNativeHeaderOutput() == null) {
+      return;
+    }
+    JarCreator jar = new JarCreator(optionsParser.getNativeHeaderOutput());
+    try {
+      jar.setNormalize(true);
+      jar.setCompression(optionsParser.compressJar());
+      jar.addDirectory(nativeHeaderDir);
+    } finally {
+      jar.execute();
+    }
   }
 
   /** Writes the class output jar, including any resource entries. */
-  private static void writeOutput(OptionsParser optionsParser) throws IOException {
+  private static void writeOutput(Path classDir, OptionsParser optionsParser) throws IOException {
     JarCreator jar = new JarCreator(optionsParser.getOutputJar());
     jar.setNormalize(true);
     jar.setCompression(optionsParser.compressJar());
-    jar.addDirectory(optionsParser.getClassDir());
-    // TODO(cushon): kill this once resource jar creation is decoupled from JavaBuilder
-    try (ResourceJarBuilder resourceBuilder =
-        new ResourceJarBuilder(
-            ResourceJarOptions.builder()
-                .setMessages(ImmutableList.copyOf(optionsParser.getMessageFiles()))
-                .setResourceJars(ImmutableList.copyOf(optionsParser.getResourceJars()))
-                .setResources(ImmutableList.copyOf(optionsParser.getResourceFiles()))
-                .setClasspathResources(ImmutableList.copyOf(optionsParser.getRootResourceFiles()))
-                .build())) {
-      resourceBuilder.build(jar);
-    }
+    jar.addDirectory(classDir);
     jar.execute();
   }
 
-  private static ImmutableList<File> toFiles(String classPath) {
+  private static ImmutableList<File> toFiles(List<String> classPath) {
     if (classPath == null) {
       return ImmutableList.of();
     }
     ImmutableList.Builder<File> files = ImmutableList.builder();
-    for (String path : Splitter.on(File.pathSeparatorChar).split(classPath)) {
+    for (String path : classPath) {
       files.add(new File(path));
     }
     return files.build();
@@ -337,5 +372,16 @@ public class VanillaJavaBuilder implements Closeable {
     public CharSequence getCharContent(boolean ignoreEncodingErrors) throws IOException {
       return new String(Files.readAllBytes(path), UTF_8);
     }
+  }
+
+  private static void createOutputDirectory(Path dir) throws IOException {
+    if (Files.exists(dir)) {
+      try {
+        MoreFiles.deleteRecursively(dir, RecursiveDeleteOption.ALLOW_INSECURE);
+      } catch (IOException e) {
+        throw new IOException("Cannot clean output directory '" + dir + "'", e);
+      }
+    }
+    Files.createDirectories(dir);
   }
 }
