@@ -342,7 +342,7 @@ public class GrpcRemoteExecutionClientTest {
         return new StreamObserver<WriteRequest>() {
           @Override
           public void onNext(WriteRequest request) {
-            assertThat(request.getResourceName()).contains(DIGEST_UTIL.toString(digest));
+            assertThat(request.getResourceName()).contains(digest.getHash());
             assertThat(request.getFinishWrite()).isTrue();
             assertThat(request.getData().toByteArray()).isEqualTo(data);
             responseObserver.onNext(
@@ -774,8 +774,7 @@ public class GrpcRemoteExecutionClientTest {
         new ByteStreamImplBase() {
           @Override
           public void read(ReadRequest request, StreamObserver<ReadResponse> responseObserver) {
-            assertThat(request.getResourceName().contains(DIGEST_UTIL.toString(stdOutDigest)))
-                .isTrue();
+            assertThat(request.getResourceName().contains(stdOutDigest.getHash())).isTrue();
             responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
           }
         });
@@ -786,7 +785,7 @@ public class GrpcRemoteExecutionClientTest {
     } catch (SpawnExecException expected) {
       assertThat(expected.getSpawnResult().status())
           .isEqualTo(SpawnResult.Status.REMOTE_CACHE_FAILED);
-      assertThat(expected).hasMessageThat().contains(DIGEST_UTIL.toString(stdOutDigest));
+      assertThat(expected).hasMessageThat().contains(stdOutDigest.getHash());
       // Ensure we also got back the stack trace.
       assertThat(expected).hasMessageThat()
           .contains("GrpcRemoteExecutionClientTest.passCacheMissErrorWithStackTrace");
@@ -834,8 +833,7 @@ public class GrpcRemoteExecutionClientTest {
         new ByteStreamImplBase() {
           @Override
           public void read(ReadRequest request, StreamObserver<ReadResponse> responseObserver) {
-            assertThat(request.getResourceName().contains(DIGEST_UTIL.toString(stdOutDigest)))
-                .isTrue();
+            assertThat(request.getResourceName().contains(stdOutDigest.getHash())).isTrue();
             responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
           }
         });
@@ -846,7 +844,7 @@ public class GrpcRemoteExecutionClientTest {
     } catch (SpawnExecException expected) {
       assertThat(expected.getSpawnResult().status())
           .isEqualTo(SpawnResult.Status.REMOTE_CACHE_FAILED);
-      assertThat(expected).hasMessageThat().contains(DIGEST_UTIL.toString(stdOutDigest));
+      assertThat(expected).hasMessageThat().contains(stdOutDigest.getHash());
       // Ensure we also got back the stack trace.
       assertThat(expected)
           .hasMessageThat()
