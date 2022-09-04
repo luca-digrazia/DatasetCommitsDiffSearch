@@ -137,7 +137,7 @@ public class KogitoAssetsProcessor {
     }
 
     @BuildStep
-    public RuntimeInitializedClassBuildItem runtimeInitializedClass() {
+    public RuntimeInitializedClassBuildItem init() {
         return new RuntimeInitializedClassBuildItem(ClassFieldAccessorFactory.class.getName());
     }
 
