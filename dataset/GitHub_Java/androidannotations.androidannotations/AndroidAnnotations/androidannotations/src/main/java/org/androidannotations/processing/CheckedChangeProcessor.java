@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,6 +15,7 @@
  */
 package org.androidannotations.processing;
 
+import java.lang.annotation.Annotation;
 import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
@@ -34,6 +35,11 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
+/**
+ * 
+ * @author Rostislav Chekan
+ * 
+ */
 public class CheckedChangeProcessor extends AbstractListenerProcessor {
 
 	public CheckedChangeProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
@@ -41,8 +47,8 @@ public class CheckedChangeProcessor extends AbstractListenerProcessor {
 	}
 
 	@Override
-	public String getTarget() {
-		return CheckedChange.class.getName();
+	public Class<? extends Annotation> getTarget() {
+		return CheckedChange.class;
 	}
 
 	@Override
@@ -81,7 +87,7 @@ public class CheckedChangeProcessor extends AbstractListenerProcessor {
 	}
 
 	@Override
-	protected JExpression castWidget(JInvocation view) {
+	protected JExpression castWidget(JVar view) {
 		return JExpr.cast(classes.COMPOUND_BUTTON, view);
 	}
 }

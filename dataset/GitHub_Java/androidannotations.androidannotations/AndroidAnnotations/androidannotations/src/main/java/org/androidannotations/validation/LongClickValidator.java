@@ -29,6 +29,10 @@ import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.rclass.IRClass;
 import org.androidannotations.rclass.IRClass.Res;
 
+/**
+ * @author Benjamin Fellous
+ * @author Pierre-Yves Ricau
+ */
 public class LongClickValidator implements ElementValidator {
 
 	private IdValidatorHelper validatorHelper;
@@ -62,7 +66,7 @@ public class LongClickValidator implements ElementValidator {
 
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
-		validatorHelper.zeroOrOneViewParameters(executableElement, valid);
+		validatorHelper.param.zeroOrOneViewParameter(executableElement, valid);
 
 		return valid.isValid();
 	}

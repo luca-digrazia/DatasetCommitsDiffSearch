@@ -30,6 +30,7 @@ import org.androidannotations.rclass.IRClass;
 import org.androidannotations.rclass.IRClass.Res;
 
 /**
+ * @author Pierre-Yves Ricau
  */
 public class OptionsItemValidator implements ElementValidator {
 
@@ -69,7 +70,7 @@ public class OptionsItemValidator implements ElementValidator {
 
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
-		validatorHelper.zeroOrOneMenuItemParameters(executableElement, valid);
+		validatorHelper.param.zeroOrOneMenuItemParameter(executableElement, valid);
 
 		return valid.isValid();
 	}
