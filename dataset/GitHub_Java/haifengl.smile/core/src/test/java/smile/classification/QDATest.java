@@ -22,10 +22,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.BreastCancer;
 import smile.data.Iris;
-import smile.math.MathEx;
-import smile.validation.CrossValidation;
 import smile.validation.Error;
 import smile.validation.LOOCV;
 
@@ -56,29 +53,13 @@ public class QDATest {
     public void tearDown() {
     }
 
-    @Test(expected = Test.None.class)
-    public void testIris() throws Exception {
+    @Test
+    public void testIris() {
         System.out.println("Iris");
 
         int[] prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> QDA.fit(x, y));
-        int error = Error.of(Iris.y, prediction);
+        int error = Error.apply(Iris.y, prediction);
         System.out.println("Error = " + error);
         assertEquals(4, error);
-
-        QDA model = QDA.fit(Iris.x, Iris.y);
-        java.nio.file.Path temp = smile.data.Serialize.write(model);
-        smile.data.Serialize.read(temp);
-    }
-
-    @Test
-    public void testBreastCancer() {
-        System.out.println("Breast Cancer");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y, (x, y) -> QDA.fit(x, y));
-        int error = Error.of(BreastCancer.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(24, error);
     }
 }

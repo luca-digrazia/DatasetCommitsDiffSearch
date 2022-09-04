@@ -22,10 +22,11 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.*;
-import smile.math.MathEx;
-import smile.validation.*;
+import smile.data.Iris;
+import smile.data.USPS;
 import smile.validation.Error;
+import smile.validation.LOOCV;
+import smile.validation.Validation;
 
 import static org.junit.Assert.*;
 
@@ -59,48 +60,21 @@ public class LDATest {
         System.out.println("Iris");
 
         int[] prediction = LOOCV.classification(Iris.x, Iris.y, (x, y) -> LDA.fit(x, y));
-        int error = Error.of(Iris.y, prediction);
+        int error = Error.apply(Iris.y, prediction);
         System.out.println("Error = " + error);
         assertEquals(22, error);
     }
 
     @Test
-    public void testPenDigits() {
-        System.out.println("Pen Digits");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, PenDigits.x, PenDigits.y, (x, y) -> LDA.fit(x, y));
-        int error = Error.of(PenDigits.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(884, error);
-    }
-
-    @Test
-    public void testBreastCancer() {
-        System.out.println("Breast Cancer");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        int[] prediction = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y, (x, y) -> LDA.fit(x, y));
-        int error = Error.of(BreastCancer.y, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(42, error);
-    }
-
-    @Test(expected = Test.None.class)
-    public void testUSPS() throws Exception {
+    public void testUSPS() {
         System.out.println("USPS");
 
         LDA model = LDA.fit(USPS.x, USPS.y);
 
         int[] prediction = Validation.test(model, USPS.testx);
-        int error = Error.of(USPS.testy, prediction);
+        int error = Error.apply(USPS.testy, prediction);
 
         System.out.println("Error = " + error);
         assertEquals(256, error);
-
-        java.nio.file.Path temp = smile.data.Serialize.write(model);
-        smile.data.Serialize.read(temp);
     }
 }

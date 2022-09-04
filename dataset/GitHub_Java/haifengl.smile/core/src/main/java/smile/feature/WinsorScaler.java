@@ -20,6 +20,7 @@ package smile.feature;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import smile.data.DataFrame;
+import smile.data.type.DataType;
 import smile.data.type.StructType;
 
 /**

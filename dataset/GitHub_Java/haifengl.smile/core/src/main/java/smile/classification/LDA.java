@@ -17,13 +17,9 @@
 
 package smile.classification;
 
-import java.util.Properties;
-import smile.data.DataFrame;
-import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.EVD;
-import smile.util.Strings;
 
 /**
  * Linear discriminant analysis. LDA is based on the Bayes decision theory
@@ -92,7 +88,7 @@ public class LDA implements SoftClassifier<double[]> {
      */
     private final DenseMatrix scaling;
     /**
-     * The class label encoder.
+     * The class label encoder;
      */
     private final ClassLabel labels;
 
@@ -136,21 +132,23 @@ public class LDA implements SoftClassifier<double[]> {
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
      */
+    /*
     public static LDA fit(Formula formula, DataFrame data) {
         return fit(formula, data, new Properties());
     }
-
+*/
     /**
      * Learns linear discriminant analysis.
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
      */
+    /*
     public static LDA fit(Formula formula, DataFrame data, Properties prop) {
-        double[][] x = formula.x(data).toArray();
-        int[] y = formula.y(data).toIntArray();
-        return fit(x, y, prop);
+        double tol = Double.valueOf(prop.getProperty("smile.lda.tolerance", "1E-4"));
+        return fit(formula, data, null, tol);
     }
+     */
 
     /**
      * Learns linear discriminant analysis.
@@ -159,17 +157,6 @@ public class LDA implements SoftClassifier<double[]> {
      */
     public static LDA fit(double[][] x, int[] y) {
         return fit(x, y, null, 1E-4);
-    }
-
-    /**
-     * Learns linear discriminant analysis.
-     * @param x training samples.
-     * @param y training labels.
-     */
-    public static LDA fit(double[][] x, int[] y, Properties prop) {
-        double[] priori = Strings.parseDoubleArray(prop.getProperty("smile.lda.priori"));
-        double tol = Double.valueOf(prop.getProperty("smile.lda.tolerance", "1E-4"));
-        return fit(x, y, priori, tol);
     }
 
     /**
@@ -195,7 +182,10 @@ public class LDA implements SoftClassifier<double[]> {
             }
         }
 
-        return new LDA(da.priori, da.mu, eigen.getEigenValues(), eigen.getEigenVectors(), da.labels);
+        da.St = St;
+        da.StEigen = eigen;
+
+        return new LDA(da.priori, da.mu, da.StEigen.getEigenValues(), da.StEigen.getEigenVectors(), da.labels);
     }
 
     /**
@@ -207,13 +197,17 @@ public class LDA implements SoftClassifier<double[]> {
 
     @Override
     public int predict(double[] x) {
-        return predict(x, new double[k]);
+        return predict(x, null);
     }
 
     @Override
     public int predict(double[] x, double[] posteriori) {
         if (x.length != p) {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, p));
+        }
+
+        if (posteriori == null) {
+            posteriori = new double[k];
         }
 
         double[] d = new double[p];

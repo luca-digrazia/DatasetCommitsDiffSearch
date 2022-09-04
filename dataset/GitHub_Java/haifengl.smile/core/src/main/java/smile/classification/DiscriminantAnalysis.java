@@ -19,6 +19,7 @@ package smile.classification;
 
 import smile.math.MathEx;
 import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.EVD;
 import smile.math.matrix.Matrix;
 
 /** Common functions for various discriminant analysis. */
@@ -37,6 +38,14 @@ class DiscriminantAnalysis {
     double[] mean;
     /** THe mean vector per class. */
     double[][] mu;
+    /** The total covariance matrix. */
+    DenseMatrix St;
+    /** The eigen decomposition of St. */
+    EVD StEigen;
+    /** The covaraince matrix of each class. */
+    DenseMatrix[] cov = new DenseMatrix[k];
+    /** The eigen decomposition of the covaraince matrix of each class. */
+    EVD[] covEigen;
 
     /**
      * Constructor.
@@ -162,7 +171,7 @@ class DiscriminantAnalysis {
     }
 
     /** Computes the covariance matrix of each class. */
-    public static DenseMatrix[] cov(double[][] x, int[] y, double[][] mu, int[] ni) {
+    public static DenseMatrix[] cov(double[][] x, int[] y, double[][] mu, int[] ni, double tol) {
         int n = x.length;
         int p = x[0].length;
         int k = mu.length;
@@ -189,6 +198,7 @@ class DiscriminantAnalysis {
             }
         }
 
+        tol = tol * tol;
         for (int i = 0; i < k; i++) {
             DenseMatrix v = cov[i];
             int m = ni[i] - 1;

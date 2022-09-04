@@ -90,13 +90,13 @@ public class RDA extends QDA {
             throw new IllegalArgumentException("Invalid regularization factor: " + alpha);
         }
 
-        DiscriminantAnalysis da = DiscriminantAnalysis.fit(x, y, priori, tol);
+        DiscriminantAnalysis da = DiscriminantAnalysis.rda(x, y, priori, tol);
 
         int k = da.k;
         int p = da.mean.length;
 
         DenseMatrix St = DiscriminantAnalysis.St(x, da.mean, k, tol);
-        DenseMatrix[] cov = DiscriminantAnalysis.cov(x, y, da.mu, da.ni);
+        DenseMatrix[] cov = DiscriminantAnalysis.cov(x, y, da.mu, da.ni, tol);
 
         double[][] eigen = new double[k][];
         DenseMatrix[] scaling = new DenseMatrix[k];

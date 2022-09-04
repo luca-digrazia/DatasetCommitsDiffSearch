@@ -27,7 +27,6 @@ import java.util.concurrent.ForkJoinPool;
 import smile.sort.QuickSelect;
 import smile.sort.QuickSort;
 import smile.sort.Sort;
-import smile.util.SparseArray;
 
 /**
  * Extra basic numeric functions. The following functions are
@@ -673,7 +672,7 @@ public class MathEx {
      * the larger input components will correspond to larger probabilities.
      *
      * @param posteriori the input/output vector.
-     * @return the index of largest posteriori probability.
+     * @return the index of largest component.
      */
     public static int softmax(double[] posteriori) {
         return softmax(posteriori, posteriori.length);
@@ -691,29 +690,29 @@ public class MathEx {
      * so that they can be interpreted as probabilities. Furthermore,
      * the larger input components will correspond to larger probabilities.
      *
-     * @param x the input/output vector.
+     * @param posteriori the input/output vector.
      * @param k uses only first k components of input vector.
-     * @return the index of largest posteriori probability.
+     * @return the index of largest component.
      */
-    public static int softmax(double[] x, int k) {
+    public static int softmax(double[] posteriori, int k) {
         int y = -1;
         double max = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < k; i++) {
-            if (x[i] > max) {
-                max = x[i];
+            if (posteriori[i] > max) {
+                max = posteriori[i];
                 y = i;
             }
         }
 
         double Z = 0.0;
         for (int i = 0; i < k; i++) {
-            double out = Math.exp(x[i] - max);
-            x[i] = out;
+            double out = Math.exp(posteriori[i] - max);
+            posteriori[i] = out;
             Z += out;
         }
 
         for (int i = 0; i < k; i++) {
-            x[i] /= Z;
+            posteriori[i] /= Z;
         }
 
         return y;
