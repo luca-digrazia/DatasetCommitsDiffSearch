@@ -15,8 +15,10 @@
  *******************************************************************************/
 package smile.classification;
 
-import smile.math.SparseArray;
 import smile.stat.distribution.Distribution;
+
+import java.io.Serializable;
+import smile.math.SparseArray;
 
 /**
  * Naive Bayes classifier. A naive Bayes classifier is a simple probabilistic
@@ -82,7 +84,7 @@ import smile.stat.distribution.Distribution;
  * 
  * @author Haifeng Li
  */
-public class NaiveBayes implements OnlineClassifier<double[]>, SoftClassifier<double[]> {
+public class NaiveBayes implements OnlineClassifier<double[]>, SoftClassifier<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
