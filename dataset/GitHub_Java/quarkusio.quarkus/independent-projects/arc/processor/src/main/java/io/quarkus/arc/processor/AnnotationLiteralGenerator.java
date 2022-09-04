@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
@@ -252,24 +268,13 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
     }
 
     static String generatedSharedName(DotName annotationName) {
-        // when the annotation is a java.lang annotation we need to use a different package in which to generate the literal
-        // otherwise a security exception will be thrown when the literal is loaded
-        String nameToUse = isJavaLang(annotationName.toString())
-                ? AbstractGenerator.DEFAULT_PACKAGE + annotationName.withoutPackagePrefix()
-                : annotationName.toString();
-
         // com.foo.MyQualifier -> com.foo.MyQualifier1_Shared_AnnotationLiteral
-        return nameToUse + SHARED_SUFFIX + ANNOTATION_LITERAL_SUFFIX;
-    }
-
-    private static boolean isJavaLang(String s) {
-        return s.startsWith("java.lang");
+        return annotationName + SHARED_SUFFIX + ANNOTATION_LITERAL_SUFFIX;
     }
 
     static String generatedLocalName(String targetPackage, String simpleName, String hash) {
         // com.foo.MyQualifier -> com.bar.MyQualifier_somehashvalue_AnnotationLiteral
-        return (isJavaLang(targetPackage) ? AbstractGenerator.DEFAULT_PACKAGE : targetPackage) + "." + simpleName + hash
-                + AnnotationLiteralGenerator.ANNOTATION_LITERAL_SUFFIX;
+        return targetPackage + "." + simpleName + hash + AnnotationLiteralGenerator.ANNOTATION_LITERAL_SUFFIX;
     }
 
 }
