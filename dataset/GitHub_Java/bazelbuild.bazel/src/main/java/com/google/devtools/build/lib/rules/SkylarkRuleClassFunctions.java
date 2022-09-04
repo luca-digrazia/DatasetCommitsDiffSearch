@@ -477,13 +477,7 @@ public class SkylarkRuleClassFunctions {
           @Param(name = "required_aspect_providers",
               type = SkylarkList.class,
               defaultValue = "[]",
-              // todo(dslomov): Document once it works.
-              doc = "<not available>"
-          ),
-          @Param(name = "provides",
-              type = SkylarkList.class,
-              defaultValue = "[]",
-              // todo(dslomov): Document once it works.
+              // todo(dslomov): document once it works.
               doc = "<not available>"
           ),
           @Param(
@@ -515,7 +509,6 @@ public class SkylarkRuleClassFunctions {
             SkylarkList attributeAspects,
             Object attrs,
             SkylarkList requiredAspectProvidersArg,
-            SkylarkList providesArg,
             SkylarkList fragments,
             SkylarkList hostFragments,
             FuncallExpression ast,
@@ -593,7 +586,6 @@ public class SkylarkRuleClassFunctions {
               attrAspects.build(),
               attributes.build(),
               SkylarkAttr.buildProviderPredicate(requiredAspectProvidersArg),
-              ImmutableList.copyOf(STRING_LIST.convert(providesArg, "provides")),
               requiredParams.build(),
               ImmutableSet.copyOf(fragments.getContents(String.class, "fragments")),
               ImmutableSet.copyOf(hostFragments.getContents(String.class, "host_fragments")),
