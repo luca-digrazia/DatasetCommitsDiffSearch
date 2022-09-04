@@ -4,18 +4,16 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.AppenderBase;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Queues;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 
 public class AsyncAppender extends AppenderBase<ILoggingEvent> implements Runnable {
-    private static final int BATCH_SIZE = 1000;
-
     public static Appender<ILoggingEvent> wrap(Appender<ILoggingEvent> delegate) {
-        final AsyncAppender appender = new AsyncAppender(delegate, BATCH_SIZE);
+        final AsyncAppender appender = new AsyncAppender(delegate, 1000);
         appender.start();
         return appender;
     }
@@ -34,8 +32,8 @@ public class AsyncAppender extends AppenderBase<ILoggingEvent> implements Runnab
 
     public AsyncAppender(Appender<ILoggingEvent> delegate, int batchSize) {
         this.delegate = delegate;
-        this.queue = Queues.newLinkedBlockingQueue();
-        this.batch = Lists.newArrayListWithCapacity(batchSize);
+        this.queue = new LinkedBlockingQueue<ILoggingEvent>();
+        this.batch = Lists.newArrayListWithExpectedSize(batchSize);
         this.batchSize = batchSize;
         this.dispatcher = THREAD_FACTORY.newThread(this);
         setContext(delegate.getContext());
@@ -58,7 +56,7 @@ public class AsyncAppender extends AppenderBase<ILoggingEvent> implements Runnab
         this.running = false;
         try {
             dispatcher.join();
-        } catch (InterruptedException ignored) {
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
         super.stop();
@@ -69,7 +67,7 @@ public class AsyncAppender extends AppenderBase<ILoggingEvent> implements Runnab
         while (running) {
             try {
                 batch.add(queue.take());
-                queue.drainTo(batch, batchSize - 1);
+                queue.drainTo(batch, batchSize);
 
                 for (ILoggingEvent event : batch) {
                     delegate.doAppend(event);
