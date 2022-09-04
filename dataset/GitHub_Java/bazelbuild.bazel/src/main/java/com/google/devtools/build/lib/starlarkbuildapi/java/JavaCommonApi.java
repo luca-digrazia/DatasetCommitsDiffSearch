@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkActionFactoryApi;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkRuleContextApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.starlarkbuildapi.core.TransitiveInfoCollectionApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintValueInfoApi;
 import javax.annotation.Nullable;
@@ -130,6 +131,7 @@ public interface JavaCommonApi<
             named = true,
             allowedTypes = {
               @ParamType(type = Sequence.class, generic1 = JavaInfoApi.class),
+              @ParamType(type = Sequence.class, generic1 = TransitiveInfoCollectionApi.class),
             },
             defaultValue = "[]",
             doc = "A list of exports. Optional."),
@@ -414,10 +416,8 @@ public interface JavaCommonApi<
             named = false,
             allowedTypes = {@ParamType(type = Sequence.class, generic1 = JavaInfoApi.class)},
             doc = "The list of providers to merge."),
-      },
-      useStarlarkThread = true)
-  JavaInfoT mergeJavaProviders(
-      Sequence<?> providers /* <JavaInfoT> expected. */, StarlarkThread thread)
+      })
+  JavaInfoT mergeJavaProviders(Sequence<?> providers /* <JavaInfoT> expected. */)
       throws EvalException;
 
   @StarlarkMethod(
