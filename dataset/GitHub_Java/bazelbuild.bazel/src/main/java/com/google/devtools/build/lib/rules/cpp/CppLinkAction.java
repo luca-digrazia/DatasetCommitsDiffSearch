@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionContinuationOrResult;
@@ -36,10 +35,9 @@ import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.CommandAction;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
-import com.google.devtools.build.lib.actions.CommandLines.CommandLineAndParamFileInfo;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
@@ -50,18 +48,12 @@ import com.google.devtools.build.lib.actions.extra.CppLinkInfo;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.skylark.Args;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.CollectionUtils;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -76,7 +68,8 @@ import javax.annotation.Nullable;
 /** Action that represents a linking step. */
 @ThreadCompatible
 @AutoCodec
-public final class CppLinkAction extends AbstractAction implements CommandAction {
+public final class CppLinkAction extends AbstractAction
+    implements ExecutionInfoSpecifier, CommandAction {
 
   /**
    * An abstraction for creating intermediate and output artifacts for C++ linking.
@@ -135,6 +128,8 @@ public final class CppLinkAction extends AbstractAction implements CommandAction
   private final String hostSystemName;
   private final String targetCpu;
 
+  private final Iterable<Artifact> mandatoryInputs;
+
   // Linking uses a lot of memory; estimate 1 MB per input file, min 1.5 Gib. It is vital to not
   // underestimate too much here, because running too many concurrent links can thrash the machine
   // to the point where it stops responding to keystrokes or mouse clicks. This is primarily a
@@ -160,7 +155,7 @@ public final class CppLinkAction extends AbstractAction implements CommandAction
   CppLinkAction(
       ActionOwner owner,
       String mnemonic,
-      NestedSet<Artifact> inputs,
+      Iterable<Artifact> inputs,
       ImmutableSet<Artifact> outputs,
       LibraryToLink outputLibrary,
       Artifact linkOutput,
@@ -178,6 +173,7 @@ public final class CppLinkAction extends AbstractAction implements CommandAction
       String targetCpu) {
     super(owner, inputs, outputs, env);
     this.mnemonic = getMnemonic(mnemonic, isLtoIndexing);
+    this.mandatoryInputs = inputs;
     this.outputLibrary = outputLibrary;
     this.linkOutput = linkOutput;
     this.interfaceOutputLibrary = interfaceOutputLibrary;
@@ -204,7 +200,7 @@ public final class CppLinkAction extends AbstractAction implements CommandAction
 
   @Override
   @VisibleForTesting
-  public NestedSet<Artifact> getPossibleInputsForTesting() {
+  public Iterable<Artifact> getPossibleInputsForTesting() {
     return getInputs();
   }
 
@@ -262,23 +258,6 @@ public final class CppLinkAction extends AbstractAction implements CommandAction
   }
 
   @Override
-  public Sequence<CommandLineArgsApi> getStarlarkArgs() throws EvalException {
-    ImmutableSet<Artifact> directoryInputs =
-        Streams.stream(getInputs())
-            .filter(artifact -> artifact.isDirectory())
-            .collect(ImmutableSet.toImmutableSet());
-
-    CommandLine commandLine = linkCommandLine.getCommandLineForStarlark();
-
-    CommandLineAndParamFileInfo commandLineAndParamFileInfo =
-        new CommandLineAndParamFileInfo(commandLine, /* paramFileInfo= */ null);
-
-    Args args = Args.forRegisteredAction(commandLineAndParamFileInfo, directoryInputs);
-
-    return StarlarkList.immutableCopyOf(ImmutableList.of(args));
-  }
-
-  @Override
   public List<String> getArguments() throws CommandLineExpansionException {
     return linkCommandLine.arguments();
   }
@@ -329,7 +308,7 @@ public final class CppLinkAction extends AbstractAction implements CommandAction
           ImmutableList.copyOf(getCommandLine(actionExecutionContext.getArtifactExpander())),
           getEnvironment(actionExecutionContext.getClientEnv()),
           getExecutionInfo(),
-          ImmutableList.copyOf(getInputs()),
+          ImmutableList.copyOf(getMandatoryInputs()),
           getOutputs().asList(),
           estimateResourceConsumptionLocal());
     } catch (CommandLineExpansionException e) {
@@ -541,6 +520,11 @@ public final class CppLinkAction extends AbstractAction implements CommandAction
             inputSize * LINK_RESOURCES_PER_INPUT.getMemoryMb(), minLinkResources.getMemoryMb()),
         Math.max(inputSize * LINK_RESOURCES_PER_INPUT.getCpuUsage(), minLinkResources.getCpuUsage())
     );
+  }
+
+  @Override
+  public Iterable<Artifact> getMandatoryInputs() {
+    return mandatoryInputs;
   }
 
   private final class CppLinkActionContinuation extends ActionContinuationOrResult {

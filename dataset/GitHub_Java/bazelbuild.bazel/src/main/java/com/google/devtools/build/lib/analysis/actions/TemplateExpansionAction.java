@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.analysis.actions;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.AbstractAction;
@@ -32,14 +31,12 @@ import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import javax.annotation.Nullable;
 
@@ -69,12 +66,12 @@ public final class TemplateExpansionAction extends AbstractAction {
   @AutoCodec.Instantiator
   TemplateExpansionAction(
       ActionOwner owner,
-      NestedSet<Artifact> inputs,
+      Collection<Artifact> inputs,
       Artifact primaryOutput,
       Template template,
       List<Substitution> substitutions,
       boolean makeExecutable) {
-    super(owner, inputs, ImmutableSet.of(primaryOutput));
+    super(owner, inputs, ImmutableList.of(primaryOutput));
     this.template = template;
     this.substitutions = ImmutableList.copyOf(substitutions);
     this.makeExecutable = makeExecutable;
@@ -97,13 +94,8 @@ public final class TemplateExpansionAction extends AbstractAction {
                                  Artifact output,
                                  List<Substitution> substitutions,
                                  boolean makeExecutable) {
-    this(
-        owner,
-        NestedSetBuilder.create(Order.STABLE_ORDER, templateArtifact),
-        output,
-        Template.forArtifact(templateArtifact),
-        substitutions,
-        makeExecutable);
+    this(owner, ImmutableList.of(templateArtifact), output, Template.forArtifact(templateArtifact),
+        substitutions, makeExecutable);
   }
 
   /**
@@ -122,13 +114,7 @@ public final class TemplateExpansionAction extends AbstractAction {
                                  Template template,
                                  List<Substitution> substitutions,
                                  boolean makeExecutable) {
-    this(
-        owner,
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-        output,
-        template,
-        substitutions,
-        makeExecutable);
+    this(owner, Artifact.NO_ARTIFACTS, output, template, substitutions, makeExecutable);
   }
 
   @VisibleForTesting
@@ -138,7 +124,7 @@ public final class TemplateExpansionAction extends AbstractAction {
   }
 
   @Override
-  public String getStarlarkContent() throws IOException {
+  public String getSkylarkContent() throws IOException {
     return getFileContents();
   }
 
@@ -214,11 +200,11 @@ public final class TemplateExpansionAction extends AbstractAction {
   }
 
   @Override
-  public Dict<String, String> getStarlarkSubstitutions() {
+  public SkylarkDict<String, String> getSkylarkSubstitutions() {
     ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
     for (Substitution entry : substitutions) {
       builder.put(entry.getKey(), entry.getValue());
     }
-    return Dict.copyOf(null, builder.build());
+    return SkylarkDict.copyOf(null, builder.build());
   }
 }

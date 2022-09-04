@@ -290,9 +290,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    * if the subprocess execution returns normally, not in case of errors (non-zero exit,
    * setup/network failures, etc.).
    */
-  protected void afterExecute(
-      ActionExecutionContext actionExecutionContext, List<SpawnResult> spawnResults)
-      throws IOException {}
+  protected void afterExecute(ActionExecutionContext actionExecutionContext) throws IOException {}
 
   @Override
   public final ActionContinuationOrResult beginExecution(
@@ -363,16 +361,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    */
   @VisibleForTesting
   public final Spawn getSpawn() throws CommandLineExpansionException {
-    return getSpawn(getInputs());
-  }
-
-  final Spawn getSpawn(Iterable<Artifact> inputs) throws CommandLineExpansionException {
     return new ActionSpawn(
-        commandLines.allArguments(),
-        ImmutableMap.of(),
-        inputs,
-        ImmutableList.of(),
-        ImmutableMap.of());
+        commandLines.allArguments(), ImmutableMap.of(), ImmutableList.of(), ImmutableMap.of());
   }
 
   /**
@@ -397,13 +387,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     return new ActionSpawn(
         ImmutableList.copyOf(expandedCommandLines.arguments()),
         clientEnv,
-        getInputs(),
         expandedCommandLines.getParamFiles(),
         filesetMappings);
-  }
-
-  Spawn getSpawnForExtraAction() throws CommandLineExpansionException {
-    return getSpawn(getInputs());
   }
 
   @Override
@@ -491,7 +476,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    */
   protected SpawnInfo getExtraActionSpawnInfo() throws CommandLineExpansionException {
     SpawnInfo.Builder info = SpawnInfo.newBuilder();
-    Spawn spawn = getSpawnForExtraAction();
+    Spawn spawn = getSpawn();
     info.addAllArgument(spawn.getArguments());
     for (Map.Entry<String, String> variable : spawn.getEnvironment().entrySet()) {
       info.addVariable(
@@ -544,7 +529,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     private ActionSpawn(
         ImmutableList<String> arguments,
         Map<String, String> clientEnv,
-        Iterable<Artifact> inputs,
         Iterable<? extends ActionInput> additionalInputs,
         Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings) {
       super(
@@ -554,15 +538,15 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           SpawnAction.this.getRunfilesSupplier(),
           SpawnAction.this,
           resourceSet);
-      ImmutableList.Builder<ActionInput> inputsBuilder = ImmutableList.builder();
+      ImmutableList.Builder<ActionInput> inputs = ImmutableList.builder();
       ImmutableList<Artifact> manifests = getRunfilesSupplier().getManifests();
-      for (Artifact input : inputs) {
+      for (Artifact input : getInputs()) {
         if (!input.isFileset() && !manifests.contains(input)) {
-          inputsBuilder.add(input);
+          inputs.add(input);
         }
       }
-      inputsBuilder.addAll(additionalInputs);
-      this.inputs = inputsBuilder.build();
+      inputs.addAll(additionalInputs);
+      this.inputs = inputs.build();
       this.filesetMappings = filesetMappings;
       LinkedHashMap<String, String> env = new LinkedHashMap<>(SpawnAction.this.env.size());
       SpawnAction.this.env.resolve(env, clientEnv);
@@ -736,7 +720,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           commandLineLimits,
           isShellCommand,
           env,
-          configuration,
           configuration == null
               ? executionInfo
               : configuration.modifiedExecutionInfo(executionInfo, mnemonic),
@@ -757,7 +740,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         CommandLineLimits commandLineLimits,
         boolean isShellCommand,
         ActionEnvironment env,
-        @Nullable BuildConfiguration configuration,
         ImmutableMap<String, String> executionInfo,
         CharSequence progressMessage,
         RunfilesSupplier runfilesSupplier,
@@ -1361,8 +1343,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           if (resultConsumer != null) {
             resultConsumer.accept(Pair.of(actionExecutionContext, nextContinuation.get()));
           }
-          List<SpawnResult> spawnResults = nextContinuation.get();
-          afterExecute(actionExecutionContext, spawnResults);
+          afterExecute(actionExecutionContext);
           return ActionContinuationOrResult.of(ActionResult.create(nextContinuation.get()));
         }
         return new SpawnActionContinuation(actionExecutionContext, nextContinuation);
