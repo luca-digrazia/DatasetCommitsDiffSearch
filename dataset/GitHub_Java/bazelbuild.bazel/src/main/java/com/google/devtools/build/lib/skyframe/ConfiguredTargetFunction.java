@@ -620,8 +620,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
             depValueNames,
             hostConfiguration,
             ruleClassProvider,
-            defaultBuildOptions,
-            configConditions);
+            defaultBuildOptions);
 
     // Return early in case packages were not loaded yet. In theory, we could start configuring
     // dependent targets in loaded packages. However, that creates an artificial sync boundary
@@ -873,7 +872,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
                       depValue.getConfiguredTarget(),
                       pkgValue.getPackage().getTarget(depLabel.getName()),
                       depConfiguration,
-                      dep.getTransitionKeys()));
+                      dep.getTransitionKey()));
             } catch (NoSuchTargetException e) {
               throw new IllegalStateException("Target already verified for " + dep, e);
             }
