@@ -308,7 +308,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
                     );
                     try (OutputStream os = itemResource.openOutputStream()) {
                         try (BufferedOutputStream bos = new BufferedOutputStream(os)) {
-                            try (OutputStreamWriter osw = new OutputStreamWriter(bos, StandardCharsets.UTF_8)) {
+                            try (OutputStreamWriter osw = new OutputStreamWriter(bos)) {
                                 try (BufferedWriter bw = new BufferedWriter(osw)) {
                                     bw.write(binaryName);
                                     bw.newLine();
@@ -444,7 +444,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
                     );
                     try (OutputStream os = itemResource.openOutputStream()) {
                         try (BufferedOutputStream bos = new BufferedOutputStream(os)) {
-                            try (OutputStreamWriter osw = new OutputStreamWriter(bos, StandardCharsets.UTF_8)) {
+                            try (OutputStreamWriter osw = new OutputStreamWriter(bos)) {
                                 try (BufferedWriter bw = new BufferedWriter(osw)) {
                                     bw.write(binaryName);
                                     bw.newLine();
@@ -586,7 +586,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unable to find javadoc for config item " + e, e);
             return "";
         }
-        return docComment;
+        return docComment.trim();
     }
 
     private static boolean hasParameterAnnotated(ExecutableElement ex, String annotationName) {
