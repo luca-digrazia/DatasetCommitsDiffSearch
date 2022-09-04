@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.Executor;
@@ -103,10 +104,15 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.pkgcache.LoadingCallback;
+import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
+import com.google.devtools.build.lib.pkgcache.PackageManager.PackageManagerStatistics;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetParsingPhaseTimeEvent;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
@@ -1308,13 +1314,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     resourceManager.resetResourceUsage();
     try {
       progressReceiver.executionProgressReceiver = executionProgressReceiver;
+      Iterable<ArtifactSkyKey> artifactKeys = ArtifactSkyKey.mandatoryKeys(artifactsToBuild);
       Iterable<TargetCompletionValue.TargetCompletionKey> targetKeys =
           TargetCompletionValue.keys(targetsToBuild, topLevelArtifactContext, targetsToTest);
       Iterable<SkyKey> aspectKeys = AspectCompletionValue.keys(aspects, topLevelArtifactContext);
       Iterable<SkyKey> testKeys =
           TestCompletionValue.keys(targetsToTest, topLevelArtifactContext, exclusiveTesting);
       return buildDriver.evaluate(
-          Iterables.concat(artifactsToBuild, targetKeys, aspectKeys, testKeys),
+          Iterables.concat(artifactKeys, targetKeys, aspectKeys, testKeys),
           keepGoing,
           numJobs,
           reporter);
@@ -2199,8 +2206,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       PathFragment relativeWorkingDirectory,
       LoadingOptions options,
       boolean keepGoing,
-      boolean determineTests)
-      throws TargetParsingException, InterruptedException {
+      boolean determineTests,
+      @Nullable LoadingCallback callback)
+      throws TargetParsingException, LoadingFailedException, InterruptedException {
     Stopwatch timer = Stopwatch.createStarted();
     SkyKey key =
         TargetPatternPhaseValue.key(
@@ -2248,9 +2256,19 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       throw exc;
     }
     long timeMillis = timer.stop().elapsed(TimeUnit.MILLISECONDS);
-    eventHandler.post(new TargetParsingPhaseTimeEvent(timeMillis));
 
     TargetPatternPhaseValue patternParsingValue = evalResult.get(key);
+    eventHandler.post(new TargetParsingPhaseTimeEvent(timeMillis));
+    ImmutableSet<Target> targets = patternParsingValue.getTargets(eventHandler, packageManager);
+    if (callback != null) {
+      callback.notifyTargets(targets);
+    }
+    eventHandler.post(
+        new LoadingPhaseCompleteEvent(
+            targets,
+            patternParsingValue.getRemovedTargets(eventHandler, packageManager),
+            PackageManagerStatistics.ZERO,
+            /*timeInMs=*/ 0));
     return patternParsingValue.toLoadingResult(eventHandler, packageManager);
   }
 

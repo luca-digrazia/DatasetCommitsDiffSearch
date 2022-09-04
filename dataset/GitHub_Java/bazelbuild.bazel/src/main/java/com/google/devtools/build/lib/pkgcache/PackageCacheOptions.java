@@ -73,6 +73,17 @@ public class PackageCacheOptions extends OptionsBase {
   public List<String> packagePath;
 
   @Option(
+      name = "show_package_location",
+      defaultValue = "false",
+      deprecationWarning = "This flag is no longer supported and will go away soon.",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "If enabled, causes Bazel to print the location on the --package_path "
+              + "from which each package was loaded.")
+  public boolean showPackageLocation;
+
+  @Option(
       name = "show_loading_progress",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
@@ -153,7 +164,7 @@ public class PackageCacheOptions extends OptionsBase {
 
   @Option(
       name = "experimental_enable_tools_defaults_package",
-      defaultValue = "false",
+      defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
