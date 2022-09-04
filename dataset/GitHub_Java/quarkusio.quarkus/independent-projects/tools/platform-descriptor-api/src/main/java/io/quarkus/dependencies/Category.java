@@ -29,11 +29,11 @@ public class Category {
     }
 
     public String getDescription() {
-        return description;
+        return name;
     }
 
-    public void setDescription(String description) {
-        this.description = description;
+    public void setDescription(String name) {
+        this.description = name;
     }
 
     public Map<String, Object> getMetadata() {
