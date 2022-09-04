@@ -37,12 +37,12 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public final class PrepareDepsOfPatternFunctionTest extends BuildViewTestCase {
 
-  private PrepareDepsOfPatternSkyKeysAndExceptions createPrepDepsKeysMaybe(
+  private static PrepareDepsOfPatternSkyKeysAndExceptions createPrepDepsKeysMaybe(
       ImmutableList<String> patterns) {
     return PrepareDepsOfPatternValue.keys(patterns, "");
   }
 
-  private SkyKey createPrepDepsKey(String pattern) {
+  private static SkyKey createPrepDepsKey(String pattern) {
     PrepareDepsOfPatternSkyKeysAndExceptions keysAndExceptions =
         PrepareDepsOfPatternValue.keys(ImmutableList.of(pattern), "");
     assertThat(keysAndExceptions.getExceptions()).isEmpty();
@@ -55,7 +55,7 @@ public final class PrepareDepsOfPatternFunctionTest extends BuildViewTestCase {
         EvaluationContext.newBuilder()
             .setKeepGoing(false)
             .setNumThreads(SequencedSkyframeExecutor.DEFAULT_THREAD_COUNT)
-            .setEventHander(reporter)
+            .setEventHandler(reporter)
             .build();
     EvaluationResult<PrepareDepsOfPatternValue> evaluationResult =
         skyframeExecutor.getDriver().evaluate(ImmutableList.of(key), evaluationContext);

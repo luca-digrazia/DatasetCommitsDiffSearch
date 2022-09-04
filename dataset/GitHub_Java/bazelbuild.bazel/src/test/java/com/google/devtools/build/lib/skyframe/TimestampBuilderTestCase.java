@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.devtools.build.lib.actions.util.ActionCacheTestHelper.AMNESIAC_CACHE;
-import static com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator.DEFAULT_STORED_EVENT_FILTER;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -59,7 +58,6 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.SkyframeBuilder;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -103,9 +101,7 @@ import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationResult;
-import com.google.devtools.build.skyframe.GraphInconsistencyReceiver;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
-import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
 import com.google.devtools.build.skyframe.SequencedRecordingDifferencer;
 import com.google.devtools.build.skyframe.SequentialBuildDriver;
@@ -155,7 +151,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   public final void initialize() throws Exception  {
     options =
         OptionsParser.builder()
-            .optionsClasses(KeepGoingOption.class, BuildRequestOptions.class, CoreOptions.class)
+            .optionsClasses(KeepGoingOption.class, BuildRequestOptions.class)
             .build();
     options.parse();
     inMemoryCache = new InMemoryActionCache();
@@ -187,34 +183,17 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     return createBuilder(actionCache, 1, /*keepGoing=*/ false);
   }
 
-  protected BuilderWithResult createBuilder(
-      ActionCache actionCache, GraphInconsistencyReceiver graphInconsistencyReceiver)
-      throws Exception {
-    return createBuilder(
-        actionCache,
-        1,
-        /*keepGoing=*/ false,
-        /*evaluationProgressReceiver=*/ null,
-        graphInconsistencyReceiver);
-  }
-
   /** Create a ParallelBuilder with a DatabaseDependencyChecker using the specified ActionCache. */
   protected BuilderWithResult createBuilder(
       ActionCache actionCache, final int threadCount, final boolean keepGoing) throws Exception {
-    return createBuilder(
-        actionCache,
-        threadCount,
-        keepGoing,
-        /*evaluationProgressReceiver=*/ null,
-        GraphInconsistencyReceiver.THROWING);
+    return createBuilder(actionCache, threadCount, keepGoing, null);
   }
 
   protected BuilderWithResult createBuilder(
       final ActionCache actionCache,
       final int threadCount,
       final boolean keepGoing,
-      @Nullable EvaluationProgressReceiver evaluationProgressReceiver,
-      GraphInconsistencyReceiver graphInconsistencyReceiver)
+      @Nullable EvaluationProgressReceiver evaluationProgressReceiver)
       throws Exception {
     AtomicReference<PathPackageLocator> pkgLocator =
         new AtomicReference<>(
@@ -297,11 +276,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
                 .put(SkyFunctions.ACTION_SKETCH, new ActionSketchFunction(actionKeyContext))
                 .build(),
             differencer,
-            evaluationProgressReceiver,
-            graphInconsistencyReceiver,
-            DEFAULT_STORED_EVENT_FILTER,
-            new EmittedEventState(),
-            /*keepEdges=*/ true);
+            evaluationProgressReceiver);
     final SequentialBuildDriver driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
     PrecomputedValue.ACTION_ENV.set(differencer, ImmutableMap.<String, String>of());
@@ -402,9 +377,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   /** A non-persistent cache. */
   protected InMemoryActionCache inMemoryCache;
 
-  protected GraphInconsistencyReceiver graphInconsistencyReceiver =
-      GraphInconsistencyReceiver.THROWING;
-
   protected SkyFunction actionTemplateExpansionFunction;
 
   /** A class that records an event. */
@@ -453,12 +425,9 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     return createBuilder(AMNESIAC_CACHE);
   }
 
-  /**
-   * Creates and returns a new caching builder based on the {@link #inMemoryCache} and {@link
-   * #graphInconsistencyReceiver}.
-   */
+  /** Creates and returns a new caching builder based on the inMemoryCache. */
   protected BuilderWithResult cachingBuilder() throws Exception {
-    return createBuilder(inMemoryCache, graphInconsistencyReceiver);
+    return createBuilder(inMemoryCache);
   }
 
   /** {@link Builder} that saves its most recent {@link EvaluationResult}. */

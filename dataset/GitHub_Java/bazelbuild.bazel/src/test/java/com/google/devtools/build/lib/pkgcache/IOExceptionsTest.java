@@ -13,36 +13,33 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
-import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.packages.Preprocessor;
-import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
-import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.util.BlazeClock;
+import com.google.devtools.build.lib.skyframe.TransitiveTargetKey;
+import com.google.devtools.build.lib.skyframe.TransitiveTargetValue;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
-
+import com.google.devtools.build.skyframe.EvaluationContext;
+import com.google.devtools.build.skyframe.EvaluationResult;
+import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.SkyValue;
+import java.io.IOException;
+import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.io.IOException;
-
-import javax.annotation.Nullable;
 
 /**
  * Tests for recovering from IOExceptions thrown by the filesystem when reading BUILD files. Needs
@@ -50,10 +47,6 @@ import javax.annotation.Nullable;
  */
 @RunWith(JUnit4.class)
 public class IOExceptionsTest extends PackageLoadingTestCase {
-
-  private static final String FS_ROOT = "/fsg";
-
-  protected TransitivePackageLoader visitor;
 
   private static final Function<Path, String> NULL_FUNCTION = new Function<Path, String>() {
     @Override
@@ -65,32 +58,39 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
 
   private Function<Path, String> crashMessage = NULL_FUNCTION;
 
-  private SkyframeExecutor skyframeExecutor;
-
   @Before
   public final void initializeVisitor() throws Exception {
-    skyframeExecutor =
-        super.createSkyframeExecutor(ImmutableList.<PackageFactory.EnvironmentExtension>of(),
-            Preprocessor.Factory.Supplier.NullSupplier.INSTANCE, ConstantRuleVisibility.PRIVATE,
-            ruleClassProvider.getDefaultsPackageContent());
-    this.visitor = skyframeExecutor.pkgLoader();
+    setUpSkyframe(ConstantRuleVisibility.PRIVATE);
+  }
+
+  private boolean visitTransitively(Label label) throws InterruptedException {
+    SkyKey key = TransitiveTargetKey.of(label);
+    EvaluationContext evaluationContext =
+        EvaluationContext.newBuilder().setNumThreads(5).setEventHandler(reporter).build();
+    EvaluationResult<SkyValue> result =
+        skyframeExecutor.prepareAndGet(ImmutableSet.of(key), evaluationContext);
+    TransitiveTargetValue value = (TransitiveTargetValue) result.get(key);
+    System.out.println(value);
+    boolean hasTransitiveError = (value == null) || value.getTransitiveRootCauses() != null;
+    return !result.hasError() && !hasTransitiveError;
   }
 
   protected void syncPackages() throws Exception {
     skyframeExecutor.invalidateFilesUnderPathForTesting(
-        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
+        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, Root.fromPath(rootDirectory));
   }
 
   @Override
   protected FileSystem createFileSystem() {
-    return new InMemoryFileSystem(BlazeClock.instance(), new PathFragment(FS_ROOT)) {
+    return new InMemoryFileSystem(BlazeClock.instance()) {
+      @Nullable
       @Override
-      public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
+      public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
         String crash = crashMessage.apply(path);
         if (crash != null) {
           throw new IOException(crash);
         }
-        return super.stat(path, followSymlinks);
+        return super.statIfFound(path, followSymlinks);
       }
     };
   }
@@ -109,11 +109,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertFalse(visitor.sync(reporter, ImmutableSet.<Target>of(),
-        ImmutableSet.of(Label.parseAbsolute("//pkg:x")), /*keepGoing=*/false,
-        /*parallelThreads=*/5, Integer.MAX_VALUE));
-    assertContainsEvent("no such package 'pkg'");
-    assertEquals(1, eventCollector.count());
+    assertThat(visitTransitively(Label.parseAbsolute("//pkg:x", ImmutableMap.of()))).isFalse();
     scratch.overwriteFile("pkg/BUILD",
         "# another comment to force reload",
         "sh_library(name = 'x')");
@@ -121,9 +117,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
     syncPackages();
     eventCollector.clear();
     reporter.addHandler(failFastHandler);
-    assertTrue(visitor.sync(reporter, ImmutableSet.<Target>of(),
-        ImmutableSet.of(Label.parseAbsolute("//pkg:x")), /*keepGoing=*/false,
-        /*parallelThreads=*/5, Integer.MAX_VALUE));
+    assertThat(visitTransitively(Label.parseAbsolute("//pkg:x", ImmutableMap.of()))).isTrue();
     assertNoEvents();
   }
 
@@ -144,9 +138,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertFalse(visitor.sync(reporter, ImmutableSet.<Target>of(),
-        ImmutableSet.of(Label.parseAbsolute("//top:top")), /*keepGoing=*/false,
-        /*parallelThreads=*/5, Integer.MAX_VALUE));
+    assertThat(visitTransitively(Label.parseAbsolute("//top:top", ImmutableMap.of()))).isFalse();
     assertContainsEvent("no such package 'pkg'");
     // The traditional label visitor does not propagate the original IOException message.
     // assertContainsEvent("custom crash");
@@ -160,9 +152,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
     syncPackages();
     eventCollector.clear();
     reporter.addHandler(failFastHandler);
-    assertTrue(visitor.sync(reporter, ImmutableSet.<Target>of(),
-        ImmutableSet.of(Label.parseAbsolute("//top:top")), /*keepGoing=*/false,
-        /*parallelThreads=*/5, Integer.MAX_VALUE));
+    assertThat(visitTransitively(Label.parseAbsolute("//top:top", ImmutableMap.of()))).isTrue();
     assertNoEvents();
   }
 
@@ -181,10 +171,6 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertFalse(visitor.sync(reporter, ImmutableSet.<Target>of(),
-        ImmutableSet.of(Label.parseAbsolute("//top/pkg:x")), /*keepGoing=*/false,
-        /*parallelThreads=*/5, Integer.MAX_VALUE));
-    assertContainsEvent("no such package 'top/pkg'");
-    assertEquals(1, eventCollector.count());
+    assertThat(visitTransitively(Label.parseAbsolute("//top/pkg:x", ImmutableMap.of()))).isFalse();
   }
 }

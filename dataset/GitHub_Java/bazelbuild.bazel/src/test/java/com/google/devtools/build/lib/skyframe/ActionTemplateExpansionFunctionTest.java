@@ -374,7 +374,7 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
   private SpecialArtifact createTreeArtifact(String path) {
     PathFragment execPath = PathFragment.create("out").getRelative(path);
     return new SpecialArtifact(
-        ArtifactRoot.asDerivedRoot(rootDirectory, false, "out"),
+        ArtifactRoot.asDerivedRoot(rootDirectory, "out"),
         execPath,
         CTKEY,
         SpecialArtifactType.TREE);
@@ -464,11 +464,6 @@ public final class ActionTemplateExpansionFunctionTest extends FoundationTestCas
     @Override
     public String prettyPrint() {
       return "TestActionTemplate for " + outputTreeArtifact;
-    }
-
-    @Override
-    public String describe() {
-      return prettyPrint();
     }
 
     @Override

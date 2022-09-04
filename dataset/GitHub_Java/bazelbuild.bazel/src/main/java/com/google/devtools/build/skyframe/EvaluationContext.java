@@ -108,8 +108,6 @@ public class EvaluationContext {
       this.executorServiceSupplier = evaluationContext.executorServiceSupplier;
       this.keepGoing = evaluationContext.keepGoing;
       this.eventHandler = evaluationContext.eventHandler;
-      this.isExecutionPhase = evaluationContext.isExecutionPhase;
-      this.useForkJoinPool = evaluationContext.useForkJoinPool;
       return this;
     }
 

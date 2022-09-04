@@ -325,6 +325,12 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
     managedDirectoriesKnowledge.setManagedDirectories(
         ImmutableMap.of(PathFragment.create("dir1"), RepositoryName.create("@repo1")));
 
+    StarlarkSemantics semantics =
+        StarlarkSemantics.builderWithDefaults()
+            .experimentalAllowIncrementalRepositoryUpdates(true)
+            .build();
+    PrecomputedValue.STARLARK_SEMANTICS.set(differencer, semantics);
+
     loadRepo("repo1");
 
     assertThat(testStarlarkRepositoryFunction.isFetchCalled()).isTrue();

@@ -15,9 +15,7 @@ package com.google.devtools.build.lib.skyframe.packages;
 
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Suppliers;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
@@ -31,9 +29,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
-import com.google.devtools.build.lib.concurrent.ExecutorUtil;
-import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
@@ -109,8 +104,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -144,7 +137,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   protected final BlazeDirectories directories;
   private final DigestHashFunction digestHashFunction;
   private final int legacyGlobbingThreads;
-  @VisibleForTesting final ForkJoinPool forkJoinPoolForLegacyGlobbing;
   private final int skyframeThreads;
 
   /** Abstract base class of a builder for {@link PackageLoader} instances. */
@@ -272,9 +264,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     this.extraSkyFunctions = ImmutableMap.copyOf(builder.extraSkyFunctions);
     this.pkgLocatorRef = builder.pkgLocatorRef;
     this.legacyGlobbingThreads = builder.legacyGlobbingThreads;
-    this.forkJoinPoolForLegacyGlobbing =
-        NamedForkJoinPool.newNamedPool(
-            "package-loader-globbing-pool", builder.legacyGlobbingThreads);
     this.skyframeThreads = builder.skyframeThreads;
     this.directories = builder.directories;
     this.digestHashFunction = builder.workspaceDir.getFileSystem().getDigestFunction();
@@ -289,7 +278,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     pkgFactory =
         new PackageFactory(
             ruleClassProvider,
-            forkJoinPoolForLegacyGlobbing,
             getEnvironmentExtensions(),
             "PackageLoader",
             DefaultPackageSettings.INSTANCE,
@@ -324,13 +312,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   }
 
   @Override
-  public void close() {
-    // We don't use ForkJoinPool#shutdownNow since it has a performance bug. See
-    // http://b/33482341#comment13.
-    forkJoinPoolForLegacyGlobbing.shutdown();
-  }
-
-  @Override
   public Package loadPackage(PackageIdentifier pkgId)
       throws NoSuchPackageException, InterruptedException {
     return loadPackages(ImmutableList.of(pkgId)).getLoadedPackages().get(pkgId).get();
@@ -346,39 +327,17 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     Reporter reporter = new Reporter(commonReporter);
     StoredEventHandler storedEventHandler = new StoredEventHandler();
     reporter.addHandler(storedEventHandler);
-    ExecutorService executorServiceForSkyframe =
-        AbstractQueueVisitor.createExecutorService(
-            skyframeThreads, "skyframe-threadpool-for-package-loader");
     EvaluationContext evaluationContext =
         EvaluationContext.newBuilder()
             .setKeepGoing(true)
-            // Technically, the Skyframe codepath we use shuts down the executor it creates and uses
-            // (say, if we used #setNumThreads but not also #setExecutorServiceSupplier). Still,
-            // since this is brittle and not explicitly tested, we act defensively and provide our
-            // own executor that we explicitly shutdown ourselves.
-            .setExecutorServiceSupplier(Suppliers.ofInstance(executorServiceForSkyframe))
             .setNumThreads(skyframeThreads)
             .setEventHandler(reporter)
             .build();
-    try {
-      return loadPackagesInternal(keys, evaluationContext, storedEventHandler);
-    } finally {
-      if (!executorServiceForSkyframe.isShutdown()) {
-        ExecutorUtil.uninterruptibleShutdownNow(executorServiceForSkyframe);
-      }
-    }
-  }
+    EvaluationResult<PackageValue> evalResult = makeFreshDriver().evaluate(keys, evaluationContext);
 
-  private Result loadPackagesInternal(
-      Iterable<SkyKey> pkgKeys,
-      EvaluationContext evaluationContext,
-      StoredEventHandler storedEventHandler)
-      throws InterruptedException {
-    EvaluationResult<PackageValue> evalResult =
-        makeFreshDriver().evaluate(pkgKeys, evaluationContext);
     ImmutableMap.Builder<PackageIdentifier, PackageLoader.PackageOrException> result =
         ImmutableMap.builder();
-    for (SkyKey key : pkgKeys) {
+    for (SkyKey key : keys) {
       ErrorInfo error = evalResult.getError(key);
       PackageValue packageValue = evalResult.get(key);
       checkState((error == null) != (packageValue == null));
@@ -389,6 +348,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
               ? new PackageOrException(null, exceptionFromErrorInfo(error, pkgId))
               : new PackageOrException(packageValue.getPackage(), null));
     }
+
     return new Result(result.build(), storedEventHandler.getEvents());
   }
 
@@ -450,6 +410,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     AtomicReference<FilesystemCalls> syscallCacheRef =
         new AtomicReference<>(
             PerBuildSyscallCache.newBuilder().setConcurrencyLevel(legacyGlobbingThreads).build());
+    pkgFactory.setGlobbingThreads(legacyGlobbingThreads);
     pkgFactory.setSyscalls(syscallCacheRef);
     pkgFactory.setMaxDirectoriesToEagerlyVisitInGlobbing(
         MAX_DIRECTORIES_TO_EAGERLY_VISIT_IN_GLOBBING);
@@ -486,12 +447,18 @@ public abstract class AbstractPackageLoader implements PackageLoader {
                 /*ignoredPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT))
         .put(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, new ContainingPackageLookupFunction())
         .put(
-            SkyFunctions.AST_FILE_LOOKUP, new ASTFileLookupFunction(pkgFactory, digestHashFunction))
-        .put(SkyFunctions.STARLARK_BUILTINS, new StarlarkBuiltinsFunction(pkgFactory))
+            SkyFunctions.AST_FILE_LOOKUP,
+            new ASTFileLookupFunction(ruleClassProvider, digestHashFunction))
+        .put(
+            SkyFunctions.STARLARK_BUILTINS,
+            new StarlarkBuiltinsFunction(ruleClassProvider, pkgFactory))
         .put(
             SkyFunctions.BZL_LOAD,
             BzlLoadFunction.create(
-                pkgFactory, digestHashFunction, CacheBuilder.newBuilder().build()))
+                ruleClassProvider,
+                pkgFactory,
+                digestHashFunction,
+                CacheBuilder.newBuilder().build()))
         .put(SkyFunctions.WORKSPACE_NAME, new WorkspaceNameFunction())
         .put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider))
         .put(

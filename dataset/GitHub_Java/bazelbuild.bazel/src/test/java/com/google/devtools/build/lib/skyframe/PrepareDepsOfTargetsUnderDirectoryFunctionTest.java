@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
 import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 
 import com.google.common.base.Preconditions;
@@ -83,7 +82,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
             .build();
     EvaluationResult<PrepareDepsOfTargetsUnderDirectoryValue> evaluationResult =
         skyframeExecutor.getDriver().evaluate(ImmutableList.copyOf(keys), evaluationContext);
-    assertThatEvaluationResult(evaluationResult).hasNoError();
+    Preconditions.checkState(!evaluationResult.hasError());
     return evaluationResult;
   }
 
