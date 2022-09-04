@@ -35,8 +35,6 @@ public class ConfusionMatrix {
 		
 		for(int i = 0; i < truth.length; i++){
 			ySet.add(truth[i]);
-			// Sometimes, small test data doesn't have all the classes.
-			ySet.add(prediction[i]);
 		}
 		
 		matrix = new int[ySet.size()][ySet.size()];
