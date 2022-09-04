@@ -174,6 +174,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleRemoveNativeMavenJar();
 
+  public abstract boolean incompatibleStricArgumentOrdering();
+
   public abstract boolean internalSkylarkFlagTestCanary();
 
   public abstract boolean incompatibleUseToolchainProvidersInJavaCommon();
@@ -220,13 +222,14 @@ public abstract class StarlarkSemantics {
           .incompatibleDisallowStructProviderSyntax(false)
           .incompatibleExpandDirectories(true)
           .incompatibleNewActionsApi(false)
-          .incompatibleNoAttrLicense(true)
+          .incompatibleNoAttrLicense(false)
           .incompatibleNoOutputAttrDefault(false)
           .incompatibleNoSupportToolsInActionInputs(false)
           .incompatibleNoTargetOutputGroup(false)
           .incompatibleNoTransitiveLoads(true)
           .incompatibleRemapMainRepo(false)
           .incompatibleRemoveNativeMavenJar(false)
+          .incompatibleStricArgumentOrdering(true)
           .internalSkylarkFlagTestCanary(false)
           .incompatibleDoNotSplitLinkingCmdline(false)
           .build();
@@ -297,6 +300,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleRemapMainRepo(boolean value);
 
     public abstract Builder incompatibleRemoveNativeMavenJar(boolean value);
+
+    public abstract Builder incompatibleStricArgumentOrdering(boolean value);
 
     public abstract Builder incompatibleUseToolchainProvidersInJavaCommon(boolean value);
 
