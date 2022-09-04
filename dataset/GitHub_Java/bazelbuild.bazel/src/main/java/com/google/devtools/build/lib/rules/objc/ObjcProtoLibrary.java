@@ -43,7 +43,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
         ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoSourcesProvider.class);
 
     Iterable<ObjcProtoProvider> objcProtoProviders =
-        ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
+        ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProtoProvider.class);
 
     ProtobufSupport protoSupport =
         new ProtobufSupport(
