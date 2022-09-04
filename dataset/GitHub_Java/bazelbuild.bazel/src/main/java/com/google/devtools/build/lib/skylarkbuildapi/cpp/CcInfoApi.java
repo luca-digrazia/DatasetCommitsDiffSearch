@@ -31,11 +31,7 @@ import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 @SkylarkModule(
     name = "CcInfo",
     category = SkylarkModuleCategory.PROVIDER,
-    doc =
-        "A provider for compilation and linking of C++. This "
-            + "is also a marking provider telling C++ rules that they can depend on the rule "
-            + "with this provider. If it is not intended for the rule to be depended on by C++, "
-            + "the rule should wrap the CcInfo in some other provider.")
+    doc = "A provider containing information for C++ compilation and linking.")
 public interface CcInfoApi extends StructApi {
   String NAME = "CcInfo";
 
@@ -49,15 +45,16 @@ public interface CcInfoApi extends StructApi {
       name = "linking_context",
       doc = "Returns the <code>LinkingContext</code>",
       structField = true)
-  CcLinkingContextApi getCcLinkingContext();
+  CcLinkingInfoApi getCcLinkingInfo();
 
-  /** The provider implementing this can construct CcInfo objects. */
+  /** The provider implementing this can construct the CcInfo provider. */
   @SkylarkModule(
-      name = "Provider",
-      doc = "",
-      // This object is documented via the CcInfo documentation and the docuemntation of its
-      // callable function.
-      documented = false)
+      name = "CcProvider",
+      doc =
+          "A provider for compilation and linking of C++. This "
+              + "is also a marking provider telling C++ rules that they can depend on the rule "
+              + "with this provider. If it is not intended for the rule to be depended on by C++, "
+              + "the rule should wrap the CcInfo in some other provider.")
   interface Provider extends ProviderApi {
 
     @SkylarkCallable(
@@ -86,6 +83,7 @@ public interface CcInfoApi extends StructApi {
               defaultValue = "None",
               allowedTypes = {
                 @ParamType(type = CcLinkingContextApi.class),
+                @ParamType(type = CcLinkingInfoApi.class),
                 @ParamType(type = NoneType.class)
               })
         },
