@@ -17,47 +17,32 @@ import javax.ws.rs.Path;
 import java.io.File;
 
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 
 public class DropwizardServiceRuleTest {
 
     @ClassRule
-    public static final DropwizardServiceRule<TestConfiguration> RULE =
+    public static DropwizardServiceRule<TestConfiguration> dropwizardServiceRule =
             new DropwizardServiceRule<TestConfiguration>(TestService.class, resourceFilePath("test-config.yaml"));
 
     @Test
     public void canGetExpectedResourceOverHttp() {
-        final String content = new Client().resource("http://localhost:" +
-                                                             RULE.getLocalPort()
-                                                             +"/test").get(String.class);
+        String content = new Client().resource("http://localhost:8080/test").get(String.class);
 
         assertThat(content, is("Yes, it's here"));
     }
 
     @Test
     public void returnsConfiguration() {
-        final TestConfiguration config = RULE.getConfiguration();
+        TestConfiguration config = dropwizardServiceRule.getConfiguration();
         assertThat(config.getMessage(), is("Yes, it's here"));
-        assertThat(config.getHttpConfiguration().getPort(), is(0));
-    }
-
-    @Test
-    public void returnsService() {
-        TestService service = RULE.getService();
-        assertNotNull(service);
-    }
-
-    @Test
-    public void returnsEnvironment() {
-        Environment environment = RULE.getEnvironment();
-        assertThat(environment.getName(), is("TestService"));
+        assertThat(config.getHttpConfiguration().getPort(), is(8080));
     }
 
 
     public static class TestService extends Service<TestConfiguration> {
         @Override
-        public void initialize(Bootstrap<TestConfiguration> bootstrap) {
+        public void initialize(Bootstrap bootstrap) {
         }
 
         @Override
