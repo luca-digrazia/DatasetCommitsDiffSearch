@@ -133,12 +133,9 @@ public class NinjaActionsHelper {
 
     NinjaScope targetScope = createTargetScope(target);
     int targetOffset = target.getOffset();
+    maybeCreateRspFile(rule, targetScope, targetOffset, inputsBuilder);
 
-    ImmutableSortedMap<String, List<Pair<Integer, String>>> map =
-        resolveRuleVariables(targetScope, targetOffset, rule);
-    String command = map.get(NinjaRuleVariable.COMMAND.lowerCaseName()).get(0).getSecond();
-    maybeCreateRspFile(rule, inputsBuilder, map);
-
+    String command = resolveRuleCommand(targetScope, targetOffset, rule);
     if (!artifactsHelper.getWorkingDirectory().isEmpty()) {
       command = String.format("cd %s && ", artifactsHelper.getWorkingDirectory()) + command;
     }
@@ -183,26 +180,23 @@ public class NinjaActionsHelper {
 
   private void maybeCreateRspFile(
       NinjaRule rule,
-      NestedSetBuilder<Artifact> inputsBuilder,
-      ImmutableSortedMap<String, List<Pair<Integer, String>>> ruleVariables)
+      NinjaScope targetScope,
+      int targetOffset,
+      NestedSetBuilder<Artifact> inputsBuilder)
       throws GenericParsingException {
-    List<Pair<Integer, String>> filePair =
-        ruleVariables.get(NinjaRuleVariable.RSPFILE.lowerCaseName());
-    List<Pair<Integer, String>> contentPair =
-        ruleVariables.get(NinjaRuleVariable.RSPFILE_CONTENT.lowerCaseName());
-
-    if (filePair == null && contentPair == null) {
+    NinjaVariableValue value = rule.getVariables().get(NinjaRuleVariable.RSPFILE);
+    NinjaVariableValue content = rule.getVariables().get(NinjaRuleVariable.RSPFILE_CONTENT);
+    if (value == null && content == null) {
       return;
     }
-    if (filePair == null || contentPair == null) {
+    if (value == null || content == null) {
       ruleContext.ruleError(
           String.format(
               "Both rspfile and rspfile_content should be defined for rule '%s'.", rule.getName()));
       return;
     }
-
-    String fileName = filePair.get(0).getSecond();
-    String contentString = contentPair.get(0).getSecond();
+    String fileName = targetScope.getExpandedValue(targetOffset, value);
+    String contentString = targetScope.getExpandedValue(targetOffset, content);
     if (!fileName.trim().isEmpty()) {
       DerivedArtifact rspArtifact =
           artifactsHelper.createOutputArtifact(PathFragment.create(fileName));
@@ -225,7 +219,7 @@ public class NinjaActionsHelper {
    *
    * <p>See {@link NinjaRuleVariable} for the list.
    */
-  private static ImmutableSortedMap<String, List<Pair<Integer, String>>> resolveRuleVariables(
+  private static String resolveRuleCommand(
       NinjaScope targetScope, int targetOffset, NinjaRule rule) {
     ImmutableSortedMap.Builder<String, List<Pair<Integer, String>>> builder =
         ImmutableSortedMap.naturalOrder();
@@ -239,11 +233,8 @@ public class NinjaActionsHelper {
       builder.put(Ascii.toLowerCase(type.name()), ImmutableList.of(Pair.of(0, expandedValue)));
     }
     NinjaScope expandedRuleScope = targetScope.createScopeFromExpandedValues(builder.build());
-    String command =
-        expandedRuleScope.getExpandedValue(
-            targetOffset, rule.getVariables().get(NinjaRuleVariable.COMMAND));
-    builder.put(NinjaRuleVariable.COMMAND.lowerCaseName(), ImmutableList.of(Pair.of(0, command)));
-    return builder.build();
+    return expandedRuleScope.getExpandedValue(
+        targetOffset, rule.getVariables().get(NinjaRuleVariable.COMMAND));
   }
 
   private NinjaScope createTargetScope(NinjaTarget target) {
