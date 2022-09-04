@@ -50,7 +50,7 @@ import org.objectweb.asm.ClassWriter;
 import io.quarkus.deployment.ClassOutput;
 import io.quarkus.deployment.QuarkusClassWriter;
 
-public class RuntimeClassLoader extends ClassLoader implements ClassOutput, TransformerTarget {
+public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
 
     private static final Logger log = Logger.getLogger(RuntimeClassLoader.class);
 
@@ -65,7 +65,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
     private final Path frameworkClassesPath;
     private final Path transformerCache;
 
-    private static final String DEBUG_CLASSES_DIR = System.getProperty("quarkus.debug.generated-classes-dir");
+    private static final String DEBUG_CLASSES_DIR = System.getProperty("io.quarkus.DEBUG_GENERATED_CLASSES_DIR");
 
     private final ConcurrentHashMap<String, Future<Class<?>>> loadingClasses = new ConcurrentHashMap<>();
 
@@ -262,10 +262,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
             throw new ClassNotFoundException(name);
         }
         try {
-            final String pkgName = getPackageNameFromClassName(name);
-            if (getPackage(pkgName) == null) {
-                definePackage(pkgName, null, null, null, null, null, null, null);
-            }
             return defineClass(name, bytes, 0, bytes.length);
         } catch (Error e) {
             //potential race conditions if another thread is loading the same class
@@ -275,10 +271,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Tran
             }
             throw e;
         }
-    }
-
-    private String getPackageNameFromClassName(String className) {
-        return className.substring(0, className.lastIndexOf('.'));
     }
 
     @Override
