@@ -343,7 +343,7 @@ public final class TrimmableTestConfigurationFragments {
                           .add(
                               attr("deps", BuildType.LABEL_LIST)
                                   .allowedFileTypes(FileTypeSet.ANY_FILE))
-                          .useToolchainResolution(false)
+                          .supportsPlatforms(false)
                           .setImplicitOutputsFunction(
                               ImplicitOutputsFunction.fromTemplates("%{name}.np"));
                     });
@@ -359,7 +359,7 @@ public final class TrimmableTestConfigurationFragments {
                           .add(
                               attr("deps", BuildType.LABEL_LIST)
                                   .allowedFileTypes(FileTypeSet.ANY_FILE))
-                          .useToolchainResolution(true)
+                          .supportsPlatforms(true)
                           .setImplicitOutputsFunction(
                               ImplicitOutputsFunction.fromTemplates("%{name}.p"));
                     });
@@ -391,7 +391,7 @@ public final class TrimmableTestConfigurationFragments {
                             .add(
                                 attr("deps", BuildType.LABEL_LIST)
                                     .allowedFileTypes(FileTypeSet.ANY_FILE))
-                            .useToolchainResolution(true)
+                            .supportsPlatforms(true)
                             .addRequiredToolchains(toolchainTypeLabel)
                             .setImplicitOutputsFunction(
                                 ImplicitOutputsFunction.fromTemplates("%{name}.u"));

@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.skyframe.TransitiveTargetFunction.Transitiv
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException2;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -113,7 +113,8 @@ public class TransitiveTargetFunction
 
       NestedSet<Class<? extends Fragment>> depFragments =
           transitiveTargetValue.getTransitiveConfigFragments();
-      ImmutableList<Class<? extends Fragment>> depFragmentsAsList = depFragments.toList();
+      Collection<Class<? extends Fragment>> depFragmentsAsCollection =
+          depFragments.toCollection();
       // The simplest collection technique would be to unconditionally add all deps' nested
       // sets to the current target's nested set. But when there's large overlap between their
       // fragment needs, this produces unnecessarily bloated nested sets and a lot of references
@@ -121,9 +122,9 @@ public class TransitiveTargetFunction
       // by completely skipping sets that don't offer anything new. More fine-tuned optimization
       // is possible, but this offers a good balance between simplicity and practical efficiency.
       Set<Class<? extends Fragment>> addedConfigFragments = builder.getConfigFragmentsFromDeps();
-      if (!addedConfigFragments.containsAll(depFragmentsAsList)) {
+      if (!addedConfigFragments.containsAll(depFragmentsAsCollection)) {
         builder.getTransitiveConfigFragments().addTransitive(depFragments);
-        addedConfigFragments.addAll(depFragmentsAsList);
+        addedConfigFragments.addAll(depFragmentsAsCollection);
       }
     }
     builder.setSuccessfulTransitiveLoading(successfulTransitiveLoading);

@@ -191,17 +191,16 @@ public class BuildViewForTesting {
   @VisibleForTesting
   public BuildConfiguration getConfigurationForTesting(
       Target target, BuildConfiguration config, ExtendedEventHandler eventHandler)
-      throws InvalidConfigurationException {
+      throws StarlarkTransition.TransitionException, InvalidConfigurationException {
     List<TargetAndConfiguration> node =
         ImmutableList.<TargetAndConfiguration>of(new TargetAndConfiguration(target, config));
-    Collection<TargetAndConfiguration> configs =
+    LinkedHashSet<TargetAndConfiguration> configs =
         ConfigurationResolver.getConfigurationsFromExecutor(
-                node,
-                AnalysisUtils.targetsToDeps(
-                    new LinkedHashSet<TargetAndConfiguration>(node), ruleClassProvider),
-                eventHandler,
-                skyframeExecutor)
-            .getTargetsAndConfigs();
+            node,
+            AnalysisUtils.targetsToDeps(
+                new LinkedHashSet<TargetAndConfiguration>(node), ruleClassProvider),
+            eventHandler,
+            skyframeExecutor);
     return configs.iterator().next().getConfiguration();
   }
 

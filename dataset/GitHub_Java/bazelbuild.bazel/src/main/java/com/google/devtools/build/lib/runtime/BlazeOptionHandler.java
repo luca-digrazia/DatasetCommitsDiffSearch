@@ -18,7 +18,6 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -26,7 +25,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.runtime.commands.ProjectFileSupport;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
@@ -246,11 +244,11 @@ public final class BlazeOptionHandler {
       return ExitCode.SUCCESS;
     }
     try {
-      StarlarkOptionsParser.newStarlarkOptionsParser(env, optionsParser)
+      StarlarkOptionsParser.newStarlarkOptionsParser(env, optionsParser, runtime)
           .parse(commandAnnotation, eventHandler);
     } catch (OptionsParsingException e) {
-      env.getReporter().handle(Event.error(e.getMessage()));
-      return ExitCode.PARSING_FAILURE;
+      eventHandler.handle(Event.error(e.getMessage()));
+      return ExitCode.COMMAND_LINE_ERROR;
     }
     return ExitCode.SUCCESS;
   }
@@ -317,42 +315,6 @@ public final class BlazeOptionHandler {
     return ExitCode.SUCCESS;
   }
 
-  private static String getPlatformName() {
-    switch (OS.getCurrent()) {
-      case LINUX:
-        return "linux";
-      case DARWIN:
-        return "macos";
-      case WINDOWS:
-        return "windows";
-      case FREEBSD:
-        return "freebsd";
-      default:
-        return OS.getCurrent().getCanonicalName();
-    }
-  }
-
-  /**
-   * If --enable_platform_specific_config is true and the corresponding config definition exists, we
-   * should enable the platform specific config.
-   */
-  private boolean shouldEnablePlatformSpecificConfig(
-      OptionValueDescription enablePlatformSpecificConfigDescription,
-      ListMultimap<String, RcChunkOfArgs> commandToRcArgs) {
-    if (enablePlatformSpecificConfigDescription == null
-        || !(boolean) enablePlatformSpecificConfigDescription.getValue()) {
-      return false;
-    }
-
-    for (String commandName : getCommandNamesToParse(commandAnnotation)) {
-      String defaultConfigDef = commandName + ":" + getPlatformName();
-      if (commandToRcArgs.containsKey(defaultConfigDef)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   /**
    * Expand the values of --config according to the definitions provided in the rc files and the
    * applicable command.
@@ -363,31 +325,23 @@ public final class BlazeOptionHandler {
 
     OptionValueDescription configValueDescription =
         optionsParser.getOptionValueDescription("config");
-    if (configValueDescription != null && configValueDescription.getCanonicalInstances() != null) {
-      // Find the base set of configs. This does not include the config options that might be
-      // recursively included.
-      ImmutableList<ParsedOptionDescription> configInstances =
-          ImmutableList.copyOf(configValueDescription.getCanonicalInstances());
-
-      // Expand the configs that are mentioned in the input. Flatten these expansions before parsing
-      // them, to preserve order.
-      for (ParsedOptionDescription configInstance : configInstances) {
-        String configValueToExpand = (String) configInstance.getConvertedValue();
-        List<String> expansion = getExpansion(eventHandler, commandToRcArgs, configValueToExpand);
-        optionsParser.parseArgsAsExpansionOfOption(
-            configInstance, String.format("expanded from --%s", configValueToExpand), expansion);
-      }
+    if (configValueDescription == null || configValueDescription.getCanonicalInstances() == null) {
+      // No --config values were set, we can avoid this whole thing.
+      return;
     }
 
-    OptionValueDescription enablePlatformSpecificConfigDescription =
-        optionsParser.getOptionValueDescription("enable_platform_specific_config");
-    if (shouldEnablePlatformSpecificConfig(
-        enablePlatformSpecificConfigDescription, commandToRcArgs)) {
-      List<String> expansion = getExpansion(eventHandler, commandToRcArgs, getPlatformName());
+    // Find the base set of configs. This does not include the config options that might be
+    // recursively incuded.
+    ImmutableList<ParsedOptionDescription> configInstances =
+        ImmutableList.copyOf(configValueDescription.getCanonicalInstances());
+
+    // Expand the configs that are mentioned in the input. Flatten these expansions before parsing
+    // them, to preserve order.
+    for (ParsedOptionDescription configInstance : configInstances) {
+      String configValueToExpand = (String) configInstance.getConvertedValue();
+      List<String> expansion = getExpansion(eventHandler, commandToRcArgs, configValueToExpand);
       optionsParser.parseArgsAsExpansionOfOption(
-          Iterables.getOnlyElement(enablePlatformSpecificConfigDescription.getCanonicalInstances()),
-          String.format("enabled by --enable_platform_specific_config"),
-          expansion);
+          configInstance, String.format("expanded from --%s", configValueToExpand), expansion);
     }
 
     // At this point, we've expanded everything, identify duplicates, if any, to warn about

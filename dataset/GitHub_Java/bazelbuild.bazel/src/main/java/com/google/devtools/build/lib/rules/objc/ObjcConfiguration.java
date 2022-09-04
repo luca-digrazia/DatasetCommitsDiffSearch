@@ -71,6 +71,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
   private final Label objcHeaderScannerTool;
   private final Label appleSdk;
   private final boolean strictObjcModuleMaps;
+  private final boolean disableObjcLibraryResources;
 
   ObjcConfiguration(ObjcCommandLineOptions objcOptions, CoreOptions options) {
     this.iosSimulatorDevice =
@@ -112,6 +113,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
     this.objcHeaderScannerTool = objcOptions.objcHeaderScannerTool;
     this.appleSdk = objcOptions.appleSdk;
     this.strictObjcModuleMaps = objcOptions.strictObjcModuleMaps;
+    this.disableObjcLibraryResources = objcOptions.disableObjcLibraryResources;
   }
 
   /**
@@ -297,5 +299,10 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
   /** Returns true if Objective-C module maps should only be propagated to direct dependencies. */
   public boolean useStrictObjcModuleMaps() {
     return strictObjcModuleMaps;
+  }
+
+  /** Returns true if Objective-C library resource attributes are disallowed. */
+  public boolean disableObjcLibraryResources() {
+    return disableObjcLibraryResources;
   }
 }

@@ -217,7 +217,11 @@ public final class AndroidRuleClasses {
       AndroidConfiguration.Options androidOptions = options.get(AndroidConfiguration.Options.class);
 
       CppOptions cppOptions = options.get(CppOptions.class);
-      if (androidOptions.androidCrosstoolTop != null) {
+      if (androidOptions.androidCrosstoolTop != null
+          && !cppOptions.crosstoolTop.equals(androidOptions.androidCrosstoolTop)) {
+        if (cppOptions.hostCrosstoolTop == null) {
+          cppOptions.hostCrosstoolTop = cppOptions.crosstoolTop;
+        }
         cppOptions.crosstoolTop = androidOptions.androidCrosstoolTop;
       }
 
@@ -857,9 +861,13 @@ public final class AndroidRuleClasses {
           Select the version of aapt for this rule.<br/>
           Possible values:
           <ul>
-              <li><code>aapt_version = "aapt"</code>: Use aapt (deprecated).</li>
-              <li><code>aapt_version = "aapt2"</code>: Use aapt2. This provides improved
-                incremental resource processing, smaller apks and more.</li>
+              <li><code>aapt_version = "aapt"</code>: Use aapt. This is the current default
+                behaviour, and should be used for production binaries.</li>
+              <li><code>aapt_version = "aapt2"</code>: Use aapt2. This is the new resource
+               packaging system that provides improved incremental resource processing, smaller apks
+               and more.</li>
+              <li><code>aapt_version = "auto"</code>: aapt is controlled by the
+                --android_aapt flag.</li>
           </ul>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(

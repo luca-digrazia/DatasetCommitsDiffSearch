@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.XcodeConfig;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigInfo;
+import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables;
 import java.io.Serializable;
@@ -57,21 +57,22 @@ public class AppleCcToolchain extends CcToolchain {
   protected AdditionalBuildVariablesComputer getAdditionalBuildVariablesComputer(
       RuleContext ruleContextPossiblyInHostConfiguration) {
     // xcode config is shared between target and host configuration therefore we can use it.
-    XcodeConfigInfo xcodeConfig =
-        XcodeConfig.getXcodeConfigInfo(ruleContextPossiblyInHostConfiguration);
+    XcodeConfigProvider xcodeConfig =
+        XcodeConfig.getXcodeConfigProvider(ruleContextPossiblyInHostConfiguration);
     return getAdditionalBuildVariablesComputer(xcodeConfig);
   }
 
   /** Returns {@link AdditionalBuildVariablesComputer} lambda without capturing instance state. */
   private static AdditionalBuildVariablesComputer getAdditionalBuildVariablesComputer(
-      XcodeConfigInfo xcodeConfig) {
+      XcodeConfigProvider xcodeConfig) {
     return (AdditionalBuildVariablesComputer & Serializable)
         (BuildOptions buildOptions) -> computeCcToolchainVariables(xcodeConfig, buildOptions);
   }
 
   private static CcToolchainVariables computeCcToolchainVariables(
-      XcodeConfigInfo xcodeConfig, BuildOptions buildOptions) {
-    AppleConfiguration appleConfiguration = new AppleConfiguration(buildOptions);
+      XcodeConfigProvider xcodeConfig, BuildOptions buildOptions) {
+    AppleConfiguration.Loader appleConfigurationLoader = new AppleConfiguration.Loader();
+    AppleConfiguration appleConfiguration = appleConfigurationLoader.create(buildOptions);
     ApplePlatform platform = appleConfiguration.getSingleArchPlatform();
     String cpu = buildOptions.get(CoreOptions.class).cpu;
 
@@ -122,7 +123,7 @@ public class AppleCcToolchain extends CcToolchain {
   }
 
   private static ImmutableMap<String, String> getEnvironmentBuildVariables(
-      XcodeConfigInfo xcodeConfig, String cpu) {
+      XcodeConfigProvider xcodeConfig, String cpu) {
     Map<String, String> builder = new LinkedHashMap<>();
     builder.putAll(AppleConfiguration.getXcodeVersionEnv(xcodeConfig.getXcodeVersion()));
     if (ApplePlatform.isApplePlatform(cpu)) {
@@ -141,7 +142,7 @@ public class AppleCcToolchain extends CcToolchain {
 
   @Override
   protected void validateToolchain(RuleContext ruleContext) throws RuleErrorException {
-    if (XcodeConfig.getXcodeConfigInfo(ruleContext).getXcodeVersion() == null) {
+    if (XcodeConfig.getXcodeConfigProvider(ruleContext).getXcodeVersion() == null) {
       ruleContext.throwWithRuleError(
           "Xcode version must be specified to use an Apple CROSSTOOL. If your Xcode version has "
               + "changed recently, verify that \"xcode-select -p\" is correct and then try: "

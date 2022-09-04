@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.exec.TestStrategy;
 import com.google.devtools.build.lib.exec.TestStrategy.TestOutputFormat;
 import com.google.devtools.build.lib.runtime.AggregatingTestListener;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
+import com.google.devtools.build.lib.runtime.BlazeCommandEventHandler;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
@@ -40,7 +41,6 @@ import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier.TestSumm
 import com.google.devtools.build.lib.runtime.TestResultAnalyzer;
 import com.google.devtools.build.lib.runtime.TestResultNotifier;
 import com.google.devtools.build.lib.runtime.TestSummaryPrinter.TestLogPathFormatter;
-import com.google.devtools.build.lib.runtime.UiOptions;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.AnsiTerminalPrinter;
 import com.google.devtools.build.lib.vfs.Path;
@@ -63,6 +63,8 @@ import java.util.List;
          completion = "label-test",
          allowResidue = true)
 public class TestCommand implements BlazeCommand {
+  private AnsiTerminalPrinter printer;
+
   /** Returns the name of the command to ask the project file for. */
   // TODO(hdm): move into BlazeRuntime?  It feels odd to duplicate the annotation here.
   protected String commandName() {
@@ -98,24 +100,20 @@ public class TestCommand implements BlazeCommand {
         options.getOptions(ExecutionOptions.class),
         env.getEventBus());
 
-    AnsiTerminalPrinter printer =
-        new AnsiTerminalPrinter(
-            env.getReporter().getOutErr().getOutputStream(),
-            options.getOptions(UiOptions.class).useColor());
+    printer = new AnsiTerminalPrinter(env.getReporter().getOutErr().getOutputStream(),
+        options.getOptions(BlazeCommandEventHandler.Options.class).useColor());
 
     // Initialize test handler.
     AggregatingTestListener testListener =
         new AggregatingTestListener(resultAnalyzer, env.getEventBus());
 
     env.getEventBus().register(testListener);
-    return doTest(env, options, testListener, printer);
+    return doTest(env, options, testListener);
   }
 
-  private BlazeCommandResult doTest(
-      CommandEnvironment env,
+  private BlazeCommandResult doTest(CommandEnvironment env,
       OptionsParsingResult options,
-      AggregatingTestListener testListener,
-      AnsiTerminalPrinter printer) {
+      AggregatingTestListener testListener) {
     BlazeRuntime runtime = env.getRuntime();
     // Run simultaneous build and test.
     List<String> targets = ProjectFileSupport.getTargets(runtime.getProjectFileProvider(), options);
@@ -158,9 +156,8 @@ public class TestCommand implements BlazeCommand {
     }
 
     boolean buildSuccess = buildResult.getSuccess();
-    boolean testSuccess =
-        analyzeTestResults(
-            testTargets, buildResult.getSkippedTargets(), testListener, options, env, printer);
+    boolean testSuccess = analyzeTestResults(
+        testTargets, buildResult.getSkippedTargets(), testListener, options, env);
 
     if (testSuccess && !buildSuccess) {
       // If all tests run successfully, test summary should include warning if
@@ -178,16 +175,15 @@ public class TestCommand implements BlazeCommand {
   }
 
   /**
-   * Analyzes test results and prints summary information. Returns true if and only if all tests
-   * were successful.
+   * Analyzes test results and prints summary information.
+   * Returns true if and only if all tests were successful.
    */
   private boolean analyzeTestResults(
       Collection<ConfiguredTarget> testTargets,
       Collection<ConfiguredTarget> skippedTargets,
       AggregatingTestListener listener,
       OptionsParsingResult options,
-      CommandEnvironment env,
-      AnsiTerminalPrinter printer) {
+      CommandEnvironment env) {
     TestResultNotifier notifier = new TerminalTestResultNotifier(
         printer,
         makeTestLogPathFormatter(options, env),

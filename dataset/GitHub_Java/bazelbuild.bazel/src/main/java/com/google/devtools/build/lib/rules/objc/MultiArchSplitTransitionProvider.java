@@ -76,9 +76,7 @@ public class MultiArchSplitTransitionProvider
         ruleContext.attributes().get(PlatformRule.PLATFORM_TYPE_ATTR_NAME, STRING);
     try {
       return getPlatformType(attributeValue);
-    } catch (
-        @SuppressWarnings("UnusedException")
-        ApplePlatform.UnsupportedPlatformTypeException exception) {
+    } catch (IllegalArgumentException exception) {
       throw ruleContext.throwWithAttributeError(
           PlatformRule.PLATFORM_TYPE_ATTR_NAME,
           String.format(UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT, attributeValue));
@@ -89,14 +87,13 @@ public class MultiArchSplitTransitionProvider
    * Returns the apple platform type for the given platform type string (corresponding directly with
    * platform type attribute value).
    *
-   * @throws UnsupportedPlatformTypeException if the given platform type string is not a valid type
+   * @throws IllegalArgumentException if the given platform type string is not a valid type
    */
-  private static PlatformType getPlatformType(String platformTypeString)
-      throws ApplePlatform.UnsupportedPlatformTypeException {
+  public static PlatformType getPlatformType(String platformTypeString) {
     PlatformType platformType = PlatformType.fromString(platformTypeString);
 
     if (!SUPPORTED_PLATFORM_TYPES.contains(platformType)) {
-      throw new ApplePlatform.UnsupportedPlatformTypeException(
+      throw new IllegalArgumentException(
           String.format(UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT, platformTypeString));
     } else {
       return platformType;
@@ -125,7 +122,7 @@ public class MultiArchSplitTransitionProvider
               PlatformRule.MINIMUM_OS_VERSION,
               String.format(INVALID_VERSION_STRING_ERROR_FORMAT, attributeValue));
         }
-      } catch (DottedVersion.InvalidDottedVersionException exception) {
+      } catch (IllegalArgumentException exception) {
         ruleContext.throwWithAttributeError(
             PlatformRule.MINIMUM_OS_VERSION,
             String.format(INVALID_VERSION_STRING_ERROR_FORMAT, attributeValue));
@@ -147,8 +144,7 @@ public class MultiArchSplitTransitionProvider
       } else {
         minimumOsVersion = Optional.of(DottedVersion.fromString(minimumOsVersionString));
       }
-    } catch (ApplePlatform.UnsupportedPlatformTypeException
-        | DottedVersion.InvalidDottedVersionException exception) {
+    } catch (IllegalArgumentException exception) {
       // There's no opportunity to propagate exception information up cleanly at the transition
       // provider level. This should later be registered as a rule error during the initialization
       // of the rule.
@@ -212,7 +208,7 @@ public class MultiArchSplitTransitionProvider
                     AppleConfiguration.iosCpuFromCpu(buildOptions.get(CoreOptions.class).cpu));
           }
           if (actualMinimumOsVersion != null
-              && actualMinimumOsVersion.compareTo(DottedVersion.fromStringUnchecked("11.0")) >= 0) {
+              && actualMinimumOsVersion.compareTo(DottedVersion.fromString("11.0")) >= 0) {
             List<String> non32BitCpus =
                 cpus.stream()
                     .filter(cpu -> !ApplePlatform.is32Bit(PlatformType.IOS, cpu))

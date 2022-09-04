@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
@@ -86,7 +86,12 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     assertThat(env).containsEntry("LANG", "en_US");
     assertThat(env).containsKey("PATH");
     assertThat(env.get("PATH")).contains("/bin:/usr/bin");
-    assertThrows(UnsupportedOperationException.class, () -> env.put("FOO", "bar"));
+    try {
+      env.put("FOO", "bar");
+      fail("modifiable default environment");
+    } catch (UnsupportedOperationException ignored) {
+      //expected exception
+    }
   }
 
   @Test
@@ -226,7 +231,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     BuildConfiguration config3 = create("--j2objc_translation_flags=baz");
     // Shared because all j2objc options are the same:
     assertThat(config1.getFragment(J2ObjcConfiguration.class))
-        .isSameInstanceAs(config2.getFragment(J2ObjcConfiguration.class));
+        .isSameAs(config2.getFragment(J2ObjcConfiguration.class));
     // Distinct because the j2objc options differ:
     assertThat(config1.getFragment(J2ObjcConfiguration.class))
         .isNotSameInstanceAs(config3.getFragment(J2ObjcConfiguration.class));
