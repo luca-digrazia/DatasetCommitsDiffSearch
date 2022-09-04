@@ -30,11 +30,13 @@ import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.metrics.Metric;
 import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
 import org.graylog2.restclient.models.api.responses.BuffersResponse;
+import org.graylog2.restclient.models.api.responses.EmptyResponse;
 import org.graylog2.restclient.models.api.responses.SystemOverviewResponse;
 import org.graylog2.restclient.models.api.responses.cluster.RadioSummaryResponse;
 import org.graylog2.restclient.models.api.responses.metrics.MetricsListResponse;
 import org.graylog2.restclient.models.api.responses.system.*;
 import org.graylog2.restroutes.generated.routes;
+import org.joda.time.DateTime;
 import org.slf4j.LoggerFactory;
 import play.Logger;
 import play.mvc.Http;
@@ -77,9 +79,6 @@ public class Radio extends ClusterEntity {
     }
 
     public synchronized void loadSystemInformation() {
-        if (systemInfo != null) {
-            return;
-        }
         try {
             systemInfo = api.path(routes.radio().SystemResource().system(), SystemOverviewResponse.class)
                     .radio(this)
@@ -92,9 +91,6 @@ public class Radio extends ClusterEntity {
     }
 
     public synchronized void loadJVMInformation() {
-        if (jvmInfo != null) {
-            return;
-        }
         try {
             jvmInfo = new NodeJVMStats(api.path(routes.radio().SystemResource().jvm(), ClusterEntityJVMStatsResponse.class)
                     .radio(this)
@@ -107,9 +103,6 @@ public class Radio extends ClusterEntity {
     }
 
     public synchronized void loadBufferInformation() {
-        if (bufferInfo != null) {
-            return;
-        }
         try {
             bufferInfo = new BufferInfo(api.path(routes.radio().BuffersResource().utilization(), BuffersResponse.class)
                     .radio(this)
@@ -135,13 +128,11 @@ public class Radio extends ClusterEntity {
     }
 
     public NodeJVMStats jvm() {
-        loadJVMInformation();
-
         if (jvmInfo == null) {
-            return NodeJVMStats.buildEmpty();
-        } else {
-            return jvmInfo;
+            loadJVMInformation();
         }
+
+        return jvmInfo;
     }
 
     public String getPid() {
@@ -191,16 +182,6 @@ public class Radio extends ClusterEntity {
         return false;
     }
 
-    private SystemOverviewResponse systemInfo() {
-        loadSystemInformation();
-
-        if (systemInfo == null) {
-            return SystemOverviewResponse.buildEmpty();
-        } else {
-            return systemInfo;
-        }
-    }
-
     @Override
     public String getTransportAddress() {
         return transportAddress.toASCIIString();
@@ -212,21 +193,35 @@ public class Radio extends ClusterEntity {
 
     @Override
     public String getHostname() {
-        return systemInfo().hostname;
+        if (systemInfo == null) {
+            loadSystemInformation();
+        }
+
+        return systemInfo.hostname;
     }
 
     public String getVersion() {
-        return systemInfo().version;
+        if (systemInfo == null) {
+            loadSystemInformation();
+        }
+
+        return systemInfo.version;
     }
 
     public String getLifecycle() {
-        return this.systemInfo().lifecycle;
+        if (systemInfo == null) {
+            loadSystemInformation();
+        }
+
+        return this.systemInfo.lifecycle;
     }
 
     public boolean lbAlive() {
-        final SystemOverviewResponse info = systemInfo();
+        if (systemInfo == null) {
+            loadSystemInformation();
+        }
 
-        return info.lbStatus != null && info.lbStatus.equals("alive");
+        return this.systemInfo.lbStatus != null && this.systemInfo.lbStatus.equals("alive");
     }
 
     @Override
@@ -322,13 +317,10 @@ public class Radio extends ClusterEntity {
     }
 
     public BufferInfo getBuffers() {
-        loadBufferInformation();
-
         if (bufferInfo == null) {
-            return BufferInfo.buildEmpty();
-        } else {
-            return bufferInfo;
+            loadBufferInformation();
         }
+        return bufferInfo;
     }
 
     public String getThreadDump() throws IOException, APIException {

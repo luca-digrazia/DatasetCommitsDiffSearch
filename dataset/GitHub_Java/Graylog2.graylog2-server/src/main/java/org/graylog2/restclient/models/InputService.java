@@ -9,11 +9,14 @@ import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.ServerNodes;
 import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
 import org.graylog2.restclient.models.api.responses.system.*;
+import org.graylog2.restroutes.generated.InputsResource;
+import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
 
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,6 +31,7 @@ public class InputService {
     private final InputState.Factory inputStateFactory;
     private final NodeService nodeService;
     private final ServerNodes serverNodes;
+    private final InputsResource resource = routes.InputsResource();
 
 
     @Inject
@@ -45,10 +49,11 @@ public class InputService {
 
     protected Map<ClusterEntity, InputsResponse> getInputsFromAllEntities() {
         Map<ClusterEntity, InputsResponse> result = Maps.newHashMap();
-        result.putAll(api.get(InputsResponse.class).fromAllNodes().path("/system/inputs").executeOnAll());
+        result.putAll(api.path(resource.list(), InputsResponse.class).fromAllNodes().executeOnAll());
         try {
             for(Radio radio : nodeService.radios().values()) {
-                result.put(radio, api.get(InputsResponse.class).radio(radio).path("/system/inputs").execute());
+                result.put(radio,
+                        api.path(routes.radio().InputsResource().list(), InputsResponse.class).radio(radio).execute());
             }
         } catch (APIException e) {
             log.error("Unable to fetch radio list: " + e);
@@ -58,10 +63,10 @@ public class InputService {
         return result;
     }
 
-    protected List<InputStateSummaryResponse> getInputsFromNode(Node node) {
+    protected List<InputStateSummaryResponse> getInputsFromNode(ClusterEntity node) {
         List<InputStateSummaryResponse> result = Lists.newArrayList();
         try {
-            result = api.get(InputsResponse.class).node(node).path("/system/inputs").execute().inputs;
+            result = api.path(resource.list(), InputsResponse.class).clusterEntity(node).execute().inputs;
         } catch (APIException e) {
             log.error("Unable to fetch input list: " + e);
         } catch (IOException e) {
@@ -72,10 +77,10 @@ public class InputService {
     }
 
     protected Map<Node, InputsResponse> getInputsFromAllNodes() {
-        return api.get(InputsResponse.class).fromAllNodes().path("/system/inputs").executeOnAll();
+        return api.path(resource.list(), InputsResponse.class).fromAllNodes().executeOnAll();
     }
 
-    public List<InputState> loadAllInputStates(Node node) {
+    public List<InputState> loadAllInputStates(ClusterEntity node) {
         List<InputState> inputStates = Lists.newArrayList();
 
         for (InputStateSummaryResponse inputsResponse : getInputsFromNode(node)) {
@@ -132,8 +137,8 @@ public class InputService {
 
     public Map<Node, Map<String, String>> getAllInputTypes() throws IOException, APIException {
         Map<Node, Map<String, String>> result = Maps.newHashMap();
-        Map<Node, InputTypesResponse> inputTypesResponseMap = api.get(InputTypesResponse.class)
-                .fromAllNodes().path("/system/inputs/types").executeOnAll();
+        Map<Node, InputTypesResponse> inputTypesResponseMap = api.path(resource.types(), InputTypesResponse.class)
+                .fromAllNodes().executeOnAll();
 
         for (Map.Entry<Node, InputTypesResponse> entry : inputTypesResponseMap.entrySet())
             result.put(entry.getKey(), entry.getValue().types);
@@ -142,7 +147,7 @@ public class InputService {
     }
 
     public InputTypeSummaryResponse getInputTypeInformation(Node node, String type) throws IOException, APIException {
-        return api.get(InputTypeSummaryResponse.class).node(node).path("/system/inputs/types/{0}", type).execute();
+        return api.path(resource.info(type), InputTypeSummaryResponse.class).node(node).execute();
     }
 
     public Map<String, InputTypeSummaryResponse> getAllInputTypeInformation() throws IOException, APIException {
@@ -210,4 +215,61 @@ public class InputService {
         return results;
     }
 
+    public void start(String inputId) throws IOException, APIException {
+        Map.Entry<ClusterEntity, InputState> target = findNodeAndInputStateForInput(inputId);
+
+        List<ClusterEntity> targetNodes = targetNodesForInput(target);
+
+        for (ClusterEntity targetNode : targetNodes)
+            targetNode.startInput(inputId);
+    }
+
+    public void stop(String inputId) throws IOException, APIException {
+        final Map.Entry<ClusterEntity, InputState> target = findNodeAndInputStateForInput(inputId);
+
+        List<ClusterEntity> targetNodes = targetNodesForInput(target);
+
+        for (ClusterEntity targetNode : targetNodes)
+            targetNode.stopInput(inputId);
+    }
+
+    public void restart(String inputId) throws IOException, APIException {
+        final Map.Entry<ClusterEntity, InputState> target = findNodeAndInputStateForInput(inputId);
+
+        List<ClusterEntity> targetNodes = targetNodesForInput(target);
+
+        for (ClusterEntity targetNode : targetNodes)
+            targetNode.restartInput(inputId);
+    }
+
+    protected List<ClusterEntity> targetNodesForInput(Map.Entry<ClusterEntity, InputState> target) {
+        final List<ClusterEntity> targetNodes = Lists.newArrayList();
+        if (target.getValue().getInput().getGlobal()) {
+            targetNodes.addAll(serverNodes.all());
+            try {
+                targetNodes.addAll(nodeService.radios().values());
+            } catch (APIException | IOException e) {
+                log.error("Unable to fetch list of radios: " + e);
+            }
+        } else {
+            targetNodes.add(target.getKey());
+        }
+
+        return targetNodes;
+    }
+
+    protected Map.Entry<ClusterEntity, InputState> findNodeAndInputStateForInput(String inputId) {
+        ClusterEntity targetNode = null;
+        InputState targetInputState = null;
+
+        for (final Map.Entry<ClusterEntity, List<InputState>> entry : loadAllInputStatesByEntity().entrySet()) {
+            for (final InputState inputState : entry.getValue()) {
+                if (inputState.getInput().getPersistId().equals(inputId)) {
+                    return new AbstractMap.SimpleImmutableEntry<ClusterEntity, InputState>(entry.getKey(), inputState);
+                }
+            }
+        }
+
+        return null;
+    }
 }
