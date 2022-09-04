@@ -78,9 +78,7 @@ public final class EvalUtils {
               && ((SkylarkList) o1).isTuple() == ((SkylarkList) o2).isTuple()) {
             return compareLists((SkylarkList) o1, (SkylarkList) o2);
           }
-
-          if (!(o1.getClass().isAssignableFrom(o2.getClass())
-              || o2.getClass().isAssignableFrom(o1.getClass()))) {
+          if (!o1.getClass().equals(o2.getClass())) {
             throw new ComparisonException(
                 "Cannot compare " + getDataTypeName(o1) + " with " + getDataTypeName(o2));
           }
@@ -530,6 +528,7 @@ public final class EvalUtils {
     int step;
 
     if (stepObj == Runtime.NONE) {
+      // This case is excluded by the parser, but let's handle it for completeness.
       step = 1;
     } else if (stepObj instanceof Integer) {
       step = ((Integer) stepObj).intValue();
