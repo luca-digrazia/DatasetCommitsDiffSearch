@@ -53,7 +53,7 @@ import org.fusesource.jansi.Ansi;
 
 import io.quarkus.cli.commands.AddExtensions;
 import io.quarkus.cli.commands.CreateProject;
-import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.cli.commands.writer.FileWriter;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.components.Prompter;
 import io.quarkus.maven.utilities.MojoUtils;
@@ -147,7 +147,7 @@ public class CreateProjectMojo extends AbstractMojo {
             final Map<String, Object> context = new HashMap<>();
             context.put("path", path);
 
-            success = new CreateProject(new FileProjectWriter(projectRoot))
+            success = new CreateProject(new FileWriter(projectRoot))
                     .groupId(projectGroupId)
                     .artifactId(projectArtifactId)
                     .version(projectVersion)
@@ -158,7 +158,7 @@ public class CreateProjectMojo extends AbstractMojo {
             File createdPomFile = new File(projectRoot, "pom.xml");
             if (success) {
                 File pomFile = new File(createdPomFile.getAbsolutePath());
-                new AddExtensions(new FileProjectWriter(pomFile.getParentFile()), pomFile.getName())
+                new AddExtensions(new FileWriter(pomFile.getParentFile()), pomFile.getName())
                         .addExtensions(extensions);
             }
 
@@ -245,10 +245,7 @@ public class CreateProjectMojo extends AbstractMojo {
                             .replace("_", ".") + ".HelloResource";
                     className = prompter.promptWithDefaultValue("Set the resource classname", defaultResourceName);
                     if (StringUtils.isBlank(path)) {
-                        String[] resourceClassName = StringUtils.splitByCharacterTypeCamelCase(
-                                className.substring(className.lastIndexOf(".")));
-                        path = prompter.promptWithDefaultValue("Set the resource path ",
-                                "/" + resourceClassName[1].toLowerCase());
+                        path = prompter.promptWithDefaultValue("Set the resource path ", "/hello");
                     }
                 } else {
                     className = null;

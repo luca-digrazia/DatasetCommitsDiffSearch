@@ -19,7 +19,7 @@ import org.apache.maven.model.Model;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.cli.commands.writer.FileWriter;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.maven.utilities.QuarkusDependencyPredicate;
 
@@ -32,14 +32,14 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(new FileProjectWriter(pom.getParentFile()))
+        new CreateProject(new FileWriter(pom.getParentFile()))
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
                 .doCreateProject(context);
 
         File pomFile = new File(pom.getAbsolutePath());
-        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()), pomFile.getName())
+        new AddExtensions(new FileWriter(pomFile.getParentFile()), pomFile.getName())
                 .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         Model model = readPom(pom);
@@ -64,14 +64,14 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(new FileProjectWriter(pom.getParentFile()))
+        new CreateProject(new FileWriter(pom.getParentFile()))
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
                 .doCreateProject(context);
 
         File pomFile = new File(pom.getAbsolutePath());
-        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()), pomFile.getName())
+        new AddExtensions(new FileWriter(pomFile.getParentFile()), pomFile.getName())
                 .addExtensions(new HashSet<>(asList("resteasy", " hibernate-validator ")));
 
         Model model = readPom(pom);
@@ -91,7 +91,7 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(new FileProjectWriter(pom.getParentFile()))
+        new CreateProject(new FileWriter(pom.getParentFile()))
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
@@ -107,7 +107,7 @@ public class ListExtensionsTest {
         MojoUtils.write(model, pom);
 
         File pomFile = new File(pom.getAbsolutePath());
-        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()), pomFile.getName())
+        new AddExtensions(new FileWriter(pomFile.getParentFile()), pomFile.getName())
                 .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         model = readPom(pom);
@@ -117,7 +117,7 @@ public class ListExtensionsTest {
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             System.setOut(printStream);
             new ListExtensions(model)
-                    .listExtensions(true, "full");
+                    .listExtensions();
         } finally {
             System.setOut(out);
         }
@@ -125,27 +125,17 @@ public class ListExtensionsTest {
         boolean resteasy = false;
         boolean hibernateValidator = false;
         final String output = baos.toString();
-        boolean checkGuideInLineAfter = false;
         for (String line : output.split("\r?\n")) {
             if (line.contains(" Agroal ")) {
                 assertTrue(line.startsWith("current"), "Agroal should list as current: " + line);
                 agroal = true;
             } else if (line.contains(" RESTEasy  ")) {
                 assertTrue(line.startsWith("update"), "RESTEasy should list as having an update: " + line);
-                assertTrue(
-                        line.endsWith(
-                                String.format("%-16s", getPluginVersion())),
-                        "RESTEasy should list as having an update: " + line);
+                assertTrue(line.endsWith(getPluginVersion()), "RESTEasy should list as having an update: " + line);
                 resteasy = true;
             } else if (line.contains(" Hibernate Validator  ")) {
                 assertTrue(line.startsWith("   "), "Hibernate Validator should not list as anything: " + line);
                 hibernateValidator = true;
-            } else if (checkGuideInLineAfter) {
-                checkGuideInLineAfter = false;
-                assertTrue(
-                        line.endsWith(
-                                String.format("%s", "https://quarkus.io/guides/rest-json-guide")),
-                        "RESTEasy should list as having an guide: " + line);
             }
         }
 

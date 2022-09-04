@@ -1,6 +1,22 @@
+/*
+ *
+ *   Copyright (c) 2016-2018 Red Hat, Inc.
+ *
+ *   Red Hat licenses this file to you under the Apache License, version
+ *   2.0 (the "License"); you may not use this file except in compliance
+ *   with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ *   implied.  See the License for the specific language governing
+ *   permissions and limitations under the License.
+ */
+
 package io.quarkus.maven.utilities;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -8,7 +24,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import org.apache.maven.model.Dependency;
@@ -212,11 +227,6 @@ public class MojoUtils {
         }
     }
 
-    public static String[] readGavFromPom(final InputStream resourceAsStream) throws IOException {
-        Model model = readPom(resourceAsStream);
-        return new String[] { model.getGroupId(), model.getArtifactId(), model.getVersion() };
-    }
-
     public static void write(Model model, File outputFile) throws IOException {
         FileOutputStream fileOutputStream = new FileOutputStream(outputFile);
         write(model, fileOutputStream);
@@ -334,23 +344,6 @@ public class MojoUtils {
             this.name = name;
             this.value = value;
         }
-    }
-
-    public static String[] readGavFromSettingsGradle(ByteArrayInputStream buildFileInputStream, String[] gavIn) {
-        String[] gavOut = Arrays.copyOf(gavIn, gavIn.length);
-        try (Scanner scanner = new Scanner(buildFileInputStream, StandardCharsets.UTF_8.name())) {
-            while (scanner.hasNextLine()) {
-                String currentLine = scanner.nextLine();
-                if (currentLine.startsWith("group")) {
-                    gavOut[0] = currentLine.substring(currentLine.indexOf('\'') + 1, currentLine.lastIndexOf('\''));
-                } else if (currentLine.startsWith("rootProject.name")) {
-                    gavOut[1] = currentLine.substring(currentLine.indexOf('\'') + 1, currentLine.lastIndexOf('\''));
-                } else if (currentLine.startsWith("version")) {
-                    gavOut[2] = currentLine.substring(currentLine.indexOf('\'') + 1, currentLine.lastIndexOf('\''));
-                }
-            }
-        }
-        return gavOut;
     }
 
 }

@@ -2,7 +2,6 @@ package io.quarkus.maven;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -16,7 +15,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 
 import io.quarkus.cli.commands.AddExtensions;
-import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.cli.commands.writer.FileWriter;
 
 /**
  * Allow adding an extension to an existing pom.xml file.
@@ -56,15 +55,13 @@ public class AddExtensionMojo extends AbstractMojo {
         if (extensions != null && !extensions.isEmpty()) {
             ext.addAll(extensions);
         } else {
-            // Parse the "extension" just in case it contains several comma-separated values
-            // https://github.com/quarkusio/quarkus/issues/2393
-            ext.addAll(Arrays.stream(extension.split(",")).map(s -> s.trim()).collect(Collectors.toSet()));
+            ext.add(extension);
         }
 
         try {
             Model model = project.getOriginalModel().clone();
             File pomFile = new File(model.getPomFile().getAbsolutePath());
-            new AddExtensions(new FileProjectWriter(pomFile.getParentFile()), pomFile.getName())
+            new AddExtensions(new FileWriter(pomFile.getParentFile()), pomFile.getName())
                     .addExtensions(ext.stream().map(String::trim).collect(Collectors.toSet()));
         } catch (IOException e) {
             throw new MojoExecutionException("Unable to update the pom.xml file", e);
