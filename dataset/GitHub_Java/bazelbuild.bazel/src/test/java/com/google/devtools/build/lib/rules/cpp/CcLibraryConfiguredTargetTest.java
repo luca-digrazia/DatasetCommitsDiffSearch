@@ -17,11 +17,17 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
@@ -88,7 +94,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
 
   private void assertNoCppModuleMapAction(String label) throws Exception {
     ConfiguredTarget target = getConfiguredTarget(label);
-    assertThat(target.getProvider(CppCompilationContext.class).getCppModuleMap()).isNull();
+    assertNull(target.getProvider(CppCompilationContext.class).getCppModuleMap());
   }
 
 
@@ -175,13 +181,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   @Test
   public void testEmptyLinkopts() throws Exception {
     ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
-    assertThat(
-            hello
-                .getProvider(CcLinkParamsProvider.class)
-                .getCcLinkParams(false, false)
-                .getLinkopts()
-                .isEmpty())
-        .isTrue();
+    assertTrue(hello.getProvider(CcLinkParamsProvider.class)
+        .getCcLinkParams(false, false).getLinkopts().isEmpty());
   }
 
   @Test
@@ -218,21 +219,20 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
 
     ExtraActionInfo.Builder builder = action.getExtraActionInfo();
     ExtraActionInfo info = builder.build();
-    assertThat(info.getMnemonic()).isEqualTo("CppLink");
+    assertEquals("CppLink", info.getMnemonic());
 
     CppLinkInfo cppLinkInfo = info.getExtension(CppLinkInfo.cppLinkInfo);
-    assertThat(cppLinkInfo).isNotNull();
+    assertNotNull(cppLinkInfo);
 
     Iterable<String> inputs = Artifact.asExecPaths(
         LinkerInputs.toLibraryArtifacts(action.getLinkCommandLine().getLinkerInputs()));
     assertThat(cppLinkInfo.getInputFileList()).containsExactlyElementsIn(inputs);
-    assertThat(cppLinkInfo.getOutputFile())
-        .isEqualTo(action.getPrimaryOutput().getExecPathString());
-    assertThat(cppLinkInfo.hasInterfaceOutputFile()).isFalse();
-    assertThat(cppLinkInfo.getLinkTargetType())
-        .isEqualTo(action.getLinkCommandLine().getLinkTargetType().name());
-    assertThat(cppLinkInfo.getLinkStaticness())
-        .isEqualTo(action.getLinkCommandLine().getLinkStaticness().name());
+    assertEquals(action.getPrimaryOutput().getExecPathString(), cppLinkInfo.getOutputFile());
+    assertFalse(cppLinkInfo.hasInterfaceOutputFile());
+    assertEquals(action.getLinkCommandLine().getLinkTargetType().name(),
+        cppLinkInfo.getLinkTargetType());
+    assertEquals(action.getLinkCommandLine().getLinkStaticness().name(),
+        cppLinkInfo.getLinkStaticness());
     Iterable<String> linkstamps = Artifact.asExecPaths(
         action.getLinkCommandLine().getLinkstamps().values());
     assertThat(cppLinkInfo.getLinkStampList()).containsExactlyElementsIn(linkstamps);
@@ -248,26 +248,25 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testCppLinkActionExtraActionInfoWithSharedLibraries() throws Exception {
     useConfiguration("--cpu=k8");
     ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
-    Artifact sharedObject =
+    Artifact sharedObject  =
         FileType.filter(getFilesToBuild(hello), CppFileTypes.SHARED_LIBRARY).iterator().next();
     CppLinkAction action = (CppLinkAction) getGeneratingAction(sharedObject);
 
     ExtraActionInfo.Builder builder = action.getExtraActionInfo();
     ExtraActionInfo info = builder.build();
-    assertThat(info.getMnemonic()).isEqualTo("CppLink");
+    assertEquals("CppLink", info.getMnemonic());
 
     CppLinkInfo cppLinkInfo = info.getExtension(CppLinkInfo.cppLinkInfo);
-    assertThat(cppLinkInfo).isNotNull();
+    assertNotNull(cppLinkInfo);
 
     Iterable<String> inputs = Artifact.asExecPaths(
         LinkerInputs.toLibraryArtifacts(action.getLinkCommandLine().getLinkerInputs()));
     assertThat(cppLinkInfo.getInputFileList()).containsExactlyElementsIn(inputs);
-    assertThat(cppLinkInfo.getOutputFile())
-        .isEqualTo(action.getPrimaryOutput().getExecPathString());
-    assertThat(cppLinkInfo.getLinkTargetType())
-        .isEqualTo(action.getLinkCommandLine().getLinkTargetType().name());
-    assertThat(cppLinkInfo.getLinkStaticness())
-        .isEqualTo(action.getLinkCommandLine().getLinkStaticness().name());
+    assertEquals(action.getPrimaryOutput().getExecPathString(), cppLinkInfo.getOutputFile());
+    assertEquals(action.getLinkCommandLine().getLinkTargetType().name(),
+        cppLinkInfo.getLinkTargetType());
+    assertEquals(action.getLinkCommandLine().getLinkStaticness().name(),
+        cppLinkInfo.getLinkStaticness());
     Iterable<String> linkstamps = Artifact.asExecPaths(
         action.getLinkCommandLine().getLinkstamps().values());
     assertThat(cppLinkInfo.getLinkStampList()).containsExactlyElementsIn(linkstamps);
@@ -378,17 +377,15 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     useConfiguration("--cpu=k8");
     // ArtifactsToAlwaysBuild should apply both for static libraries.
     ConfiguredTarget helloStatic = getConfiguredTarget("//hello:hello_static");
-    assertThat(
-        artifactsToStrings(getOutputGroup(helloStatic, OutputGroupProvider.HIDDEN_TOP_LEVEL)))
-        .containsExactly("bin hello/_objs/hello_static/hello/hello.pic.o");
+    assertEquals(ImmutableSet.of("bin hello/_objs/hello_static/hello/hello.pic.o"),
+        artifactsToStrings(getOutputGroup(helloStatic, OutputGroupProvider.HIDDEN_TOP_LEVEL)));
     Artifact implSharedObject = getBinArtifact("libhello_static.so", helloStatic);
     assertThat(getFilesToBuild(helloStatic)).doesNotContain(implSharedObject);
 
     // And for shared libraries.
     ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
-    assertThat(
-        artifactsToStrings(getOutputGroup(helloStatic, OutputGroupProvider.HIDDEN_TOP_LEVEL)))
-        .containsExactly("bin hello/_objs/hello_static/hello/hello.pic.o");
+    assertEquals(ImmutableSet.of("bin hello/_objs/hello_static/hello/hello.pic.o"),
+        artifactsToStrings(getOutputGroup(helloStatic, OutputGroupProvider.HIDDEN_TOP_LEVEL)));
     implSharedObject = getBinArtifact("libhello.so", hello);
     assertThat(getFilesToBuild(hello)).contains(implSharedObject);
   }
@@ -401,11 +398,12 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         "cc_library(name = 'x', srcs = ['x.cc'], deps = [':y'], linkstatic = 1)",
         "cc_library(name = 'y', srcs = ['y.cc'], deps = [':z'])",
         "cc_library(name = 'z', srcs = ['z.cc'])");
-    assertThat(artifactsToStrings(getOutputGroup(x, OutputGroupProvider.HIDDEN_TOP_LEVEL)))
-        .containsExactly(
-            "bin foo/_objs/x/foo/x.pic.o",
-            "bin foo/_objs/y/foo/y.pic.o",
-            "bin foo/_objs/z/foo/z.pic.o");
+    assertEquals(
+        ImmutableSet.of(
+          "bin foo/_objs/x/foo/x.pic.o",
+          "bin foo/_objs/y/foo/y.pic.o",
+          "bin foo/_objs/z/foo/z.pic.o"),
+        artifactsToStrings(getOutputGroup(x, OutputGroupProvider.HIDDEN_TOP_LEVEL)));
   }
 
   @Test
@@ -791,8 +789,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(ActionsTestUtil.baseArtifactNames(action.getDependencyArtifacts())).containsExactly(
         "stl.cppmap",
         "crosstool.cppmap");
-    assertThat(artifactsToStrings(action.getPrivateHeaders()))
-        .containsExactly("src module/a.h");
+    assertEquals(ImmutableSet.of("src module/a.h"),
+        artifactsToStrings(action.getPrivateHeaders()));
     assertThat(action.getPublicHeaders()).isEmpty();
   }
 
