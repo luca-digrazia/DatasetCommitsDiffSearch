@@ -11,19 +11,16 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
-import android.database.sqlite.SQLiteStatement;
 
 import com.facebook.stetho.common.Util;
 import com.facebook.stetho.inspector.helper.ChromePeerManager;
 import com.facebook.stetho.inspector.helper.PeerRegistrationListener;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
 import com.facebook.stetho.inspector.protocol.module.Database;
-import com.facebook.stetho.inspector.protocol.module.DatabaseConstants;
 
 @ThreadSafe
 public class DatabasePeerManager extends ChromePeerManager {
@@ -132,67 +129,17 @@ public class DatabasePeerManager extends ChromePeerManager {
     Util.throwIfNull(handler);
     SQLiteDatabase database = openDatabase(databaseName);
     try {
-      String firstWord = getFirstWord(query);
-
-      if (firstWord.equalsIgnoreCase("UPDATE") || firstWord.equalsIgnoreCase("DELETE")) {
-        return executeUpdateDelete(database, query, handler);
-      } else if (firstWord.equalsIgnoreCase("INSERT")) {
-        return executeInsert(database, query, handler);
-      } else if (firstWord.equalsIgnoreCase("SELECT")) {
-        return executeSelect(database, query, handler);
-      } else {
-        return executeRawQuery(database, query, handler);
+      Cursor cursor = database.rawQuery(query, null);
+      try {
+        return handler.handleResult(cursor);
+      } finally {
+        cursor.close();
       }
-
     } finally {
       database.close();
     }
   }
 
-  private static String getFirstWord(String s) {
-    s.trim();
-    int firstSpace = s.indexOf(' ');
-    return firstSpace >= 0 ? s.substring(0, firstSpace) : s;
-  }
-
-  @TargetApi(DatabaseConstants.MIN_API_LEVEL)
-  private <T> T executeUpdateDelete(
-      SQLiteDatabase database,
-      String query,
-      ExecuteResultHandler<T> handler) {
-    SQLiteStatement statement = database.compileStatement(query);
-    int count = statement.executeUpdateDelete();
-    return handler.handleUpdateDelete(count);
-  }
-
-  private <T> T executeInsert(
-      SQLiteDatabase database,
-      String query,
-      ExecuteResultHandler<T> handler) {
-    SQLiteStatement statement = database.compileStatement(query);
-    long count = statement.executeInsert();
-    return handler.handleInsert(count);
-  }
-
-  private <T> T executeSelect(
-      SQLiteDatabase database,
-      String query,
-      ExecuteResultHandler<T> handler) {
-    Cursor cursor = database.rawQuery(query, null);
-    try {
-      return handler.handleSelect(cursor);
-    } finally {
-      cursor.close();
-    }
-  }
-
-  private <T> T executeRawQuery(
-      SQLiteDatabase database,
-      String query,
-      ExecuteResultHandler<T> handler) {
-    database.execSQL(query);
-    return handler.handleRawQuery();
-  }
   private SQLiteDatabase openDatabase(String databaseName) throws SQLiteException {
     Util.throwIfNull(databaseName);
     File databaseFile = mContext.getDatabasePath(databaseName);
@@ -204,13 +151,7 @@ public class DatabasePeerManager extends ChromePeerManager {
   }
 
   public interface ExecuteResultHandler<T> {
-    public T handleRawQuery() throws SQLiteException;
-
-    public T handleSelect(Cursor result) throws SQLiteException;
-
-    public T handleInsert(long insertedId) throws SQLiteException;
-
-    public T handleUpdateDelete(int count) throws SQLiteException;
+    public T handleResult(Cursor result) throws SQLiteException;
   }
 
   private final PeerRegistrationListener mPeerRegistrationListener =
