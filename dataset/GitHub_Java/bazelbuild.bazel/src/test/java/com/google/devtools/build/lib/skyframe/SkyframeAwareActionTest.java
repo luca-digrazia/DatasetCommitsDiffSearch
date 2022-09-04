@@ -209,9 +209,8 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-      fp.addString(getPrimaryOutput().getExecPathString());
-      fp.addInt(executionCounter.get());
+    protected String computeKey(ActionKeyContext actionKeyContext) {
+      return getPrimaryOutput().getExecPathString() + executionCounter.get();
     }
   }
 
@@ -656,8 +655,8 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-      fp.addInt(42);
+    protected String computeKey(ActionKeyContext actionKeyContext) {
+      return new Fingerprint().addInt(42).hexDigestAndReset();
     }
   }
 

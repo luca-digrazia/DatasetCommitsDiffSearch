@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Symlinks;
@@ -114,24 +113,21 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     }
   }
 
-  @AutoCodec static final FileArtifactValue DEFAULT_MIDDLEMAN = new SingletonMarkerValue();
+  static final FileArtifactValue DEFAULT_MIDDLEMAN = new SingletonMarkerValue();
   /** Data that marks that a file is not present on the filesystem. */
-  @VisibleForTesting @AutoCodec
+  @VisibleForTesting
   public static final FileArtifactValue MISSING_FILE_MARKER = new SingletonMarkerValue();
 
   /**
    * Represents an omitted file -- we are aware of it but it doesn't exist. All access methods are
    * unsupported.
    */
-  @AutoCodec static final FileArtifactValue OMITTED_FILE_MARKER = new OmittedFileValue();
+  static final FileArtifactValue OMITTED_FILE_MARKER = new OmittedFileValue();
 
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static final class DirectoryArtifactValue extends FileArtifactValue {
+  private static final class DirectoryArtifactValue extends FileArtifactValue {
     private final long mtime;
 
-    @AutoCodec.VisibleForSerialization
-    DirectoryArtifactValue(long mtime) {
+    private DirectoryArtifactValue(long mtime) {
       this.mtime = mtime;
     }
 
@@ -167,15 +163,12 @@ public abstract class FileArtifactValue implements SkyValue, Metadata {
     }
   }
 
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static final class RegularFileArtifactValue extends FileArtifactValue {
+  private static final class RegularFileArtifactValue extends FileArtifactValue {
     private final byte[] digest;
     @Nullable private final FileContentsProxy proxy;
     private final long size;
 
-    @AutoCodec.VisibleForSerialization
-    RegularFileArtifactValue(byte[] digest, @Nullable FileContentsProxy proxy, long size) {
+    private RegularFileArtifactValue(byte[] digest, @Nullable FileContentsProxy proxy, long size) {
       this.digest = Preconditions.checkNotNull(digest);
       this.proxy = proxy;
       this.size = size;
