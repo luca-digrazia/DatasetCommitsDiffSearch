@@ -48,12 +48,15 @@ public class UnitOfWorkAwareProxyFactoryTest {
         dataSourceFactory.setMinSize(1);
 
         sessionFactory = new SessionFactoryFactory()
-                .build(bundle, environment, dataSourceFactory, ImmutableList.of());
-        try (Session session = sessionFactory.openSession()) {
+                .build(bundle, environment, dataSourceFactory, ImmutableList.<Class<?>>of());
+        final Session session = sessionFactory.openSession();
+        try {
             session.createSQLQuery("create table user_sessions (token varchar(64) primary key, username varchar(16))")
-                .executeUpdate();
+                    .executeUpdate();
             session.createSQLQuery("insert into user_sessions values ('67ab89d', 'jeff_28')")
-                .executeUpdate();
+                    .executeUpdate();
+        } finally {
+            session.close();
         }
     }
 
@@ -85,16 +88,6 @@ public class UnitOfWorkAwareProxyFactoryTest {
         new UnitOfWorkAwareProxyFactory("default", sessionFactory)
                 .create(BrokenAuthenticator.class)
                 .authenticate("b812ae4");
-    }
-
-    @Test
-    public void testNewAspect() {
-        final UnitOfWorkAwareProxyFactory unitOfWorkAwareProxyFactory =
-                new UnitOfWorkAwareProxyFactory("default", sessionFactory);
-
-        UnitOfWorkAspect aspect1 = unitOfWorkAwareProxyFactory.newAspect();
-        UnitOfWorkAspect aspect2 = unitOfWorkAwareProxyFactory.newAspect();
-        assertThat(aspect1).isNotSameAs(aspect2);
     }
 
     static class SessionDao {

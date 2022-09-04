@@ -12,8 +12,11 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
  * When annotating a Jersey resource method, wraps the method in a Hibernate session.
+ * <p>To be used outside Jersey, one need to create a proxy of the component with the
+ * annotated method.</p.
  *
- * @see UnitOfWorkRequestDispatcher
+ * @see UnitOfWorkApplicationListener
+ * @see UnitOfWorkAwareProxyFactory
  */
 @Target(METHOD)
 @Retention(RUNTIME)
@@ -47,4 +50,10 @@ public @interface UnitOfWork {
      * @see org.hibernate.Session#setFlushMode(org.hibernate.FlushMode)
      */
     FlushMode flushMode() default FlushMode.AUTO;
+
+    /**
+     * The name of a hibernate bundle (session factory) that specifies
+     * a datasource against which a transaction will be opened.
+     */
+    String value() default HibernateBundle.DEFAULT_NAME;
 }
