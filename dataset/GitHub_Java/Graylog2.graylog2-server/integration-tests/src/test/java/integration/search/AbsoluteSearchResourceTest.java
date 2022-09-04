@@ -21,14 +21,12 @@ import com.jayway.restassured.response.ValidatableResponse;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import integration.RequiresAuthentication;
 import integration.RestTestIncludingElasticsearch;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import static com.jayway.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @RequiresAuthentication
-@Ignore("Flakey test")
 public class AbsoluteSearchResourceTest extends RestTestIncludingElasticsearch {
     @Test
     @UsingDataSet(locations = "searchForExistingKeyword.json")
