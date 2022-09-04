@@ -12,13 +12,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.PreDestroy;
-import javax.annotation.Priority;
 import javax.enterprise.event.Observes;
 import javax.enterprise.inject.Typed;
 import javax.inject.Singleton;
-import javax.interceptor.Interceptor;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
@@ -50,13 +49,17 @@ public class SimpleScheduler implements Scheduler {
     private final ExecutorService executor;
     private volatile boolean running;
     private final List<ScheduledTask> scheduledTasks;
+    private final AtomicInteger triggerNameSequence;
+    private final Config config;
 
-    public SimpleScheduler(SchedulerContext context, Config config) {
+    public SimpleScheduler(SchedulerSupport support, Config config) {
         this.running = true;
         this.scheduledTasks = new ArrayList<>();
-        this.executor = context.getExecutor();
+        this.triggerNameSequence = new AtomicInteger();
+        this.executor = support.getExecutor();
+        this.config = config;
 
-        if (context.getScheduledMethods().isEmpty()) {
+        if (support.getScheduledMethods().isEmpty()) {
             this.scheduledExecutor = null;
         } else {
             this.scheduledExecutor = new JBossScheduledThreadPoolExecutor(1, new Runnable() {
@@ -66,24 +69,20 @@ public class SimpleScheduler implements Scheduler {
                 }
             });
 
-            CronDefinition definition = CronDefinitionBuilder.instanceDefinitionFor(context.getCronType());
+            CronDefinition definition = CronDefinitionBuilder.instanceDefinitionFor(support.getCronType());
             CronParser parser = new CronParser(definition);
 
-            for (ScheduledMethodMetadata method : context.getScheduledMethods()) {
-                ScheduledInvoker invoker = context.createInvoker(method.getInvokerClassName());
-                int nameSequence = 0;
+            for (ScheduledMethodMetadata method : support.getScheduledMethods()) {
+                ScheduledInvoker invoker = support.createInvoker(method.getInvokerClassName());
                 for (Scheduled scheduled : method.getSchedules()) {
-                    nameSequence++;
-                    SimpleTrigger trigger = createTrigger(method.getInvokerClassName(), parser, scheduled, nameSequence,
-                            config);
+                    SimpleTrigger trigger = createTrigger(method.getInvokerClassName(), parser, scheduled);
                     scheduledTasks.add(new ScheduledTask(trigger, invoker));
                 }
             }
         }
     }
 
-    // Use Interceptor.Priority.PLATFORM_BEFORE to start the scheduler before regular StartupEvent observers
-    void start(@Observes @Priority(Interceptor.Priority.PLATFORM_BEFORE) StartupEvent event) {
+    void start(@Observes StartupEvent event) {
         if (scheduledExecutor == null) {
             return;
         }
@@ -145,26 +144,16 @@ public class SimpleScheduler implements Scheduler {
         running = true;
     }
 
-    SimpleTrigger createTrigger(String invokerClass, CronParser parser, Scheduled scheduled, int nameSequence, Config config) {
-        String id = scheduled.identity().trim();
-        if (id.isEmpty()) {
-            id = nameSequence + "_" + invokerClass;
-        }
+    SimpleTrigger createTrigger(String invokerClass, CronParser parser, Scheduled scheduled) {
+        String id = triggerNameSequence.getAndIncrement() + "_" + invokerClass;
         ZonedDateTime start = ZonedDateTime.now().truncatedTo(ChronoUnit.SECONDS);
-        Long millisToAdd = null;
         if (scheduled.delay() > 0) {
-            millisToAdd = scheduled.delayUnit().toMillis(scheduled.delay());
-        } else if (!scheduled.delayed().isEmpty()) {
-            millisToAdd = Math.abs(parseDuration(scheduled, scheduled.delayed(), "delayed").toMillis());
+            start = start.toInstant().plusMillis(scheduled.delayUnit().toMillis(scheduled.delay())).atZone(start.getZone());
         }
-        if (millisToAdd != null) {
-            start = start.toInstant().plusMillis(millisToAdd).atZone(start.getZone());
-        }
-
         String cron = scheduled.cron().trim();
         if (!cron.isEmpty()) {
-            if (SchedulerContext.isConfigValue(cron)) {
-                cron = config.getValue(SchedulerContext.getConfigProperty(cron), String.class);
+            if (SchedulerSupport.isConfigValue(cron)) {
+                cron = config.getValue(SchedulerSupport.getConfigProperty(cron), String.class);
             }
             Cron cronExpr;
             try {
@@ -174,27 +163,24 @@ public class SimpleScheduler implements Scheduler {
             }
             return new CronTrigger(id, start, cronExpr);
         } else if (!scheduled.every().isEmpty()) {
-            return new IntervalTrigger(id, start, Math.abs(parseDuration(scheduled, scheduled.every(), "every").toMillis()));
+            String every = scheduled.every().trim();
+            if (SchedulerSupport.isConfigValue(every)) {
+                every = ConfigProviderResolver.instance().getConfig().getValue(SchedulerSupport.getConfigProperty(every),
+                        String.class);
+            }
+            if (Character.isDigit(every.charAt(0))) {
+                every = "PT" + every;
+            }
+            Duration duration;
+            try {
+                duration = Duration.parse(every);
+            } catch (Exception e) {
+                // This could only happen for config-based expressions
+                throw new IllegalStateException("Invalid every() expression on: " + scheduled, e);
+            }
+            return new IntervalTrigger(id, start, duration.toMillis());
         } else {
             throw new IllegalArgumentException("Invalid schedule configuration: " + scheduled);
-        }
-    }
-
-    // Keep it public so that we can reuse the logic in the quartz extension
-    public static Duration parseDuration(Scheduled scheduled, String value, String memberName) {
-        value = value.trim();
-        if (SchedulerContext.isConfigValue(value)) {
-            value = ConfigProviderResolver.instance().getConfig().getValue(SchedulerContext.getConfigProperty(value),
-                    String.class);
-        }
-        if (Character.isDigit(value.charAt(0))) {
-            value = "PT" + value;
-        }
-        try {
-            return Duration.parse(value);
-        } catch (Exception e) {
-            // This could only happen for config-based expressions
-            throw new IllegalStateException("Invalid " + memberName + "() expression on: " + scheduled, e);
         }
     }
 
