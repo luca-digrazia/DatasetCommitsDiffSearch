@@ -64,8 +64,8 @@ public class AndroidResourceMerger {
       final VariantType type,
       @Nullable final Path symbolsOut,
       @Nullable AndroidResourceClassWriter rclassWriter,
-      AndroidDataDeserializer deserializer,
-      boolean throwOnResourceConflict) {
+      AndroidDataDeserializer deserializer)
+      throws MergingException {
     Stopwatch timer = Stopwatch.createStarted();
     final ListeningExecutorService executorService =
         MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(15));
@@ -78,8 +78,7 @@ public class AndroidResourceMerger {
               primary,
               primaryManifest,
               type != VariantType.LIBRARY,
-              deserializer,
-              throwOnResourceConflict);
+              deserializer);
       timer.reset().start();
       if (symbolsOut != null) {
         AndroidDataSerializer serializer = AndroidDataSerializer.create();
@@ -115,19 +114,14 @@ public class AndroidResourceMerger {
       ParsedAndroidData primary,
       Path primaryManifest,
       boolean allowPrimaryOverrideAll,
-      AndroidDataDeserializer deserializer,
-      boolean throwOnResourceConflict) {
+      AndroidDataDeserializer deserializer)
+      throws MergingException {
     Stopwatch timer = Stopwatch.createStarted();
     try {
       AndroidDataMerger merger =
           AndroidDataMerger.createWithPathDeduplictor(executorService, deserializer);
       return merger.loadAndMerge(
-          transitive,
-          direct,
-          primary,
-          primaryManifest,
-          allowPrimaryOverrideAll,
-          throwOnResourceConflict);
+          transitive, direct, primary, primaryManifest, allowPrimaryOverrideAll);
     } finally {
       logger.fine(String.format("merge finished in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
     }
@@ -146,8 +140,8 @@ public class AndroidResourceMerger {
       @Nullable final PngCruncher cruncher,
       final VariantType type,
       @Nullable final Path symbolsOut,
-      final List<String> filteredResources,
-      boolean throwOnResourceConflict) {
+      final List<String> filteredResources)
+      throws MergingException {
     try {
       final ParsedAndroidData parsedPrimary = ParsedAndroidData.from(primary);
       return mergeData(
@@ -161,8 +155,7 @@ public class AndroidResourceMerger {
           type,
           symbolsOut,
           null /* rclassWriter */,
-          AndroidDataDeserializer.withFilteredResources(filteredResources),
-          throwOnResourceConflict);
+          AndroidDataDeserializer.withFilteredResources(filteredResources));
     } catch (IOException e) {
       throw MergingException.wrapException(e);
     }
@@ -182,8 +175,8 @@ public class AndroidResourceMerger {
       @Nullable final PngCruncher cruncher,
       final VariantType type,
       @Nullable final Path symbolsOut,
-      @Nullable final AndroidResourceClassWriter rclassWriter,
-      boolean throwOnResourceConflict) {
+      @Nullable final AndroidResourceClassWriter rclassWriter)
+      throws MergingException {
     final ParsedAndroidData.Builder primaryBuilder = ParsedAndroidData.Builder.newBuilder();
     final AndroidDataDeserializer deserializer = AndroidDataDeserializer.create();
     primary.deserialize(deserializer, primaryBuilder.consumers());
@@ -199,8 +192,7 @@ public class AndroidResourceMerger {
         type,
         symbolsOut,
         rclassWriter,
-        deserializer,
-        throwOnResourceConflict);
+        deserializer);
   }
 }
 

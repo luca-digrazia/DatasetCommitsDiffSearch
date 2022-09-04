@@ -30,10 +30,8 @@ import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.Closeable;
 import java.nio.file.FileSystems;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -44,7 +42,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * This action generates consistent ids R.class files for use in robolectric tests.
+ * This action generates consistant ids R.class files for use in robolectric tests.
  */
 public class GenerateRobolectricResourceSymbolsAction {
 
@@ -52,11 +50,11 @@ public class GenerateRobolectricResourceSymbolsAction {
       Logger.getLogger(GenerateRobolectricResourceSymbolsAction.class.getName());
 
   private static final class WriteLibraryRClass implements Callable<Boolean> {
-    private final Entry<String, Collection<ListenableFuture<ResourceSymbols>>> librarySymbolEntry;
+    private final Entry<String, ListenableFuture<ResourceSymbols>> librarySymbolEntry;
     private final RClassGenerator generator;
 
     private WriteLibraryRClass(
-        Entry<String, Collection<ListenableFuture<ResourceSymbols>>> librarySymbolEntry,
+        Entry<String, ListenableFuture<ResourceSymbols>> librarySymbolEntry,
         RClassGenerator generator) {
       this.librarySymbolEntry = librarySymbolEntry;
       this.generator = generator;
@@ -64,14 +62,8 @@ public class GenerateRobolectricResourceSymbolsAction {
 
     @Override
     public Boolean call() throws Exception {
-      List<ResourceSymbols> resourceSymbolsList = new ArrayList<>();
-      for (final ListenableFuture<ResourceSymbols> resourceSymbolsReader :
-          librarySymbolEntry.getValue()) {
-        resourceSymbolsList.add(resourceSymbolsReader.get());
-      }
-
       generator.write(
-          librarySymbolEntry.getKey(), ResourceSymbols.merge(resourceSymbolsList).asInitializers());
+          librarySymbolEntry.getKey(), librarySymbolEntry.getValue().get().asInitializers());
       return true;
     }
   }
@@ -114,7 +106,7 @@ public class GenerateRobolectricResourceSymbolsAction {
     try (ScopedTemporaryDirectory scopedTmp =
         new ScopedTemporaryDirectory("robolectric_resources_tmp")) {
       Path tmp = scopedTmp.getPath();
-      Path generatedSources = Files.createDirectories(tmp.resolve("generated_resources"));
+      Path generatedSources = tmp.resolve("generated_resources");
       // The reported availableProcessors may be higher than the actual resources
       // (on a shared system). On the other hand, a lot of the work is I/O, so it's not completely
       // CPU bound. As a compromise, divide by 2 the reported availableProcessors.
@@ -159,8 +151,8 @@ public class GenerateRobolectricResourceSymbolsAction {
           libraries.add(library);
         }
         List<ListenableFuture<Boolean>> writeSymbolsTask = new ArrayList<>();
-        for (final Entry<String, Collection<ListenableFuture<ResourceSymbols>>> librarySymbolEntry :
-            ResourceSymbols.loadFrom(libraries, executorService, null).asMap().entrySet()) {
+        for (final Entry<String, ListenableFuture<ResourceSymbols>> librarySymbolEntry :
+            ResourceSymbols.loadFrom(libraries, executorService, null).entries()) {
           writeSymbolsTask.add(
               executorService.submit(new WriteLibraryRClass(librarySymbolEntry, generator)));
         }
