@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -52,9 +51,6 @@ import io.quarkus.test.common.RestAssuredURLManager;
 import io.quarkus.test.common.TestResourceManager;
 import io.quarkus.test.common.TestScopeManager;
 import io.quarkus.test.common.http.TestHTTPResourceManager;
-import io.quarkus.test.junit.callback.QuarkusTestAfterEachCallback;
-import io.quarkus.test.junit.callback.QuarkusTestBeforeAllCallback;
-import io.quarkus.test.junit.callback.QuarkusTestBeforeEachCallback;
 
 //todo: share common core with QuarkusUnitTest
 public class QuarkusTestExtension
@@ -70,10 +66,6 @@ public class QuarkusTestExtension
     private static RunningQuarkusApplication runningQuarkusApplication;
     private static Path testClassLocation;
     private static Throwable firstException; //if this is set then it will be thrown from the very first test that is run, the rest are aborted
-
-    private static List<Object> beforeAllCallbacks = new ArrayList<>();
-    private static List<Object> beforeEachCallbacks = new ArrayList<>();
-    private static List<Object> afterEachCallbacks = new ArrayList<>();
 
     private ExtensionState doJavaStart(ExtensionContext context) throws Throwable {
         Closeable testResourceManager = null;
@@ -109,8 +101,6 @@ public class QuarkusTestExtension
                     .getConstructor(Class.class)
                     .newInstance(context.getRequiredTestClass());
             testResourceManager.getClass().getMethod("start").invoke(testResourceManager);
-
-            populateCallbacks(startupAction.getClassLoader());
 
             runningQuarkusApplication = startupAction.run();
 
@@ -163,34 +153,12 @@ public class QuarkusTestExtension
         }
     }
 
-    private void populateCallbacks(ClassLoader classLoader) throws ClassNotFoundException {
-        ServiceLoader<?> quarkusTestBeforeAllLoader = ServiceLoader
-                .load(Class.forName(QuarkusTestBeforeAllCallback.class.getName(), false, classLoader), classLoader);
-        for (Object quarkusTestBeforeAllCallback : quarkusTestBeforeAllLoader) {
-            beforeAllCallbacks.add(quarkusTestBeforeAllCallback);
-        }
-        ServiceLoader<?> quarkusTestBeforeEachLoader = ServiceLoader
-                .load(Class.forName(QuarkusTestBeforeEachCallback.class.getName(), false, classLoader), classLoader);
-        for (Object quarkusTestBeforeEachCallback : quarkusTestBeforeEachLoader) {
-            beforeEachCallbacks.add(quarkusTestBeforeEachCallback);
-        }
-        ServiceLoader<?> quarkusTestAfterEachLoader = ServiceLoader
-                .load(Class.forName(QuarkusTestAfterEachCallback.class.getName(), false, classLoader), classLoader);
-        for (Object quarkusTestAfterEach : quarkusTestAfterEachLoader) {
-            afterEachCallbacks.add(quarkusTestAfterEach);
-        }
-    }
-
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
         if (isNativeTest(context)) {
             return;
         }
         if (!failedBoot) {
-            popMockContext();
-            for (Object afterEachCallback : afterEachCallbacks) {
-                afterEachCallback.getClass().getMethod("afterEach", Object.class).invoke(afterEachCallback, actualTestInstance);
-            }
             boolean nativeImageTest = isNativeTest(context);
             runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
                     .getDeclaredMethod("clearURL").invoke(null);
@@ -209,11 +177,6 @@ public class QuarkusTestExtension
             return;
         }
         if (!failedBoot) {
-            pushMockContext();
-            for (Object beforeEachCallback : beforeEachCallbacks) {
-                beforeEachCallback.getClass().getMethod("beforeEach", Object.class).invoke(beforeEachCallback,
-                        actualTestInstance);
-            }
             boolean nativeImageTest = isNativeTest(context);
             if (runningQuarkusApplication != null) {
                 runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
@@ -264,34 +227,7 @@ public class QuarkusTestExtension
         }
         ensureStarted(context);
         if (runningQuarkusApplication != null) {
-            pushMockContext();
             setCCL(runningQuarkusApplication.getClassLoader());
-        }
-    }
-
-    private void pushMockContext() {
-        try {
-            //classloader issues
-            Method pushContext = runningQuarkusApplication.getClassLoader().loadClass(MockSupport.class.getName())
-                    .getDeclaredMethod("pushContext");
-            pushContext.setAccessible(true);
-            pushContext
-                    .invoke(null);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void popMockContext() {
-        try {
-            //classloader issues
-            Method popContext = runningQuarkusApplication.getClassLoader().loadClass(MockSupport.class.getName())
-                    .getDeclaredMethod("popContext");
-            popContext.setAccessible(true);
-            popContext
-                    .invoke(null);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -354,9 +290,6 @@ public class QuarkusTestExtension
             resM.getDeclaredMethod("inject", Object.class).invoke(null, actualTestInstance);
             state.testResourceManager.getClass().getMethod("inject", Object.class).invoke(state.testResourceManager,
                     actualTestInstance);
-            for (Object beforeAllCallback : beforeAllCallbacks) {
-                beforeAllCallback.getClass().getMethod("beforeAll", Object.class).invoke(beforeAllCallback, actualTestInstance);
-            }
         } catch (Exception e) {
             throw new TestInstantiationException("Failed to create test instance", e);
         }
@@ -489,9 +422,6 @@ public class QuarkusTestExtension
 
     @Override
     public void afterAll(ExtensionContext context) throws Exception {
-        if (!isNativeTest(context) && (runningQuarkusApplication != null)) {
-            popMockContext();
-        }
         if (originalCl != null) {
             setCCL(originalCl);
         }
