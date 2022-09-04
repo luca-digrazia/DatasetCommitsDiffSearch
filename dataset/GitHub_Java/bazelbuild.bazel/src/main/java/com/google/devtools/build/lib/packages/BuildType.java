@@ -19,7 +19,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.License.DistributionType;
@@ -581,7 +580,7 @@ public final class BuildType {
     Selector(ImmutableMap<?, ?> x, Object what, @Nullable Label context, Type<T> originalType,
         String noMatchError) throws ConversionException {
       this.originalType = originalType;
-      LinkedHashMap<Label, T> result = Maps.newLinkedHashMapWithExpectedSize(x.size());
+      LinkedHashMap<Label, T> result = new LinkedHashMap<>();
       ImmutableSet.Builder<Label> defaultValuesBuilder = ImmutableSet.builder();
       boolean foundDefaultCondition = false;
       for (Entry<?, ?> entry : x.entrySet()) {
