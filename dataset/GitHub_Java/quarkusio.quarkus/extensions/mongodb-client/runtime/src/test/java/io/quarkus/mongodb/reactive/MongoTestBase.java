@@ -6,7 +6,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
 
 import org.bson.Document;
@@ -61,11 +60,39 @@ public class MongoTestBase {
                     .version(version)
                     .net(new Net(port, Network.localhostIsIPv6()))
                     .build();
-            MONGO = MongodStarter.getDefaultInstance().prepare(config);
-            MONGO.start();
+            MONGO = getMongodExecutable(config);
+            try {
+                MONGO.start();
+            } catch (Exception e) {
+                //every so often mongo fails to start on CI runs
+                //see if this helps
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ignore) {
+                }
+                MONGO.start();
+            }
         } else {
             LOGGER.infof("Using existing Mongo %s", uri);
         }
+    }
+
+    private static MongodExecutable getMongodExecutable(IMongodConfig config) {
+        try {
+            return doGetExecutable(config);
+        } catch (Exception e) {
+            // sometimes the download process can timeout so just sleep and try again
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ignored) {
+
+            }
+            return doGetExecutable(config);
+        }
+    }
+
+    private static MongodExecutable doGetExecutable(IMongodConfig config) {
+        return MongodStarter.getDefaultInstance().prepare(config);
     }
 
     @AfterAll
@@ -111,27 +138,9 @@ public class MongoTestBase {
 
     protected void dropOurCollection(io.quarkus.mongodb.reactive.ReactiveMongoClient client) {
         List<io.quarkus.mongodb.reactive.ReactiveMongoCollection<Document>> collections = getOurCollections(client);
-        for (ReactiveMongoCollection col : collections) {
+        for (ReactiveMongoCollection<Document> col : collections) {
             col.drop().await().indefinitely();
         }
-    }
-
-    protected void dropOurCollection(io.quarkus.mongodb.ReactiveMongoClient client) {
-        List<io.quarkus.mongodb.ReactiveMongoCollection<Document>> collections = getOurCollections(client);
-        for (io.quarkus.mongodb.ReactiveMongoCollection col : collections) {
-            col.drop().toCompletableFuture().join();
-        }
-    }
-
-    protected List<io.quarkus.mongodb.ReactiveMongoCollection<Document>> getOurCollections(
-            io.quarkus.mongodb.ReactiveMongoClient client) {
-        io.quarkus.mongodb.ReactiveMongoDatabase database = client.getDatabase(DATABASE);
-        List<String> names = database.listCollectionNames().toList().run().toCompletableFuture().join();
-        return names
-                .stream()
-                .filter(c -> c.startsWith(COLLECTION_PREFIX))
-                .map(database::getCollection)
-                .collect(Collectors.toList());
     }
 
     protected String randomCollection() {
@@ -147,22 +156,8 @@ public class MongoTestBase {
             Document doc = createDoc(i);
             list.add(mongoCollection.insertOne(doc).subscribeAsCompletionStage());
         }
-        CompletableFuture[] array = list.toArray(new CompletableFuture[0]);
+        CompletableFuture<InsertOneResult>[] array = list.toArray(new CompletableFuture[0]);
         return Uni.createFrom().completionStage(CompletableFuture.allOf(array));
-    }
-
-    protected CompletionStage<Void> insertDocs(io.quarkus.mongodb.ReactiveMongoClient mongoClient, String collection,
-            int num) {
-        io.quarkus.mongodb.ReactiveMongoDatabase database = mongoClient.getDatabase(DATABASE);
-        io.quarkus.mongodb.ReactiveMongoCollection<Document> mongoCollection = database
-                .getCollection(collection);
-        List<CompletableFuture<InsertOneResult>> list = new ArrayList<>();
-        for (int i = 0; i < num; i++) {
-            Document doc = createDoc(i);
-            list.add(mongoCollection.insertOne(doc).toCompletableFuture());
-        }
-        CompletableFuture[] array = list.toArray(new CompletableFuture[0]);
-        return CompletableFuture.allOf(array);
     }
 
     protected Document createDoc() {
