@@ -123,7 +123,6 @@ final class ClassConfigPropertiesUtil {
      */
     static boolean addProducerMethodForClassConfigProperties(ClassLoader classLoader, ClassInfo configPropertiesClassInfo,
             ClassCreator producerClassCreator, String prefixStr, ConfigProperties.NamingStrategy namingStrategy,
-            boolean failOnMismatchingMember,
             boolean needsQualifier, IndexView applicationIndex,
             BuildProducer<ConfigPropertyBuildItem> configProperties) {
 
@@ -178,7 +177,7 @@ final class ClassConfigPropertiesUtil {
             }
 
             ResultHandle configObject = populateConfigObject(classLoader, configPropertiesClassInfo, prefixStr, namingStrategy,
-                    failOnMismatchingMember, methodCreator, applicationIndex, configProperties);
+                    methodCreator, applicationIndex, configProperties);
 
             if (needsValidation) {
                 createValidationCodePath(methodCreator, configObject, prefixStr);
@@ -208,8 +207,7 @@ final class ClassConfigPropertiesUtil {
     }
 
     private static ResultHandle populateConfigObject(ClassLoader classLoader, ClassInfo configClassInfo, String prefixStr,
-            ConfigProperties.NamingStrategy namingStrategy, boolean failOnMismatchingMember, MethodCreator methodCreator,
-            IndexView applicationIndex,
+            ConfigProperties.NamingStrategy namingStrategy, MethodCreator methodCreator, IndexView applicationIndex,
             BuildProducer<ConfigPropertyBuildItem> configProperties) {
         String configObjectClassStr = configClassInfo.name().toString();
         ResultHandle configObject = methodCreator.newInstance(MethodDescriptor.ofConstructor(configObjectClassStr));
@@ -244,15 +242,9 @@ final class ClassConfigPropertiesUtil {
                 MethodInfo setter = currentClassInHierarchy.method(setterName, fieldType);
                 if (setter == null) {
                     if (!Modifier.isPublic(field.flags()) || Modifier.isFinal(field.flags())) {
-                        String message = "Configuration properties class '" + configClassInfo
-                                + "' does not have a setter for field '"
-                                + field.name() + "' nor is the field a public non-final field.";
-                        if (failOnMismatchingMember) {
-                            throw new IllegalArgumentException(message);
-                        } else {
-                            LOGGER.warn(message + " It will therefore be ignored.");
-                            continue;
-                        }
+                        throw new IllegalArgumentException(
+                                "Configuration properties class '" + configClassInfo + "' does not have a setter for field "
+                                        + field + " nor is the field a public non-final field");
                     }
                     useFieldAccess = true;
                 }
@@ -266,6 +258,7 @@ final class ClassConfigPropertiesUtil {
                  * What we do is simply recursively build it up based by adding the field name to the config name prefix
                  */
                 DotName fieldTypeDotName = fieldType.name();
+                String fieldTypeStr = fieldTypeDotName.toString();
                 ClassInfo fieldTypeClassInfo = applicationIndex.getClassByName(fieldType.name());
                 if (fieldTypeClassInfo != null) {
                     if (!fieldTypeClassInfo.hasNoArgsConstructor()) {
@@ -279,8 +272,7 @@ final class ClassConfigPropertiesUtil {
                     }
 
                     ResultHandle nestedConfigObject = populateConfigObject(classLoader, fieldTypeClassInfo,
-                            prefixStr + "." + namingStrategy.getName(field.name()), namingStrategy, failOnMismatchingMember,
-                            methodCreator,
+                            prefixStr + "." + namingStrategy.getName(field.name()), namingStrategy, methodCreator,
                             applicationIndex, configProperties);
                     createWriteValue(methodCreator, configObject, field, setter, useFieldAccess, nestedConfigObject);
 
