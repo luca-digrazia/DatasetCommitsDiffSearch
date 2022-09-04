@@ -1052,9 +1052,7 @@ public class BuildView {
         configurations.getHostConfiguration(),
         /*aspect=*/ null,
         getConfigurableAttributeKeysForTesting(eventHandler, ctgNode),
-        toolchainContext == null
-            ? ImmutableSet.of()
-            : toolchainContext.getResolvedToolchainLabels());
+        toolchainContext);
   }
 
   /**
