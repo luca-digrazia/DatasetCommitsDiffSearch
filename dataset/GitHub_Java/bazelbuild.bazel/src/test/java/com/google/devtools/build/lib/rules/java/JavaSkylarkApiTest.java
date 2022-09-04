@@ -416,8 +416,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    output = output_jar,",
         "    deps = deps,",
         "    java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo],",
-        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo],",
-        "    javac_opts = ['-XDone -XDtwo'],",
+        "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo]",
         "  )",
         "  return struct(",
         "    files = depset([output_jar] + compilation_provider.source_jars),",
@@ -447,8 +446,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     assertThat(prettyArtifactNames(compilationInfo.getRuntimeClasspath().toList()))
         .containsExactly("java/test/libdep.jar", "java/test/libcustom.jar");
-
-    assertThat(compilationInfo.getJavacOpts()).contains("-XDone");
   }
 
   @Test
