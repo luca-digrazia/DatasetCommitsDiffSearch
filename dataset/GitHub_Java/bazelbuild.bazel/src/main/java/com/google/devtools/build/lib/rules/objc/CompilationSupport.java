@@ -389,7 +389,7 @@ public class CompilationSupport {
     boolean isHost = ruleContext.getConfiguration().isHostConfiguration();
     ImmutableSet.Builder<String> activatedCrosstoolSelectables =
         ImmutableSet.<String>builder()
-            .addAll(ccToolchain.getFeatures().getDefaultFeaturesAndActionConfigs())
+            .addAll(ccToolchain.getFeatures().getDefaultFeatures())
             .addAll(ACTIVATED_ACTIONS)
             .addAll(
                 ruleContext
@@ -442,7 +442,7 @@ public class CompilationSupport {
 
     activatedCrosstoolSelectables.addAll(ruleContext.getFeatures());
     try {
-      return ccToolchain
+      return toolchain
           .getFeatures()
           .getFeatureConfiguration(
               FeatureSpecification.create(
@@ -558,6 +558,13 @@ public class CompilationSupport {
         .addPrecompiledSrcs(srcs.filter(PRECOMPILED_SRCS_TYPE).list())
         .setIntermediateArtifacts(intermediateArtifacts)
         .build();
+  }
+
+  /** Returns a list of framework search path flags for clang actions. */
+  static Iterable<String> commonFrameworkFlags(
+      ObjcProvider provider, RuleContext ruleContext, ApplePlatform applePlaform) {
+    return Interspersing.beforeEach("-F",
+        commonFrameworkNames(provider, ruleContext, applePlaform));
   }
 
   /** Returns a list of frameworks for clang actions. */
@@ -764,6 +771,26 @@ public class CompilationSupport {
     }
   }
 
+ /**
+   * Registers all actions necessary to compile this rule's sources and archive them.
+   *
+   * @param compilationArtifacts collection of artifacts required for the compilation
+   * @param objcProvider provides all compiling and linking information to register these actions
+   * @return this compilation support
+   * @throws RuleErrorException for invalid crosstool files
+   */
+  CompilationSupport registerCompileAndArchiveActions(
+      CompilationArtifacts compilationArtifacts,
+      ObjcProvider objcProvider) throws RuleErrorException, InterruptedException {
+    return registerCompileAndArchiveActions(
+        compilationArtifacts,
+        objcProvider,
+        ExtraCompileArgs.NONE,
+        ImmutableList.<PathFragment>of(),
+        toolchain,
+        maybeGetFdoSupport());
+  }
+
   /**
    * Registers all actions necessary to compile this rule's sources and archive them.
    *
@@ -815,6 +842,21 @@ public class CompilationSupport {
   }
 
   /**
+   * Registers all actions necessary to compile this rule's sources and archive them.
+   *
+   * @param common common information about this rule and its dependencies
+   * @param extraCompileArgs args to be added to compile actions
+   * @return this compilation support
+   * @throws RuleErrorException for invalid crosstool files
+   */
+  CompilationSupport registerCompileAndArchiveActions(
+      ObjcCommon common, ExtraCompileArgs extraCompileArgs)
+      throws RuleErrorException, InterruptedException {
+    return registerCompileAndArchiveActions(
+        common, extraCompileArgs, ImmutableList.<PathFragment>of());
+  }
+
+  /**
    * Registers an action to create an archive artifact by fully (statically) linking all transitive
    * dependencies of this rule.
    *
@@ -823,6 +865,36 @@ public class CompilationSupport {
    */
   public CompilationSupport registerFullyLinkAction(
       ObjcProvider objcProvider, Artifact outputArchive) throws InterruptedException {
+    return registerFullyLinkAction(
+        objcProvider,
+        outputArchive,
+        toolchain,
+        maybeGetFdoSupport());
+  }
+
+  /**
+   * Registers an action to create an archive artifact by fully (statically) linking all transitive
+   * dependencies of this rule *except* for dependencies given in {@code avoidsDeps}.
+   *
+   * @param objcProvider provides all compiling and linking information to create this artifact
+   * @param outputArchive the output artifact for this action
+   * @param avoidsDeps list of providers with dependencies that should not be linked into the output
+   *     artifact
+   */
+  public CompilationSupport registerFullyLinkActionWithAvoids(
+      ObjcProvider objcProvider, Artifact outputArchive, Iterable<ObjcProvider> avoidsDeps)
+      throws InterruptedException {
+    ImmutableSet.Builder<Artifact> avoidsDepsArtifacts = ImmutableSet.builder();
+
+    for (ObjcProvider avoidsProvider : avoidsDeps) {
+      avoidsDepsArtifacts.addAll(avoidsProvider.getObjcLibraries())
+          .addAll(avoidsProvider.get(IMPORTED_LIBRARY))
+          .addAll(avoidsProvider.getCcLibraries());
+    }
+    ImmutableList<Artifact> depsArtifacts = ImmutableList.<Artifact>builder()
+        .addAll(objcProvider.getObjcLibraries())
+        .addAll(objcProvider.get(IMPORTED_LIBRARY))
+        .addAll(objcProvider.getCcLibraries()).build();
     return registerFullyLinkAction(
         objcProvider,
         outputArchive,
@@ -1603,7 +1675,7 @@ public class CompilationSupport {
     }
   }
 
-  private CompilationSupport registerGenerateUmbrellaHeaderAction(
+  CompilationSupport registerGenerateUmbrellaHeaderAction(
       Artifact umbrellaHeader, Iterable<Artifact> publicHeaders) {
      ruleContext.registerAction(
         new UmbrellaHeaderAction(

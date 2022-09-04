@@ -14,9 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
@@ -48,6 +45,7 @@ import com.google.devtools.build.lib.rules.cpp.Link.Picness;
 import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -1446,36 +1444,23 @@ public final class CppModel {
                 ccToolchain.getDynamicRuntimeLinkInputs())
             .addVariablesExtensions(variablesExtensions);
 
+    if (CppHelper.shouldUseDefFile(featureConfiguration)) {
+      Artifact defFile =
+          CppHelper.createDefFileActions(
+              ruleContext,
+              ccToolchain.getDefParserTool(),
+              ccOutputs.getObjectFiles(false),
+              SolibSymlinkAction.getDynamicLibrarySoname(soImpl.getRootRelativePath(), true));
+      dynamicLinkActionBuilder.setDefFile(defFile);
+    }
+
+    // On Windows, we cannot build a shared library with symbols unresolved, so here we dynamically
+    // link to all it's dependencies.
     if (featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-      // On Windows, we cannot build a shared library with symbols unresolved, so here we
-      // dynamically
-      // link to all it's dependencies.
       CcLinkParams.Builder ccLinkParamsBuilder =
           CcLinkParams.builder(/* linkingStatically= */ false, /* linkShared= */ true);
       ccLinkParamsBuilder.addCcLibrary(ruleContext);
       dynamicLinkActionBuilder.addLinkParams(ccLinkParamsBuilder.build(), ruleContext);
-
-      // If windows_export_all_symbols feature is enabled, bazel parses object files to generate
-      // DEF file and use it to export symbols. The generated DEF file won't be used if a custom
-      // DEF file is specified by win_def_file attribute.
-      if (CppHelper.shouldUseGeneratedDefFile(ruleContext, featureConfiguration)) {
-        Artifact generatedDefFile =
-            CppHelper.createDefFileActions(
-                ruleContext,
-                ccToolchain.getDefParserTool(),
-                ccOutputs.getObjectFiles(false),
-                SolibSymlinkAction.getDynamicLibrarySoname(soImpl.getRootRelativePath(), true));
-        dynamicLinkActionBuilder.setDefFile(generatedDefFile);
-      }
-
-      // If user specifies a custom DEF file, then we use this one instead of the generated one.
-      Artifact customDefFile = null;
-      if (ruleContext.isAttrDefined("win_def_file", LABEL)) {
-        customDefFile = ruleContext.getPrerequisiteArtifact("win_def_file", Mode.TARGET);
-      }
-      if (customDefFile != null) {
-        dynamicLinkActionBuilder.setDefFile(customDefFile);
-      }
     }
 
     if (!ccOutputs.getLtoBitcodeFiles().isEmpty()

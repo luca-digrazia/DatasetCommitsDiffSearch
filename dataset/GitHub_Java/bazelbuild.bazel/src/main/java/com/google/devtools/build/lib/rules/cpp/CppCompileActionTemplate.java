@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.analysis.actions.ActionTemplate;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -81,15 +80,13 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
       throws ActionTemplateExpansionException {
     ImmutableList.Builder<CppCompileAction> expandedActions = new ImmutableList.Builder<>();
     for (TreeFileArtifact inputTreeFileArtifact : inputTreeFileArtifacts) {
-      try {
-        String outputName = outputTreeFileArtifactName(inputTreeFileArtifact);
-        TreeFileArtifact outputTreeFileArtifact =
-            ActionInputHelper.treeFileArtifact(
-                outputTreeArtifact, PathFragment.create(outputName), artifactOwner);
-        expandedActions.add(createAction(inputTreeFileArtifact, outputTreeFileArtifact));
-      } catch (InvalidConfigurationException e) {
-        throw new ActionTemplateExpansionException(e);
-      }
+      String outputName = outputTreeFileArtifactName(inputTreeFileArtifact);
+      TreeFileArtifact outputTreeFileArtifact = ActionInputHelper.treeFileArtifact(
+          outputTreeArtifact,
+          PathFragment.create(outputName),
+          artifactOwner);
+
+      expandedActions.add(createAction(inputTreeFileArtifact, outputTreeFileArtifact));
     }
 
     return expandedActions.build();
@@ -123,8 +120,7 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
     return result;
   }
 
-  private String outputTreeFileArtifactName(TreeFileArtifact inputTreeFileArtifact)
-      throws InvalidConfigurationException {
+  private String outputTreeFileArtifactName(TreeFileArtifact inputTreeFileArtifact) {
     String outputName = FileSystemUtils.removeExtension(
         inputTreeFileArtifact.getParentRelativePath().getPathString());
     for (ArtifactCategory category : categories) {

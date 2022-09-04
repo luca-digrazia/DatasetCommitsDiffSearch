@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
@@ -36,8 +37,6 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorAr
 import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.ConfigAwareAspectBuilder;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -115,7 +114,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
   protected AspectDefinition.Builder addAdditionalAttributes(AspectDefinition.Builder builder) {
     return builder.add(
         attr("$j2objc_plugin", LABEL)
-            .cfg(HostTransition.INSTANCE)
+            .cfg(HOST)
             .exec()
             .value(
                 Label.parseAbsoluteUnchecked(
@@ -134,9 +133,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
   @Override
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
-    return ConfigAwareAspectBuilder.of(addAdditionalAttributes(new AspectDefinition.Builder(this)))
-        .requiresHostConfigurationFragments(Jvm.class)
-        .originalBuilder()
+    return addAdditionalAttributes(new AspectDefinition.Builder(this))
         .propagateAlongAttribute("deps")
         .propagateAlongAttribute("exports")
         .propagateAlongAttribute("runtime_deps")
@@ -148,9 +145,10 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
             J2ObjcConfiguration.class,
             ObjcConfiguration.class,
             ProtoConfiguration.class)
+        .requiresHostConfigurationFragments(Jvm.class)
         .add(
             attr("$j2objc", LABEL)
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .exec()
                 .value(
                     Label.parseAbsoluteUnchecked(
@@ -158,7 +156,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         .add(
             attr("$j2objc_wrapper", LABEL)
                 .allowedFileTypes(FileType.of(".py"))
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .exec()
                 .singleArtifact()
                 .value(
@@ -167,7 +165,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         .add(
             attr("$j2objc_header_map", LABEL)
                 .allowedFileTypes(FileType.of(".py"))
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .exec()
                 .singleArtifact()
                 .value(
@@ -175,11 +173,11 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                         toolsRepository + "//tools/j2objc:j2objc_header_map")))
         .add(
             attr("$jre_emul_jar", LABEL)
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .value(
                     Label.parseAbsoluteUnchecked(
                         toolsRepository + "//third_party/java/j2objc:jre_emul.jar")))
-        .add(attr(":dead_code_report", LABEL).cfg(HostTransition.INSTANCE).value(DEAD_CODE_REPORT))
+        .add(attr(":dead_code_report", LABEL).cfg(HOST).value(DEAD_CODE_REPORT))
         .add(
             attr("$jre_lib", LABEL)
                 .value(
@@ -192,12 +190,12 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                         toolsRepository + "//third_party/java/j2objc:proto_runtime")))
         .add(
             attr("$xcrunwrapper", LABEL)
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .exec()
                 .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/objc:xcrunwrapper")))
         .add(
             attr(ObjcRuleClasses.LIBTOOL_ATTRIBUTE, LABEL)
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .exec()
                 .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/objc:libtool")))
         .add(
@@ -208,7 +206,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                 .value(AppleToolchain.getXcodeConfigLabel(toolsRepository)))
         .add(
             attr("$zipper", LABEL)
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .exec()
                 .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/zip:zipper")))
         .add(
