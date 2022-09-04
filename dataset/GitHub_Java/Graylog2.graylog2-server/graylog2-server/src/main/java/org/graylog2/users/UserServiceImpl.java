@@ -27,9 +27,7 @@ import com.google.common.eventbus.EventBus;
 import com.mongodb.BasicDBObject;
 import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
-import org.apache.shiro.authz.permission.WildcardPermission;
 import org.bson.types.ObjectId;
-import org.graylog.security.GrantPermissionResolver;
 import org.graylog2.Configuration;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
@@ -55,7 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class UserServiceImpl extends PersistedServiceImpl implements UserService {
     private static final Logger LOG = LoggerFactory.getLogger(UserServiceImpl.class);
@@ -66,7 +63,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     private final UserImpl.Factory userFactory;
     private final InMemoryRolePermissionResolver inMemoryRolePermissionResolver;
     private final EventBus serverEventBus;
-    private final GrantPermissionResolver grantPermissionResolver;
 
     @Inject
     public UserServiceImpl(final MongoConnection mongoConnection,
@@ -75,8 +71,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
                            final AccessTokenService accessTokenService,
                            final UserImpl.Factory userFactory,
                            final InMemoryRolePermissionResolver inMemoryRolePermissionResolver,
-                           final EventBus serverEventBus,
-                           final GrantPermissionResolver grantPermissionResolver) {
+                           final EventBus serverEventBus) {
         super(mongoConnection);
         this.configuration = configuration;
         this.roleService = roleService;
@@ -84,7 +79,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         this.userFactory = userFactory;
         this.inMemoryRolePermissionResolver = inMemoryRolePermissionResolver;
         this.serverEventBus = serverEventBus;
-        this.grantPermissionResolver = grantPermissionResolver;
 
         // ensure that the users' roles array is indexed
         collection(UserImpl.class).createIndex(UserImpl.ROLES);
@@ -231,9 +225,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     public List<String> getPermissionsForUser(User user) {
         final ImmutableSet.Builder<String> permSet = ImmutableSet.<String>builder()
                 .addAll(user.getPermissions())
-                // The frontend cannot handle (and currently does not need) GRNPermissions. Thus we filter them
-                .addAll(grantPermissionResolver.resolvePermissionsForUser(user.getName())
-                        .stream().filter(p -> p instanceof WildcardPermission).map(Object::toString).collect(Collectors.toSet()))
                 .addAll(getUserPermissionsFromRoles(user));
 
         return permSet.build().asList();

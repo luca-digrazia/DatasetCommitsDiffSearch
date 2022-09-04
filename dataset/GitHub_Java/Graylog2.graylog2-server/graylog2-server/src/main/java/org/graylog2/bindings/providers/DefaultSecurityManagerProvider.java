@@ -34,7 +34,6 @@ import org.graylog2.security.MongoDbSessionDAO;
 import org.graylog2.security.OrderedAuthenticatingRealms;
 import org.graylog2.security.realm.MongoDbAuthorizationRealm;
 import org.graylog2.security.realm.RootAccountRealm;
-import org.graylog2.shared.security.ThrowingFirstSuccessfulStrategy;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
@@ -59,9 +58,7 @@ public class DefaultSecurityManagerProvider implements Provider<DefaultSecurityM
         sm = new DefaultSecurityManager(orderedAuthenticatingRealms);
         final Authenticator authenticator = sm.getAuthenticator();
         if (authenticator instanceof ModularRealmAuthenticator) {
-            FirstSuccessfulStrategy strategy = new ThrowingFirstSuccessfulStrategy();
-            strategy.setStopAfterFirstSuccess(true);
-            ((ModularRealmAuthenticator) authenticator).setAuthenticationStrategy(strategy);
+            ((ModularRealmAuthenticator) authenticator).setAuthenticationStrategy(new FirstSuccessfulStrategy());
         }
 
         // root account realm might be deactivated and won't be present in that case
