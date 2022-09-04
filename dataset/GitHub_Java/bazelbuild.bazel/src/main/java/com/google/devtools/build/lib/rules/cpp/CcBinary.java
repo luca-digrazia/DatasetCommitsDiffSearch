@@ -901,17 +901,14 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
     ccCompilationInfoBuilder.setCcCompilationContextInfo(ccCompilationContextInfo);
 
-    CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-    ccLinkingInfoBuilder.setCcExecutionDynamicLibrariesInfo(
-        new CcExecutionDynamicLibrariesInfo(
-            collectExecutionDynamicLibraryArtifacts(
-                ruleContext, linkingOutputs.getExecutionDynamicLibraries())));
-
     builder
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(ccCompilationInfoBuilder.build())
         .addProvider(TransitiveLipoInfoProvider.class, transitiveLipoInfo)
-        .addNativeDeclaredProvider(ccLinkingInfoBuilder.build())
+        .addNativeDeclaredProvider(
+            new CcExecutionDynamicLibrariesInfo(
+                collectExecutionDynamicLibraryArtifacts(
+                    ruleContext, linkingOutputs.getExecutionDynamicLibraries())))
         .addProvider(
             CcNativeLibraryProvider.class,
             new CcNativeLibraryProvider(
@@ -944,17 +941,13 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       return NestedSetBuilder.wrap(Order.STABLE_ORDER, artifacts);
     }
 
-    NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
-    for (CcLinkingInfo ccLinkingInfo :
-        ruleContext.getPrerequisites("deps", Mode.TARGET, CcLinkingInfo.PROVIDER)) {
-      CcExecutionDynamicLibrariesInfo ccExecutionDynamicLibrariesInfo =
-          ccLinkingInfo.getCcExecutionDynamicLibrariesInfo();
-      if (ccExecutionDynamicLibrariesInfo != null) {
-        builder.addTransitive(
-            ccExecutionDynamicLibrariesInfo.getExecutionDynamicLibraryArtifacts());
-      }
-    }
+    Iterable<CcExecutionDynamicLibrariesInfo> deps =
+        ruleContext.getPrerequisites("deps", Mode.TARGET, CcExecutionDynamicLibrariesInfo.PROVIDER);
 
+    NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
+    for (CcExecutionDynamicLibrariesInfo dep : deps) {
+      builder.addTransitive(dep.getExecutionDynamicLibraryArtifacts());
+    }
     return builder.build();
   }
 
