@@ -2,35 +2,39 @@ package com.example.gsyvideoplayer;
 
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Point;
 import android.os.Bundle;
+import android.os.Handler;
+import android.support.v4.app.FragmentActivity;
 import android.support.v4.widget.NestedScrollView;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
 
 import com.example.gsyvideoplayer.listener.SampleListener;
-import com.shuyu.gsyvideoplayer.GSYPreViewManager;
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
-
+import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
-import com.shuyu.gsyvideoplayer.video.CustomGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
-
+import com.transitionseverywhere.TransitionManager;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
+import static com.example.gsyvideoplayer.utils.CommonUtil.setViewHeight;
 
-public class DetailPlayer extends AppCompatActivity {
+public class DetailPlayer extends FragmentActivity {
 
     @BindView(R.id.post_detail_nested_scroll)
     NestedScrollView postDetailNestedScroll;
     @BindView(R.id.detail_player)
-    CustomGSYVideoPlayer detailPlayer;
+    StandardGSYVideoPlayer detailPlayer;
     @BindView(R.id.activity_detail_player)
     RelativeLayout activityDetailPlayer;
 
+    private boolean isFull;
     private boolean isPlay;
     private boolean isPause;
 
@@ -43,9 +47,7 @@ public class DetailPlayer extends AppCompatActivity {
         ButterKnife.bind(this);
 
         String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
-        //String url = "https://s3.cn-north-1.amazonaws.com.cn/talkpal/lecture/video/472/v.mp4";
-        //String url = "https://d131x7vzzf85jg.cloudfront.net/upload/documents/paper/b2/61/00/00/20160420_115018_b544.mp4";
-        detailPlayer.setUp(url, false, null, "测试视频");
+        detailPlayer.setUp(url, true, null, "测试视频");
 
         //增加封面
         ImageView imageView = new ImageView(this);
@@ -73,6 +75,16 @@ public class DetailPlayer extends AppCompatActivity {
 
                 //第一个true是否需要隐藏actionbar，第二个true是否需要隐藏statusbar
                 detailPlayer.startWindowFullscreen(DetailPlayer.this, true, true);
+
+                //这是以前旧的方式
+                //toDo();
+            }
+        });
+
+        detailPlayer.getBackButton().setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toNormal();
             }
         });
 
@@ -103,13 +115,6 @@ public class DetailPlayer extends AppCompatActivity {
                 }
             }
         });
-
-        detailPlayer.setBottomProgressBarDrawable(getResources().getDrawable(R.drawable.video_new_progress));
-        detailPlayer.setDialogVolumeProgressBar(getResources().getDrawable(R.drawable.video_new_volume_progress_bg));
-        detailPlayer.setDialogProgressBar(getResources().getDrawable(R.drawable.video_new_progress));
-        detailPlayer.setBottomShowProgressBarDrawable(getResources().getDrawable(R.drawable.video_new_seekbar_progress),
-        getResources().getDrawable(R.drawable.video_new_seekbar_thumb));
-        detailPlayer.setDialogProgressColor(getResources().getColor(R.color.colorAccent), -11);
 
     }
 
@@ -143,7 +148,6 @@ public class DetailPlayer extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         GSYVideoPlayer.releaseAllVideos();
-        GSYPreViewManager.instance().releaseMediaPlayer();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
     }
@@ -166,12 +170,50 @@ public class DetailPlayer extends AppCompatActivity {
         }
     }
 
+    private void toFull() {
+        isFull = true;
+
+        TransitionManager.beginDelayedTransition(activityDetailPlayer);
+
+        setViewHeight(detailPlayer, ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        resolveFullVideoUI();
+        orientationUtils.setEnable(true);
+    }
+
+    private void toNormal() {
+        isFull = false;
+        orientationUtils.setEnable(false);
+        int delay = orientationUtils.backToProtVideo();
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                TransitionManager.beginDelayedTransition(activityDetailPlayer);
+                setViewHeight(detailPlayer, ViewGroup.LayoutParams.MATCH_PARENT,
+                        (int) getResources().getDimension(R.dimen.post_media_height));
+            }
+        }, delay);
+    }
+
+    private void toDo() {
+        if (isFull) {
+            toNormal();
+        } else {
+            toFull();
+        }
+    }
 
     private void resolveNormalVideoUI() {
         //增加title
         detailPlayer.getTitleTextView().setVisibility(View.GONE);
         detailPlayer.getTitleTextView().setText("测试视频");
         detailPlayer.getBackButton().setVisibility(View.GONE);
+    }
+
+    private void resolveFullVideoUI() {
+        detailPlayer.getTitleTextView().setVisibility(View.VISIBLE);
+        detailPlayer.getTitleTextView().setText("测试视频");
+        detailPlayer.getBackButton().setVisibility(View.VISIBLE);
     }
 
 }
