@@ -35,7 +35,6 @@ import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.system.urlwhitelist.UrlWhitelistService;
 
 import javax.inject.Inject;
 import java.io.IOException;
@@ -53,14 +52,11 @@ public class HTTPAlarmCallback implements AlarmCallback {
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private Configuration configuration;
-    private final UrlWhitelistService whitelistService;
 
     @Inject
-    public HTTPAlarmCallback(final OkHttpClient httpClient, final ObjectMapper objectMapper,
-            UrlWhitelistService whitelistService) {
+    public HTTPAlarmCallback(final OkHttpClient httpClient, final ObjectMapper objectMapper) {
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
-        this.whitelistService = whitelistService;
     }
 
     @Override
@@ -85,10 +81,6 @@ public class HTTPAlarmCallback implements AlarmCallback {
         final HttpUrl httpUrl = HttpUrl.parse(url);
         if (httpUrl == null) {
             throw new AlarmCallbackException("Malformed URL: " + url);
-        }
-
-        if (!whitelistService.isWhitelisted(url)) {
-            throw new AlarmCallbackException("URL <" + url + "> is not whitelisted.");
         }
 
         final Request request = new Request.Builder()
@@ -130,17 +122,13 @@ public class HTTPAlarmCallback implements AlarmCallback {
     public void checkConfiguration() throws ConfigurationException {
         final String url = configuration.getString(CK_URL);
         if (isNullOrEmpty(url)) {
-            throw new ConfigurationException("URL parameter is missing.");
+            throw new ConfigurationException("URL parameter is missing!");
         }
 
         try {
             new URL(url);
         } catch (MalformedURLException e) {
-            throw new ConfigurationException("Malformed URL '" + url + "'", e);
-        }
-
-        if (!whitelistService.isWhitelisted(url)) {
-            throw new ConfigurationException("URL <" + url + "> is not whitelisted.");
+            throw new ConfigurationException("Malformed URL", e);
         }
     }
 }

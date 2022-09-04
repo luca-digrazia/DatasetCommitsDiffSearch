@@ -1,141 +1,178 @@
 /**
- * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.periodical;
 
-import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.codec.digest.DigestUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.http.HttpEntity;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
-import org.graylog2.Core;
-import org.graylog2.ServerVersion;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.net.HttpHeaders;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.graylog2.configuration.VersionCheckConfiguration;
 import org.graylog2.notifications.Notification;
-import org.graylog2.plugin.Version;
+import org.graylog2.notifications.NotificationService;
+import org.graylog2.plugin.ServerStatus;
+import org.graylog2.plugin.periodical.Periodical;
+import org.graylog2.plugin.system.NodeId;
+import org.graylog2.shared.ServerVersion;
 import org.graylog2.versioncheck.VersionCheckResponse;
+import org.graylog2.versioncheck.VersionResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import java.io.IOException;
-import java.io.StringWriter;
+import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.charset.Charset;
+import java.util.Locale;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class VersionCheckThread implements Runnable {
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
+public class VersionCheckThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(VersionCheckThread.class);
+    private static final String USER_AGENT = String.format(Locale.ENGLISH, "graylog2-server (%s, %s, %s, %s)",
+            System.getProperty("java.vendor"), System.getProperty("java.version"),
+            System.getProperty("os.name"), System.getProperty("os.version"));
 
-    public static final int INITIAL_DELAY = 0;
+    private final NotificationService notificationService;
+    private final ServerStatus serverStatus;
+    private final VersionCheckConfiguration config;
+    private final ObjectMapper objectMapper;
+    private final OkHttpClient httpClient;
+    private final URI versionCheckUri;
 
-    // Run every 30 minutes.
-    public static final int PERIOD = 1800;
+    @Inject
+    public VersionCheckThread(NotificationService notificationService,
+                              ServerStatus serverStatus,
+                              VersionCheckConfiguration config,
+                              ObjectMapper objectMapper,
+                              OkHttpClient httpClient) throws URISyntaxException {
+        this(
+                notificationService,
+                serverStatus,
+                config,
+                objectMapper,
+                httpClient,
+                buildURI(serverStatus.getNodeId(), config.getUri())
+        );
+    }
 
-    private final Core core;
+    private static URI buildURI(NodeId nodeId, URI baseUri) throws URISyntaxException {
+        final String queryParams = "anonid=" + nodeId.anonymize() + "&version=" + ServerVersion.VERSION.toString();
+        return new URI(
+                baseUri.getScheme(),
+                baseUri.getUserInfo(),
+                baseUri.getHost(),
+                baseUri.getPort(),
+                baseUri.getPath(),
+                isNullOrEmpty(baseUri.getQuery()) ? queryParams : baseUri.getQuery() + "&" + queryParams,
+                baseUri.getFragment()
+        );
+    }
 
-    public VersionCheckThread(Core core) {
-        this.core = core;
+    @VisibleForTesting
+    VersionCheckThread(NotificationService notificationService,
+                       ServerStatus serverStatus,
+                       VersionCheckConfiguration config,
+                       ObjectMapper objectMapper,
+                       OkHttpClient httpClient,
+                       URI versionCheckUri) {
+        this.notificationService = notificationService;
+        this.serverStatus = serverStatus;
+        this.config = config;
+        this.objectMapper = objectMapper;
+        this.httpClient = httpClient;
+        this.versionCheckUri = versionCheckUri;
     }
 
     @Override
-    public void run() {
-        URIBuilder uri = null;
-        HttpGet get = null;
-        try {
-            uri = new URIBuilder(core.getConfiguration().getVersionchecksUri());
-            uri.addParameter("anonid", DigestUtils.sha256Hex(core.getNodeId()));
-            uri.addParameter("version", ServerVersion.VERSION.toString());
+    public void doRun() {
+        final Request request = new Request.Builder()
+                .addHeader(HttpHeaders.USER_AGENT, USER_AGENT)
+                .get()
+                .url(versionCheckUri.toString())
+                .build();
 
-            get = new HttpGet(uri.build());
-            get.setHeader("User-Agent", "graylog2-server");
-            get.setConfig(RequestConfig.custom()
-                    .setConnectTimeout(10000)
-                    .setSocketTimeout(10000)
-                    .setConnectionRequestTimeout(10000)
-                    .build()
-            );
-        } catch (URISyntaxException e) {
-            LOG.error("Invalid version check URI.", e);
-            return;
-        }
+        try (final Response response = httpClient.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                final VersionCheckResponse versionCheckResponse = objectMapper.readValue(response.body().byteStream(), VersionCheckResponse.class);
 
-        CloseableHttpClient http = HttpClients.createDefault();
-        CloseableHttpResponse response = null;
-        try {
-            response = http.execute(get);
+                final VersionResponse version = versionCheckResponse.version;
+                final com.github.zafarkhaja.semver.Version reportedVersion = com.github.zafarkhaja.semver.Version.forIntegers(version.major, version.minor, version.patch);
 
-            if (response.getStatusLine().getStatusCode() != 200) {
-                LOG.error("Expected version check HTTP status code [200] but got [{}]", response.getStatusLine().getStatusCode());
-                return;
-            }
+                LOG.debug("Version check reports current version: " + versionCheckResponse);
+                if (reportedVersion.greaterThan(ServerVersion.VERSION.getVersion())) {
+                    LOG.debug("Reported version is higher than ours ({}). Writing notification.", ServerVersion.VERSION);
 
-            HttpEntity entity = response.getEntity();
-
-            StringWriter writer = new StringWriter();
-            IOUtils.copy(entity.getContent(), writer, Charset.forName("UTF-8"));
-            String body = writer.toString();
-
-            VersionCheckResponse parsedResponse = parse(body);
-            Version reportedVersion = new Version(parsedResponse.version.major, parsedResponse.version.minor, parsedResponse.version.patch);
-
-            LOG.debug("Version check reports current version: " + parsedResponse);
-
-            if (reportedVersion.greaterMinor(Core.GRAYLOG2_VERSION)) {
-                LOG.debug("Reported version is higher than ours ({}). Writing notification.", Core.GRAYLOG2_VERSION);
-
-                Notification.buildNow(core)
-                        .addSeverity(Notification.Severity.NORMAL)
-                        .addType(Notification.Type.OUTDATED_VERSION)
-                        .addDetail("current_version", parsedResponse.toString())
-                        .publishIfFirst();
-            } else {
-                LOG.debug("Reported version is not higher than ours ({}).", Core.GRAYLOG2_VERSION);
-                Notification.fixed(core, Notification.Type.OUTDATED_VERSION);
-            }
-
-            EntityUtils.consume(entity);
-        } catch (IOException e) {
-            LOG.warn("Could not perform version check.", e);
-            return;
-        } finally {
-            try {
-                if (response != null) {
-                    response.close();
+                    Notification notification = notificationService.buildNow()
+                            .addSeverity(Notification.Severity.NORMAL)
+                            .addType(Notification.Type.OUTDATED_VERSION)
+                            .addDetail("current_version", versionCheckResponse.toString());
+                    notificationService.publishIfFirst(notification);
+                } else {
+                    LOG.debug("Reported version is not higher than ours ({}).", ServerVersion.VERSION);
+                    notificationService.fixed(Notification.Type.OUTDATED_VERSION);
                 }
-            } catch (IOException e) {
-                LOG.warn("Could not close HTTP connection to version check API.", e);
+            } else {
+                LOG.error("Version check unsuccessful (response code {}).", response.code());
             }
+        } catch (IOException e) {
+            LOG.error("Couldn't perform version check", e);
         }
     }
 
-    private VersionCheckResponse parse(String httpBody) throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
-        return mapper.readValue(httpBody, VersionCheckResponse.class);
+    @Override
+    protected Logger getLogger() {
+        return LOG;
     }
 
+    @Override
+    public boolean runsForever() {
+        return false;
+    }
+
+    @Override
+    public boolean stopOnGracefulShutdown() {
+        return true;
+    }
+
+    @Override
+    public boolean masterOnly() {
+        return true;
+    }
+
+    @Override
+    public boolean startOnThisNode() {
+        return config.isEnabled() && !serverStatus.hasCapability(ServerStatus.Capability.LOCALMODE);
+    }
+
+    @Override
+    public boolean isDaemon() {
+        return true;
+    }
+
+    @Override
+    public int getInitialDelaySeconds() {
+        return (int) MINUTES.toSeconds(5);
+    }
+
+    @Override
+    public int getPeriodSeconds() {
+        return (int) MINUTES.toSeconds(30);
+    }
 }
