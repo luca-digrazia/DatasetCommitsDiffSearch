@@ -278,7 +278,7 @@ public class AmqpTransport extends ThrottleableTransport {
                     new TextField(
                             CK_ROUTING_KEY,
                             "Routing key",
-                            defaultRoutingKey(),
+                            defaultRouttingKey(),
                             "Routing key to listen for.",
                             ConfigurationField.Optional.NOT_OPTIONAL
                     )
@@ -297,7 +297,7 @@ public class AmqpTransport extends ThrottleableTransport {
             return cr;
         }
 
-        protected String defaultRoutingKey() {
+        protected String defaultRouttingKey() {
             return "#";
         }
 
