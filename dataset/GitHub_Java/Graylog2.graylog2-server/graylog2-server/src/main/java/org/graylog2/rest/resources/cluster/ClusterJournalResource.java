@@ -46,11 +46,9 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 
-import static javax.ws.rs.core.Response.Status.BAD_GATEWAY;
-
 @RequiresAuthentication
 @Api(value = "Cluster/Journal", description = "Journal information of any nodes in the cluster")
-@Path("/cluster/{nodeId}/journal")
+@Path("/cluster/journal")
 @Produces(MediaType.APPLICATION_JSON)
 public class ClusterJournalResource extends ProxiedResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterJournalResource.class);
@@ -71,6 +69,7 @@ public class ClusterJournalResource extends ProxiedResource {
     @Timed
     @ApiOperation(value = "Get message journal information of a given node")
     @RequiresPermissions(RestPermissions.JOURNAL_READ)
+    @Path("{nodeId}")
     public JournalSummaryResponse get(@ApiParam(name = "nodeId", value = "The id of the node to get message journal information.", required = true)
                                       @PathParam("nodeId") String nodeId) throws IOException, NodeNotFoundException {
         final Node targetNode = nodeService.byNodeId(nodeId);
@@ -83,7 +82,7 @@ public class ClusterJournalResource extends ProxiedResource {
             return response.body();
         } else {
             LOG.warn("Unable to get message journal information on node {}: {}", nodeId, response.message());
-            throw new WebApplicationException(response.message(), BAD_GATEWAY);
+            throw new WebApplicationException(response.message(), response.code());
         }
     }
 }
