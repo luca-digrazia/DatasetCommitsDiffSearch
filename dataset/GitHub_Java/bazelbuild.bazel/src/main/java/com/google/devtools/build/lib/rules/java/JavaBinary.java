@@ -52,7 +52,7 @@ import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.JavaOutput;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
@@ -204,8 +204,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     JavaCompileOutputs<Artifact> outputs = helper.createOutputs(classJar);
     JavaRuleOutputJarsProvider.Builder ruleOutputJarsProviderBuilder =
         JavaRuleOutputJarsProvider.builder()
-            .addJavaOutput(
-                JavaOutput.builder().fromJavaCompileOutputs(outputs).addSourceJar(srcJar).build());
+            .addOutputJar(
+                OutputJar.builder().fromJavaCompileOutputs(outputs).addSourceJar(srcJar).build());
 
     JavaTargetAttributes attributes = attributesBuilder.build();
     List<Artifact> nativeLibraries = attributes.getNativeLibraries();
@@ -218,7 +218,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     JavaConfiguration javaConfig = ruleContext.getFragment(JavaConfiguration.class);
     if (attributes.hasMessages()) {
-      helper.setTranslations(semantics.translate(ruleContext, attributes.getMessages()));
+      helper.setTranslations(
+          semantics.translate(ruleContext, javaConfig, attributes.getMessages()));
     }
 
     if (attributes.hasSources() || attributes.hasResources()) {

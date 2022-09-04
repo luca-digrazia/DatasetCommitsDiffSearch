@@ -32,7 +32,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.JavaOutput;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
@@ -54,7 +54,7 @@ import net.starlark.java.syntax.Location;
 /** A Starlark declared provider that encapsulates all providers that are needed by Java rules. */
 @Immutable
 @AutoCodec
-public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact, JavaOutput> {
+public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> {
 
   public static final String STARLARK_NAME = "JavaInfo";
 
@@ -296,15 +296,8 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact, 
   }
 
   @Override
-  @Deprecated
   public JavaRuleOutputJarsProvider getOutputJars() {
     return getProvider(JavaRuleOutputJarsProvider.class);
-  }
-
-  @Override
-  public ImmutableList<JavaOutput> getJavaOutputs() {
-    JavaRuleOutputJarsProvider outputs = getProvider(JavaRuleOutputJarsProvider.class);
-    return outputs == null ? ImmutableList.of() : outputs.getJavaOutputs();
   }
 
   @Override
@@ -458,7 +451,7 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact, 
       checkSequenceOfJavaInfo(exports, "exports");
       return JavaInfoBuildHelper.getInstance()
           .createJavaInfo(
-              JavaOutput.builder()
+              OutputJar.builder()
                   .setClassJar(outputJar)
                   .setCompileJar(compileJar)
                   .setCompileJdeps(compileJdeps)

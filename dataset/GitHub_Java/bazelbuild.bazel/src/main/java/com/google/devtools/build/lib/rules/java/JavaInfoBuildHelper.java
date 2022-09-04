@@ -36,9 +36,8 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.JavaOutput;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.util.ArrayList;
@@ -64,7 +63,7 @@ final class JavaInfoBuildHelper {
   /**
    * Creates JavaInfo instance from outputJar.
    *
-   * @param javaOutput the artifacts that were created as a result of a compilation (e.g. javac,
+   * @param outputs the artifacts that were created as a result of a compilation (e.g. javac,
    *     scalac, etc)
    * @param neverlink if true only use this library for compilation and not at runtime
    * @param compileTimeDeps compile time dependencies that were used to create the output jar
@@ -72,16 +71,14 @@ final class JavaInfoBuildHelper {
    * @param exports libraries to make available for users of this library. <a
    *     href="https://docs.bazel.build/versions/master/be/java.html#java_library"
    *     target="_top">java_library.exports</a>
-   * @param nativeLibraries CC library dependencies that are needed for this library
    * @return new created JavaInfo instance
    */
   JavaInfo createJavaInfo(
-      JavaOutput javaOutput,
+      OutputJar outputs,
       Boolean neverlink,
       Sequence<JavaInfo> compileTimeDeps,
       Sequence<JavaInfo> runtimeDeps,
       Sequence<JavaInfo> exports,
-      Sequence<CcInfo> nativeLibraries,
       Location location) {
     JavaInfo.Builder javaInfoBuilder = JavaInfo.Builder.create();
     javaInfoBuilder.setLocation(location);
@@ -90,19 +87,15 @@ final class JavaInfoBuildHelper {
         JavaCompilationArgsProvider.builder();
 
     if (!neverlink) {
-      javaCompilationArgsBuilder.addRuntimeJar(javaOutput.getClassJar());
+      javaCompilationArgsBuilder.addRuntimeJar(outputs.getClassJar());
     }
-    if (javaOutput.getCompileJar() != null) {
+    if (outputs.getCompileJar() != null) {
       javaCompilationArgsBuilder.addDirectCompileTimeJar(
-          /* interfaceJar= */ javaOutput.getCompileJar(), /* fullJar= */ javaOutput.getClassJar());
-    }
-    if (javaOutput.getCompileJdeps() != null) {
-      javaCompilationArgsBuilder.addCompileTimeJavaDependencyArtifacts(
-          NestedSetBuilder.create(Order.STABLE_ORDER, javaOutput.getCompileJdeps()));
+          /* interfaceJar= */ outputs.getCompileJar(), /* fullJar= */ outputs.getClassJar());
     }
 
     JavaRuleOutputJarsProvider javaRuleOutputJarsProvider =
-        JavaRuleOutputJarsProvider.builder().addJavaOutput(javaOutput).build();
+        JavaRuleOutputJarsProvider.builder().addOutputJar(outputs).build();
     javaInfoBuilder.addProvider(JavaRuleOutputJarsProvider.class, javaRuleOutputJarsProvider);
 
     ClasspathType type = neverlink ? COMPILE_ONLY : BOTH;
@@ -127,22 +120,19 @@ final class JavaInfoBuildHelper {
     javaInfoBuilder.addProvider(
         JavaSourceJarsProvider.class,
         createJavaSourceJarsProvider(
-            javaOutput.getSourceJars(), concat(compileTimeDeps, runtimeDeps, exports)));
+            outputs.getSourceJars(), concat(compileTimeDeps, runtimeDeps, exports)));
 
     javaInfoBuilder.addProvider(
         JavaGenJarsProvider.class,
         JavaGenJarsProvider.create(
             false,
-            javaOutput.getGeneratedClassJar(),
-            javaOutput.getGeneratedSourceJar(),
+            outputs.getGeneratedClassJar(),
+            outputs.getGeneratedSourceJar(),
             JavaPluginInfoProvider.empty(),
             JavaInfo.fetchProvidersFromList(
                 concat(compileTimeDeps, exports), JavaGenJarsProvider.class)));
 
-    javaInfoBuilder.setRuntimeJars(ImmutableList.of(javaOutput.getClassJar()));
-
-    javaInfoBuilder.addProvider(
-        JavaCcInfoProvider.class, new JavaCcInfoProvider(CcInfo.merge(nativeLibraries)));
+    javaInfoBuilder.setRuntimeJars(ImmutableList.of(outputs.getClassJar()));
 
     return javaInfoBuilder.build();
   }

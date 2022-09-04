@@ -37,13 +37,12 @@ import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
-import com.google.devtools.build.lib.rules.java.JavaCcInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.JavaOutput;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
@@ -219,15 +218,11 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
         // TODO(carmi): Expose to native rules
         JavaRuleOutputJarsProvider ruleOutputJarsProvider =
             JavaRuleOutputJarsProvider.builder()
-                .addJavaOutput(
-                    JavaOutput.builder()
+                .addOutputJar(
+                    OutputJar.builder()
                         .setClassJar(outputJar)
                         .setCompileJar(compileTimeJar)
                         .addSourceJar(sourceJar)
-                        .setCompileJdeps(
-                            generatedCompilationArgsProvider
-                                .getCompileTimeJavaDependencyArtifacts()
-                                .getSingleton())
                         .build())
                 .build();
         JavaSourceJarsProvider sourceJarsProvider =
@@ -252,11 +247,8 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
       aspect.addProvider(generatedCompilationArgsProvider);
       javaInfo.addProvider(JavaCompilationArgsProvider.class, generatedCompilationArgsProvider);
-
-      javaInfo.addProvider(
-          JavaCcInfoProvider.class,
+      aspect.addNativeDeclaredProvider(
           createCcLinkingInfo(ruleContext, aspectCommon.getProtoRuntimeDeps()));
-
       aspect
           .addNativeDeclaredProvider(javaInfo.build())
           .addProvider(

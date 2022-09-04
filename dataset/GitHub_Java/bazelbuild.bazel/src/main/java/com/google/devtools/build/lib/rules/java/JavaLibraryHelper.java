@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.JavaOutput;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -59,9 +59,8 @@ public final class JavaLibraryHelper {
   private final List<JavaCompilationArgsProvider> runtimeDeps = new ArrayList<>();
 
   private final List<JavaCompilationArgsProvider> exports = new ArrayList<>();
-  private JavaPluginInfo plugins = JavaPluginInfo.empty();
+  private JavaPluginInfoProvider plugins = JavaPluginInfoProvider.empty();
   private ImmutableList<String> javacOpts = ImmutableList.of();
-  private boolean enableJspecify = true;
   private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
   private final List<Artifact> additionalOutputs = new ArrayList<>();
 
@@ -137,7 +136,7 @@ public final class JavaLibraryHelper {
     return this;
   }
 
-  public JavaLibraryHelper setPlugins(JavaPluginInfo plugins) {
+  public JavaLibraryHelper setPlugins(JavaPluginInfoProvider plugins) {
     checkNotNull(plugins, "plugins must not be null");
     checkState(this.plugins.isEmpty());
     this.plugins = plugins;
@@ -147,11 +146,6 @@ public final class JavaLibraryHelper {
   /** Sets the compiler options. */
   public JavaLibraryHelper setJavacOpts(ImmutableList<String> javacOpts) {
     this.javacOpts = Preconditions.checkNotNull(javacOpts);
-    return this;
-  }
-
-  public JavaLibraryHelper enableJspecify(boolean enableJspecify) {
-    this.enableJspecify = enableJspecify;
     return this;
   }
 
@@ -256,8 +250,7 @@ public final class JavaLibraryHelper {
             javacOpts,
             attributes,
             javaToolchainProvider,
-            additionalInputForDatabinding,
-            enableJspecify);
+            additionalInputForDatabinding);
     helper.addLocalClassPathEntries(localClassPathEntries);
     JavaCompileOutputs<Artifact> outputs = helper.createOutputs(output);
     artifactsBuilder.setCompileTimeDependencies(outputs.depsProto());
@@ -273,8 +266,8 @@ public final class JavaLibraryHelper {
       helper.createSourceJarAction(outputSourceJar, outputs.genSource(), javaToolchainProvider);
     }
     JavaCompilationArtifacts javaArtifacts = artifactsBuilder.build();
-    outputJarsBuilder.addJavaOutput(
-        JavaOutput.builder()
+    outputJarsBuilder.addOutputJar(
+        OutputJar.builder()
             .fromJavaCompileOutputs(outputs)
             .setCompileJar(iJar)
             .setCompileJdeps(javaArtifacts.getCompileTimeDependencyArtifact())
