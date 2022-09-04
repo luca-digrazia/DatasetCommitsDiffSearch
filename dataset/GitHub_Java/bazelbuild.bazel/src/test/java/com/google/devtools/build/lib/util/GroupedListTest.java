@@ -154,9 +154,6 @@ public class GroupedListTest {
     assertElementsEqual(compressed, allElts);
     assertElementsEqualInGroups(GroupedList.<String>create(compressed), elements);
     assertElementsEqualInGroups(groupedList, elements);
-    assertThat(groupedList.getAllElementsAsIterable())
-        .containsExactlyElementsIn(Iterables.concat(groupedList))
-        .inOrder();
   }
 
   @Test
@@ -189,9 +186,6 @@ public class GroupedListTest {
     elements.remove(1);
     assertElementsEqualInGroups(GroupedList.<String>create(compressed), elements);
     assertElementsEqualInGroups(groupedList, elements);
-    assertThat(groupedList.getAllElementsAsIterable())
-        .containsExactlyElementsIn(Iterables.concat(groupedList))
-        .inOrder();
   }
 
   @Test
