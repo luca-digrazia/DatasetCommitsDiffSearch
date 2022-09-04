@@ -27,7 +27,6 @@ import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.cluster.NodeService;
 import org.graylog2.rest.RemoteInterfaceProvider;
-import org.graylog2.shared.rest.resources.ProxiedResource;
 import org.graylog2.shared.rest.resources.system.RemoteLoadBalancerStatusResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.slf4j.Logger;
@@ -43,24 +42,32 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
+import java.util.List;
 
 @RequiresAuthentication
 @Api(value = "Cluster/LoadBalancers", description = "Cluster-wide status propagation for LB")
 @Produces(MediaType.APPLICATION_JSON)
 @Path("/cluster/{nodeId}/lbstatus")
-public class ClusterLoadBalancerStatusResource extends ProxiedResource {
+public class ClusterLoadBalancerStatusResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterLoadBalancerStatusResource.class);
 
     private final NodeService nodeService;
     private final RemoteInterfaceProvider remoteInterfaceProvider;
+    private final String authenticationToken;
 
     @Inject
     public ClusterLoadBalancerStatusResource(NodeService nodeService,
                                              RemoteInterfaceProvider remoteInterfaceProvider,
                                              @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders);
         this.nodeService = nodeService;
         this.remoteInterfaceProvider = remoteInterfaceProvider;
+
+        final List<String> authenticationTokens = httpHeaders.getRequestHeader("Authorization");
+        if (authenticationTokens != null && authenticationTokens.size() >= 1) {
+            this.authenticationToken = authenticationTokens.get(0);
+        } else {
+            this.authenticationToken = null;
+        }
     }
 
     @PUT
@@ -70,7 +77,7 @@ public class ClusterLoadBalancerStatusResource extends ProxiedResource {
     @ApiOperation(value = "Override load balancer status of this graylog2-server node. Next lifecycle " +
             "change will override it again to its default. Set to ALIVE or DEAD.")
     @Path("/override/{status}")
-    public void override(@ApiParam(name = "nodeId", value = "The id of the node whose LB status will be changed", required = true)
+    public void override(@ApiParam(name = "nodeId", value = "The id of the node where processing will be paused.", required = true)
                          @PathParam("nodeId") String nodeId,
                          @ApiParam(name = "status") @PathParam("status") String status) throws IOException, NodeNotFoundException {
         final Node targetNode = nodeService.byNodeId(nodeId);
