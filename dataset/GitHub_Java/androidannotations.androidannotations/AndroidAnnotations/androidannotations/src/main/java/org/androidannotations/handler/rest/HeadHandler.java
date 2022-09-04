@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,17 +15,18 @@
  */
 package org.androidannotations.handler.rest;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JInvocation;
-import org.androidannotations.annotations.rest.Head;
-import org.androidannotations.handler.rest.RestMethodHandler;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.IsValid;
-
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+
+import org.androidannotations.annotations.rest.Head;
+import org.androidannotations.holder.RestHolder;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.IsValid;
+
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 
 public class HeadHandler extends RestMethodHandler {
 
@@ -34,18 +35,12 @@ public class HeadHandler extends RestMethodHandler {
 	}
 
 	@Override
-	public boolean validate(Element element, AnnotationElements validatedElements) {
-		IsValid valid = new IsValid();
-
-		if (!super.validate(element, validatedElements)) {
-			valid.invalidate();
-		}
+	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+		super.validate(element, validatedElements, valid);
 
 		validatorHelper.hasHttpHeadersReturnType((ExecutableElement) element, valid);
 
 		restAnnotationHelper.urlVariableNamesExistInParametersAndHasNoOneMoreParameter((ExecutableElement) element, valid);
-
-		return valid.isValid();
 	}
 
 	@Override
@@ -55,7 +50,12 @@ public class HeadHandler extends RestMethodHandler {
 	}
 
 	@Override
-	protected JInvocation addResultCallMethod(JInvocation exchangeCall, JClass methodReturnClass) {
+	protected JExpression getResponseClass(Element element, RestHolder holder) {
+		return restAnnotationHelper.nullCastedToNarrowedClass(holder);
+	}
+
+	@Override
+	protected JExpression addResultCallMethod(JExpression exchangeCall, JClass methodReturnClass) {
 		return JExpr.invoke(exchangeCall, "getHeaders");
 	}
 }
