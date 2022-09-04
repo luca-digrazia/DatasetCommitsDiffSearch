@@ -267,7 +267,7 @@ public abstract class AbstractBlazeQueryEnvironment<T> extends AbstractQueryEnvi
 
   /** A {@link KeyExtractor} that extracts {@code Label}s out of {@link Target}s. */
   protected static class TargetKeyExtractor implements KeyExtractor<Target, Label> {
-    public static final TargetKeyExtractor INSTANCE = new TargetKeyExtractor();
+    protected static final TargetKeyExtractor INSTANCE = new TargetKeyExtractor();
 
     private TargetKeyExtractor() {
     }
