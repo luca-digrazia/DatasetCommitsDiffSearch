@@ -258,6 +258,19 @@ public class UndertowBuildStep {
                         for (ClassInfo classInfo : combinedIndexBuildItem.getIndex().getAllKnownImplementors(typeName)) {
                             handledTypes.add(classInfo.name().toString());
                         }
+                        for (AnnotationInstance annotationInstance : combinedIndexBuildItem.getIndex()
+                                .getAnnotations(typeName)) {
+                            if (annotationInstance.target().kind() == AnnotationTarget.Kind.CLASS) {
+                                handledTypes.add(annotationInstance.target().asClass().name().toString());
+                            } else if (annotationInstance.target().kind() == AnnotationTarget.Kind.METHOD) {
+                                handledTypes.add(annotationInstance.target().asMethod().declaringClass().name().toString());
+                            } else if (annotationInstance.target().kind() == AnnotationTarget.Kind.FIELD) {
+                                handledTypes.add(annotationInstance.target().asField().declaringClass().name().toString());
+                            } else if (annotationInstance.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
+                                handledTypes.add(annotationInstance.target().asMethodParameter().method().declaringClass()
+                                        .name().toString());
+                            }
+                        }
                     }
                 }
                 ret.add(new ServletContainerInitializerBuildItem(initializer, handledTypes));
@@ -322,8 +335,7 @@ public class UndertowBuildStep {
                 knownPaths.knownDirectories,
                 launchMode.getLaunchMode(), shutdownContext, contextPath, httpBuildTimeConfig.rootPath,
                 servletConfig.defaultCharset, webMetaData.getRequestCharacterEncoding(),
-                webMetaData.getResponseCharacterEncoding(), httpBuildTimeConfig.auth.proactive,
-                webMetaData.getWelcomeFileList() != null ? webMetaData.getWelcomeFileList().getWelcomeFiles() : null);
+                webMetaData.getResponseCharacterEncoding(), httpBuildTimeConfig.auth.proactive);
 
         if (webMetaData.getContextParams() != null) {
             for (ParamValueMetaData i : webMetaData.getContextParams()) {
