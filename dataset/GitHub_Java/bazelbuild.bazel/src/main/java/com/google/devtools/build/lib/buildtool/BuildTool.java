@@ -302,17 +302,16 @@ public class BuildTool {
     } catch (InterruptedException e) {
       // We may have been interrupted by an error, or the user's interruption may have raced with
       // an error, so check to see if we should report that error code instead.
-      AbruptExitException environmentPendingAbruptExitException = env.getPendingException();
-      if (environmentPendingAbruptExitException == null) {
+      ExitCode environmentPendingExitCode = env.getPendingExitCode();
+      if (environmentPendingExitCode == null) {
         detailedExitCode = DetailedExitCode.justExitCode(ExitCode.INTERRUPTED);
         env.getReporter().handle(Event.error("build interrupted"));
         env.getEventBus().post(new BuildInterruptedEvent());
       } else {
         // Report the exception from the environment - the exception we're handling here is just an
         // interruption.
-        detailedExitCode =
-            DetailedExitCode.justExitCode(environmentPendingAbruptExitException.getExitCode());
-        reportExceptionError(environmentPendingAbruptExitException);
+        detailedExitCode = DetailedExitCode.justExitCode(environmentPendingExitCode);
+        reportExceptionError(env.getPendingException());
         result.setCatastrophe();
       }
     } catch (TargetParsingException | LoadingFailedException | ViewCreationFailedException e) {
@@ -335,7 +334,7 @@ public class BuildTool {
       // target(s) that triggered them.
       result.setCatastrophe();
     } catch (AbruptExitException e) {
-      detailedExitCode = e.getDetailedExitCode();
+      detailedExitCode = DetailedExitCode.justExitCode(e.getExitCode());
       reportExceptionError(e);
       result.setCatastrophe();
     } catch (Throwable throwable) {
