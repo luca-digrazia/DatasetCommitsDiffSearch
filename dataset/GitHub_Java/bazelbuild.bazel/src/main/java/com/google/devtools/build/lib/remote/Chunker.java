@@ -115,7 +115,7 @@ public final class Chunker {
     return chunk.build();
   }
 
-  static Item toItem(final byte[] blob) {
+  static Item toItem(byte[] blob) {
     return new Item() {
       @Override
       public ContentDigest getDigest() throws IOException {
@@ -129,7 +129,7 @@ public final class Chunker {
     };
   }
 
-  static Item toItem(final Path file) {
+  static Item toItem(Path file) {
     return new Item() {
       @Override
       public ContentDigest getDigest() throws IOException {
@@ -143,8 +143,7 @@ public final class Chunker {
     };
   }
 
-  static Item toItem(
-      final ActionInput input, final ActionInputFileCache inputCache, final Path execRoot) {
+  static Item toItem(ActionInput input, ActionInputFileCache inputCache, Path execRoot) {
     return new Item() {
       @Override
       public ContentDigest getDigest() throws IOException {

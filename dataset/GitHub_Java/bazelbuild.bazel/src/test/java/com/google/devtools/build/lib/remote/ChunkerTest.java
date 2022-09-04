@@ -69,7 +69,9 @@ public class ChunkerTest {
     byte[] b3 = "ccc".getBytes(UTF_8);
     byte[] b4 = "dddd".getBytes(UTF_8);
     ContentDigest d1 = ContentDigests.computeDigest(b1);
+    ContentDigest d2 = ContentDigests.computeDigest(b2);
     ContentDigest d3 = ContentDigests.computeDigest(b3);
+    ContentDigest d4 = ContentDigests.computeDigest(b4);
     Chunker c =
         new Chunker.Builder()
             .chunkSize(2)
