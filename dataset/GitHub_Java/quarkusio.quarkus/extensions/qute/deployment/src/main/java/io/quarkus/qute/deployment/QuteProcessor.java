@@ -583,15 +583,15 @@ public class QuteProcessor {
             if (root.isTypeInfo()) {
                 // E.g. |org.acme.Item|
                 match.setValues(root.asTypeInfo().rawClass, root.asTypeInfo().resolvedType);
-                if (root.hasHints()) {
+                if (root.asTypeInfo().hasHints()) {
                     processHints(templateAnalysis, root.asTypeInfo().hints, match, index, expression, generatedIdsToMatches,
                             incorrectExpressions);
                 }
             } else {
-                if (root.hasHints()) {
+                if (root.isProperty() && root.asProperty().hasHints()) {
                     // Root is not a type info but a property with hint
                     // E.g. 'it<loop#123>' and 'STATUS<when#123>'
-                    if (processHints(templateAnalysis, root.asHintInfo().hints, match, index, expression,
+                    if (processHints(templateAnalysis, root.asProperty().hints, match, index, expression,
                             generatedIdsToMatches, incorrectExpressions)) {
                         // In some cases it's necessary to reset the iterator
                         iterator = parts.iterator();
@@ -713,9 +713,9 @@ public class QuteProcessor {
                         clazz = index.getClassByName(type.name());
                     }
                     match.setValues(clazz, type);
-                    if (info.hasHints()) {
+                    if (info.isProperty() && info.asProperty().hasHints()) {
                         // For example a loop section needs to validate the type of an element
-                        processHints(templateAnalysis, info.asHintInfo().hints, match, index, expression, generatedIdsToMatches,
+                        processHints(templateAnalysis, info.asProperty().hints, match, index, expression, generatedIdsToMatches,
                                 incorrectExpressions);
                     }
                 }
@@ -1100,7 +1100,7 @@ public class QuteProcessor {
     @BuildStep
     void excludeTypeChecks(QuteConfig config, BuildProducer<TypeCheckExcludeBuildItem> excludes) {
         // Exclude all checks that involve built-in value resolvers
-        List<String> skipOperators = Arrays.asList("?:", "or", ":", "?", "ifTruthy", "&&", "||");
+        List<String> skipOperators = Arrays.asList("?:", "or", ":", "?", "&&", "||");
         excludes.produce(new TypeCheckExcludeBuildItem(new Predicate<TypeCheck>() {
             @Override
             public boolean test(TypeCheck check) {
@@ -1677,9 +1677,7 @@ public class QuteProcessor {
                         }
                         idx++;
                     }
-                    if (matches) {
-                        return method;
-                    }
+                    return matches ? method : null;
                 }
             }
             DotName superName = clazz.superName();
