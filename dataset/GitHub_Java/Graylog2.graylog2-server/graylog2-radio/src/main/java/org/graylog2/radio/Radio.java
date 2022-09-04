@@ -27,8 +27,6 @@ import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.internal.scanning.PackageNamesScanner;
-import org.graylog2.inputs.BasicCache;
-import org.graylog2.inputs.Cache;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Tools;
@@ -36,7 +34,6 @@ import org.graylog2.plugin.Version;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.radio.buffers.ProcessBuffer;
 import org.graylog2.radio.cluster.Ping;
 import org.graylog2.radio.inputs.InputRegistry;
 import org.jboss.netty.bootstrap.ServerBootstrap;
@@ -57,7 +54,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -76,9 +72,6 @@ public class Radio implements InputHost {
     private ScheduledExecutorService scheduler;
 
     private InputRegistry inputs;
-    private Cache inputCache;
-    private ProcessBuffer processBuffer;
-    private AtomicInteger processBufferWatermark = new AtomicInteger();
 
     private final AsyncHttpClient httpClient;
 
@@ -93,18 +86,14 @@ public class Radio implements InputHost {
     public void initialize(Configuration configuration, MetricRegistry metrics) {
         startedAt = new DateTime(DateTimeZone.UTC);
 
-        this.metricRegistry = metrics;
-        this.configuration = configuration;
-
         NodeId id = new NodeId(configuration.getNodeIdFile());
         this.nodeId = id.readOrGenerate();
 
-        inputCache = new BasicCache();
-        processBuffer = new ProcessBuffer(this, inputCache);
-        processBuffer.initialize();
-
         this.inputs = new InputRegistry(this);
 
+        this.metricRegistry = metrics;
+
+        this.configuration = configuration;
 
         if (this.configuration.getRestTransportUri() == null) {
             String guessedIf;
@@ -190,11 +179,7 @@ public class Radio implements InputHost {
 
     @Override
     public Buffer getProcessBuffer() {
-        return processBuffer;
-    }
-
-    public AtomicInteger processBufferWatermark() {
-        return processBufferWatermark;
+        return null;
     }
 
     public String getNodeId() {
@@ -219,11 +204,4 @@ public class Radio implements InputHost {
         return inputs;
     }
 
-    public Configuration getConfiguration() {
-        return configuration;
-    }
-
-    public Cache getInputCache() {
-        return inputCache;
-    }
 }
