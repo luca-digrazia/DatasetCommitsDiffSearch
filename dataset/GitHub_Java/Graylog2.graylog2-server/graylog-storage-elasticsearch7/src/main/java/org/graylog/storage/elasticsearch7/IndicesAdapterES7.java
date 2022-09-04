@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2020 Graylog, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
+ *
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
+ */
 package org.graylog.storage.elasticsearch7;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,7 +42,8 @@ import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.indices.CloseI
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.indices.CreateIndexRequest;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.indices.DeleteAliasRequest;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.client.indices.PutIndexTemplateRequest;
-import org.graylog.shaded.elasticsearch7.org.elasticsearch.cluster.metadata.AliasMetaData;
+import org.graylog.shaded.elasticsearch7.org.elasticsearch.cluster.metadata.AliasMetadata;
+import org.graylog.shaded.elasticsearch7.org.elasticsearch.common.unit.TimeValue;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.index.query.QueryBuilders;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.index.reindex.BulkByScrollResponse;
 import org.graylog.shaded.elasticsearch7.org.elasticsearch.index.reindex.ReindexRequest;
@@ -70,6 +87,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
+import static org.graylog.storage.elasticsearch7.ElasticsearchClient.withTimeout;
 
 public class IndicesAdapterES7 implements IndicesAdapter {
     private static final Logger LOG = LoggerFactory.getLogger(IndicesAdapterES7.class);
@@ -159,7 +177,7 @@ public class IndicesAdapterES7 implements IndicesAdapter {
 
         return creationDate
                 .map(Long::valueOf)
-                .map(DateTime::new);
+                .map(instant -> new DateTime(instant, DateTimeZone.UTC));
     }
 
     @Override
@@ -197,7 +215,7 @@ public class IndicesAdapterES7 implements IndicesAdapter {
     }
 
     @Override
-    public String markIndexReopened(String index) {
+    public void markIndexReopened(String index) {
         final String aliasName = index + Indices.REOPENED_ALIAS_SUFFIX;
         final IndicesAliasesRequest indicesAliasesRequest = new IndicesAliasesRequest();
         final IndicesAliasesRequest.AliasActions aliasAction = new IndicesAliasesRequest.AliasActions(IndicesAliasesRequest.AliasActions.Type.ADD)
@@ -207,8 +225,6 @@ public class IndicesAdapterES7 implements IndicesAdapter {
 
         client.execute((c, requestOptions) -> c.indices().updateAliases(indicesAliasesRequest, requestOptions),
                 "Couldn't create reopened alias for index " + index);
-
-        return aliasName;
     }
 
     @Override
@@ -230,7 +246,11 @@ public class IndicesAdapterES7 implements IndicesAdapter {
     @Override
     public long numberOfMessages(String index) {
         final JsonNode result = statsApi.indexStats(index);
-        return result.path("primaries").path("docs").path("count").asLong();
+        final JsonNode count = result.path("_all").path("primaries").path("docs").path("count");
+        if (count.isMissingNode()) {
+            throw new RuntimeException("Unable to extract count from response.");
+        }
+        return count.asLong();
     }
 
     private GetSettingsResponse settingsFor(String indexOrAlias) {
@@ -252,7 +272,7 @@ public class IndicesAdapterES7 implements IndicesAdapter {
                 .stream()
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
-                        entry -> entry.getValue().stream().map(AliasMetaData::alias).collect(Collectors.toSet())
+                        entry -> entry.getValue().stream().map(AliasMetadata::alias).collect(Collectors.toSet())
                 ));
     }
 
@@ -305,9 +325,7 @@ public class IndicesAdapterES7 implements IndicesAdapter {
 
     @Override
     public JsonNode getIndexStats(Collection<String> indices) {
-        final JsonNode result = statsApi.indexStatsWithDocsAndStore(indices);
-
-        return result.path("indices");
+        return statsApi.indexStatsWithDocsAndStore(indices);
     }
 
     @Override
@@ -349,7 +367,7 @@ public class IndicesAdapterES7 implements IndicesAdapter {
         final IndicesAliasesRequest.AliasActions addAlias = new IndicesAliasesRequest.AliasActions(IndicesAliasesRequest.AliasActions.Type.ADD)
                 .index(targetIndex)
                 .alias(aliasName);
-        final IndicesAliasesRequest.AliasActions removeAlias = new IndicesAliasesRequest.AliasActions(IndicesAliasesRequest.AliasActions.Type.REMOVE_INDEX)
+        final IndicesAliasesRequest.AliasActions removeAlias = new IndicesAliasesRequest.AliasActions(IndicesAliasesRequest.AliasActions.Type.REMOVE)
                 .index(oldIndex)
                 .alias(aliasName);
         final IndicesAliasesRequest indicesAliasesRequest = new IndicesAliasesRequest()
@@ -377,10 +395,9 @@ public class IndicesAdapterES7 implements IndicesAdapter {
         final ForceMergeRequest request = new ForceMergeRequest()
                 .indices(index)
                 .maxNumSegments(maxNumSegments)
-                .flush(true)
-                .onlyExpungeDeletes(true);
+                .flush(true);
 
-        client.execute((c, requestOptions) -> c.indices().forcemerge(request, requestOptions));
+        client.execute((c, requestOptions) -> c.indices().forcemerge(request, withTimeout(requestOptions, timeout)));
     }
 
     @Override
@@ -431,7 +448,12 @@ public class IndicesAdapterES7 implements IndicesAdapter {
 
     @Override
     public HealthStatus waitForRecovery(String index) {
-        final ClusterHealthRequest clusterHealthRequest = new ClusterHealthRequest(index);
+        return waitForRecovery(index, 30);
+    }
+
+    @Override
+    public HealthStatus waitForRecovery(String index, int timeout) {
+        final ClusterHealthRequest clusterHealthRequest = new ClusterHealthRequest(index).timeout(TimeValue.timeValueSeconds(timeout));
         clusterHealthRequest.waitForGreenStatus();
 
         final ClusterHealthResponse result = client.execute((c, requestOptions) -> c.cluster().health(clusterHealthRequest, requestOptions));

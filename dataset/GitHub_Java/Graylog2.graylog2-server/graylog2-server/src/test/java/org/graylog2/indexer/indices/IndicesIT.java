@@ -16,7 +16,6 @@
  */
 package org.graylog2.indexer.indices;
 
-import com.github.joschi.jadconfig.util.Duration;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
@@ -448,12 +447,5 @@ public abstract class IndicesIT extends ElasticsearchBaseTest {
         importFixture("org/graylog2/indexer/indices/IndicesIT.json");
 
         assertThat(indices.numberOfMessages("graylog_0")).isEqualTo(10);
-    }
-
-    @Test
-    public void optimizeIndexJobDoesNotThrowException() {
-        importFixture("org/graylog2/indexer/indices/IndicesIT.json");
-
-        indices.optimizeIndex("graylog_0", 1, Duration.minutes(1));
     }
 }
