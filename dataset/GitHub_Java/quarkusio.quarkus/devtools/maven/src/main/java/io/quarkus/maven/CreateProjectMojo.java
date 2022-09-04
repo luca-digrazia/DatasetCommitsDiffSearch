@@ -26,8 +26,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.lang.model.SourceVersion;
-
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.execution.DefaultMavenExecutionRequest;
 import org.apache.maven.execution.MavenExecutionRequest;
@@ -193,10 +191,6 @@ public class CreateProjectMojo extends AbstractMojo {
             sanitizeExtensions();
             final SourceType sourceType = CreateProject.determineSourceType(extensions);
             sanitizeOptions(sourceType);
-
-            if (className != null && !isClassNameValid(className)) {
-                throw new MojoExecutionException("Unable to create the project, " + className + " is not valid FQCN.");
-            }
 
             final Map<String, Object> context = new HashMap<>();
             context.put("path", path);
@@ -387,10 +381,6 @@ public class CreateProjectMojo extends AbstractMojo {
                 path = "/" + path;
             }
         }
-    }
-
-    private boolean isClassNameValid(String className) {
-        return SourceVersion.isName(className) && !SourceVersion.isKeyword(className);
     }
 
     private void sanitizeExtensions() {
