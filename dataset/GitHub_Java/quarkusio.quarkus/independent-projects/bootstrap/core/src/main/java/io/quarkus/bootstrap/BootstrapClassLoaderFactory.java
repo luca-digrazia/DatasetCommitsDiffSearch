@@ -25,6 +25,8 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.jboss.logging.Logger;
@@ -58,42 +60,23 @@ public class BootstrapClassLoaderFactory {
         return new BootstrapClassLoaderFactory();
     }
 
-    private static URL[] toURLs(List<AppDependency> deps) throws BootstrapException {
-        final URL[] urls = new URL[deps.size()];
-        addDeps(urls, 0, deps);
-        return urls;
-    }
-
-    private static URL toURL(Path p) throws BootstrapException {
+    private static URL[] toURLs(List<AppDependency> deps, List<Path> extraPaths) {
+        final URL[] urls = new URL[deps.size() + extraPaths.size()];
         try {
-            return p.toUri().toURL();
+            int i = 0;
+            while (i < deps.size()) {
+                urls[i] = deps.get(i).getArtifact().getPath().toUri().toURL();
+                ++i;
+            }
+            for(Path p : extraPaths) {
+                if(p == null) {
+                    continue;
+                }
+                urls[i++] = p.toUri().toURL();
+            }
+            return i != urls.length ? Arrays.copyOf(urls, i) : urls;
         } catch (MalformedURLException e) {
-            throw new BootstrapException("Failed to create a URL for " + p, e);
-        }
-    }
-
-    private static int addDeps(URL[] urls, int offset, List<AppDependency> deps) throws BootstrapException {
-        assertCapacity(urls, offset, deps.size());
-        int i = 0;
-        while(i < deps.size()) {
-            urls[offset + i] = toURL(deps.get(i++).getArtifact().getPath());
-        }
-        return i + offset;
-    }
-
-    private static int addPaths(URL[] urls, int offset, List<Path> deps) throws BootstrapException {
-        assertCapacity(urls, offset, deps.size());
-        int i = 0;
-        while(i < deps.size()) {
-            urls[offset + i] = toURL(deps.get(i++));
-        }
-        return i + offset;
-    }
-
-    private static void assertCapacity(URL[] urls, int offset, int deps) throws BootstrapException {
-        if(urls.length < offset + deps) {
-            throw new BootstrapException("Failed to add dependency URLs: the target array of length " + urls.length
-                    + " is not big enough to add " + deps + " dependencies with offset " + offset);
+            throw new IllegalStateException("Failed to create a URL", e);
         }
     }
 
@@ -101,7 +84,7 @@ public class BootstrapClassLoaderFactory {
         return project.getOutputDir().resolve(QUARKUS).resolve(BOOTSTRAP).resolve(DEPLOYMENT_CP);
     }
 
-    private static void persistCp(LocalProject project, URL[] urls, int limit, Path p) {
+    private static void persistCp(LocalProject project, URL[] urls, Path p) {
         try {
             Files.createDirectories(p.getParent());
             try (BufferedWriter writer = Files.newBufferedWriter(p)) {
@@ -109,8 +92,8 @@ public class BootstrapClassLoaderFactory {
                 writer.newLine();
                 writer.write(Integer.toString(project.getWorkspace().getId()));
                 writer.newLine();
-                for (int i = 0; i < limit; ++i) {
-                    writer.write(urls[i].toExternalForm());
+                for (URL url : urls) {
+                    writer.write(url.toExternalForm());
                     writer.newLine();
                 }
             }
@@ -122,7 +105,7 @@ public class BootstrapClassLoaderFactory {
 
     private ClassLoader parent;
     private Path appClasses;
-    private List<Path> appCp = new ArrayList<>(0);
+    private List<Path> appCp = new ArrayList<>(1);
     private boolean localProjectsDiscovery;
     private Boolean offline;
     private boolean enableClasspathCache;
@@ -137,6 +120,7 @@ public class BootstrapClassLoaderFactory {
 
     public BootstrapClassLoaderFactory setAppClasses(Path appClasses) {
         this.appClasses = appClasses;
+        addToClassPath(appClasses);
         return this;
     }
 
@@ -181,16 +165,16 @@ public class BootstrapClassLoaderFactory {
             }
             final LocalProject localProject;
             if (localProjectsDiscovery) {
-                localProject = LocalProject.loadWorkspace(appClasses);
+                localProject = LocalProject.resolveLocalProjectWithWorkspace(LocalProject.locateCurrentProjectDir(appClasses));
                 mvnBuilder.setWorkspace(localProject.getWorkspace());
             } else {
-                localProject = LocalProject.load(appClasses);
+                localProject = LocalProject.resolveLocalProject(LocalProject.locateCurrentProjectDir(appClasses));
             }
             final AppModel appModel = new BootstrapAppModelResolver(mvnBuilder.build()).resolveModel(localProject.getAppArtifact());
             if (hierarchical) {
-                final URLClassLoader cl = initAppCp(appModel.getUserDependencies());
+                final URLClassLoader cl = new URLClassLoader(toURLs(appModel.getUserDependencies(), appCp), parent);
                 try {
-                    return new URLClassLoader(toURLs(appModel.getDeploymentDependencies()), cl);
+                    return new URLClassLoader(toURLs(appModel.getDeploymentDependencies(), Collections.emptyList()), cl);
                 } catch (Throwable e) {
                     try {
                         cl.close();
@@ -200,20 +184,10 @@ public class BootstrapClassLoaderFactory {
                     throw e;
                 }
             }
-            return initAppCp(appModel.getAllDependencies());
+            return new URLClassLoader(toURLs(appModel.getAllDependencies(), appCp), parent);
         } catch (AppModelResolverException e) {
             throw new BootstrapException("Failed to init application classloader", e);
         }
-    }
-
-    private URLClassLoader initAppCp(final List<AppDependency> deps) throws BootstrapException {
-        final URL[] urls = new URL[deps.size() + appCp.size() + 1];
-        urls[0] = toURL(appClasses);
-        int offset = addDeps(urls, 1, deps);
-        if(!appCp.isEmpty()) {
-            addPaths(urls, offset, appCp);
-        }
-        return new URLClassLoader(urls, parent);
     }
 
     public URLClassLoader newDeploymentClassLoader() throws BootstrapException {
@@ -223,8 +197,8 @@ public class BootstrapClassLoaderFactory {
         final URLClassLoader ucl;
         Path cachedCpPath = null;
         final LocalProject localProject = localProjectsDiscovery || enableClasspathCache
-                ? LocalProject.loadWorkspace(appClasses)
-                : LocalProject.load(appClasses);
+                ? LocalProject.resolveLocalProjectWithWorkspace(LocalProject.locateCurrentProjectDir(appClasses))
+                : LocalProject.resolveLocalProject(LocalProject.locateCurrentProjectDir(appClasses));
         try {
             if (enableClasspathCache) {
                 cachedCpPath = resolveCachedCpPath(localProject);
@@ -240,18 +214,7 @@ public class BootstrapClassLoaderFactory {
                                 }
                                 debug("Deployment classloader for %s was re-created from the classpath cache",
                                         localProject.getAppArtifact());
-                                final URL[] arr;
-                                if(appCp.isEmpty()) {
-                                    arr = urls.toArray(new URL[urls.size()]);
-                                } else {
-                                    arr = new URL[urls.size() + appCp.size()];
-                                    int i = 0;
-                                    while(i < urls.size()) {
-                                        arr[i] = urls.get(i++);
-                                    }
-                                    addPaths(arr, i, appCp);
-                                }
-                                return new URLClassLoader(arr, parent);
+                                return new URLClassLoader(urls.toArray(new URL[urls.size()]), parent);
                             } else {
                                 debug("Cached deployment classpath has expired for %s", localProject.getAppArtifact());
                             }
@@ -269,22 +232,13 @@ public class BootstrapClassLoaderFactory {
             if (offline != null) {
                 mvn.setOffline(offline);
             }
-            final List<AppDependency> deploymentDeps = new BootstrapAppModelResolver(mvn.build()).resolveModel(localProject.getAppArtifact()).getDeploymentDependencies();
-            final URL[] urls;
-            if(appCp.isEmpty()) {
-                urls = toURLs(deploymentDeps);
-            } else {
-                urls = new URL[deploymentDeps.size() + appCp.size()];
-                addDeps(urls,
-                        addPaths(urls, 0, appCp),
-                        deploymentDeps);
-            }
+            final URL[] urls = toURLs(new BootstrapAppModelResolver(mvn.build()).resolveModel(localProject.getAppArtifact()).getDeploymentDependencies(), Collections.emptyList());
             if(cachedCpPath != null) {
-                persistCp(localProject, urls, deploymentDeps.size(), cachedCpPath);
+                persistCp(localProject, urls, cachedCpPath);
             }
             ucl = new URLClassLoader(urls, parent);
         } catch (AppModelResolverException e) {
-            throw new BootstrapException("Failed to create the deployment classloader for " + localProject.getAppArtifact(), e);
+            throw new BootstrapException("Failed to create a deployment classloader for " + localProject.getAppArtifact(), e);
         }
         return ucl;
     }
