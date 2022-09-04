@@ -98,7 +98,7 @@ public class LoggingConfiguration {
 
     public static class SyslogConfiguration {
         @JsonProperty
-        private boolean enabled = false;
+        private boolean enabled = true;
 
         @NotNull
         @JsonProperty
