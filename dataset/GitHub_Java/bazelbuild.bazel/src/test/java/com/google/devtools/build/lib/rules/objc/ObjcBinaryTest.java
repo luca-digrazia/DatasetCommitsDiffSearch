@@ -115,7 +115,8 @@ public class ObjcBinaryTest extends ObjcRuleTestCase {
    * Tests that bitcode is disabled for simulator builds even if enabled by flag.
    */
   public void testLinkActionsWithBitcode_simulator() throws Exception {
-    useConfiguration("--apple_bitcode=embedded", "--ios_multi_cpus=x86_64");
+    useConfiguration("--xcode_version=7.1", "--apple_bitcode=embedded",
+        "--ios_multi_cpus=x86_64");
     createBinaryTargetWriter("//objc:bin").setAndCreateFiles("srcs", "a.m").write();
 
     CommandAction linkAction = linkAction("//objc:bin");
@@ -127,7 +128,8 @@ public class ObjcBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLinkActionsWithNoBitcode() throws Exception {
-    useConfiguration("--apple_bitcode=none", "--ios_multi_cpus=arm64");
+    useConfiguration("--xcode_version=7.1", "--apple_bitcode=none",
+        "--ios_multi_cpus=arm64");
     createBinaryTargetWriter("//objc:bin").setAndCreateFiles("srcs", "a.m").write();
 
     CommandAction linkAction = linkAction("//objc:bin");
@@ -808,7 +810,7 @@ public class ObjcBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLinkActionsWithEmbeddedBitcode() throws Exception {
-    useConfiguration("--apple_bitcode=embedded", "--ios_multi_cpus=arm64");
+    useConfiguration("--xcode_version=7.1", "--apple_bitcode=embedded", "--ios_multi_cpus=arm64");
     createBinaryTargetWriter("//objc:bin").setAndCreateFiles("srcs", "a.m").write();
 
     CommandAction linkAction = linkAction("//objc:bin");
@@ -821,7 +823,8 @@ public class ObjcBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLinkActionsWithEmbeddedBitcodeMarkers() throws Exception {
-    useConfiguration("--apple_bitcode=embedded_markers", "--ios_multi_cpus=arm64");
+    useConfiguration(
+        "--xcode_version=7.1", "--apple_bitcode=embedded_markers", "--ios_multi_cpus=arm64");
     createBinaryTargetWriter("//objc:bin").setAndCreateFiles("srcs", "a.m").write();
 
     CommandAction linkAction = linkAction("//objc:bin");
