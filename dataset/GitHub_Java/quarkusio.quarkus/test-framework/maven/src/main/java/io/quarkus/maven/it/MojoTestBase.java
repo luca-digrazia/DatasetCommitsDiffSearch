@@ -28,8 +28,22 @@ import org.apache.maven.shared.invoker.DefaultInvoker;
 import org.apache.maven.shared.invoker.Invoker;
 import org.apache.maven.shared.utils.StringUtils;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+import org.junit.jupiter.api.BeforeAll;
+
+import com.google.common.collect.ImmutableMap;
+
+import io.quarkus.maven.utilities.MojoUtils;
 
 public class MojoTestBase {
+    private static ImmutableMap<String, String> VARIABLES;
+
+    @BeforeAll
+    public static void init() {
+        VARIABLES = ImmutableMap.of(
+                "@project.groupId@", MojoUtils.getPluginGroupId(),
+                "@project.artifactId@", MojoUtils.getPluginArtifactId(),
+                "@project.version@", MojoUtils.getPluginVersion());
+    }
 
     public static Invoker initInvoker(File root) {
         Invoker invoker = new DefaultInvoker();
@@ -55,14 +69,6 @@ public class MojoTestBase {
         return tc;
     }
 
-    public static File initProject(String name) {
-        return initProject(name, name);
-    }
-
-    public static File getTargetDir(String name) {
-        return new File("target/test-classes/" + name);
-    }
-
     public static File initProject(String name, String output) {
         File tc = new File("target/test-classes");
         if (!tc.isDirectory()) {
@@ -71,7 +77,7 @@ public class MojoTestBase {
                     .log(Level.FINE, "test-classes created? " + mkdirs);
         }
 
-        File in = new File(tc, name);
+        File in = new File("src/test/resources", name);
         if (!in.isDirectory()) {
             throw new RuntimeException("Cannot find directory: " + in.getAbsolutePath());
         }
@@ -88,8 +94,34 @@ public class MojoTestBase {
         } catch (IOException e) {
             throw new RuntimeException("Cannot copy project resources", e);
         }
+        filterPom(out);
 
         return out;
+    }
+
+    private static void filterPom(File out) {
+
+        File pom = new File(out, "pom.xml");
+        if (pom.exists()) {
+            try {
+                filter(pom, VARIABLES);
+            } catch (IOException e) {
+                throw new IllegalArgumentException(e);
+            }
+        }
+        for (File i : out.listFiles()) {
+            if (i.isDirectory()) {
+                pom = new File(i, "pom.xml");
+                if (pom.exists()) {
+                    try {
+                        filter(pom, VARIABLES);
+                    } catch (IOException e) {
+                        throw new IllegalArgumentException(e);
+                    }
+                }
+            }
+        }
+
     }
 
     public static void filter(File input, Map<String, String> variables) throws IOException {
@@ -229,27 +261,6 @@ public class MojoTestBase {
         return code.get();
     }
 
-    // will fail if it receives any http response except the expected one
-    static boolean getStrictHttpResponse(String path, int expectedStatus) {
-        AtomicBoolean code = new AtomicBoolean();
-        await()
-                .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(5, TimeUnit.MINUTES).until(() -> {
-                    try {
-                        URL url = new URL("http://localhost:8080" + ((path.startsWith("/") ? path : "/" + path)));
-                        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                        // the default Accept header used by HttpURLConnection is not compatible with RESTEasy negotiation as it uses q=.2
-                        connection.setRequestProperty("Accept", "text/html, *; q=0.2, */*; q=0.2");
-                        code.set(connection.getResponseCode() == expectedStatus);
-                        //complete no matter what the response code was
-                        return true;
-                    } catch (Exception e) {
-                        return false;
-                    }
-                });
-        return code.get();
-    }
-
     public static String get() throws IOException {
         URL url = new URL("http://localhost:8080");
         return IOUtils.toString(url, "UTF-8");
@@ -259,9 +270,9 @@ public class MojoTestBase {
         assertThat(logs.isEmpty()).isFalse();
         String infoLogLevel = "INFO";
         assertThat(logs.contains(infoLogLevel)).isTrue();
-        Predicate<String> datePattern = Pattern.compile("\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{3}").asPredicate();
+        Predicate<String> datePattern = Pattern.compile("\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{3}\\s").asPredicate();
         assertThat(datePattern.test(logs)).isTrue();
-        assertThat(logs.contains("cdi, resteasy, servlet, undertow-websockets")).isTrue();
+        assertThat(logs.contains("features: [cdi, resteasy, undertow-websockets]")).isTrue();
         assertThat(logs.contains("JBoss Threads version")).isFalse();
     }
 
