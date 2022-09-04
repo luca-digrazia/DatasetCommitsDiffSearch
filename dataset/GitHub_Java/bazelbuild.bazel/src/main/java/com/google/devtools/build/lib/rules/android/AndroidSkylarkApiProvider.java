@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -93,18 +92,6 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
   )
   public Artifact getMergedManifest() {
     return getIdeInfoProvider().getGeneratedManifest();
-  }
-
-  @SkylarkCallable(
-    name = "native_libs",
-    structField = true,
-    doc =
-        "Returns the native libraries as a map of the libraries' architecture as a String to a "
-            + "set of the native library artifacts, or the empty map if there are no native "
-            + "libraries."
-  )
-  public ImmutableMap<String, NestedSet<Artifact>> getNativeLibs() {
-    return getIdeInfoProvider().getNativeLibs();
   }
 
   @SkylarkCallable(

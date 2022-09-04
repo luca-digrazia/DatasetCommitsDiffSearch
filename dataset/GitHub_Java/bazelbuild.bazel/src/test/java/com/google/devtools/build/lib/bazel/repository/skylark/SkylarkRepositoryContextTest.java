@@ -23,7 +23,6 @@ import com.google.common.io.CharStreams;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.ExternalPackageBuilder;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -85,8 +84,10 @@ public class SkylarkRepositoryContextTest {
         new FuncallExpression(new Identifier("test"), ImmutableList.<Passed>of());
     ast.setLocation(Location.BUILTIN);
     Rule rule =
-        ExternalPackageBuilder.createAndAddRepositoryRule(
-            packageBuilder, buildRuleClass(attributes), null, kwargs, ast);
+        packageBuilder
+            .externalPackageData()
+            .createAndAddRepositoryRule(
+                packageBuilder, buildRuleClass(attributes), null, kwargs, ast);
     HttpDownloader downloader = Mockito.mock(HttpDownloader.class);
     context =
         new SkylarkRepositoryContext(
@@ -144,27 +145,21 @@ public class SkylarkRepositoryContextTest {
       context.createFile(context.path("/absolute"), "", true);
       fail("Expected error on creating path outside of the repository directory");
     } catch (RepositoryFunctionException ex) {
-      assertThat(ex)
-          .hasCauseThat()
-          .hasMessageThat()
+      assertThat(ex.getCause().getMessage())
           .isEqualTo("Cannot write outside of the repository directory for path /absolute");
     }
     try {
       context.createFile(context.path("../somepath"), "", true);
       fail("Expected error on creating path outside of the repository directory");
     } catch (RepositoryFunctionException ex) {
-      assertThat(ex)
-          .hasCauseThat()
-          .hasMessageThat()
+      assertThat(ex.getCause().getMessage())
           .isEqualTo("Cannot write outside of the repository directory for path /somepath");
     }
     try {
       context.createFile(context.path("foo/../../somepath"), "", true);
       fail("Expected error on creating path outside of the repository directory");
     } catch (RepositoryFunctionException ex) {
-      assertThat(ex)
-          .hasCauseThat()
-          .hasMessageThat()
+      assertThat(ex.getCause().getMessage())
           .isEqualTo("Cannot write outside of the repository directory for path /somepath");
     }
   }

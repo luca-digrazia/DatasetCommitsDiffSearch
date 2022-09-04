@@ -14,12 +14,14 @@
 
 package com.google.devtools.build.lib.rules.apple;
 
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -33,6 +35,7 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
 
 /**
  * Utility class for resolving items for the Apple toolchain (such as common tool flags, and paths).
@@ -117,14 +120,16 @@ public class AppleToolchain {
     return platformDir + "/Developer/Library/Frameworks";
   }
 
-  /** Returns the SDK frameworks directory inside of Xcode for a given configuration. */
-  public static String sdkFrameworkDir(
-      ApplePlatform targetPlatform, RuleContext ruleContext) {
+  /**
+   * Returns the SDK frameworks directory inside of Xcode for a given configuration.
+   */
+  public static String sdkFrameworkDir(Platform targetPlatform,
+      AppleConfiguration configuration) {
     String relativePath;
     switch (targetPlatform) {
       case IOS_DEVICE:
       case IOS_SIMULATOR:
-        if (XcodeConfig.getSdkVersionForPlatform(ruleContext, targetPlatform)
+        if (configuration.getSdkVersionForPlatform(targetPlatform)
             .compareTo(DottedVersion.fromString("9.0")) >= 0) {
           relativePath = SYSTEM_FRAMEWORK_PATH;
         } else {
@@ -144,6 +149,21 @@ public class AppleToolchain {
         throw new IllegalArgumentException("Unhandled platform " + targetPlatform);
     }
     return sdkDir() + relativePath;
+  }
+
+  /**
+   * Returns a series of xcode build settings which configure compilation warnings to
+   * "recommended settings". Without these settings, compilation might result in some spurious
+   * warnings, and xcode would complain that the settings be changed to these values.
+   */
+  public static Iterable<? extends XcodeprojBuildSetting> defaultWarningsForXcode() {
+    return Iterables.transform(DEFAULT_WARNINGS.keySet(),
+        new Function<String, XcodeprojBuildSetting>() {
+      @Override
+      public XcodeprojBuildSetting apply(String key) {
+        return XcodeprojBuildSetting.newBuilder().setName(key).setValue("YES").build();
+      }
+    });
   }
 
   /**
@@ -175,10 +195,11 @@ public class AppleToolchain {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(attr(XcodeConfigRule.XCODE_CONFIG_ATTR_NAME, LABEL)
+          .add(attr(":xcode_config", LABEL)
               .allowedRuleClasses("xcode_config")
               .checkConstraints()
               .direct_compile_time_input()
+              .cfg(HOST)
               .value(new XcodeConfigLabel(toolsRepository)))
           .build();
     }
