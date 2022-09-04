@@ -214,9 +214,7 @@ public class SmallRyeMetricsRecorder {
     }
 
     public void registerMetrics(Consumer<MetricsFactory> consumer) {
-        if (consumer != null) {
-            consumer.accept(factory);
-        }
+        consumer.accept(factory);
     }
 
     public void createRegistries(BeanContainer container) {
