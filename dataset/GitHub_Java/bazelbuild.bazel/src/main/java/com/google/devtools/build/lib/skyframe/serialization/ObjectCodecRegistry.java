@@ -14,17 +14,12 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.skyframe.serialization.Memoizer.MemoizingCodec;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
-import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -46,20 +41,12 @@ public class ObjectCodecRegistry {
   private final ImmutableList<CodecDescriptor> tagMappedCodecs;
   @Nullable
   private final CodecDescriptor defaultCodecDescriptor;
-
-  private final int memoizingCodecsStartTag;
-  private final ImmutableMap<Class<?>, MemoizingCodecDescriptor<?>> classMappedMemoizingCodecs;
-  private final ImmutableList<MemoizingCodecDescriptor<?>> tagMappedMemoizingCodecs;
-
   private final IdentityHashMap<Object, Integer> constantsMap;
   private final ImmutableList<Object> constants;
   private final int constantsStartTag;
 
   private ObjectCodecRegistry(
-      Map<String, CodecHolder> codecs,
-      ImmutableSet<MemoizingCodec<?>> memoizingCodecs,
-      ImmutableList<Object> constants,
-      boolean allowDefaultCodec) {
+      Map<String, CodecHolder> codecs, ImmutableList<Object> constants, boolean allowDefaultCodec) {
     ImmutableMap.Builder<String, CodecDescriptor> codecMappingsBuilder = ImmutableMap.builder();
     int nextTag = 1; // 0 is reserved for null.
     for (String classifier : ImmutableList.sortedCopyOf(codecs.keySet())) {
@@ -75,18 +62,6 @@ public class ObjectCodecRegistry {
             ? new TypedCodecDescriptor<>(nextTag++, new JavaSerializableCodec())
             : null;
     this.tagMappedCodecs = makeTagMappedCodecs(stringMappedCodecs, defaultCodecDescriptor);
-
-    this.memoizingCodecsStartTag = nextTag;
-    ImmutableMap.Builder<Class<?>, MemoizingCodecDescriptor<?>> memoizingCodecsBuilder =
-        ImmutableMap.builderWithExpectedSize(memoizingCodecs.size());
-    ImmutableList.Builder<MemoizingCodecDescriptor<?>> tagMappedMemoizingCodecsBuilder =
-        ImmutableList.builderWithExpectedSize(memoizingCodecs.size());
-    nextTag =
-        processMemoizingCodecs(
-            memoizingCodecs, nextTag, tagMappedMemoizingCodecsBuilder, memoizingCodecsBuilder);
-    this.classMappedMemoizingCodecs = memoizingCodecsBuilder.build();
-    this.tagMappedMemoizingCodecs = tagMappedMemoizingCodecsBuilder.build();
-
     constantsStartTag = nextTag;
     constantsMap = new IdentityHashMap<>();
     for (Object constant : constants) {
@@ -146,20 +121,6 @@ public class ObjectCodecRegistry {
   }
 
   @Nullable
-  public <T> MemoizingCodecDescriptor<? super T> getMemoizingCodecDescriptor(Class<T> type) {
-    for (Class<?> nextType = type; nextType != null; nextType = nextType.getSuperclass()) {
-      MemoizingCodecDescriptor<?> result = classMappedMemoizingCodecs.get(nextType);
-      if (result != null) {
-        @SuppressWarnings("unchecked")
-        MemoizingCodecDescriptor<? super T> castResult =
-            (MemoizingCodecDescriptor<? super T>) result;
-        return castResult;
-      }
-    }
-    return null;
-  }
-
-  @Nullable
   Object maybeGetConstantByTag(int tag) {
     return tag < constantsStartTag || tag - constantsStartTag >= constants.size()
         ? null
@@ -187,32 +148,17 @@ public class ObjectCodecRegistry {
     }
   }
 
-  @Nullable
-  public MemoizingCodec<?> maybeGetMemoizingCodecByTag(int tag) {
-    int tagOffset = tag - memoizingCodecsStartTag;
-    if (tagOffset < 0 || tagOffset > tagMappedMemoizingCodecs.size()) {
-      return null;
-    }
-    return tagMappedMemoizingCodecs.get(tagOffset).getMemoizingCodec();
-  }
-
   /**
    * Creates a builder using the current contents of this registry.
    *
    * <p>This is much more efficient than scanning multiple times.
    */
-  @VisibleForTesting
-  public Builder getBuilder() {
+  Builder getBuilder() {
     Builder builder = newBuilder();
     builder.setAllowDefaultCodec(defaultCodecDescriptor != null);
     for (Map.Entry<String, CodecDescriptor> entry : stringMappedCodecs.entrySet()) {
       builder.add(entry.getKey(), entry.getValue().getCodec());
     }
-
-    for (MemoizingCodecDescriptor<?> descriptor : tagMappedMemoizingCodecs) {
-      builder.addMemoizing(descriptor.getMemoizingCodec());
-    }
-
     for (Object constant : constants) {
       builder.addConstant(constant);
     }
@@ -220,7 +166,7 @@ public class ObjectCodecRegistry {
   }
 
   /** Describes encoding logic. */
-  interface CodecDescriptor {
+  static interface CodecDescriptor {
     void serialize(SerializationContext context, Object obj, CodedOutputStream codedOut)
         throws IOException, SerializationException;
 
@@ -241,32 +187,6 @@ public class ObjectCodecRegistry {
 
     /** Returns the underlying codec. */
     ObjectCodec<?> getCodec();
-  }
-
-  static class MemoizingCodecDescriptor<T> {
-    private final int tag;
-    private final MemoizingCodec<T> memoizingCodec;
-
-    MemoizingCodecDescriptor(int tag, MemoizingCodec<T> memoizingCodec) {
-      this.tag = tag;
-      this.memoizingCodec = memoizingCodec;
-    }
-
-    int getTag() {
-      return tag;
-    }
-
-    MemoizingCodec<T> getMemoizingCodec() {
-      return memoizingCodec;
-    }
-
-    @Override
-    public String toString() {
-      return MoreObjects.toStringHelper(this)
-          .add("tag", tag)
-          .add("codec", memoizingCodec)
-          .toString();
-    }
   }
 
   private static class TypedCodecDescriptor<T> implements CodecDescriptor {
@@ -317,18 +237,11 @@ public class ObjectCodecRegistry {
     public CodecDescriptor createDescriptor(int tag) {
       return new TypedCodecDescriptor<T>(tag, codec);
     }
-
-    @Override
-    public String toString() {
-      return MoreObjects.toStringHelper(this).add("codec", codec).toString();
-    }
   }
 
   /** Builder for {@link ObjectCodecRegistry}. */
   public static class Builder {
     private final ImmutableMap.Builder<String, CodecHolder> codecsBuilder = ImmutableMap.builder();
-    private final ImmutableSet.Builder<MemoizingCodec<?>> memoizingCodecBuilder =
-        ImmutableSet.builder();
     private final ImmutableList.Builder<Object> constantsBuilder = ImmutableList.builder();
     private boolean allowDefaultCodec = true;
 
@@ -345,11 +258,6 @@ public class ObjectCodecRegistry {
 
     public <T> Builder add(Class<? extends T> type, ObjectCodec<T> codec) {
       add(type.getName(), codec);
-      return this;
-    }
-
-    public Builder addMemoizing(MemoizingCodec<?> memoizingCodec) {
-      memoizingCodecBuilder.add(memoizingCodec);
       return this;
     }
 
@@ -373,10 +281,7 @@ public class ObjectCodecRegistry {
 
     public ObjectCodecRegistry build() {
       return new ObjectCodecRegistry(
-          codecsBuilder.build(),
-          memoizingCodecBuilder.build(),
-          constantsBuilder.build(),
-          allowDefaultCodec);
+          codecsBuilder.build(), constantsBuilder.build(), allowDefaultCodec);
     }
   }
 
@@ -420,24 +325,5 @@ public class ObjectCodecRegistry {
       codecTable[defaultCodecDescriptor.getTag() - 1] = defaultCodecDescriptor;
     }
     return ImmutableList.copyOf(codecTable);
-  }
-
-  private static int processMemoizingCodecs(
-      Iterable<? extends MemoizingCodec<?>> memoizingCodecs,
-      int nextTag,
-      ImmutableList.Builder<MemoizingCodecDescriptor<?>> tagMappedMemoizingCodecsBuilder,
-      ImmutableMap.Builder<Class<?>, MemoizingCodecDescriptor<?>> memoizingCodecsBuilder) {
-    for (MemoizingCodec<?> memoizingCodec :
-        ImmutableList.sortedCopyOf(
-            Comparator.comparing(o -> o.getEncodedClass().getName()), memoizingCodecs)) {
-      MemoizingCodecDescriptor<?> codecDescriptor =
-          new MemoizingCodecDescriptor<>(nextTag++, memoizingCodec);
-      tagMappedMemoizingCodecsBuilder.add(codecDescriptor);
-      memoizingCodecsBuilder.put(memoizingCodec.getEncodedClass(), codecDescriptor);
-      for (Class<?> otherClass : memoizingCodec.additionalEncodedSubclasses()) {
-        memoizingCodecsBuilder.put(otherClass, codecDescriptor);
-      }
-    }
-    return nextTag;
   }
 }
