@@ -21,18 +21,16 @@
 */
 package org.graylog2.plugin.inputs;
 
+import java.util.Map;
+import org.graylog2.plugin.GraylogServer;
+
 /**
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class MessageInputConfigurationException extends Exception {
+public interface MessageInput {
     
-    public MessageInputConfigurationException() {
-        super();
-    }
-    
-    public MessageInputConfigurationException(String msg) {
-        super(msg);
-    }
+    void initialize(Map<String, String> config, GraylogServer graylogServer) throws MessageInputConfigurationException;
+    public Map<String, String> getRequestedConfiguration();
+    String getName();
     
 }
