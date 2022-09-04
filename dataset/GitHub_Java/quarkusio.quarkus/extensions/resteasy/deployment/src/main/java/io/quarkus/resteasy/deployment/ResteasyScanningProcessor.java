@@ -21,30 +21,20 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
-import javax.inject.Singleton;
 import javax.servlet.DispatcherType;
-import javax.ws.rs.ApplicationPath;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.container.DynamicFeature;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.ext.ContextResolver;
-import javax.ws.rs.ext.MessageBodyReader;
-import javax.ws.rs.ext.MessageBodyWriter;
-import javax.ws.rs.ext.Provider;
-import javax.ws.rs.ext.Providers;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.core.Application;
+import javax.ws.rs.core.Response;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
@@ -54,18 +44,27 @@ import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.api.validation.ResteasyConstraintViolation;
 import org.jboss.resteasy.api.validation.ViolationReport;
-import org.jboss.resteasy.core.MediaTypeMap;
-import org.jboss.resteasy.plugins.interceptors.AcceptEncodingGZIPFilter;
-import org.jboss.resteasy.plugins.interceptors.GZIPDecodingInterceptor;
-import org.jboss.resteasy.plugins.interceptors.GZIPEncodingInterceptor;
+import org.jboss.resteasy.microprofile.config.FilterConfigSource;
+import org.jboss.resteasy.microprofile.config.ServletConfigSource;
+import org.jboss.resteasy.microprofile.config.ServletContextConfigSource;
 import org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
+import org.objectweb.asm.AnnotationVisitor;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
 
+import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
+import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.arc.processor.AnnotationsTransformer;
+import io.quarkus.arc.processor.BuiltinScope;
+import io.quarkus.arc.processor.DotNames;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ProxyUnwrapperBuildItem;
@@ -75,7 +74,10 @@ import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildIte
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
-import io.quarkus.deployment.util.ServiceUtil;
+import io.quarkus.jaxb.deployment.JaxbEnabledBuildItem;
+import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
+import io.quarkus.resteasy.common.deployment.ResteasyDotNames;
+import io.quarkus.resteasy.common.deployment.ResteasyJaxrsProviderBuildItem;
 import io.quarkus.resteasy.runtime.QuarkusInjectorFactory;
 import io.quarkus.resteasy.runtime.ResteasyFilter;
 import io.quarkus.resteasy.runtime.ResteasyTemplate;
@@ -93,78 +95,44 @@ import io.quarkus.undertow.deployment.ServletInitParamBuildItem;
  */
 public class ResteasyScanningProcessor {
 
-    private static final String JAVAX_WS_RS_APPLICATION = "javax.ws.rs.Application";
+    private static final String JAVAX_WS_RS_APPLICATION = Application.class.getName();
     private static final String JAX_RS_FILTER_NAME = JAVAX_WS_RS_APPLICATION;
     private static final String JAX_RS_SERVLET_NAME = JAVAX_WS_RS_APPLICATION;
-    private static final String JAX_RS_APPLICATION_PARAMETER_NAME = JAVAX_WS_RS_APPLICATION;
-
-    private static final DotName APPLICATION_PATH = DotName.createSimple(ApplicationPath.class.getName());
-
-    private static final DotName PATH = DotName.createSimple(Path.class.getName());
-    private static final DotName PROVIDER = DotName.createSimple(Provider.class.getName());
-    private static final DotName DYNAMIC_FEATURE = DotName.createSimple(DynamicFeature.class.getName());
-    private static final DotName CONTEXT = DotName.createSimple(Context.class.getName());
-
-    private static final DotName GET = DotName.createSimple(javax.ws.rs.GET.class.getName());
-    private static final DotName HEAD = DotName.createSimple(javax.ws.rs.HEAD.class.getName());
-    private static final DotName DELETE = DotName.createSimple(javax.ws.rs.DELETE.class.getName());
-    private static final DotName OPTIONS = DotName.createSimple(javax.ws.rs.OPTIONS.class.getName());
-    private static final DotName PATCH = DotName.createSimple(javax.ws.rs.PATCH.class.getName());
-    private static final DotName POST = DotName.createSimple(javax.ws.rs.POST.class.getName());
-    private static final DotName PUT = DotName.createSimple(javax.ws.rs.PUT.class.getName());
-
-    private static final DotName CONSUMES = DotName.createSimple(Consumes.class.getName());
-    private static final DotName PRODUCES = DotName.createSimple(Produces.class.getName());
-
-    private static final DotName RESTEASY_QUERY_PARAM = DotName
-            .createSimple(org.jboss.resteasy.annotations.jaxrs.QueryParam.class.getName());
-    private static final DotName RESTEASY_FORM_PARAM = DotName
-            .createSimple(org.jboss.resteasy.annotations.jaxrs.FormParam.class.getName());
-    private static final DotName RESTEASY_COOKIE_PARAM = DotName
-            .createSimple(org.jboss.resteasy.annotations.jaxrs.CookieParam.class.getName());
-    private static final DotName RESTEASY_PATH_PARAM = DotName
-            .createSimple(org.jboss.resteasy.annotations.jaxrs.PathParam.class.getName());
-    private static final DotName RESTEASY_HEADER_PARAM = DotName
-            .createSimple(org.jboss.resteasy.annotations.jaxrs.HeaderParam.class.getName());
-    private static final DotName RESTEASY_MATRIX_PARAM = DotName
-            .createSimple(org.jboss.resteasy.annotations.jaxrs.MatrixParam.class.getName());
+    private static final String JAX_RS_APPLICATION_PARAMETER_NAME = "javax.ws.rs.Application";
 
     private static final DotName JSONB_ANNOTATION = DotName.createSimple("javax.json.bind.annotation.JsonbAnnotation");
 
     private static final Set<DotName> TYPES_IGNORED_FOR_REFLECTION = new HashSet<>(Arrays.asList(
+            // javax.json
             DotName.createSimple("javax.json.JsonObject"),
             DotName.createSimple("javax.json.JsonArray"),
-            DotName.createSimple("javax.ws.rs.core.Response")));
+
+            // JAX-RS
+            DotName.createSimple(Response.class.getName()),
+            DotName.createSimple(AsyncResponse.class.getName()),
+
+            // Vert-x
+            DotName.createSimple("io.vertx.core.json.JsonArray"),
+            DotName.createSimple("io.vertx.core.json.JsonObject")));
 
     private static final DotName[] METHOD_ANNOTATIONS = {
-            GET,
-            HEAD,
-            DELETE,
-            OPTIONS,
-            PATCH,
-            POST,
-            PUT,
+            ResteasyDotNames.GET,
+            ResteasyDotNames.HEAD,
+            ResteasyDotNames.DELETE,
+            ResteasyDotNames.OPTIONS,
+            ResteasyDotNames.PATCH,
+            ResteasyDotNames.POST,
+            ResteasyDotNames.PUT,
     };
 
     private static final DotName[] RESTEASY_PARAM_ANNOTATIONS = {
-            RESTEASY_QUERY_PARAM,
-            RESTEASY_FORM_PARAM,
-            RESTEASY_COOKIE_PARAM,
-            RESTEASY_PATH_PARAM,
-            RESTEASY_HEADER_PARAM,
-            RESTEASY_MATRIX_PARAM,
+            ResteasyDotNames.RESTEASY_QUERY_PARAM,
+            ResteasyDotNames.RESTEASY_FORM_PARAM,
+            ResteasyDotNames.RESTEASY_COOKIE_PARAM,
+            ResteasyDotNames.RESTEASY_PATH_PARAM,
+            ResteasyDotNames.RESTEASY_HEADER_PARAM,
+            ResteasyDotNames.RESTEASY_MATRIX_PARAM,
     };
-
-    private static final ProviderDiscoverer[] PROVIDER_DISCOVERERS = {
-            new ProviderDiscoverer(GET, false, true),
-            new ProviderDiscoverer(HEAD, false, false),
-            new ProviderDiscoverer(DELETE, true, false),
-            new ProviderDiscoverer(OPTIONS, false, true),
-            new ProviderDiscoverer(PATCH, true, false),
-            new ProviderDiscoverer(POST, true, true),
-            new ProviderDiscoverer(PUT, true, false)
-    };
-    private static final DotName SINGLETON_SCOPE = DotName.createSimple(Singleton.class.getName());
 
     /**
      * JAX-RS configuration.
@@ -193,12 +161,6 @@ public class ResteasyScanningProcessor {
         boolean singletonResources;
 
         /**
-         * Enable gzip support for JAX-RS services.
-         */
-        @ConfigItem
-        boolean enableGzip;
-
-        /**
          * Set this to override the default path for JAX-RS resources if there are no
          * annotated application classes.
          */
@@ -221,15 +183,6 @@ public class ResteasyScanningProcessor {
     }
 
     @BuildStep
-    void scanForProviders(BuildProducer<ResteasyJaxrsProviderBuildItem> providers, CombinedIndexBuildItem indexBuildItem) {
-        for (AnnotationInstance i : indexBuildItem.getIndex().getAnnotations(PROVIDER)) {
-            if (i.target().kind() == AnnotationTarget.Kind.CLASS) {
-                providers.produce(new ResteasyJaxrsProviderBuildItem(i.target().asClass().name().toString()));
-            }
-        }
-    }
-
-    @BuildStep
     public void build(
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
@@ -240,6 +193,7 @@ public class ResteasyScanningProcessor {
             BuildProducer<FilterBuildItem> filterProducer,
             BuildProducer<ServletBuildItem> servletProducer,
             BuildProducer<ServletInitParamBuildItem> servletContextParams,
+            BuildProducer<BytecodeTransformerBuildItem> transformers,
             CombinedIndexBuildItem combinedIndexBuildItem) throws Exception {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.RESTEASY));
 
@@ -247,9 +201,9 @@ public class ResteasyScanningProcessor {
 
         resource.produce(new SubstrateResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
 
-        Collection<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
+        Collection<AnnotationInstance> app = index.getAnnotations(ResteasyDotNames.APPLICATION_PATH);
         //@Context uses proxies for interface injection
-        for (AnnotationInstance annotation : index.getAnnotations(CONTEXT)) {
+        for (AnnotationInstance annotation : index.getAnnotations(ResteasyDotNames.CONTEXT)) {
             DotName typeName = null;
             if (annotation.target().kind() == AnnotationTarget.Kind.METHOD) {
                 MethodInfo method = annotation.target().asMethod();
@@ -282,7 +236,7 @@ public class ResteasyScanningProcessor {
             }
         }
 
-        for (ClassInfo implementation : index.getAllKnownImplementors(DYNAMIC_FEATURE)) {
+        for (ClassInfo implementation : index.getAllKnownImplementors(ResteasyDotNames.DYNAMIC_FEATURE)) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, implementation.name().toString()));
         }
 
@@ -319,7 +273,7 @@ public class ResteasyScanningProcessor {
             mappingPath = path + "/*";
         }
 
-        Collection<AnnotationInstance> paths = index.getAnnotations(PATH);
+        Collection<AnnotationInstance> paths = index.getAnnotations(ResteasyDotNames.PATH);
         if (paths != null && !paths.isEmpty()) {
 
             //if JAX-RS is installed at the root location we use a filter, otherwise we use a Servlet and take over the whole mapped path
@@ -335,31 +289,91 @@ public class ResteasyScanningProcessor {
                 reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, HttpServlet30Dispatcher.class.getName()));
             }
 
-            StringBuilder sb = new StringBuilder();
-            boolean first = true;
+            Set<String> resources = new HashSet<>();
+            Set<DotName> pathInterfaces = new HashSet<>();
+            Set<ClassInfo> withoutDefaultCtor = new HashSet<>();
             for (AnnotationInstance annotation : paths) {
                 if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
                     ClassInfo clazz = annotation.target().asClass();
                     if (!Modifier.isInterface(clazz.flags())) {
-                        if (first) {
-                            first = false;
-                        } else {
-                            sb.append(",");
-                        }
                         String className = clazz.name().toString();
-                        sb.append(className);
+                        resources.add(className);
                         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, className));
+
+                        if (!clazz.hasNoArgsConstructor()) {
+                            withoutDefaultCtor.add(clazz);
+                        }
+                    } else {
+                        pathInterfaces.add(clazz.name());
                     }
                 }
             }
 
-            if (sb.length() > 0) {
+            // look for all implementations of interfaces annotated @Path
+            for (final DotName iface : pathInterfaces) {
+                final Collection<ClassInfo> implementors = index.getAllKnownImplementors(iface);
+                for (final ClassInfo implementor : implementors) {
+                    String className = implementor.name().toString();
+                    reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, className));
+                    resources.add(className);
+                }
+            }
+
+            if (!resources.isEmpty()) {
                 servletContextParams.produce(
-                        new ServletInitParamBuildItem(ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString()));
+                        new ServletInitParamBuildItem(ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES,
+                                String.join(",", resources)));
             }
             servletContextParams.produce(new ServletInitParamBuildItem("resteasy.servlet.mapping.prefix", path));
             if (appClass != null) {
                 servletContextParams.produce(new ServletInitParamBuildItem(JAX_RS_APPLICATION_PARAMETER_NAME, appClass));
+            }
+
+            // generate default constructors for suitable concrete @Path classes that don't have them
+            // see https://issues.jboss.org/browse/RESTEASY-2183
+            for (ClassInfo classInfo : withoutDefaultCtor) {
+                // keep it super simple - only generate default constructor is the object is a direct descendant of Object
+                if (!(classInfo.superClassType() != null && classInfo.superClassType().name().equals(DotNames.OBJECT))) {
+                    return;
+                }
+
+                boolean hasNonJaxRSAnnotations = false;
+                for (AnnotationInstance instance : classInfo.classAnnotations()) {
+                    if (!instance.name().toString().startsWith("javax.ws.rs")) {
+                        hasNonJaxRSAnnotations = true;
+                        break;
+                    }
+                }
+
+                // again keep it very very simple, if there are any non JAX-RS annotations, we don't generate the constructor
+                if (hasNonJaxRSAnnotations) {
+                    continue;
+                }
+
+                final String name = classInfo.name().toString();
+                transformers
+                        .produce(new BytecodeTransformerBuildItem(name, new BiFunction<String, ClassVisitor, ClassVisitor>() {
+                            @Override
+                            public ClassVisitor apply(String className, ClassVisitor classVisitor) {
+                                ClassVisitor cv = new ClassVisitor(Opcodes.ASM6, classVisitor) {
+
+                                    @Override
+                                    public void visit(int version, int access, String name, String signature, String superName,
+                                            String[] interfaces) {
+                                        super.visit(version, access, name, signature, superName, interfaces);
+                                        MethodVisitor ctor = visitMethod(Modifier.PUBLIC, "<init>", "()V", null,
+                                                null);
+                                        ctor.visitCode();
+                                        ctor.visitVarInsn(Opcodes.ALOAD, 0);
+                                        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+                                        ctor.visitInsn(Opcodes.RETURN);
+                                        ctor.visitMaxs(1, 1);
+                                        ctor.visitEnd();
+                                    }
+                                };
+                                return cv;
+                            }
+                        }));
             }
         } else {
             // no @Application class and no detected @Path resources, bail out
@@ -385,67 +399,40 @@ public class ResteasyScanningProcessor {
         registerReflectionForSerialization(reflectiveClass, reflectiveHierarchy, combinedIndexBuildItem);
     }
 
-    @Record(STATIC_INIT)
     @BuildStep
     void registerProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ServletInitParamBuildItem> servletContextParams,
-            CombinedIndexBuildItem combinedIndexBuildItem,
-            List<ResteasyJaxrsProviderBuildItem> contributedProviderBuildItems) throws Exception {
-        IndexView index = combinedIndexBuildItem.getIndex();
+            BuildProducer<UnremovableBeanBuildItem> unremovableBeans,
+            JaxrsProvidersToRegisterBuildItem jaxrsProvidersToRegisterBuildItem) {
 
-        Set<String> contributedProviders = new HashSet<>();
-        for (ResteasyJaxrsProviderBuildItem contributedProviderBuildItem : contributedProviderBuildItems) {
-            contributedProviders.add(contributedProviderBuildItem.getName());
-        }
-
-        Set<String> availableProviders = ServiceUtil.classNamesNamedIn(getClass().getClassLoader(),
-                "META-INF/services/" + Providers.class.getName());
-
-        MediaTypeMap<String> categorizedReaders = new MediaTypeMap<>();
-        MediaTypeMap<String> categorizedWriters = new MediaTypeMap<>();
-        MediaTypeMap<String> categorizedContextResolvers = new MediaTypeMap<>();
-        Set<String> otherProviders = new HashSet<>();
-
-        categorizeProviders(availableProviders, categorizedReaders, categorizedWriters, categorizedContextResolvers,
-                otherProviders);
-
-        Set<String> providersToRegister = new HashSet<>();
-
-        // add the other providers detected
-        providersToRegister.addAll(otherProviders);
-
-        // find the providers declared in our services
-        boolean useBuiltinProviders = collectDeclaredProviders(providersToRegister, categorizedReaders, categorizedWriters,
-                categorizedContextResolvers, index);
-
-        // If GZIP support is enabled, enable it
-        if (resteasyConfig.enableGzip) {
-            providersToRegister.add(AcceptEncodingGZIPFilter.class.getName());
-            providersToRegister.add(GZIPDecodingInterceptor.class.getName());
-            providersToRegister.add(GZIPEncodingInterceptor.class.getName());
-        }
-
-        if (useBuiltinProviders) {
+        if (jaxrsProvidersToRegisterBuildItem.useBuiltIn()) {
             // if we find a wildcard media type, we just use the built-in providers
             servletContextParams.produce(new ServletInitParamBuildItem("resteasy.use.builtin.providers", "true"));
-            if (!contributedProviders.isEmpty()) {
-                servletContextParams.produce(new ServletInitParamBuildItem("resteasy.providers",
-                        contributedProviders.stream().collect(Collectors.joining(","))));
-            }
 
-            providersToRegister = new HashSet<>(contributedProviders);
-            providersToRegister.addAll(availableProviders);
+            if (!jaxrsProvidersToRegisterBuildItem.getContributedProviders().isEmpty()) {
+                servletContextParams.produce(new ServletInitParamBuildItem("resteasy.providers",
+                        String.join(",", jaxrsProvidersToRegisterBuildItem.getContributedProviders())));
+            }
         } else {
-            providersToRegister.addAll(contributedProviders);
             servletContextParams.produce(new ServletInitParamBuildItem("resteasy.use.builtin.providers", "false"));
             servletContextParams.produce(new ServletInitParamBuildItem("resteasy.providers",
-                    providersToRegister.stream().collect(Collectors.joining(","))));
+                    String.join(",", jaxrsProvidersToRegisterBuildItem.getProviders())));
         }
 
         // register the providers for reflection
-        for (String providerToRegister : providersToRegister) {
+        for (String providerToRegister : jaxrsProvidersToRegisterBuildItem.getProviders()) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, providerToRegister));
         }
+
+        // special case: our config providers
+        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
+                ServletConfigSource.class,
+                ServletContextConfigSource.class,
+                FilterConfigSource.class));
+
+        // Providers that are also beans are unremovable
+        unremovableBeans.produce(new UnremovableBeanBuildItem(
+                b -> jaxrsProvidersToRegisterBuildItem.getProviders().contains(b.getBeanClass().toString())));
     }
 
     @Record(STATIC_INIT)
@@ -466,9 +453,34 @@ public class ResteasyScanningProcessor {
     }
 
     @BuildStep
-    List<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations() {
-        return Collections.singletonList(
-                new BeanDefiningAnnotationBuildItem(PATH, resteasyConfig.singletonResources ? SINGLETON_SCOPE : null));
+    void beanDefiningAnnotations(BuildProducer<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations) {
+        beanDefiningAnnotations
+                .produce(new BeanDefiningAnnotationBuildItem(ResteasyDotNames.PATH,
+                        resteasyConfig.singletonResources ? BuiltinScope.SINGLETON.getName() : null));
+        beanDefiningAnnotations
+                .produce(new BeanDefiningAnnotationBuildItem(ResteasyDotNames.APPLICATION_PATH,
+                        BuiltinScope.SINGLETON.getName()));
+    }
+
+    @BuildStep
+    AnnotationsTransformerBuildItem annotationTransformer() {
+        return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
+
+            @Override
+            public boolean appliesTo(Kind kind) {
+                return kind == Kind.CLASS;
+            }
+
+            @Override
+            public void transform(TransformationContext transformationContext) {
+                ClassInfo clazz = transformationContext.getTarget().asClass();
+                if (clazz.classAnnotation(ResteasyDotNames.PROVIDER) != null && clazz.annotations().containsKey(DotNames.INJECT)
+                        && !BuiltinScope.isIn(clazz.classAnnotations())) {
+                    // A provider with an injection point but no built-in scope is @Singleton
+                    transformationContext.transform().add(BuiltinScope.SINGLETON.getName()).done();
+                }
+            }
+        });
     }
 
     /**
@@ -481,13 +493,20 @@ public class ResteasyScanningProcessor {
         providers.produce(new ResteasyJaxrsProviderBuildItem(RolesFilterRegistrar.class.getName()));
     }
 
+    /**
+     * Indicates that JAXB support should be enabled
+     *
+     * @return
+     */
+    @BuildStep
+    JaxbEnabledBuildItem enableJaxb() {
+        return new JaxbEnabledBuildItem();
+    }
+
     private void registerReflectionForSerialization(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             CombinedIndexBuildItem combinedIndexBuildItem) {
         IndexView index = combinedIndexBuildItem.getIndex();
-
-        // required by JSON-P support
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "org.glassfish.json.JsonProviderImpl"));
 
         // required by Jackson
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false,
@@ -511,9 +530,11 @@ public class ResteasyScanningProcessor {
                 if (isReflectionDeclarationRequiredFor(method.returnType())) {
                     reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType()));
                 }
-                for (Type param : method.parameters()) {
-                    if (isReflectionDeclarationRequiredFor(param)) {
-                        reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(param));
+                for (short i = 0; i < method.parameters().size(); i++) {
+                    Type parameterType = method.parameters().get(i);
+                    if (isReflectionDeclarationRequiredFor(parameterType)
+                            && !hasAnnotation(method, i, ResteasyDotNames.CONTEXT)) {
+                        reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(parameterType));
                     }
                 }
             }
@@ -522,118 +543,6 @@ public class ResteasyScanningProcessor {
         // In the case of a constraint violation, these elements might be returned as entities and will be serialized
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ViolationReport.class.getName()));
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ResteasyConstraintViolation.class.getName()));
-    }
-
-    private static void categorizeProviders(Set<String> availableProviders, MediaTypeMap<String> categorizedReaders,
-            MediaTypeMap<String> categorizedWriters, MediaTypeMap<String> categorizedContextResolvers,
-            Set<String> otherProviders) {
-        for (String availableProvider : availableProviders) {
-            try {
-                Class<?> providerClass = Class.forName(availableProvider);
-                if (MessageBodyReader.class.isAssignableFrom(providerClass)
-                        || MessageBodyWriter.class.isAssignableFrom(providerClass)) {
-                    if (MessageBodyReader.class.isAssignableFrom(providerClass)) {
-                        Consumes consumes = providerClass.getAnnotation(Consumes.class);
-                        if (consumes != null) {
-                            for (String consumesMediaType : consumes.value()) {
-                                categorizedReaders.add(MediaType.valueOf(consumesMediaType), providerClass.getName());
-                            }
-                        } else {
-                            categorizedReaders.add(MediaType.WILDCARD_TYPE, providerClass.getName());
-                        }
-                    }
-                    if (MessageBodyWriter.class.isAssignableFrom(providerClass)) {
-                        Produces produces = providerClass.getAnnotation(Produces.class);
-                        if (produces != null) {
-                            for (String producesMediaType : produces.value()) {
-                                categorizedWriters.add(MediaType.valueOf(producesMediaType), providerClass.getName());
-                            }
-                        } else {
-                            categorizedWriters.add(MediaType.WILDCARD_TYPE, providerClass.getName());
-                        }
-                    }
-                } else if (ContextResolver.class.isAssignableFrom(providerClass)) {
-                    Produces produces = providerClass.getAnnotation(Produces.class);
-                    if (produces != null) {
-                        for (String producesMediaType : produces.value()) {
-                            categorizedContextResolvers.add(MediaType.valueOf(producesMediaType),
-                                    providerClass.getName());
-                        }
-                    } else {
-                        categorizedContextResolvers.add(MediaType.WILDCARD_TYPE, providerClass.getName());
-                    }
-                } else {
-                    otherProviders.add(providerClass.getName());
-                }
-            } catch (ClassNotFoundException e) {
-                // Ignore
-            }
-        }
-    }
-
-    private static boolean collectDeclaredProviders(Set<String> providersToRegister,
-            MediaTypeMap<String> categorizedReaders, MediaTypeMap<String> categorizedWriters,
-            MediaTypeMap<String> categorizedContextResolvers, IndexView index) {
-        for (ProviderDiscoverer providerDiscoverer : PROVIDER_DISCOVERERS) {
-            Collection<AnnotationInstance> getMethods = index.getAnnotations(providerDiscoverer.getMethodAnnotation());
-            for (AnnotationInstance getMethod : getMethods) {
-                MethodInfo methodTarget = getMethod.target().asMethod();
-                if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedReaders,
-                        methodTarget, CONSUMES, providerDiscoverer.noConsumesDefaultsToAll())) {
-                    return true;
-                }
-                if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedWriters,
-                        methodTarget, PRODUCES, providerDiscoverer.noProducesDefaultsToAll())) {
-                    return true;
-                }
-                if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister,
-                        categorizedContextResolvers, methodTarget, PRODUCES,
-                        providerDiscoverer.noProducesDefaultsToAll())) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private static boolean collectDeclaredProvidersForMethodAndMediaTypeAnnotation(Set<String> providersToRegister,
-            MediaTypeMap<String> categorizedProviders, MethodInfo methodTarget, DotName mediaTypeAnnotation,
-            boolean defaultsToAll) {
-        AnnotationInstance mediaTypeAnnotationInstance = methodTarget.annotation(mediaTypeAnnotation);
-        if (mediaTypeAnnotationInstance == null) {
-            // let's consider the class
-            Collection<AnnotationInstance> classAnnotations = methodTarget.declaringClass().classAnnotations();
-            for (AnnotationInstance classAnnotation : classAnnotations) {
-                if (mediaTypeAnnotation.equals(classAnnotation.name())) {
-                    if (collectDeclaredProvidersForMediaTypeAnnotationInstance(providersToRegister, categorizedProviders,
-                            classAnnotation)) {
-                        return true;
-                    }
-                    return false;
-                }
-            }
-            return defaultsToAll;
-        }
-        if (collectDeclaredProvidersForMediaTypeAnnotationInstance(providersToRegister, categorizedProviders,
-                mediaTypeAnnotationInstance)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    private static boolean collectDeclaredProvidersForMediaTypeAnnotationInstance(Set<String> providersToRegister,
-            MediaTypeMap<String> categorizedProviders, AnnotationInstance mediaTypeAnnotationInstance) {
-        for (String media : mediaTypeAnnotationInstance.value().asStringArray()) {
-            MediaType mediaType = MediaType.valueOf(media);
-            if (MediaType.WILDCARD_TYPE.equals(mediaType)) {
-                // exit early if we have the wildcard type
-                return true;
-            }
-            providersToRegister.addAll(categorizedProviders.getPossible(mediaType));
-        }
-        return false;
     }
 
     private static boolean isReflectionDeclarationRequiredFor(Type type) {
@@ -654,31 +563,15 @@ public class ResteasyScanningProcessor {
         }
     }
 
-    private static class ProviderDiscoverer {
-
-        private final DotName methodAnnotation;
-
-        private final boolean noConsumesDefaultsToAll;
-
-        private final boolean noProducesDefaultsToAll;
-
-        private ProviderDiscoverer(DotName methodAnnotation, boolean noConsumesDefaultsToAll,
-                boolean noProducesDefaultsToAll) {
-            this.methodAnnotation = methodAnnotation;
-            this.noConsumesDefaultsToAll = noConsumesDefaultsToAll;
-            this.noProducesDefaultsToAll = noProducesDefaultsToAll;
+    private static boolean hasAnnotation(MethodInfo method, short paramPosition, DotName annotation) {
+        for (AnnotationInstance annotationInstance : method.annotations()) {
+            AnnotationTarget target = annotationInstance.target();
+            if (target != null && target.kind() == Kind.METHOD_PARAMETER
+                    && target.asMethodParameter().position() == paramPosition
+                    && annotationInstance.name().equals(annotation)) {
+                return true;
+            }
         }
-
-        public DotName getMethodAnnotation() {
-            return methodAnnotation;
-        }
-
-        public boolean noConsumesDefaultsToAll() {
-            return noConsumesDefaultsToAll;
-        }
-
-        public boolean noProducesDefaultsToAll() {
-            return noProducesDefaultsToAll;
-        }
+        return false;
     }
 }
