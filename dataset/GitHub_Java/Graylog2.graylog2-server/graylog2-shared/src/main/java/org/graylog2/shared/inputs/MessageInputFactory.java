@@ -16,7 +16,6 @@
  */
 package org.graylog2.shared.inputs;
 
-import com.codahale.metrics.MetricSet;
 import com.google.common.collect.Maps;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
@@ -98,8 +97,8 @@ public class MessageInputFactory {
                         }
 
                         @Override
-                        public MetricSet getMetricSet() {
-                            return null;
+                        public void setupMetrics(MessageInput2 input) {
+
                         }
                     },
                     new Codec() {

@@ -31,6 +31,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 public interface Codec {
+
     @Nullable
     Message decode(@Nonnull RawMessage rawMessage);
 
@@ -40,15 +41,11 @@ public interface Codec {
     String getName();
 
     @Nonnull
-    Configuration getConfiguration();
+    ConfigurationRequest getRequestedConfiguration();
+
+    void overrideDefaultValues(@Nonnull ConfigurationRequest cr);
 
     public interface Factory<C> {
         C create(Configuration configuration);
-        Config getConfig();
-    }
-
-    public interface Config {
-        ConfigurationRequest getRequestedConfiguration();
-        void overrideDefaultValues(@Nonnull ConfigurationRequest cr);
     }
 }
