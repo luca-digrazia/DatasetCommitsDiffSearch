@@ -21,15 +21,15 @@
 package org.graylog2.messagehandlers.gelf;
 
 /**
- * ForeignGELFChunkException.java: Sep 24, 2010 6:02:36 PM
+ * InvalidGELFChunkException.java: Sep 24, 2010 4:53:44 PM
  *
  * [description]
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-class ForeignGELFChunkException extends GELFException {
+class InvalidGELFChunkException extends GELFException {
 
-    public ForeignGELFChunkException(String msg) {
+    public InvalidGELFChunkException(String msg) {
         super(msg);
     }
 

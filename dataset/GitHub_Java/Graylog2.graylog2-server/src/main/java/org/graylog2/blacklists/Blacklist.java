@@ -53,15 +53,13 @@ public class Blacklist {
     }
 
     public static List<Blacklist> fetchAll() {
-        final BlacklistCache blacklistCache = BlacklistCache.getInstance();
-
-        if (blacklistCache.valid()) {
-            return blacklistCache.get();
+        if (BlacklistCache.getInstance().valid()) {
+            return BlacklistCache.getInstance().get();
         }
 
         List<Blacklist> blacklists = new ArrayList<Blacklist>();
 
-        DBCollection coll = blacklistCache.getGraylogServer().getMongoConnection().getDatabase().getCollection("blacklists");
+        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("blacklists");
         DBCursor cur = coll.find(new BasicDBObject());
 
         while (cur.hasNext()) {
@@ -72,7 +70,7 @@ public class Blacklist {
             }
         }
 
-        blacklistCache.set(blacklists);
+        BlacklistCache.getInstance().set(blacklists);
 
         return blacklists;
     }

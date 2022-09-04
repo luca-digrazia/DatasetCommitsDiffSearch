@@ -27,7 +27,7 @@ package org.graylog2.messagehandlers.gelf;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class InvalidGELFHeaderException extends GELFException {
+class InvalidGELFHeaderException extends GELFException {
 
     public InvalidGELFHeaderException() {
         super();

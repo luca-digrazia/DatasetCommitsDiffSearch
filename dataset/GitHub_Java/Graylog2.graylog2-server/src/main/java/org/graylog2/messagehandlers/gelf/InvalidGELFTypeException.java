@@ -21,16 +21,20 @@
 package org.graylog2.messagehandlers.gelf;
 
 /**
- * ForeignGELFChunkException.java: Sep 24, 2010 6:02:36 PM
+ * InvalidGELFTypeException.java: Sep 15, 2010 9:22:45 PM
  *
- * [description]
+ * Received GELF message is of unknown type. (i.e. cannot
+ * find out if chunked or not because of invalid headers)
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-class ForeignGELFChunkException extends GELFException {
+public class InvalidGELFTypeException extends GELFException {
 
-    public ForeignGELFChunkException(String msg) {
-        super(msg);
+    public InvalidGELFTypeException() {
+        super();
     }
 
+    public InvalidGELFTypeException(String s, Throwable throwable) {
+        super(s, throwable);
+    }
 }

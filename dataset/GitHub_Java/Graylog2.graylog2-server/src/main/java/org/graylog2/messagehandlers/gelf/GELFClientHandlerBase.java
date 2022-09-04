@@ -53,9 +53,8 @@ class GELFClientHandlerBase {
         JSONObject json;
 
         try {
-            json = getJSON(this.clientMessage);
+         json = getJSON(this.clientMessage);
         } catch (Exception e) {
-            LOG.error("Could not parse JSON!", e);
             json = null;
         }
 

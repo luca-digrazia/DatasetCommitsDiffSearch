@@ -21,16 +21,18 @@
 package org.graylog2.messagehandlers.gelf;
 
 /**
- * ForeignGELFChunkException.java: Sep 24, 2010 6:02:36 PM
+ * InvalidGELFCompressionMethodException.java: Sep 15, 2010 10:40:00 PM
  *
- * [description]
+ * Received GELF message has an unknown compression type.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-class ForeignGELFChunkException extends GELFException {
-
-    public ForeignGELFChunkException(String msg) {
-        super(msg);
+public class InvalidGELFCompressionMethodException extends GELFException {
+    public InvalidGELFCompressionMethodException() {
+        super();
     }
 
+    public InvalidGELFCompressionMethodException(String msg) {
+        super(msg);
+    }
 }

@@ -20,7 +20,9 @@
 
 package org.graylog2;
 
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.joda.time.DateTime;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -28,7 +30,6 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.Calendar;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -48,7 +49,8 @@ public final class Tools {
     /**
      * Get the own PID of this process.
      *
-     * @return PID of the running process
+     * @return PID
+     * @throws Exception
      */
     public static String getPID() {
         return ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
@@ -133,6 +135,22 @@ public final class Tools {
         return ret;
     }
 
+    public static int log4jLevelToSyslog(Level level) {
+        if (level.equals(Level.DEBUG)) {
+            return 7;
+        } else if (level.equals(Level.INFO)) {
+            return 6;
+        } else if (level.equals(Level.WARN)) {
+            return 4;
+        } else if (level.equals(Level.ERROR)) {
+            return 3;
+        } else if (level.equals(Level.FATAL)) {
+            return 2;
+        }
+
+        return 4; // Warning.
+    }
+
 
     /**
      * Decompress ZLIB (RFC 1950) compressed data
@@ -173,28 +191,21 @@ public final class Tools {
      * @return The current UTC UNIX timestamp.
      */
     public static int getUTCTimestamp() {
-       return (int) (Calendar.getInstance().getTimeInMillis()/1000);
+       return (int) (System.currentTimeMillis()/1000);
     }
 
     /**
-     * Get the current UNIX epoch with milliseconds of the system
      *
      * @return The current UTC UNIX timestamp with milliseconds.
      */
     public static double getUTCTimestampWithMilliseconds() {
-
-        return getUTCTimestampWithMilliseconds(Calendar.getInstance().getTimeInMillis());
-    }
-
-    /**
-     * Get the UNIX epoch with milliseconds of the provided millisecond timestamp
-     *
-     * @param timestamp a millisecond timestamp (milliseconds since UNIX epoch)
-     * @return The current UTC UNIX timestamp with milliseconds.
-     */
-    public static double getUTCTimestampWithMilliseconds(long timestamp) {
-
-        return Double.parseDouble(String.format("%d.%d", timestamp/1000, timestamp%1000));
+        // Use JodaTime to easy get the milliseconds and construct a float. (This looks dumb but is the easiest and safest way)
+        long now = System.currentTimeMillis();
+        DateTime jt = new DateTime(now);
+        String unixTime = String.valueOf(now/1000);
+        String millis = String.valueOf(jt.getMillisOfSecond());
+        Double milliSecondTime = new Double(unixTime + "." + millis);
+        return milliSecondTime.doubleValue();
     }
 
     public static String getLocalHostname() {

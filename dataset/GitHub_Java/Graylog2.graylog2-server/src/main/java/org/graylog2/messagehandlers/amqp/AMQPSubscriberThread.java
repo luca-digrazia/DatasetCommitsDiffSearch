@@ -20,21 +20,19 @@
 
 package org.graylog2.messagehandlers.amqp;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.util.zip.DataFormatException;
-
+import com.rabbitmq.client.AlreadyClosedException;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.QueueingConsumer;
 import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
 import org.graylog2.messagehandlers.gelf.InvalidGELFCompressionMethodException;
 import org.graylog2.messagehandlers.gelf.SimpleGELFClientHandler;
 import org.graylog2.messagehandlers.syslog.GraylogSyslogServerEvent;
 import org.graylog2.messagehandlers.syslog.SyslogEventHandler;
 
-import com.rabbitmq.client.AlreadyClosedException;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.QueueingConsumer;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.util.zip.DataFormatException;
 
 /**
  * AMQPSubscriberThread.java: Jan 20, 2011 7:19:52 PM
@@ -52,10 +50,7 @@ public class AMQPSubscriberThread extends Thread {
 
     public static final int SLEEP_INTERVAL = 10;
 
-    private final GraylogServer server;
-
-    public AMQPSubscriberThread(GraylogServer server, AMQPSubscribedQueue queue, AMQPBroker broker) {
-        this.server = server;
+    public AMQPSubscriberThread(AMQPSubscribedQueue queue, AMQPBroker broker) {
         this.queue = queue;
         this.broker = broker;
     }
@@ -133,14 +128,14 @@ public class AMQPSubscriberThread extends Thread {
         switch (this.queue.getType()) {
             case AMQPSubscribedQueue.TYPE_GELF:
                 // Handle GELF message.
-                SimpleGELFClientHandler gelfHandler = new SimpleGELFClientHandler(server, new String(amqpBody));
+                SimpleGELFClientHandler gelfHandler = new SimpleGELFClientHandler(new String(amqpBody));
                 gelfHandler.setAmqpReceiverQueue(this.queue.getName());
                 gelfHandler.handle();
                 break;
             case AMQPSubscribedQueue.TYPE_SYSLOG:
                 // Handle syslog message.
                 GraylogSyslogServerEvent message = new GraylogSyslogServerEvent(amqpBody, amqpBody.length, InetAddress.getLocalHost());
-                SyslogEventHandler syslogHandler = new SyslogEventHandler(server);
+                SyslogEventHandler syslogHandler = new SyslogEventHandler();
                 message.setAmqpReceiverQueue(this.queue.getName());
                 syslogHandler.event(null, null, message);
                 break;
