@@ -62,10 +62,8 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBui
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.pkg.NativeConfig;
-import io.quarkus.kafka.client.runtime.KafkaBindingConverter;
 import io.quarkus.kafka.client.runtime.KafkaRecorder;
 import io.quarkus.kafka.client.runtime.KafkaRuntimeConfigProducer;
 import io.quarkus.kafka.client.serialization.JsonbDeserializer;
@@ -394,25 +392,6 @@ public class KafkaProcessor {
                 "com.fasterxml.jackson.databind.ObjectMapper",
                 "io.quarkus.jsonb.JsonbProducer",
                 "javax.json.bind.Jsonb");
-    }
-
-    @BuildStep
-    public void registerRuntimeInitializedClasses(BuildProducer<RuntimeInitializedClassBuildItem> producer) {
-        // Classes using java.util.Random, which need to be runtime initialized
-        producer.produce(
-                new RuntimeInitializedClassBuildItem("org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"));
-        producer.produce(new RuntimeInitializedClassBuildItem(
-                "org.apache.kafka.common.security.oauthbearer.internals.expiring.ExpiringCredentialRefreshingLogin"));
-    }
-
-    @BuildStep
-    void registerServiceBinding(Capabilities capabilities,
-            BuildProducer<ServiceProviderBuildItem> serviceProvider) {
-        if (capabilities.isPresent(Capability.KUBERNETES_SERVICE_BINDING)) {
-            serviceProvider.produce(
-                    new ServiceProviderBuildItem("io.quarkus.kubernetes.service.binding.runtime.ServiceBindingConverter",
-                            KafkaBindingConverter.class.getName()));
-        }
     }
 
     public static String getArch() {
