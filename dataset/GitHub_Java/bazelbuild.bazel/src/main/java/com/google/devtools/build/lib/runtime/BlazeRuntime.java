@@ -18,7 +18,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
@@ -47,6 +46,7 @@ import com.google.devtools.build.lib.profiler.MemoryProfiler;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.Profiler.Format;
+import com.google.devtools.build.lib.profiler.Profiler.ProfiledTaskKinds;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
@@ -279,7 +279,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       long waitTimeInMs) {
     OutputStream out = null;
     boolean recordFullProfilerData = false;
-    ImmutableSet.Builder<ProfilerTask> profiledTasksBuilder = ImmutableSet.builder();
+    ProfiledTaskKinds profiledTasks = ProfiledTaskKinds.NONE;
     Profiler.Format format = Profiler.Format.BINARY_BAZEL_FORMAT;
     Path profilePath = null;
     try {
@@ -300,37 +300,20 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
         recordFullProfilerData = false;
         out = profilePath.getOutputStream();
         eventHandler.handle(Event.info("Writing tracer profile to '" + profilePath + "'"));
-        for (ProfilerTask profilerTask : ProfilerTask.values()) {
-          if (!profilerTask.isVfs()
-              // CRITICAL_PATH corresponds to writing the file.
-              && profilerTask != ProfilerTask.CRITICAL_PATH
-              && profilerTask != ProfilerTask.SKYFUNCTION
-              && profilerTask != ProfilerTask.ACTION_COMPLETE
-              && !profilerTask.isStarlark()) {
-            profiledTasksBuilder.add(profilerTask);
-          }
-        }
-        profiledTasksBuilder.addAll(options.additionalProfileTasks);
+        profiledTasks = ProfiledTaskKinds.ALL_FOR_TRACE;
       } else if (options.profilePath != null) {
         profilePath = workspace.getWorkspace().getRelative(options.profilePath);
 
         recordFullProfilerData = options.recordFullProfilerData;
         out = profilePath.getOutputStream();
         eventHandler.handle(Event.info("Writing profile data to '" + profilePath + "'"));
-        for (ProfilerTask profilerTask : ProfilerTask.values()) {
-          profiledTasksBuilder.add(profilerTask);
-        }
+        profiledTasks = ProfiledTaskKinds.ALL;
       } else if (options.alwaysProfileSlowOperations) {
         recordFullProfilerData = false;
         out = null;
-        for (ProfilerTask profilerTask : ProfilerTask.values()) {
-          if (profilerTask.collectsSlowestInstances()) {
-            profiledTasksBuilder.add(profilerTask);
-          }
-        }
+        profiledTasks = ProfiledTaskKinds.SLOWEST;
       }
-      ImmutableSet<ProfilerTask> profiledTasks = profiledTasksBuilder.build();
-      if (!profiledTasks.isEmpty()) {
+      if (profiledTasks != ProfiledTaskKinds.NONE) {
         Profiler profiler = Profiler.instance();
         profiler.start(
             profiledTasks,
