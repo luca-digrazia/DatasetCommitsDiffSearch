@@ -21,12 +21,61 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Use this annotation to enhance an Android Service
+ * Should be used on a method that must respond to a specific action in an
+ * {@link EIntentService} annotated class. The method name will be used as
+ * action name unless the {@link #value()} field is set.
+ * <p/ >
+ * The method signature (ie with attributes) will be a part of the IntentBuilder
+ * generated for the {@link EIntentService}.
+ * <p/>
+ * The method could contain any type or parameters.
+ * <p/>
+ * The class MAY contain several {@link ServiceAction} annotated methods.
+ * <p/>
+ * <blockquote>
+ * 
+ * Example :
+ * 
+ * <pre>
+ * &#064;EActivity(R.layout.main)
+ * public class MyActivity extends Activity {
+ * 
+ * 	public void launchAction() {
+ * 		// Note the use of generated class instead of original one
+ * 		MyIntentService_.intent(this)
+ * 				.<b>myAction</b>("test", 10L)
+ * 				.start();
+ * 	}
+ * 
+ * }
+ * 
+ * &#064;EIntentService
+ * public class MyIntentService extends IntentService {
+ * 
+ * 	&#064;ServiceAction
+ * 	void mySimpleAction() {
+ * 		// ...
+ * 	}
+ * 
+ * 	&#064;ServiceAction
+ * 	void <b>myAction</b>(String valueString, long valueLong) {
+ * 		// ...
+ * 	}
+ * }
+ * </pre>
+ * 
+ * </blockquote>
+ * 
+ * @see EIntentService
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface ServiceAction {
 
+	/**
+	 * Define the action's name. If this field isn't set the annotated method
+	 * name will be used.
+	 */
 	String value() default "";
 
 }
