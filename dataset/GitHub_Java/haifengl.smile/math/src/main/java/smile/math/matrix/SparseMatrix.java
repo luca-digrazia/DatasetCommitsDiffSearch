@@ -40,8 +40,6 @@ import smile.math.Math;
  * @author Haifeng Li
  */
 public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, SparseMatrix> {
-    private static final long serialVersionUID = 1L;
-
     /**
      * The number of rows.
      */

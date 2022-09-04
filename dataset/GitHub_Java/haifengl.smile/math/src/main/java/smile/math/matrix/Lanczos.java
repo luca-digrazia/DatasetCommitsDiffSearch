@@ -35,7 +35,7 @@ import smile.math.Math;
 public class Lanczos {
     private static final Logger logger = LoggerFactory.getLogger(Lanczos.class);
 
-    private static class ATA extends Matrix {
+    private static class ATA implements Matrix {
 
         Matrix A;
         double[] buf;
@@ -135,7 +135,7 @@ public class Lanczos {
      * @param k the number of singular triples we wish to compute for the input matrix.
      * This number cannot exceed the size of A.
      */
-    public static SVD svd(Matrix A, int k) {
+    public static SingularValueDecomposition svd(Matrix A, int k) {
         return svd(A, k, 1.0E-6);
     }
 
@@ -148,9 +148,9 @@ public class Lanczos {
      * This number cannot exceed the size of A.
      * @param kappa relative accuracy of ritz values acceptable as singular values.
      */
-    public static SVD svd(Matrix A, int k, double kappa) {
+    public static SingularValueDecomposition svd(Matrix A, int k, double kappa) {
         ATA B = new ATA(A);
-        EVD eigen = Lanczos.eigen(B, k, kappa);
+        EigenValueDecomposition eigen = Lanczos.eigen(B, k, kappa);
 
         double[] s = eigen.getEigenValues();
         for (int i = 0; i < s.length; i++) {
@@ -163,7 +163,7 @@ public class Lanczos {
 
             double[] tmp = new double[A.nrows()];
             double[] vi = new double[A.ncols()];
-            DenseMatrix U = Matrix.zeros(A.nrows(), s.length);
+            DenseMatrix U = new ColumnMajorMatrix(A.nrows(), s.length);
             for (int i = 0; i < s.length; i++) {
                 for (int j = 0; j < A.ncols(); j++) {
                     vi[j] = V.get(j, i);
@@ -176,7 +176,7 @@ public class Lanczos {
                 }
             }
 
-            return new SVD(U, V, s);
+            return new SingularValueDecomposition(U, V, s, false);
 
         } else {
 
@@ -184,7 +184,7 @@ public class Lanczos {
 
             double[] tmp = new double[A.ncols()];
             double[] ui = new double[A.nrows()];
-            DenseMatrix V = Matrix.zeros(A.ncols(), s.length);
+            DenseMatrix V = new ColumnMajorMatrix(A.ncols(), s.length);
             for (int i = 0; i < s.length; i++) {
                 for (int j = 0; j < A.nrows(); j++) {
                     ui[j] = U.get(j, i);
@@ -197,7 +197,7 @@ public class Lanczos {
                 }
             }
 
-            return new SVD(U, V, s);
+            return new SingularValueDecomposition(U, V, s, false);
         }
     }
 
@@ -209,7 +209,7 @@ public class Lanczos {
      * @param k the number of eigenvalues we wish to compute for the input matrix.
      * This number cannot exceed the size of A.
      */
-    public static EVD eigen(Matrix A, int k) {
+    public static EigenValueDecomposition eigen(Matrix A, int k) {
         return eigen(A, k, 1.0E-6);
     }
 
@@ -222,7 +222,7 @@ public class Lanczos {
      * This number cannot exceed the size of A.
      * @param kappa relative accuracy of ritz values acceptable as eigenvalues.
      */
-    public static EVD eigen(Matrix A, int k, double kappa) {
+    public static EigenValueDecomposition eigen(Matrix A, int k, double kappa) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException("Matrix is not square.");
         }
@@ -269,7 +269,7 @@ public class Lanczos {
         // arrays used in the QL decomposition
         double[] ritz = new double[n + 1];
         // eigenvectors calculated in the QL decomposition
-        DenseMatrix z = null;
+        ColumnMajorMatrix z = null;
 
         // First step of the Lanczos algorithm. It also does a step of extended
         // local re-orthogonalization.
@@ -410,14 +410,14 @@ public class Lanczos {
             System.arraycopy(alf, 0, ritz, 0, j + 1);
             System.arraycopy(bet, 0, wptr[5], 0, j + 1);
 
-            z = Matrix.zeros(j + 1, j + 1);
+            z = new ColumnMajorMatrix(j + 1, j + 1);
             for (int i = 0; i <= j; i++) {
                 z.set(i, i, 1.0);
             }
 
             // compute the eigenvalues and eigenvectors of the
             // tridiagonal matrix
-            JMatrix.tql2(z, ritz, wptr[5], j + 1);
+            EigenValueDecomposition.tql2(z, ritz, wptr[5], j + 1);
 
             for (int i = 0; i <= j; i++) {
                 bnd[i] = rnm * Math.abs(z.get(j, i));
@@ -447,7 +447,7 @@ public class Lanczos {
         k = Math.min(k, neig);
 
         double[] eigenvalues = new double[k];
-        DenseMatrix eigenvectors = Matrix.zeros(n, k);
+        ColumnMajorMatrix eigenvectors = new ColumnMajorMatrix(n, k);
         for (int i = 0, index = 0; i <= j && index < k; i++) {
             if (bnd[i] <= kappa * Math.abs(ritz[i])) {
                 for (int row = 0; row < n; row++) {
@@ -459,7 +459,7 @@ public class Lanczos {
             }
         }
 
-        return new EVD(eigenvectors, eigenvalues);
+        return new EigenValueDecomposition(eigenvectors, eigenvalues);
     }
 
     /**

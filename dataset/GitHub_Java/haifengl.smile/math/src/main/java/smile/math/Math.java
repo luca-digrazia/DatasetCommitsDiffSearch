@@ -1934,43 +1934,6 @@ public class Math {
     }
 
     /**
-     * Pairwise distance between pairs of objects.
-     * @param x Rows of x correspond to observations, and columns correspond to variables.
-     * @return a full pairwise distance matrix.
-     */
-    public static double[][] pdist(double[][] x) {
-        int n = x.length;
-
-        double[][] proximity = new double[n][n];
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < i; j++) {
-                proximity[i][j] = distance(x[i], x[j]);
-            }
-        }
-
-        return proximity;
-    }
-
-    /**
-     * Pairwise distance between pairs of objects. Only the lower half is stored to save space.
-     * @param x Rows of x correspond to observations, and columns correspond to variables.
-     * @return the lower half of pairwise distance matrix.
-     */
-    public static double[][] proximity(double[][] x) {
-        int n = x.length;
-
-        double[][] proximity = new double[n][];
-        for (int i = 0; i < n; i++) {
-            proximity[i] = new double[i + 1];
-            for (int j = 0; j < i; j++) {
-                proximity[i][j] = distance(x[i], x[j]);
-            }
-        }
-
-        return proximity;
-    }
-
-    /**
      * The squared Euclidean distance.
      */
     public static double squaredDistance(int[] x, int[] y) {
@@ -4379,21 +4342,10 @@ public class Math {
      * Returns the eigen value decomposition of a square matrix. Note that the input
      * matrix will be altered during decomposition.
      * @param A    square matrix which will be altered after decomposition.
-     * @param symmetric if the matrix A is symmetric.
-     */
-    public static EigenValueDecomposition eigen(double[][] A, boolean symmetric) {
-        return new EigenValueDecomposition(A, symmetric, false);
-    }
-
-    /**
-     * Returns the eigen value decomposition of a square matrix. Note that the input
-     * matrix will be altered during decomposition.
-     * @param A    square matrix which will be altered after decomposition.
-     * @param symmetric if the matrix A is symmetric.
      * @param onlyValues true if only compute eigenvalues; the default is to compute eigenvectors also.
      */
-    public static EigenValueDecomposition eigen(double[][] A, boolean symmetric, boolean onlyValues) {
-        return new EigenValueDecomposition(A, symmetric, onlyValues);
+    public static EigenValueDecomposition eigen(double[][] A, boolean onlyValues) {
+        return new EigenValueDecomposition(A, onlyValues);
     }
 
     /**

@@ -143,14 +143,31 @@ public class ColumnMajorMatrix extends DenseMatrix {
         return matrix;
     }
 
-    /**
-     * Returns the transpose that shares the same underlying array
-     * with this matrix. The result matrix should only be used for
-     * read only operations, which is the typical cases in linear algebra.
-     */
     @Override
-    public RowMajorMatrix transpose() {
+    public ColumnMajorMatrix transpose() {
+        ColumnMajorMatrix B = new ColumnMajorMatrix(ncols, nrows);
+        for (int k = 0; k < A.length; k++) {
+            int i = k / nrows;
+            int j = k % nrows;
+            B.set(j, i, A[k]);
+        }
+
+        return B;
+    }
+
+    public RowMajorMatrix transposeToRowMajor() {
         return new RowMajorMatrix(ncols, nrows, A);
+    }
+
+    public RowMajorMatrix toRowMajor() {
+        RowMajorMatrix B = new RowMajorMatrix(nrows, ncols);
+        for (int k = 0; k < A.length; k++) {
+            int i = k / nrows;
+            int j = k % nrows;
+            B.set(i, j, A[k]);
+        }
+
+        return B;
     }
 
     @Override
@@ -379,12 +396,16 @@ public class ColumnMajorMatrix extends DenseMatrix {
 
     @Override
     public ColumnMajorMatrix aat() {
+        ColumnMajorMatrix at = transpose();
+        RowMajorMatrix row = toRowMajor();
         ColumnMajorMatrix C = new ColumnMajorMatrix(nrows, nrows);
-        for (int k = 0; k < ncols; k++) {
-            for (int i = 0; i < nrows; i++) {
-                for (int j = 0; j < nrows; j++) {
-                    C.add(i, j, get(i, k) * get(j, k));
+        for (int i = 0; i < nrows; i++) {
+            for (int j = 0; j < nrows; j++) {
+                double v = 0.0;
+                for (int k = 0; k < ncols; k++) {
+                    v += row.get(i, k) * at.get(k, j);
                 }
+                C.set(i, j, v);
             }
         }
         return C;
