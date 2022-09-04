@@ -13,6 +13,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
+ *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -20,6 +21,7 @@
 package org.graylog2.radio;
 
 import com.beust.jcommander.internal.Lists;
+import com.beust.jcommander.internal.Maps;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.Inject;
@@ -40,15 +42,20 @@ import org.graylog2.plugin.Version;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.indexer.MessageGateway;
-import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
+import org.graylog2.plugin.streams.Stream;
+import org.graylog2.plugin.system.NodeId;
 import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
 import org.graylog2.radio.cluster.Ping;
 import org.graylog2.radio.inputs.RadioInputRegistry;
 import org.graylog2.radio.transports.RadioTransport;
 import org.graylog2.radio.transports.kafka.KafkaProducer;
 import org.graylog2.shared.ProcessingHost;
-import org.graylog2.shared.ServerStatus;
+import org.graylog2.shared.buffers.ProcessBuffer;
+import org.graylog2.shared.inputs.InputRegistry;
+import org.graylog2.radio.transports.RadioTransport;
+import org.graylog2.radio.transports.kafka.KafkaProducer;
+import org.graylog2.shared.ProcessingHost;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.inputs.InputRegistry;
@@ -68,6 +75,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -80,12 +88,11 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
 
     public static final Version VERSION = RadioVersion.VERSION;
 
+    private DateTime startedAt;
     @Inject
     private MetricRegistry metricRegistry;
     @Inject
     private Configuration configuration;
-    @Inject
-    private ServerStatus serverStatus;
 
     private GELFChunkManager gelfChunkManager;
 
@@ -101,6 +108,8 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
 
     private final AsyncHttpClient httpClient;
 
+    private String nodeId;
+
     @Inject
     private ProcessBuffer.Factory processBufferFactory;
     @Inject
@@ -115,6 +124,11 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     }
 
     public void initialize() {
+        startedAt = new DateTime(DateTimeZone.UTC);
+
+        NodeId id = new NodeId(configuration.getNodeIdFile());
+        this.nodeId = id.readOrGenerate();
+
         gelfChunkManager = new GELFChunkManager(this);
         gelfChunkManager.start();
 
@@ -159,7 +173,7 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
             this.configuration.setRestTransportUri(transportStr);
         }
 
-        pinger = new Ping.Pinger(httpClient, serverStatus.getNodeId().toString(), configuration.getRestTransportUri(), configuration.getGraylog2ServerUri());
+        pinger = new Ping.Pinger(httpClient, nodeId, configuration.getRestTransportUri(), configuration.getGraylog2ServerUri());
 
         scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
                 new ThreadFactoryBuilder().setNameFormat("scheduled-%d").build()
@@ -261,7 +275,7 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     }
 
     public String getNodeId() {
-        return serverStatus.getNodeId().toString();
+        return nodeId;
     }
 
     @Override
@@ -275,7 +289,7 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     }
 
     public DateTime getStartedAt() {
-        return serverStatus.getStartedAt();
+        return startedAt;
     }
 
     public InputRegistry inputs() {
@@ -308,6 +322,12 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     }
 
     @Override
+    public Map<String, Stream> getEnabledStreams() {
+        Map<String, Stream> result = Maps.newHashMap();
+        return result;
+    }
+
+    @Override
     public MessageGateway getMessageGateway() {
         return null;
     }
@@ -335,13 +355,4 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     public boolean isRadio() {
         return true;
     }
-
-    public Lifecycle getLifecycle() {
-        return serverStatus.getLifecycle();
-    }
-
-    public void setLifecycle(Lifecycle lifecycle) {
-        serverStatus.setLifecycle(lifecycle);
-    }
-
 }
