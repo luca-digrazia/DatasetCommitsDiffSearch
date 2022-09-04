@@ -17,7 +17,6 @@ import android.widget.TextView;
 
 import com.facebook.stetho.common.Predicate;
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.common.android.HandlerUtil;
 import com.facebook.stetho.common.android.ViewUtil;
 import com.facebook.stetho.inspector.elements.DOMProvider;
 import com.facebook.stetho.inspector.elements.Descriptor;
@@ -37,7 +36,7 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
   private final DescriptorMap mDescriptorMap;
   private final AndroidDOMRoot mDOMRoot;
   private final ViewHighlighter mHighlighter;
-  private final InspectModeHandler mInspectModeHandler;
+  private final InspectModeHandler mInspectModeOverlay;
   private Listener mListener;
 
   public AndroidDOMProvider(Application application) {
@@ -60,24 +59,19 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
         .endInit();
 
     mHighlighter = ViewHighlighter.newInstance();
-    mInspectModeHandler = new InspectModeHandler();
+    mInspectModeOverlay = new InspectModeHandler();
   }
 
   // DOMProvider implementation
   @Override
   public void dispose() {
     mHighlighter.clearHighlight();
-    mInspectModeHandler.disable();
+    mInspectModeOverlay.disable();
   }
 
   @Override
   public void setListener(Listener listener) {
     mListener = listener;
-  }
-
-  @Override
-  public boolean postAndWait(Runnable r) {
-    return HandlerUtil.postAndWait(mHandler, r);
   }
 
   @Override
@@ -108,9 +102,9 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
   @Override
   public void setInspectModeEnabled(boolean enabled) {
     if (enabled) {
-      mInspectModeHandler.enable();
+      mInspectModeOverlay.enable();
     } else {
-      mInspectModeHandler.disable();
+      mInspectModeOverlay.disable();
     }
   }
 

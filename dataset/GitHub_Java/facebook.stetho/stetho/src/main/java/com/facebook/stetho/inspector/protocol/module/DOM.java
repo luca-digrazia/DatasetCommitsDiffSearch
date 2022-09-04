@@ -46,7 +46,7 @@ public class DOM implements ChromeDevtoolsDomain {
   private final DOMObjectIdMapper mObjectIdMapper;
 
   @Nullable
-  private volatile DOMProvider mDOMProvider;
+  private DOMProvider mDOMProvider;
 
   public DOM(DOMProvider.Factory providerFactory) {
     mDOMProviderFactory = Util.throwIfNull(providerFactory);
@@ -70,18 +70,15 @@ public class DOM implements ChromeDevtoolsDomain {
 
   @ChromeDevtoolsMethod
   public JsonRpcResult getDocument(JsonRpcPeer peer, JSONObject params) {
-    final GetDocumentResponse result = new GetDocumentResponse();
+    Object rootElement = mDOMProvider.getRootElement();
+    if (rootElement == null) {
+      return null;
+    }
 
-    mDOMProvider.postAndWait(new Runnable() {
-       @Override
-       public void run() {
-         Object rootElement = mDOMProvider.getRootElement();
-         if (rootElement != null) {
-           result.root = createNodeForElement(rootElement);
-         }
-       }
-     });
+    Node rootNode = createNodeForElement(rootElement);
 
+    GetDocumentResponse result = new GetDocumentResponse();
+    result.root = rootNode;
     return result;
   }
 
@@ -91,18 +88,12 @@ public class DOM implements ChromeDevtoolsDomain {
     if (request.nodeId == null) {
       LogUtil.w("DOM.highlightNode was not given a nodeId; JS objectId is not supported");
     } else {
-      final RGBAColor contentColor = request.highlightConfig.contentColor;
+      RGBAColor contentColor = request.highlightConfig.contentColor;
       if (contentColor == null) {
         LogUtil.w("DOM.highlightNode was not given a color to highlight with");
       } else {
-        final Object element = mObjectIdMapper.getObjectForId(request.nodeId);
-
-        mDOMProvider.postAndWait(new Runnable() {
-          @Override
-          public void run() {
-            mDOMProvider.highlightElement(element, contentColor.getColor());
-          }
-        });
+        Object element = mObjectIdMapper.getObjectForId(request.nodeId);
+        mDOMProvider.highlightElement(element, contentColor.getColor());
       }
     }
   }
@@ -204,12 +195,7 @@ public class DOM implements ChromeDevtoolsDomain {
 
     @Override
     protected synchronized void onLastPeerUnregistered() {
-      mDOMProvider.postAndWait(new Runnable() {
-        @Override
-        public void run() {
-          mObjectIdMapper.clear();
-        }
-      });
+      mObjectIdMapper.clear();
 
       mDOMProvider.dispose();
       mDOMProvider = null;

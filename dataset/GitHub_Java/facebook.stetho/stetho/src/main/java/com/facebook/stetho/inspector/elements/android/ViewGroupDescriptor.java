@@ -1,11 +1,4 @@
-/*
- * Copyright (c) 2014-present, Facebook, Inc.
- * All rights reserved.
- *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements.android;
 
@@ -13,7 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.common.android.FragmentCompatUtil;
+import com.facebook.stetho.common.android.FragmentApiUtil;
 import com.facebook.stetho.common.android.ViewGroupUtil;
 import com.facebook.stetho.inspector.elements.ChainedDescriptor;
 
@@ -173,7 +166,7 @@ final class ViewGroupDescriptor extends ChainedDescriptor<ViewGroup> {
         return element;
       }
 
-      Object fragment = FragmentCompatUtil.findFragmentForView(view);
+      Object fragment = FragmentApiUtil.findFragmentForView(view);
       if (fragment != null) {
         mViewToElementMap.put(view, fragment);
         return fragment;
