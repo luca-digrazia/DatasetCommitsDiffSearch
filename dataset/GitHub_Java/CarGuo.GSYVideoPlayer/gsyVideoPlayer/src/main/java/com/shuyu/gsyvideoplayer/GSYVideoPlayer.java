@@ -181,7 +181,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         mFullscreenButton.setOnTouchListener(this);
         mScreenWidth = getContext().getResources().getDisplayMetrics().widthPixels;
         mScreenHeight = getContext().getResources().getDisplayMetrics().heightPixels;
-        mAudioManager = (AudioManager) getContext().getApplicationContext().getSystemService(Context.AUDIO_SERVICE);
+        mAudioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
 
         mSeekEndOffset = CommonUtil.dip2px(getContext(), 50);
     }
@@ -233,17 +233,15 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     public boolean setUp(String url, boolean cacheWithPlay, File cachePath, Object... objects) {
         mCache = cacheWithPlay;
         mCachePath = cachePath;
-        mOriginUrl = url;
         if (isCurrentMediaListener() &&
                 (System.currentTimeMillis() - CLICK_QUIT_FULLSCREEN_TIME) < FULL_SCREEN_NORMAL_DELAY)
             return false;
         mCurrentState = CURRENT_STATE_NORMAL;
         if (cacheWithPlay && url.startsWith("http") && !url.contains("127.0.0.1")) {
+            mOriginUrl = url;
             HttpProxyCacheServer proxy = GSYVideoManager.getProxy(getContext().getApplicationContext(), cachePath);
-            //此处转换了url，然后再赋值给mUrl。
             url = proxy.getProxyUrl(url);
             mCacheFile = (!url.startsWith("http"));
-            //注册上缓冲监听
             if (!mCacheFile && GSYVideoManager.instance() != null) {
                 proxy.registerCacheListener(GSYVideoManager.instance(), mOriginUrl);
             }
@@ -1097,12 +1095,14 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
      * @param percent
      */
     private void onBrightnessSlide(float percent) {
+        //if (mBrightnessData < 0) {
         mBrightnessData = ((Activity) (mContext)).getWindow().getAttributes().screenBrightness;
         if (mBrightnessData <= 0.00f) {
             mBrightnessData = 0.50f;
         } else if (mBrightnessData < 0.01f) {
             mBrightnessData = 0.01f;
         }
+        //}
         WindowManager.LayoutParams lpa = ((Activity) (mContext)).getWindow().getAttributes();
         lpa.screenBrightness = mBrightnessData + percent;
         if (lpa.screenBrightness > 1.0f) {
@@ -1245,7 +1245,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     /**
      * 从哪里开始播放
-     * 目前有时候前几秒有跳动问题，毫秒
+     * 目前有时候前几秒有跳动问题
      */
     public void setSeekOnStart(long seekOnStart) {
         this.mSeekOnStart = seekOnStart;
