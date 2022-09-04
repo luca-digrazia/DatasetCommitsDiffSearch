@@ -235,13 +235,9 @@ public class GradleRunner implements BuildSystemRunner {
     }
 
     void verifyBuildFile() {
-        for (String buildFileName : buildTool.getBuildFiles()) {
-            File buildFile = projectRoot.resolve(buildFileName).toFile();
-            if (buildFile.exists()) {
-                return;
-            }
+        File buildFile = projectRoot.resolve("build.gradle").toFile();
+        if (!buildFile.isFile()) {
+            throw new IllegalStateException("Was not able to find a build file in: " + projectRoot);
         }
-        throw new IllegalStateException("Was not able to find a build file in: " + projectRoot
-                + " based on the following list: " + String.join(",", buildTool.getBuildFiles()));
     }
 }
