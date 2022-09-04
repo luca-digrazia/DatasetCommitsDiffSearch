@@ -378,10 +378,8 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       throw new RuntimeException(e);
     }
 
-    GenQueryConfiguration genQueryConfig =
-        ruleContext.getConfiguration().getFragment(GenQueryConfiguration.class);
-    GenQueryOutputStream outputStream =
-        new GenQueryOutputStream(genQueryConfig.inMemoryCompressionEnabled());
+    // TODO(b/137379942): Enable compression.
+    GenQueryOutputStream outputStream = new GenQueryOutputStream(/*compressionEnabled=*/ false);
     try {
       QueryOutputUtils
           .output(queryOptions, queryResult, targets.getResult(), formatter, outputStream,
