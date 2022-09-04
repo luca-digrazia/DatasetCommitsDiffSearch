@@ -18,8 +18,7 @@ package org.graylog2.plugin;
 
 public enum DocsHelper {
     PAGE_SENDING_JSONPATH("sending_data.html#json-path-from-http-api-input"),
-    PAGE_SENDING_IPFIXPATH("integrations/inputs/ipfix_input.html"),
-    PAGE_ES_CONFIGURATION("configuration/elasticsearch.html"),
+    PAGE_ES_CONFIGURATION("configuring_es.html"),
     PAGE_LDAP_TROUBLESHOOTING("users_and_roles/external_auth.html#troubleshooting");
 
     private static final String DOCS_URL = "http://docs.graylog.org/en/";
@@ -32,10 +31,9 @@ public enum DocsHelper {
 
     @Override
     public String toString() {
-        final com.github.zafarkhaja.semver.Version version = Version.CURRENT_CLASSPATH.getVersion();
-        final String shortVersion = version.getMajorVersion() + "." + version.getMinorVersion();
+        final String version = Version.CURRENT_CLASSPATH.major + "." + Version.CURRENT_CLASSPATH.minor;
 
-        return DOCS_URL + shortVersion + "/pages/" + path;
+        return DOCS_URL + version + "/pages/" + path;
     }
 
     public String toLink(String title) {
