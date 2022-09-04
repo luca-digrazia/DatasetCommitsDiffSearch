@@ -16,8 +16,8 @@
  */
 package org.graylog2.bootstrap;
 
+import com.codahale.metrics.JmxReporter;
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.jmx.JmxReporter;
 import com.codahale.metrics.log4j2.InstrumentedAppender;
 import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.ParameterException;
@@ -30,8 +30,6 @@ import com.github.joschi.jadconfig.jodatime.JodaTimeConverterFactory;
 import com.github.joschi.jadconfig.repositories.EnvironmentRepository;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
 import com.github.joschi.jadconfig.repositories.SystemPropertiesRepository;
-import com.github.rvesse.airline.annotations.Command;
-import com.github.rvesse.airline.annotations.Option;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -42,8 +40,8 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.name.Names;
 import com.google.inject.spi.Message;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-import io.netty.util.internal.logging.Slf4JLoggerFactory;
+import io.airlift.airline.Command;
+import io.airlift.airline.Option;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LoggerContext;
@@ -63,13 +61,14 @@ import org.graylog2.shared.bindings.PluginBindings;
 import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.plugins.PluginLoader;
 import org.graylog2.shared.utilities.ExceptionUtils;
+import org.jboss.netty.logging.InternalLoggerFactory;
+import org.jboss.netty.logging.Slf4JLoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.nio.file.AccessDeniedException;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -219,7 +218,7 @@ public abstract class CmdLineTool implements CliCommand {
             logLevel = Level.DEBUG;
 
             // Enable logging for Netty when running in debug mode.
-            InternalLoggerFactory.setDefaultFactory(Slf4JLoggerFactory.INSTANCE);
+            InternalLoggerFactory.setDefaultFactory(new Slf4JLoggerFactory());
         } else if (onlyLogErrors()) {
             logLevel = Level.ERROR;
         } else {
@@ -266,7 +265,7 @@ public abstract class CmdLineTool implements CliCommand {
         dumpCurrentConfigAndExit();
     }
 
-    private PluginBindings installPluginConfigAndBindings(Path pluginPath, ChainingClassLoader classLoader) {
+    private PluginBindings installPluginConfigAndBindings(String pluginPath, ChainingClassLoader classLoader) {
         final Set<Plugin> plugins = loadPlugins(pluginPath, classLoader);
         final PluginBindings pluginBindings = new PluginBindings(plugins);
         for (final Plugin plugin : plugins) {
@@ -280,17 +279,18 @@ public abstract class CmdLineTool implements CliCommand {
         return pluginBindings;
     }
 
-    private Path getPluginPath(String configFile) {
+    private String getPluginPath(String configFile) {
         final PluginLoaderConfig pluginLoaderConfig = new PluginLoaderConfig();
         processConfiguration(new JadConfig(getConfigRepositories(configFile), pluginLoaderConfig));
 
         return pluginLoaderConfig.getPluginDir();
     }
 
-    protected Set<Plugin> loadPlugins(Path pluginPath, ChainingClassLoader chainingClassLoader) {
+    protected Set<Plugin> loadPlugins(String pluginPath, ChainingClassLoader chainingClassLoader) {
+        final File pluginDir = new File(pluginPath);
         final Set<Plugin> plugins = new HashSet<>();
 
-        final PluginLoader pluginLoader = new PluginLoader(pluginPath.toFile(), chainingClassLoader);
+        final PluginLoader pluginLoader = new PluginLoader(pluginDir, chainingClassLoader);
         for (Plugin plugin : pluginLoader.loadPlugins()) {
             final PluginMetaData metadata = plugin.metadata();
             if (capabilities().containsAll(metadata.getRequiredCapabilities())) {
