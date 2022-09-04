@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoM
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -526,7 +525,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "lipo configuration state",
     defaultValue = "apply_lipo",
-    optionUsageRestrictions = OptionUsageRestrictions.INTERNAL,
+    category = "internal",
     converter = LipoConfigurationStateConverter.class
   )
   public LipoConfigurationState lipoConfigurationState;
