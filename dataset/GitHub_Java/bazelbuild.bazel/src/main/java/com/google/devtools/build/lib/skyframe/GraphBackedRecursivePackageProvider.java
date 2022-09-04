@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
-import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -45,7 +44,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
@@ -175,6 +173,9 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
       return ImmutableList.of();
     }
 
+    PathFragment.checkAllPathsAreUnder(blacklistedSubdirectories, directory);
+    PathFragment.checkAllPathsAreUnder(excludedSubdirectories, directory);
+
     // Check that this package is covered by at least one of our universe patterns.
     boolean inUniverse = false;
     for (TargetPatternKey patternKey : universeTargetPatternKeys) {
@@ -208,8 +209,7 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
   }
 
   @Override
-  public void streamPackagesUnderDirectory(
-      Consumer<PackageIdentifier> results,
+  public Iterable<PathFragment> getPackagesUnderDirectory(
       ExtendedEventHandler eventHandler,
       RepositoryName repository,
       PathFragment directory,
@@ -219,9 +219,7 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
     List<Root> roots =
         checkValidDirectoryAndGetRoots(
             repository, directory, blacklistedSubdirectories, excludedSubdirectories);
-
-    rootPackageExtractor.streamPackagesFromRoots(
-        path -> results.accept(PackageIdentifier.create(repository, path)),
+    return rootPackageExtractor.getPackagesFromRoots(
         graph,
         roots,
         eventHandler,

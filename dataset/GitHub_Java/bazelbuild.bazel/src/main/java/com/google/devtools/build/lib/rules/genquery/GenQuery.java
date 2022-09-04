@@ -52,8 +52,9 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
+import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
-import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
+import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.query2.BlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
 import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
@@ -278,10 +279,10 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     ImmutableMap<Label, Target> validTargetsMap = closureInfo.second;
     PreloadedMapPackageProvider packageProvider =
         new PreloadedMapPackageProvider(packageMap, validTargetsMap);
-    TargetPatternPreloader preloader = new SkyframeEnvTargetPatternEvaluator(env);
+    TargetPatternEvaluator evaluator = new SkyframeEnvTargetPatternEvaluator(env);
     Predicate<Label> labelFilter = Predicates.in(validTargetsMap.keySet());
 
-    return doQuery(queryOptions, packageProvider, labelFilter, preloader, query, ruleContext);
+    return doQuery(queryOptions, packageProvider, labelFilter, evaluator, query, ruleContext);
   }
 
   @SuppressWarnings("unchecked")
@@ -290,7 +291,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       QueryOptions queryOptions,
       PreloadedMapPackageProvider packageProvider,
       Predicate<Label> labelFilter,
-      TargetPatternPreloader preloader,
+      TargetPatternEvaluator evaluator,
       String query,
       RuleContext ruleContext)
       throws InterruptedException {
@@ -329,8 +330,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
                   /* graphFactory= */ null,
                   packageProvider,
                   packageProvider,
-                  preloader,
-                  PathFragment.EMPTY_FRAGMENT,
+                  evaluator,
                   /*keepGoing=*/ false,
                   ruleContext.attributes().get("strict", Type.BOOLEAN),
                   /*orderedResults=*/ !QueryOutputUtils.shouldStreamResults(
@@ -396,7 +396,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
    * Provide target pattern evaluation to the query operations using Skyframe dep lookup. For thread
    * safety, we must synchronize access to the SkyFunction.Environment.
    */
-  private static final class SkyframeEnvTargetPatternEvaluator implements TargetPatternPreloader {
+  private static final class SkyframeEnvTargetPatternEvaluator implements TargetPatternEvaluator {
     private final SkyFunction.Environment env;
 
     public SkyframeEnvTargetPatternEvaluator(SkyFunction.Environment env) {
@@ -415,13 +415,9 @@ public class GenQuery implements RuleConfiguredTargetFactory {
 
     @Override
     public Map<String, ResolvedTargets<Target>> preloadTargetPatterns(
-        ExtendedEventHandler eventHandler,
-        PathFragment relativeWorkingDirectory,
-        Collection<String> patterns,
-        boolean keepGoing)
-            throws TargetParsingException, InterruptedException {
+        ExtendedEventHandler eventHandler, Collection<String> patterns, boolean keepGoing)
+        throws TargetParsingException, InterruptedException {
       Preconditions.checkArgument(!keepGoing);
-      Preconditions.checkArgument(relativeWorkingDirectory.isEmpty());
       boolean ok = true;
       Map<String, ResolvedTargets<Target>> preloadedPatterns =
           Maps.newHashMapWithExpectedSize(patterns.size());
@@ -501,6 +497,33 @@ public class GenQuery implements RuleConfiguredTargetFactory {
         throw new TargetParsingException(
             String.format("recursive target patterns are not permitted: '%s''", pattern));
       }
+    }
+
+    @Override
+    public ResolvedTargets<Target> parseTargetPatternList(
+        ExtendedEventHandler eventHandler,
+        List<String> targetPatterns,
+        FilteringPolicy policy,
+        boolean keepGoing)
+        throws TargetParsingException {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ResolvedTargets<Target> parseTargetPattern(
+        ExtendedEventHandler eventHandler, String pattern, boolean keepGoing)
+        throws TargetParsingException {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void updateOffset(PathFragment relativeWorkingDirectory) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String getOffset() {
+      throw new UnsupportedOperationException();
     }
   }
 

@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionGraph;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
@@ -52,9 +53,6 @@ import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.FileStateType;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
 import com.google.devtools.build.lib.analysis.AspectCollection;
@@ -407,14 +405,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.PRECOMPUTED, new PrecomputedFunction());
     map.put(SkyFunctions.CLIENT_ENVIRONMENT_VARIABLE, new ClientEnvironmentFunction(clientEnv));
     map.put(SkyFunctions.ACTION_ENVIRONMENT_VARIABLE, new ActionEnvironmentFunction());
-    map.put(FileStateValue.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper));
+    map.put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper));
     map.put(SkyFunctions.DIRECTORY_LISTING_STATE,
         new DirectoryListingStateFunction(externalFilesHelper));
     map.put(SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS,
         new FileSymlinkCycleUniquenessFunction());
     map.put(SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
         new FileSymlinkInfiniteExpansionUniquenessFunction());
-    map.put(FileValue.FILE, new FileFunction(pkgLocator));
+    map.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
     map.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     map.put(
         SkyFunctions.PACKAGE_LOOKUP,
@@ -503,7 +501,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.TARGET_COMPLETION, CompletionFunction.targetCompletionFunction());
     map.put(SkyFunctions.ASPECT_COMPLETION, CompletionFunction.aspectCompletionFunction());
     map.put(SkyFunctions.TEST_COMPLETION, new TestCompletionFunction());
-    map.put(Artifact.ARTIFACT, new ArtifactFunction());
+    map.put(SkyFunctions.ARTIFACT, new ArtifactFunction());
     map.put(
         SkyFunctions.BUILD_INFO_COLLECTION,
         new BuildInfoCollectionFunction(
@@ -581,7 +579,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   public void configureActionExecutor(
-      MetadataProvider fileCache, ActionInputPrefetcher actionInputPrefetcher) {
+      ActionInputFileCache fileCache, ActionInputPrefetcher actionInputPrefetcher) {
     this.skyframeActionExecutor.configure(fileCache, actionInputPrefetcher);
   }
 
@@ -1040,7 +1038,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     Map<SkyKey, SkyValue> valuesToInject = new HashMap<>();
     for (Map.Entry<SkyKey, Delta> entry : diff.changedKeysWithNewAndOldValues().entrySet()) {
       SkyKey key = entry.getKey();
-      Preconditions.checkState(key.functionName().equals(FileStateValue.FILE_STATE), key);
+      Preconditions.checkState(key.functionName().equals(SkyFunctions.FILE_STATE), key);
       RootedPath rootedPath = (RootedPath) key.argument();
       Delta delta = entry.getValue();
       FileStateValue oldValue = (FileStateValue) delta.getOldValue();
@@ -1076,7 +1074,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       }
     }
     for (SkyKey key : diff.changedKeysWithoutNewValues()) {
-      Preconditions.checkState(key.functionName().equals(FileStateValue.FILE_STATE), key);
+      Preconditions.checkState(key.functionName().equals(SkyFunctions.FILE_STATE), key);
       RootedPath rootedPath = (RootedPath) key.argument();
       valuesToInvalidate.add(parentDirectoryListingStateKey(rootedPath));
     }
@@ -1325,13 +1323,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     resourceManager.resetResourceUsage();
     try {
       progressReceiver.executionProgressReceiver = executionProgressReceiver;
+      Iterable<SkyKey> artifactKeys = ArtifactSkyKey.mandatoryKeys(artifactsToBuild);
       Iterable<TargetCompletionValue.TargetCompletionKey> targetKeys =
           TargetCompletionValue.keys(targetsToBuild, topLevelArtifactContext, targetsToTest);
       Iterable<SkyKey> aspectKeys = AspectCompletionValue.keys(aspects, topLevelArtifactContext);
       Iterable<SkyKey> testKeys =
           TestCompletionValue.keys(targetsToTest, topLevelArtifactContext, exclusiveTesting);
       return buildDriver.evaluate(
-          Iterables.concat(artifactsToBuild, targetKeys, aspectKeys, testKeys),
+          Iterables.concat(artifactKeys, targetKeys, aspectKeys, testKeys),
           keepGoing,
           numJobs,
           reporter);
@@ -2205,8 +2204,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   public abstract void deleteOldNodes(long versionWindowForDirtyGc);
 
-  public LoadingPhaseRunner getLoadingPhaseRunner(Set<String> ruleClassNames) {
-    return new SkyframeLoadingPhaseRunner(ruleClassNames);
+  public LoadingPhaseRunner getLoadingPhaseRunner(Set<String> ruleClassNames, boolean useNewImpl) {
+    if (!useNewImpl) {
+      return new LegacyLoadingPhaseRunner(packageManager, ruleClassNames);
+    } else {
+      return new SkyframeLoadingPhaseRunner(ruleClassNames);
+    }
   }
 
   /**
@@ -2253,9 +2256,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         if (!Iterables.isEmpty(errorInfo.getCycleInfo())) {
           exc = new TargetParsingException("cycles detected during target parsing");
           getCyclesReporter().reportCycles(errorInfo.getCycleInfo(), key, eventHandler);
-          // Fallback: we don't know which patterns failed, specifically, so we report the entire
-          // set as being in error.
-          eventHandler.post(PatternExpandingError.failed(targetPatterns, exc.getMessage()));
         } else {
           // TargetPatternPhaseFunction never directly throws. Thus, the only way
           // evalResult.hasError() && keepGoing can hold is if there are cycles, which is handled
@@ -2268,12 +2268,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
               (e instanceof TargetParsingException)
                   ? (TargetParsingException) e
                   : new TargetParsingException(e.getMessage(), e);
-          if (!(e instanceof TargetParsingException)) {
-            // If it's a TargetParsingException, then the TargetPatternPhaseFunction has already
-            // reported the error, so we don't need to report it again.
-            eventHandler.post(PatternExpandingError.failed(targetPatterns, exc.getMessage()));
-          }
         }
+        eventHandler.post(PatternExpandingError.failed(targetPatterns, exc.getMessage()));
         throw exc;
       }
       long timeMillis = timer.stop().elapsed(TimeUnit.MILLISECONDS);

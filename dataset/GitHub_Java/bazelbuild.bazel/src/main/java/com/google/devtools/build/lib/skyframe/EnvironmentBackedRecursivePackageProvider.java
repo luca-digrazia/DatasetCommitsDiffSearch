@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
@@ -39,7 +38,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A {@link RecursivePackageProvider} backed by an {@link Environment}. Its methods may throw {@link
@@ -53,21 +51,9 @@ public final class EnvironmentBackedRecursivePackageProvider
     extends AbstractRecursivePackageProvider {
 
   private final Environment env;
-  private final AtomicBoolean encounteredPackageErrors = new AtomicBoolean(false);
 
   EnvironmentBackedRecursivePackageProvider(Environment env) {
     this.env = env;
-  }
-
-  /**
-   * Whether any of the calls to {@link #getPackage}, {@link #getTarget}, {@link #bulkGetPackages},
-   * or {@link #getPackagesUnderDirectory} encountered a package in error.
-   *
-   * <p>The client of {@link EnvironmentBackedRecursivePackageProvider} may want to check this. See
-   * comments in {@link #getPackage} for details.
-   */
-  boolean encounteredPackageErrors() {
-    return encounteredPackageErrors.get();
   }
 
   @Override
@@ -90,11 +76,7 @@ public final class EnvironmentBackedRecursivePackageProvider
         Preconditions.checkState(env.valuesMissing(), "Should have thrown for %s", packageName);
         throw new MissingDepException();
       } catch (BuildFileContainsErrorsException e) {
-        // If this is a keep_going build, then the user of this RecursivePackageProvider has two
-        // options for handling the "package in error" case. The user must either inspect the
-        // package returned by this method, or else determine whether any errors have been seen via
-        // the "encounteredPackageErrors" method.
-        encounteredPackageErrors.set(true);
+        // Expected.
       }
     }
     return pkgValue.getPackage();
@@ -124,7 +106,6 @@ public final class EnvironmentBackedRecursivePackageProvider
       return packageLookupValue.packageExists();
     } catch (NoSuchPackageException | InconsistentFilesystemException e) {
       env.getListener().handle(Event.error(e.getMessage()));
-      encounteredPackageErrors.set(true);
       return false;
     }
   }
@@ -162,21 +143,12 @@ public final class EnvironmentBackedRecursivePackageProvider
     if (blacklistedSubdirectories.contains(directory)) {
       return ImmutableList.of();
     }
-    ImmutableSet filteredBlacklistedSubdirectories =
-        ImmutableSet.copyOf(
-            Iterables.filter(
-                blacklistedSubdirectories,
-                path -> !path.equals(directory) && path.startsWith(directory)));
+    PathFragment.checkAllPathsAreUnder(blacklistedSubdirectories, directory);
 
     LinkedHashSet<PathFragment> packageNames = new LinkedHashSet<>();
     for (Root root : roots) {
-      RecursivePkgValue lookup =
-          (RecursivePkgValue)
-              env.getValue(
-                  RecursivePkgValue.key(
-                      repository,
-                      RootedPath.toRootedPath(root, directory),
-                      filteredBlacklistedSubdirectories));
+      RecursivePkgValue lookup = (RecursivePkgValue) env.getValue(RecursivePkgValue.key(
+          repository, RootedPath.toRootedPath(root, directory), blacklistedSubdirectories));
       if (lookup == null) {
         // Typically a null value from Environment.getValue(k) means that either the key k is
         // missing a dependency or an exception was thrown during evaluation of k. Here, if this
