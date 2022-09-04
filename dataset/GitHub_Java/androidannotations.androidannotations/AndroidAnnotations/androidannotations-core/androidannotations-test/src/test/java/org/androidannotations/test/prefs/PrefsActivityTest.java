@@ -240,13 +240,6 @@ public class PrefsActivityTest {
 	}
 
 	@Test
-	public void getStringSetEmptyWithDefaultValue() {
-		sharedPref.edit().clear().commit();
-
-		assertThat(somePrefs.emtpyStringSet().get()).isEmpty();
-	}
-
-	@Test
 	public void getStringSetWithDefaultRes() {
 		sharedPref.edit().clear().commit();
 
