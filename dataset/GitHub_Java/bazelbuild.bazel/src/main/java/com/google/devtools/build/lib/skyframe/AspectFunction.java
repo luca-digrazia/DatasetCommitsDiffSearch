@@ -329,8 +329,7 @@ public final class AspectFunction implements SkyFunction {
           new ConfiguredTargetAndData(
               associatedTarget,
               targetPkg.getTarget(associatedTarget.getLabel().getName()),
-              configuration,
-              null);
+              configuration);
     } catch (NoSuchTargetException e) {
       throw new IllegalStateException("Name already verified", e);
     }
