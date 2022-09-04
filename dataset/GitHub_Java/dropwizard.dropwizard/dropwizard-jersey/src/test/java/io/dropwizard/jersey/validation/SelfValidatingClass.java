@@ -5,14 +5,12 @@ import io.dropwizard.validation.selfvalidating.SelfValidating;
 import io.dropwizard.validation.selfvalidating.SelfValidation;
 import io.dropwizard.validation.selfvalidating.ViolationCollector;
 
-import javax.annotation.Nullable;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.QueryParam;
 
 @SelfValidating
 public class SelfValidatingClass {
 
-    @Nullable
     @JsonProperty
     private Integer answer;
 
@@ -25,7 +23,7 @@ public class SelfValidatingClass {
 
     @SelfValidation
     public void validate(ViolationCollector collector) {
-        if (answer == null || !answer.equals(42)) {
+        if (!answer.equals(42)) {
             collector.addViolation("The answer is 42");
         }
     }
