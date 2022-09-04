@@ -226,37 +226,6 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
   }
 
   @Test
-  public void buildHelperCreateJavaInfoWithSourceFiles_namingSourceJarFromOutputJar()
-      throws Exception {
-    ruleBuilder().withSourceFilesFromJar().build();
-
-    scratch.file(
-        "foo/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "my_rule(",
-        "  name = 'my_starlark_rule',",
-        "  output_jar = 'my_starlark_rule_lib.jar',",
-        "  sources = ['ClassA.java', 'ClassB.java', 'ClassC.java', 'ClassD.java'],",
-        ")");
-    assertNoEvents();
-
-    JavaRuleOutputJarsProvider javaRuleOutputJarsProvider =
-        fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
-
-    assertThat(prettyArtifactNames(javaRuleOutputJarsProvider.getAllSrcOutputJars()))
-        .containsExactly("foo/my_starlark_rule_lib-src.jar");
-
-    JavaSourceJarsProvider sourceJarsProvider =
-        fetchJavaInfo().getProvider(JavaSourceJarsProvider.class);
-
-    assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
-        .containsExactly("foo/my_starlark_rule_lib-src.jar");
-
-    assertThat(prettyArtifactNames(sourceJarsProvider.getTransitiveSourceJars()))
-        .containsExactly("foo/my_starlark_rule_lib-src.jar");
-  }
-
-  @Test
   public void buildHelperCreateJavaInfoWithSourcesFiles() throws Exception {
     ruleBuilder().withSourceFiles().build();
 
@@ -711,7 +680,6 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
     private boolean useIJar = false;
     private boolean stampJar;
     private boolean neverLink = false;
-    private boolean sourceFilesFromJar = false;
     private boolean sourceFiles = false;
 
     private RuleBuilder withIJar() {
@@ -726,11 +694,6 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
 
     private RuleBuilder withNeverLink() {
       neverLink = true;
-      return this;
-    }
-
-    private RuleBuilder withSourceFilesFromJar() {
-      sourceFilesFromJar = true;
       return this;
     }
 
@@ -760,18 +723,11 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
       } else {
         lines.add("  compile_jar = ctx.outputs.output_jar");
       }
-      if (sourceFiles || sourceFilesFromJar) {
-        String outputJar = sourceFilesFromJar ? "    output_jar = ctx.outputs.output_jar," : "";
-        String outputSrcJar =
-            sourceFiles
-                ? "    output_source_jar = ctx.actions.declare_file("
-                    + " ctx.outputs.output_jar.basename[:-4] + '-src.jar'),"
-                : "";
+      if (sourceFiles) {
         lines.add(
             "  source_jar = java_common.pack_sources(",
             "    ctx.actions,",
-            outputJar,
-            outputSrcJar,
+            "    output_jar = ctx.outputs.output_jar,",
             "    sources = ctx.files.sources,",
             "    source_jars = ctx.files.source_jars,",
             "    java_toolchain = ctx.attr._toolchain[java_common.JavaToolchainInfo],",
@@ -800,7 +756,7 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
     }
 
     private void build() throws Exception {
-      if (useIJar || stampJar || sourceFiles || sourceFilesFromJar) {
+      if (useIJar || stampJar || sourceFiles) {
         writeBuildFileForJavaToolchain();
       }
 
@@ -824,10 +780,10 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
           "    'source_jars' : attr.label_list(allow_files=['.jar']),",
           "    'sources' : attr.label_list(allow_files=['.java']),",
           "    'jdeps' : attr.label(allow_single_file=True),",
-          useIJar || stampJar || sourceFiles || sourceFilesFromJar
+          useIJar || stampJar || sourceFiles
               ? "    '_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),"
               : "",
-          sourceFiles || sourceFilesFromJar
+          sourceFiles
               ? "    '_host_javabase': attr.label(default = Label('"
                   + HOST_JAVA_RUNTIME_LABEL
                   + "')),"
@@ -847,6 +803,7 @@ public class JavaInfoStarlarkApiTest extends BuildViewTestCase {
                 new StarlarkProvider.Key(
                     Label.parseAbsolute("//foo:extension.bzl", ImmutableMap.of()), "result"));
 
+    @SuppressWarnings("unchecked")
     JavaInfo javaInfo = (JavaInfo) info.getValue("property");
     return javaInfo;
   }
