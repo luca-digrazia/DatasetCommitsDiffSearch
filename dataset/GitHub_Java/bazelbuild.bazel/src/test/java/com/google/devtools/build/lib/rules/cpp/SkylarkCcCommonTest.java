@@ -5613,8 +5613,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testPossibleSrcsExtensions() throws Exception {
-    doTestPossibleExtensionsOfSrcsAndHdrs(
-        "srcs", CppFileTypes.ALL_C_CLASS_SOURCE.including(CppFileTypes.ASSEMBLER).getExtensions());
+    doTestPossibleExtensionsOfSrcsAndHdrs("srcs", CppFileTypes.ALL_C_CLASS_SOURCE.getExtensions());
   }
 
   @Test

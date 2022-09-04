@@ -318,7 +318,7 @@ public abstract class StarlarkSemantics {
           .experimentalRepoRemoteExec(false)
           .experimentalDisableExternalPackage(false)
           .experimentalSiblingRepositoryLayout(false)
-          .incompatibleAlwaysCheckDepsetElements(true)
+          .incompatibleAlwaysCheckDepsetElements(false)
           .incompatibleApplicableLicenses(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
           .incompatibleDepsetUnion(true)

@@ -602,9 +602,8 @@ public abstract class CcModule
     CcCompilationContext.Builder ccCompilationContext =
         CcCompilationContext.builder(
             /* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null);
-    ImmutableList<Artifact> headerList = toNestedSetOfArtifacts(headers, "headers").toList();
-    ccCompilationContext.addDeclaredIncludeSrcs(headerList);
-    ccCompilationContext.addModularHdrs(headerList);
+    ccCompilationContext.addDeclaredIncludeSrcs(
+        toNestedSetOfArtifacts(headers, "headers").toList());
     ccCompilationContext.addSystemIncludeDirs(
         toNestedSetOfStrings(systemIncludes, "system_includes").toList().stream()
             .map(x -> PathFragment.create(x))

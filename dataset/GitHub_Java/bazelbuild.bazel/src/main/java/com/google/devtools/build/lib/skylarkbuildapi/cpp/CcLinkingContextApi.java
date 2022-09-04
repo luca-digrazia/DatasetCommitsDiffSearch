@@ -14,32 +14,32 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /** Wrapper for every C++ linking provider. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "LinkingContext",
-    category = StarlarkDocumentationCategory.BUILTIN,
+    category = SkylarkModuleCategory.BUILTIN,
     doc =
         "Immutable store of information needed for C++ linking that is aggregated across "
             + "dependencies.")
 public interface CcLinkingContextApi<FileT extends FileApi> extends StarlarkValue {
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "user_link_flags",
       doc = "Returns the list of user link flags passed as strings.",
       disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
       structField = true)
-  Sequence<String> getStarlarkUserLinkFlags();
+  Sequence<String> getSkylarkUserLinkFlags();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "libraries_to_link",
       doc =
           "Returns the depset of <code>LibraryToLink</code>. May return a list but this is"
@@ -47,18 +47,18 @@ public interface CcLinkingContextApi<FileT extends FileApi> extends StarlarkValu
       disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
       structField = true,
       useStarlarkSemantics = true)
-  Object getStarlarkLibrariesToLink(StarlarkSemantics semantics);
+  Object getSkylarkLibrariesToLink(StarlarkSemantics semantics);
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "additional_inputs",
       doc = "Returns the depset of additional inputs, e.g.: linker scripts.",
       disableWithFlag = FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API,
       structField = true)
-  Depset getStarlarkNonCodeInputs();
+  Depset getSkylarkNonCodeInputs();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "linker_inputs",
       doc = "Returns the depset of linker inputs.",
       structField = true)
-  Depset getStarlarkLinkerInputs();
+  Depset getSkylarkLinkerInputs();
 }

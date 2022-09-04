@@ -43,7 +43,7 @@ public interface CcModuleApi<
         FileT extends FileApi,
         CcToolchainProviderT extends CcToolchainProviderApi<?>,
         FeatureConfigurationT extends FeatureConfigurationApi,
-        CompilationContextT extends CcCompilationContextApi<FileT>,
+        CompilationContextT extends CcCompilationContextApi,
         LinkerInputT extends LinkerInputApi<LibraryToLinkT, FileT>,
         LinkingContextT extends CcLinkingContextApi<?>,
         LibraryToLinkT extends LibraryToLinkApi<FileT>,
@@ -714,7 +714,7 @@ public interface CcModuleApi<
             defaultValue = "[]",
             type = Sequence.class)
       })
-  CcInfoApi<FileT> mergeCcInfos(Sequence<?> ccInfos) // <CcInfoApi> expected
+  CcInfoApi mergeCcInfos(Sequence<?> ccInfos) // <CcInfoApi> expected
       throws EvalException;
 
   @SkylarkCallable(

@@ -50,7 +50,7 @@ public class FakeCcModule
         SkylarkRuleContextApi<ConstraintValueInfoApi>,
         CcToolchainProviderApi<FeatureConfigurationApi>,
         FeatureConfigurationApi,
-        CcCompilationContextApi<FileApi>,
+        CcCompilationContextApi,
         CcCompilationOutputsApi<FileApi>,
         CcLinkingOutputsApi<FileApi>,
         LinkerInputApi<LibraryToLinkApi<FileApi>, FileApi>,
@@ -193,12 +193,12 @@ public class FakeCcModule
   }
 
   @Override
-  public CcInfoApi<FileApi> mergeCcInfos(Sequence<?> ccInfos) {
+  public CcInfoApi mergeCcInfos(Sequence<?> ccInfos) {
     return null;
   }
 
   @Override
-  public CcCompilationContextApi<FileApi> createCcCompilationContext(
+  public CcCompilationContextApi createCcCompilationContext(
       Object headers,
       Object systemIncludes,
       Object includes,
