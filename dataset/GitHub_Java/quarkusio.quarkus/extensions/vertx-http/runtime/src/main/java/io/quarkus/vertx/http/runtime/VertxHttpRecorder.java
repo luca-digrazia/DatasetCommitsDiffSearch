@@ -127,7 +127,7 @@ public class VertxHttpRecorder {
                 public Integer get() {
                     return ProcessorInfo.availableProcessors() * 2; //this is dev mode, so the number of IO threads not always being 100% correct does not really matter in this case
                 }
-            }, null);
+            });
 
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -148,8 +148,7 @@ public class VertxHttpRecorder {
 
     public void startServer(RuntimeValue<Vertx> vertxRuntimeValue, ShutdownContext shutdown,
             HttpConfiguration httpConfiguration, LaunchMode launchMode,
-            boolean startVirtual, boolean startSocket, Supplier<Integer> ioThreads, String websocketSubProtocols)
-            throws IOException {
+            boolean startVirtual, boolean startSocket, Supplier<Integer> ioThreads) throws IOException {
 
         Vertx vertx = vertxRuntimeValue.getValue();
         if (startVirtual) {
@@ -158,7 +157,7 @@ public class VertxHttpRecorder {
         if (startSocket) {
             // Start the server
             if (closeTask == null) {
-                doServerStart(vertx, httpConfiguration, launchMode, ioThreads, websocketSubProtocols);
+                doServerStart(vertx, httpConfiguration, launchMode, ioThreads);
                 if (launchMode != LaunchMode.DEVELOPMENT) {
                     shutdown.addShutdownTask(closeTask);
                 }
@@ -181,9 +180,8 @@ public class VertxHttpRecorder {
 
         filterList.addAll(filters.getFilters());
 
-        // Then, fire the resuming router
-        ResumingRouter resumingRouter = new ResumingRouter(router);
-        event.select(Router.class).fire(resumingRouter);
+        // Then, fire the router
+        event.select(Router.class).fire(new ResumingRouter(router));
 
         for (Filter filter : filterList) {
             if (filter.getHandler() != null) {
@@ -196,7 +194,7 @@ public class VertxHttpRecorder {
             defaultRouteHandler.accept(router.route().order(10_000));
         }
 
-        container.instance(RouterProducer.class).initialize(resumingRouter);
+        container.instance(RouterProducer.class).initialize(router);
         router.route().last().failureHandler(new QuarkusErrorHandler(launchMode.isDevOrTest()));
 
         if (rootPath.equals("/")) {
@@ -216,9 +214,10 @@ public class VertxHttpRecorder {
     }
 
     private static void doServerStart(Vertx vertx, HttpConfiguration httpConfiguration, LaunchMode launchMode,
-            Supplier<Integer> eventLoops, String websocketSubProtocols) throws IOException {
+            Supplier<Integer> eventLoops)
+            throws IOException {
         // Http server configuration
-        HttpServerOptions httpServerOptions = createHttpServerOptions(httpConfiguration, launchMode, websocketSubProtocols);
+        HttpServerOptions httpServerOptions = createHttpServerOptions(httpConfiguration, launchMode);
         HttpServerOptions sslConfig = createSslOptions(httpConfiguration, launchMode);
 
         int eventLoopCount = eventLoops.get();
@@ -396,14 +395,13 @@ public class VertxHttpRecorder {
     }
 
     private static HttpServerOptions createHttpServerOptions(HttpConfiguration httpConfiguration,
-            LaunchMode launchMode, String websocketSubProtocols) {
+            LaunchMode launchMode) {
         // TODO other config properties
         HttpServerOptions options = new HttpServerOptions();
         options.setHost(httpConfiguration.host);
         options.setPort(httpConfiguration.determinePort(launchMode));
         setIdleTimeout(httpConfiguration, options);
         options.setMaxHeaderSize(httpConfiguration.limits.maxHeaderSize.asBigInteger().intValueExact());
-        options.setWebsocketSubProtocols(websocketSubProtocols);
         return options;
     }
 
