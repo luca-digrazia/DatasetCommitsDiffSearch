@@ -19,21 +19,17 @@
 package controllers;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import lib.BreadcrumbList;
-import lib.DateTools;
 import lib.Tools;
 import models.PermissionsService;
 import models.User;
 import models.UserService;
-import models.api.requests.ChangePasswordRequest;
 import models.api.requests.ChangeUserRequest;
 import models.api.requests.CreateUserRequest;
 import org.apache.shiro.crypto.hash.SimpleHash;
 import play.data.Form;
 import play.mvc.Result;
-import views.html.system.users.edit;
 import views.html.system.users.new_user;
 import views.html.system.users.show;
 
@@ -43,7 +39,6 @@ public class UsersController extends AuthenticatedController {
 
     private static final Form<CreateUserRequest> createUserForm = Form.form(CreateUserRequest.class);
     private static final Form<ChangeUserRequest> changeUserForm = Form.form(ChangeUserRequest.class);
-    private static final Form<ChangePasswordRequest> changePasswordForm = Form.form(ChangePasswordRequest.class);
 
     @Inject
     private UserService userService;
@@ -53,7 +48,7 @@ public class UsersController extends AuthenticatedController {
     public Result index() {
         final List<User> allUsers = userService.all();
         final List<String> permissions = permissionsService.all();
-        return ok(views.html.system.users.index.render(currentUser(), breadcrumbs(), allUsers, permissions));
+        return ok(views.html.system.users.index.render(currentUser(), allUsers, permissions));
     }
 
     public Result show(String username) {
@@ -70,16 +65,10 @@ public class UsersController extends AuthenticatedController {
 
     public Result newUserForm() {
         BreadcrumbList bc = breadcrumbs();
-        bc.addCrumb("New", routes.UsersController.newUserForm());
+        bc.addCrumb("Create new", routes.UsersController.newUserForm());
 
         final List<String> permissions = permissionsService.all();
-        return ok(new_user.render(
-                createUserForm,
-                currentUser(),
-                permissions,
-                ImmutableSet.<String>of(),
-                DateTools.getGroupedTimezoneIds().asMap(),
-                bc));
+        return ok(new_user.render(createUserForm, currentUser(), permissions, ImmutableSet.<String>of(), bc));
     }
 
     public Result editUserForm(String username) {
@@ -88,15 +77,7 @@ public class UsersController extends AuthenticatedController {
 
         User user = userService.load(username);
         final Form<ChangeUserRequest> form = changeUserForm.fill(new ChangeUserRequest(user));
-        return ok(edit.render(
-                form,
-                username,
-                currentUser(),
-                permissionsService.all(),
-                ImmutableSet.copyOf(user.getPermissions()),
-                DateTools.getGroupedTimezoneIds().asMap(),
-                bc)
-        );
+        return ok(views.html.system.users.edit.render(form, username, currentUser(), permissionsService.all(), ImmutableSet.copyOf(user.getPermissions()), bc));
     }
 
     public Result create() {
@@ -107,22 +88,11 @@ public class UsersController extends AuthenticatedController {
             BreadcrumbList bc = breadcrumbs();
             bc.addCrumb("Create new", routes.UsersController.newUserForm());
             final List<String> permissions = permissionsService.all();
-            return badRequest(new_user.render(
-                    createUserRequestForm,
-                    currentUser(),
-                    permissions,
-                    ImmutableSet.copyOf(request.permissions),
-                    DateTools.getGroupedTimezoneIds().asMap(),
-                    bc));
+            return badRequest(new_user.render(createUserRequestForm, currentUser(), permissions, ImmutableSet.copyOf(request.permissions), bc));
         }
-        // TODO PREVIEW: remove hardcoded permissions once the permission editor is ready
-        request.permissions = Lists.newArrayList("*");
+        // hash it before sending it across
+        request.password = new SimpleHash("SHA1", request.password).toString();
         userService.create(request);
-        return redirect(routes.UsersController.index());
-    }
-
-    public Result delete(String username) {
-        userService.delete(username);
         return redirect(routes.UsersController.index());
     }
 
@@ -147,35 +117,11 @@ public class UsersController extends AuthenticatedController {
 
             final List<String> all = permissionsService.all();
 
-            return badRequest(edit.render(
-                    requestForm,
-                    username,
-                    currentUser(),
-                    all,
-                    ImmutableSet.copyOf(requestForm.get().permissions),
-                    DateTools.getGroupedTimezoneIds().asMap(),
-                    bc));
+            return badRequest(views.html.system.users.edit.render(requestForm, username, currentUser(), all, ImmutableSet.copyOf(requestForm.get().permissions), bc));
         }
         final User user = userService.load(username);
         user.update(requestForm.get());
 
-        return redirect(routes.UsersController.index());
-    }
-
-    public Result changePassword(String username) {
-        final Form<ChangePasswordRequest> requestForm = changePasswordForm.bindFromRequest("old_password", "password");
-
-        final ChangePasswordRequest request = requestForm.get();
-        final User user = userService.load(username);
-        request.old_password = new SimpleHash("SHA-256", request.old_password).toString();
-        request.password = new SimpleHash("SHA-256", request.password).toString();
-
-        if (requestForm.hasErrors() || !user.updatePassword(request)) {
-            flash("error", "Could not update the password.");
-            return redirect(routes.UsersController.editUserForm(username));
-        }
-
-        flash("success", "Successfully changed the password for user " + user.getFullName());
         return redirect(routes.UsersController.index());
     }
 

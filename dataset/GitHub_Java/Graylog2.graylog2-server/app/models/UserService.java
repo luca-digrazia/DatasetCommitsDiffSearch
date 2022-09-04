@@ -124,7 +124,7 @@ public class UserService {
             return null;
         }
         final String userName = tokenizer.nextToken();
-        final String passwordSha2 = tokenizer.nextToken();
+        final String passwordSha1 = tokenizer.nextToken();
 
         // special case for the local admin user for the web interface
 //        if (userName != null) {
@@ -136,11 +136,11 @@ public class UserService {
 //        }
         try {
             UserResponse response = api.get(UserResponse.class)
-                    .credentials(userName, passwordSha2)
+                    .credentials(userName, passwordSha1)
                     .path("/users/{0}", userName)
                     .execute();
 
-            User currentUser = userFactory.fromResponse(response, passwordSha2);
+            User currentUser = userFactory.fromResponse(response, passwordSha1);
             setCurrent(currentUser);
             return currentUser;
         } catch (IOException e) {
