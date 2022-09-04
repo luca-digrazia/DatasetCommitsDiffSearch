@@ -29,6 +29,7 @@ import com.google.common.truth.Truth;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.TestAspects;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.DotOutputVisitor;
@@ -429,7 +430,7 @@ public abstract class AbstractQueryTest<T> {
     assertThat(eval("somepath(//d, //a)")).isEqualTo(EMPTY); // no path
 
     Set<T> somepathAToD = eval("somepath(//a, //d)");
-    assertThat(somepathAToD).containsAtLeastElementsIn(eval("//a"));
+    assertContains(somepathAToD, eval("//a"));
     Set<T> aAndB = eval("//a + //b");
     // Contains one of {//b, //c}:
     assertThat(somepathAToD).containsAnyIn(aAndB);
@@ -472,24 +473,16 @@ public abstract class AbstractQueryTest<T> {
     assertThat(eval("somepath(//d, //a)")).isEqualTo(EMPTY); // no path
 
     Set<T> allpathsAtoD = eval("allpaths(//a, //d)");
-    assertThat(allpathsAtoD).containsAtLeastElementsIn(eval("//a + //b + //c + //d"));
+    assertContains(allpathsAtoD, eval("//a"));
+    assertContains(allpathsAtoD, eval("//b"));
+    assertContains(allpathsAtoD, eval("//c"));
+    assertContains(allpathsAtoD, eval("//d"));
 
     // Configurable attributes:
     if (testConfigurableAttributes()) {
       assertThat(eval("allpaths(//configurable:main, //configurable:bdep.cc)"))
           .isEqualTo(eval("//configurable:main + //configurable:bdep + //configurable:bdep.cc"));
     }
-  }
-
-  @Test
-  public void testPathOperatorsWithOutputFile() throws Exception {
-    writeFile("a/BUILD", "genrule(name='a', outs=['out'], cmd=':')");
-
-    assertThat(eval("somepath(//a, //a:out)")).isEqualTo(EMPTY); // no path
-    assertThat(eval("allpaths(//a, //a:out)")).isEqualTo(EMPTY); // no path
-
-    assertThat(eval("somepath(//a:out, //a)")).isEqualTo(eval("//a + //a:out"));
-    assertThat(eval("allpaths(//a:out, //a)")).isEqualTo(eval("//a + //a:out"));
   }
 
   @Test
@@ -526,24 +519,12 @@ public abstract class AbstractQueryTest<T> {
 
     // Configurable attributes:
     if (testConfigurableAttributes()) {
-      String implicitDeps = "";
-      if (analysisMock.isThisBazel()) {
-        implicitDeps =
-            " + "
-                + helper.getToolsRepository()
-                + "//tools/def_parser:def_parser"
-                + " + "
-                + helper.getToolsRepository()
-                + "//tools/cpp:grep-includes";
-      }
       assertThat(eval("deps(//configurable:main, 1)" + TestConstants.CC_DEPENDENCY_CORRECTION))
-          .containsExactlyElementsIn(
+          .isEqualTo(
               eval(
-                  helper.getToolsRepository()
-                      + "//tools/cpp:malloc + //configurable:main + "
-                      + "//configurable:main.cc + //configurable:adep + //configurable:bdep + "
-                      + "//configurable:defaultdep + //conditions:a + //conditions:b"
-                      + implicitDeps));
+                  "//tools/cpp:malloc + //configurable:main + //configurable:main.cc + "
+                      + "//configurable:adep + //configurable:bdep + //configurable:defaultdep + "
+                      + "//conditions:a + //conditions:b"));
     }
   }
 
@@ -732,26 +713,13 @@ public abstract class AbstractQueryTest<T> {
     writeFile("x/BUILD", "cc_binary(name='x', srcs=['x.cc'])");
 
     // Implicit dependencies:
-    String hostDepsExpr = helper.getToolsRepository() + "//tools/cpp:malloc";
-    String implicitDepsExpr = "";
-    if (analysisMock.isThisBazel()) {
-      implicitDepsExpr +=
-          " + "
-              + helper.getToolsRepository()
-              + "//tools/def_parser:def_parser"
-              + " + "
-              + helper.getToolsRepository()
-              + "//tools/def_parser:def_parser.exe"
-              + " + "
-              + helper.getToolsRepository()
-              + "//tools/cpp:grep-includes";
-    }
+    final String hostDepsExpr = "//tools/cpp:malloc";
 
-    String targetDepsExpr = "//x:x + //x:x.cc";
+    final String targetDepsExpr = "//x:x + //x:x.cc";
 
     // Test all combinations of --[no]host_deps and --[no]implicit_deps on //x:x
     assertEqualsFiltered(
-        targetDepsExpr + " + " + hostDepsExpr + implicitDepsExpr,
+        targetDepsExpr + " + " + hostDepsExpr,
         "deps(//x)" + TestConstants.CC_DEPENDENCY_CORRECTION);
     assertEqualsFiltered(
         targetDepsExpr + " + " + hostDepsExpr,
@@ -762,10 +730,55 @@ public abstract class AbstractQueryTest<T> {
         targetDepsExpr, "deps(//x)", Setting.NO_HOST_DEPS, Setting.NO_IMPLICIT_DEPS);
   }
 
-  protected void assertEqualsFiltered(String expected, String actual, Setting... settings)
+  @Test
+  public void testNoImplicitDeps_computedDefault() throws Exception {
+    String extractorPackage = "java/com/google/javascript/jscomp";
+    String extractorName = "JsMessageExtractor";
+    String extractor = Label.create(extractorPackage, extractorName).toString();
+
+    writeFile(
+        "x/BUILD",
+        "js_binary(name='x1', compiler=':c')",
+        "js_binary(name='x2', compiler=':c', tc_project='x', locales = ['en'])",
+        "js_binary(name='x3', compiler=':c', extractor=':e')",
+        "js_binary(name='x4', compiler=':c', extractor=':e', tc_project='x', locales = ['en'])",
+        "js_binary(name='x5', compiler=':c', extractor='" + extractor + "')",
+        "js_binary(name='x6', compiler=':c', extractor='"
+            + extractor
+            + "', tc_project='x', locales = ['en'])",
+        "cc_binary(name='c')",
+        "cc_library(name='e')");
+
+    assertDependsNotFiltered("//x:x1", extractor);
+    assertDependsFiltered("//x:x2", extractor);
+    assertDependsFiltered("//x:x3", "//x:e");
+    assertDependsFiltered("//x:x4", "//x:e");
+    assertDependsFiltered("//x:x5", extractor);
+    assertDependsFiltered("//x:x6", extractor);
+
+    assertDependsNotFiltered("//x:x1", extractor, Setting.NO_IMPLICIT_DEPS);
+    assertDependsNotFiltered("//x:x2", extractor, Setting.NO_IMPLICIT_DEPS);
+    assertDependsFiltered("//x:x3", "//x:e", Setting.NO_IMPLICIT_DEPS);
+    assertDependsFiltered("//x:x4", "//x:e", Setting.NO_IMPLICIT_DEPS);
+    assertDependsFiltered("//x:x5", extractor, Setting.NO_IMPLICIT_DEPS);
+    assertDependsFiltered("//x:x6", extractor, Setting.NO_IMPLICIT_DEPS);
+  }
+
+  private void assertDependsNotFiltered(String from, String to, Setting... settings)
+      throws Exception {
+    String fromDeps = "deps(" + from + ")";
+    assertEqualsFiltered(fromDeps, fromDeps + '-' + to, settings);
+  }
+
+  private void assertDependsFiltered(String from, String to, Setting... settings) throws Exception {
+    String fromDeps = "deps(" + from + ")";
+    assertEqualsFiltered(to, fromDeps + '^' + to, settings);
+  }
+
+  private void assertEqualsFiltered(String expected, String actual, Setting... settings)
       throws Exception {
     helper.setQuerySettings(settings);
-    assertThat(eval(actual)).containsExactlyElementsIn(eval(expected));
+    assertThat(eval(actual)).isEqualTo(eval(expected));
   }
 
   @Test
@@ -808,9 +821,7 @@ public abstract class AbstractQueryTest<T> {
 
     // Works for implicit edges too.  This is for consistency with --output
     // xml, which exposes them too.
-    String toolsRepository = helper.getToolsRepository();
-    assertThat(eval("labels(\"$python2to3\", //k)"))
-        .isEqualTo(eval(toolsRepository + "//tools/python:2to3"));
+    assertThat(eval("labels(\"$root_init_py\", //k)")).isEqualTo(eval("//tools/python:initpy"));
 
     // Configurable deps:
     if (testConfigurableAttributes()) {
@@ -1640,20 +1651,6 @@ public abstract class AbstractQueryTest<T> {
     assertThat(evalToString("same_pkg_direct_rdeps(//foo:d)")).isEqualTo("//foo:b //foo:c");
   }
 
-  @Test
-  public void testSiblings_MatchesTargetNamedAll() throws Exception {
-    writeFile(
-        "foo/BUILD",
-        // NOTE: target named 'all' collides with, takes precedence over the ':all' wildcard
-        "sh_library(name = 'all')",
-        "sh_library(name = 'ball')",
-        "sh_library(name = 'call')",
-        "sh_library(name = 'doll')");
-    assertThat(evalToString("//foo:all")).isEqualTo("//foo:all");
-    assertThat(evalToString("kind(' rule', siblings(//foo:BUILD))"))
-        .isEqualTo("//foo:all //foo:ball //foo:call //foo:doll");
-  }
-
   // Explicit test for the interaction of 'siblings' on operands coming from 'buildfiles' or
   // 'loadfiles'. The behavior here of treating a load'd .bzl file as coming from the package
   // loading it, rather than the package to which it belongs, is unfortunate, but it's the only
@@ -1802,10 +1799,6 @@ public abstract class AbstractQueryTest<T> {
 
     default Set<T> evaluateQueryRaw(String query) throws QueryException, InterruptedException {
       return evaluateQuery(query).results;
-    }
-
-    default String getToolsRepository() {
-      return "";
     }
 
     /**
