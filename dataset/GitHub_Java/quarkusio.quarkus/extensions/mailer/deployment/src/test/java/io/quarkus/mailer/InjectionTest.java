@@ -27,8 +27,9 @@ public class InjectionTest {
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(BeanUsingBareMailClient.class, BeanUsingBlockingMailer.class,
-                            BeanUsingReactiveMailer.class, MailTemplates.class)
+                    .addClasses(BeanUsingAxleMailClient.class, BeanUsingBareMailClient.class, BeanUsingRxClient.class)
+                    .addClasses(BeanUsingBlockingMailer.class, BeanUsingReactiveMailer.class)
+                    .addClasses(MailTemplates.class)
                     .addAsResource("mock-config.properties", "application.properties")
                     .addAsResource(new StringAsset(""
                             + "<html>{name}</html>"), "templates/test1.html")
@@ -42,13 +43,22 @@ public class InjectionTest {
                             + "<html>{name}</html>"), "templates/mails/test2.html"));
 
     @Inject
-    BeanUsingBareMailClient beanUsingBare;
+    BeanUsingAxleMailClient beanUsingBare;
+
+    @Inject
+    BeanUsingBareMailClient beanUsingAxle;
+
+    @Inject
+    BeanUsingRxClient beanUsingRx;
 
     @Inject
     BeanUsingMutinyClient beanUsingMutiny;
 
     @Inject
     BeanUsingReactiveMailer beanUsingReactiveMailer;
+
+    @Inject
+    BeanUsingLegacyReactiveMailer beanUsingLegacyReactiveMailer;
 
     @Inject
     BeanUsingBlockingMailer beanUsingBlockingMailer;
@@ -59,9 +69,12 @@ public class InjectionTest {
     @Test
     public void testInjection() {
         beanUsingMutiny.verify();
+        beanUsingAxle.verify();
         beanUsingBare.verify();
+        beanUsingRx.verify();
         beanUsingBlockingMailer.verify();
         beanUsingReactiveMailer.verify().toCompletableFuture().join();
+        beanUsingLegacyReactiveMailer.verify().toCompletableFuture().join();
         templates.send1();
         templates.send2().await();
         templates.sendNative().await();
@@ -72,6 +85,28 @@ public class InjectionTest {
 
         @Inject
         MailClient client;
+
+        void verify() {
+            Assertions.assertNotNull(client);
+        }
+    }
+
+    @ApplicationScoped
+    static class BeanUsingAxleMailClient {
+
+        @Inject
+        io.vertx.axle.ext.mail.MailClient client;
+
+        void verify() {
+            Assertions.assertNotNull(client);
+        }
+    }
+
+    @ApplicationScoped
+    static class BeanUsingRxClient {
+
+        @Inject
+        io.vertx.reactivex.ext.mail.MailClient client;
 
         void verify() {
             Assertions.assertNotNull(client);
@@ -98,6 +133,17 @@ public class InjectionTest {
         CompletionStage<Void> verify() {
             return mailer.send(Mail.withText("quarkus@quarkus.io", "test mailer", "reactive test!"))
                     .subscribeAsCompletionStage();
+        }
+    }
+
+    @ApplicationScoped
+    static class BeanUsingLegacyReactiveMailer {
+
+        @Inject
+        ReactiveMailer mailer;
+
+        CompletionStage<Void> verify() {
+            return mailer.send(Mail.withText("quarkus@quarkus.io", "test mailer", "reactive test!"));
         }
     }
 
