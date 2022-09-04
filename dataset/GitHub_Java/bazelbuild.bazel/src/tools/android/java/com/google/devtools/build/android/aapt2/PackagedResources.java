@@ -13,31 +13,46 @@
 // limitations under the License.
 package com.google.devtools.build.android.aapt2;
 
-import com.google.auto.value.AutoValue;
+import com.google.devtools.build.android.AndroidResourceOutputs;
 import com.google.devtools.build.android.ResourcesZip;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import javax.annotation.Nullable;
 
 /** Represents the packaged, flattened resources. */
-@AutoValue
-public abstract class PackagedResources {
+public class PackagedResources {
 
-  public abstract Path apk();
+  private final Path apk;
+  private final Path proto;
+  private final Path rTxt;
+  private final Path proguardConfig;
+  private final Path mainDexProguard;
+  private final Path javaSourceDirectory;
+  private final Path resourceIds;
+  private final Path attributes;
+  private final Path packages;
 
-  public abstract Path proto();
-
-  public abstract Path rTxt();
-
-  public abstract Path proguardConfig();
-
-  public abstract Path mainDexProguard();
-
-  public abstract Path javaSourceDirectory();
-
-  abstract Path resourceIds();
-
-  public abstract Path attributes();
-
-  public abstract Path packages();
+  private PackagedResources(
+      Path apk,
+      Path proto,
+      Path rTxt,
+      Path proguardConfig,
+      Path mainDexProguard,
+      Path javaSourceDirectory,
+      Path resourceIds,
+      Path attributes,
+      Path packages) {
+    this.apk = apk;
+    this.proto = proto;
+    this.rTxt = rTxt;
+    this.proguardConfig = proguardConfig;
+    this.mainDexProguard = mainDexProguard;
+    this.javaSourceDirectory = javaSourceDirectory;
+    this.resourceIds = resourceIds;
+    this.attributes = attributes;
+    this.packages = packages;
+  }
 
   public static PackagedResources of(
       Path outPath,
@@ -48,8 +63,9 @@ public abstract class PackagedResources {
       Path javaSourceDirectory,
       Path resourceIds,
       Path attributes,
-      Path packages) {
-    return new AutoValue_PackagedResources(
+      Path packages)
+      throws IOException {
+    return new PackagedResources(
         outPath,
         protoPath,
         rTxt,
@@ -61,7 +77,95 @@ public abstract class PackagedResources {
         packages);
   }
 
+  public PackagedResources copyPackageTo(Path packagePath) throws IOException {
+    return of(
+        copy(apk, packagePath),
+        proto,
+        rTxt,
+        proguardConfig,
+        mainDexProguard,
+        javaSourceDirectory,
+        resourceIds,
+        attributes,
+        packages);
+  }
+
+  public PackagedResources copyRTxtTo(Path rOutput) throws IOException {
+    if (rOutput == null) {
+      return this;
+    }
+    return new PackagedResources(
+        apk,
+        proto,
+        copy(rTxt, rOutput),
+        proguardConfig,
+        mainDexProguard,
+        javaSourceDirectory,
+        resourceIds,
+        attributes,
+        packages);
+  }
+
+  private Path copy(Path from, Path out) throws IOException {
+    Files.createDirectories(out.getParent());
+    Files.copy(from, out);
+    return out;
+  }
+
+  public PackagedResources copyProguardTo(Path proguardOut) throws IOException {
+    if (proguardOut == null) {
+      return this;
+    }
+    return of(
+        apk,
+        proto,
+        rTxt,
+        copy(proguardConfig, proguardOut),
+        mainDexProguard,
+        javaSourceDirectory,
+        resourceIds,
+        attributes,
+        packages);
+  }
+
+  public PackagedResources copyMainDexProguardTo(Path mainDexProguardOut) throws IOException {
+    if (mainDexProguardOut == null) {
+      return this;
+    }
+    return of(
+        apk,
+        proto,
+        rTxt,
+        proguardConfig,
+        copy(mainDexProguard, mainDexProguardOut),
+        javaSourceDirectory,
+        resourceIds,
+        attributes,
+        packages);
+  }
+
+  public PackagedResources createSourceJar(@Nullable Path sourceJarPath) throws IOException {
+    if (sourceJarPath == null) {
+      return this;
+    }
+    AndroidResourceOutputs.createSrcJar(javaSourceDirectory, sourceJarPath, false);
+    return of(
+        apk,
+        proto,
+        rTxt,
+        proguardConfig,
+        mainDexProguard,
+        sourceJarPath,
+        resourceIds,
+        attributes,
+        packages);
+  }
+
   public ResourcesZip asArchive() {
-    return ResourcesZip.fromApkWithProto(proto(), attributes(), resourceIds(), packages());
+    return ResourcesZip.fromApkWithProto(proto, attributes, resourceIds, packages);
+  }
+
+  public Path getApk() {
+    return apk;
   }
 }

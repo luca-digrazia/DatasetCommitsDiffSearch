@@ -24,8 +24,6 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -45,9 +43,7 @@ public class AndroidAssetMergingAction extends AbstractBusyBoxAction {
   }
 
   private static AndroidAssetMergingAction create() {
-    return new AndroidAssetMergingAction(
-        OptionsParser.newOptionsParser(
-            new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()), Options.class));
+    return new AndroidAssetMergingAction(OptionsParser.newOptionsParser(Options.class));
   }
 
   private AndroidAssetMergingAction(OptionsParser optionsParser) {

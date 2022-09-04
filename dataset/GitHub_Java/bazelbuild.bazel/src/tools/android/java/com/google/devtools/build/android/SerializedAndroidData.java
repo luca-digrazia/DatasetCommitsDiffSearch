@@ -96,16 +96,13 @@ public class SerializedAndroidData {
     }
   }
 
-  public void deserialize(
-      DependencyInfo.DependencyType dependencyType,
-      AndroidDataDeserializer deserializer,
-      KeyValueConsumers consumers)
+  public void deserialize(AndroidDataDeserializer deserializer, KeyValueConsumers consumers)
       throws DeserializationException {
     // Missing symbols means the resources where provided via android_resources rules.
     if (symbols == null) {
       throw new DeserializationException(true);
     }
-    deserializer.read(DependencyInfo.create(label, dependencyType), symbols, consumers);
+    deserializer.read(symbols, consumers);
   }
 
   public String getLabel() {

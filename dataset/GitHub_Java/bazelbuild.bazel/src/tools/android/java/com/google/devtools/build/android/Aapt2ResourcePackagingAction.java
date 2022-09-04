@@ -179,7 +179,6 @@ public class Aapt2ResourcePackagingAction {
               .buildVersion(aaptConfigOptions.buildToolsVersion)
               .conditionalKeepRules(aaptConfigOptions.conditionalKeepRules == TriState.YES)
               .filterToDensity(options.densities)
-              .storeUncompressed(aaptConfigOptions.uncompressedExtensions)
               .debug(aaptConfigOptions.debug)
               .includeGeneratedLocales(aaptConfigOptions.generatePseudoLocale)
               .includeOnlyConfigs(aaptConfigOptions.resourceConfigs)

@@ -269,7 +269,6 @@ public class ResourcesZip {
    * @param packages The packages of the dependencies. Used to analyze the java code for resource
    *     references.
    * @param classJar Used to find resource references in java.
-   * @param rTxt R.txt file listing all resources.
    * @param proguardMapping Mapping used to decode java references.
    * @param logFile Destination of the resource shrinker log.
    * @param workingDirectory Temporary directory for intermediate artifacts.
@@ -282,7 +281,6 @@ public class ResourcesZip {
   public ShrunkProtoApk shrinkUsingProto(
       Set<String> packages,
       Path classJar,
-      Path rTxt,
       Path proguardMapping,
       Path logFile,
       Path workingDirectory)
@@ -293,7 +291,7 @@ public class ResourcesZip {
       final Map<String, Set<String>> toolAttributes = toAttributes();
       // record resources and manifest
       final ProtoResourceUsageAnalyzer analyzer =
-          new ProtoResourceUsageAnalyzer(packages, rTxt, proguardMapping, logFile);
+          new ProtoResourceUsageAnalyzer(packages, proguardMapping, logFile);
 
       final ProtoApk shrink =
           analyzer.shrink(

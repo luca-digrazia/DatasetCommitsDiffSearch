@@ -308,8 +308,7 @@ public class AarGeneratorActionTest {
 
     String[] args = new String[] {"--manifest", manifest.toString(), "--rtxt", rtxt.toString(),
         "--classes", classes.toString()};
-    OptionsParser optionsParser =
-        OptionsParser.builder().optionsClasses(AarGeneratorOptions.class).build();
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(AarGeneratorOptions.class);
     optionsParser.parse(args);
     AarGeneratorOptions options = optionsParser.getOptions(AarGeneratorOptions.class);
     AarGeneratorAction.checkFlags(options);
@@ -322,8 +321,7 @@ public class AarGeneratorActionTest {
     Files.createFile(rtxt);
 
     String[] args = new String[] {"--manifest", manifest.toString(), "--rtxt", rtxt.toString()};
-    OptionsParser optionsParser =
-        OptionsParser.builder().optionsClasses(AarGeneratorOptions.class).build();
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(AarGeneratorOptions.class);
     optionsParser.parse(args);
     AarGeneratorOptions options = optionsParser.getOptions(AarGeneratorOptions.class);
     thrown.expect(IllegalArgumentException.class);
@@ -336,8 +334,7 @@ public class AarGeneratorActionTest {
     Path manifest = tempDir.resolve("AndroidManifest.xml");
     Files.createFile(manifest);
     String[] args = new String[] {"--manifest", manifest.toString()};
-    OptionsParser optionsParser =
-        OptionsParser.builder().optionsClasses(AarGeneratorOptions.class).build();
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(AarGeneratorOptions.class);
     optionsParser.parse(args);
     AarGeneratorOptions options = optionsParser.getOptions(AarGeneratorOptions.class);
     thrown.expect(IllegalArgumentException.class);
