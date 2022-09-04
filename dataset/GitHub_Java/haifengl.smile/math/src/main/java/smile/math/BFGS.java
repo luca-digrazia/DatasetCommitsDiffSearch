@@ -861,7 +861,10 @@ public class BFGS {
         double[] v  = M.mv(WZ.tv(r));
         Matrix N = WZ.ata().mul(-thetaInverse);
         N = M.mm(N);
-        N.addDiag(1.0);
+        int n1 = N.nrow();
+        for (int i = 0; i < n1; i++) {
+            N.add(i, i, 1.0);
+        }
 
         Matrix.LU lu = N.lu();
         v = lu.solve(v);
