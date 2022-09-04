@@ -2,7 +2,6 @@ package io.quarkus.resteasy.runtime.standalone;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -44,7 +43,7 @@ public final class VertxHttpRequest extends BaseHttpRequest {
     private String httpMethod;
     private String remoteHost;
     private InputStream inputStream;
-    private Map<String, Object> attributes;
+    private Map<String, Object> attributes = new HashMap<String, Object>();
     private VertxHttpResponse response;
     private final boolean is100ContinueExpected;
     private VertxExecutionContext executionContext;
@@ -82,25 +81,20 @@ public final class VertxHttpRequest extends BaseHttpRequest {
 
     @Override
     public Enumeration<String> getAttributeNames() {
-        final Map<String, Object> attributes = this.attributes;
-        if (attributes == null) {
-            return Collections.emptyEnumeration();
-        } else {
-            Enumeration<String> en = new Enumeration<String>() {
-                private Iterator<String> it = attributes.keySet().iterator();
+        Enumeration<String> en = new Enumeration<String>() {
+            private Iterator<String> it = attributes.keySet().iterator();
 
-                @Override
-                public boolean hasMoreElements() {
-                    return it.hasNext();
-                }
+            @Override
+            public boolean hasMoreElements() {
+                return it.hasNext();
+            }
 
-                @Override
-                public String nextElement() {
-                    return it.next();
-                }
-            };
-            return en;
-        }
+            @Override
+            public String nextElement() {
+                return it.next();
+            }
+        };
+        return en;
     }
 
     @Override
@@ -114,22 +108,17 @@ public final class VertxHttpRequest extends BaseHttpRequest {
 
     @Override
     public Object getAttribute(String attribute) {
-        return attributes != null ? attributes.get(attribute) : null;
+        return attributes.get(attribute);
     }
 
     @Override
     public void setAttribute(String name, Object value) {
-        if (attributes == null) {
-            attributes = new HashMap<String, Object>();
-        }
         attributes.put(name, value);
     }
 
     @Override
     public void removeAttribute(String name) {
-        if (attributes != null) {
-            attributes.remove(name);
-        }
+        attributes.remove(name);
     }
 
     @Override
