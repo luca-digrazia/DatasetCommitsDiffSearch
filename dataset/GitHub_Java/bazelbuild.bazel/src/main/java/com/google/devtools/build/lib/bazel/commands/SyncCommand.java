@@ -19,7 +19,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 import com.google.devtools.build.lib.bazel.repository.RepositoryOrderEvent;
-import com.google.devtools.build.lib.bazel.repository.skylark.StarlarkRepositoryFunction;
+import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryFunction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -38,18 +38,12 @@ import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Interrupted;
-import com.google.devtools.build.lib.server.FailureDetails.SyncCommand.Code;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.InterruptedFailureDetails;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationResult;
@@ -89,6 +83,8 @@ public final class SyncCommand implements BlazeCommand {
 
   @Override
   public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
+    ExitCode exitCode = ExitCode.SUCCESS;
+
     try {
       env.getReporter()
           .post(
@@ -128,11 +124,11 @@ public final class SyncCommand implements BlazeCommand {
           skyframeExecutor.prepareAndGet(ImmutableSet.of(packageLookupKey), evaluationContext);
       if (packageLookupValue.hasError()) {
         reportError(env, packageLookupValue);
-        return blazeCommandResultWithNoBuildReport(
-            env,
-            ExitCode.ANALYSIS_FAILURE,
-            Code.PACKAGE_LOOKUP_ERROR,
-            packageLookupValue.getError(packageLookupKey).toString());
+        env.getReporter()
+            .post(
+                new NoBuildRequestFinishedEvent(
+                    ExitCode.ANALYSIS_FAILURE, env.getRuntime().getClock().currentTimeMillis()));
+        return BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
       }
       RootedPath workspacePath =
           ((PackageLookupValue) packageLookupValue.get(packageLookupKey))
@@ -148,11 +144,11 @@ public final class SyncCommand implements BlazeCommand {
             skyframeExecutor.prepareAndGet(ImmutableSet.of(workspace), evaluationContext);
         if (value.hasError()) {
           reportError(env, value);
-          return blazeCommandResultWithNoBuildReport(
-              env,
-              ExitCode.ANALYSIS_FAILURE,
-              Code.WORKSPACE_EVALUATION_ERROR,
-              value.getError(workspace).toString());
+          env.getReporter()
+              .post(
+                  new NoBuildRequestFinishedEvent(
+                      ExitCode.ANALYSIS_FAILURE, env.getRuntime().getClock().currentTimeMillis()));
+          return BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
         }
         fileValue = (WorkspaceFileValue) value.get(workspace);
         for (Rule rule : fileValue.getPackage().getTargets(Rule.class)) {
@@ -190,12 +186,19 @@ public final class SyncCommand implements BlazeCommand {
             repositoriesToFetch.add(
                 RepositoryDirectoryValue.key(RepositoryName.create("@" + rule.getName())));
           } catch (LabelSyntaxException e) {
-            String errorMessage =
-                String.format(
-                    "Internal error queuing %s to fetch: %s", rule.getName(), e.getMessage());
-            env.getReporter().handle(Event.error(errorMessage));
-            return blazeCommandResultWithNoBuildReport(
-                env, ExitCode.BLAZE_INTERNAL_ERROR, Code.REPOSITORY_NAME_INVALID, errorMessage);
+            env.getReporter()
+                .handle(
+                    Event.error(
+                        "Internal error queuing "
+                            + rule.getName()
+                            + " to fetch: "
+                            + e.getMessage()));
+            env.getReporter()
+                .post(
+                    new NoBuildRequestFinishedEvent(
+                        ExitCode.BLAZE_INTERNAL_ERROR,
+                        env.getRuntime().getClock().currentTimeMillis()));
+            return BlazeCommandResult.exitCode(ExitCode.BLAZE_INTERNAL_ERROR);
           }
         }
       }
@@ -203,24 +206,19 @@ public final class SyncCommand implements BlazeCommand {
       fetchValue = skyframeExecutor.prepareAndGet(repositoriesToFetch.build(), evaluationContext);
       if (fetchValue.hasError()) {
         reportError(env, fetchValue);
-        return blazeCommandResultWithNoBuildReport(
-            env,
-            ExitCode.ANALYSIS_FAILURE,
-            Code.REPOSITORY_FETCH_ERRORS,
-            "Repository fetch failure.");
+        exitCode = ExitCode.ANALYSIS_FAILURE;
       }
     } catch (InterruptedException e) {
-      reportNoBuildRequestFinished(env, ExitCode.INTERRUPTED);
-      BlazeCommandResult.detailedExitCode(
-          InterruptedFailureDetails.detailedExitCode(
-              e.getMessage(), Interrupted.Code.SYNC_COMMAND));
+      exitCode = ExitCode.INTERRUPTED;
     } catch (AbruptExitException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
-      reportNoBuildRequestFinished(env, ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
-      return BlazeCommandResult.detailedExitCode(e.getDetailedExitCode());
+      exitCode = ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     }
-    reportNoBuildRequestFinished(env, ExitCode.SUCCESS);
-    return BlazeCommandResult.success();
+    env.getReporter()
+        .post(
+            new NoBuildRequestFinishedEvent(
+                exitCode, env.getRuntime().getClock().currentTimeMillis()));
+    return BlazeCommandResult.exitCode(exitCode);
   }
 
   private static boolean shouldSync(Rule rule, SyncOptions options) {
@@ -235,7 +233,7 @@ public final class SyncCommand implements BlazeCommand {
     if (options.configure) {
       // If this is only a configure run, only sync Starlark rules that
       // declare themselves as configure-like.
-      return StarlarkRepositoryFunction.isConfigureRule(rule);
+      return SkylarkRepositoryFunction.isConfigureRule(rule);
     }
     if (rule.getRuleClassObject().isStarlark()) {
       // Starlark rules are all whitelisted
@@ -314,28 +312,5 @@ public final class SyncCommand implements BlazeCommand {
             .build();
       }
     };
-  }
-
-  private static BlazeCommandResult blazeCommandResultWithNoBuildReport(
-      CommandEnvironment env, ExitCode exitCode, Code syncCommandCode, String message) {
-    reportNoBuildRequestFinished(env, exitCode);
-    return createFailedBlazeCommandResult(exitCode, syncCommandCode, message);
-  }
-
-  private static void reportNoBuildRequestFinished(CommandEnvironment env, ExitCode exitCode) {
-    long finishTimeMillis = env.getRuntime().getClock().currentTimeMillis();
-    env.getReporter().post(new NoBuildRequestFinishedEvent(exitCode, finishTimeMillis));
-  }
-
-  private static BlazeCommandResult createFailedBlazeCommandResult(
-      ExitCode exitCode, Code syncCommandCode, String message) {
-    return BlazeCommandResult.detailedExitCode(
-        DetailedExitCode.of(
-            exitCode,
-            FailureDetail.newBuilder()
-                .setMessage(message)
-                .setSyncCommand(
-                    FailureDetails.SyncCommand.newBuilder().setCode(syncCommandCode).build())
-                .build()));
   }
 }

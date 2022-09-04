@@ -14,130 +14,264 @@
 
 package com.google.devtools.build.lib.bazel.repository.skylark;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.bazel.repository.RepositoryResolvedEvent;
+import com.google.devtools.build.lib.bazel.repository.downloader.DownloadManager;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.SymbolGenerator;
+import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.profiler.Profiler;
+import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.profiler.SilentCloseable;
+import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.skyframe.FileValue;
-import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.rules.repository.ResolvedHashesValue;
+import com.google.devtools.build.lib.rules.repository.WorkspaceFileHelper;
+import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
+import com.google.devtools.build.lib.skyframe.BlacklistedPackagePrefixesValue;
+import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
-import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
-import com.google.devtools.build.skyframe.SkyValue;
-
+import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
 import java.util.Map;
-
+import java.util.Set;
 import javax.annotation.Nullable;
 
-/**
- * A repository function to delegate work done by skylark remote repositories.
- */
+/** A repository function to delegate work done by Starlark remote repositories. */
 public class SkylarkRepositoryFunction extends RepositoryFunction {
+  static final String SEMANTICS = "STARLARK_SEMANTICS";
 
-  /**
-   * An exception thrown when a dependency is missing to notify the SkyFunction from a skylark
-   * evaluation.
-   */
-  private static class SkylarkRepositoryMissingDependencyException extends EvalException {
+  private final DownloadManager downloadManager;
+  private double timeoutScaling = 1.0;
+  @Nullable private RepositoryRemoteExecutor repositoryRemoteExecutor;
 
-    SkylarkRepositoryMissingDependencyException() {
-      super(Location.BUILTIN, "Internal exception");
+  public SkylarkRepositoryFunction(DownloadManager downloadManager) {
+    this.downloadManager = downloadManager;
+  }
+
+  public void setTimeoutScaling(double timeoutScaling) {
+    this.timeoutScaling = timeoutScaling;
+  }
+
+  static String describeSemantics(StarlarkSemantics semantics) {
+    // Here we use the hash code provided by AutoValue. This is unique, as long
+    // as the number of bits in the StarlarkSemantics is small enough. We will have to
+    // move to a longer description once the number of flags grows too large.
+    return "" + semantics.hashCode();
+  }
+
+  @Override
+  protected boolean verifySemanticsMarkerData(Map<String, String> markerData, Environment env)
+      throws InterruptedException {
+    StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
+    if (starlarkSemantics == null) {
+      // As it is a precomputed value, it should already be available. If not, returning
+      // false is the safe thing to do.
+      return false;
     }
-  }
-
-  /**
-   * Skylark repository context functions can use this function to notify the
-   * SkylarkRepositoryFunction that a dependency was missing and the evaluation of the function must
-   * be restarted.
-   */
-  static void restart() throws EvalException {
-    throw new SkylarkRepositoryMissingDependencyException();
-  }
-
-  private CommandEnvironment commandEnvironment = null;
-
-  public void setCommandEnvironment(CommandEnvironment commandEnvironment) {
-    this.commandEnvironment = commandEnvironment;
-  }
-
-  private Map<String, String> getClientEnvironment() {
-    return commandEnvironment != null
-        ? commandEnvironment.getClientEnv()
-        : ImmutableMap.<String, String>of();
+    return describeSemantics(starlarkSemantics).equals(markerData.get(SEMANTICS));
   }
 
   @Nullable
   @Override
-  public SkyValue fetch(Rule rule, Path outputDirectory, Environment env)
-      throws SkyFunctionException, InterruptedException {
-    BaseFunction function = rule.getRuleClassObject().getConfiguredTargetFunction();
-    try (Mutability mutability = Mutability.create("skylark repository")) {
-      com.google.devtools.build.lib.syntax.Environment buildEnv =
-          com.google.devtools.build.lib.syntax.Environment.builder(mutability)
-              .setGlobals(rule.getRuleClassObject().getRuleDefinitionEnvironment().getGlobals())
-              .setSkylark()
-              .setEventHandler(env.getListener())
-              .build();
-      SkylarkRepositoryContext skylarkRepositoryContext =
-          new SkylarkRepositoryContext(rule, outputDirectory, env, getClientEnvironment());
+  public RepositoryDirectoryValue.Builder fetch(
+      Rule rule,
+      Path outputDirectory,
+      BlazeDirectories directories,
+      Environment env,
+      Map<String, String> markerData,
+      SkyKey key)
+      throws RepositoryFunctionException, InterruptedException {
 
-      // This has side-effect, we don't care about the output.
-      // Also we do a lot of stuff in there, maybe blocking operations and we should certainly make
-      // it possible to return null and not block but it doesn't seem to be easy with Skylark
-      // structure as it is.
-      Object retValue =
-          function.call(
-              ImmutableList.<Object>of(skylarkRepositoryContext),
-              ImmutableMap.<String, Object>of(),
-              null,
-              buildEnv);
-      if (retValue != Runtime.NONE) {
-        throw new RepositoryFunctionException(
-            new EvalException(
-                rule.getLocation(),
-                "Call to repository rule "
-                    + rule.getName()
-                    + " returned a non-None value, None expected."),
-            Transience.PERSISTENT);
-      }
-    } catch (EvalException e) {
-      if (e.getCause() instanceof SkylarkRepositoryMissingDependencyException) {
-        // A dependency is missing, cleanup and returns null
-        try {
-          if (outputDirectory.exists()) {
-            FileSystemUtils.deleteTree(outputDirectory);
-          }
-        } catch (IOException e1) {
-          throw new RepositoryFunctionException(e1, Transience.TRANSIENT);
-        }
-        return null;
-      }
-      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
+    String defInfo = RepositoryResolvedEvent.getRuleDefinitionInformation(rule);
+    env.getListener().post(new SkylarkRepositoryDefinitionLocationEvent(rule.getName(), defInfo));
+
+    StarlarkCallable function = rule.getRuleClassObject().getConfiguredTargetFunction();
+    if (declareEnvironmentDependencies(markerData, env, getEnviron(rule)) == null) {
+      return null;
     }
+    StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
+    if (env.valuesMissing()) {
+      return null;
+    }
+    markerData.put(SEMANTICS, describeSemantics(starlarkSemantics));
 
-    FileValue repositoryValue = getRepositoryDirectory(outputDirectory, env);
-    if (repositoryValue == null) {
-      // TODO(bazel-team): If this returns null, we unnecessarily recreate the symlink above on the
-      // second execution.
+    Set<String> verificationRules =
+        RepositoryDelegatorFunction.OUTPUT_VERIFICATION_REPOSITORY_RULES.get(env);
+    if (env.valuesMissing()) {
+      return null;
+    }
+    ResolvedHashesValue resolvedHashesValue =
+        (ResolvedHashesValue) env.getValue(ResolvedHashesValue.key());
+    if (env.valuesMissing()) {
+      return null;
+    }
+    Map<String, String> resolvedHashes =
+        Preconditions.checkNotNull(resolvedHashesValue).getHashes();
+
+    PathPackageLocator packageLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
+    if (env.valuesMissing()) {
       return null;
     }
 
-    if (!repositoryValue.isDirectory()) {
+    BlacklistedPackagePrefixesValue blacklistedPackagesValue =
+        (BlacklistedPackagePrefixesValue) env.getValue(BlacklistedPackagePrefixesValue.key());
+    if (env.valuesMissing()) {
+      return null;
+    }
+    ImmutableSet<PathFragment> blacklistedPatterns =
+        Preconditions.checkNotNull(blacklistedPackagesValue).getPatterns();
+
+    try (Mutability mutability = Mutability.create("Starlark repository")) {
+      StarlarkThread thread =
+          StarlarkThread.builder(mutability)
+              .setSemantics(starlarkSemantics)
+              .build();
+      thread.setPrintHandler(Event.makeDebugPrintHandler(env.getListener()));
+
+      // The fetch phase does not need the tools repository
+      // or the fragment map because it happens before analysis.
+      new BazelStarlarkContext(
+              BazelStarlarkContext.Phase.LOADING, // ("fetch")
+              /*toolsRepository=*/ null,
+              /*fragmentNameToClass=*/ null,
+              rule.getPackage().getRepositoryMapping(),
+              new SymbolGenerator<>(key),
+              /*analysisRuleLabel=*/ null)
+          .storeInThread(thread);
+
+      SkylarkRepositoryContext skylarkRepositoryContext =
+          new SkylarkRepositoryContext(
+              rule,
+              packageLocator,
+              outputDirectory,
+              blacklistedPatterns,
+              env,
+              clientEnvironment,
+              downloadManager,
+              directories.getEmbeddedBinariesRoot(),
+              timeoutScaling,
+              markerData,
+              starlarkSemantics,
+              repositoryRemoteExecutor);
+
+      if (skylarkRepositoryContext.isRemotable()) {
+        // If a rule is declared remotable then invalidate it if remote execution gets
+        // enabled or disabled.
+        PrecomputedValue.REMOTE_EXECUTION_ENABLED.get(env);
+      }
+
+      // Since restarting a repository function can be really expensive, we first ensure that
+      // all label-arguments can be resolved to paths.
+      try {
+        skylarkRepositoryContext.enforceLabelAttributes();
+      } catch (RepositoryMissingDependencyException e) {
+        // Missing values are expected; just restart before we actually start the rule
+        return null;
+      } catch (EvalException e) {
+        // EvalExceptions indicate labels not referring to existing files. This is fine,
+        // as long as they are never resolved to files in the execution of the rule; we allow
+        // non-strict rules. So now we have to start evaluating the actual rule, even if that
+        // means the rule might get restarted for legitimate reasons.
+      }
+
+      // This rule is mainly executed for its side effect. Nevertheless, the return value is
+      // of importance, as it provides information on how the call has to be modified to be a
+      // reproducible rule.
+      //
+      // Also we do a lot of stuff in there, maybe blocking operations and we should certainly make
+      // it possible to return null and not block but it doesn't seem to be easy with Skylark
+      // structure as it is.
+      Object result;
+      try (SilentCloseable c =
+          Profiler.instance()
+              .profile(ProfilerTask.STARLARK_REPOSITORY_FN, rule.getLabel().toString())) {
+        result =
+            Starlark.call(
+                thread,
+                function,
+                /*args=*/ ImmutableList.of(skylarkRepositoryContext),
+                /*kwargs=*/ ImmutableMap.of());
+      }
+      RepositoryResolvedEvent resolved =
+          new RepositoryResolvedEvent(
+              rule, skylarkRepositoryContext.getAttr(), outputDirectory, result);
+      if (resolved.isNewInformationReturned()) {
+        env.getListener().handle(Event.debug(resolved.getMessage()));
+        env.getListener().handle(Event.debug(defInfo));
+      }
+
+      String ruleClass =
+          rule.getRuleClassObject().getRuleDefinitionEnvironmentLabel() + "%" + rule.getRuleClass();
+      if (verificationRules.contains(ruleClass)) {
+        String expectedHash = resolvedHashes.get(rule.getName());
+        if (expectedHash != null) {
+          String actualHash = resolved.getDirectoryDigest();
+          if (!expectedHash.equals(actualHash)) {
+            throw new RepositoryFunctionException(
+                new IOException(
+                    rule + " failed to create a directory with expected hash " + expectedHash),
+                Transience.PERSISTENT);
+          }
+        }
+      }
+      env.getListener().post(resolved);
+    } catch (RepositoryMissingDependencyException e) {
+      // A dependency is missing, cleanup and returns null
+      try {
+        if (outputDirectory.exists()) {
+          outputDirectory.deleteTree();
+        }
+      } catch (IOException e1) {
+        throw new RepositoryFunctionException(e1, Transience.TRANSIENT);
+      }
+      return null;
+    } catch (EvalException e) {
+      env.getListener()
+          .handle(
+              Event.error(
+                  "An error occurred during the fetch of repository '"
+                      + rule.getName()
+                      + "':\n   "
+                      + e.getMessage()));
+      env.getListener()
+          .handle(Event.info(RepositoryResolvedEvent.getRuleDefinitionInformation(rule)));
+
+      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
+    }
+
+    if (!outputDirectory.isDirectory()) {
       throw new RepositoryFunctionException(
           new IOException(rule + " must create a directory"), Transience.TRANSIENT);
     }
 
-    return RepositoryDirectoryValue.create(outputDirectory);
+    if (!WorkspaceFileHelper.doesWorkspaceFileExistUnder(outputDirectory)) {
+      createWorkspaceFile(outputDirectory, rule.getTargetKind(), rule.getName());
+    }
+
+    return RepositoryDirectoryValue.builder().setPath(outputDirectory);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Iterable<String> getEnviron(Rule rule) {
+    return (Iterable<String>) rule.getAttributeContainer().getAttr("$environ");
   }
 
   @Override
@@ -146,7 +280,27 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
   }
 
   @Override
+  protected boolean isConfigure(Rule rule) {
+    return (Boolean) rule.getAttributeContainer().getAttr("$configure");
+  }
+
+  /**
+   * Static method to determine if for a starlark repository rule {@code isConfigure} holds true. It
+   * also checks that the rule is indeed a Starlark rule so that this class is the appropriate
+   * handler for the given rule. As, however, only Starklark rules can be configure rules, this
+   * method can also be used as a universal check.
+   */
+  public static boolean isConfigureRule(Rule rule) {
+    return rule.getRuleClassObject().isStarlark()
+        && ((Boolean) rule.getAttributeContainer().getAttr("$configure"));
+  }
+
+  @Override
   public Class<? extends RuleDefinition> getRuleDefinition() {
     return null; // unused so safe to return null
+  }
+
+  public void setRepositoryRemoteExecutor(RepositoryRemoteExecutor repositoryRemoteExecutor) {
+    this.repositoryRemoteExecutor = repositoryRemoteExecutor;
   }
 }

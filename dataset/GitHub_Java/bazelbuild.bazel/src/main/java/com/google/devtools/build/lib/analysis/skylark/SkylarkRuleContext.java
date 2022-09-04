@@ -60,7 +60,7 @@ import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
-import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.StarlarkImplicitOutputsFunction;
+import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Provider;
@@ -128,7 +128,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
 
   private final boolean isForAspect;
 
-  private final StarlarkActionFactory actionFactory;
+  private final SkylarkActionFactory actionFactory;
 
   // The fields below intended to be final except that they can be cleared by calling `nullify()`
   // when the object becomes featureless.
@@ -159,7 +159,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       @Nullable AspectDescriptor aspectDescriptor,
       StarlarkSemantics starlarkSemantics)
       throws EvalException, InterruptedException, RuleErrorException {
-    this.actionFactory = new StarlarkActionFactory(this, starlarkSemantics, ruleContext);
+    this.actionFactory = new SkylarkActionFactory(this, starlarkSemantics, ruleContext);
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
     this.ruleLabelCanonicalName = ruleContext.getLabel().getCanonicalForm();
     this.fragments = new FragmentCollection(ruleContext, NoTransition.INSTANCE);
@@ -175,9 +175,9 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       ImplicitOutputsFunction implicitOutputsFunction =
           ruleContext.getRule().getImplicitOutputsFunction();
 
-      if (implicitOutputsFunction instanceof StarlarkImplicitOutputsFunction) {
-        StarlarkImplicitOutputsFunction func =
-            (StarlarkImplicitOutputsFunction) implicitOutputsFunction;
+      if (implicitOutputsFunction instanceof SkylarkImplicitOutputsFunction) {
+        SkylarkImplicitOutputsFunction func =
+            (SkylarkImplicitOutputsFunction) implicitOutputsFunction;
         for (Map.Entry<String, String> entry :
             func.calculateOutputs(
                     ruleContext.getAnalysisEnvironment().getEventHandler(),
@@ -494,7 +494,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
   }
 
   @Override
-  public StarlarkActionFactory actions() {
+  public SkylarkActionFactory actions() {
     return actionFactory;
   }
 
@@ -618,7 +618,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
           ruleContext.getConfiguration(), ruleContext.getLabel(), ruleContext.isTestTarget());
     }
     TransitiveInfoCollection target = (TransitiveInfoCollection) targetUnchecked;
-    return (target.get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR) != null)
+    return (target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR) != null)
         && InstrumentedFilesCollector.shouldIncludeLocalSources(config, target);
   }
 

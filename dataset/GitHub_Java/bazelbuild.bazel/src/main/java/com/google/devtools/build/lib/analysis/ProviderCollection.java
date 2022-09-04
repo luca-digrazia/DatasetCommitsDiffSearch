@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
 import javax.annotation.Nullable;
 
 /**
- * Interface to mark classes that could contain transitive information added using the Starlark
+ * Interface to mark classes that could contain transitive information added using the Skylark
  * framework.
  */
 public interface ProviderCollection {

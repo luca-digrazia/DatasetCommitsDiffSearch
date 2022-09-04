@@ -1482,7 +1482,8 @@ public final class Attribute implements Comparable<Attribute> {
       try {
         return type.cast((result == Starlark.NONE) ? type.getDefaultValue() : result);
       } catch (ClassCastException ex) {
-        throw Starlark.errorf("expected '%s', but got '%s'", type, Starlark.type(result));
+        throw Starlark.errorf(
+            "expected '%s', but got '%s'", type, EvalUtils.getDataTypeName(result, true));
       }
     }
 

@@ -20,44 +20,46 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
-/** A Skylark value that is a result of an 'aspect(..)' function call. */
+/** A Starlark value that is a result of an 'aspect(..)' function call. */
+@AutoCodec
 public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
-  private final BaseFunction implementation;
+  private final StarlarkCallable implementation;
   private final ImmutableList<String> attributeAspects;
   private final ImmutableList<Attribute> attributes;
-  private final ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> requiredAspectProviders;
-  private final ImmutableSet<SkylarkProviderIdentifier> provides;
+  private final ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> requiredAspectProviders;
+  private final ImmutableSet<StarlarkProviderIdentifier> provides;
   private final ImmutableSet<String> paramAttributes;
   private final ImmutableSet<String> fragments;
   private final ConfigurationTransition hostTransition;
   private final ImmutableSet<String> hostFragments;
   private final ImmutableList<Label> requiredToolchains;
+  private final boolean applyToGeneratingRules;
 
-  private final Environment funcallEnv;
   private SkylarkAspectClass aspectClass;
 
   public SkylarkDefinedAspect(
-      BaseFunction implementation,
+      StarlarkCallable implementation,
       ImmutableList<String> attributeAspects,
       ImmutableList<Attribute> attributes,
-      ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> requiredAspectProviders,
-      ImmutableSet<SkylarkProviderIdentifier> provides,
+      ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> requiredAspectProviders,
+      ImmutableSet<StarlarkProviderIdentifier> provides,
       ImmutableSet<String> paramAttributes,
       ImmutableSet<String> fragments,
       // The host transition is in lib.analysis, so we can't reference it directly here.
       ConfigurationTransition hostTransition,
       ImmutableSet<String> hostFragments,
       ImmutableList<Label> requiredToolchains,
-      Environment funcallEnv) {
+      boolean applyToGeneratingRules) {
     this.implementation = implementation;
     this.attributeAspects = attributeAspects;
     this.attributes = attributes;
@@ -68,19 +70,47 @@ public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
     this.hostTransition = hostTransition;
     this.hostFragments = hostFragments;
     this.requiredToolchains = requiredToolchains;
-    this.funcallEnv = funcallEnv;
+    this.applyToGeneratingRules = applyToGeneratingRules;
   }
 
-  public BaseFunction getImplementation() {
+  /** Constructor for post export reconstruction for serialization. */
+  @VisibleForSerialization
+  @AutoCodec.Instantiator
+  SkylarkDefinedAspect(
+      StarlarkCallable implementation,
+      ImmutableList<String> attributeAspects,
+      ImmutableList<Attribute> attributes,
+      ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> requiredAspectProviders,
+      ImmutableSet<StarlarkProviderIdentifier> provides,
+      ImmutableSet<String> paramAttributes,
+      ImmutableSet<String> fragments,
+      // The host transition is in lib.analysis, so we can't reference it directly here.
+      ConfigurationTransition hostTransition,
+      ImmutableSet<String> hostFragments,
+      ImmutableList<Label> requiredToolchains,
+      boolean applyToGeneratingRules,
+      SkylarkAspectClass aspectClass) {
+    this(
+        implementation,
+        attributeAspects,
+        attributes,
+        requiredAspectProviders,
+        provides,
+        paramAttributes,
+        fragments,
+        hostTransition,
+        hostFragments,
+        requiredToolchains,
+        applyToGeneratingRules);
+    this.aspectClass = aspectClass;
+  }
+
+  public StarlarkCallable getImplementation() {
     return implementation;
   }
 
   public ImmutableList<String> getAttributeAspects() {
     return attributeAspects;
-  }
-
-  public Environment getFuncallEnv() {
-    return funcallEnv;
   }
 
   public ImmutableList<Attribute> getAttributes() {
@@ -93,7 +123,7 @@ public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
   }
 
   @Override
-  public void repr(SkylarkPrinter printer) {
+  public void repr(Printer printer) {
     printer.append("<aspect>");
   }
 
@@ -147,15 +177,16 @@ public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
       builder.add(attr);
     }
     builder.requireAspectsWithProviders(requiredAspectProviders);
-    ImmutableList.Builder<SkylarkProviderIdentifier> advertisedSkylarkProviders =
+    ImmutableList.Builder<StarlarkProviderIdentifier> advertisedSkylarkProviders =
         ImmutableList.builder();
-    for (SkylarkProviderIdentifier provider : provides) {
+    for (StarlarkProviderIdentifier provider : provides) {
       advertisedSkylarkProviders.add(provider);
     }
     builder.advertiseProvider(advertisedSkylarkProviders.build());
     builder.requiresConfigurationFragmentsBySkylarkModuleName(fragments);
     builder.requiresConfigurationFragmentsBySkylarkModuleName(hostTransition, hostFragments);
     builder.addRequiredToolchains(requiredToolchains);
+    builder.applyToGeneratingRules(applyToGeneratingRules);
     return builder.build();
   }
 
@@ -187,7 +218,11 @@ public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
                     getName(), rule.getTargetKind(), param));
           }
           if (ruleAttr != null && ruleAttr.getType() == aspectAttr.getType()) {
-            builder.addAttribute(param, (String) ruleAttrs.get(param, ruleAttr.getType()));
+            // If the attribute has a select() (which aspect attributes don't yet support), the
+            // error gets reported in RuleClass.checkAspectAllowedValues.
+            if (!ruleAttrs.isConfigurable(param)) {
+              builder.addAttribute(param, (String) ruleAttrs.get(param, ruleAttr.getType()));
+            }
           }
         }
       }
@@ -200,12 +235,49 @@ public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
   }
 
   @Override
-  public void attachToAttribute(Attribute.Builder<?> attrBuilder, Location loc)
-      throws EvalException {
+  public void attachToAttribute(Attribute.Builder<?> attrBuilder) throws EvalException {
     if (!isExported()) {
-      throw new EvalException(
-          loc, "Aspects should be top-level values in extension files that define them.");
+      throw Starlark.errorf(
+          "Aspects should be top-level values in extension files that define them.");
     }
-    attrBuilder.aspect(this, loc);
+    attrBuilder.aspect(this);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    SkylarkDefinedAspect that = (SkylarkDefinedAspect) o;
+    return Objects.equals(implementation, that.implementation)
+        && Objects.equals(attributeAspects, that.attributeAspects)
+        && Objects.equals(attributes, that.attributes)
+        && Objects.equals(requiredAspectProviders, that.requiredAspectProviders)
+        && Objects.equals(provides, that.provides)
+        && Objects.equals(paramAttributes, that.paramAttributes)
+        && Objects.equals(fragments, that.fragments)
+        && Objects.equals(hostTransition, that.hostTransition)
+        && Objects.equals(hostFragments, that.hostFragments)
+        && Objects.equals(requiredToolchains, that.requiredToolchains)
+        && Objects.equals(aspectClass, that.aspectClass);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        implementation,
+        attributeAspects,
+        attributes,
+        requiredAspectProviders,
+        provides,
+        paramAttributes,
+        fragments,
+        hostTransition,
+        hostFragments,
+        requiredToolchains,
+        aspectClass);
   }
 }
