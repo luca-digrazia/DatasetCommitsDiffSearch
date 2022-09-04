@@ -57,7 +57,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import javax.annotation.Nullable;
 
 /** A helper class for analyzing a Python configured target. */
 public final class PyCommon {
@@ -71,15 +70,17 @@ public final class PyCommon {
    *
    * <p>It is expected that both attributes are defined, string-typed, and default to {@link
    * PythonVersion#_INTERNAL_SENTINEL}. The returned version is the value of {@code python_version}
-   * if it is not the sentinel, then {@code default_python_version} if it is not the sentinel,
-   * otherwise null (when both attributes are sentinels). In all cases the return value is either a
-   * target version value ({@code PY2} or {@code PY3}) or null.
+   * if it is not the sentinel, then {@code default_python_version} if it is not the sentinel, then
+   * finally {@code default}. In all cases the return value is a target version value (either {@code
+   * PY2} or {@code PY3}).
    *
    * @throws IllegalArgumentException if the attributes are not present, not string-typed, or not
-   *     parsable as target {@link PythonVersion} values or as the sentinel value
+   *     parsable as target {@link PythonVersion} values or as the sentinel value; or if {@code
+   *     default} is not a target version value
    */
-  @Nullable
-  public static PythonVersion readPythonVersionFromAttributes(AttributeMap attrs) {
+  public static PythonVersion readPythonVersionFromAttributes(
+      AttributeMap attrs, PythonVersion defaultVersion) {
+    Preconditions.checkArgument(defaultVersion.isTargetValue());
     PythonVersion pythonVersionAttr =
         PythonVersion.parseTargetOrSentinelValue(attrs.get(PYTHON_VERSION_ATTRIBUTE, Type.STRING));
     PythonVersion defaultPythonVersionAttr =
@@ -90,7 +91,7 @@ public final class PyCommon {
     } else if (defaultPythonVersionAttr != PythonVersion._INTERNAL_SENTINEL) {
       return defaultPythonVersionAttr;
     } else {
-      return null;
+      return defaultVersion;
     }
   }
 
@@ -157,7 +158,7 @@ public final class PyCommon {
    *
    * <p>Null if no 2to3 conversion is required.
    */
-  @Nullable private final Map<PathFragment, Artifact> convertedFiles;
+  private final Map<PathFragment, Artifact> convertedFiles;
 
   private Artifact executable = null;
 
@@ -278,8 +279,8 @@ public final class PyCommon {
       try {
         NestedSet<String> imports = PyProviderUtils.getImports(dep);
         if (!builder.getOrder().isCompatible(imports.getOrder())) {
-          // TODO(brandjon): We should make order an invariant of the Python provider, and move this
-          // check into PyInfo/PyStructUtils.
+          // TODO(brandjon): We should make order an invariant of the Python provider. Then once we
+          /// remove PythonImportsProvider we can move this check into PyProvider/PyStructUtils.
           ruleContext.ruleError(
               getOrderErrorMessage(PyStructUtils.IMPORTS, builder.getOrder(), imports.getOrder()));
         } else {
@@ -344,7 +345,6 @@ public final class PyCommon {
    */
   // TODO(#1393): 2to3 conversion doesn't work in Bazel and the attempt to invoke it for Bazel
   // should be removed / factored away into PythonSemantics.
-  @Nullable
   private static Map<PathFragment, Artifact> makeAndInitConvertedFiles(
       RuleContext ruleContext, PythonVersion version, PythonVersion sourcesVersion) {
     if (sourcesVersion == PythonVersion.PY2 && version == PythonVersion.PY3) {
@@ -361,7 +361,7 @@ public final class PyCommon {
 
   /**
    * Under the old version semantics ({@code
-   * --incompatible_allow_python_version_transitions=false}), checks that the {@code srcs_version}
+   * --experimental_allow_python_version_transitions=false}), checks that the {@code srcs_version}
    * attribute is compatible with the Python version as determined by the configuration.
    *
    * <p>A failure is reported as a rule error.
@@ -438,7 +438,7 @@ public final class PyCommon {
       ruleContext.attributeError(
           DEFAULT_PYTHON_VERSION_ATTRIBUTE,
           "the 'default_python_version' attribute is disabled by the "
-              + "'--incompatible_remove_old_python_version_api' flag");
+              + "'--experimental_remove_old_python_version_api' flag");
     }
   }
 
@@ -464,7 +464,7 @@ public final class PyCommon {
   }
 
   /**
-   * Under the new version semantics ({@code --incompatible_allow_python_version_transitions=true}),
+   * Under the new version semantics ({@code --experimental_allow_python_version_transitions=true}),
    * if the Python version (as determined by the configuration) is inconsistent with {@link
    * #hasPy2OnlySources} or {@link #hasPy3OnlySources}, emits a {@link FailAction} that "generates"
    * the executable.
@@ -586,7 +586,9 @@ public final class PyCommon {
   }
 
   public void addCommonTransitiveInfoProviders(
-      RuleConfiguredTargetBuilder builder, NestedSet<Artifact> filesToBuild) {
+      RuleConfiguredTargetBuilder builder,
+      NestedSet<Artifact> filesToBuild,
+      NestedSet<String> imports) {
 
     boolean createLegacyPyProvider =
         !ruleContext.getFragment(PythonConfiguration.class).disallowLegacyPyProvider();
@@ -761,13 +763,19 @@ public final class PyCommon {
    * trigger an execution-time failure. See {@link
    * #maybeCreateFailActionDueToTransitiveSourcesVersion}.
    */
-  public Artifact createExecutable(CcInfo ccInfo, Runfiles.Builder defaultRunfilesBuilder)
+  public Artifact createExecutable(
+      CcInfo ccInfo, NestedSet<String> givenImports, Runfiles.Builder defaultRunfilesBuilder)
       throws InterruptedException, RuleErrorException {
     boolean failed = maybeCreateFailActionDueToTransitiveSourcesVersion();
     if (failed) {
       return executable;
     } else {
-      return semantics.createExecutable(ruleContext, this, ccInfo, defaultRunfilesBuilder);
+      // TODO(#7054): We pass imports as an arg instead of taking them from the PyCommon field
+      // because the imports logic is a little inconsistent, and passing it explicitly may help
+      // avoid creating bugs that make the situation worse. We can eliminate this arg when we
+      // straighten up the other imports logic.
+      return semantics.createExecutable(
+          ruleContext, this, ccInfo, givenImports, defaultRunfilesBuilder);
     }
   }
 
