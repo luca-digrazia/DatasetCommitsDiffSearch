@@ -52,7 +52,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 @Path("/system/inputs/{inputId}/extractors")
 public class ExtractorsResource extends RestResource {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ExtractorsResource.class);
+    private static final Logger LOG = LoggerFactory.getLogger(InputsResource.class);
 
     @POST
     @Timed
@@ -211,9 +211,6 @@ public class ExtractorsResource extends RestResource {
         map.put("extractor_config", extractor.getExtractorConfig());
         map.put("creator_user_id", extractor.getCreatorUserId());
         map.put("converters", extractor.converterConfigMap());
-
-        map.put("exceptions", extractor.getExceptionCount());
-        map.put("converter_exceptions", extractor.getConverterExceptionCount());
 
         Map<String, Object> metrics = Maps.newHashMap();
         metrics.put("total",  buildMetricsMap(core.metrics().getTimers().get(extractor.getTotalTimerName())));
