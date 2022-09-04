@@ -17,6 +17,8 @@ package com.google.devtools.build.lib.util;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
+import com.google.devtools.common.options.Converters;
+import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
 import com.google.devtools.common.options.ParsedOptionDescription;
 import java.util.ArrayList;
@@ -41,7 +43,23 @@ public final class OptionsUtils {
       if (result.length() != 0) {
         result.append(' ');
       }
-      result.append(option.getCanonicalFormWithValueEscaper(ShellEscaper::escapeString));
+      String value = option.getUnconvertedValue();
+      if (option.isBooleanOption()) {
+        boolean isEnabled = false;
+        try {
+          isEnabled = new Converters.BooleanConverter().convert(value);
+        } catch (OptionsParsingException e) {
+          throw new RuntimeException("Unexpected parsing exception", e);
+        }
+        result
+            .append(isEnabled ? "--" : "--no")
+            .append(option.getOptionDefinition().getOptionName());
+      } else {
+        result.append("--").append(option.getOptionDefinition().getOptionName());
+        if (value != null) { // Can be null for Void options.
+          result.append("=").append(ShellEscaper.escapeString(value));
+        }
+      }
     }
     return result.toString();
   }
@@ -64,7 +82,22 @@ public final class OptionsUtils {
       if (option.isHidden()) {
         continue;
       }
-      builder.add(option.getCanonicalForm());
+      String value = option.getUnconvertedValue();
+      if (option.isBooleanOption()) {
+        boolean isEnabled = false;
+        try {
+          isEnabled = new Converters.BooleanConverter().convert(value);
+        } catch (OptionsParsingException e) {
+          throw new RuntimeException("Unexpected parsing exception", e);
+        }
+        builder.add((isEnabled ? "--" : "--no") + option.getOptionDefinition().getOptionName());
+      } else {
+        String optionString = "--" + option.getOptionDefinition().getOptionName();
+        if (value != null) { // Can be null for Void options.
+          optionString += "=" + value;
+        }
+        builder.add(optionString);
+      }
     }
     return builder.build();
   }
