@@ -110,15 +110,14 @@ public class RBFInterpolation {
         int n = x.length;
 
         if (rbf instanceof GaussianRadialBasis) {
-            DenseMatrix G = new ColumnMajorMatrix(n, n);
+            double[][] G = new double[n][];
             double[] rhs = new double[n];
             for (int i = 0; i < n; i++) {
+                G[i] = new double[i + 1];
                 double sum = 0.0;
                 for (int j = 0; j <= i; j++) {
-                    double r = rbf.f(Math.distance(x[i], x[j]));
-                    G.set(i, j, r);
-                    G.set(j, i, r);
-                    sum += 2 * r;
+                    G[i][j] = rbf.f(Math.distance(x[i], x[j]));
+                    sum += 2 * G[i][j];
                 }
 
                 if (normalized) {

@@ -16,7 +16,6 @@
 
 package smile.regression;
 
-import java.io.Serializable;
 import smile.math.Math;
 import smile.math.kernel.MercerKernel;
 import smile.math.matrix.CholeskyDecomposition;
@@ -67,8 +66,7 @@ import smile.math.matrix.LUDecomposition;
  * </ol>
  * @author Haifeng Li
  */
-public class GaussianProcessRegression <T> implements Regression<T>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class GaussianProcessRegression <T> implements Regression<T> {
 
     /**
      * The control points in the regression.
