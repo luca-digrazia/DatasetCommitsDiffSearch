@@ -2,11 +2,16 @@ package com.shuyu.gsyvideoplayer.video;
 
 import android.app.Activity;
 import android.content.Context;
+import android.media.AudioManager;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.model.GSYVideoModel;
+import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
@@ -118,7 +123,14 @@ public class ListGSYVideoPlayer extends StandardGSYVideoPlayer {
 
     @Override
     public void onAutoCompletion() {
-        if (playNext()) {
+        if (mPlayPosition < (mUriList.size() - 1)) {
+            mPlayPosition++;
+            GSYVideoModel gsyVideoModel = mUriList.get(mPlayPosition);
+            setUp(gsyVideoModel.getUrl(), mCache, mCachePath, gsyVideoModel.getTitle());
+            if (!TextUtils.isEmpty(gsyVideoModel.getTitle())) {
+                mTitleTextView.setText(gsyVideoModel.getTitle());
+            }
+            startPlayLogic();
             return;
         }
         super.onAutoCompletion();
@@ -155,23 +167,5 @@ public class ListGSYVideoPlayer extends StandardGSYVideoPlayer {
                 ((ENDownloadView) mLoadingProgressBar).start();
             }
         }
-    }
-
-    /**
-     * 播放下一集
-     * @return true表示还有下一集
-     */
-    public boolean playNext() {
-        if (mPlayPosition < (mUriList.size() - 1)) {
-            mPlayPosition++;
-            GSYVideoModel gsyVideoModel = mUriList.get(mPlayPosition);
-            setUp(gsyVideoModel.getUrl(), mCache, mCachePath, gsyVideoModel.getTitle());
-            if (!TextUtils.isEmpty(gsyVideoModel.getTitle())) {
-                mTitleTextView.setText(gsyVideoModel.getTitle());
-            }
-            startPlayLogic();
-            return true;
-        }
-        return false;
     }
 }
