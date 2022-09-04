@@ -14,7 +14,7 @@
 
 package com.google.devtools.build.lib.packages;
 
-import static com.google.devtools.build.lib.syntax.Starlark.NONE;
+import static com.google.devtools.build.lib.syntax.Runtime.NONE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -261,12 +261,7 @@ public class WorkspaceFactory {
    */
   private static BuiltinFunction newRuleFunction(
       final RuleFactory ruleFactory, final String ruleClassName, final boolean allowOverride) {
-    return new BuiltinFunction(FunctionSignature.KWARGS) {
-      @Override
-      public String getName() {
-        return ruleClassName;
-      }
-
+    return new BuiltinFunction(ruleClassName, FunctionSignature.KWARGS) {
       public Object invoke(Map<String, Object> kwargs, Location loc, StarlarkThread thread)
           throws EvalException, InterruptedException {
         try {
@@ -357,19 +352,13 @@ public class WorkspaceFactory {
       ImmutableMap<String, Object> workspaceFunctions, String version) {
     ImmutableMap.Builder<String, Object> env = new ImmutableMap.Builder<>();
     Starlark.addMethods(env, new SkylarkNativeModule());
-    for (Map.Entry<String, Object> entry : workspaceFunctions.entrySet()) {
-      String name = entry.getKey();
-      if (name.startsWith("$")) {
-        // Skip "abstract" rules like "$go_rule".
-        continue;
-      }
-      // "workspace" is explicitly omitted from the native module,
-      // as it must only occur at the top of a WORKSPACE file.
+    for (Map.Entry<String, Object> function : workspaceFunctions.entrySet()) {
+      // "workspace" is explicitly omitted from the native module, as it must only occur at the
+      // top of a WORKSPACE file.
       // TODO(cparsons): Clean up separation between environments.
-      if (name.equals("workspace")) {
-        continue;
+      if (!function.getKey().equals("workspace")) {
+        env.put(function);
       }
-      env.put(entry);
     }
 
     env.put("bazel_version", version);

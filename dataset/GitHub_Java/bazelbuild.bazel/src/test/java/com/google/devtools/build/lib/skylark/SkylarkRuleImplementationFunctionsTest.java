@@ -61,10 +61,11 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -553,7 +554,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   private void checkEmptyAction(String namedArgs) throws Exception {
     assertThat(eval(String.format("ruleContext.actions.do_nothing(%s)", namedArgs)))
-        .isEqualTo(Starlark.NONE);
+        .isEqualTo(Runtime.NONE);
   }
 
   @Test
@@ -659,7 +660,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "  command='I got the $(HELLO) on a $(DAVE)', ",
         "  make_variables={'HELLO': 'World', 'DAVE': type('')})");
     @SuppressWarnings("unchecked")
-    List<String> argv = (List<String>) (List<?>) (StarlarkList) lookup("argv");
+    List<String> argv = (List<String>) (List<?>) (MutableList) lookup("argv");
     assertThat(argv).hasSize(3);
     assertMatches("argv[0]", "^.*/bash" + OsUtils.executableExtension() + "$", argv.get(0));
     assertThat(argv.get(1)).isEqualTo("-c");
@@ -673,7 +674,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "inputs, argv, input_manifests = ruleContext.resolve_command(",
         "   tools=ruleContext.attr.tools)");
     @SuppressWarnings("unchecked")
-    List<Artifact> inputs = (List<Artifact>) (List<?>) (StarlarkList) lookup("inputs");
+    List<Artifact> inputs = (List<Artifact>) (List<?>) (MutableList) lookup("inputs");
     assertArtifactFilenames(
         inputs,
         "mytool.sh",
@@ -701,7 +702,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "    attribute='cmd', expand_locations=True, label_dict=label_dict)",
         "inputs, argv, manifests = foo()");
     @SuppressWarnings("unchecked")
-    List<String> argv = (List<String>) (List<?>) (StarlarkList) lookup("argv");
+    List<String> argv = (List<String>) (List<?>) (MutableList) lookup("argv");
     assertThat(argv).hasSize(3);
     assertMatches("argv[0]", "^.*/bash" + OsUtils.executableExtension() + "$", argv.get(0));
     assertThat(argv.get(1)).isEqualTo("-c");
@@ -716,7 +717,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "inputs, argv, manifests = ruleContext.resolve_command(",
         "  execution_requirements={'requires-darwin': ''})");
     @SuppressWarnings("unchecked")
-    List<String> argv = (List<String>) (List<?>) (StarlarkList) lookup("argv");
+    List<String> argv = (List<String>) (List<?>) (MutableList) lookup("argv");
     assertMatches("argv[0]", "^/bin/bash$", argv.get(0));
   }
 
@@ -731,7 +732,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "    command=s)",
         "argv = foo()[1]");
     @SuppressWarnings("unchecked")
-    List<String> argv = (List<String>) (List<?>) (StarlarkList) lookup("argv");
+    List<String> argv = (List<String>) (List<?>) (MutableList) lookup("argv");
     assertThat(argv).hasSize(2);
     assertMatches("argv[0]", "^.*/bash" + OsUtils.executableExtension() + "$", argv.get(0));
     assertMatches("argv[1]", "^.*/resolve_me[.][a-z0-9]+[.]script[.]sh$", argv.get(1));
@@ -962,7 +963,8 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   @Test
   public void testNsetContainsList() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
-    checkEvalErrorContains("unhashable type: 'list'", "depset([[ruleContext.files.srcs]])");
+    checkEvalErrorContains(
+        "depsets cannot contain items of type 'list'", "depset([[ruleContext.files.srcs]])");
   }
 
   @Test
@@ -1074,7 +1076,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
     assertThat(myInfo.getValue("rule_files")).isInstanceOf(SkylarkNestedSet.class);
     assertThat(myInfo.getValue("rule_files_to_run")).isInstanceOf(FilesToRunProvider.class);
-    assertThat(myInfo.getValue("rule_file_executable")).isEqualTo(Starlark.NONE);
+    assertThat(myInfo.getValue("rule_file_executable")).isEqualTo(Runtime.NONE);
   }
 
   @Test
@@ -1822,7 +1824,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testEmptyLabelListTypeAttrInCtx() throws Exception {
     setRuleContext(createRuleContext("//foo:baz"));
     Object result = eval("ruleContext.attr.srcs");
-    assertThat(result).isEqualTo(StarlarkList.empty());
+    assertThat(result).isEqualTo(MutableList.empty());
   }
 
   @Test
@@ -2526,7 +2528,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "  return [MyInfo(dep_arg = args)]",
         "dep_rule = rule(implementation = _dep_impl)");
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:main"));
-    assertThat(e).hasMessageThat().contains("trying to mutate a frozen object");
+    assertThat(e).hasMessageThat().contains("cannot modify frozen value");
   }
 
   @Test
@@ -2911,7 +2913,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "directory = ruleContext.actions.declare_directory('dir')",
         "def _short_path(f): return f.short_path", // For easier assertions
         "args.add_all([directory], map_each=_short_path)");
-    Sequence<?> result = (Sequence<?>) eval("args, directory");
+    SkylarkList<?> result = (SkylarkList<?>) eval("args, directory");
     Args args = (Args) result.get(0);
     Artifact directory = (Artifact) result.get(1);
     CommandLine commandLine = args.build();
@@ -2938,7 +2940,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "def _short_path(f): return f.short_path", // For easier assertions
         "args.add_all([directory], map_each=_short_path, expand_directories=True)",
         "args.add_all([directory], map_each=_short_path, expand_directories=False)");
-    Sequence<?> result = (Sequence<?>) eval("args, directory");
+    SkylarkList<?> result = (SkylarkList<?>) eval("args, directory");
     Args args = (Args) result.get(0);
     Artifact directory = (Artifact) result.get(1);
     CommandLine commandLine = args.build();
@@ -2973,7 +2975,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "args.add_all([directory])",
         "params = ruleContext.actions.declare_file('params')",
         "ruleContext.actions.write(params, args)");
-    Sequence<?> result = (Sequence<?>) eval("params, directory");
+    SkylarkList<?> result = (SkylarkList<?>) eval("params, directory");
     Artifact params = (Artifact) result.get(0);
     Artifact directory = (Artifact) result.get(1);
     ActionAnalysisMetadata action =

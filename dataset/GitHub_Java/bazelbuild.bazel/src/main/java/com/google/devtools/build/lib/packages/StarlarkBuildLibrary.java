@@ -27,8 +27,8 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.NoneType;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.List;
@@ -69,14 +69,14 @@ class StarlarkBuildLibrary {
         // Both parameter below are lists of label designators
         @Param(
             name = "environments",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = Object.class,
             positional = false,
             named = true,
             doc = "A list of Labels for the environments to be grouped, from the same package."),
         @Param(
             name = "defaults",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = Object.class,
             positional = false,
             named = true,
@@ -85,14 +85,16 @@ class StarlarkBuildLibrary {
       // Not documented by docgen, as this is only available in BUILD files.
       // TODO(cparsons): Devise a solution to document BUILD functions.
       documented = false,
+      useLocation = true,
       useStarlarkThread = true)
-  public NoneType environmentGroup(
+  public Runtime.NoneType environmentGroup(
       String name,
-      Sequence<?> environmentsList, // <Label>
-      Sequence<?> defaultsList, // <Label>
+      SkylarkList<?> environmentsList, // <Label>
+      SkylarkList<?> defaultsList, // <Label>
+      Location loc,
       StarlarkThread thread)
       throws EvalException {
-    PackageContext context = getContext(thread);
+    PackageContext context = getContext(thread, loc);
     List<Label> environments =
         BuildType.LABEL_LIST.convert(
             environmentsList,
@@ -103,17 +105,18 @@ class StarlarkBuildLibrary {
             defaultsList, "'environment_group argument'", context.pkgBuilder.getBuildFileLabel());
 
     if (environments.isEmpty()) {
-      throw Starlark.errorf("environment group %s must contain at least one environment", name);
+      throw new EvalException(
+          loc, "environment group " + name + " must contain at least one environment");
     }
     try {
-      Location loc = thread.getCallerLocation();
       context.pkgBuilder.addEnvironmentGroup(
           name, environments, defaults, context.eventHandler, loc);
-      return Starlark.NONE;
+      return Runtime.NONE;
     } catch (LabelSyntaxException e) {
-      throw Starlark.errorf("environment group has invalid name: %s: %s", name, e.getMessage());
+      throw new EvalException(
+          loc, "environment group has invalid name: " + name + ": " + e.getMessage());
     } catch (Package.NameConflictException e) {
-      throw Starlark.errorf("%s", e.getMessage());
+      throw new EvalException(loc, e.getMessage());
     }
   }
 
@@ -123,27 +126,29 @@ class StarlarkBuildLibrary {
       parameters = {
         @Param(
             name = "license_strings",
-            type = Sequence.class,
+            type = SkylarkList.class,
             generic1 = String.class,
             doc = "A list of strings, the names of the licenses used.")
       },
       // Not documented by docgen, as this is only available in BUILD files.
       // TODO(cparsons): Devise a solution to document BUILD functions.
       documented = false,
-      useStarlarkThread = true)
-  public NoneType licenses(
-      Sequence<?> licensesList, // list of license strings
+      useStarlarkThread = true,
+      useLocation = true)
+  public Runtime.NoneType invoke(
+      SkylarkList<?> licensesList, // list of license strings
+      Location loc,
       StarlarkThread thread)
       throws EvalException {
-    PackageContext context = getContext(thread);
+    PackageContext context = getContext(thread, loc);
     try {
       License license = BuildType.LICENSE.convert(licensesList, "'licenses' operand");
       context.pkgBuilder.setDefaultLicense(license);
     } catch (ConversionException e) {
-      context.eventHandler.handle(Event.error(thread.getCallerLocation(), e.getMessage()));
+      context.eventHandler.handle(Event.error(loc, e.getMessage()));
       context.pkgBuilder.setContainsErrors();
     }
-    return Starlark.NONE;
+    return Runtime.NONE;
   }
 
   @SkylarkCallable(
@@ -155,18 +160,20 @@ class StarlarkBuildLibrary {
       // Not documented by docgen, as this is only available in BUILD files.
       // TODO(cparsons): Devise a solution to document BUILD functions.
       documented = false,
-      useStarlarkThread = true)
-  public NoneType distribs(Object object, StarlarkThread thread) throws EvalException {
-    PackageContext context = getContext(thread);
+      useStarlarkThread = true,
+      useLocation = true)
+  public Runtime.NoneType distribs(Object object, Location loc, StarlarkThread thread)
+      throws EvalException {
+    PackageContext context = getContext(thread, loc);
 
     try {
       Set<DistributionType> distribs =
           BuildType.DISTRIBUTIONS.convert(object, "'distribs' operand");
       context.pkgBuilder.setDefaultDistribs(distribs);
     } catch (ConversionException e) {
-      context.eventHandler.handle(Event.error(thread.getCallerLocation(), e.getMessage()));
+      context.eventHandler.handle(Event.error(loc, e.getMessage()));
       context.pkgBuilder.setContainsErrors();
     }
-    return Starlark.NONE;
+    return Runtime.NONE;
   }
 }

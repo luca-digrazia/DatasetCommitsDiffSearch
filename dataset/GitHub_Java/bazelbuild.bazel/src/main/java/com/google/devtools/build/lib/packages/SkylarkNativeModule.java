@@ -33,15 +33,16 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicens
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkNativeModuleApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.NoneType;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.Tuple;
 import java.io.IOException;
@@ -74,9 +75,9 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
   }
 
   @Override
-  public Sequence<?> glob(
-      Sequence<?> include,
-      Sequence<?> exclude,
+  public SkylarkList<?> glob(
+      SkylarkList<?> include,
+      SkylarkList<?> exclude,
       Integer excludeDirs,
       Object allowEmptyArgument,
       Location loc,
@@ -91,7 +92,7 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
 
     List<String> matches;
     boolean allowEmpty;
-    if (allowEmptyArgument == Starlark.UNBOUND) {
+    if (allowEmptyArgument == Runtime.UNBOUND) {
       allowEmpty = !thread.getSemantics().incompatibleDisallowEmptyGlob();
     } else if (allowEmptyArgument instanceof Boolean) {
       allowEmpty = (Boolean) allowEmptyArgument;
@@ -120,7 +121,7 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
       throw new EvalException(loc, "illegal argument in call to glob", e);
     }
 
-    return StarlarkList.copyOf(thread, matches);
+    return MutableList.copyOf(thread, matches);
   }
 
   @Override
@@ -129,8 +130,8 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
     SkylarkUtils.checkLoadingOrWorkspacePhase(thread, "native.existing_rule", loc);
     PackageContext context = getContext(thread, loc);
     Target target = context.pkgBuilder.getTarget(name);
-    Dict<String, Object> rule = targetDict(target, loc, thread.mutability());
-    return rule != null ? rule : Starlark.NONE;
+    SkylarkDict<String, Object> rule = targetDict(target, loc, thread.mutability());
+    return rule != null ? rule : Runtime.NONE;
   }
 
   /*
@@ -138,16 +139,16 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
     For now, we ignore this, since users can implement it in Skylark.
   */
   @Override
-  public Dict<String, Dict<String, Object>> existingRules(Location loc, StarlarkThread thread)
-      throws EvalException, InterruptedException {
+  public SkylarkDict<String, SkylarkDict<String, Object>> existingRules(
+      Location loc, StarlarkThread thread) throws EvalException, InterruptedException {
     SkylarkUtils.checkLoadingOrWorkspacePhase(thread, "native.existing_rules", loc);
     PackageContext context = getContext(thread, loc);
     Collection<Target> targets = context.pkgBuilder.getTargets();
     Mutability mu = thread.mutability();
-    Dict<String, Dict<String, Object>> rules = Dict.withMutability(mu);
+    SkylarkDict<String, SkylarkDict<String, Object>> rules = SkylarkDict.withMutability(mu);
     for (Target t : targets) {
       if (t instanceof Rule) {
-        Dict<String, Object> rule = targetDict(t, loc, mu);
+        SkylarkDict<String, Object> rule = targetDict(t, loc, mu);
         Preconditions.checkNotNull(rule);
         rules.put(t.getName(), rule, loc);
       }
@@ -157,10 +158,10 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
   }
 
   @Override
-  public NoneType packageGroup(
+  public Runtime.NoneType packageGroup(
       String name,
-      Sequence<?> packagesO,
-      Sequence<?> includesO,
+      SkylarkList<?> packagesO,
+      SkylarkList<?> includesO,
       Location loc,
       StarlarkThread thread)
       throws EvalException {
@@ -175,7 +176,7 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
 
     try {
       context.pkgBuilder.addPackageGroup(name, packages, includes, context.eventHandler, loc);
-      return Starlark.NONE;
+      return Runtime.NONE;
     } catch (LabelSyntaxException e) {
       throw new EvalException(
           loc, "package group has invalid name: " + name + ": " + e.getMessage());
@@ -185,8 +186,12 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
   }
 
   @Override
-  public NoneType exportsFiles(
-      Sequence<?> srcs, Object visibilityO, Object licensesO, Location loc, StarlarkThread thread)
+  public Runtime.NoneType exportsFiles(
+      SkylarkList<?> srcs,
+      Object visibilityO,
+      Object licensesO,
+      Location loc,
+      StarlarkThread thread)
       throws EvalException {
     SkylarkUtils.checkLoadingPhase(thread, "native.exports_files", loc);
     Package.Builder pkgBuilder = getContext(thread, loc).pkgBuilder;
@@ -257,7 +262,7 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
         throw new EvalException(loc, e.getMessage());
       }
     }
-    return Starlark.NONE;
+    return Runtime.NONE;
   }
 
   @Override
@@ -277,12 +282,12 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
   }
 
   @Nullable
-  private static Dict<String, Object> targetDict(Target target, Location loc, Mutability mu)
+  private static SkylarkDict<String, Object> targetDict(Target target, Location loc, Mutability mu)
       throws EvalException {
     if (!(target instanceof Rule)) {
       return null;
     }
-    Dict<String, Object> values = Dict.withMutability(mu);
+    SkylarkDict<String, Object> values = SkylarkDict.withMutability(mu);
 
     Rule rule = (Rule) target;
     AttributeContainer cont = rule.getAttributeContainer();
@@ -384,7 +389,7 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
 
         m.put(key, mapVal);
       }
-      return Starlark.fromJava(m, mu);
+      return SkylarkType.convertToSkylark(m, mu);
     }
     if (val.getClass().isAnonymousClass()) {
       // Computed defaults. They will be represented as

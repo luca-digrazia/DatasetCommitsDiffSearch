@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.List;
@@ -77,7 +78,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkCallable(name = "interrupted_function", documented = false)
-  public NoneType interruptedFunction() throws InterruptedException {
+  public Runtime.NoneType interruptedFunction() throws InterruptedException {
     throw new InterruptedException();
   }
 
@@ -227,49 +228,55 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     }
 
     @SkylarkCallable(
-        name = "with_params",
-        documented = false,
-        parameters = {
-          @Param(name = "pos1"),
-          @Param(name = "pos2", defaultValue = "False", type = Boolean.class),
-          @Param(
-              name = "posOrNamed",
-              defaultValue = "False",
-              type = Boolean.class,
-              positional = true,
-              named = true),
-          @Param(name = "named", type = Boolean.class, positional = false, named = true),
-          @Param(
-              name = "optionalNamed",
-              type = Boolean.class,
-              defaultValue = "False",
-              positional = false,
-              named = true),
-          @Param(
-              name = "nonNoneable",
-              type = Object.class,
-              defaultValue = "\"a\"",
-              positional = false,
-              named = true),
-          @Param(
-              name = "noneable",
-              type = Integer.class,
-              defaultValue = "None",
-              noneable = true,
-              positional = false,
-              named = true),
-          @Param(
-              name = "multi",
-              allowedTypes = {
-                @ParamType(type = String.class),
-                @ParamType(type = Integer.class),
-                @ParamType(type = Sequence.class, generic1 = Integer.class),
-              },
-              defaultValue = "None",
-              noneable = true,
-              positional = false,
-              named = true)
-        })
+      name = "with_params",
+      documented = false,
+      parameters = {
+        @Param(name = "pos1"),
+        @Param(name = "pos2", defaultValue = "False", type = Boolean.class),
+        @Param(
+          name = "posOrNamed",
+          defaultValue = "False",
+          type = Boolean.class,
+          positional = true,
+          named = true
+        ),
+        @Param(name = "named", type = Boolean.class, positional = false, named = true),
+        @Param(
+          name = "optionalNamed",
+          type = Boolean.class,
+          defaultValue = "False",
+          positional = false,
+          named = true
+        ),
+        @Param(
+          name = "nonNoneable",
+          type = Object.class,
+          defaultValue = "\"a\"",
+          positional = false,
+          named = true
+        ),
+        @Param(
+          name = "noneable",
+          type = Integer.class,
+          defaultValue = "None",
+          noneable = true,
+          positional = false,
+          named = true
+        ),
+        @Param(
+          name = "multi",
+          allowedTypes = {
+            @ParamType(type = String.class),
+            @ParamType(type = Integer.class),
+            @ParamType(type = SkylarkList.class, generic1 = Integer.class),
+          },
+          defaultValue = "None",
+          noneable = true,
+          positional = false,
+          named = true
+        )
+      }
+    )
     public String withParams(
         Integer pos1,
         boolean pos2,
@@ -291,8 +298,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           + optionalNamed
           + ", "
           + nonNoneable
-          + (noneable != Starlark.NONE ? ", " + noneable : "")
-          + (multi != Starlark.NONE ? ", " + multi : "")
+          + (noneable != Runtime.NONE ? ", " + noneable : "")
+          + (multi != Runtime.NONE ? ", " + multi : "")
           + ")";
     }
 
@@ -353,7 +360,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
               allowedTypes = {
                 @ParamType(type = String.class),
                 @ParamType(type = Integer.class),
-                @ParamType(type = Sequence.class, generic1 = Integer.class),
+                @ParamType(type = SkylarkList.class, generic1 = Integer.class),
               },
               defaultValue = "None",
               noneable = true,
@@ -389,8 +396,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           + optionalNamed
           + ", "
           + nonNoneable
-          + (noneable != Starlark.NONE ? ", " + noneable : "")
-          + (multi != Starlark.NONE ? ", " + multi : "")
+          + (noneable != Runtime.NONE ? ", " + noneable : "")
+          + (multi != Runtime.NONE ? ", " + multi : "")
           + ", "
           + location.getStartLine()
           + ", "
@@ -422,7 +429,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         extraPositionals = @Param(name = "args"),
         useStarlarkThread = true)
     public String withArgsAndThread(
-        Integer pos1, boolean pos2, boolean named, Sequence<?> args, StarlarkThread thread) {
+        Integer pos1, boolean pos2, boolean named, SkylarkList<?> args, StarlarkThread thread) {
       String argsString =
           "args(" + args.stream().map(Printer::debugPrint).collect(joining(", ")) + ")";
       return "with_args_and_thread("
@@ -439,14 +446,16 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     }
 
     @SkylarkCallable(
-        name = "with_kwargs",
-        documented = false,
-        parameters = {
-          @Param(name = "pos", defaultValue = "False", type = Boolean.class),
-          @Param(name = "named", type = Boolean.class, positional = false, named = true),
-        },
-        extraKeywords = @Param(name = "kwargs"))
-    public String withKwargs(boolean pos, boolean named, Dict<?, ?> kwargs) throws EvalException {
+      name = "with_kwargs",
+      documented = false,
+      parameters = {
+        @Param(name = "pos", defaultValue = "False", type = Boolean.class),
+        @Param(name = "named", type = Boolean.class, positional = false, named = true),
+      },
+      extraKeywords = @Param(name = "kwargs")
+    )
+    public String withKwargs(boolean pos, boolean named, SkylarkDict<?, ?> kwargs)
+        throws EvalException {
       String kwargsString =
           "kwargs("
               + kwargs
@@ -460,14 +469,15 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     }
 
     @SkylarkCallable(
-        name = "with_args_and_kwargs",
-        documented = false,
-        parameters = {
-          @Param(name = "foo", named = true, positional = true, type = String.class),
-        },
-        extraPositionals = @Param(name = "args"),
-        extraKeywords = @Param(name = "kwargs"))
-    public String withArgsAndKwargs(String foo, Sequence<?> args, Dict<?, ?> kwargs)
+      name = "with_args_and_kwargs",
+      documented = false,
+      parameters = {
+        @Param(name = "foo", named = true, positional = true, type = String.class),
+      },
+      extraPositionals = @Param(name = "args"),
+      extraKeywords = @Param(name = "kwargs")
+    )
+    public String withArgsAndKwargs(String foo, SkylarkList<?> args, SkylarkDict<?, ?> kwargs)
         throws EvalException {
       String argsString =
           "args(" + args.stream().map(Printer::debugPrint).collect(joining(", ")) + ")";
@@ -782,18 +792,15 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   @Test
   public void testForDeepUpdate() throws Exception {
     // Check that indirectly reachable values can still be manipulated as normal.
-    new SkylarkTest()
-        .setUp(
-            "def foo():",
-            "  xs = [['a'], ['b'], ['c']]",
-            "  ys = []",
-            "  for x in xs:",
-            "    for y in x:",
-            "      ys.append(y)",
-            "    xs[2].append(x[0])",
-            "  return ys",
-            "ys = foo()")
-        .testLookup("ys", StarlarkList.of(null, "a", "b", "c", "a", "b"));
+    new SkylarkTest().setUp("def foo():",
+        "  xs = [['a'], ['b'], ['c']]",
+        "  ys = []",
+        "  for x in xs:",
+        "    for y in x:",
+        "      ys.append(y)",
+        "    xs[2].append(x[0])",
+        "  return ys",
+        "ys = foo()").testLookup("ys", MutableList.of(null, "a", "b", "c", "a", "b"));
   }
 
   @Test
@@ -1083,7 +1090,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
             "    modified_list = v + ['extra_string']",
             "  return modified_list",
             "m = func(mock)")
-        .testLookup("m", StarlarkList.of(thread, "b", "c", "extra_string"));
+        .testLookup("m", MutableList.of(thread, "b", "c", "extra_string"));
   }
 
   @Test
@@ -1481,6 +1488,14 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
+  public void testInSetDeprecated() throws Exception {
+    new SkylarkTest("--incompatible_depset_is_not_iterable=false")
+        .testExpression("'b' in depset(['a', 'b'])", Boolean.TRUE)
+        .testExpression("'c' in depset(['a', 'b'])", Boolean.FALSE)
+        .testExpression("1 in depset(['a', 'b'])", Boolean.FALSE);
+  }
+
+  @Test
   public void testUnionSet() throws Exception {
     new SkylarkTest("--incompatible_depset_union=false")
         .testExpression("str(depset([1, 3]) | depset([1, 2]))", "depset([1, 2, 3])")
@@ -1490,14 +1505,26 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testSetIsNotIterable() throws Exception {
-    new SkylarkTest()
-        .testIfErrorContains("not a collection", "list(depset(['a', 'b']))")
+    new SkylarkTest("--incompatible_depset_is_not_iterable=true")
+        .testIfErrorContains("not iterable", "list(depset(['a', 'b']))")
         .testIfErrorContains("not iterable", "max(depset([1, 2, 3]))")
         .testIfErrorContains("not iterable", "1 in depset([1, 2, 3])")
-        .testIfErrorContains("not a collection", "sorted(depset(['a', 'b']))")
-        .testIfErrorContains("not a collection", "tuple(depset(['a', 'b']))")
+        .testIfErrorContains("not iterable", "sorted(depset(['a', 'b']))")
+        .testIfErrorContains("not iterable", "tuple(depset(['a', 'b']))")
         .testIfErrorContains("not iterable", "[x for x in depset()]")
         .testIfErrorContains("not iterable", "len(depset(['a']))");
+  }
+
+  @Test
+  public void testSetIsIterable() throws Exception {
+    new SkylarkTest("--incompatible_depset_is_not_iterable=false")
+        .testExpression("str(list(depset(['a', 'b'])))", "[\"a\", \"b\"]")
+        .testExpression("max(depset([1, 2, 3]))", 3)
+        .testExpression("1 in depset([1, 2, 3])", true)
+        .testExpression("str(sorted(depset(['b', 'a'])))", "[\"a\", \"b\"]")
+        .testExpression("str(tuple(depset(['a', 'b'])))", "(\"a\", \"b\")")
+        .testExpression("str([x for x in depset()])", "[]")
+        .testExpression("len(depset(['a']))", 1);
   }
 
   @Test
@@ -1512,7 +1539,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("v = mock.nullfunc_working()")
-        .testLookup("v", Starlark.NONE);
+        .testLookup("v", Runtime.NONE);
   }
 
   @Test
@@ -1520,7 +1547,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("v = mock.voidfunc()")
-        .testLookup("v", Starlark.NONE);
+        .testLookup("v", Runtime.NONE);
   }
 
   @Test
@@ -1545,7 +1572,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
             "  return value",
             "",
             "f()[1] += 1") // `f()` should be called only once here
-        .testLookup("counter", StarlarkList.of(thread, 1));
+        .testLookup("counter", MutableList.of(thread, 1));
 
     // Check key position.
     new SkylarkTest()
@@ -1558,7 +1585,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
             "  return 1",
             "",
             "value[f()] += 1") // `f()` should be called only once here
-        .testLookup("counter", StarlarkList.of(thread, 1));
+        .testLookup("counter", MutableList.of(thread, 1));
   }
 
   @Test
@@ -1598,8 +1625,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
             "",
             "f(ordinary)[0] = g(ordinary)[1]",
             "f(augmented)[0] += g(augmented)[1]")
-        .testLookup("ordinary", StarlarkList.of(thread, "g", "f")) // This order is consistent
-        .testLookup("augmented", StarlarkList.of(thread, "f", "g")); // with Python
+        .testLookup("ordinary", MutableList.of(thread, "g", "f")) // This order is consistent
+        .testLookup("augmented", MutableList.of(thread, "f", "g")); // with Python
   }
 
   @Test
@@ -1729,16 +1756,18 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testDictAssignmentAsLValueSideEffects() throws Exception {
-    new SkylarkTest()
-        .setUp("def func(d):", "  d['b'] = 2", "d = {'a' : 1}", "func(d)")
-        .testLookup("d", Dict.of(null, "a", 1, "b", 2));
+    new SkylarkTest().setUp("def func(d):",
+        "  d['b'] = 2",
+        "d = {'a' : 1}",
+        "func(d)").testLookup("d", SkylarkDict.of(null, "a", 1, "b", 2));
   }
 
   @Test
   public void testAssignmentToListInDictSideEffect() throws Exception {
-    new SkylarkTest()
-        .setUp("l = [1, 2]", "d = {0: l}", "d[0].append(3)")
-        .testLookup("l", StarlarkList.of(null, 1, 2, 3));
+    new SkylarkTest().setUp(
+        "l = [1, 2]",
+        "d = {0: l}",
+        "d[0].append(3)").testLookup("l", MutableList.of(null, 1, 2, 3));
   }
 
   @Test
@@ -1826,11 +1855,12 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testNoneTrueFalseInSkylark() throws Exception {
-    new SkylarkTest()
-        .setUp("a = None", "b = True", "c = False")
-        .testLookup("a", Starlark.NONE)
-        .testLookup("b", Boolean.TRUE)
-        .testLookup("c", Boolean.FALSE);
+    new SkylarkTest().setUp("a = None",
+      "b = True",
+      "c = False")
+      .testLookup("a", Runtime.NONE)
+      .testLookup("b", Boolean.TRUE)
+      .testLookup("c", Boolean.FALSE);
   }
 
   @Test
@@ -2065,12 +2095,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
               "values_only_field",
               "fromValues",
               "values_only_method",
-              new BuiltinFunction(FunctionSignature.of()) {
-                @Override
-                public String getName() {
-                  return "values_only_method";
-                }
-
+              new BuiltinFunction("values_only_method", FunctionSignature.of()) {
                 public String invoke() {
                   return "fromValues";
                 }
@@ -2078,12 +2103,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
               "collision_field",
               "fromValues",
               "collision_method",
-              new BuiltinFunction(FunctionSignature.of()) {
-                @Override
-                public String getName() {
-                  return "collision_method";
-                }
-
+              new BuiltinFunction("collision_method", FunctionSignature.of()) {
                 public String invoke() {
                   return "fromValues";
                 }

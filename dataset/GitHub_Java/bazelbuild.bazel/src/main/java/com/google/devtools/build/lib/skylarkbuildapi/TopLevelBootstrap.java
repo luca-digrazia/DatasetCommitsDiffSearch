@@ -17,28 +17,28 @@ package com.google.devtools.build.lib.skylarkbuildapi;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skylarkbuildapi.DefaultInfoApi.DefaultInfoApiProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.OutputGroupInfoApi.OutputGroupInfoApiProvider;
-import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.Starlark;
 
 /**
  * A {@link Bootstrap} for top-level libraries of the build API.
  */
 public class TopLevelBootstrap implements Bootstrap {
-  private final Class<? extends SkylarkBuildApiGlobals> skylarkBuildApiGlobals;
-  private final Class<? extends SkylarkAttrApi> skylarkAttrApi;
-  private final Class<? extends SkylarkCommandLineApi> skylarkCommandLineApi;
-  private final Class<? extends SkylarkNativeModuleApi> skylarkNativeModuleApi;
-  private final Class<? extends SkylarkRuleFunctionsApi<?>> skylarkRuleFunctionsApi;
+  private final SkylarkBuildApiGlobals skylarkBuildApiGlobals;
+  private final SkylarkAttrApi skylarkAttrApi;
+  private final SkylarkCommandLineApi skylarkCommandLineApi;
+  private final SkylarkNativeModuleApi skylarkNativeModuleApi;
+  private final SkylarkRuleFunctionsApi<?> skylarkRuleFunctionsApi;
   private final StructApi.StructProviderApi structProvider;
   private final OutputGroupInfoApiProvider outputGroupInfoProvider;
   private final ActionsInfoProviderApi actionsInfoProviderApi;
   private final DefaultInfoApiProvider<?, ?> defaultInfoProvider;
 
   public TopLevelBootstrap(
-      Class<? extends SkylarkBuildApiGlobals> skylarkBuildApiGlobals,
-      Class<? extends SkylarkAttrApi> skylarkAttrApi,
-      Class<? extends SkylarkCommandLineApi> skylarkCommandLineApi,
-      Class<? extends SkylarkNativeModuleApi> skylarkNativeModuleApi,
-      Class<? extends SkylarkRuleFunctionsApi<?>> skylarkRuleFunctionsApi,
+      SkylarkBuildApiGlobals skylarkBuildApiGlobals,
+      SkylarkAttrApi skylarkAttrApi,
+      SkylarkCommandLineApi skylarkCommandLineApi,
+      SkylarkNativeModuleApi skylarkNativeModuleApi,
+      SkylarkRuleFunctionsApi<?> skylarkRuleFunctionsApi,
       StructApi.StructProviderApi structProvider,
       OutputGroupInfoApiProvider outputGroupInfoProvider,
       ActionsInfoProviderApi actionsInfoProviderApi,
@@ -56,11 +56,11 @@ public class TopLevelBootstrap implements Bootstrap {
 
   @Override
   public void addBindingsToBuilder(ImmutableMap.Builder<String, Object> builder) {
-    Runtime.setupModuleGlobals(builder, skylarkAttrApi);
-    Runtime.setupModuleGlobals(builder, skylarkBuildApiGlobals);
-    Runtime.setupModuleGlobals(builder, skylarkCommandLineApi);
-    Runtime.setupModuleGlobals(builder, skylarkNativeModuleApi);
-    Runtime.setupModuleGlobals(builder, skylarkRuleFunctionsApi);
+    Starlark.addMethods(builder, skylarkBuildApiGlobals);
+    Starlark.addMethods(builder, skylarkRuleFunctionsApi);
+    Starlark.addModule(builder, skylarkAttrApi); // "attr"
+    Starlark.addModule(builder, skylarkCommandLineApi); // "cmd_helper"
+    Starlark.addModule(builder, skylarkNativeModuleApi); // "native"
     builder.put("struct", structProvider);
     builder.put("OutputGroupInfo", outputGroupInfoProvider);
     builder.put("Actions", actionsInfoProviderApi);
