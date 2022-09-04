@@ -59,11 +59,6 @@ public class JavaSkylarkCommon {
   @SkylarkCallable(
     name = "create_provider",
     documented = false,
-    doc = "Create a java_common.provider from pre-built jars. Note that compile_time_jars and "
-        + "runtime_jars are not automatically merged into the recursive jars - if this is the "
-        + "desired behaviour the user should merge the jars before creating the provider. "
-        + "The recursive (compile/runtime) jars are the jars usually collected transitively from "
-        + "dependencies.",
     parameters = {
       @Param(
         name = "compile_time_jars",
@@ -88,28 +83,6 @@ public class JavaSkylarkCommon {
         defaultValue = "[]"
       ),
       @Param(
-          name = "transitive_compile_time_jars",
-          positional = false,
-          named = true,
-          allowedTypes = {
-              @ParamType(type = SkylarkList.class),
-              @ParamType(type = SkylarkNestedSet.class),
-          },
-          generic1 = Artifact.class,
-          defaultValue = "[]"
-      ),
-      @Param(
-          name = "transitive_runtime_jars",
-          positional = false,
-          named = true,
-          allowedTypes = {
-              @ParamType(type = SkylarkList.class),
-              @ParamType(type = SkylarkNestedSet.class),
-          },
-          generic1 = Artifact.class,
-          defaultValue = "[]"
-      ),
-      @Param(
         name = "source_jars",
         positional = false,
         named = true,
@@ -122,41 +95,19 @@ public class JavaSkylarkCommon {
       )
     }
   )
-  public JavaProvider create(
-      Object compileTimeJars,
-      Object runtimeJars,
-      Object transitiveCompileTimeJars,
-      Object transitiveRuntimeJars,
-      Object sourceJars)
+  public JavaProvider create(Object compileTimeJars, Object runtimeJars, Object sourceJars)
       throws EvalException {
-    NestedSet<Artifact> compileTimeJarsNestedSet = asArtifactNestedSet(compileTimeJars);
-    NestedSet<Artifact> runtimeJarsNestedSet = asArtifactNestedSet(runtimeJars);
-    NestedSet<Artifact> transitiveCompileTimeJarsNestedSet =
-        asArtifactNestedSet(transitiveCompileTimeJars);
-    NestedSet<Artifact> transitiveRuntimeJarsNestedSet = asArtifactNestedSet(transitiveRuntimeJars);
-
     JavaCompilationArgs javaCompilationArgs =
         JavaCompilationArgs.builder()
-            .addTransitiveCompileTimeJars(compileTimeJarsNestedSet)
-            .addTransitiveRuntimeJars(runtimeJarsNestedSet)
-        .build();
-    JavaCompilationArgs.Builder recursiveJavaCompilationArgs = JavaCompilationArgs.builder();
-    if (transitiveCompileTimeJarsNestedSet.isEmpty() && transitiveRuntimeJarsNestedSet.isEmpty()) {
-      recursiveJavaCompilationArgs
-          .addTransitiveCompileTimeJars(compileTimeJarsNestedSet)
-          .addTransitiveRuntimeJars(runtimeJarsNestedSet);
-    } else {
-      recursiveJavaCompilationArgs
-          .addTransitiveCompileTimeJars(transitiveCompileTimeJarsNestedSet)
-          .addTransitiveRuntimeJars(transitiveRuntimeJarsNestedSet);
-    }
+            .addTransitiveRuntimeJars(asArtifactNestedSet(runtimeJars))
+            .addTransitiveCompileTimeJars(asArtifactNestedSet(compileTimeJars))
+            .build();
 
     JavaProvider javaProvider =
         JavaProvider.Builder.create()
             .addProvider(
                 JavaCompilationArgsProvider.class,
-                JavaCompilationArgsProvider.create(
-                    javaCompilationArgs, recursiveJavaCompilationArgs.build()))
+                JavaCompilationArgsProvider.create(javaCompilationArgs, javaCompilationArgs))
             .addProvider(
                 JavaSourceJarsProvider.class,
                 JavaSourceJarsProvider.create(
@@ -173,7 +124,7 @@ public class JavaSkylarkCommon {
   private static NestedSet<Artifact> asArtifactNestedSet(Object o) throws EvalException {
     return o instanceof SkylarkNestedSet
         ? ((SkylarkNestedSet) o).getSet(Artifact.class)
-        : NestedSetBuilder.<Artifact>naiveLinkOrder()
+        : NestedSetBuilder.<Artifact>compileOrder()
             .addAll(((SkylarkList<?>) o).getContents(Artifact.class, null))
             .build();
   }
