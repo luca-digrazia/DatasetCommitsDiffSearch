@@ -250,37 +250,31 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
      * Fits a MLP model.
      * @param x the training dataset.
      * @param y the training labels.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @return the model.
      */
-    public static MLP fit(double[][] x, int[] y, Properties params) {
+    public static MLP fit(double[][] x, int[] y, Properties prop) {
         int p = x[0].length;
         int k = MathEx.max(y) + 1;
 
-        LayerBuilder[] layers = Layer.of(k, p, params.getProperty("smile.mlp.layers", "ReLU(100)"));
+        LayerBuilder[] layers = Layer.of(k, p, prop.getProperty("smile.mlp.layers", "ReLU(100)"));
         MLP model = new MLP(layers);
-        model.setParameters(params);
+        model.setProperties(prop);
 
-        int epochs = Integer.parseInt(params.getProperty("smile.mlp.epochs", "100"));
-        int batch = Integer.parseInt(params.getProperty("smile.mlp.mini_batch", "256"));
+        int epochs = Integer.parseInt(prop.getProperty("smile.mlp.epochs", "100"));
+        int batch = Integer.parseInt(prop.getProperty("smile.mlp.mini_batch", "256"));
         double[][] batchx = new double[batch][];
         int[] batchy = new int[batch];
         for (int epoch = 1; epoch <= epochs; epoch++) {
             logger.info("{} epoch", Strings.ordinal(epoch));
             int[] permutation = MathEx.permutate(x.length);
             for (int i = 0; i < x.length; i += batch) {
-                int size = Math.min(batch, x.length - i);
-                for (int j = 0; j < size; j++) {
-                    int index = permutation[i + j];
-                    batchx[j] = x[index];
-                    batchy[j] = y[index];
+                for (int j = 0; j < batch; j++) {
+                    int pi = permutation[(i+j) % x.length];
+                    batchx[j] = x[pi];
+                    batchy[j] = y[pi];
                 }
-
-                if (size < batch) {
-                    model.update(Arrays.copyOf(batchx, size), Arrays.copyOf(batchy, size));
-                } else {
-                    model.update(batchx, batchy);
-                }
+                model.update(batchx, batchy);
             }
         }
 
