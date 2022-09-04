@@ -23,10 +23,8 @@ import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import lib.APIException;
 import lib.ApiClient;
-import models.api.requests.ChangePasswordRequest;
 import models.api.requests.ChangeUserRequest;
 import models.api.responses.system.UserResponse;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.mvc.Http;
@@ -45,36 +43,22 @@ public class User {
 	private final String email;
 	private final String fullName;
 	private final List<String> permissions;
-    private final String sessionId;
-    private final DateTimeZone timezone;
-    private final boolean readonly;
-    private final boolean external;
+
+    private final String passwordHash;
 
     @AssistedInject
-    public User(ApiClient api, @Assisted UserResponse ur, @Nullable @Assisted String sessionId) {
-        this(api, ur.id, ur.username, ur.email, ur.fullName, ur.permissions, sessionId, ur.timezone, ur.readonly, ur.external);
+    public User(ApiClient api, @Assisted UserResponse ur, @Nullable @Assisted String passwordHash) {
+        this(api, ur.id, ur.username, ur.email, ur.fullName, ur.permissions, passwordHash);
     }
 
-	public User(ApiClient api, String id, String name, String email, String fullName, List<String> permissions, String sessionId, String timezone, boolean readonly, boolean external) {
-        DateTimeZone timezone1 = null;
+	public User(ApiClient api, String id, String name, String email, String fullName, List<String> permissions, String passwordHash) {
         this.api = api;
         this.id = id;
         this.name = name;
 		this.email = email;
 		this.fullName = fullName;
 		this.permissions = permissions;
-        this.sessionId = sessionId;
-        try {
-            if (timezone != null) {
-                timezone1 = DateTimeZone.forID(timezone);
-            }
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid time zone name {} when loading user {}.", timezone, name);
-        } finally {
-            this.timezone = timezone1;
-        }
-        this.readonly = readonly;
-        this.external = external;
+        this.passwordHash = passwordHash;
     }
 
     public void update(ChangeUserRequest request) {
@@ -110,41 +94,12 @@ public class User {
 		return permissions;
 	}
 
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    public DateTimeZone getTimeZone() {
-        return timezone;
-    }
-
-    public boolean updatePassword(ChangePasswordRequest request) {
-        try {
-            api.put()
-                .path("/users/{0}/password", getName())
-                .body(request)
-                .expect(Http.Status.NO_CONTENT)
-                .execute();
-        } catch (APIException e) {
-            log.error("Unable to update password", e);
-            return false;
-        } catch (IOException e) {
-            log.error("Unable to update password", e);
-            return false;
-        }
-        return true;
-    }
-
-    public boolean isReadonly() {
-        return readonly;
-    }
-
-    public boolean isExternal() {
-        return external;
+    public String getPasswordHash() {
+        return passwordHash;
     }
 
     public interface Factory {
-        User fromResponse(UserResponse ur, String sessionId);
+        User fromResponse(UserResponse ur, String passwordHash);
     }
 
 }
