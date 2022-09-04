@@ -1,7 +1,6 @@
 package com.github.pedrovgs.effectiveandroidui.ui.activity;
 
 import android.os.Bundle;
-import android.support.v4.view.GestureDetectorCompat;
 import android.support.v7.app.ActionBarActivity;
 import butterknife.ButterKnife;
 import com.github.pedrovgs.effectiveandroidui.TvShowsApplication;
@@ -19,8 +18,6 @@ import java.util.List;
 public abstract class BaseActivity extends ActionBarActivity {
 
   private ObjectGraph activityScopeGraph;
-
-  private GestureDetectorCompat gestureDetectorCompat;
 
   @Override protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);

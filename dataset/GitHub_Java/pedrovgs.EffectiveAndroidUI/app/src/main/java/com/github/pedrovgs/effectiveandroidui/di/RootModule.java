@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import com.github.pedrovgs.effectiveandroidui.TvShowsApplication;
 import com.github.pedrovgs.effectiveandroidui.domain.TvShowsModule;
 import com.github.pedrovgs.effectiveandroidui.executor.ExecutorModule;
+import com.github.pedrovgs.effectiveandroidui.ui.activity.MainActivity;
 import dagger.Module;
 import dagger.Provides;
 
@@ -19,7 +20,7 @@ import dagger.Provides;
         ExecutorModule.class, TvShowsModule.class,
     },
     injects = {
-        TvShowsApplication.class
+        TvShowsApplication.class, MainActivity.class
     }, library = true)
 public final class RootModule {
 
