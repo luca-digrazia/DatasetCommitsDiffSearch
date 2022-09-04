@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
@@ -22,7 +23,6 @@ import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Formattable;
 import java.util.Formatter;
 import java.util.List;
@@ -232,7 +232,7 @@ public class Printer {
    * @return the formatted string.
    */
   public static Formattable formattable(final String pattern, Object... arguments) {
-    final List<Object> args = Arrays.asList(arguments);
+    final ImmutableList<Object> args = ImmutableList.copyOf(arguments);
     return new Formattable() {
       @Override
       public String toString() {
@@ -341,9 +341,7 @@ public class Printer {
     @Override
     public BasePrinter repr(Object o) {
       if (o == null) {
-        // Java null is not a valid Skylark value, but sometimes printers are used on non-Skylark
-        // values such as Locations or ASTs.
-        this.append("null");
+        throw new NullPointerException(); // Java null is not a valid Skylark value.
 
       } else if (o instanceof SkylarkValue) {
         ((SkylarkValue) o).repr(this);
@@ -514,7 +512,7 @@ public class Printer {
      */
     @Override
     public BasePrinter format(String pattern, Object... arguments) {
-      return this.formatWithList(pattern, Arrays.asList(arguments));
+      return this.formatWithList(pattern, ImmutableList.copyOf(arguments));
     }
 
     /**
