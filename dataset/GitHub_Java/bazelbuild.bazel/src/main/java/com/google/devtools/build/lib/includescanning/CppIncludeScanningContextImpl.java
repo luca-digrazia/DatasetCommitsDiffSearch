@@ -14,9 +14,11 @@
 package com.google.devtools.build.lib.includescanning;
 
 import com.google.common.base.Supplier;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppIncludeScanningContext;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
@@ -27,6 +29,7 @@ import java.util.List;
 /**
  * Include scanning context implementation.
  */
+@ExecutionStrategy(contextType = CppIncludeScanningContext.class)
 public class CppIncludeScanningContextImpl implements CppIncludeScanningContext {
 
   private final Supplier<? extends IncludeScannerSupplier> includeScannerSupplier;
@@ -37,7 +40,7 @@ public class CppIncludeScanningContextImpl implements CppIncludeScanningContext 
   }
 
   @Override
-  public List<Artifact> findAdditionalInputs(
+  public ListenableFuture<List<Artifact>> findAdditionalInputs(
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
       IncludeProcessing includeProcessing,

@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScannerSupplier;
@@ -27,7 +28,7 @@ public class NoProcessing implements IncludeProcessing {
   @AutoCodec public static final NoProcessing INSTANCE = new NoProcessing();
 
   @Override
-  public List<Artifact> determineAdditionalInputs(
+  public ListenableFuture<List<Artifact>> determineAdditionalInputs(
       @Nullable IncludeScannerSupplier includeScannerSupplier,
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,

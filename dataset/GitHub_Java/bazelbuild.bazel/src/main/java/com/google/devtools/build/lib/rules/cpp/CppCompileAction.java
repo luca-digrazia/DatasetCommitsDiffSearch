@@ -45,6 +45,7 @@ import com.google.devtools.build.lib.actions.CommandLines.CommandLineAndParamFil
 import com.google.devtools.build.lib.actions.CommandLines.ParamFileActionInput;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -108,7 +109,8 @@ import javax.annotation.Nullable;
 
 /** Action that represents some kind of C++ compilation step. */
 @ThreadCompatible
-public class CppCompileAction extends AbstractAction implements IncludeScannable, CommandAction {
+public class CppCompileAction extends AbstractAction
+    implements IncludeScannable, ExecutionInfoSpecifier, CommandAction {
 
   private static final PathFragment BUILD_PATH_FRAGMENT = PathFragment.create("BUILD");
 
@@ -640,7 +642,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     NestedSetBuilder<Artifact> discoveredModulesBuilder = NestedSetBuilder.stableOrder();
     for (Artifact module : topLevel) {
       topLevelModulesBuilder.add(module);
-      discoveredModulesBuilder.addTransitiveAndBlockIfFuture(transitivelyUsedModules.get(module));
+      discoveredModulesBuilder.addTransitive(transitivelyUsedModules.get(module));
     }
     topLevelModules = topLevelModulesBuilder.build();
     discoveredModulesBuilder.addTransitive(topLevelModules);
@@ -1204,7 +1206,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    * action cache hit.
    */
   @Override
-  public synchronized void updateInputs(NestedSet<Artifact> inputs) {
+  public synchronized void updateInputs(Iterable<Artifact> inputs) {
     super.updateInputs(inputs);
     if (outputFile.isFileType(CppFileTypes.CPP_MODULE)) {
       discoveredModules =
