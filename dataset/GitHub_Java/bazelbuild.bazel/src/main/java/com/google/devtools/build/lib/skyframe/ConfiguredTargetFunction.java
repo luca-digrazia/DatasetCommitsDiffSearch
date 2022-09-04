@@ -100,7 +100,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -136,8 +135,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
   private final BuildViewProvider buildViewProvider;
   private final RuleClassProvider ruleClassProvider;
-  // TODO(b/185987566): Remove this semaphore.
-  private final AtomicReference<Semaphore> cpuBoundSemaphore;
+  private final Semaphore cpuBoundSemaphore;
+  private final BuildOptions defaultBuildOptions;
   @Nullable private final ConfiguredTargetProgressReceiver configuredTargetProgress;
 
   /**
@@ -152,9 +151,10 @@ public final class ConfiguredTargetFunction implements SkyFunction {
   ConfiguredTargetFunction(
       BuildViewProvider buildViewProvider,
       RuleClassProvider ruleClassProvider,
-      AtomicReference<Semaphore> cpuBoundSemaphore,
+      Semaphore cpuBoundSemaphore,
       boolean storeTransitivePackagesForPackageRootResolution,
       boolean shouldUnblockCpuWorkWhenFetchingDeps,
+      BuildOptions defaultBuildOptions,
       @Nullable ConfiguredTargetProgressReceiver configuredTargetProgress) {
     this.buildViewProvider = buildViewProvider;
     this.ruleClassProvider = ruleClassProvider;
@@ -162,25 +162,17 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     this.storeTransitivePackagesForPackageRootResolution =
         storeTransitivePackagesForPackageRootResolution;
     this.shouldUnblockCpuWorkWhenFetchingDeps = shouldUnblockCpuWorkWhenFetchingDeps;
+    this.defaultBuildOptions = defaultBuildOptions;
     this.configuredTargetProgress = configuredTargetProgress;
   }
 
-  private void maybeAcquireSemaphoreWithLogging(SkyKey key) throws InterruptedException {
-    if (cpuBoundSemaphore.get() == null) {
-      return;
-    }
+  private void acquireWithLogging(SkyKey key) throws InterruptedException {
     Stopwatch stopwatch = Stopwatch.createStarted();
-    cpuBoundSemaphore.get().acquire();
+    cpuBoundSemaphore.acquire();
     long elapsedTime = stopwatch.elapsed().toMillis();
     if (elapsedTime > 5) {
       logger.atInfo().atMostEvery(10, TimeUnit.SECONDS).log(
           "Spent %s milliseconds waiting for lock acquisition for %s", elapsedTime, key);
-    }
-  }
-
-  private void maybeReleaseSemaphore() {
-    if (cpuBoundSemaphore.get() != null) {
-      cpuBoundSemaphore.get().release();
     }
   }
 
@@ -191,8 +183,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       env =
           new StateInformingSkyFunctionEnvironment(
               env,
-              /*preFetch=*/ this::maybeReleaseSemaphore,
-              /*postFetch=*/ () -> maybeAcquireSemaphoreWithLogging(key));
+              /*preFetch=*/ cpuBoundSemaphore::release,
+              /*postFetch=*/ () -> acquireWithLogging(key));
     }
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
     NestedSetBuilder<Package> transitivePackagesForPackageRootResolution =
@@ -253,9 +245,20 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               : transitivePackagesForPackageRootResolution.build());
     }
 
+    // This line is only needed for accurate error messaging. Say this target has a circular
+    // dependency with one of its deps. With this line, loading this target fails so Bazel
+    // associates the corresponding error with this target, as expected. Without this line,
+    // the first TransitiveTargetValue call happens on its dep (in trimConfigurations), so Bazel
+    // associates the error with the dep, which is misleading.
+    if (configuration != null
+        && configuration.trimConfigurations()
+        && env.getValue(TransitiveTargetKey.of(label)) == null) {
+      return null;
+    }
+
     TargetAndConfiguration ctgValue = new TargetAndConfiguration(target, configuration);
 
-    SkyframeDependencyResolver resolver = new SkyframeDependencyResolver(env);
+    SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
 
     ToolchainCollection<UnloadedToolchainContext> unloadedToolchainContexts = null;
 
@@ -263,7 +266,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     //  Skyframe. This is a strict improvement over the prior state of the code, in which we ran
     //  with #processors threads, but ideally we would call #tryAcquire here, and if we failed,
     //  would exit this SkyFunction and restart it when permits were available.
-    maybeAcquireSemaphoreWithLogging(key);
+    acquireWithLogging(key);
     try {
       // Determine what toolchains are needed by this target.
       unloadedToolchainContexts =
@@ -322,7 +325,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               ruleClassProvider,
               view.getHostConfiguration(configuration),
               transitivePackagesForPackageRootResolution,
-              transitiveRootCauses);
+              transitiveRootCauses,
+              defaultBuildOptions);
       if (!transitiveRootCauses.isEmpty()) {
         NestedSet<Cause> causes = transitiveRootCauses.build();
         throw new ConfiguredTargetFunctionException(
@@ -436,7 +440,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     } catch (ConfiguredValueCreationException e) {
       throw new ConfiguredTargetFunctionException(e);
     } finally {
-      maybeReleaseSemaphore();
+      cpuBoundSemaphore.release();
     }
   }
 
@@ -449,7 +453,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
    */
   @VisibleForTesting
   @Nullable
-  public static ToolchainCollection<UnloadedToolchainContext> computeUnloadedToolchainContexts(
+  static ToolchainCollection<UnloadedToolchainContext> computeUnloadedToolchainContexts(
       Environment env,
       RuleClassProvider ruleClassProvider,
       TargetAndConfiguration targetAndConfig,
@@ -505,7 +509,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     BuildConfigurationValue.Key toolchainConfig =
         BuildConfigurationValue.keyWithoutPlatformMapping(
-            configuration.fragmentClasses(), toolchainOptions);
+            configuration.getFragmentsMap().keySet(), toolchainOptions);
 
     Map<String, ToolchainContextKey> toolchainContextKeys = new HashMap<>();
     String targetUnloadedToolchainContext = "target-unloaded-toolchain-context";
@@ -608,6 +612,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
    * @param hostConfiguration the host configuration. There's a noticeable performance hit from
    *     instantiating this on demand for every dependency that wants it, so it's best to compute
    *     the host configuration as early as possible and pass this reference to all consumers
+   * @param defaultBuildOptions the default build options provided by the server; these are used to
+   *     create diffs for {@link BuildConfigurationValue.Key}s to prevent storing the entire
+   *     BuildOptions object.
    */
   @Nullable
   static OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> computeDependencies(
@@ -621,7 +628,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       RuleClassProvider ruleClassProvider,
       BuildConfiguration hostConfiguration,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution,
-      NestedSetBuilder<Cause> transitiveRootCauses)
+      NestedSetBuilder<Cause> transitiveRootCauses,
+      BuildOptions defaultBuildOptions)
       throws DependencyEvaluationException, ConfiguredValueCreationException,
           AspectCreationException, InterruptedException {
     // Create the map from attributes to set of (target, transition) pairs.
@@ -651,7 +659,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     // Trim each dep's configuration so it only includes the fragments needed by its transitive
     // closure.
     ConfigurationResolver configResolver =
-        new ConfigurationResolver(env, ctgValue, hostConfiguration, configConditions);
+        new ConfigurationResolver(
+            env, ctgValue, hostConfiguration, defaultBuildOptions, configConditions);
     OrderedSetMultimap<DependencyKind, Dependency> depValueNames =
         configResolver.resolveConfigurations(initialDependencies);
 

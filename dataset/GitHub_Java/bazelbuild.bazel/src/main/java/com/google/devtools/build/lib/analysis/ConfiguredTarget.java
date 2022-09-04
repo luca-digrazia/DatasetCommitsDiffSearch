@@ -40,7 +40,6 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, Structure {
   /** All <code>ConfiguredTarget</code>s have a "files" field. */
   String FILES_FIELD = "files";
 
-  @Nullable
   default String getConfigurationChecksum() {
     return getConfigurationKey() == null ? null : getConfigurationKey().getOptions().checksum();
   }

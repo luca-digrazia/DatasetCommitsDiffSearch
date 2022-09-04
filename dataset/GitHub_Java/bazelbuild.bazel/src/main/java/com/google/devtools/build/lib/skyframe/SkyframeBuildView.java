@@ -47,9 +47,8 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetValue;
 import com.google.devtools.build.lib.analysis.DependencyKind;
-import com.google.devtools.build.lib.analysis.ExecGroupCollection;
-import com.google.devtools.build.lib.analysis.ExecGroupCollection.InvalidExecGroupException;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
+import com.google.devtools.build.lib.analysis.RuleContext.InvalidExecGroupException;
 import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
@@ -387,20 +386,14 @@ public final class SkyframeBuildView {
       boolean keepGoing,
       int numThreads,
       boolean strictConflictChecks,
-      boolean checkForActionConflicts,
-      int cpuHeavySkyKeysThreadPoolSize)
+      boolean checkForActionConflicts)
       throws InterruptedException, ViewCreationFailedException {
     enableAnalysis(true);
     EvaluationResult<ActionLookupValue> result;
     try (SilentCloseable c = Profiler.instance().profile("skyframeExecutor.configureTargets")) {
       result =
           skyframeExecutor.configureTargets(
-              eventHandler,
-              ctKeys,
-              aspectKeys,
-              keepGoing,
-              numThreads,
-              cpuHeavySkyKeysThreadPoolSize);
+              eventHandler, ctKeys, aspectKeys, keepGoing, numThreads);
     } finally {
       enableAnalysis(false);
     }
@@ -454,10 +447,7 @@ public final class SkyframeBuildView {
             skyframeExecutor.getActionLookupValuesInBuild(ctKeys, aspectKeys);
         ArtifactConflictFinder.ActionConflictsAndStats conflictsAndStats =
             ArtifactConflictFinder.findAndStoreArtifactConflicts(
-                analysisTraversalResult.getActionShards(),
-                analysisTraversalResult.getActionCount(),
-                strictConflictChecks,
-                actionKeyContext);
+                analysisTraversalResult.getActionShards(), strictConflictChecks, actionKeyContext);
         BuildEventStreamProtos.BuildMetrics.BuildGraphMetrics buildGraphMetrics =
             analysisTraversalResult
                 .getMetrics()
@@ -1018,8 +1008,7 @@ public final class SkyframeBuildView {
       ConfiguredTargetKey configuredTargetKey,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ConfigConditions configConditions,
-      @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts,
-      ExecGroupCollection.Builder execGroupCollectionBuilder)
+      @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts)
       throws InterruptedException, ActionConflictException, InvalidExecGroupException {
     Preconditions.checkState(
         enableAnalysis, "Already in execution phase %s %s", target, configuration);
@@ -1035,8 +1024,7 @@ public final class SkyframeBuildView {
         configuredTargetKey,
         prerequisiteMap,
         configConditions,
-        toolchainContexts,
-        execGroupCollectionBuilder);
+        toolchainContexts);
   }
 
   /**
@@ -1074,7 +1062,10 @@ public final class SkyframeBuildView {
     // trims a host configuration to the same scope as a target configuration. Since their options
     // are different, the host instance may actually be able to produce the fragment. So it's
     // wrong and potentially dangerous to unilaterally exclude it.
-    FragmentClassSet fragmentClasses = ruleClassProvider.getAllFragments();
+    FragmentClassSet fragmentClasses =
+        config.trimConfigurations()
+            ? config.fragmentClasses()
+            : FragmentClassSet.of(ruleClassProvider.getAllFragments());
     // TODO(bazel-team): investigate getting the trimmed config from Skyframe instead of cloning.
     // This is the only place we instantiate BuildConfigurations outside of Skyframe, This can
     // produce surprising effects, such as requesting a configuration that's in the Skyframe cache
@@ -1089,6 +1080,10 @@ public final class SkyframeBuildView {
         topLevelHostConfiguration.clone(fragmentClasses, ruleClassProvider);
     hostConfigurationCache.put(config, trimmedConfig);
     return trimmedConfig;
+  }
+
+  SkyframeDependencyResolver createDependencyResolver(Environment env) {
+    return new SkyframeDependencyResolver(env);
   }
 
   /**

@@ -23,11 +23,13 @@ import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationResolver.TopLevelTargetsAndConfigsResult;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
@@ -83,8 +85,9 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
           throws InvalidConfigurationException {
     BuildConfiguration hostConfiguration =
         skyframeExecutor.getConfiguration(eventHandler, hostConfigurationKey);
-    Collection<BuildConfiguration> targetConfigurations =
-        skyframeExecutor.getConfigurations(eventHandler, targetConfigurationKeys).values();
+    ImmutableList<BuildConfiguration> targetConfigurations =
+        ImmutableList.copyOf(
+            skyframeExecutor.getConfigurations(eventHandler, targetConfigurationKeys).values());
     return new BuildConfigurationCollection(targetConfigurations, hostConfiguration);
   }
 
@@ -92,34 +95,40 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
    * Returns the intended top-level targets and configurations for the build. Note that this
    * performs additional Skyframe calls for the involved configurations and targets, which may be
    * expensive.
+   *
+   * <p>Skips targets that have errors and registers the errors to be reported later as part of
+   * {@link com.google.devtools.build.lib.analysis.AnalysisResult} error resolution.
    */
-  public Collection<TargetAndConfiguration> getTopLevelCts(
+  public TopLevelTargetsAndConfigsResult getTopLevelCts(
       ExtendedEventHandler eventHandler, SkyframeExecutor skyframeExecutor) {
     List<TargetAndConfiguration> result = new ArrayList<>();
     Map<BuildConfigurationValue.Key, BuildConfiguration> configs =
         skyframeExecutor.getConfigurations(
             eventHandler,
-            topLevelCtKeys
-                .stream()
-                .map(ctk -> ctk.getConfigurationKey())
+            topLevelCtKeys.stream()
+                .map(ConfiguredTargetKey::getConfigurationKey)
                 .filter(Predicates.notNull())
                 .collect(Collectors.toSet()));
 
     // TODO(ulfjack): This performs one Skyframe call per top-level target. This is not a
     // regression, but we should fix it nevertheless, either by doing a bulk lookup call or by
     // migrating the consumers of these to Skyframe so they can directly request the values.
+    boolean hasError = false;
     for (ConfiguredTargetKey key : topLevelCtKeys) {
       Target target;
       try {
         target = skyframeExecutor.getPackageManager().getTarget(eventHandler, key.getLabel());
       } catch (NoSuchPackageException | NoSuchTargetException | InterruptedException e) {
-        throw new RuntimeException("Failed to get package from TargetPatternPhaseValue", e);
+        eventHandler.handle(
+            Event.error("Failed to get package from TargetPatternPhaseValue: " + e.getMessage()));
+        hasError = true;
+        continue;
       }
       BuildConfiguration config =
           key.getConfigurationKey() == null ? null : configs.get(key.getConfigurationKey());
       result.add(new TargetAndConfiguration(target, config));
     }
-    return result;
+    return new TopLevelTargetsAndConfigsResult(result, hasError);
   }
 
   @Override
@@ -148,10 +157,10 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
   @ThreadSafe
   public static SkyKey key(
       FragmentClassSet fragments,
-      BuildOptions.OptionsDiffForReconstruction optionsDiff,
+      BuildOptions options,
       Set<String> multiCpu,
       Collection<Label> labels) {
-    return new PrepareAnalysisPhaseKey(fragments, optionsDiff, multiCpu, labels);
+    return new PrepareAnalysisPhaseKey(fragments, options, multiCpu, labels);
   }
 
   /** The configuration needed to prepare the analysis phase. */
@@ -160,17 +169,17 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
   @AutoCodec
   public static final class PrepareAnalysisPhaseKey implements SkyKey, Serializable {
     private final FragmentClassSet fragments;
-    private final BuildOptions.OptionsDiffForReconstruction optionsDiff;
+    private final BuildOptions options;
     private final ImmutableSortedSet<String> multiCpu;
     private final ImmutableSet<Label> labels;
 
     PrepareAnalysisPhaseKey(
         FragmentClassSet fragments,
-        BuildOptions.OptionsDiffForReconstruction optionsDiff,
+        BuildOptions options,
         Set<String> multiCpu,
         Collection<Label> labels) {
       this.fragments = Preconditions.checkNotNull(fragments);
-      this.optionsDiff = Preconditions.checkNotNull(optionsDiff);
+      this.options = Preconditions.checkNotNull(options);
       this.multiCpu = ImmutableSortedSet.copyOf(multiCpu);
       this.labels = ImmutableSet.copyOf(labels);
     }
@@ -184,8 +193,8 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
       return fragments;
     }
 
-    public BuildOptions.OptionsDiffForReconstruction getOptionsDiff() {
-      return optionsDiff;
+    public BuildOptions getOptions() {
+      return options;
     }
 
     public ImmutableSortedSet<String> getMultiCpu() {
@@ -200,7 +209,7 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
     public String toString() {
       return MoreObjects.toStringHelper(PrepareAnalysisPhaseKey.class)
           .add("fragments", fragments)
-          .add("optionsDiff", optionsDiff)
+          .add("optionsDiff", options)
           .add("multiCpu", multiCpu)
           .add("labels", labels)
           .toString();
@@ -208,11 +217,7 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
 
     @Override
     public int hashCode() {
-      return Objects.hash(
-          fragments,
-          optionsDiff,
-          multiCpu,
-          labels);
+      return Objects.hash(fragments, options, multiCpu, labels);
     }
 
     @Override
@@ -225,7 +230,7 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
       }
       PrepareAnalysisPhaseKey other = (PrepareAnalysisPhaseKey) obj;
       return other.fragments.equals(this.fragments)
-          && other.optionsDiff.equals(this.optionsDiff)
+          && other.options.equals(this.options)
           && other.multiCpu.equals(multiCpu)
           && other.labels.equals(labels);
     }

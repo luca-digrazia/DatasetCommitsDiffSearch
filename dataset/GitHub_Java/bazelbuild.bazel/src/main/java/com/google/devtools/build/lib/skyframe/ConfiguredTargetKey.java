@@ -14,9 +14,8 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.actions.ActionLookupKey;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -43,27 +42,24 @@ public class ConfiguredTargetKey implements ActionLookupKey {
   private final Label label;
   @Nullable private final BuildConfigurationValue.Key configurationKey;
 
-  private final transient int hashCode;
+  private transient int hashCode;
 
-  ConfiguredTargetKey(
-      Label label, @Nullable BuildConfigurationValue.Key configurationKey, int hashCode) {
-    this.label = checkNotNull(label);
+  ConfiguredTargetKey(Label label, @Nullable BuildConfigurationValue.Key configurationKey) {
+    this.label = Preconditions.checkNotNull(label);
     this.configurationKey = configurationKey;
-    this.hashCode = hashCode;
   }
 
   @AutoCodec.VisibleForSerialization
   @AutoCodec.Instantiator
   static ConfiguredTargetKey create(
       Label label, @Nullable BuildConfigurationValue.Key configurationKey) {
-    int hashCode = computeHashCode(label, configurationKey, /*toolchainContextKey=*/ null);
-    return interner.intern(new ConfiguredTargetKey(label, configurationKey, hashCode));
+    return interner.intern(new ConfiguredTargetKey(label, configurationKey));
   }
 
   public Builder toBuilder() {
     return builder()
-        .setConfigurationKey(configurationKey)
-        .setLabel(label)
+        .setConfigurationKey(getConfigurationKey())
+        .setLabel(getLabel())
         .setToolchainContextKey(getToolchainContextKey());
   }
 
@@ -89,15 +85,34 @@ public class ConfiguredTargetKey implements ActionLookupKey {
 
   @Override
   public final int hashCode() {
-    return hashCode;
+    // We use the hash code caching strategy employed by java.lang.String. There are three subtle
+    // things going on here:
+    //
+    // (1) We use a value of 0 to indicate that the hash code hasn't been computed and cached yet.
+    // Yes, this means that if the hash code is really 0 then we will "recompute" it each time. But
+    // this isn't a problem in practice since a hash code of 0 should be rare.
+    //
+    // (2) Since we have no synchronization, multiple threads can race here thinking there are the
+    // first one to compute and cache the hash code.
+    //
+    // (3) Moreover, since 'hashCode' is non-volatile, the cached hash code value written from one
+    // thread may not be visible by another.
+    //
+    // All three of these issues are benign from a correctness perspective; in the end we have no
+    // overhead from synchronization, at the cost of potentially computing the hash code more than
+    // once.
+    int h = hashCode;
+    if (h == 0) {
+      h = computeHashCode();
+      hashCode = h;
+    }
+    return h;
   }
 
-  private static int computeHashCode(
-      Label label,
-      @Nullable BuildConfigurationValue.Key configurationKey,
-      @Nullable ToolchainContextKey toolchainContextKey) {
+  private int computeHashCode() {
     int configVal = configurationKey == null ? 79 : configurationKey.hashCode();
-    int toolchainContextVal = toolchainContextKey == null ? 47 : toolchainContextKey.hashCode();
+    int toolchainContextVal =
+        getToolchainContextKey() == null ? 47 : getToolchainContextKey().hashCode();
     return 31 * label.hashCode() + configVal + toolchainContextVal;
   }
 
@@ -106,12 +121,14 @@ public class ConfiguredTargetKey implements ActionLookupKey {
     if (this == obj) {
       return true;
     }
+    if (obj == null) {
+      return false;
+    }
     if (!(obj instanceof ConfiguredTargetKey)) {
       return false;
     }
     ConfiguredTargetKey other = (ConfiguredTargetKey) obj;
-    return hashCode == other.hashCode
-        && label.equals(other.label)
+    return Objects.equals(label, other.label)
         && Objects.equals(configurationKey, other.configurationKey)
         && Objects.equals(getToolchainContextKey(), other.getToolchainContextKey());
   }
@@ -147,10 +164,9 @@ public class ConfiguredTargetKey implements ActionLookupKey {
     private ConfiguredTargetKeyWithToolchainContext(
         Label label,
         @Nullable BuildConfigurationValue.Key configurationKey,
-        int hashCode,
         ToolchainContextKey toolchainContextKey) {
-      super(label, configurationKey, hashCode);
-      this.toolchainContextKey = checkNotNull(toolchainContextKey);
+      super(label, configurationKey);
+      this.toolchainContextKey = toolchainContextKey;
     }
 
     @AutoCodec.VisibleForSerialization
@@ -159,13 +175,13 @@ public class ConfiguredTargetKey implements ActionLookupKey {
         Label label,
         @Nullable BuildConfigurationValue.Key configurationKey,
         ToolchainContextKey toolchainContextKey) {
-      int hashCode = computeHashCode(label, configurationKey, toolchainContextKey);
       return withToolchainContextInterner.intern(
           new ConfiguredTargetKeyWithToolchainContext(
-              label, configurationKey, hashCode, toolchainContextKey));
+              label, configurationKey, toolchainContextKey));
     }
 
     @Override
+    @Nullable
     final ToolchainContextKey getToolchainContextKey() {
       return toolchainContextKey;
     }
@@ -177,12 +193,10 @@ public class ConfiguredTargetKey implements ActionLookupKey {
   }
 
   /** A helper class to create instances of {@link ConfiguredTargetKey}. */
-  public static final class Builder {
+  public static class Builder {
     private Label label = null;
     private BuildConfigurationValue.Key configurationKey = null;
     private ToolchainContextKey toolchainContextKey = null;
-
-    private Builder() {}
 
     /** Sets the label for the target. */
     public Builder setLabel(Label label) {

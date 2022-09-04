@@ -162,6 +162,7 @@ import com.google.devtools.build.lib.skyframe.ArtifactConflictFinder.ConflictExc
 import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.FileDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
+import com.google.devtools.build.lib.skyframe.FileFunction.NonexistentFileReceiver;
 import com.google.devtools.build.lib.skyframe.MetadataConsumerForMetrics.FilesMetricConsumer;
 import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptionReadingBuildFile;
 import com.google.devtools.build.lib.skyframe.PackageFunction.IncrementalityIntent;
@@ -213,6 +214,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -370,6 +372,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   private int lastConcurrencyLevel = -1;
 
   private final PathResolverFactory pathResolverFactory = new PathResolverFactoryImpl();
+  @Nullable private final NonexistentFileReceiver nonexistentFileReceiver;
 
   private boolean siblingRepositoryLayout = false;
 
@@ -421,6 +424,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       BuildOptions defaultBuildOptions,
       @Nullable PackageProgressReceiver packageProgress,
       @Nullable ConfiguredTargetProgressReceiver configuredTargetProgress,
+      @Nullable NonexistentFileReceiver nonexistentFileReceiver,
       @Nullable ManagedDirectoriesKnowledge managedDirectoriesKnowledge,
       BugReporter bugReporter) {
     // Strictly speaking, these arguments are not required for initialization, but all current
@@ -430,6 +434,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     this.pkgFactory = pkgFactory;
     this.shouldUnblockCpuWorkWhenFetchingDeps = shouldUnblockCpuWorkWhenFetchingDeps;
     this.graphInconsistencyReceiver = graphInconsistencyReceiver;
+    this.nonexistentFileReceiver = nonexistentFileReceiver;
     this.bugReporter = bugReporter;
     this.pkgFactory.setSyscalls(syscalls);
     this.workspaceStatusActionFactory = workspaceStatusActionFactory;
@@ -503,7 +508,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     map.put(
         FileSymlinkInfiniteExpansionUniquenessFunction.NAME,
         new FileSymlinkInfiniteExpansionUniquenessFunction());
-    map.put(FileValue.FILE, new FileFunction(pkgLocator));
+    map.put(FileValue.FILE, new FileFunction(pkgLocator, nonexistentFileReceiver));
     map.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     map.put(
         SkyFunctions.PACKAGE_LOOKUP,
@@ -2006,7 +2011,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   }
 
   /**
-   * Retrieves the configurations needed for the given deps. Unconditionally includes all fragments.
+   * Retrieves the configurations needed for the given deps. If {@link
+   * BuildConfiguration#trimConfigurations()} is true, trims their fragments to only those needed by
+   * their transitive closures. Else unconditionally includes all fragments.
    *
    * <p>Skips targets with loading phase errors.
    */
@@ -2017,74 +2024,120 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       ExtendedEventHandler eventHandler, BuildOptions fromOptions, Iterable<DependencyKey> keys)
       throws InvalidConfigurationException, InterruptedException {
     ConfigurationsResult.Builder builder = ConfigurationsResult.newBuilder();
+    Set<DependencyKey> depsToEvaluate = new HashSet<>();
 
-    ImmutableSortedSet<Class<? extends Fragment>> allFragments =
-        ruleClassProvider.getAllFragments();
+    ImmutableSortedSet<Class<? extends Fragment>> allFragments = null;
+    if (useUntrimmedConfigs(fromOptions)) {
+      allFragments = ruleClassProvider.getAllFragments();
+    }
+
+    // Get the fragments needed for dynamic configuration nodes.
+    final List<SkyKey> transitiveFragmentSkyKeys = new ArrayList<>();
+    Map<Label, ImmutableSortedSet<Class<? extends Fragment>>> fragmentsMap = new HashMap<>();
+    Set<Label> labelsWithErrors = new HashSet<>();
+    for (DependencyKey key : keys) {
+      if (useUntrimmedConfigs(fromOptions)) {
+        fragmentsMap.put(key.getLabel(), allFragments);
+      } else {
+        depsToEvaluate.add(key);
+        transitiveFragmentSkyKeys.add(TransitiveTargetKey.of(key.getLabel()));
+      }
+    }
+    EvaluationResult<SkyValue> fragmentsResult =
+        evaluateSkyKeys(eventHandler, transitiveFragmentSkyKeys, /*keepGoing=*/ true);
+    for (Map.Entry<SkyKey, ErrorInfo> entry : fragmentsResult.errorMap().entrySet()) {
+      reportCycles(eventHandler, entry.getValue().getCycleInfo(), entry.getKey());
+    }
+    for (DependencyKey key : keys) {
+      if (!depsToEvaluate.contains(key)) {
+        // No fragments to compute here.
+      } else if (fragmentsResult.getError(TransitiveTargetKey.of(key.getLabel())) != null) {
+        labelsWithErrors.add(key.getLabel());
+        builder.setHasError();
+      } else {
+        TransitiveTargetValue ttv =
+            (TransitiveTargetValue) fragmentsResult.get(TransitiveTargetKey.of(key.getLabel()));
+        fragmentsMap.put(
+            key.getLabel(),
+            ImmutableSortedSet.copyOf(
+                BuildConfiguration.lexicalFragmentSorter,
+                ttv.getTransitiveConfigFragments().toSet()));
+      }
+    }
 
     PlatformMappingValue platformMappingValue = getPlatformMappingValue(eventHandler, fromOptions);
 
     // Now get the configurations.
-    List<SkyKey> configSkyKeys = new ArrayList<>();
+    final List<SkyKey> configSkyKeys = new ArrayList<>();
     for (DependencyKey key : keys) {
-      ConfigurationTransition transition = key.getTransition();
-      if (transition == NullTransition.INSTANCE) {
+      if (labelsWithErrors.contains(key.getLabel())) {
         continue;
       }
-      Collection<BuildOptions> toOptions;
-      try {
-        Map<PackageValue.Key, PackageValue> buildSettingPackages =
-            getBuildSettingPackages(transition, eventHandler);
-        toOptions =
-            ConfigurationResolver.applyTransition(
-                    fromOptions, transition, buildSettingPackages, eventHandler)
-                .values();
-      } catch (TransitionException e) {
-        eventHandler.handle(Event.error(e.getMessage()));
-        builder.setHasError();
-        continue;
-      }
-      for (BuildOptions toOption : toOptions) {
-        configSkyKeys.add(toConfigurationKey(platformMappingValue, allFragments, toOption));
+      ImmutableSortedSet<Class<? extends Fragment>> depFragments = fragmentsMap.get(key.getLabel());
+      if (depFragments != null) {
+        ConfigurationTransition transition = key.getTransition();
+        if (transition == NullTransition.INSTANCE) {
+          continue;
+        }
+        Collection<BuildOptions> toOptions = Collections.singletonList(fromOptions);
+        try {
+          Map<PackageValue.Key, PackageValue> buildSettingPackages =
+              getBuildSettingPackages(transition, eventHandler);
+          toOptions =
+              ConfigurationResolver.applyTransition(
+                      fromOptions, transition, buildSettingPackages, eventHandler)
+                  .values();
+        } catch (TransitionException e) {
+          eventHandler.handle(Event.error(e.getMessage()));
+          builder.setHasError();
+          continue;
+        }
+        for (BuildOptions toOption : toOptions) {
+          configSkyKeys.add(toConfigurationKey(platformMappingValue, depFragments, toOption));
+        }
       }
     }
-
     EvaluationResult<SkyValue> configsResult =
         evaluateSkyKeys(eventHandler, configSkyKeys, /*keepGoing=*/ true);
-
     for (DependencyKey key : keys) {
-      if (key.getTransition() == NullTransition.INSTANCE) {
-        builder.put(key, null);
+      if (labelsWithErrors.contains(key.getLabel())) {
         continue;
       }
-      Collection<BuildOptions> toOptions;
-      try {
-        Map<PackageValue.Key, PackageValue> buildSettingPackages =
-            getBuildSettingPackages(key.getTransition(), eventHandler);
-        toOptions =
-            ConfigurationResolver.applyTransition(
-                    fromOptions, key.getTransition(), buildSettingPackages, eventHandler)
-                .values();
-      } catch (TransitionException e) {
-        eventHandler.handle(Event.error(e.getMessage()));
-        builder.setHasError();
-        continue;
-      }
-
-      for (BuildOptions toOption : toOptions) {
-        BuildConfigurationValue.Key configKey =
-            toConfigurationKey(platformMappingValue, allFragments, toOption);
-        BuildConfigurationValue configValue =
-            (BuildConfigurationValue) configsResult.get(configKey);
-        if (configValue != null) {
-          builder.put(key, configValue.getConfiguration());
-        } else if (configsResult.errorMap().containsKey(configKey)) {
-          ErrorInfo configError = configsResult.getError(configKey);
-          if (configError.getException() instanceof InvalidConfigurationException) {
-            // Wrap underlying exception to make it clearer to developers which line of code
-            // actually threw exception.
-            InvalidConfigurationException underlying =
-                (InvalidConfigurationException) configError.getException();
-            throw new InvalidConfigurationException(underlying.getDetailedExitCode(), underlying);
+      ImmutableSortedSet<Class<? extends Fragment>> depFragments = fragmentsMap.get(key.getLabel());
+      if (depFragments != null) {
+        if (key.getTransition() == NullTransition.INSTANCE) {
+          builder.put(key, null);
+          continue;
+        }
+        Collection<BuildOptions> toOptions = Collections.singletonList(fromOptions);
+        try {
+          Map<PackageValue.Key, PackageValue> buildSettingPackages =
+              getBuildSettingPackages(key.getTransition(), eventHandler);
+          toOptions =
+              ConfigurationResolver.applyTransition(
+                      fromOptions, key.getTransition(), buildSettingPackages, eventHandler)
+                  .values();
+        } catch (TransitionException e) {
+          eventHandler.handle(Event.error(e.getMessage()));
+          builder.setHasError();
+          continue;
+        }
+        for (BuildOptions toOption : toOptions) {
+          BuildConfigurationValue.Key configKey =
+              toConfigurationKey(platformMappingValue, depFragments, toOption);
+          BuildConfigurationValue configValue =
+              ((BuildConfigurationValue) configsResult.get(configKey));
+          if (configValue != null) {
+            builder.put(key, configValue.getConfiguration());
+          } else if (configsResult.errorMap().containsKey(configKey)) {
+            ErrorInfo configError = configsResult.getError(configKey);
+            if (configError.getException() instanceof InvalidConfigurationException) {
+              // Wrap underlying exception to make it clearer to developers which line of code
+              // actually threw exception.
+              InvalidConfigurationException underlying =
+                  (InvalidConfigurationException) configError.getException();
+              throw new InvalidConfigurationException(underlying.getDetailedExitCode(), underlying);
+            }
           }
         }
       }
@@ -2171,6 +2224,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
               buildSettingPackages, unverifiedBuildSettings);
     }
     return buildSettingPackages;
+  }
+
+  /**
+   * Returns whether configurations should trim their fragments to only those needed by targets and
+   * their transitive dependencies.
+   */
+  private static boolean useUntrimmedConfigs(BuildOptions options) {
+    return options.get(CoreOptions.class).configsMode == CoreOptions.ConfigsMode.NOTRIM;
   }
 
   /**
