@@ -162,8 +162,16 @@ class Desugar {
       System.out.printf("Lambda classes will be written under %s%n", dumpDirectory);
     }
 
-    checkState(!options.bootclasspath.isEmpty() || options.allowEmptyBootclasspath,
-        "Bootclasspath required to desugar %s", options.inputJar);
+    boolean allowDefaultMethods = options.minSdkVersion >= 24;
+
+    ClassLoader parent;
+    if (options.bootclasspath.isEmpty() && !options.allowEmptyBootclasspath) {
+      // TODO(b/31547323): Require bootclasspath once Bazel always provides it.  Using the tool's
+      // bootclasspath as a fallback is iffy at best and produces wrong results at worst.
+      parent = ClassLoader.getSystemClassLoader();
+    } else {
+      parent = new ThrowingClassLoader();
+    }
 
     CoreLibraryRewriter rewriter =
         new CoreLibraryRewriter(options.coreLibrary ? "__desugar__/" : "");
@@ -171,8 +179,7 @@ class Desugar {
     IndexedJars appIndexedJar = new IndexedJars(ImmutableList.of(options.inputJar));
     IndexedJars appAndClasspathIndexedJars = new IndexedJars(options.classpath, appIndexedJar);
     ClassLoader loader =
-        createClassLoader(rewriter, options.bootclasspath, appAndClasspathIndexedJars);
-    boolean allowDefaultMethods = options.minSdkVersion >= 24;
+        createClassLoader(rewriter, options.bootclasspath, appAndClasspathIndexedJars, parent);
     boolean allowCallsToObjectsNonNull = options.minSdkVersion >= 19;
     try (ZipFile in = new ZipFile(options.inputJar.toFile());
         ZipOutputStream out =
@@ -292,11 +299,14 @@ class Desugar {
     out.closeEntry();
   }
 
-  private static ClassLoader createClassLoader(CoreLibraryRewriter rewriter,
-      List<Path> bootclasspath, IndexedJars appAndClasspathIndexedJars) throws IOException {
+  private static ClassLoader createClassLoader(
+      CoreLibraryRewriter rewriter,
+      List<Path> bootclasspath,
+      IndexedJars appAndClasspathIndexedJars,
+      ClassLoader parent)
+      throws IOException {
     // Use a classloader that as much as possible uses the provided bootclasspath instead of
     // the tool's system classloader.  Unfortunately we can't do that for java. classes.
-    ClassLoader parent = new ThrowingClassLoader();
     if (!bootclasspath.isEmpty()) {
       parent = new HeaderClassLoader(new IndexedJars(bootclasspath), rewriter, parent);
     }

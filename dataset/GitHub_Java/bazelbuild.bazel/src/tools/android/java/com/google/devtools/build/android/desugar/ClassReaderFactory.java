@@ -15,47 +15,46 @@ package com.google.devtools.build.android.desugar;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.jar.JarFile;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import javax.annotation.Nullable;
 import org.objectweb.asm.ClassReader;
 
 class ClassReaderFactory {
-  private final IndexedInputs indexedInputs;
+  private final IndexedJars indexedJars;
   private final CoreLibraryRewriter rewriter;
 
-  public ClassReaderFactory(IndexedInputs indexedInputs, CoreLibraryRewriter rewriter) {
+  public ClassReaderFactory(IndexedJars indexedJars, CoreLibraryRewriter rewriter) {
     this.rewriter = rewriter;
-    this.indexedInputs = indexedInputs;
+    this.indexedJars = indexedJars;
   }
 
   /**
-   * Returns a reader for the given/internal/Class$Name if the class is defined in the wrapped input
+   * Returns a reader for the given/internal/Class$Name if the class is defined in the wrapped Jar
    * and {@code null} otherwise.  For simplicity this method turns checked into runtime exceptions
    * under the assumption that all classes have already been read once when this method is called.
    */
   @Nullable
   public ClassReader readIfKnown(String internalClassName) {
     String filename = rewriter.unprefix(internalClassName) + ".class";
-    InputFileProvider inputFileProvider = indexedInputs.getInputFileProvider(filename);
+    JarFile jarFile = indexedJars.getJarFile(filename);
 
-    if (inputFileProvider != null) {
-      try (InputStream bytecode = inputFileProvider.getInputStream(filename)) {
-        // ClassReader doesn't take ownership and instead eagerly reads the stream's contents
-        return rewriter.reader(bytecode);
-      } catch (IOException e) {
-        // We should've already read through all files in the Jar once at this point, so we don't
-        // expect failures reading some files a second time.
-        throw new IllegalStateException("Couldn't load " + internalClassName, e);
-      }
+    if (jarFile != null) {
+      return getClassReader(internalClassName, jarFile, jarFile.getEntry(filename));
     }
 
     return null;
   }
 
-  /**
-   * Returns {@code true} if the given given/internal/Class$Name is defined in the wrapped input.
-   */
-  public boolean isKnown(String internalClassName) {
-    String filename = rewriter.unprefix(internalClassName) + ".class";
-    return indexedInputs.getInputFileProvider(filename) != null;
+  private ClassReader getClassReader(String internalClassName, ZipFile jar, ZipEntry entry) {
+    try (InputStream bytecode = jar.getInputStream(entry)) {
+      // ClassReader doesn't take ownership and instead eagerly reads the stream's contents
+      return rewriter.reader(bytecode);
+    } catch (IOException e) {
+      // We should've already read through all files in the Jar once at this point, so we don't
+      // expect failures reading some files a second time.
+      throw new IllegalStateException("Couldn't load " + internalClassName, e);
+    }
   }
 }
