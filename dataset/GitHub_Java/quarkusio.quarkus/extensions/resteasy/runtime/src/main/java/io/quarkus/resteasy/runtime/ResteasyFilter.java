@@ -2,7 +2,6 @@ package io.quarkus.resteasy.runtime;
 
 import java.io.IOException;
 
-import javax.enterprise.inject.spi.CDI;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
@@ -12,8 +11,6 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 
 import org.jboss.resteasy.plugins.server.servlet.Filter30Dispatcher;
-
-import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 
 /**
  * A filter that will be mapped to the default servlet. At first content will attempt to be served from the
@@ -30,8 +27,6 @@ public class ResteasyFilter extends Filter30Dispatcher {
             //we only serve get requests from the default servlet and CORS preflight requests
             filterChain.doFilter(servletRequest, new ResteasyResponseWrapper(response, request));
         } else {
-            CurrentVertxRequest currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
-            ContextUtil.pushContext(currentVertxRequest.getCurrent());
             servletContainerDispatcher.service(request.getMethod(), request, response, true);
         }
     }
@@ -57,23 +52,16 @@ public class ResteasyFilter extends Filter30Dispatcher {
         @Override
         public void sendError(int sc, String msg) throws IOException {
             if (sc == 404 || sc == 403) {
-
-                service();
+                servletContainerDispatcher.service(request.getMethod(), request, response, true);
             } else {
                 super.sendError(sc, msg);
             }
         }
 
-        protected void service() throws IOException {
-            CurrentVertxRequest currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
-            ContextUtil.pushContext(currentVertxRequest.getCurrent());
-            servletContainerDispatcher.service(request.getMethod(), request, response, true);
-        }
-
         @Override
         public void sendError(int sc) throws IOException {
             if (sc == 404 || sc == 403) {
-                service();
+                servletContainerDispatcher.service(request.getMethod(), request, response, true);
             } else {
                 super.sendError(sc);
             }
