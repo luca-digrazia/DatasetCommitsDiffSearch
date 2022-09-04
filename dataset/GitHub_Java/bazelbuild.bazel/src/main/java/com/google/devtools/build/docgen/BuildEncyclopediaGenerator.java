@@ -53,11 +53,7 @@ public class BuildEncyclopediaGenerator {
   }
 
   public static void main(String[] args) {
-    OptionsParser parser =
-        OptionsParser.builder()
-            .optionsClasses(BuildEncyclopediaOptions.class)
-            .allowResidue(false)
-            .build();
+    OptionsParser parser = OptionsParser.newOptionsParser(false, BuildEncyclopediaOptions.class);
     parser.parseAndExitUponError(args);
     BuildEncyclopediaOptions options = parser.getOptions(BuildEncyclopediaOptions.class);
 

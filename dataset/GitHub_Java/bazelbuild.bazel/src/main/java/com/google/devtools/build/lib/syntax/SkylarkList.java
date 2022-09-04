@@ -24,9 +24,9 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.StarlarkMutable.BaseMutableList;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.RandomAccess;
@@ -63,14 +63,15 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
    * @throws EvalException if the key is invalid
    */
   @Override
-  public E getIndex(Object key, Location loc) throws EvalException {
+  public E getIndex(Object key, Location loc, StarlarkContext context) throws EvalException {
     List<E> list = getContentsUnsafe();
     int index = EvalUtils.getSequenceIndex(key, list.size(), loc);
     return list.get(index);
   }
 
   @Override
-  public boolean containsKey(Object key, Location loc) throws EvalException {
+  public boolean containsKey(Object key, Location loc, StarlarkContext context)
+      throws EvalException {
     for (Object obj : this) {
       if (obj.equals(key)) {
         return true;
@@ -489,17 +490,6 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
     }
 
     @SkylarkCallable(
-        name = "clear",
-        doc = "Removes all the elements of the list.",
-        useLocation = true,
-        useEnvironment = true)
-    public Runtime.NoneType clearMethod(Location loc, Environment env) throws EvalException {
-      checkMutable(loc, env.mutability());
-      contents.clear();
-      return Runtime.NONE;
-    }
-
-    @SkylarkCallable(
       name = "insert",
       doc = "Inserts an item at a given position.",
       parameters = {
@@ -517,53 +507,35 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
     }
 
     @SkylarkCallable(
-        name = "extend",
-        doc = "Adds all items to the end of the list.",
-        parameters = {
-          @Param(name = "items", type = Object.class, doc = "Items to add at the end.")
-        },
-        useLocation = true,
-        useEnvironment = true)
-    public Runtime.NoneType extend(Object items, Location loc, Environment env)
+      name = "extend",
+      doc = "Adds all items to the end of the list.",
+      parameters = {
+          @Param(name = "items", type = SkylarkList.class, doc = "Items to add at the end.")
+      },
+      useLocation = true,
+      useEnvironment = true
+    )
+    public Runtime.NoneType extend(
+        SkylarkList<E> items, Location loc, Environment env)
         throws EvalException {
-      addAll(
-          (Collection<? extends E>) EvalUtils.toCollection(items, loc, env), loc, env.mutability());
+      addAll(items, loc, env.mutability());
       return Runtime.NONE;
     }
 
     @SkylarkCallable(
-        name = "index",
-        doc =
-            "Returns the index in the list of the first item whose value is x. "
-                + "It is an error if there is no such item.",
-        parameters = {
-          @Param(name = "x", type = Object.class, doc = "The object to search."),
-          @Param(
-              name = "start",
-              type = Integer.class,
-              defaultValue = "None",
-              noneable = true,
-              named = true,
-              doc = "The start index of the list portion to inspect."),
-          @Param(
-              name = "end",
-              type = Integer.class,
-              defaultValue = "None",
-              noneable = true,
-              named = true,
-              doc = "The end index of the list portion to inspect.")
-        },
-        useLocation = true)
-    public Integer index(Object x, Object start, Object end, Location loc) throws EvalException {
-      int i =
-          start == Runtime.NONE ? 0 : EvalUtils.clampRangeEndpoint((Integer) start, this.size());
-      int j =
-          end == Runtime.NONE
-              ? this.size()
-              : EvalUtils.clampRangeEndpoint((Integer) end, this.size());
-
-      while (i < j) {
-        if (this.get(i).equals(x)) {
+      name = "index",
+      doc =
+          "Returns the index in the list of the first item whose value is x. "
+              + "It is an error if there is no such item.",
+      parameters = {
+          @Param(name = "x", type = Object.class, doc = "The object to search.")
+      },
+      useLocation = true
+    )
+    public Integer index(Object x, Location loc) throws EvalException {
+      int i = 0;
+      for (Object obj : this) {
+        if (obj.equals(x)) {
           return i;
         }
         i++;
@@ -679,16 +651,6 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
     public boolean isImmutable() {
       for (Object item : this) {
         if (!EvalUtils.isImmutable(item)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    @Override
-    public boolean isHashable() {
-      for (Object item : this) {
-        if (!EvalUtils.isHashable(item)) {
           return false;
         }
       }

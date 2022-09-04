@@ -144,8 +144,7 @@ public final class CanonicalizeCommand implements BlazeCommand {
             .add(FlagClashCanaryOptions.class)
             .build();
     try {
-      OptionsParser parser =
-          OptionsParser.builder().optionsClasses(optionsClasses).allowResidue(false).build();
+      OptionsParser parser = OptionsParser.newOptionsParser(false, optionsClasses);
       parser.parse(options.getResidue());
 
       InvocationPolicy policy =

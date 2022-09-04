@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.StarlarkMutable.MutableMap;
@@ -79,25 +80,18 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
     this.mutability = env == null ? Mutability.IMMUTABLE : env.mutability();
   }
 
-  @SkylarkCallable(
-      name = "get",
-      doc =
-          "Returns the value for <code>key</code> if <code>key</code> is in the dictionary, "
-              + "else <code>default</code>. If <code>default</code> is not given, it defaults to "
-              + "<code>None</code>, so that this method never throws an error.",
-      parameters = {
-        @Param(name = "key", noneable = true, doc = "The key to look for."),
-        @Param(
-            name = "default",
-            defaultValue = "None",
-            noneable = true,
-            named = true,
-            doc = "The default value to use (instead of None) if the key is not found.")
-      },
-      allowReturnNones = true,
-      useEnvironment = true)
-  public Object get(Object key, Object defaultValue, Environment env) throws EvalException {
-    if (containsKey(key, null, env)) {
+  @SkylarkCallable(name = "get",
+    doc = "Returns the value for <code>key</code> if <code>key</code> is in the dictionary, "
+        + "else <code>default</code>. If <code>default</code> is not given, it defaults to "
+        + "<code>None</code>, so that this method never throws an error.",
+    parameters = {
+      @Param(name = "key", noneable = true, doc = "The key to look for."),
+      @Param(name = "default", defaultValue = "None", noneable = true, named = true,
+          doc = "The default value to use (instead of None) if the key is not found.")},
+    allowReturnNones = true
+  )
+  public Object get(Object key, Object defaultValue) {
+    if (this.containsKey(key)) {
       return this.get(key);
     }
     return defaultValue;
@@ -221,7 +215,7 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
     SkylarkDict<K, V> dict =
         (args instanceof SkylarkDict) ? (SkylarkDict<K, V>) args : getDictFromArgs(args, loc, env);
     dict = SkylarkDict.plus(dict, (SkylarkDict<K, V>) kwargs, env);
-    putAll(dict, loc, env.mutability(), env);
+    putAll(dict, loc, env.mutability());
     return Runtime.NONE;
   }
 
@@ -354,7 +348,7 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
    */
   public void put(K key, V value, Location loc, Mutability mutability) throws EvalException {
     checkMutable(loc, mutability);
-    EvalUtils.checkValidDictKey(key, null);
+    EvalUtils.checkValidDictKey(key);
     contents.put(key, value);
   }
 
@@ -364,9 +358,7 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
    */
   // TODO(bazel-team): Decide whether to eliminate this overload.
   public void put(K key, V value, Location loc, Environment env) throws EvalException {
-    checkMutable(loc, mutability);
-    EvalUtils.checkValidDictKey(key, env);
-    contents.put(key, value);
+    put(key, value, loc, env.mutability());
   }
 
   /**
@@ -378,11 +370,11 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
    * @throws EvalException if some key is invalid or the dict is frozen
    */
   public <KK extends K, VV extends V> void putAll(
-      Map<KK, VV> map, Location loc, Mutability mutability, Environment env) throws EvalException {
+      Map<KK, VV> map, Location loc, Mutability mutability) throws EvalException {
     checkMutable(loc, mutability);
     for (Map.Entry<KK, VV> e : map.entrySet()) {
       KK k = e.getKey();
-      EvalUtils.checkValidDictKey(k, env);
+      EvalUtils.checkValidDictKey(k);
       contents.put(k, e.getValue());
     }
   }
@@ -492,7 +484,8 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
   }
 
   @Override
-  public final Object getIndex(Object key, Location loc) throws EvalException {
+  public final Object getIndex(Object key, Location loc, StarlarkContext context)
+      throws EvalException {
     if (!this.containsKey(key)) {
       throw new EvalException(loc, Printer.format("key %r not found in dictionary", key));
     }
@@ -500,15 +493,8 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
   }
 
   @Override
-  public final boolean containsKey(Object key, Location loc) throws EvalException {
-    return this.containsKey(key);
-  }
-
-  @Override
-  public final boolean containsKey(Object key, Location loc, Environment env) throws EvalException {
-    if (env.getSemantics().incompatibleDisallowDictLookupUnhashableKeys()) {
-      EvalUtils.checkValidDictKey(key, env);
-    }
+  public final boolean containsKey(Object key, Location loc, StarlarkContext context)
+      throws EvalException {
     return this.containsKey(key);
   }
 

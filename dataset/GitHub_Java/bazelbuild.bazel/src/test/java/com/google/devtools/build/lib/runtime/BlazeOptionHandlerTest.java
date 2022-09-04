@@ -59,10 +59,8 @@ public class BlazeOptionHandlerTest {
   @Before
   public void initStuff() throws Exception {
     parser =
-        OptionsParser.builder()
-            .optionsClasses(TestOptions.class, CommonCommandOptions.class, ClientOptions.class)
-            .allowResidue(true)
-            .build();
+        OptionsParser.newOptionsParser(
+            true, TestOptions.class, CommonCommandOptions.class, ClientOptions.class);
     String productName = TestConstants.PRODUCT_NAME;
     ServerDirectories serverDirectories =
         new ServerDirectories(
@@ -73,7 +71,7 @@ public class BlazeOptionHandlerTest {
             .setServerDirectories(serverDirectories)
             .setProductName(productName)
             .setStartupOptionsProvider(
-                OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build())
+                OptionsParser.newOptionsParser(BlazeServerStartupOptions.class))
             .addBlazeModule(new BazelRulesModule())
             .build();
     this.runtime.overrideCommands(ImmutableList.of(new C0Command()));

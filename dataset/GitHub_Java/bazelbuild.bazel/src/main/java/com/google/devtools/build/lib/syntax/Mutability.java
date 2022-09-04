@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Formattable;
 import java.util.IdentityHashMap;
@@ -103,7 +104,7 @@ import java.util.List;
  * are also frozen. For safety and explicitness, this operation is disallowed unless the {@code
  * Mutability}'s {@link #allowsUnsafeShallowFreeze} method returns true.
  */
-public final class Mutability implements AutoCloseable {
+public final class Mutability implements AutoCloseable, Serializable {
 
   /**
    * If true, mutation of any {@link Freezable} associated with this {@code Mutability} is
