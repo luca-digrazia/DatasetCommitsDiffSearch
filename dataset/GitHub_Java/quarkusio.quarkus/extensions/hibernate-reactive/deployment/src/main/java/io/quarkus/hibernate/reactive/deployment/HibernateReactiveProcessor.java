@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Properties;
 
 import javax.persistence.SharedCacheMode;
@@ -27,11 +26,13 @@ import org.hibernate.loader.BatchFetchStyle;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.datasource.deployment.spi.DefaultDataSourceDbKindBuildItem;
 import io.quarkus.datasource.runtime.DataSourcesBuildTimeConfig;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
+import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
@@ -42,7 +43,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
-import io.quarkus.hibernate.orm.deployment.Dialects;
 import io.quarkus.hibernate.orm.deployment.HibernateConfigUtil;
 import io.quarkus.hibernate.orm.deployment.HibernateOrmConfig;
 import io.quarkus.hibernate.orm.deployment.HibernateOrmConfigPersistenceUnit;
@@ -75,6 +75,11 @@ public final class HibernateReactiveProcessor {
     @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(Feature.HIBERNATE_REACTIVE);
+    }
+
+    @BuildStep
+    CapabilityBuildItem capability() {
+        return new CapabilityBuildItem(Capability.HIBERNATE_REACTIVE);
     }
 
     @BuildStep
@@ -142,11 +147,7 @@ public final class HibernateReactiveProcessor {
 
         // we only support the default pool for now
         Optional<String> dbKindOptional = DefaultDataSourceDbKindBuildItem.resolve(
-                dataSourcesBuildTimeConfig.defaultDataSource.dbKind,
-                defaultDataSourceDbKindBuildItems,
-                dataSourcesBuildTimeConfig.defaultDataSource.devservices.enabled
-                        .orElse(dataSourcesBuildTimeConfig.namedDataSources.isEmpty()),
-                curateOutcomeBuildItem);
+                dataSourcesBuildTimeConfig.defaultDataSource.dbKind, defaultDataSourceDbKindBuildItems, curateOutcomeBuildItem);
         if (dbKindOptional.isPresent()) {
             final String dbKind = dbKindOptional.get();
             ParsedPersistenceXmlDescriptor reactivePU = generateReactivePersistenceUnit(
@@ -208,7 +209,7 @@ public final class HibernateReactiveProcessor {
         //we have no persistence.xml so we will create a default one
         Optional<String> dialect = persistenceUnitConfig.dialect.dialect;
         if (!dialect.isPresent()) {
-            dialect = Dialects.guessDialect(dbKind);
+            dialect = HibernateOrmProcessor.guessDialect(dbKind);
         }
 
         String dialectClassName = dialect.get();
@@ -250,17 +251,14 @@ public final class HibernateReactiveProcessor {
         }
 
         // Query
-        if (persistenceUnitConfig.fetch.batchSize > 0) {
-            setBatchFetchSize(desc, persistenceUnitConfig.fetch.batchSize);
-        } else if (persistenceUnitConfig.batchFetchSize > 0) {
-            setBatchFetchSize(desc, persistenceUnitConfig.batchFetchSize);
+        if (persistenceUnitConfig.batchFetchSize > 0) {
+            desc.getProperties().setProperty(AvailableSettings.DEFAULT_BATCH_FETCH_SIZE,
+                    Integer.toString(persistenceUnitConfig.batchFetchSize));
+            desc.getProperties().setProperty(AvailableSettings.BATCH_FETCH_STYLE, BatchFetchStyle.PADDED.toString());
         }
 
-        if (persistenceUnitConfig.fetch.maxDepth.isPresent()) {
-            setMaxFetchDepth(desc, persistenceUnitConfig.fetch.maxDepth);
-        } else if (persistenceUnitConfig.maxFetchDepth.isPresent()) {
-            setMaxFetchDepth(desc, persistenceUnitConfig.maxFetchDepth);
-        }
+        persistenceUnitConfig.maxFetchDepth.ifPresent(
+                depth -> desc.getProperties().setProperty(AvailableSettings.MAX_FETCH_DEPTH, String.valueOf(depth)));
 
         desc.getProperties().setProperty(AvailableSettings.QUERY_PLAN_CACHE_MAX_SIZE, Integer.toString(
                 persistenceUnitConfig.query.queryPlanCacheMaxSize));
@@ -319,16 +317,6 @@ public final class HibernateReactiveProcessor {
         }
 
         return desc;
-    }
-
-    private static void setMaxFetchDepth(ParsedPersistenceXmlDescriptor descriptor, OptionalInt maxFetchDepth) {
-        descriptor.getProperties().setProperty(AvailableSettings.MAX_FETCH_DEPTH, String.valueOf(maxFetchDepth.getAsInt()));
-    }
-
-    private static void setBatchFetchSize(ParsedPersistenceXmlDescriptor descriptor, int batchFetchSize) {
-        descriptor.getProperties().setProperty(AvailableSettings.DEFAULT_BATCH_FETCH_SIZE,
-                Integer.toString(batchFetchSize));
-        descriptor.getProperties().setProperty(AvailableSettings.BATCH_FETCH_STYLE, BatchFetchStyle.PADDED.toString());
     }
 
     private static Optional<String> getSqlLoadScript(Optional<String> sqlLoadScript, LaunchMode launchMode) {
