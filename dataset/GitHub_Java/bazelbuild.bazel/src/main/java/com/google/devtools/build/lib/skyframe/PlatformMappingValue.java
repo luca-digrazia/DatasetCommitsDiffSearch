@@ -198,7 +198,8 @@ public final class PlatformMappingValue implements SkyValue {
   private BuildConfigurationValue.Key computeMapping(
       BuildConfigurationValue.Key original, BuildOptions defaultBuildOptions)
       throws OptionsParsingException {
-    BuildOptions originalOptions = original.getOptions();
+    BuildOptions.OptionsDiffForReconstruction originalDiff = original.getOptionsDiff();
+    BuildOptions originalOptions = defaultBuildOptions.applyDiff(originalDiff);
 
     Preconditions.checkArgument(
         originalOptions.contains(PlatformOptions.class),
@@ -241,7 +242,8 @@ public final class PlatformMappingValue implements SkyValue {
     }
 
     return BuildConfigurationValue.keyWithoutPlatformMapping(
-        original.getFragments(), modifiedOptions);
+        original.getFragments(),
+        BuildOptions.diffForReconstruction(defaultBuildOptions, modifiedOptions));
   }
 
   private OptionsParsingResult parseWithCache(
@@ -253,7 +255,7 @@ public final class PlatformMappingValue implements SkyValue {
     }
   }
 
-  private static OptionsParsingResult parse(Iterable<String> args, BuildOptions defaultBuildOptions)
+  private OptionsParsingResult parse(Iterable<String> args, BuildOptions defaultBuildOptions)
       throws OptionsParsingException {
     OptionsParser parser =
         OptionsParser.builder()
