@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.periodical;
 
@@ -41,12 +42,8 @@ public class Periodicals {
 
     private final List<Periodical> periodicals;
     private final Map<Periodical, ScheduledFuture> futures;
-    private final ScheduledExecutorService scheduler;
-    private final ScheduledExecutorService daemonScheduler;
 
-    public Periodicals(Core core, ScheduledExecutorService scheduler, ScheduledExecutorService daemonScheduler) {
-        this.scheduler = scheduler;
-        this.daemonScheduler = daemonScheduler;
+    public Periodicals(Core core) {
         this.periodicals = Lists.newArrayList();
         this.futures = Maps.newHashMap();
         this.core = core;
@@ -68,7 +65,7 @@ public class Periodicals {
                     }
             );
 
-            ScheduledExecutorService scheduler = periodical.isDaemon() ? this.daemonScheduler : this.scheduler;
+            ScheduledExecutorService scheduler = periodical.isDaemon() ? core.getDaemonScheduler() : core.getScheduler();
             ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(
                     periodical,
                     periodical.getInitialDelaySeconds(),

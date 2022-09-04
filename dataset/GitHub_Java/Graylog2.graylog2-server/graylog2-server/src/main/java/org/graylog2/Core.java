@@ -51,7 +51,6 @@ import org.graylog2.inputs.Cache;
 import org.graylog2.inputs.ServerInputRegistry;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
-import org.graylog2.lifecycles.Lifecycle;
 import org.graylog2.metrics.jersey2.MetricsDynamicBinding;
 import org.graylog2.periodical.Periodicals;
 import org.graylog2.rest.RestAccessLogFilter;
@@ -124,8 +123,6 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Core implements GraylogServer, InputHost, ProcessingHost {
 
     private static final Logger LOG = LoggerFactory.getLogger(Core.class);
-
-    private Lifecycle lifecycle = Lifecycle.UNINITIALIZED;
 
     @Inject
     private MongoConnection mongoConnection;
@@ -632,8 +629,8 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     }
 
     public void pauseMessageProcessing(boolean locked) {
+        // TODO: properly pause and restart AMQP inputs.
         isProcessing.set(false);
-        setLifecycle(Lifecycle.PAUSED);
 
         // Never override pause lock if already locked.
         if (!processingPauseLocked.get()) {
@@ -648,7 +645,6 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
         }
 
         isProcessing.set(true);
-        setLifecycle(Lifecycle.RUNNING);
     }
 
     public boolean processingPauseLocked() {
@@ -720,13 +716,4 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     public boolean isRadio() {
         return false;
     }
-
-    public Lifecycle getLifecycle() {
-        return lifecycle;
-    }
-
-    public void setLifecycle(Lifecycle lifecycle) {
-        this.lifecycle = lifecycle;
-    }
-
 }

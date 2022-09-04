@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,11 +15,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.periodical;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.inject.Inject;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpEntity;
@@ -35,7 +35,6 @@ import org.graylog2.Configuration;
 import org.graylog2.Core;
 import org.graylog2.ServerVersion;
 import org.graylog2.notifications.Notification;
-import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.Version;
 import org.graylog2.versioncheck.VersionCheckResponse;
 import org.slf4j.Logger;
@@ -53,21 +52,14 @@ import java.nio.charset.Charset;
 public class VersionCheckThread extends Periodical {
 
     private static final Logger LOG = LoggerFactory.getLogger(VersionCheckThread.class);
-    private final NotificationService notificationService;
-    private final Configuration configuration;
-
-    @Inject
-    public VersionCheckThread(NotificationService notificationService, Configuration configuration) {
-        this.notificationService = notificationService;
-        this.configuration = configuration;
-    }
 
     @Override
     public void run() {
         final URIBuilder uri;
         final HttpGet get;
         try {
-            uri = new URIBuilder(configuration.getVersionchecksUri());
+            final Configuration config = core.getConfiguration();
+            uri = new URIBuilder(config.getVersionchecksUri());
             uri.addParameter("anonid", DigestUtils.sha256Hex(core.getNodeId()));
             uri.addParameter("version", ServerVersion.VERSION.toString());
 
@@ -86,14 +78,14 @@ public class VersionCheckThread extends Periodical {
                     .setConnectTimeout(10000)
                     .setSocketTimeout(10000)
                     .setConnectionRequestTimeout(10000);
-            if (configuration.getHttpProxyUri() != null) {
+            if (config.getHttpProxyUri() != null) {
                 try {
-                    final URIBuilder uriBuilder = new URIBuilder(configuration.getHttpProxyUri());
+                    final URIBuilder uriBuilder = new URIBuilder(config.getHttpProxyUri());
                     final URI proxyURI = uriBuilder.build();
 
                     configBuilder.setProxy(new HttpHost(proxyURI.getHost(), proxyURI.getPort(), proxyURI.getScheme()));
                 } catch (Exception e) {
-                    LOG.error("Invalid version check proxy URI: " + configuration.getHttpProxyUri(), e);
+                    LOG.error("Invalid version check proxy URI: " + config.getHttpProxyUri(), e);
                     return;
                 }
             }
@@ -127,14 +119,14 @@ public class VersionCheckThread extends Periodical {
             if (reportedVersion.greaterMinor(Core.GRAYLOG2_VERSION)) {
                 LOG.debug("Reported version is higher than ours ({}). Writing notification.", Core.GRAYLOG2_VERSION);
 
-                Notification notification = notificationService.buildNow()
+                Notification.buildNow(core)
                         .addSeverity(Notification.Severity.NORMAL)
                         .addType(Notification.Type.OUTDATED_VERSION)
-                        .addDetail("current_version", parsedResponse.toString());
-                notificationService.publishIfFirst(notification);
+                        .addDetail("current_version", parsedResponse.toString())
+                        .publishIfFirst();
             } else {
                 LOG.debug("Reported version is not higher than ours ({}).", Core.GRAYLOG2_VERSION);
-                notificationService.fixed(Notification.Type.OUTDATED_VERSION);
+                Notification.fixed(core, Notification.Type.OUTDATED_VERSION);
             }
 
             EntityUtils.consume(entity);
