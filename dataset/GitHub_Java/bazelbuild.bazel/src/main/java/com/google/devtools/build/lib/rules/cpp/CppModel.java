@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -1147,8 +1146,8 @@ public final class CppModel {
       CppCompileActionBuilder builder,
       Iterable<ArtifactCategory> outputCategories,
       boolean usePic) {
-    SpecialArtifact sourceArtifact = (SpecialArtifact) source.getSource();
-    SpecialArtifact outputFiles =
+    Artifact sourceArtifact = source.getSource();
+    Artifact outputFiles =
         CppHelper.getCompileOutputTreeArtifact(ruleContext, sourceArtifact, usePic);
     // TODO(rduan): Dotd file output is not supported yet.
     builder.setOutputs(outputFiles, /* dotdFile= */ null);
