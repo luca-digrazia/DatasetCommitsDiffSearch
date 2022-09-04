@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.annotations;
 
 import static javax.lang.model.util.ElementFilter.fieldsIn;
@@ -89,7 +73,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
     private static final AtomicInteger classNameCounter = new AtomicInteger();
     private static final String TEMPLATE_ANNOTATION = "org.jboss.shamrock.runtime.Template";
     private static final String CONFIG_PROPERTY_ANNOTATION = "org.eclipse.microprofile.config.inject.ConfigProperty";
-    private static final String CONFIG_GROUP_ANNOTATION = "org.jboss.shamrock.runtime.ConfigGroup";
+    private static final String CONFIGURED_TYPE_ANNOTATION = "org.jboss.shamrock.runtime.ConfiguredType";
     private static final String SHAMROCK_CONFIG = "org.jboss.shamrock.deployment.ShamrockConfig";
 
     @Override
@@ -103,7 +87,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
         ret.add(Inject.class.getName());
         ret.add(BuildStep.class.getName());
         ret.add(Record.class.getName());
-        ret.add(CONFIG_GROUP_ANNOTATION);
+        ret.add(CONFIGURED_TYPE_ANNOTATION);
         return ret;
     }
 
@@ -118,6 +102,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
             try {
                 doProcess(annotations, roundEnv);
             } catch (RuntimeException e) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, e.getMessage());
                 throw e;
             }
         }
@@ -266,7 +251,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                             List<ResultHandle> args = new ArrayList<>();
                             ResultHandle bytecodeRecorder = null;
                             if (templatePresent) {
-                                bytecodeRecorder = buildStepMc.newInstance(ofConstructor("org.jboss.shamrock.deployment.recording.BytecodeRecorderImpl", boolean.class, String.class, String.class), buildStepMc.load(recordAnnotation.value() == ExecutionTime.STATIC_INIT), buildStepMc.load(method.getEnclosingElement().getSimpleName().toString()), buildStepMc.load(method.getSimpleName().toString()));
+                                bytecodeRecorder = buildStepMc.newInstance(ofConstructor("org.jboss.shamrock.deployment.recording.BytecodeRecorderImpl", boolean.class), buildStepMc.load(recordAnnotation.value() == ExecutionTime.STATIC_INIT));
                             }
 
                             for (InjectedBuildResource i : methodInjection) {
@@ -303,7 +288,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                         }
 
 
-                        registerCapabilitiesAndMarkers(mc, method);
+                        registerCapabilities(mc, method);
                     } catch (Exception e) {
 
                         throw new RuntimeException("Failed to process " + processorClassName + "." + method.getSimpleName(), e);
@@ -444,15 +429,14 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                     if (isAnnotationPresent(e, CONFIG_PROPERTY_ANNOTATION)) {
                         ResultHandle sb = func.getBytecode().newInstance(ofConstructor(StringBuilder.class));
                         func.getBytecode().invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class), sb, keyPrefix);
-                        func.getBytecode().invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class), sb, bc.load(val.name + "."));
                         func.getBytecode().invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class), sb, func.getBytecode().getMethodParam(0));
-                        func.getBytecode().invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class), sb, func.getBytecode().load("."));
+                        func.getBytecode().invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class), sb, bc.load("." + val.name + "."));
                         ResultHandle handle = func.getBytecode().invokeVirtualMethod(ofMethod(Object.class, "toString", String.class), sb);
                         injectConfigField(func.getBytecode(), mi, (VariableElement) e, val.customTypeName, handle, configProperties, currentKeyDesc + ".*");
                     }
                 }
+                func.getBytecode().returnValue(mi);
                 func.getBytecode().invokeVirtualMethod(ofMethod(HashMap.class, "put", Object.class, Object.class, Object.class), instance, func.getBytecode().getMethodParam(0), mi);
-                func.getBytecode().returnValue(null);
                 return instance;
             default:
                 throw new RuntimeException("unknown type " + val.type);
@@ -474,11 +458,6 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                         default:
                             throw new RuntimeException("Unknown annotation value " + elem.getKey());
                     }
-                }
-                if(ret.name == null) {
-                    String msg = "@ConfigProperty with no name specified " + field.getEnclosingElement() + "." + field.getSimpleName();
-                    processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, msg);
-                    throw new RuntimeException(msg);
                 }
                 if (field.asType() instanceof PrimitiveType) {
                     PrimitiveType type = (PrimitiveType) field.asType();
@@ -518,8 +497,8 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                         } else if (typeName.equals(Boolean.class.getName())) {
                             ret.type = ConfigType.BOOLEAN;
                         } else {
-                            if (!isAnnotationPresent(processingEnv.getTypeUtils().asElement(typeMirror), CONFIG_GROUP_ANNOTATION)) {
-                                throw new RuntimeException("Cannot inject a configured instance of " + typeName + " as it is not annotated with " + CONFIG_GROUP_ANNOTATION + " into " + field);
+                            if (!isAnnotationPresent(processingEnv.getTypeUtils().asElement(typeMirror), CONFIGURED_TYPE_ANNOTATION)) {
+                                throw new RuntimeException("Cannot inject a configured instance of " + typeName + " as it is not annotated with " + CONFIGURED_TYPE_ANNOTATION + " into " + field);
                             }
                             ret.type = ConfigType.CUSTOM_TYPE;
                             ret.customTypeName = typeName;
@@ -532,8 +511,8 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                         ret.type = ConfigType.BOOLEAN;
                     } else {
                         ret.type = ConfigType.CUSTOM_TYPE;
-                        if (!isAnnotationPresent(processingEnv.getTypeUtils().asElement(type), CONFIG_GROUP_ANNOTATION)) {
-                            throw new RuntimeException("Cannot inject a configured instance of " + simpleType + " as it is not annotated with " + CONFIG_GROUP_ANNOTATION + " into " + field);
+                        if (!isAnnotationPresent(processingEnv.getTypeUtils().asElement(type), CONFIGURED_TYPE_ANNOTATION)) {
+                            throw new RuntimeException("Cannot inject a configured instance of " + simpleType + " as it is not annotated with " + CONFIGURED_TYPE_ANNOTATION + " into " + field);
                         }
                         ret.customTypeName = simpleType;
                     }
@@ -693,25 +672,15 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
         }
     }
 
-    private void registerCapabilitiesAndMarkers(MethodCreator mc, ExecutableElement method) {
+    private void registerCapabilities(MethodCreator mc, ExecutableElement method) {
         ResultHandle step;
         ResultHandle builder;
-        BuildStep annotation = method.getAnnotation(BuildStep.class);
-        String[] capabilities = annotation.providesCapabilities();
+        String[] capabilities = method.getAnnotation(BuildStep.class).providesCapabilities();
         if (capabilities.length > 0) {
             for (String i : capabilities) {
                 step = mc.newInstance(ofConstructor("org.jboss.shamrock.deployment.steps.CapabilityBuildStep", String.class), mc.load(i));
                 builder = mc.invokeVirtualMethod(MethodDescriptor.ofMethod(BuildChainBuilder.class, "addBuildStep", BuildStepBuilder.class, org.jboss.builder.BuildStep.class), mc.getMethodParam(0), step);
                 mc.invokeVirtualMethod(ofMethod(BuildStepBuilder.class, "produces", BuildStepBuilder.class, Class.class), builder, mc.loadClass("org.jboss.shamrock.deployment.builditem.CapabilityBuildItem"));
-                mc.invokeVirtualMethod(ofMethod(BuildStepBuilder.class, "build", BuildChainBuilder.class), builder);
-            }
-        }
-        String[] markers = annotation.applicationArchiveMarkers();
-        if (markers.length > 0) {
-            for (String i : markers) {
-                step = mc.newInstance(ofConstructor("org.jboss.shamrock.deployment.steps.ApplicationArchiveMarkerBuildStep", String.class), mc.load(i));
-                builder = mc.invokeVirtualMethod(MethodDescriptor.ofMethod(BuildChainBuilder.class, "addBuildStep", BuildStepBuilder.class, org.jboss.builder.BuildStep.class), mc.getMethodParam(0), step);
-                mc.invokeVirtualMethod(ofMethod(BuildStepBuilder.class, "produces", BuildStepBuilder.class, Class.class), builder, mc.loadClass("org.jboss.shamrock.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem"));
                 mc.invokeVirtualMethod(ofMethod(BuildStepBuilder.class, "build", BuildChainBuilder.class), builder);
             }
         }

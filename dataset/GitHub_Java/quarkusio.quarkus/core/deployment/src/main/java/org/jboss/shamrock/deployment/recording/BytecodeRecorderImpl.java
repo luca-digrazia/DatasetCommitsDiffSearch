@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.deployment.recording;
 
 import static org.jboss.protean.gizmo.MethodDescriptor.ofConstructor;
@@ -46,7 +30,6 @@ import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.invocation.proxy.ProxyConfiguration;
 import org.jboss.invocation.proxy.ProxyFactory;
-import org.jboss.protean.gizmo.AssignableResultHandle;
 import org.jboss.protean.gizmo.BranchResult;
 import org.jboss.protean.gizmo.CatchBlockCreator;
 import org.jboss.protean.gizmo.ClassCreator;
@@ -57,7 +40,6 @@ import org.jboss.protean.gizmo.ResultHandle;
 import org.jboss.protean.gizmo.TryBlock;
 import org.jboss.shamrock.deployment.ClassOutput;
 import org.jboss.shamrock.deployment.ShamrockConfig;
-import org.jboss.shamrock.runtime.ConfigHelper;
 import org.jboss.shamrock.runtime.RuntimeValue;
 import org.jboss.shamrock.runtime.StartupContext;
 import org.jboss.shamrock.runtime.StartupTask;
@@ -321,45 +303,27 @@ public class BytecodeRecorderImpl implements RecorderContext {
                 return method.invokeStaticMethod(ofMethod(Optional.class, "empty", Optional.class));
             }
         } else if (param instanceof String) {
-            //this allows for runtime config to automatically work
-            //if a string is passed into the template that was obtained from config the config key used to obtain it is recorded
-            //and used to make this value runtime configurable
-            String configParam = ShamrockConfig.getConfigKey(param);
+            String configParam = ShamrockConfig.getConfigKey((String) param);
             if (configParam != null) {
-                out = method.invokeStaticMethod(ofMethod(ConfigHelper.class, "getString", String.class, String.class, String.class), method.load(configParam), method.load((String)param));
+                ResultHandle config = method.invokeStaticMethod(ofMethod(ConfigProvider.class, "getConfig", Config.class));
+                ResultHandle propName = method.load(configParam);
+                ResultHandle configOptional = method.invokeInterfaceMethod(ofMethod(Config.class, "getOptionalValue", Optional.class, String.class, Class.class), config, propName, method.loadClass(String.class));
+                ResultHandle result = method.invokeVirtualMethod(ofMethod(Optional.class, "isPresent", boolean.class), configOptional);
+
+                BranchResult ifResult = method.ifNonZero(result);
+                ResultHandle tr = ifResult.trueBranch().invokeVirtualMethod(ofMethod(Optional.class, "get", Object.class), configOptional);
+                ResultHandle trs = ifResult.trueBranch().invokeVirtualMethod(ofMethod(Object.class, "toString", String.class), tr);
+                ResultHandle fr = ifResult.falseBranch().load((String) param);
+                out = ifResult.mergeBranches(trs, fr);
             } else {
                 out = method.load((String) param);
             }
-        }else if (param instanceof Integer) {
-            //this allows for runtime config to automatically work
-            //if a string is passed into the template that was obtained from config the config key used to obtain it is recorded
-            //and used to make this value runtime configurable
-            String configParam = ShamrockConfig.getConfigKey(param);
-            if (configParam != null) {
-                out = method.invokeStaticMethod(ofMethod(ConfigHelper.class, "getInteger", Integer.class, String.class, int.class), method.load(configParam), method.load((Integer)param));
-            } else {
-                out = method.invokeStaticMethod(ofMethod(Integer.class, "valueOf", Integer.class, int.class), method.load((Integer) param));
-            }
-        } else if (param instanceof Boolean) {
-            //this allows for runtime config to automatically work
-            //if a string is passed into the template that was obtained from config the config key used to obtain it is recorded
-            //and used to make this value runtime configurable
-            String configParam = ShamrockConfig.getConfigKey(param);
-            if (configParam != null) {
-                out = method.invokeStaticMethod(ofMethod(ConfigHelper.class, "getBoolean", Boolean.class, String.class, boolean.class), method.load(configParam), method.load((Boolean) param));
-            } else {
-                out = method.invokeStaticMethod(ofMethod(Boolean.class, "valueOf", Boolean.class, boolean.class), method.load((Boolean) param));
-            }
-        }   else if (param instanceof URL) {
+        } else if (param instanceof URL) {
             String url = ((URL) param).toExternalForm();
-            AssignableResultHandle value = method.createVariable(URL.class);
-            try (TryBlock et = method.tryBlock()) {
-                et.assign(value, et.newInstance(MethodDescriptor.ofConstructor(URL.class, String.class), et.load(url)));
-                out = value;
-                try (CatchBlockCreator malformed = et.addCatch(MalformedURLException.class)) {
-                    malformed.throwException(RuntimeException.class, "Malformed URL", malformed.getCaughtException());
-                }
-            }
+            TryBlock et = method.tryBlock();
+            out = et.newInstance(MethodDescriptor.ofConstructor(URL.class, String.class), et.load(url));
+            CatchBlockCreator malformed = et.addCatch(MalformedURLException.class);
+            malformed.throwException(RuntimeException.class, "Malformed URL", malformed.getCaughtException());
 
         } else if (param instanceof Enum) {
             Enum e = (Enum) param;
@@ -383,11 +347,11 @@ public class BytecodeRecorderImpl implements RecorderContext {
             out = method.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), method.load(name), method.load(true), tccl);
         } else if (expectedType == boolean.class) {
             out = method.load((boolean) param);
-        } else if (expectedType == Boolean.class) {
+        } else if (expectedType == Boolean.class || param instanceof Boolean) {
             out = method.invokeStaticMethod(ofMethod(Boolean.class, "valueOf", Boolean.class, boolean.class), method.load((boolean) param));
         } else if (expectedType == int.class) {
             out = method.load((int) param);
-        } else if (expectedType == Integer.class) {
+        } else if (expectedType == Integer.class || param instanceof Integer) {
             out = method.invokeStaticMethod(ofMethod(Integer.class, "valueOf", Integer.class, int.class), method.load((int) param));
         } else if (expectedType == short.class) {
             out = method.load((short) param);
@@ -530,7 +494,6 @@ public class BytecodeRecorderImpl implements RecorderContext {
             //now handle accessible fields
             for(Field field : param.getClass().getFields()) {
                 if(!Modifier.isFinal(field.getModifiers()) && ! Modifier.isStatic(field.getModifiers()) && !handledProperties.contains(field.getName())) {
-
                     try {
                         ResultHandle val = loadObjectInstance(method, field.get(param), returnValueResults, field.getType());
                         method.writeInstanceField(FieldDescriptor.of(param.getClass(), field.getName(), field.getType()), out, val);
