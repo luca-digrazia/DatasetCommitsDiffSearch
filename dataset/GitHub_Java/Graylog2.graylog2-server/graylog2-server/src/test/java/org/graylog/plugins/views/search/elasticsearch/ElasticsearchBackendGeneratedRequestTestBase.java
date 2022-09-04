@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.search.elasticsearch;
 
 import com.google.common.collect.ImmutableSet;
@@ -20,11 +36,9 @@ import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog.plugins.views.search.searchtypes.pivot.SeriesSpec;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Average;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Max;
-import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
-import org.graylog2.streams.StreamService;
 import org.junit.Before;
 import org.junit.Rule;
 import org.mockito.ArgumentCaptor;
@@ -55,23 +69,31 @@ public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchB
     @Mock
     protected JestHttpClient jestClient;
     @Mock
-    protected IndexRangeService indexRangeService;
+    protected IndexLookup indexLookup;
+
     @Mock
-    protected StreamService streamService;
+    protected FieldTypesLookup fieldTypesLookup;
+
+    protected Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticSearchTypeHandlers;
 
     @Captor
     protected ArgumentCaptor<MultiSearch> clientRequestCaptor;
 
     @Before
     public void setUpSUT() {
-        Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticSearchTypeHandlers = new HashMap<>();
+        this.elasticSearchTypeHandlers = new HashMap<>();
         final Map<String, ESPivotBucketSpecHandler<? extends BucketSpec, ? extends Aggregation>> bucketHandlers = Collections.emptyMap();
         final Map<String, ESPivotSeriesSpecHandler<? extends SeriesSpec, ? extends Aggregation>> seriesHandlers = new HashMap<>();
         seriesHandlers.put(Average.NAME, new ESAverageHandler());
         seriesHandlers.put(Max.NAME, new ESMaxHandler());
         elasticSearchTypeHandlers.put(Pivot.NAME, () -> new ESPivot(bucketHandlers, seriesHandlers));
 
-        this.elasticsearchBackend = new ElasticsearchBackend(elasticSearchTypeHandlers, queryStringParser, jestClient, indexRangeService, streamService, new ESQueryDecorators.Fake());
+        this.elasticsearchBackend = new ElasticsearchBackend(elasticSearchTypeHandlers,
+                queryStringParser,
+                jestClient,
+                indexLookup,
+                new ESQueryDecorators.Fake(),
+                (elasticsearchBackend, ssb, job, query, results) -> new ESGeneratedQueryContext(elasticsearchBackend, ssb, job, query, results, fieldTypesLookup));
     }
 
     SearchJob searchJobForQuery(Query query) {
@@ -84,7 +106,7 @@ public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchB
 
     TimeRange timeRangeForTest() {
         try {
-            return AbsoluteRange.create("2018-08-23 10:02:00.247", "2018-08-23 10:07:00.252");
+            return AbsoluteRange.create("2018-08-23T10:02:00.247+02:00", "2018-08-23T10:07:00.252+02:00");
         } catch (InvalidRangeParametersException ignored) {
         }
         return null;

@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.search.elasticsearch;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -10,12 +26,12 @@ import io.searchbox.core.MultiSearch;
 import io.searchbox.core.MultiSearchResult;
 import io.searchbox.core.Search;
 import io.searchbox.core.SearchResult;
-import org.apache.commons.collections4.CollectionUtils;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.graylog.plugins.views.search.Filter;
+import org.graylog.plugins.views.search.GlobalOverride;
 import org.graylog.plugins.views.search.Parameter;
 import org.graylog.plugins.views.search.Query;
 import org.graylog.plugins.views.search.QueryMetadata;
@@ -24,25 +40,18 @@ import org.graylog.plugins.views.search.SearchJob;
 import org.graylog.plugins.views.search.SearchType;
 import org.graylog.plugins.views.search.elasticsearch.searchtypes.ESSearchTypeHandler;
 import org.graylog.plugins.views.search.engine.QueryBackend;
-import org.graylog.plugins.views.search.errors.QueryError;
-import org.graylog.plugins.views.search.errors.SearchException;
 import org.graylog.plugins.views.search.errors.SearchTypeError;
+import org.graylog.plugins.views.search.errors.SearchTypeErrorParser;
 import org.graylog.plugins.views.search.filter.AndFilter;
 import org.graylog.plugins.views.search.filter.OrFilter;
 import org.graylog.plugins.views.search.filter.QueryStringFilter;
 import org.graylog.plugins.views.search.filter.StreamFilter;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.ElasticsearchException;
 import org.graylog2.indexer.FieldTypeException;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.cluster.jest.JestUtils;
-import org.graylog2.indexer.ranges.IndexRange;
-import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,6 +71,7 @@ import java.util.stream.StreamSupport;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
+import static org.graylog2.indexer.cluster.jest.JestUtils.deduplicateErrors;
 
 public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContext> {
     private static final Logger LOG = LoggerFactory.getLogger(ElasticsearchBackend.class);
@@ -69,23 +79,30 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
     private final Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticsearchSearchTypeHandlers;
     private final QueryStringParser queryStringParser;
     private final JestClient jestClient;
-    private final IndexRangeService indexRangeService;
-    private final StreamService streamService;
+    private final IndexLookup indexLookup;
     private final ESQueryDecorators esQueryDecorators;
+    private final ESGeneratedQueryContext.Factory queryContextFactory;
 
     @Inject
     public ElasticsearchBackend(Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticsearchSearchTypeHandlers,
                                 QueryStringParser queryStringParser,
                                 JestClient jestClient,
-                                IndexRangeService indexRangeService,
-                                StreamService streamService,
-                                ESQueryDecorators esQueryDecorators) {
+                                IndexLookup indexLookup,
+                                ESQueryDecorators esQueryDecorators,
+                                ESGeneratedQueryContext.Factory queryContextFactory) {
         this.elasticsearchSearchTypeHandlers = elasticsearchSearchTypeHandlers;
         this.queryStringParser = queryStringParser;
         this.jestClient = jestClient;
-        this.indexRangeService = indexRangeService;
-        this.streamService = streamService;
+        this.indexLookup = indexLookup;
+
         this.esQueryDecorators = esQueryDecorators;
+        this.queryContextFactory = queryContextFactory;
+    }
+
+    private QueryBuilder normalizeQueryString(String queryString) {
+        return (queryString.isEmpty() || queryString.trim().equals("*"))
+                ? QueryBuilders.matchAllQuery()
+                : QueryBuilders.queryStringQuery(queryString).allowLeadingWildcard(true);
     }
 
     @Override
@@ -93,30 +110,51 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
         final ElasticsearchQueryString backendQuery = (ElasticsearchQueryString) query.query();
 
         final Set<SearchType> searchTypes = query.searchTypes();
-        if (searchTypes.isEmpty()) {
-            throw new SearchException(new QueryError(query, "Cannot generate query without any search types"));
-        }
 
         final String queryString = this.esQueryDecorators.decorate(backendQuery.queryString(), job, query, results);
-        final QueryBuilder esBuilder = (queryString.isEmpty() || queryString.trim().equals("*")) ?
-                QueryBuilders.matchAllQuery() :
-                QueryBuilders.queryStringQuery(queryString).allowLeadingWildcard(true);
+        final QueryBuilder normalizedRootQuery = normalizeQueryString(queryString);
 
         final BoolQueryBuilder boolQuery = QueryBuilders.boolQuery()
-                .filter(esBuilder)
-                .filter(Objects.requireNonNull(IndexHelper.getTimestampRangeFilter(query.timerange()), "Timerange is missing."));
+                .filter(normalizedRootQuery);
 
-        // add the specified filters
+        // add the optional root query filters
         generateFilterClause(query.filter(), job, query, results)
                 .map(boolQuery::filter);
 
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+        final SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
                 .query(boolQuery)
                 .from(0)
                 .size(0);
 
-        final ESGeneratedQueryContext queryContext = new ESGeneratedQueryContext(this, searchSourceBuilder, job, query, results);
+        final ESGeneratedQueryContext queryContext = queryContextFactory.create(this, searchSourceBuilder, job, query, results);
         for (SearchType searchType : searchTypes) {
+            final SearchSourceBuilder searchTypeSourceBuilder = queryContext.searchSourceBuilder(searchType);
+
+            final Set<String> effectiveStreamIds = searchType.effectiveStreams().isEmpty()
+                    ? query.usedStreamIds()
+                    : searchType.effectiveStreams();
+
+            final BoolQueryBuilder searchTypeOverrides = QueryBuilders.boolQuery()
+                    .must(searchTypeSourceBuilder.query())
+                    .must(
+                            Objects.requireNonNull(
+                                    IndexHelper.getTimestampRangeFilter(
+                                            query.effectiveTimeRange(searchType)
+                                    ),
+                                    "Timerange for search type " + searchType.id() + " cannot be found in query or search type."
+                            )
+                    )
+                    .must(QueryBuilders.termsQuery(Message.FIELD_STREAMS, effectiveStreamIds));
+
+            searchType.query().ifPresent(q -> {
+                final ElasticsearchQueryString searchTypeBackendQuery = (ElasticsearchQueryString) q;
+                final String searchTypeQueryString = this.esQueryDecorators.decorate(searchTypeBackendQuery.queryString(), job, query, results);
+                final QueryBuilder normalizedSearchTypeQuery = normalizeQueryString(searchTypeQueryString);
+                searchTypeOverrides.must(normalizedSearchTypeQuery);
+            });
+
+            searchTypeSourceBuilder.query(searchTypeOverrides);
+
             final String type = searchType.type();
             final Provider<ESSearchTypeHandler<? extends SearchType>> searchTypeHandler = elasticsearchSearchTypeHandlers.get(type);
             if (searchTypeHandler == null) {
@@ -153,55 +191,59 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
                         .forEach(optQueryBuilder -> optQueryBuilder.ifPresent(orBuilder::should));
                 return Optional.of(orBuilder);
             case StreamFilter.NAME:
-                if (CollectionUtils.isNotEmpty(filter.filters())) {
-                    LOG.debug("Ignoring meaningless subfilters of StreamFilter");
-                }
-                //noinspection ConstantConditions
-                return Optional.of(QueryBuilders.termQuery(Message.FIELD_STREAMS, ((StreamFilter) filter).streamId()));
+                // Skipping stream filter, will be extracted elsewhere
+                return Optional.empty();
             case QueryStringFilter.NAME:
                 return Optional.of(QueryBuilders.queryStringQuery(this.esQueryDecorators.decorate(((QueryStringFilter) filter).query(), job, query, results)));
         }
         return Optional.empty();
     }
 
-    private Set<Stream> loadStreams(Set<String> streamIds) {
-        // TODO: Use method from `StreamService` which loads a collection of ids (when implemented) to prevent n+1.
-        // Track https://github.com/Graylog2/graylog2-server/issues/4897 for progress.
-        return streamIds.stream().map(streamId -> {
-            try {
-                return streamService.load(streamId);
-            } catch (NotFoundException e) {
-                throw new RuntimeException(e);
-            }
-        }).collect(Collectors.toSet());
-    }
-
     @Override
     public QueryResult doRun(SearchJob job, Query query, ESGeneratedQueryContext queryContext, Set<QueryResult> predecessorResults) {
+        if (query.searchTypes().isEmpty()) {
+            return QueryResult.builder()
+                    .query(query)
+                    .searchTypes(Collections.emptyMap())
+                    .errors(new HashSet<>(queryContext.errors()))
+                    .build();
+        }
         LOG.debug("Running query {} for job {}", query.id(), job.getId());
         final HashMap<String, SearchType.Result> resultsMap = Maps.newHashMap();
 
-        final Set<Stream> usedStreams = loadStreams(query.usedStreamIds());
-
-        final IndexRangeContainsOneOfStreams indexRangeContainsOneOfStreams = new IndexRangeContainsOneOfStreams(usedStreams);
-        final Set<String> affectedIndices = indicesByTimeRange(query.timerange()).stream()
-                .filter(indexRangeContainsOneOfStreams)
-                .map(IndexRange::indexName)
-                .collect(Collectors.toSet());
+        final Set<String> affectedIndices = indexLookup.indexNamesForStreamsInTimeRange(query.usedStreamIds(), query.timerange());
 
         final Map<String, SearchSourceBuilder> searchTypeQueries = queryContext.searchTypeQueries();
         final List<String> searchTypeIds = new ArrayList<>(searchTypeQueries.keySet());
         final List<Search> searches = searchTypeIds
                 .stream()
-                .map(searchTypeId -> new Search.Builder(searchTypeQueries.get(searchTypeId).toString())
-                        .addType(IndexMapping.TYPE_MESSAGE)
-                        .addIndex(affectedIndices.isEmpty() ? Collections.singleton("") : affectedIndices)
-                        .allowNoIndices(false)
-                        .ignoreUnavailable(false)
-                        .build())
+                .map(searchTypeId -> {
+                    final Set<String> affectedIndicesForSearchType = query.searchTypes().stream()
+                            .filter(s -> s.id().equalsIgnoreCase(searchTypeId)).findFirst()
+                            .flatMap(searchType -> {
+                                if (searchType.effectiveStreams().isEmpty()
+                                        && !query.globalOverride().flatMap(GlobalOverride::timerange).isPresent()
+                                        && !searchType.timerange().isPresent()) {
+                                    return Optional.empty();
+                                }
+                                final Set<String> usedStreamIds = searchType.effectiveStreams().isEmpty()
+                                        ? query.usedStreamIds()
+                                        : searchType.effectiveStreams();
+
+                                return Optional.of(indexLookup.indexNamesForStreamsInTimeRange(usedStreamIds, query.effectiveTimeRange(searchType)));
+                            })
+                            .orElse(affectedIndices);
+
+                    return new Search.Builder(searchTypeQueries.get(searchTypeId).toString())
+                            .addType(IndexMapping.TYPE_MESSAGE)
+                            .addIndex(affectedIndicesForSearchType.isEmpty() ? Collections.singleton("") : affectedIndicesForSearchType)
+                            .allowNoIndices(false)
+                            .ignoreUnavailable(false)
+                            .build();
+                })
                 .collect(Collectors.toList());
         final MultiSearch.Builder multiSearchBuilder = new MultiSearch.Builder(searches);
-        final MultiSearchResult result = JestUtils.execute(jestClient, multiSearchBuilder.build(), () -> "Unable to perform search query");
+        final MultiSearchResult result = JestUtils.execute(jestClient, multiSearchBuilder.build(), () -> "Unable to perform search query: ");
 
         for (SearchType searchType : query.searchTypes()) {
             final String searchTypeId = searchType.id();
@@ -217,9 +259,11 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
             final int searchTypeIndex = searchTypeIds.indexOf(searchTypeId);
             final MultiSearchResult.MultiSearchResponse multiSearchResponse = result.getResponses().get(searchTypeIndex);
             if (multiSearchResponse.isError) {
-                queryContext.addError(new SearchTypeError(query, searchTypeId, JestUtils.specificException(() -> "Search type returned error: ", multiSearchResponse.error)));
+                ElasticsearchException e = JestUtils.specificException(() -> "Search type returned error: ", multiSearchResponse.error);
+                queryContext.addError(SearchTypeErrorParser.parse(query, searchTypeId, e));
             } else if (checkForFailedShards(multiSearchResponse.searchResult).isPresent()) {
-                queryContext.addError(new SearchTypeError(query, searchTypeId, checkForFailedShards(multiSearchResponse.searchResult).get()));
+                ElasticsearchException e = checkForFailedShards(multiSearchResponse.searchResult).get();
+                queryContext.addError(SearchTypeErrorParser.parse(query, searchTypeId, e));
             } else {
                 final SearchType.Result searchTypeResult = handler.extractResult(job, query, searchType, multiSearchResponse.searchResult, queryContext);
                 if (searchTypeResult != null) {
@@ -254,17 +298,13 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
                     .filter(error -> error.startsWith("Expected numeric type on field"))
                     .collect(Collectors.toList());
             if (!nonNumericFieldErrors.isEmpty()) {
-                return Optional.of(new FieldTypeException("Unable to perform search query", nonNumericFieldErrors));
+                return Optional.of(new FieldTypeException("Unable to perform search query: ", deduplicateErrors(nonNumericFieldErrors)));
             }
 
-            return Optional.of(new ElasticsearchException("Unable to perform search query", errors));
+            return Optional.of(new ElasticsearchException("Unable to perform search query: ", deduplicateErrors(errors)));
         }
 
         return Optional.empty();
-    }
-
-    private Set<IndexRange> indicesByTimeRange(TimeRange timerange) {
-        return indexRangeService.find(timerange.getFrom(), timerange.getTo());
     }
 
     private Set<String> queryStringsFromFilter(Filter entry) {
@@ -285,7 +325,7 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
         final String mainQueryString = ((ElasticsearchQueryString) query.query()).queryString();
         final java.util.stream.Stream<String> queryStringStreams = java.util.stream.Stream.concat(
                 java.util.stream.Stream.of(mainQueryString),
-                query.searchTypes().stream().flatMap(searchType -> queryStringsFromFilter(searchType.filter()).stream())
+                query.searchTypes().stream().flatMap(this::queryStringsFromSearchType)
         );
 
         final QueryMetadata metadataForParameters = queryStringStreams
@@ -296,5 +336,15 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
 
 
         return metadataForParameters;
+    }
+
+    private java.util.stream.Stream<String> queryStringsFromSearchType(SearchType searchType) {
+        return java.util.stream.Stream.concat(
+                searchType.query().filter(query -> query instanceof ElasticsearchQueryString)
+                        .map(query -> ((ElasticsearchQueryString) query).queryString())
+                        .map(java.util.stream.Stream::of)
+                        .orElse(java.util.stream.Stream.empty()),
+                queryStringsFromFilter(searchType.filter()).stream()
+        );
     }
 }
