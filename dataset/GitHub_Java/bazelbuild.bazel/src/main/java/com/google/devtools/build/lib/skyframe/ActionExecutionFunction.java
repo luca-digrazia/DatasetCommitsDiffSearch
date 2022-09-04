@@ -1033,7 +1033,7 @@ public class ActionExecutionFunction implements SkyFunction {
       } else if (retrievedMetadata instanceof ActionExecutionValue) {
         inputData.putWithNoDepOwner(
             input,
-            ActionExecutionValue.createSimpleFileArtifactValue(
+            ArtifactFunction.createSimpleFileArtifactValue(
                 (Artifact.DerivedArtifact) input, (ActionExecutionValue) retrievedMetadata));
       } else if (retrievedMetadata instanceof MissingFileArtifactValue) {
         inputData.putWithNoDepOwner(input, FileArtifactValue.MISSING_FILE_MARKER);
@@ -1266,7 +1266,7 @@ public class ActionExecutionFunction implements SkyFunction {
           action,
           rootCauses.build(),
           firstActionExecutionException.isCatastrophe(),
-          firstActionExecutionException.getDetailedExitCode());
+          firstActionExecutionException.getExitCode());
     }
 
     if (missingCount > 0) {
