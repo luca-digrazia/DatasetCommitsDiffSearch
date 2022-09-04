@@ -26,29 +26,19 @@ import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.rest.resources.streams.requests.CreateStreamRequest;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public interface StreamService extends PersistedService {
     Stream create(Map<String, Object> fields);
 
     Stream create(CreateStreamRequest request, String userId);
 
-    String save(Stream stream) throws ValidationException;
-
-    String saveWithRules(Stream stream, Collection<StreamRule> streamRules) throws ValidationException;
-
     Stream load(String id) throws NotFoundException;
 
     void destroy(Stream stream) throws NotFoundException;
 
     List<Stream> loadAll();
-
-    Set<Stream> loadByIds(Collection<String> streamIds);
-
-    Set<String> indexSetIdsByIds(Collection<String> streamIds);
 
     List<Stream> loadAllEnabled();
 
@@ -82,8 +72,6 @@ public interface StreamService extends PersistedService {
     void removeAlertReceiver(Stream stream, String type, String name);
 
     void addOutput(Stream stream, Output output);
-
-    void addOutputs(ObjectId streamId, Collection<ObjectId> outputIds);
 
     void removeOutput(Stream stream, Output output);
 
