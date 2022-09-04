@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect.nestedset;
 
-import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.FingerprintComputationResult;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationConstants;
@@ -71,10 +70,9 @@ public class NestedSetCodecWithStore<T> implements ObjectCodec<NestedSet<T>> {
       context.serialize(obj.rawChildren(), codedOut);
     } else {
       context.serialize(NestedSetSize.GROUP, codedOut);
-      FingerprintComputationResult fingerprintComputationResult =
+      ByteString fingerprint =
           nestedSetStore.computeFingerprintAndStore((Object[]) obj.rawChildren(), context);
-      context.addFutureToBlockWritingOn(fingerprintComputationResult.writeStatus());
-      codedOut.writeByteArrayNoTag(fingerprintComputationResult.fingerprint().toByteArray());
+      codedOut.writeByteArrayNoTag(fingerprint.toByteArray());
     }
   }
 
