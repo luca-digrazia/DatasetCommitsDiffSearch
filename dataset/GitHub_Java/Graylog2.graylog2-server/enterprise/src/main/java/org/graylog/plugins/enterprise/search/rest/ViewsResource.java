@@ -10,6 +10,7 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog.plugins.enterprise.audit.EnterpriseAuditEventTypes;
 import org.graylog.plugins.enterprise.search.views.ViewDTO;
+import org.graylog.plugins.enterprise.search.views.ViewParameterSummaryDTO;
 import org.graylog.plugins.enterprise.search.views.ViewService;
 import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.database.PaginatedList;
@@ -40,6 +41,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -120,6 +122,13 @@ public class ViewsResource extends RestResource implements PluginRestResource {
         final ViewDTO savedDto = dbService.save(dto);
         ensureUserPermissions(savedDto);
         return savedDto;
+    }
+
+    @POST
+    @Path("forValue")
+    @ApiOperation("Get all views that match given parameter value")
+    public Collection<ViewParameterSummaryDTO> forParameter() {
+        return dbService.forValue();
     }
 
     @PUT
