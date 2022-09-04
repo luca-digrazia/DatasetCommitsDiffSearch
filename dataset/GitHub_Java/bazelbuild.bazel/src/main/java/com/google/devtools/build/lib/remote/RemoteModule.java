@@ -20,19 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.RunfilesSupport;
-import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.test.TestProvider;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
 import com.google.devtools.build.lib.authandtls.GoogleAuthUtils;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
@@ -41,7 +34,6 @@ import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.remote.logging.LoggingInterceptor;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.options.RemoteOutputsMode;
@@ -99,8 +91,7 @@ public final class RemoteModule extends BlazeModule {
 
   @Override
   public void serverInit(OptionsParsingResult startupOptions, ServerBuilder builder) {
-    builder.addBuildEventArtifactUploaderFactory(
-        buildEventArtifactUploaderFactoryDelegate, "remote");
+    builder.addBuildEventArtifactUploaderFactory(buildEventArtifactUploaderFactoryDelegate, "remote");
   }
 
   private static final String VIOLATION_TYPE_MISSING = "MISSING";
@@ -270,7 +261,6 @@ public final class RemoteModule extends BlazeModule {
         buildEventArtifactUploaderFactoryDelegate.init(
             new ByteStreamBuildEventArtifactUploaderFactory(
                 uploader,
-                cache,
                 cacheChannel.authority(),
                 requestContext,
                 remoteOptions.remoteInstanceName));
@@ -322,51 +312,6 @@ public final class RemoteModule extends BlazeModule {
     }
   }
 
-  private static ImmutableList<Artifact> getRunfiles(ConfiguredTarget buildTarget) {
-    FilesToRunProvider runfilesProvider = buildTarget.getProvider(FilesToRunProvider.class);
-    if (runfilesProvider == null) {
-      return ImmutableList.of();
-    }
-    RunfilesSupport runfilesSupport = runfilesProvider.getRunfilesSupport();
-    if (runfilesSupport == null) {
-      return ImmutableList.of();
-    }
-    boolean noPruningManifestsInBazel =
-        Iterables.isEmpty(runfilesSupport.getRunfiles().getPruningManifests());
-    Preconditions.checkState(
-        noPruningManifestsInBazel, "Bazel should not have pruning manifests. This is a bug.");
-    ImmutableList.Builder<Artifact> runfilesBuilder = ImmutableList.builder();
-    for (Artifact runfile : runfilesSupport.getRunfiles().getUnconditionalArtifacts()) {
-      if (runfile.isSourceArtifact()) {
-        continue;
-      }
-      runfilesBuilder.add(runfile);
-    }
-    return runfilesBuilder.build();
-  }
-
-  private static ImmutableList<ActionInput> getTestOutputs(ConfiguredTarget testTarget) {
-    TestProvider testProvider = testTarget.getProvider(TestProvider.class);
-    if (testProvider == null) {
-      return ImmutableList.of();
-    }
-    return testProvider.getTestParams().getOutputs();
-  }
-
-  private static Iterable<? extends ActionInput> getArtifactsToBuild(
-      ConfiguredTarget buildTarget, TopLevelArtifactContext topLevelArtifactContext) {
-    return TopLevelArtifactHelper.getAllArtifactsToBuild(buildTarget, topLevelArtifactContext)
-        .getImportantArtifacts();
-  }
-
-  private static boolean isTestRule(ConfiguredTarget configuredTarget) {
-    if (configuredTarget instanceof RuleConfiguredTarget) {
-      RuleConfiguredTarget ruleConfiguredTarget = (RuleConfiguredTarget) configuredTarget;
-      return TargetUtils.isTestRuleName(ruleConfiguredTarget.getRuleClassString());
-    }
-    return false;
-  }
-
   @Override
   public void afterAnalysis(
       CommandEnvironment env,
@@ -376,19 +321,26 @@ public final class RemoteModule extends BlazeModule {
       ImmutableSet<AspectValue> aspects) {
     if (remoteOutputsMode != null && remoteOutputsMode.downloadToplevelOutputsOnly()) {
       Preconditions.checkState(actionContextProvider != null, "actionContextProvider was null");
-      boolean isTestCommand = env.getCommandName().equals("test");
-      TopLevelArtifactContext artifactContext = request.getTopLevelArtifactContext();
-      ImmutableSet.Builder<ActionInput> filesToDownload = ImmutableSet.builder();
+      // TODO(buchgr): Consider only storing the action owners instead of the artifacts
+      // Collect all top level output artifacts of regular targets as well as aspects. This
+      // information is used by remote spawn runners to decide whether to download an artifact
+      // if --experimental_remote_download_outputs=toplevel is set
+      ImmutableSet.Builder<Artifact> topLevelOutputsBuilder = ImmutableSet.builder();
       for (ConfiguredTarget configuredTarget : configuredTargets) {
-        if (isTestCommand && isTestRule(configuredTarget)) {
-          // When running a test download the test.log and test.xml.
-          filesToDownload.addAll(getTestOutputs(configuredTarget));
-        } else {
-          filesToDownload.addAll(getArtifactsToBuild(configuredTarget, artifactContext));
-          filesToDownload.addAll(getRunfiles(configuredTarget));
-        }
+        topLevelOutputsBuilder.addAll(
+            TopLevelArtifactHelper.getAllArtifactsToBuild(
+                    configuredTarget, request.getTopLevelArtifactContext())
+                .getImportantArtifacts());
       }
-      actionContextProvider.setFilesToDownload(filesToDownload.build());
+
+      for (AspectValue aspect : aspects) {
+        topLevelOutputsBuilder.addAll(
+            TopLevelArtifactHelper.getAllArtifactsToBuild(
+                    aspect, request.getTopLevelArtifactContext())
+                .getImportantArtifacts());
+      }
+
+      actionContextProvider.setTopLevelOutputs(topLevelOutputsBuilder.build());
     }
   }
 

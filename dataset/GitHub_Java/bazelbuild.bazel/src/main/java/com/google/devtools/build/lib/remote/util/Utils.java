@@ -13,32 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote.util;
 
-import build.bazel.remote.execution.v2.ActionResult;
-import build.bazel.remote.execution.v2.Digest;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.FluentFuture;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnMetrics;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
-import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
-import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOutputsMode;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
-import java.util.function.BiFunction;
 import javax.annotation.Nullable;
 
 /** Utility methods for the remote package. * */
@@ -55,17 +44,13 @@ public class Utils {
     try {
       return f.get();
     } catch (ExecutionException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof InterruptedException) {
-        throw (InterruptedException) cause;
+      if (e.getCause() instanceof IOException) {
+        throw (IOException) e.getCause();
       }
-      if (cause instanceof IOException) {
-        throw (IOException) cause;
+      if (e.getCause() instanceof RuntimeException) {
+        throw (RuntimeException) e.getCause();
       }
-      if (cause instanceof RuntimeException) {
-        throw (RuntimeException) cause;
-      }
-      throw new IOException(cause);
+      throw new IOException(e.getCause());
     }
   }
 
@@ -85,19 +70,13 @@ public class Utils {
 
   /** Constructs a {@link SpawnResult}. */
   public static SpawnResult createSpawnResult(
-      int exitCode,
-      boolean cacheHit,
-      String runnerName,
-      @Nullable InMemoryOutput inMemoryOutput,
-      SpawnMetrics spawnMetrics) {
+      int exitCode, boolean cacheHit, String runnerName, @Nullable InMemoryOutput inMemoryOutput) {
     SpawnResult.Builder builder =
         new SpawnResult.Builder()
             .setStatus(exitCode == 0 ? Status.SUCCESS : Status.NON_ZERO_EXIT)
             .setExitCode(exitCode)
             .setRunnerName(cacheHit ? runnerName + " cache hit" : runnerName)
-            .setCacheHit(cacheHit)
-            .setSpawnMetrics(spawnMetrics)
-            .setRemote(true);
+            .setCacheHit(cacheHit);
     if (inMemoryOutput != null) {
       builder.setInMemoryOutput(inMemoryOutput.getOutput(), inMemoryOutput.getContents());
     }
@@ -120,12 +99,12 @@ public class Utils {
   }
 
   /** Returns {@code true} if outputs contains one or more top level outputs. */
-  public static boolean hasFilesToDownload(
-      Collection<? extends ActionInput> outputs, ImmutableSet<ActionInput> filesToDownload) {
-    if (filesToDownload.isEmpty()) {
+  public static boolean hasTopLevelOutputs(
+      Collection<? extends ActionInput> outputs, ImmutableSet<Artifact> topLevelOutputs) {
+    if (topLevelOutputs.isEmpty()) {
       return false;
     }
-    return !Collections.disjoint(outputs, filesToDownload);
+    return !Collections.disjoint(outputs, topLevelOutputs);
   }
 
   public static String grpcAwareErrorMessage(IOException e) {
@@ -136,36 +115,6 @@ public class Utils {
       return String.format("%s: %s", errStatus.getCode().name(), errStatus.getDescription());
     }
     return e.getMessage();
-  }
-
-  @SuppressWarnings("ProtoParseWithRegistry")
-  public static ListenableFuture<ActionResult> downloadAsActionResult(
-      ActionKey actionDigest,
-      BiFunction<Digest, OutputStream, ListenableFuture<Void>> downloadFunction) {
-    ByteArrayOutputStream data = new ByteArrayOutputStream(/* size= */ 1024);
-    ListenableFuture<Void> download = downloadFunction.apply(actionDigest.getDigest(), data);
-    return FluentFuture.from(download)
-        .transformAsync(
-            (v) -> {
-              try {
-                return Futures.immediateFuture(ActionResult.parseFrom(data.toByteArray()));
-              } catch (InvalidProtocolBufferException e) {
-                return Futures.immediateFailedFuture(e);
-              }
-            },
-            MoreExecutors.directExecutor())
-        .catching(CacheNotFoundException.class, (e) -> null, MoreExecutors.directExecutor());
-  }
-
-  public static void verifyBlobContents(String expectedHash, String actualHash) throws IOException {
-    if (!expectedHash.equals(actualHash)) {
-      String msg =
-          String.format(
-              "An output download failed, because the expected hash"
-                  + "'%s' did not match the received hash '%s'.",
-              expectedHash, actualHash);
-      throw new IOException(msg);
-    }
   }
 
   /** An in-memory output file. */
