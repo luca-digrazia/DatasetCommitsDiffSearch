@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
+import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
@@ -77,7 +77,6 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
             /* builtInIncludeDirectories= */ ImmutableList.<PathFragment>of(),
             /* sysroot= */ null,
             FdoMode.OFF,
-            /* fdoProvider= */ null,
             /* useLLVMCoverageMapFormat= */ false,
             /* codeCoverageEnabled= */ false,
             /* isHostConfiguration= */ false);
@@ -115,7 +114,6 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
             /* builtInIncludeDirectories= */ ImmutableList.<PathFragment>of(),
             /* sysroot= */ null,
             FdoMode.OFF,
-            /* fdoProvider= */ null,
             /* useLLVMCoverageMapFormat= */ false,
             /* codeCoverageEnabled= */ false,
             /* isHostConfiguration= */ false);
