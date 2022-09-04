@@ -18,7 +18,6 @@ package org.graylog2.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.graylog2.plugin.Plugin;
-import org.graylog2.shared.plugins.PluginLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,13 +83,7 @@ public class PluginAssets {
     }
 
     private ModuleManifest manifestForPlugin(Plugin plugin) {
-        if (!(plugin instanceof PluginLoader.PluginAdapter)) {
-            LOG.warn("Unable to read web manifest from plugin " + plugin + ": Plugin is not an instance of PluginAdapter.");
-            return null;
-        }
-
-        final String pluginClassName = ((PluginLoader.PluginAdapter) plugin).getPluginClassName();
-        final InputStream manifestStream = plugin.metadata().getClass().getResourceAsStream("/plugin." + pluginClassName + "." + manifestFilename);
+        final InputStream manifestStream = plugin.metadata().getClass().getResourceAsStream("/" + plugin.getClass().getCanonicalName() + "." + manifestFilename);
         if (manifestStream != null) {
             try {
                 final ModuleManifest manifest = objectMapper.readValue(manifestStream, ModuleManifest.class);
