@@ -33,8 +33,8 @@ class RedisClientImpl implements RedisClient {
     }
 
     @Override
-    public Response auth(List<String> args) {
-        return await(redisAPI.auth(args));
+    public Response auth(String arg0) {
+        return await(redisAPI.auth(arg0));
     }
 
     @Override
@@ -103,8 +103,8 @@ class RedisClientImpl implements RedisClient {
     }
 
     @Override
-    public Response command(List<String> args) {
-        return await(redisAPI.command(args));
+    public Response command() {
+        return await(redisAPI.command());
     }
 
     @Override
