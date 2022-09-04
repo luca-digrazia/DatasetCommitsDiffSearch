@@ -18,8 +18,7 @@
  *
  */
 
-
-package org.graylog2.blacklists;
+package org.graylog2.streams;
 
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
@@ -27,13 +26,9 @@ import org.bson.types.ObjectId;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-/**
- *
- * @author XING\lennart.koopmann
- */
-public class BlacklistTest {
+public class StreamTest {
 
-    public BasicDBObject buildMongoBlacklist() {
+    public BasicDBObject buildMongoStream() {
         BasicDBObject mongo = new BasicDBObject();
         mongo.put("_id", new ObjectId());
         mongo.put("title", "foo");
@@ -43,57 +38,59 @@ public class BlacklistTest {
 
     @Test
     public void testGetStreamRules() {
-        BasicDBObject mongoList = this.buildMongoBlacklist();
-
         BasicDBObject mongoRule1 = new BasicDBObject();
         mongoRule1.put("_id", new ObjectId());
-        mongoRule1.put("blacklist_id", mongoList.get("_id"));
-        mongoRule1.put("term", "^foo.+");
+        mongoRule1.put("rule_type", StreamRule.TYPE_HOST);
+        mongoRule1.put("value", "example.org");
 
         BasicDBObject mongoRule2 = new BasicDBObject();
         mongoRule2.put("_id", new ObjectId());
-        mongoRule1.put("blacklist_id", mongoList.get("_id"));
-        mongoRule2.put("term", ".+bar");
+        mongoRule2.put("rule_type", StreamRule.TYPE_SEVERITY);
+        mongoRule2.put("value", "2");
 
         BasicDBList rules = new BasicDBList();
         rules.add(mongoRule1);
         rules.add(mongoRule2);
 
-        mongoList.put("blacklisted_terms", rules);
+        BasicDBObject mongo = this.buildMongoStream();
+        mongo.put("streamrules", rules);
 
-        Blacklist blacklist = new Blacklist(mongoList);
+        Stream stream = new Stream(mongo);
 
-        assertEquals(2, blacklist.getRules().size());
-        assertEquals("^foo.+", blacklist.getRules().get(0).getTerm());
-        assertEquals(".+bar", blacklist.getRules().get(1).getTerm());
+        assertEquals(2, stream.getStreamRules().size());
+
+        assertEquals(StreamRule.TYPE_HOST, stream.getStreamRules().get(0).getRuleType());
+        assertEquals("example.org", stream.getStreamRules().get(0).getValue());
+
+        assertEquals(StreamRule.TYPE_SEVERITY, stream.getStreamRules().get(1).getRuleType());
+        assertEquals("2", stream.getStreamRules().get(1).getValue());
     }
 
     @Test
-    public void testGetStreamRulesWithBlacklistThatHasNoRules() {
-        BasicDBObject mongoList = this.buildMongoBlacklist();
+    public void testGetStreamRulesWithStreamThatHasNoRules() {
+        BasicDBObject mongo = this.buildMongoStream();
+        mongo.put("streamrules", null);
 
-        mongoList.put("blacklisted_terms", null);
+        Stream stream = new Stream(mongo);
 
-        Blacklist blacklist = new Blacklist(mongoList);
+        assertEquals(0, stream.getStreamRules().size());
 
-        assertEquals(0, blacklist.getRules().size());
-        
         // All is fine if there are no exceptions thrown and we get here.
     }
 
     @Test
     public void testGetId() {
-        BasicDBObject mongo = this.buildMongoBlacklist();
-        Blacklist list = new Blacklist(mongo);
+        BasicDBObject mongo = this.buildMongoStream();
+        Stream stream = new Stream(mongo);
 
-        assertEquals(mongo.get("_id"), list.getId());
+        assertEquals(mongo.get("_id"), stream.getId());
     }
 
     @Test
     public void testGetTitle() {
-        Blacklist list = new Blacklist(this.buildMongoBlacklist());
+        Stream stream = new Stream(this.buildMongoStream());
 
-        assertEquals("foo", list.getTitle());
+        assertEquals("foo", stream.getTitle());
     }
 
 }

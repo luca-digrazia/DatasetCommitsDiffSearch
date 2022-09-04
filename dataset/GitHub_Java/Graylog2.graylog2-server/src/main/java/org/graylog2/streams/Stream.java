@@ -20,14 +20,16 @@
 
 package org.graylog2.streams;
 
-import com.mongodb.*;
-import org.apache.log4j.Logger;
-import org.bson.types.ObjectId;
-import org.graylog2.database.MongoConnection;
-import org.graylog2.forwarders.ForwardEndpoint;
-
+import com.mongodb.BasicDBList;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
+import com.mongodb.DBObject;
 import java.util.ArrayList;
 import java.util.List;
+import org.bson.types.ObjectId;
+import org.graylog2.Log;
+import org.graylog2.database.MongoConnection;
 
 /**
  * Stream.java: Mar 26, 2011 10:39:40 PM
@@ -39,13 +41,9 @@ import java.util.List;
  */
 public class Stream {
 
-    private static final Logger LOG = Logger.getLogger(Stream.class);
-
     private ObjectId id = null;
     private String title = null;
-
     private List<StreamRule> streamRules = null;
-    private List<ForwardEndpoint> forwardedTo = null;
 
     private DBObject mongoObject = null;
 
@@ -55,7 +53,7 @@ public class Stream {
         this.mongoObject = stream;
     }
 
-    public static ArrayList<Stream> fetchAllEnabled() {
+    public static ArrayList<Stream> fetchAll() throws Exception {
         if (StreamCache.getInstance().valid()) {
             return StreamCache.getInstance().get();
         }
@@ -63,15 +61,13 @@ public class Stream {
         ArrayList<Stream> streams = new ArrayList<Stream>();
 
         DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("streams");
-        DBObject query = new BasicDBObject();
-        query.put("disabled", new BasicDBObject("$ne", true));
-        DBCursor cur = coll.find(query);
+        DBCursor cur = coll.find(new BasicDBObject());
 
         while (cur.hasNext()) {
             try {
                 streams.add(new Stream(cur.next()));
             } catch (Exception e) {
-                LOG.warn("Can't fetch stream. Skipping. " + e.getMessage(), e);
+                Log.warn("Can't fetch stream. Skipping. " + e.toString());
             }
         }
 
@@ -90,42 +86,13 @@ public class Stream {
         BasicDBList rawRules = (BasicDBList) this.mongoObject.get("streamrules");
         if (rawRules != null && rawRules.size() > 0) {
             for (Object ruleObj : rawRules) {
-                try {
-                    StreamRule rule = new StreamRule((DBObject) ruleObj);
-                    rules.add(rule);
-                } catch (Exception e) {
-                    LOG.warn("Skipping stream rule in Stream.getStreamRules(): " + e.getMessage(), e);
-                    continue;
-                }
+                StreamRule rule = new StreamRule((DBObject) ruleObj);
+                rules.add(rule);
             }
         }
 
         this.streamRules = rules;
         return rules;
-    }
-
-    public List<ForwardEndpoint> getForwardedTo() {
-        if (this.forwardedTo != null) {
-            return this.forwardedTo;
-        }
-        
-        ArrayList<ForwardEndpoint> fwds = new ArrayList<ForwardEndpoint>();
-
-        BasicDBList rawFwds = (BasicDBList) this.mongoObject.get("forwarders");
-        if (rawFwds != null && rawFwds.size() > 0) {
-            for (Object fwdObj : rawFwds) {
-                try {
-                    ForwardEndpoint fwd = new ForwardEndpoint((DBObject) fwdObj);
-                    fwds.add(fwd);
-                } catch (Exception e) {
-                    LOG.warn("Skipping forward endpoint in Stream.getForwardedTo(): " + e.getMessage(), e);
-                    continue;
-                }
-            }
-        }
-
-        this.forwardedTo = fwds;
-        return fwds;
     }
 
     /**
