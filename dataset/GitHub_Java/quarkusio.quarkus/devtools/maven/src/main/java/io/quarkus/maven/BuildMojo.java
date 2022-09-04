@@ -1,163 +1,156 @@
-/*
- * Copyright 2018 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.maven;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
 
-import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
-import org.eclipse.aether.RepositorySystem;
-import org.eclipse.aether.RepositorySystemSession;
+import org.apache.maven.project.MavenProjectHelper;
 import org.eclipse.aether.repository.RemoteRepository;
-import io.quarkus.creator.AppArtifact;
-import io.quarkus.creator.AppCreator;
-import io.quarkus.creator.AppCreatorException;
-import io.quarkus.creator.AppDependency;
-import io.quarkus.creator.phase.augment.AugmentPhase;
-import io.quarkus.creator.phase.curate.CurateOutcome;
-import io.quarkus.creator.phase.runnerjar.RunnerJarOutcome;
-import io.quarkus.creator.phase.runnerjar.RunnerJarPhase;
-import io.quarkus.creator.resolver.maven.ResolvedMavenArtifactDeps;
+
+import io.quarkus.bootstrap.app.AugmentAction;
+import io.quarkus.bootstrap.app.AugmentResult;
+import io.quarkus.bootstrap.app.CuratedApplication;
+import io.quarkus.bootstrap.util.IoUtils;
 
 /**
- *
- * @author Alexey Loubyansky
+ * Builds the Quarkus application.
  */
-@Mojo(name = "build", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
-public class BuildMojo extends AbstractMojo {
+@Mojo(name = "build", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME, threadSafe = true)
+public class BuildMojo extends QuarkusBootstrapMojo {
 
-    /**
-     * The entry point to Aether, i.e. the component doing all the work.
-     *
-     * @component
-     */
+    public static final String QUARKUS_PACKAGE_UBER_JAR = "quarkus.package.uber-jar";
+    private static final String PACKAGE_TYPE_PROP = "quarkus.package.type";
+    private static final String NATIVE_PROFILE_NAME = "native";
+    private static final String NATIVE_PACKAGE_TYPE = "native";
+
     @Component
-    private RepositorySystem repoSystem;
-
-    /**
-     * The current repository/network configuration of Maven.
-     *
-     * @parameter default-value="${repositorySystemSession}"
-     * @readonly
-     */
-    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
-    private RepositorySystemSession repoSession;
-
-    /**
-     * The project's remote repositories to use for the resolution of artifacts and their dependencies.
-     *
-     * @parameter default-value="${project.remoteProjectRepositories}"
-     * @readonly
-     */
-    @Parameter( defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true )
-    private List<RemoteRepository> repos;
+    private MavenProjectHelper projectHelper;
 
     /**
      * The project's remote repositories to use for the resolution of plugins and their dependencies.
-     *
-     * @parameter default-value="${project.remotePluginRepositories}"
-     * @readonly
      */
-    @Parameter( defaultValue = "${project.remotePluginRepositories}", readonly = true, required = true )
+    @Parameter(defaultValue = "${project.remotePluginRepositories}", readonly = true, required = true)
     private List<RemoteRepository> pluginRepos;
 
     /**
-     * The directory for compiled classes.
+     * The directory for generated source files.
      */
-    @Parameter(readonly = true, required = true, defaultValue = "${project.build.outputDirectory}")
-    private File outputDirectory;
-
-    @Parameter(defaultValue = "${project}", readonly = true, required = true)
-    protected MavenProject project;
+    @Parameter(defaultValue = "${project.build.directory}/generated-sources")
+    private File generatedSourcesDirectory;
 
     /**
-     * The directory for application classes transformed by processing.
+     * Skips the execution of this mojo
      */
-    @Parameter(defaultValue = "${project.build.directory}/transformed-classes")
-    private File transformedClassesDirectory;
+    @Parameter(defaultValue = "false", property = "quarkus.build.skip")
+    private boolean skip = false;
 
-    /**
-     * The directory for classes generated by processing.
-     */
-    @Parameter(defaultValue = "${project.build.directory}/wiring-classes")
-    private File wiringClassesDirectory;
+    @Deprecated
+    @Parameter(property = "skipOriginalJarRename")
+    boolean skipOriginalJarRename;
 
-    @Parameter(defaultValue = "${project.build.directory}")
-    private File buildDir;
-    /**
-     * The directory for library jars
-     */
-    @Parameter(defaultValue = "${project.build.directory}/lib")
-    private File libDir;
-
-    @Parameter(defaultValue = "${project.build.finalName}")
-    private String finalName;
-
-    @Parameter(defaultValue = "io.quarkus.runner.GeneratedMain")
-    private String mainClass;
-
-    @Parameter(defaultValue = "true")
-    private boolean useStaticInit;
-
-    @Parameter(defaultValue = "false")
-    private boolean uberJar;
-
-    public BuildMojo() {
-        MojoLogger.logSupplier = this::getLog;
+    @Override
+    protected boolean beforeExecute() throws MojoExecutionException {
+        if (skip) {
+            getLog().info("Skipping Quarkus build");
+            return false;
+        }
+        if (mavenProject().getPackaging().equals("pom")) {
+            getLog().info("Type of the artifact is POM, skipping build goal");
+            return false;
+        }
+        if (!mavenProject().getArtifact().getArtifactHandler().getExtension().equals("jar")) {
+            throw new MojoExecutionException(
+                    "The project artifact's extension is '" + mavenProject().getArtifact().getArtifactHandler().getExtension()
+                            + "' while this goal expects it be 'jar'");
+        }
+        return true;
     }
 
     @Override
-    public void execute() throws MojoExecutionException {
-        try(AppCreator appCreator = AppCreator.builder()
-                // configure the build phases we want the app to go through
-                .addPhase(new AugmentPhase()
-                        .setAppClassesDir(outputDirectory.toPath())
-                        .setTransformedClassesDir(transformedClassesDirectory.toPath())
-                        .setWiringClassesDir(wiringClassesDirectory.toPath()))
-                .addPhase(new RunnerJarPhase()
-                        .setLibDir(libDir.toPath())
-                        .setFinalName(finalName)
-                        .setMainClass(mainClass)
-                        .setUberJar(uberJar))
-                .setWorkDir(buildDir.toPath())
-                .build()) {
+    protected void doExecute() throws MojoExecutionException {
 
-            final AppArtifact appArtifact = new AppArtifact(project.getGroupId(), project.getArtifactId(), project.getVersion());
-            final List<AppDependency> appDeps = new ResolvedMavenArtifactDeps(project.getGroupId(), project.getArtifactId(),
-                    project.getVersion(), project.getArtifacts()).collectDependencies(appArtifact);
+        try {
+            boolean clearPackageTypeSysProp = false;
+            // Essentially what this does is to enable the native package type even if a different package type is set
+            // in application properties. This is done to preserve what users expect to happen when
+            // they execute "mvn package -Dnative" even if quarkus.package.type has been set in application.properties
+            if (!System.getProperties().containsKey(PACKAGE_TYPE_PROP)
+                    && isNativeProfileEnabled(mavenProject())) {
+                Object packageTypeProp = mavenProject().getProperties().get(PACKAGE_TYPE_PROP);
+                String packageType = NATIVE_PACKAGE_TYPE;
+                if (packageTypeProp != null) {
+                    packageType = packageTypeProp.toString();
+                }
+                System.setProperty(PACKAGE_TYPE_PROP, packageType);
+                clearPackageTypeSysProp = true;
+            }
+            try (CuratedApplication curatedApplication = bootstrapApplication()) {
 
-            // push resolved application state
-            appCreator.pushOutcome(CurateOutcome.builder()
-                    .setAppArtifact(appArtifact)
-                    .setInitialDeps(appDeps)
-                    .build());
+                AugmentAction action = curatedApplication.createAugmentor();
+                AugmentResult result = action.createProductionApplication();
 
-            // resolve the outcome we need here
-            appCreator.resolveOutcome(RunnerJarOutcome.class);
-        } catch (AppCreatorException e) {
-            throw new MojoExecutionException("Failed to build a runnable JAR", e);
+                Artifact original = mavenProject().getArtifact();
+                if (result.getJar() != null) {
+
+                    if (!skipOriginalJarRename && result.getJar().isUberJar()
+                            && result.getJar().getOriginalArtifact() != null) {
+                        final Path standardJar = result.getJar().getOriginalArtifact();
+                        if (Files.exists(standardJar)) {
+                            final Path renamedOriginal = standardJar.getParent().toAbsolutePath()
+                                    .resolve(standardJar.getFileName() + ".original");
+                            try {
+                                IoUtils.recursiveDelete(renamedOriginal);
+                                Files.move(standardJar, renamedOriginal);
+                            } catch (IOException e) {
+                                throw new UncheckedIOException(e);
+                            }
+                            original.setFile(result.getJar().getOriginalArtifact().toFile());
+                        }
+                    }
+                    if (result.getJar().isUberJar()) {
+                        projectHelper.attachArtifact(mavenProject(), result.getJar().getPath().toFile(),
+                                result.getJar().getClassifier());
+                    }
+                }
+            } finally {
+                if (clearPackageTypeSysProp) {
+                    System.clearProperty(PACKAGE_TYPE_PROP);
+                }
+            }
+        } catch (Exception e) {
+            throw new MojoExecutionException("Failed to build quarkus application", e);
         }
     }
+
+    private boolean isNativeProfileEnabled(MavenProject mavenProject) {
+        // gotcha: mavenProject.getActiveProfiles() does not always contain all active profiles (sic!),
+        //         but getInjectedProfileIds() does (which has to be "flattened" first)
+        Stream<String> activeProfileIds = mavenProject.getInjectedProfileIds().values().stream().flatMap(List<String>::stream);
+        if (activeProfileIds.anyMatch(NATIVE_PROFILE_NAME::equalsIgnoreCase)) {
+            return true;
+        }
+        // recurse into parent (if available)
+        return Optional.ofNullable(mavenProject.getParent()).map(this::isNativeProfileEnabled).orElse(false);
+    }
+
+    @Override
+    public void setLog(Log log) {
+        super.setLog(log);
+        MojoLogger.delegate = log;
+    }
+
 }
