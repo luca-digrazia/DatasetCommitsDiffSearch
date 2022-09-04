@@ -45,7 +45,7 @@ public class SpringDataRepositoryCreator {
         this.fragmentMethodsAdder = new FragmentMethodsAdder(fragmentImplClassResolvedCallback, index);
         this.stockMethodsAdder = new StockMethodsAdder(index);
         this.derivedMethodsAdder = new DerivedMethodsAdder(index);
-        this.customQueryMethodsAdder = new CustomQueryMethodsAdder(index);
+        this.customQueryMethodsAdder = new CustomQueryMethodsAdder();
     }
 
     public void implementCrudRepository(ClassInfo repositoryToImplement) {
