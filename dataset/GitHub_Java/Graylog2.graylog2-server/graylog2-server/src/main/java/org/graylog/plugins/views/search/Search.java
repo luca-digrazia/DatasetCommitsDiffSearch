@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.plugins.views.search;
 
@@ -29,6 +29,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.graylog.plugins.views.search.errors.PermissionException;
 import org.graylog.plugins.views.search.views.PluginMetadataSummary;
 import org.graylog2.contentpacks.ContentPackable;
 import org.graylog2.contentpacks.EntityDescriptorIds;
@@ -96,6 +97,7 @@ public abstract class Search implements ContentPackable<SearchEntity> {
         return Optional.ofNullable(parameterIndex.get(parameterName));
     }
 
+    @SuppressWarnings("UnstableApiUsage")
     public Search applyExecutionState(ObjectMapper objectMapper, Map<String, Object> executionState) {
         final Builder builder = toBuilder();
 
@@ -164,25 +166,6 @@ public abstract class Search implements ContentPackable<SearchEntity> {
                 .reduce(Collections.emptySet(), Sets::union);
 
         return Sets.union(queryStreamIds, searchTypeStreamIds);
-    }
-
-    public Set<String> streamIdsForPermissionsCheck() {
-        final Set<String> queryStreamIds = queries().stream()
-                .map(Query::usedStreamIds)
-                .reduce(Collections.emptySet(), Sets::union);
-        final Set<String> searchTypeStreamIds = queries().stream()
-                .flatMap(q -> q.searchTypes().stream())
-                .map(SearchType::streams)
-                .reduce(Collections.emptySet(), Sets::union);
-
-        return Sets.union(queryStreamIds, searchTypeStreamIds);
-    }
-
-    public Query queryForSearchType(String searchTypeId) {
-        return queries().stream()
-                .filter(q -> q.hasSearchType(searchTypeId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Search " + id() + " doesn't have a query for search type " + searchTypeId));
     }
 
     @AutoValue.Builder
