@@ -6,7 +6,7 @@ import android.opengl.GLES20;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
 
-import com.shuyu.gsyvideoplayer.render.glrender.GSYVideoGLViewSimpleRender;
+import com.shuyu.gsyvideoplayer.render.GSYVideoGLViewSimpleRender;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -96,7 +96,7 @@ public class GSYVideoGLViewCustomRender extends GSYVideoGLViewSimpleRender {
     public void onDrawFrame(GL10 glUnused) {
         super.onDrawFrame(glUnused);
 
-        //curProgram = createProgram(getVertexShader(), mBitmapEffect.getShader(mSurfaceView));
+        curProgram = createProgram(getVertexShader(), mBitmapEffect.getShader(mSurfaceView));
 
         GLES20.glUseProgram(curProgram);
         checkGlError("glUseProgram");
