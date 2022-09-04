@@ -1,24 +1,35 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package io.quarkus.smallrye.metrics.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
-import static io.quarkus.smallrye.metrics.deployment.SmallRyeMetricsDotNames.GAUGE;
-import static io.quarkus.smallrye.metrics.deployment.SmallRyeMetricsDotNames.METRICS_ANNOTATIONS;
-import static io.quarkus.smallrye.metrics.deployment.SmallRyeMetricsDotNames.METRICS_BINDING;
 
-import java.util.Collection;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.microprofile.metrics.annotation.Counted;
+import org.eclipse.microprofile.metrics.annotation.Gauge;
+import org.eclipse.microprofile.metrics.annotation.Metered;
+import org.eclipse.microprofile.metrics.annotation.Metric;
+import org.eclipse.microprofile.metrics.annotation.Timed;
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.IndexView;
-import org.jboss.jandex.MethodInfo;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
@@ -34,23 +45,27 @@ import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
-import io.quarkus.smallrye.metrics.deployment.jandex.JandexBeanInfoAdapter;
-import io.quarkus.smallrye.metrics.deployment.jandex.JandexMemberInfoAdapter;
-import io.quarkus.smallrye.metrics.runtime.SmallRyeMetricsRecorder;
 import io.quarkus.smallrye.metrics.runtime.SmallRyeMetricsServlet;
+import io.quarkus.smallrye.metrics.runtime.SmallRyeMetricsTemplate;
 import io.quarkus.undertow.deployment.ServletBuildItem;
 import io.smallrye.metrics.MetricProducer;
 import io.smallrye.metrics.MetricRegistries;
 import io.smallrye.metrics.MetricsRequestHandler;
-import io.smallrye.metrics.elementdesc.BeanInfo;
-import io.smallrye.metrics.interceptors.ConcurrentGaugeInterceptor;
 import io.smallrye.metrics.interceptors.CountedInterceptor;
 import io.smallrye.metrics.interceptors.MeteredInterceptor;
 import io.smallrye.metrics.interceptors.MetricNameFactory;
+import io.smallrye.metrics.interceptors.MetricsBinding;
 import io.smallrye.metrics.interceptors.MetricsInterceptor;
 import io.smallrye.metrics.interceptors.TimedInterceptor;
 
 public class SmallRyeMetricsProcessor {
+
+    private static final Set<DotName> metricsAnnotations = new HashSet<>(Arrays.asList(
+            DotName.createSimple(Gauge.class.getName()),
+            DotName.createSimple(Counted.class.getName()),
+            DotName.createSimple(Timed.class.getName()),
+            DotName.createSimple(Metered.class.getName())));
+
     @ConfigRoot(name = "smallrye-metrics")
     static final class SmallRyeMetricsConfig {
 
@@ -78,7 +93,6 @@ public class SmallRyeMetricsProcessor {
                 MetricRegistries.class,
                 MetricsInterceptor.class,
                 MeteredInterceptor.class,
-                ConcurrentGaugeInterceptor.class,
                 CountedInterceptor.class,
                 TimedInterceptor.class,
                 MetricsRequestHandler.class,
@@ -91,15 +105,13 @@ public class SmallRyeMetricsProcessor {
         transformers.produce(new AnnotationsTransformerBuildItem(ctx -> {
             if (ctx.isClass()) {
                 // skip classes in package io.smallrye.metrics.interceptors
-                ClassInfo clazz = ctx.getTarget().asClass();
-                if (clazz.name().toString()
+                if (ctx.getTarget().asClass().name().toString()
                         .startsWith(io.smallrye.metrics.interceptors.MetricsInterceptor.class.getPackage().getName())) {
                     return;
                 }
-
-                for (DotName annotationName : clazz.annotations().keySet()) {
-                    if (GAUGE.equals(annotationName)) {
-                        ctx.transform().add(AnnotationInstance.create(METRICS_BINDING,
+                for (DotName annotationName : ctx.getTarget().asClass().annotations().keySet()) {
+                    if (metricsAnnotations.contains(annotationName)) {
+                        ctx.transform().add(AnnotationInstance.create(DotName.createSimple(MetricsBinding.class.getName()),
                                 ctx.getTarget(), new AnnotationValue[0]))
                                 .done();
                         return;
@@ -107,18 +119,17 @@ public class SmallRyeMetricsProcessor {
                 }
             }
         }));
-
     }
 
     @BuildStep
     AutoInjectAnnotationBuildItem autoInjectMetric() {
-        return new AutoInjectAnnotationBuildItem(SmallRyeMetricsDotNames.METRIC);
+        return new AutoInjectAnnotationBuildItem(DotName.createSimple(Metric.class.getName()));
     }
 
     @BuildStep
     @Record(STATIC_INIT)
     public void build(BeanContainerBuildItem beanContainerBuildItem,
-            SmallRyeMetricsRecorder metrics,
+            SmallRyeMetricsTemplate metrics,
             ShutdownContextBuildItem shutdown,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
             BeanArchiveIndexBuildItem beanArchiveIndex,
@@ -126,17 +137,17 @@ public class SmallRyeMetricsProcessor {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_METRICS));
 
-        for (DotName metricsAnnotation : METRICS_ANNOTATIONS) {
+        for (DotName metricsAnnotation : metricsAnnotations) {
             reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, metricsAnnotation.toString()));
         }
+        reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, MetricsBinding.class.getName()));
 
-        reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, METRICS_BINDING.toString()));
         metrics.createRegistries(beanContainerBuildItem.getValue());
     }
 
     @BuildStep
     @Record(STATIC_INIT)
-    void registerBaseAndVendorMetrics(SmallRyeMetricsRecorder metrics, ShutdownContextBuildItem shutdown) {
+    void registerBaseAndVendorMetrics(SmallRyeMetricsTemplate metrics, ShutdownContextBuildItem shutdown) {
         metrics.registerBaseMetrics(shutdown);
         metrics.registerVendorMetrics(shutdown);
     }
@@ -146,66 +157,4 @@ public class SmallRyeMetricsProcessor {
         logCleanupFilter.produce(new LogCleanupFilterBuildItem("io.smallrye.metrics.MetricsRegistryImpl",
                 "Register metric ["));
     }
-
-    @BuildStep
-    @Record(STATIC_INIT)
-    void registerMetricsFromAnnotatedMethods(SmallRyeMetricsRecorder metrics,
-            BeanContainerBuildItem beanContainerBuildItem,
-            BeanArchiveIndexBuildItem beanArchiveIndex) {
-        IndexView index = beanArchiveIndex.getIndex();
-        JandexBeanInfoAdapter beanInfoAdapter = new JandexBeanInfoAdapter(index);
-        JandexMemberInfoAdapter memberInfoAdapter = new JandexMemberInfoAdapter(index);
-
-        Set<MethodInfo> collectedMetricsMethods = new HashSet<>();
-        Map<DotName, ClassInfo> collectedMetricsClasses = new HashMap<>();
-
-        for (DotName metricAnnotation : METRICS_ANNOTATIONS) {
-            Collection<AnnotationInstance> metricAnnotationInstances = index.getAnnotations(metricAnnotation);
-            for (AnnotationInstance metricAnnotationInstance : metricAnnotationInstances) {
-                AnnotationTarget metricAnnotationTarget = metricAnnotationInstance.target();
-                switch (metricAnnotationTarget.kind()) {
-                    case METHOD: {
-                        MethodInfo method = metricAnnotationTarget.asMethod();
-                        collectedMetricsMethods.add(method);
-                        break;
-                    }
-                    case CLASS: {
-                        ClassInfo clazz = metricAnnotationTarget.asClass();
-                        collectMetricsClassAndSubClasses(index, collectedMetricsClasses, clazz);
-                        break;
-                    }
-                }
-            }
-        }
-
-        for (ClassInfo clazz : collectedMetricsClasses.values()) {
-            BeanInfo beanInfo = beanInfoAdapter.convert(clazz);
-            for (MethodInfo method : clazz.methods()) {
-                metrics.registerMetrics(beanInfo, memberInfoAdapter.convert(method));
-            }
-        }
-
-        for (MethodInfo method : collectedMetricsMethods) {
-            ClassInfo declaringClazz = method.declaringClass();
-            if (!collectedMetricsClasses.containsKey(declaringClazz.name())) {
-                BeanInfo beanInfo = beanInfoAdapter.convert(declaringClazz);
-                metrics.registerMetrics(beanInfo, memberInfoAdapter.convert(method));
-            }
-        }
-    }
-
-    private void collectMetricsClassAndSubClasses(IndexView index, Map<DotName, ClassInfo> collectedMetricsClasses,
-            ClassInfo clazz) {
-        collectedMetricsClasses.put(clazz.name(), clazz);
-        for (ClassInfo subClass : index.getAllKnownSubclasses(clazz.name())) {
-            collectedMetricsClasses.put(subClass.name(), subClass);
-        }
-    }
-
-    //    @BuildStep
-    //    @Record(STATIC_INIT)
-    void registerMetricsFromProducerFieldsAndMethods(BeanArchiveIndexBuildItem beanArchiveIndex) {
-        // TODO: Is this possible at all? to register such metric we need to actually instantiate the object produced by the field/method, which we can't do in STATIC_INIT?!
-    }
-
 }
