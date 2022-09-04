@@ -17,7 +17,6 @@
 package org.graylog.plugins.views.search.searchtypes;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -30,6 +29,7 @@ import org.graylog.plugins.views.search.DerivedTimeRange;
 import org.graylog.plugins.views.search.Filter;
 import org.graylog.plugins.views.search.SearchType;
 import org.graylog.plugins.views.search.engine.BackendQuery;
+import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.KeywordRange;
 import org.graylog2.plugin.indexer.searches.timeranges.OffsetRange;
@@ -40,7 +40,6 @@ import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 @AutoValue
@@ -56,9 +55,6 @@ public abstract class MessageList implements SearchType {
     @Nullable
     @JsonProperty
     public abstract String id();
-
-    @JsonProperty
-    public abstract Optional<String> name();
 
     @Nullable
     @Override
@@ -116,9 +112,6 @@ public abstract class MessageList implements SearchType {
         public abstract Builder id(@Nullable String id);
 
         @JsonProperty
-        public abstract Builder name(@Nullable String name);
-
-        @JsonProperty
         public abstract Builder filter(@Nullable Filter filter);
 
         @JsonProperty
@@ -153,7 +146,6 @@ public abstract class MessageList implements SearchType {
     }
 
     @AutoValue
-    @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public abstract static class Result implements SearchType.Result {
 
         @Override
@@ -183,8 +175,6 @@ public abstract class MessageList implements SearchType {
         @AutoValue.Builder
         public abstract static class Builder {
             public abstract Builder id(String id);
-
-            public abstract Builder name(@Nullable String name);
 
             public abstract Builder messages(List<ResultMessageSummary> messages);
 

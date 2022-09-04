@@ -24,7 +24,7 @@ import org.joda.time.DateTime;
 
 import java.util.Map;
 
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type", visible = true)
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "type", visible = true)
 @JsonSubTypes({
         @JsonSubTypes.Type(name = AbsoluteRange.ABSOLUTE, value = AbsoluteRange.class),
         @JsonSubTypes.Type(name = RelativeRange.RELATIVE, value = RelativeRange.class),
@@ -42,6 +42,7 @@ public abstract class TimeRange {
     public abstract DateTime getTo();
 
     @JsonIgnore
+    // TODO: remove this when pre 3.2 dashboarding is removed.
     public abstract Map<String, Object> getPersistedConfig();
 
 }
