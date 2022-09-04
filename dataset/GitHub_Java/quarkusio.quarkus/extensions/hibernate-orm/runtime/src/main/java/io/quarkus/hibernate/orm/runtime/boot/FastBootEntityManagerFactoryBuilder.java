@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.hibernate.orm.runtime.boot;
 
 import java.io.Serializable;
@@ -10,36 +26,32 @@ import javax.sql.DataSource;
 
 import org.hibernate.SessionFactory;
 import org.hibernate.SessionFactoryObserver;
-import org.hibernate.boot.internal.SessionFactoryOptionsBuilder;
+import org.hibernate.boot.SessionFactoryBuilder;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.selector.spi.StrategySelector;
-import org.hibernate.bytecode.internal.SessionFactoryObserverForBytecodeEnhancer;
-import org.hibernate.bytecode.spi.BytecodeProvider;
+import org.hibernate.boot.spi.MetadataImplementor;
+import org.hibernate.boot.spi.SessionFactoryBuilderImplementor;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.internal.SessionFactoryImpl;
 import org.hibernate.jpa.AvailableSettings;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
 import org.hibernate.proxy.EntityNotFoundDelegate;
 import org.hibernate.service.ServiceRegistry;
 import org.hibernate.service.spi.ServiceRegistryImplementor;
-import org.hibernate.tool.schema.spi.CommandAcceptanceException;
 import org.hibernate.tool.schema.spi.DelayedDropRegistryNotAvailableImpl;
 import org.hibernate.tool.schema.spi.SchemaManagementToolCoordinator;
 
 import io.quarkus.hibernate.orm.runtime.RuntimeSettings;
-import io.quarkus.hibernate.orm.runtime.recording.PrevalidatedQuarkusMetadata;
 
 public final class FastBootEntityManagerFactoryBuilder implements EntityManagerFactoryBuilder {
 
-    private final PrevalidatedQuarkusMetadata metadata;
+    private final MetadataImplementor metadata;
     private final String persistenceUnitName;
     private final StandardServiceRegistry standardServiceRegistry;
     private final RuntimeSettings runtimeSettings;
     private final Object validatorFactory;
     private final Object cdiBeanManager;
 
-    public FastBootEntityManagerFactoryBuilder(
-            PrevalidatedQuarkusMetadata metadata, String persistenceUnitName,
+    public FastBootEntityManagerFactoryBuilder(MetadataImplementor metadata, String persistenceUnitName,
             StandardServiceRegistry standardServiceRegistry, RuntimeSettings runtimeSettings, Object validatorFactory,
             Object cdiBeanManager) {
         this.metadata = metadata;
@@ -62,10 +74,10 @@ public final class FastBootEntityManagerFactoryBuilder implements EntityManagerF
 
     @Override
     public EntityManagerFactory build() {
+        SessionFactoryBuilder sfBuilder = metadata.getSessionFactoryBuilder();
+        populate(sfBuilder, standardServiceRegistry);
         try {
-            final SessionFactoryOptionsBuilder optionsBuilder = metadata.buildSessionFactoryOptionsBuilder();
-            populate(optionsBuilder, standardServiceRegistry);
-            return new SessionFactoryImpl(metadata.getOriginalMetadata(), optionsBuilder.buildOptions());
+            return sfBuilder.build();
         } catch (Exception e) {
             throw persistenceException("Unable to build Hibernate SessionFactory", e);
         }
@@ -78,7 +90,13 @@ public final class FastBootEntityManagerFactoryBuilder implements EntityManagerF
 
     @Override
     public void generateSchema() {
+        // This seems overkill, but building the SF is necessary to get the Integrators
+        // to kick in.
+        // Metamodel will clean this up...
         try {
+            SessionFactoryBuilder sfBuilder = metadata.getSessionFactoryBuilder();
+            populate(sfBuilder, standardServiceRegistry);
+
             SchemaManagementToolCoordinator.process(metadata, standardServiceRegistry, runtimeSettings.getSettings(),
                     DelayedDropRegistryNotAvailableImpl.INSTANCE);
         } catch (Exception e) {
@@ -98,12 +116,6 @@ public final class FastBootEntityManagerFactoryBuilder implements EntityManagerF
                         + " and SSL was not disabled automatically for your driver.";
                 break;
             }
-
-            if (t instanceof CommandAcceptanceException) {
-                message = "Invalid import file. Make sure your statements are valid and properly separated by a semi-colon.";
-                break;
-            }
-
             t = t.getCause();
         }
 
@@ -114,20 +126,20 @@ public final class FastBootEntityManagerFactoryBuilder implements EntityManagerF
         return "[PersistenceUnit: " + persistenceUnitName + "] ";
     }
 
-    protected void populate(SessionFactoryOptionsBuilder options, StandardServiceRegistry ssr) {
+    protected void populate(SessionFactoryBuilder sfBuilder, StandardServiceRegistry ssr) {
 
         // will use user override value or default to false if not supplied to follow
         // JPA spec.
         final boolean jtaTransactionAccessEnabled = runtimeSettings.getBoolean(
                 AvailableSettings.ALLOW_JTA_TRANSACTION_ACCESS);
         if (!jtaTransactionAccessEnabled) {
-            options.disableJtaTransactionAccess();
+            ((SessionFactoryBuilderImplementor) sfBuilder).disableJtaTransactionAccess();
         }
 
         final boolean allowRefreshDetachedEntity = runtimeSettings.getBoolean(
                 org.hibernate.cfg.AvailableSettings.ALLOW_REFRESH_DETACHED_ENTITY);
         if (!allowRefreshDetachedEntity) {
-            options.disableRefreshDetachedEntity();
+            ((SessionFactoryBuilderImplementor) sfBuilder).disableRefreshDetachedEntity();
         }
 
         // Locate and apply any requested SessionFactoryObserver
@@ -137,25 +149,19 @@ public final class FastBootEntityManagerFactoryBuilder implements EntityManagerF
             final StrategySelector strategySelector = ssr.getService(StrategySelector.class);
             final SessionFactoryObserver suppliedSessionFactoryObserver = strategySelector
                     .resolveStrategy(SessionFactoryObserver.class, sessionFactoryObserverSetting);
-            options.addSessionFactoryObservers(suppliedSessionFactoryObserver);
+            sfBuilder.addSessionFactoryObservers(suppliedSessionFactoryObserver);
         }
 
-        options.addSessionFactoryObservers(new ServiceRegistryCloser());
+        sfBuilder.addSessionFactoryObservers(new ServiceRegistryCloser());
 
-        options.applyEntityNotFoundDelegate(new JpaEntityNotFoundDelegate());
+        sfBuilder.applyEntityNotFoundDelegate(new JpaEntityNotFoundDelegate());
 
         if (this.validatorFactory != null) {
-            options.applyValidatorFactory(validatorFactory);
+            sfBuilder.applyValidatorFactory(validatorFactory);
         }
         if (this.cdiBeanManager != null) {
-            options.applyBeanManager(cdiBeanManager);
+            sfBuilder.applyBeanManager(cdiBeanManager);
         }
-
-        //Small memory optimisations: ensure the class transformation caches of the bytecode enhancer
-        //are cleared both on start and on close of the SessionFactory.
-        //(On start is useful especially in Quarkus as we won't do any more enhancement after this point)
-        BytecodeProvider bytecodeProvider = ssr.getService(BytecodeProvider.class);
-        options.addSessionFactoryObservers(new SessionFactoryObserverForBytecodeEnhancer(bytecodeProvider));
     }
 
     private static class ServiceRegistryCloser implements SessionFactoryObserver {

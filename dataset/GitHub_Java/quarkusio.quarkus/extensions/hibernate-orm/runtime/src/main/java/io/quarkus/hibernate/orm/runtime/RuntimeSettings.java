@@ -33,9 +33,8 @@ public class RuntimeSettings {
 
         private final Map<String, Object> settings;
 
-        public Builder(BuildTimeSettings buildTimeSettings, IntegrationSettings integrationSettings) {
+        public Builder(BuildTimeSettings buildTimeSettings) {
             this.settings = new HashMap<>(buildTimeSettings.getSettings());
-            this.settings.putAll(integrationSettings.getSettings());
         }
 
         public void put(String key, Object value) {
