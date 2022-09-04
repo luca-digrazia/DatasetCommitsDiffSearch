@@ -106,7 +106,7 @@ public class Gamma {
 
             if (fg != 1.0 / 0.0 && fg != -1.0 / 0.0) {
                 if (fg < 0) {
-                    throw new IllegalArgumentException("The gamma function is negative: " + fg);
+                    throw new IllegalArgumentException("The gamma function is negative");
                 } else {
                     fg = Math.log(fg);
                 }

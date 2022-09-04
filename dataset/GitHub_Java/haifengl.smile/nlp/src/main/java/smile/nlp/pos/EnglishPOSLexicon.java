@@ -20,6 +20,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.HashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * An English lexicon with part-of-speech tags.
@@ -32,7 +34,7 @@ public class EnglishPOSLexicon {
 
     }
 
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(EnglishPOSLexicon.class);
+    private static final Logger logger = LoggerFactory.getLogger(EnglishPOSLexicon.class);
 
     /**
      * A list of English words with POS tags.
@@ -50,21 +52,21 @@ public class EnglishPOSLexicon {
      * 
      * Where the POS tag is one or more of the following:
      * 
-     * N    Noun
-     * P    Plural
-     * h    Noun Phrase
-     * V    Verb (usu participle)
-     * t    Verb (transitive)
-     * i    Verb (intransitive)
-     * A    Adjective
-     * v    Adverb
-     * C    Conjunction
-     * P    Preposition
-     * !    Interjection
-     * r    Pronoun
-     * D    Definite Article
-     * I    Indefinite Article
-     * o    Nominative
+     * N	Noun
+     * P	Plural
+     * h	Noun Phrase
+     * V	Verb (usu participle)
+     * t	Verb (transitive)
+     * i	Verb (intransitive)
+     * A	Adjective
+     * v	Adverb
+     * C	Conjunction
+     * P	Preposition
+     * !	Interjection
+     * r	Pronoun
+     * D	Definite Article
+     * I	Indefinite Article
+     * o	Nominative
      * 
      * The parts of speech before any '|' (if at all) come from the original
      * Moby database.  Anything after the '|' comes from the WordNet

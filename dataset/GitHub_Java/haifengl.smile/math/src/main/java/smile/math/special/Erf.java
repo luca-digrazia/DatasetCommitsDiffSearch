@@ -1,26 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.math.special;
 
-import static java.lang.Math.abs;
-import static java.lang.Math.exp;
-import static java.lang.Math.log;
-import static java.lang.Math.sqrt;
+import smile.math.Math;
 
 /**
  * The error function (also called the Gauss error function) is a special
@@ -78,9 +74,9 @@ public class Erf {
      * than 1.2 &times; 10<sup>-7</sup>. This concise routine is faster than erfc.
      */
     public static double erfcc(double x) {
-        double z = abs(x);
+        double z = Math.abs(x);
         double t = 2.0 / (2.0 + z);
-        double ans = t * exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 +
+        double ans = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 +
                 t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 +
                 t * (-0.82215223 + t * 0.17087277)))))))));
 
@@ -99,7 +95,7 @@ public class Erf {
             d = ty * d - dd + cof[j];
             dd = tmp;
         }
-        return t * exp(-z * z + 0.5 * (cof[0] + ty * d) - dd);
+        return t * Math.exp(-z * z + 0.5 * (cof[0] + ty * d) - dd);
     }
 
     /**
@@ -114,11 +110,11 @@ public class Erf {
             return 100.;
         }
         pp = (p < 1.0) ? p : 2. - p;
-        t = sqrt(-2. * log(pp / 2.));
+        t = Math.sqrt(-2. * Math.log(pp / 2.));
         x = -0.70711 * ((2.30753 + t * 0.27061) / (1. + t * (0.99229 + t * 0.04481)) - t);
         for (int j = 0; j < 2; j++) {
             err = erfc(x) - pp;
-            x += err / (1.12837916709551257 * exp(-x * x) - x * err);
+            x += err / (1.12837916709551257 * Math.exp(-x * x) - x * err);
         }
         return (p < 1.0 ? x : -x);
     }

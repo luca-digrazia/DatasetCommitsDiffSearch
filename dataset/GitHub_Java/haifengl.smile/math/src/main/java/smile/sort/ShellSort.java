@@ -17,11 +17,8 @@
 package smile.sort;
 
 /**
- * Shell sort is a generalization of insertion sort.
- * For n &lt; 50, roughly, Shell sort is competitive with the more complicated
- * Quicksort on many machines. For n &gt; 50, Quicksort is generally faster.
- * <p>
- * Shell sort is based on two observations:
+ * Shell sort is a sorting algorithm that is a generalization of insertion
+ * sort, with two observations:
  * <ul>
  * <li> insertion sort is efficient if the input is "almost sorted", and
  * <li> insertion sort is typically inefficient because it moves values
@@ -36,9 +33,12 @@ package smile.sort;
  * <p>
  * The original implementation performs O(n<sup>2</sup>) comparisons and
  * exchanges in the worst case. A minor change given in V. Pratt's book
- * improved the bound to O(n log<sub><small>2</small></sub> n). This is
- * worse than the optimal comparison sorts, which are O(n log n).
- *
+ * improved the bound to O(n log<sub><small>2</small></sub> n). This is worse than the
+ * optimal comparison sorts, which are O(n log n).
+ * <p>
+ * For n &lt; 50, roughly, Shell sort is competitive with the more complicated
+ * Quicksort on many machines. For n &gt; 50, Quicksort is generally faster.
+ * 
  * @author Haifeng Li
  */
 public class ShellSort {

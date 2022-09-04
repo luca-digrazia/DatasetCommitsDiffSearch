@@ -15,12 +15,7 @@
  *******************************************************************************/
 package smile.data.parser;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,10 +26,26 @@ import java.util.List;
  * @author Haifeng Li
  */
 public class IOUtils {
-    private static String home = System.getProperty("smile.home", "src/universal/data");
+    /** Utility classes should not have public constructors. */
+    private IOUtils() {
 
-    public static File getDataFile(String path) {
-        return new java.io.File(home + "/../data/" + path);
+    }
+
+    private static String home = System.getProperty("smile.home", "shell/src/universal/bin");
+
+    /** Get the file path of sample dataset. */
+    public static String getTestDataPath(String path) {
+        return home + "/../data/" + path;
+    }
+
+    /** Get the file object of sample dataset. */
+    public static File getTestDataFile(String path) {
+        return new java.io.File(getTestDataPath(path));
+    }
+
+    /** Get the reader of sample datasets. */
+    public static BufferedReader getTestDataReader(String path) throws FileNotFoundException {
+        return new BufferedReader(new InputStreamReader(new FileInputStream(getTestDataFile(path))));
     }
 
     /**
@@ -68,7 +79,7 @@ public class IOUtils {
      */
     public static List<String> readLines(Reader input) throws IOException {
         BufferedReader reader = input instanceof BufferedReader ? (BufferedReader) input : new BufferedReader(input);
-        List<String> list = new ArrayList<String>();
+        List<String> list = new ArrayList<>();
         String line = reader.readLine();
         while (line != null) {
             list.add(line);
