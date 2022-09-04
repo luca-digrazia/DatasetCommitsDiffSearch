@@ -28,6 +28,7 @@ import build.bazel.remote.execution.v2.Tree;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import com.google.common.hash.HashingOutputStream;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -46,6 +47,7 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
+import io.grpc.Context;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -72,10 +74,12 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
 
   protected final RemoteOptions options;
   protected final DigestUtil digestUtil;
+  private final Retrier retrier;
 
-  public AbstractRemoteActionCache(RemoteOptions options, DigestUtil digestUtil) {
+  public AbstractRemoteActionCache(RemoteOptions options, DigestUtil digestUtil, Retrier retrier) {
     this.options = options;
     this.digestUtil = digestUtil;
+    this.retrier = retrier;
   }
 
   /**
@@ -150,19 +154,23 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
    */
   public void download(ActionResult result, Path execRoot, FileOutErr outErr)
       throws ExecException, IOException, InterruptedException {
+    Context ctx = Context.current();
     List<FuturePathBooleanTuple> fileDownloads =
         Collections.synchronizedList(
             new ArrayList<>(result.getOutputFilesCount() + result.getOutputDirectoriesCount()));
     for (OutputFile file : result.getOutputFilesList()) {
       Path path = execRoot.getRelative(file.getPath());
-      ListenableFuture<Void> download = downloadFile(path, file.getDigest());
+      ListenableFuture<Void> download =
+          retrier.executeAsync(
+              () -> ctx.call(() -> downloadFile(path, file.getDigest())));
       fileDownloads.add(new FuturePathBooleanTuple(download, path, file.getIsExecutable()));
     }
 
     List<ListenableFuture<Void>> dirDownloads = new ArrayList<>(result.getOutputDirectoriesCount());
     for (OutputDirectory dir : result.getOutputDirectoriesList()) {
       SettableFuture<Void> dirDownload = SettableFuture.create();
-      ListenableFuture<byte[]> protoDownload = downloadBlob(dir.getTreeDigest());
+      ListenableFuture<byte[]> protoDownload =
+          retrier.executeAsync(() -> ctx.call(() -> downloadBlob(dir.getTreeDigest())));
       Futures.addCallback(
           protoDownload,
           new FutureCallback<byte[]>() {
@@ -175,7 +183,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
                   childrenMap.put(digestUtil.compute(child), child);
                 }
                 Path path = execRoot.getRelative(dir.getPath());
-                fileDownloads.addAll(downloadDirectory(path, tree.getRoot(), childrenMap));
+                fileDownloads.addAll(downloadDirectory(path, tree.getRoot(), childrenMap, ctx));
                 dirDownload.set(null);
               } catch (IOException e) {
                 dirDownload.setException(e);
@@ -198,7 +206,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
 
     IOException downloadException = null;
     try {
-      fileDownloads.addAll(downloadOutErr(result, outErr));
+      fileDownloads.addAll(downloadOutErr(result, outErr, ctx));
     } catch (IOException e) {
       downloadException = e;
     }
@@ -233,7 +241,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
         for (OutputDirectory directory : result.getOutputDirectoriesList()) {
           // Only delete the directories below the output directories because the output
           // directories will not be re-created
-          execRoot.getRelative(directory.getPath()).deleteTreesBelow();
+          FileSystemUtils.deleteTreesBelow(execRoot.getRelative(directory.getPath()));
         }
         if (outErr != null) {
           outErr.getOutputPath().delete();
@@ -325,7 +333,8 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
    * digest.
    */
   private List<FuturePathBooleanTuple> downloadDirectory(
-      Path path, Directory dir, Map<Digest, Directory> childrenMap) throws IOException {
+      Path path, Directory dir, Map<Digest, Directory> childrenMap, Context ctx)
+      throws IOException {
     // Ensure that the directory is created here even though the directory might be empty
     path.createDirectoryAndParents();
 
@@ -338,7 +347,10 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
       Path childPath = path.getRelative(child.getName());
       downloads.add(
           new FuturePathBooleanTuple(
-              downloadFile(childPath, child.getDigest()), childPath, child.getIsExecutable()));
+              retrier.executeAsync(
+                  () -> ctx.call(() -> downloadFile(childPath, child.getDigest()))),
+              childPath,
+              child.getIsExecutable()));
     }
 
     for (DirectoryNode child : dir.getDirectoriesList()) {
@@ -355,7 +367,7 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
                 + childDigest
                 + "not found");
       }
-      downloads.addAll(downloadDirectory(childPath, childDir, childrenMap));
+      downloads.addAll(downloadDirectory(childPath, childDir, childrenMap, ctx));
     }
 
     return downloads;
@@ -402,8 +414,8 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
     return outerF;
   }
 
-  private List<FuturePathBooleanTuple> downloadOutErr(ActionResult result, FileOutErr outErr)
-      throws IOException {
+  private List<FuturePathBooleanTuple> downloadOutErr(
+      ActionResult result, FileOutErr outErr, Context ctx) throws IOException {
     List<FuturePathBooleanTuple> downloads = new ArrayList<>();
     if (!result.getStdoutRaw().isEmpty()) {
       result.getStdoutRaw().writeTo(outErr.getOutputStream());
@@ -411,7 +423,12 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
     } else if (result.hasStdoutDigest()) {
       downloads.add(
           new FuturePathBooleanTuple(
-              downloadBlob(result.getStdoutDigest(), outErr.getOutputStream()), null, false));
+              retrier.executeAsync(
+                  () ->
+                      ctx.call(
+                          () -> downloadBlob(result.getStdoutDigest(), outErr.getOutputStream()))),
+              null,
+              false));
     }
     if (!result.getStderrRaw().isEmpty()) {
       result.getStderrRaw().writeTo(outErr.getErrorStream());
@@ -419,7 +436,12 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
     } else if (result.hasStderrDigest()) {
       downloads.add(
           new FuturePathBooleanTuple(
-              downloadBlob(result.getStderrDigest(), outErr.getErrorStream()), null, false));
+              retrier.executeAsync(
+                  () ->
+                      ctx.call(
+                          () -> downloadBlob(result.getStderrDigest(), outErr.getErrorStream()))),
+              null,
+              false));
     }
     return downloads;
   }
@@ -653,11 +675,13 @@ public abstract class AbstractRemoteActionCache implements AutoCloseable {
     }
   }
 
-  protected void verifyContents(String expectedHash, String actualHash) throws IOException {
+  protected void verifyContents(Digest expected, HashingOutputStream actual) throws IOException {
+    String expectedHash = expected.getHash();
+    String actualHash = DigestUtil.hashCodeToString(actual.hash());
     if (!expectedHash.equals(actualHash)) {
       String msg =
           String.format(
-              "An output download failed, because the expected hash"
+              "Download an output failed, because the expected hash"
                   + "'%s' did not match the received hash '%s'.",
               expectedHash, actualHash);
       throw new IOException(msg);

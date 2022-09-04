@@ -39,25 +39,19 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.hash.HashCode;
 import com.google.common.hash.HashingOutputStream;
-import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.remote.Retrier.Backoff;
 import com.google.devtools.build.lib.remote.merkletree.MerkleTree;
-import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import io.grpc.CallCredentials;
 import io.grpc.Context;
@@ -73,8 +67,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /** A RemoteActionCache implementation that uses gRPC calls to a remote cache server. */
@@ -96,7 +88,7 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
       RemoteRetrier retrier,
       DigestUtil digestUtil,
       ByteStreamUploader uploader) {
-    super(options, digestUtil);
+    super(options, digestUtil, retrier);
     this.credentials = credentials;
     this.channel = channel;
     this.retrier = retrier;
@@ -160,11 +152,7 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
   private ListenableFuture<FindMissingBlobsResponse> getMissingDigests(
       FindMissingBlobsRequest request) throws IOException, InterruptedException {
     Context ctx = Context.current();
-    try {
-      return retrier.executeAsync(() -> ctx.call(() -> casFutureStub().findMissingBlobs(request)));
-    } catch (StatusRuntimeException e) {
-      throw new IOException(e);
-    }
+    return retrier.executeAsync(() -> ctx.call(() -> casFutureStub().findMissingBlobs(request)));
   }
 
   private ImmutableSet<Digest> getMissingDigests(Iterable<Digest> digests)
@@ -260,154 +248,50 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
     }
     resourceName += "blobs/" + digestUtil.toString(digest);
 
-    @Nullable Supplier<HashCode> hashSupplier = null;
-    if (options.remoteVerifyDownloads) {
-      HashingOutputStream hashOut = digestUtil.newHashingOutputStream(out);
-      hashSupplier = hashOut::hash;
-      out = hashOut;
-    }
-
+    @Nullable
+    HashingOutputStream hashOut =
+        options.remoteVerifyDownloads ? digestUtil.newHashingOutputStream(out) : null;
     SettableFuture<Void> outerF = SettableFuture.create();
-    Futures.addCallback(
-        downloadBlob(resourceName, digest, out, hashSupplier),
-        new FutureCallback<Void>() {
-          @Override
-          public void onSuccess(Void result) {
-            outerF.set(null);
-          }
-
-          @Override
-          public void onFailure(Throwable t) {
-            if (t instanceof StatusRuntimeException) {
-              t = new IOException(t);
-            }
-            outerF.setException(t);
-          }
-        },
-        Context.current().fixedContextExecutor(MoreExecutors.directExecutor()));
-    return outerF;
-  }
-
-  private ListenableFuture<Void> downloadBlob(
-      String resourceName,
-      Digest digest,
-      OutputStream out,
-      @Nullable Supplier<HashCode> hashSupplier) {
-    Context ctx = Context.current();
-    AtomicLong offset = new AtomicLong(0);
-    ProgressiveBackoff progressiveBackoff = new ProgressiveBackoff(retrier::newBackoff);
-    return Futures.catchingAsync(
-        retrier.executeAsync(
-            () ->
-                ctx.call(
-                    () ->
-                        requestRead(
-                            resourceName, offset, progressiveBackoff, digest, out, hashSupplier)),
-            progressiveBackoff),
-        StatusRuntimeException.class,
-        (e) -> Futures.immediateFailedFuture(new IOException(e)),
-        MoreExecutors.directExecutor());
-  }
-
-  static class ProgressiveBackoff implements Backoff {
-    private final Supplier<Backoff> backoffSupplier;
-    private Backoff currentBackoff = null;
-    private int retries = 0;
-
-    /**
-     * Creates a resettable Backoff for progressive reads. After a reset, the nextDelay returned
-     * indicates an immediate retry. Initially and after indicating an immediate retry, a delegate
-     * is generated to provide nextDelay until reset.
-     *
-     * @param backoffSupplier Delegate Backoff generator
-     */
-    ProgressiveBackoff(Supplier<Backoff> backoffSupplier) {
-      this.backoffSupplier = backoffSupplier;
-      currentBackoff = backoffSupplier.get();
-    }
-
-    public void reset() {
-      if (currentBackoff != null) {
-        retries += currentBackoff.getRetryAttempts();
-      }
-      currentBackoff = null;
-    }
-
-    @Override
-    public long nextDelayMillis() {
-      if (currentBackoff == null) {
-        currentBackoff = backoffSupplier.get();
-        retries++;
-        return 0;
-      }
-      return currentBackoff.nextDelayMillis();
-    }
-
-    @Override
-    public int getRetryAttempts() {
-      int retryAttempts = retries;
-      if (currentBackoff != null) {
-        retryAttempts += currentBackoff.getRetryAttempts();
-      }
-      return retryAttempts;
-    }
-  }
-
-  private ListenableFuture<Void> requestRead(
-      String resourceName,
-      AtomicLong offset,
-      ProgressiveBackoff progressiveBackoff,
-      Digest digest,
-      OutputStream out,
-      @Nullable Supplier<HashCode> hashSupplier) {
-    SettableFuture<Void> future = SettableFuture.create();
     bsAsyncStub()
         .read(
-            ReadRequest.newBuilder()
-                .setResourceName(resourceName)
-                .setReadOffset(offset.get())
-                .build(),
+            ReadRequest.newBuilder().setResourceName(resourceName).build(),
             new StreamObserver<ReadResponse>() {
               @Override
               public void onNext(ReadResponse readResponse) {
-                ByteString data = readResponse.getData();
                 try {
-                  data.writeTo(out);
-                  offset.addAndGet(data.size());
+                  readResponse.getData().writeTo(hashOut != null ? hashOut : out);
                 } catch (IOException e) {
-                  future.setException(e);
+                  outerF.setException(e);
                   // Cancel the call.
                   throw new RuntimeException(e);
                 }
-                // reset the stall backoff because we've made progress or been kept alive
-                progressiveBackoff.reset();
               }
 
               @Override
               public void onError(Throwable t) {
-                Status status = Status.fromThrowable(t);
-                if (status.getCode() == Status.Code.NOT_FOUND) {
-                  future.setException(new CacheNotFoundException(digest, digestUtil));
+                if (t instanceof StatusRuntimeException
+                    && ((StatusRuntimeException) t).getStatus().getCode()
+                        == Status.NOT_FOUND.getCode()) {
+                  outerF.setException(new CacheNotFoundException(digest, digestUtil));
                 } else {
-                  future.setException(t);
+                  outerF.setException(t);
                 }
               }
 
               @Override
               public void onCompleted() {
                 try {
-                  if (hashSupplier != null) {
-                    verifyContents(
-                        digest.getHash(), DigestUtil.hashCodeToString(hashSupplier.get()));
+                  if (hashOut != null) {
+                    verifyContents(digest, hashOut);
                   }
                   out.flush();
-                  future.set(null);
+                  outerF.set(null);
                 } catch (IOException e) {
-                  future.setException(e);
+                  outerF.setException(e);
                 }
               }
             });
-    return future;
+    return outerF;
   }
 
   @Override
