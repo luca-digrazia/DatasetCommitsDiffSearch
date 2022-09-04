@@ -15,8 +15,6 @@ import static org.twdata.maven.mojoexecutor.MojoExecutor.version;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -49,7 +47,6 @@ import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.cli.commands.AddExtensions;
 import io.quarkus.cli.commands.CreateProject;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
-import io.quarkus.cli.commands.writer.ProjectWriter;
 import io.quarkus.generators.BuildTool;
 import io.quarkus.generators.SourceType;
 import io.quarkus.maven.components.MavenVersionEnforcer;
@@ -210,12 +207,13 @@ public class CreateProjectMojo extends AbstractMojo {
                     .className(className)
                     .extensions(extensions);
             if (path != null) {
-                createProject.setValue("path", path);
+                createProject.setProperty("path", path);
             }
 
             success = createProject.execute().isSuccess();
 
             File createdDependenciesBuildFile = new File(projectRoot, buildToolEnum.getDependenciesFile());
+            File buildFile = new File(createdDependenciesBuildFile.getAbsolutePath());
             if (success) {
                 success = new AddExtensions(projectWriter, buildToolEnum, platform).extensions(extensions).execute()
                         .isSuccess();
@@ -223,7 +221,7 @@ public class CreateProjectMojo extends AbstractMojo {
             if (BuildTool.MAVEN.equals(buildToolEnum)) {
                 createMavenWrapper(createdDependenciesBuildFile, ToolsUtils.readQuarkusProperties(platform));
             } else if (BuildTool.GRADLE.equals(buildToolEnum)) {
-                createGradleWrapper(platform, projectWriter);
+                createGradleWrapper(buildFile.getParentFile(), ToolsUtils.readQuarkusProperties(platform));
             }
         } catch (Exception e) {
             throw new MojoExecutionException("Failed to generate Quarkus project", e);
@@ -236,27 +234,27 @@ public class CreateProjectMojo extends AbstractMojo {
         }
     }
 
-    private void createGradleWrapper(QuarkusPlatformDescriptor platform,
-            ProjectWriter writer) {
+    private void createGradleWrapper(File projectDirectory, Properties props) {
         try {
-            writer.mkdirs("gradle/wrapper");
+            String gradleName = IS_WINDOWS ? "gradle.bat" : "gradle";
+            ProcessBuilder pb = new ProcessBuilder(gradleName, "wrapper",
+                    "--gradle-version=" + ToolsUtils.getGradleWrapperVersion(props)).directory(projectDirectory)
+                            .inheritIO();
+            Process x = pb.start();
 
-            for (String filename : CreateUtils.GRADLE_WRAPPER_FILES) {
-                byte[] fileContent = platform.loadResource(Paths.get(CreateUtils.GRADLE_WRAPPER_PATH, filename).toString(),
-                        is -> {
-                            byte[] buffer = new byte[is.available()];
-                            is.read(buffer);
-                            return buffer;
-                        });
-                final Path destination = writer.getProjectFolder().toPath().resolve(filename);
-                Files.write(destination, fileContent);
+            x.waitFor();
+
+            if (x.exitValue() != 0) {
+                getLog().warn("Unable to install the Gradle wrapper (./gradlew) in project. See log for details.");
             }
 
-            new File(writer.getProjectFolder(), "gradlew").setExecutable(true);
-            new File(writer.getProjectFolder(), "gradlew.bat").setExecutable(true);
-        } catch (IOException e) {
-            getLog().error("Unable to copy Gradle wrapper from platform descriptor", e);
+        } catch (InterruptedException | IOException e) {
+            // no reason to fail if the wrapper could not be created
+            getLog().error(
+                    "Unable to install the Gradle wrapper (./gradlew) in the project. You need to have gradle installed to generate the wrapper files.",
+                    e);
         }
+
     }
 
     private void createMavenWrapper(File createdPomFile, Properties props) {
