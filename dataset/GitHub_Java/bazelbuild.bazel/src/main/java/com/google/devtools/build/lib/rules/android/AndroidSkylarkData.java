@@ -169,14 +169,7 @@ public abstract class AndroidSkylarkData
       AndroidAaptVersion aaptVersion = ctx.getAndroidConfig().getAndroidAaptVersion();
 
       ValidatedAndroidResources validated =
-          AndroidResources.from(
-                  errorReporter,
-                  getFileProviders(resources),
-                  "resources",
-                  enableDataBinding
-                      ? DataBinding.asEnabledDataBindingContextFrom(
-                          ctx.getActionConstructionContext())
-                      : DataBinding.asDisabledDataBindingContext())
+          AndroidResources.from(errorReporter, getFileProviders(resources), "resources")
               .process(
                   ctx,
                   manifest.asStampedManifest(),
@@ -429,11 +422,7 @@ public abstract class AndroidSkylarkData
               ctx,
               getAndroidSemantics(),
               rawManifest,
-              AndroidResources.from(
-                  errorReporter,
-                  getFileProviders(resources),
-                  "resource_files",
-                  DataBinding.asDisabledDataBindingContext()),
+              AndroidResources.from(errorReporter, getFileProviders(resources), "resource_files"),
               AndroidAssets.from(
                   errorReporter,
                   listFromNoneable(assets, ConfiguredTarget.class),
@@ -575,13 +564,7 @@ public abstract class AndroidSkylarkData
                   manifestValues,
                   settings.aaptVersion,
                   AndroidResources.from(
-                      errorReporter,
-                      getFileProviders(resources),
-                      "resource_files",
-                      dataBindingEnabled
-                          ? DataBinding.asEnabledDataBindingContextFrom(
-                              ctx.getActionConstructionContext())
-                          : DataBinding.asDisabledDataBindingContext()),
+                      errorReporter, getFileProviders(resources), "resource_files"),
                   AndroidAssets.from(
                       errorReporter,
                       listFromNoneable(assets, ConfiguredTarget.class),

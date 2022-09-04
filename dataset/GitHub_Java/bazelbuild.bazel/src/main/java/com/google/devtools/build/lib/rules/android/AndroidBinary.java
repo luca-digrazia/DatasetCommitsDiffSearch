@@ -658,7 +658,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 applicationManifest.getManifest(),
                 AndroidCommon.getApkDebugSigningKey(ruleContext)))
         .addNativeDeclaredProvider(new AndroidPreDexJarProvider(jarToDex))
-        .addNativeDeclaredProvider(
+        .addProvider(
+            AndroidFeatureFlagSetProvider.class,
             AndroidFeatureFlagSetProvider.create(
                 AndroidFeatureFlagSetProvider.getAndValidateFlagMapFromRuleContext(ruleContext)))
         .addOutputGroup("android_deploy_info", deployInfo);

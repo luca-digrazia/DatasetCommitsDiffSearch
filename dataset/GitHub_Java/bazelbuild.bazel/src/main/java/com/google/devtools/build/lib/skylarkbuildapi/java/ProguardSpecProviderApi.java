@@ -54,7 +54,7 @@ public interface ProguardSpecProviderApi<FileT extends FileApi> extends StructAp
               generic1 = FileApi.class),
         },
         selfCall = true)
-    @SkylarkConstructor(objectType = ProguardSpecProviderApi.class, receiverNameForDoc = NAME)
+    @SkylarkConstructor(objectType = ProguardSpecProviderApi.class)
     ProguardSpecProviderApi<FileT> create(SkylarkNestedSet specs) throws EvalException;
   }
 }

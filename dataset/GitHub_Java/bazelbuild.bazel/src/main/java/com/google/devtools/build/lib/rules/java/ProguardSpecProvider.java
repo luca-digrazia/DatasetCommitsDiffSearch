@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skylarkbuildapi.java.ProguardSpecProviderApi;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /** A target that can provide proguard specifications to Android binaries. */
@@ -63,10 +62,10 @@ public final class ProguardSpecProvider extends NativeInfo
     }
 
     @Override
-    public ProguardSpecProvider create(SkylarkNestedSet specs) throws EvalException {
+    public ProguardSpecProvider create(SkylarkNestedSet specs) {
       return new ProguardSpecProvider(
           NestedSetBuilder.<Artifact>stableOrder()
-              .addTransitive(specs.getSetFromParam(Artifact.class, "specs"))
+              .addTransitive(specs.getSet(Artifact.class))
               .build());
     }
   }

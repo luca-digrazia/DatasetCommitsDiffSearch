@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.common.base.Ascii;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
@@ -319,7 +318,7 @@ public abstract class ProguardHelper {
     // Generate and include implicit Proguard spec for requested mode.
     if (!optMode.getImplicitProguardDirectives().isEmpty()) {
       Artifact implicitDirectives =
-          getProguardConfigArtifact(label, context, Ascii.toLowerCase(optMode.name()));
+          getProguardConfigArtifact(label, context, optMode.name().toLowerCase());
       context.registerAction(
           FileWriteAction.create(
               context,
@@ -448,7 +447,7 @@ public abstract class ProguardHelper {
       JavaTargetAttributes attributes = new JavaTargetAttributes.Builder(semantics).build();
       Artifact combinedLibraryJar =
           getProguardTempArtifact(
-              ruleContext, Ascii.toLowerCase(optMode.name()), "combined_library_jars.jar");
+              ruleContext, optMode.name().toLowerCase(), "combined_library_jars.jar");
       new DeployArchiveBuilder(semantics, ruleContext)
           .setOutputJar(combinedLibraryJar)
           .setAttributes(attributes)
@@ -486,7 +485,7 @@ public abstract class ProguardHelper {
       // Optimization passes have been specified, so run proguard in multiple phases.
       Artifact lastStageOutput =
           getProguardTempArtifact(
-              ruleContext, Ascii.toLowerCase(optMode.name()), "proguard_preoptimization.jar");
+              ruleContext, optMode.name().toLowerCase(), "proguard_preoptimization.jar");
       SpawnAction.Builder initialAction = new SpawnAction.Builder();
       CustomCommandLine.Builder initialCommandLine = CustomCommandLine.builder();
       defaultAction(
@@ -534,7 +533,7 @@ public abstract class ProguardHelper {
           Artifact optimizationOutput =
               getProguardTempArtifact(
                   ruleContext,
-                  Ascii.toLowerCase(optMode.name()),
+                  optMode.name().toLowerCase(),
                   mnemonic + "_optimization_" + i + ".jar");
           SpawnAction.Builder optimizationAction = new SpawnAction.Builder();
           CustomCommandLine.Builder optimizationCommandLine = CustomCommandLine.builder();
