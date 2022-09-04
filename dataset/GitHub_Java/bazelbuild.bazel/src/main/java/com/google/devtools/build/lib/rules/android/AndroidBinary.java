@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
-import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
@@ -1239,12 +1238,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       shardAction.addInput(inclusionFilterJar);
     }
     ruleContext.registerAction(
-        shardAction
-            .addCommandLine(
-                shardCommandLine.build(),
-                // Classpaths can be long--overflow into @params file if necessary
-                ParamFileInfo.builder(ParameterFile.ParameterFileType.SHELL_QUOTED).build())
-            .build(ruleContext));
+        shardAction.addCommandLine(shardCommandLine.build()).build(ruleContext));
 
     return outputTree;
   }
@@ -1341,10 +1335,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       dexmerger.addInput(mainDexList);
       commandLine.addExecPath("--main-dex-list", mainDexList);
     }
-    dexmerger.addCommandLine(
-        commandLine.build(),
-        // Classpaths can be long--overflow into @params file if necessary
-        ParamFileInfo.builder(ParameterFile.ParameterFileType.SHELL_QUOTED).build());
+    dexmerger.addCommandLine(commandLine.build());
     ruleContext.registerAction(dexmerger.build(ruleContext));
   }
 
