@@ -1,9 +1,11 @@
 package io.dropwizard.jersey.validation;
 
-import io.dropwizard.validation.BaseValidator;
+import io.dropwizard.validation.valuehandling.OptionalValidatedValueUnwrapper;
+import org.hibernate.validator.HibernateValidator;
 import org.hibernate.validator.HibernateValidatorConfiguration;
 import org.hibernate.validator.spi.valuehandling.ValidatedValueUnwrapper;
 
+import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.validation.ValidatorFactory;
 
@@ -32,7 +34,10 @@ public class Validators {
      * ValidatedValueUnwrapper} registered.
      */
     public static HibernateValidatorConfiguration newConfiguration() {
-        return BaseValidator.newConfiguration()
+        return Validation
+                .byProvider(HibernateValidator.class)
+                .configure()
+                .addValidatedValueHandler(new OptionalValidatedValueUnwrapper())
                 .addValidatedValueHandler(new NonEmptyStringParamUnwrapper())
                 .addValidatedValueHandler(new ParamValidatorUnwrapper());
     }
