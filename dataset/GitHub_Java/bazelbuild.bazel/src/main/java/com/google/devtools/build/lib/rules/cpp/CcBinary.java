@@ -377,12 +377,16 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             .build();
     Iterable<Artifact> additionalLinkerInputs = common.getAdditionalLinkerInputs();
 
-    // Allows the dynamic library generated for code of test targets to be linked separately.
+    // Allows the dynamic library generated for code of default dynamic mode targets to be linked
+    // separately. The main use case for default dynamic mode is the cc_test rule. The same behavior
+    // can also be enabled specifically for tests with an experimental flag.
+    // TODO(meikeb): Retire the experimental flag in Q1 2019.
     boolean linkCompileOutputSeparately =
         ruleContext.isTestTarget()
             && linkingMode == LinkingMode.DYNAMIC
             && cppConfiguration.getDynamicModeFlag() == DynamicMode.DEFAULT
-            && ruleContext.getFeatures().contains(DYNAMIC_LINK_TEST_SRCS);
+            && (cppConfiguration.getLinkCompileOutputSeparately()
+                || ruleContext.getFeatures().contains(DYNAMIC_LINK_TEST_SRCS));
     // When linking the object files directly into the resulting binary, we do not need
     // library-level link outputs; thus, we do not let CcCompilationHelper produce link outputs
     // (either shared object files or archives) for a non-library link type [*], and add
@@ -569,13 +573,24 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
     // If the binary is linked dynamically and COPY_DYNAMIC_LIBRARIES_TO_BINARY is enabled, collect
     // all the dynamic libraries we need at runtime. Then copy these libraries next to the binary.
-    NestedSet<Artifact> copiedRuntimeDynamicLibraries = null;
     if (featureConfiguration.isEnabled(CppRuleClasses.COPY_DYNAMIC_LIBRARIES_TO_BINARY)) {
-      copiedRuntimeDynamicLibraries =
-          createDynamicLibrariesCopyActions(
-              ruleContext,
-              LibraryToLink.getDynamicLibrariesForRuntime(
-                  isStaticMode, depsCcLinkingContext.getLibraries()));
+      ImmutableList.Builder<Artifact> runtimeLibraries = ImmutableList.builder();
+      for (LibraryToLink libraryToLink : depsCcLinkingContext.getLibraries()) {
+        Artifact library =
+            libraryToLink.getDynamicLibraryForRuntimeOrNull(/* linkingStatically= */ isStaticMode);
+        if (library != null) {
+          runtimeLibraries.add(library);
+        }
+      }
+      filesToBuild =
+          NestedSetBuilder.fromNestedSet(filesToBuild)
+              .addAll(
+                  createDynamicLibrariesCopyActions(
+                      ruleContext,
+                      NestedSetBuilder.<Artifact>linkOrder()
+                          .addAll(runtimeLibraries.build())
+                          .build()))
+              .build();
     }
 
     // TODO(bazel-team): Do we need to put original shared libraries (along with
@@ -653,15 +668,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       if (dynamicLibraryForLinking != null) {
         ruleBuilder.addOutputGroup("interface_library", dynamicLibraryForLinking);
       }
-    }
-
-    if (copiedRuntimeDynamicLibraries != null) {
-      // When COPY_DYNAMIC_LIBRARIES_TO_BINARY is enabled, runtime dynamic libraries should be
-      // copied to the binary's directory. Therefore, we add them to HIDDEN_TOP_LEVEL output group
-      // to make sure they are built for the target and runtime_dynamic_libraries output group
-      // to make them easier to access.
-      ruleBuilder.addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, copiedRuntimeDynamicLibraries);
-      ruleBuilder.addOutputGroup("runtime_dynamic_libraries", copiedRuntimeDynamicLibraries);
     }
 
     CcSkylarkApiProvider.maybeAdd(ruleContext, ruleBuilder);
@@ -1013,9 +1019,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
    * @param dynamicLibrariesForRuntime The libraries to be copied.
    * @return The result artifacts of the copies.
    */
-  private static NestedSet<Artifact> createDynamicLibrariesCopyActions(
-      RuleContext ruleContext, Iterable<Artifact> dynamicLibrariesForRuntime) {
-    NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
+  private static ImmutableList<Artifact> createDynamicLibrariesCopyActions(
+      RuleContext ruleContext, NestedSet<Artifact> dynamicLibrariesForRuntime) {
+    ImmutableList.Builder<Artifact> result = ImmutableList.builder();
     for (Artifact target : dynamicLibrariesForRuntime) {
       if (!ruleContext.getLabel().getPackageName().equals(target.getOwner().getPackageName())) {
         // SymlinkAction on file is actually copy on Windows.
@@ -1023,10 +1029,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         ruleContext.registerAction(SymlinkAction.toArtifact(
             ruleContext.getActionOwner(), target, copy, "Copying Execution Dynamic Library"));
         result.add(copy);
-      } else {
-        // If the target is already in the same directory as the binary, we don't need to copy it,
-        // but we still add it the result.
-        result.add(target);
       }
     }
     return result.build();
