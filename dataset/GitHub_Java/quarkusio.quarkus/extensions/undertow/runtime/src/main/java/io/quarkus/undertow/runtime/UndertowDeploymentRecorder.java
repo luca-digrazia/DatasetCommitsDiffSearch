@@ -460,6 +460,7 @@ public class UndertowDeploymentRecorder {
                                 if (exchange == null) {
                                     return action.call(exchange, context);
                                 }
+                                boolean vertxFirst = false;
                                 ManagedContext requestContext = beanContainer.requestContext();
                                 if (requestContext.isActive()) {
                                     return action.call(exchange, context);
@@ -468,6 +469,7 @@ public class UndertowDeploymentRecorder {
                                             .getAttachment(REQUEST_CONTEXT);
                                     try {
                                         requestContext.activate(existingRequestContext);
+                                        vertxFirst = existingRequestContext == null;
 
                                         VertxHttpExchange delegate = (VertxHttpExchange) exchange.getDelegate();
                                         RoutingContext rc = (RoutingContext) delegate.getContext();
@@ -477,6 +479,9 @@ public class UndertowDeploymentRecorder {
                                         ServletRequestContext src = exchange
                                                 .getAttachment(ServletRequestContext.ATTACHMENT_KEY);
                                         HttpServletRequestImpl req = src.getOriginalRequest();
+                                        if (vertxFirst) {
+                                            currentVertxRequest.initialInvocationComplete(req.isAsyncStarted());
+                                        }
                                         if (req.isAsyncStarted()) {
                                             exchange.putAttachment(REQUEST_CONTEXT, requestContext.getState());
                                             requestContext.deactivate();

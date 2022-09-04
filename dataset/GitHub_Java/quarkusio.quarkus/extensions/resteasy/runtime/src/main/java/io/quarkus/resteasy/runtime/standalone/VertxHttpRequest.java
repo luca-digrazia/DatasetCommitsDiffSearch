@@ -8,7 +8,6 @@ import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
 import javax.ws.rs.ServiceUnavailableException;
 import javax.ws.rs.container.AsyncResponse;
@@ -263,7 +262,11 @@ public final class VertxHttpRequest extends BaseHttpRequest {
                         return false;
                     done = true;
                     requestContext.activate(requestContextState);
-                    return internalResume(entity, new FlushTask());
+                    try {
+                        return internalResume(entity, t -> vertxFlush());
+                    } finally {
+                        requestContext.terminate();
+                    }
                 }
             }
 
@@ -276,7 +279,11 @@ public final class VertxHttpRequest extends BaseHttpRequest {
                         return false;
                     done = true;
                     requestContext.activate(requestContextState);
-                    return internalResume(ex, new FlushTask());
+                    try {
+                        return internalResume(ex, t -> vertxFlush());
+                    } finally {
+                        requestContext.terminate();
+                    }
                 }
             }
 
@@ -292,7 +299,11 @@ public final class VertxHttpRequest extends BaseHttpRequest {
                     done = true;
                     cancelled = true;
                     requestContext.activate(requestContextState);
-                    return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).build(), new FlushTask());
+                    try {
+                        return internalResume(Response.status(Response.Status.SERVICE_UNAVAILABLE).build(), t -> vertxFlush());
+                    } finally {
+                        requestContext.terminate();
+                    }
                 }
             }
 
@@ -306,10 +317,14 @@ public final class VertxHttpRequest extends BaseHttpRequest {
                     done = true;
                     cancelled = true;
                     requestContext.activate(requestContextState);
-                    return internalResume(
-                            Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter)
-                                    .build(),
-                            new FlushTask());
+                    try {
+                        return internalResume(
+                                Response.status(Response.Status.SERVICE_UNAVAILABLE).header(HttpHeaders.RETRY_AFTER, retryAfter)
+                                        .build(),
+                                t -> vertxFlush());
+                    } finally {
+                        requestContext.terminate();
+                    }
                 }
             }
 
@@ -377,17 +392,6 @@ public final class VertxHttpRequest extends BaseHttpRequest {
                 if (done)
                     return;
                 resume(new ServiceUnavailableException());
-            }
-
-            private class FlushTask implements Consumer<Throwable> {
-                @Override
-                public void accept(Throwable t) {
-                    try {
-                        requestContext.terminate();
-                    } finally {
-                        VertxHttpAsyncResponse.this.vertxFlush();
-                    }
-                }
             }
         }
     }
