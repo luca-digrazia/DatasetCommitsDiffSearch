@@ -2,15 +2,12 @@ package io.quarkus.agroal.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
 import java.sql.SQLException;
 
 import javax.inject.Inject;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -26,16 +23,14 @@ public class DisabledTransactionDataSourceConfigTest {
     AgroalDataSource defaultDataSource;
 
     @RegisterExtension
-    static final QuarkusUnitTest config = new QuarkusUnitTest().setArchiveProducer(
-            () -> ShrinkWrap.create(JavaArchive.class)
-                    .addAsResource("application-disabledjta-datasource.properties",
-                            "application.properties"));
+    static final QuarkusUnitTest config = new QuarkusUnitTest()
+            .withConfigurationResource("application-disabledjta-datasource.properties");
 
     @Test
     public void testNonTransactionalDataSourceInjection() throws SQLException {
         AgroalConnectionPoolConfiguration configuration = defaultDataSource.getConfiguration().connectionPoolConfiguration();
 
-        assertTrue(!(configuration.transactionIntegration() instanceof NarayanaTransactionIntegration));
+        assertFalse(configuration.transactionIntegration() instanceof NarayanaTransactionIntegration);
         Class<? extends TransactionIntegration> nonTxIntegrator = TransactionIntegration.none().getClass();
         assertEquals(nonTxIntegrator, configuration.transactionIntegration().getClass());
         assertFalse(configuration.connectionFactoryConfiguration().trackJdbcResources());

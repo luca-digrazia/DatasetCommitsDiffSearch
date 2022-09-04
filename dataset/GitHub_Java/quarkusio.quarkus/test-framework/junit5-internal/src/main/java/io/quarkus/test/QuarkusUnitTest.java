@@ -301,7 +301,7 @@ public class QuarkusUnitTest
 
                 Object actualTest = factory.get();
                 extensionContext.getStore(ExtensionContext.Namespace.GLOBAL).put(testClass.getName(), actualTest);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 started = false;
                 if (assertException != null) {
                     if (e instanceof RuntimeException) {
@@ -401,14 +401,6 @@ public class QuarkusUnitTest
         } catch (IOException e) {
             throw new RuntimeException("Could not load resource: '" + resourceName + "'");
         }
-    }
-
-    public QuarkusUnitTest overrideConfigKey(final String propertyKey, final String propertyValue) {
-        if (customApplicationProperties == null) {
-            customApplicationProperties = new Properties();
-        }
-        customApplicationProperties.put(propertyKey, propertyValue);
-        return this;
     }
 
     private static class PropertiesAsset implements Asset {
