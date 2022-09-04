@@ -38,10 +38,13 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
+
+import static javax.ws.rs.core.Response.Status.BAD_GATEWAY;
 
 @RequiresAuthentication
 @Api(value = "Cluster/Plugins", description = "Plugin information for any node in the cluster")
@@ -50,16 +53,11 @@ import java.io.IOException;
 public class ClusterSystemPluginResource extends ProxiedResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterSystemResource.class);
 
-    private final NodeService nodeService;
-    private final RemoteInterfaceProvider remoteInterfaceProvider;
-
     @Inject
     public ClusterSystemPluginResource(NodeService nodeService,
                                        RemoteInterfaceProvider remoteInterfaceProvider,
                                        @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders);
-        this.nodeService = nodeService;
-        this.remoteInterfaceProvider = remoteInterfaceProvider;
+        super(httpHeaders, nodeService, remoteInterfaceProvider);
     }
 
     @GET
@@ -76,9 +74,8 @@ public class ClusterSystemPluginResource extends ProxiedResource {
         if (response.isSuccess()) {
             return response.body();
         } else {
-            LOG.warn("Unable to get plugin list on node " + nodeId + ": " + response.message());
+            LOG.warn("Unable to get plugin list on node {}: {}", nodeId, response.message());
+            throw new WebApplicationException(response.message(), BAD_GATEWAY);
         }
-
-        return null;
     }
 }

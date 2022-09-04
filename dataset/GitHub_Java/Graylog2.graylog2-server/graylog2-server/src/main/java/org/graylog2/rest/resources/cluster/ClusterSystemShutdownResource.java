@@ -18,12 +18,10 @@
 package org.graylog2.rest.resources.cluster;
 
 import com.codahale.metrics.annotation.Timed;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.auditlog.Actions;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.cluster.NodeService;
@@ -67,7 +65,6 @@ public class ClusterSystemShutdownResource extends ProxiedResource {
     @ApiOperation(value = "Shutdown node gracefully.",
             notes = "Attempts to process all buffered and cached messages before exiting, " +
                     "shuts down inputs first to make sure that no new messages are accepted.")
-    @AuditLog(action = Actions.SHUTDOWN, object = "Graylog node")
     public void shutdown(@ApiParam(name = "nodeId", value = "The id of the node to shutdown.", required = true)
                          @PathParam("nodeId") String nodeId) throws IOException, NodeNotFoundException {
         final Node targetNode = nodeService.byNodeId(nodeId);

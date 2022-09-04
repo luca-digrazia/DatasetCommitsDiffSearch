@@ -40,35 +40,32 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 
+import static javax.ws.rs.core.Response.Status.BAD_GATEWAY;
+
 @RequiresAuthentication
-@Api(value = "Cluster", description = "Journal information of any nodes in the cluster")
-@Path("/cluster/journal")
+@Api(value = "Cluster/Journal", description = "Journal information of any nodes in the cluster")
+@Path("/cluster/{nodeId}/journal")
 @Produces(MediaType.APPLICATION_JSON)
 public class ClusterJournalResource extends ProxiedResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterJournalResource.class);
-
-    private final NodeService nodeService;
-    private final RemoteInterfaceProvider remoteInterfaceProvider;
 
     @Inject
     public ClusterJournalResource(NodeService nodeService,
                                   RemoteInterfaceProvider remoteInterfaceProvider,
                                   @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders);
-        this.nodeService = nodeService;
-        this.remoteInterfaceProvider = remoteInterfaceProvider;
+        super(httpHeaders, nodeService, remoteInterfaceProvider);
     }
 
     @GET
     @Timed
     @ApiOperation(value = "Get message journal information of a given node")
     @RequiresPermissions(RestPermissions.JOURNAL_READ)
-    @Path("{nodeId}")
     public JournalSummaryResponse get(@ApiParam(name = "nodeId", value = "The id of the node to get message journal information.", required = true)
                                       @PathParam("nodeId") String nodeId) throws IOException, NodeNotFoundException {
         final Node targetNode = nodeService.byNodeId(nodeId);
@@ -80,10 +77,9 @@ public class ClusterJournalResource extends ProxiedResource {
         if (response.isSuccess()) {
             return response.body();
         } else {
-            LOG.warn("Unable to get message journal information on node " + nodeId + ": " + response.message());
+            LOG.warn("Unable to get message journal information on node {}: {}", nodeId, response.message());
+            throw new WebApplicationException(response.message(), BAD_GATEWAY);
         }
-
-        return null;
     }
 }
 

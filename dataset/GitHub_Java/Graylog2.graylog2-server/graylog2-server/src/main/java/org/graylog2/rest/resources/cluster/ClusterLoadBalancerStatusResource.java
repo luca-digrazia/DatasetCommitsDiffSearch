@@ -18,13 +18,11 @@
 package org.graylog2.rest.resources.cluster;
 
 import com.codahale.metrics.annotation.Timed;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.auditlog.Actions;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.cluster.NodeService;
@@ -68,9 +66,8 @@ public class ClusterLoadBalancerStatusResource extends ProxiedResource {
     @RequiresAuthentication
     @RequiresPermissions(RestPermissions.LBSTATUS_CHANGE)
     @ApiOperation(value = "Override load balancer status of this graylog2-server node. Next lifecycle " +
-            "change will override it again to its default. Set to ALIVE, DEAD, or THROTTLED.")
+            "change will override it again to its default. Set to ALIVE or DEAD.")
     @Path("/override/{status}")
-    @AuditLog(object = "load balancer status")
     public void override(@ApiParam(name = "nodeId", value = "The id of the node whose LB status will be changed", required = true)
                          @PathParam("nodeId") String nodeId,
                          @ApiParam(name = "status") @PathParam("status") String status) throws IOException, NodeNotFoundException {
@@ -80,7 +77,7 @@ public class ClusterLoadBalancerStatusResource extends ProxiedResource {
                 this.authenticationToken,
                 RemoteLoadBalancerStatusResource.class);
         final Response response = remoteLoadBalancerStatusResource.override(status).execute();
-        if (!response.isSuccessful()) {
+        if (!response.isSuccess()) {
             LOG.warn("Unable to override load balancer status on node {}: {}", nodeId, response.message());
             throw new WebApplicationException(response.message(), BAD_GATEWAY);
         }

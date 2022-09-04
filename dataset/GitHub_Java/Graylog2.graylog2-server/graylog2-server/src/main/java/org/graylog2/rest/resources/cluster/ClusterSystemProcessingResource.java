@@ -18,12 +18,10 @@
 package org.graylog2.rest.resources.cluster;
 
 import com.codahale.metrics.annotation.Timed;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.auditlog.Actions;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.cluster.NodeService;
@@ -75,11 +73,10 @@ public class ClusterSystemProcessingResource extends ProxiedResource {
             notes = "If the message journal is enabled, incoming messages will be spooled on disk, if it is disabled, " +
                     "you might lose messages from inputs which cannot buffer themselves, like AMQP or Kafka-based inputs.")
     @Path("pause")
-    @AuditLog(action = Actions.STOP, object = "message processing")
     public void pause(@ApiParam(name = "nodeId", value = "The id of the node where processing will be paused.", required = true)
                       @PathParam("nodeId") String nodeId) throws IOException, NodeNotFoundException {
         final Response response = this.getRemoteSystemProcessingResource(nodeId).pause().execute();
-        if (!response.isSuccessful()) {
+        if (!response.isSuccess()) {
             LOG.warn("Unable to pause message processing on node {}: {}", nodeId, response.message());
             throw new WebApplicationException(response.message(), BAD_GATEWAY);
         }
@@ -89,11 +86,10 @@ public class ClusterSystemProcessingResource extends ProxiedResource {
     @Timed
     @ApiOperation(value = "Resume message processing on node")
     @Path("resume")
-    @AuditLog(action = Actions.START, object = "message processing")
     public void resume(@ApiParam(name = "nodeId", value = "The id of the node where processing will be resumed.", required = true)
                        @PathParam("nodeId") String nodeId) throws IOException, NodeNotFoundException {
         final Response response = this.getRemoteSystemProcessingResource(nodeId).resume().execute();
-        if (!response.isSuccessful()) {
+        if (!response.isSuccess()) {
             LOG.warn("Unable to resume message processing on node {}: {}", nodeId, response.message());
             throw new WebApplicationException(response.message(), BAD_GATEWAY);
         }
