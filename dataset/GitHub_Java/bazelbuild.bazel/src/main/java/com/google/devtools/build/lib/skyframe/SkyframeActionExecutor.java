@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
-import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
 import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
@@ -143,7 +142,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   private boolean keepGoing;
   private boolean hadExecutionError;
   private ActionInputFileCache perBuildFileCache;
-  private ActionInputPrefetcher actionInputPrefetcher;
   /** These variables are nulled out between executions. */
   private ProgressSupplier progressSupplier;
   private ActionCompletedReceiver completionReceiver;
@@ -465,7 +463,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     return new ActionExecutionContext(
         executorEngine,
         new DelegatingPairFileCache(graphFileCache, perBuildFileCache),
-        actionInputPrefetcher,
         metadataHandler,
         fileOutErr,
         clientEnv,
@@ -574,7 +571,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
         ActionExecutionContext.forInputDiscovery(
             executorEngine,
             new DelegatingPairFileCache(graphFileCache, perBuildFileCache),
-            actionInputPrefetcher,
             metadataHandler,
             actionLogBufferPathGenerator.generate(),
             clientEnv,
@@ -609,9 +605,8 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     return hadExecutionError && !keepGoing;
   }
 
-  void configure(ActionInputFileCache fileCache, ActionInputPrefetcher actionInputPrefetcher) {
+  void setFileCache(ActionInputFileCache fileCache) {
     this.perBuildFileCache = fileCache;
-    this.actionInputPrefetcher = actionInputPrefetcher;
   }
 
   private class ActionRunner implements Callable<ActionExecutionValue> {
