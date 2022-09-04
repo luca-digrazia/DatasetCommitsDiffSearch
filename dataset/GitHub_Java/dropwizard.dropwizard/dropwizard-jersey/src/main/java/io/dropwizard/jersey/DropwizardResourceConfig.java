@@ -7,9 +7,13 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import io.dropwizard.jersey.caching.CacheControlledResponseFeature;
+import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
+import io.dropwizard.jersey.errors.LoggingExceptionMapper;
 import io.dropwizard.jersey.guava.OptionalMessageBodyWriter;
 import io.dropwizard.jersey.guava.OptionalParameterInjectionBinder;
+import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
 import io.dropwizard.jersey.sessions.SessionFactoryProvider;
+import io.dropwizard.jersey.validation.ConstraintViolationExceptionMapper;
 import org.glassfish.jersey.message.GZipEncoder;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
@@ -55,6 +59,11 @@ public class DropwizardResourceConfig extends ResourceConfig {
         property(ServerProperties.WADL_FEATURE_DISABLE, Boolean.TRUE);
         if (!testOnly) {
             // create a subclass to pin it to Throwable
+            register(new LoggingExceptionMapper<Throwable>() {
+            });
+            register(new ConstraintViolationExceptionMapper());
+            register(new JsonProcessingExceptionMapper());
+            register(new EarlyEofExceptionMapper());
             register(new ComponentLoggingListener(this));
         }
         register(new InstrumentedResourceMethodApplicationListener(metricRegistry));
