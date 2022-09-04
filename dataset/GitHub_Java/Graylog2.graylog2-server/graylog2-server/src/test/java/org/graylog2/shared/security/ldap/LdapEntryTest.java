@@ -18,61 +18,15 @@ package org.graylog2.shared.security.ldap;
 
 import nl.jqno.equalsverifier.EqualsVerifier;
 import nl.jqno.equalsverifier.Warning;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.Assert.*;
 
 public class LdapEntryTest {
     @Test
-    void testEquals() {
+    public void testEquals() throws Exception {
         EqualsVerifier.forClass(LdapEntry.class)
-                .suppress(Warning.NONFINAL_FIELDS)
-                .verify();
-    }
-
-    @Test
-    void caseInsensitiveAccess() {
-        final LdapEntry entry = new LdapEntry();
-
-        entry.put("HeLlo", "yo");
-
-        assertThat(entry.get("HELLO")).isEqualTo("yo");
-    }
-
-    @Test
-    void getEmail() {
-        final LdapEntry entry = new LdapEntry();
-
-        entry.put("mail", null);
-        entry.put("rfc822Mailbox", "rfc-test@example.com");
-
-        assertThat(entry.getEmail()).isEqualTo("rfc-test@example.com");
-
-        entry.put("mail", "mail@example.com");
-
-        assertThat(entry.getEmail()).isEqualTo("mail@example.com");
-    }
-
-    @Test
-    void getNonBlank() {
-        final LdapEntry entry = new LdapEntry();
-
-        entry.put("null", null);
-        entry.put("empty", "");
-        entry.put("blank", "     ");
-        entry.put("full", "hello");
-
-        assertThatThrownBy(() -> entry.getNonBlank("null"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("null");
-        assertThatThrownBy(() -> entry.getNonBlank("empty"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("null");
-        assertThatThrownBy(() -> entry.getNonBlank("blank"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("null");
-
-        assertThat(entry.getNonBlank("full")).isEqualTo("hello");
+            .suppress(Warning.NONFINAL_FIELDS)
+            .verify();
     }
 }
