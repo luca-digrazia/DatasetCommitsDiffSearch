@@ -16,6 +16,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.ServiceLoader;
@@ -26,6 +27,7 @@ import java.util.jar.Manifest;
 import java.util.stream.Stream;
 
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
+import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
@@ -62,7 +64,7 @@ public class QuarkusDevModeTest
         System.setProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager");
     }
 
-    private boolean started = false;
+    boolean started = false;
 
     private DevModeMain devModeMain;
     private Path deploymentDir;
@@ -153,7 +155,6 @@ public class QuarkusDevModeTest
             DevModeContext context = exportArchive(deploymentDir, projectSourceRoot);
             context.setTest(true);
             context.setAbortOnFailedStart(true);
-            context.setLocalProjectDiscovery(false);
             devModeMain = new DevModeMain(context);
             devModeMain.start();
             started = true;
@@ -251,7 +252,23 @@ public class QuarkusDevModeTest
             }
 
             //debugging code
-            ExportUtil.exportToQuarkusDeploymentPath(archive);
+            String exportPath = System.getProperty("quarkus.deploymentExportPath");
+            if (exportPath != null) {
+                File exportDir = new File(exportPath);
+                if (exportDir.exists()) {
+                    if (!exportDir.isDirectory()) {
+                        throw new IllegalStateException("Export path is not a directory: " + exportPath);
+                    }
+                    try (Stream<Path> stream = Files.walk(exportDir.toPath())) {
+                        stream.sorted(Comparator.reverseOrder()).map(Path::toFile)
+                                .forEach(File::delete);
+                    }
+                } else if (!exportDir.mkdirs()) {
+                    throw new IllegalStateException("Export path could not be created: " + exportPath);
+                }
+                File exportFile = new File(exportDir, archive.getName());
+                archive.as(ZipExporter.class).exportTo(exportFile);
+            }
 
             DevModeContext context = new DevModeContext();
             context.setCacheDir(cache.toFile());
