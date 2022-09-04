@@ -20,18 +20,17 @@
 
 package org.graylog2.messagehandlers.syslog;
 
-import java.net.SocketAddress;
 import org.graylog2.Log;
 import org.graylog2.Main;
 import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.messagehandlers.common.HostUpsertHook;
 import org.graylog2.messagehandlers.common.MessageCounterHook;
-import org.graylog2.messagehandlers.common.MessageFilterHook;
 import org.graylog2.messagehandlers.common.ReceiveHookManager;
+import org.productivity.java.syslog4j.server.SyslogServerEventHandlerIF;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
-import org.productivity.java.syslog4j.server.SyslogServerSessionlessEventHandlerIF;
+import org.productivity.java.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
 
 /**
  * SyslogEventHandler.java: May 17, 2010 8:58:18 PM
@@ -40,7 +39,7 @@ import org.productivity.java.syslog4j.server.SyslogServerSessionlessEventHandler
  *
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
-public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF {
+public class SyslogEventHandler implements SyslogServerEventHandlerIF {
     
     /**
      * Handle an incoming syslog message: Output if in debug mode, store in MongoDB, ReceiveHooks
@@ -48,7 +47,9 @@ public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF
      * @param syslogServer The syslog server
      * @param event The event to handle
      */
-    public void event(SyslogServerIF syslogServer, SocketAddress socketAddress, SyslogServerEventIF event) {
+    public void event(SyslogServerIF syslogServer, SyslogServerEventIF event) {
+        // Yeah, syslog.
+        event.setFacility(event.getFacility()/8);
 
         // Print out debug information.
         if (Main.debugMode) {
@@ -65,36 +66,17 @@ public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF
             // Connect to database.
             MongoBridge m = new MongoBridge();
 
-            // Process the message before inserting into the database
-            ReceiveHookManager.postProcess(new MessageFilterHook(), event);
-            if( event.getMessage() == "GRAYLOG2_FILTEROUT" ) {
-            	System.out.println("Not inserting event into database.");
-            } else {
-            	m.insert(event);
-                // This is doing the upcounting for statistics.
-                ReceiveHookManager.postProcess(new MessageCounterHook(), event);
+            m.insert(event);
 
-                // Counts up host in hosts collection.
-                ReceiveHookManager.postProcess(new HostUpsertHook(), event);
-            }
+            // This is doing the upcounting for statistics.
+            ReceiveHookManager.postProcess(new MessageCounterHook(), event);
 
-
+            // Counts up host in hosts collection.
+            ReceiveHookManager.postProcess(new HostUpsertHook(), event);
         } catch (Exception e) {
             Log.crit("Could not insert syslog event into database: " + e.toString());
         }
 
-    }
-
-    public void exception(SyslogServerIF syslogServer, SocketAddress socketAddress, Exception exception) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    public void initialize(SyslogServerIF syslogServer) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
-    public void destroy(SyslogServerIF syslogServer) {
-        throw new UnsupportedOperationException("Not supported yet.");
     }
 
 }

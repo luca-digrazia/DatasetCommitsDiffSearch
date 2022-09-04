@@ -22,13 +22,11 @@ package org.graylog2;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.Date;
-import java.util.Properties;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -49,11 +47,16 @@ public final class Tools {
      * @return PID
      * @throws Exception
      */
-    public static String getPID() throws Exception {
+    public static String getPID() {
         byte[] bo = new byte[100];
         String[] cmd = {"bash", "-c", "echo $PPID"};
-        Process p = Runtime.getRuntime().exec(cmd);
-        p.getInputStream().read(bo);
+        try {
+            Process p = Runtime.getRuntime().exec(cmd);
+            p.getInputStream().read(bo);
+        } catch (IOException e) {
+            Log.emerg("Could not determine own PID! " + e.toString());
+            return "unknown";
+        }
         return new String(bo).trim();
     }
 
@@ -178,26 +181,15 @@ public final class Tools {
        return (int) (System.currentTimeMillis()/1000);
     }
 
-	/**
-	 * Watch for file changes in the regular expression file.
-	 * This will allow you to add/remove/modify filters without restarting the server.
-	 * 
-	 */
-	public static void watchFilterFile(String regexPath) {
-		TimerTask task = new FileWatcher( new File(regexPath)) {
-			protected void onChange(File file) {
-				try {
-					FileInputStream regexStream = new FileInputStream(file);
-					Main.regexConfig.load(regexStream);
-					regexStream.close();
-					System.out.println(file.getName() + " has changed. Updating properties file.");
-				} catch (java.io.IOException e) {
-					System.out.println("Could not read regex config file: " + e.toString());
-				}
-			}
-		};
-		
-		Timer timer = new Timer();
-		timer.schedule(task, new Date(), 60000);
-	}
+    public static String getLocalHostname() {
+        InetAddress addr = null;
+        try {
+            addr = InetAddress.getLocalHost();
+        } catch (UnknownHostException ex) {
+            return "Unknown";
+        }
+
+        return addr.getHostName();
+    }
+
 }

@@ -23,11 +23,9 @@ package org.graylog2.database;
 import com.mongodb.DBCollection;
 import com.mongodb.BasicDBObject;
 import com.mongodb.BasicDBObjectBuilder;
-import com.mongodb.DB;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import org.graylog2.Log;
 import org.graylog2.Main;
 import org.graylog2.Tools;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
@@ -177,13 +175,8 @@ public class MongoBridge {
         BasicDBObject update = new BasicDBObject();
         update.put("$inc", new BasicDBObject("message_count", 1));
 
-        DB db = MongoConnection.getInstance().getDatabase();
-        if (db == null) {
-            // Not connected to DB.
-            Log.emerg("MongoBridge::upsertHost(): Could not get hosts collection.");
-        } else {
-            db.getCollection("hosts").update(query, update, true, false);
-        }
+        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("hosts");
+        coll.update(query, update, true, false);
     }
 
     public void writeThroughput(int current, int highest) {
