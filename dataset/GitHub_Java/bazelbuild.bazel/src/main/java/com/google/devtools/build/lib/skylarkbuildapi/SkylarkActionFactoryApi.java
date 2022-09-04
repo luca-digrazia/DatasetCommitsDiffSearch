@@ -80,11 +80,8 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
   @SkylarkCallable(
       name = "declare_directory",
       doc =
-          "Declares that the rule or aspect creates a directory with the given name, in the "
-              + "current package. You must create an action that generates the directory. "
-              + "The contents of the directory are not directly accessible from Starlark, "
-              + "but can be expanded in an action command with "
-              + "<a href=\"Args.html#add_all\"><code>Args.add_all()</code></a>.",
+          "Declares that rule or aspect create a directory with the given name, in the "
+              + "current package. You must create an action that generates the directory.",
       parameters = {
         @Param(
             name = "filename",
