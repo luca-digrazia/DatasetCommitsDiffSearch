@@ -53,17 +53,14 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
     private final Configuration configuration;
     private final RoleService roleService;
-    private final UserImpl.Factory userFactory;
 
     @Inject
     public UserServiceImpl(final MongoConnection mongoConnection,
                            final Configuration configuration,
-                           final RoleService roleService,
-                           final UserImpl.Factory userFactory) {
+                           final RoleService roleService) {
         super(mongoConnection);
         this.configuration = configuration;
         this.roleService = roleService;
-        this.userFactory = userFactory;
         // ensure that the users' roles array is indexed
         collection(UserImpl.class).createIndex(UserImpl.ROLES);
     }
@@ -75,7 +72,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         // special case for the locally defined user, we don't store that in MongoDB.
         if (configuration.getRootUsername().equals(username)) {
             LOG.debug("User {} is the built-in admin user", username);
-            return userFactory.createLocalAdminUser(roleService.getAdminRoleObjectId());
+            return new UserImpl.LocalAdminUser(configuration, roleService.getAdminRoleObjectId());
         }
 
         final DBObject query = new BasicDBObject();
@@ -96,7 +93,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         final Object userId = userObject.get("_id");
 
         LOG.debug("Loaded user {}/{} from MongoDB", username, userId);
-        return userFactory.create((ObjectId) userId, userObject.toMap());
+        return new UserImpl((ObjectId) userId, userObject.toMap());
     }
 
     public int delete(final String username) {
@@ -113,7 +110,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
     @Override
     public User create() {
-        return userFactory.create(Maps.<String, Object>newHashMap());
+        return new UserImpl(Maps.<String, Object>newHashMap());
     }
 
     @Override
@@ -123,7 +120,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
         final List<User> users = Lists.newArrayList();
         for (DBObject dbObject : result) {
-            users.add(userFactory.create((ObjectId) dbObject.get("_id"), dbObject.toMap()));
+            users.add(new UserImpl((ObjectId) dbObject.get("_id"), dbObject.toMap()));
         }
 
         return users;
@@ -135,7 +132,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
         // create new user object if necessary
         if (user == null) {
-            user = userFactory.create(Maps.<String, Object>newHashMap());
+            user = new UserImpl(Maps.<String, Object>newHashMap());
         }
 
         // update user attributes from ldap entry
@@ -184,7 +181,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         final Set<String> translatedRoleIds = Sets.newHashSet(Sets.union(Sets.newHashSet(ldapSettings.getDefaultGroupId()),
                                                                          ldapSettings.getAdditionalDefaultGroupIds()));
         if (!userEntry.getGroups().isEmpty()) {
-            // ldap search returned groups, these always override the ones set on the user
             try {
                 final Map<String, Role> roleNameToRole = roleService.loadAllLowercaseNameMap();
                 for (String ldapGroupName : userEntry.getGroups()) {
@@ -205,13 +201,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
             } catch (NotFoundException e) {
                 LOG.error("Unable to load user roles", e);
             }
-        } else if (ldapSettings.getGroupMapping().isEmpty()
-                || ldapSettings.getGroupSearchBase().isEmpty()
-                || ldapSettings.getGroupSearchPattern().isEmpty()
-                || ldapSettings.getGroupIdAttribute().isEmpty()) {
-            // no group mapping or configuration set, we'll leave the previously set groups alone on sync
-            // when first creating the user these will be empty
-            translatedRoleIds.addAll(user.getRoleIds());
         }
         user.setRoleIds(translatedRoleIds);
 
@@ -228,7 +217,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
     @Override
     public User getAdminUser() {
-        return userFactory.createLocalAdminUser(roleService.getAdminRoleObjectId());
+        return new UserImpl.LocalAdminUser(configuration, roleService.getAdminRoleObjectId());
     }
 
     @Override
@@ -248,7 +237,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         final Set<User> users = Sets.newHashSetWithExpectedSize(result.size());
         for (DBObject dbObject : result) {
             //noinspection unchecked
-            users.add(userFactory.create((ObjectId) dbObject.get("_id"), dbObject.toMap()));
+            users.add(new UserImpl((ObjectId) dbObject.get("_id"), dbObject.toMap()));
         }
         return users;
     }

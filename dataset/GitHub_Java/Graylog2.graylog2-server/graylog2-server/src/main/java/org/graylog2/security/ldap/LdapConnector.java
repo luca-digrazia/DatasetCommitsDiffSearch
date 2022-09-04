@@ -33,9 +33,7 @@ import org.apache.directory.api.ldap.model.message.ResultCodeEnum;
 import org.apache.directory.api.ldap.model.message.SearchScope;
 import org.apache.directory.ldap.client.api.LdapConnectionConfig;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
-import org.graylog2.plugin.DocsHelper;
 import org.graylog2.shared.security.ldap.LdapEntry;
-import org.graylog2.shared.utilities.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -207,7 +205,7 @@ public class LdapConnector {
                                   String groupSearchBase,
                                   String groupSearchPattern,
                                   String groupIdAttribute,
-                                  String dn) {
+                                  String dn) throws LdapException {
         final Set<String> groups = Sets.newHashSet();
 
         EntryCursor groupSearch = null;
@@ -253,12 +251,6 @@ public class LdapConnector {
                     }
                 }
             }
-        } catch (Exception e) {
-            LOG.warn(
-                    "Unable to iterate over user's groups, unable to perform group mapping. Graylog does not support " +
-                            "LDAP referrals at the moment. Please see " +
-                            DocsHelper.PAGE_LDAP_TROUBLESHOOTING.toString() + " for more information.",
-                    ExceptionUtils.getRootCause(e));
         } finally {
             if (groupSearch != null) {
                 groupSearch.close();
@@ -271,7 +263,7 @@ public class LdapConnector {
     public Set<String> listGroups(LdapNetworkConnection connection,
                                   String groupSearchBase,
                                   String groupSearchPattern,
-                                  String groupIdAttribute) {
+                                  String groupIdAttribute) throws LdapException {
         return findGroups(connection, groupSearchBase, groupSearchPattern, groupIdAttribute, null);
     }
 
