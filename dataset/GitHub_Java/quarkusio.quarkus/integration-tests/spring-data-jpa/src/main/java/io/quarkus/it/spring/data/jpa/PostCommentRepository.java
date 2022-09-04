@@ -2,12 +2,9 @@ package io.quarkus.it.spring.data.jpa;
 
 import java.util.List;
 
-import org.springframework.data.repository.RepositoryDefinition;
+import org.springframework.data.repository.Repository;
 
-@RepositoryDefinition(domainClass = PostComment.class, idClass = Long.class)
-public interface PostCommentRepository {
-
-    List<PostComment> findAll();
+public interface PostCommentRepository extends Repository<PostComment, Long> {
 
     List<PostComment> findByPostId(Long postId);
 }

@@ -42,6 +42,4 @@ public interface PersonRepository extends CrudRepository<Person, Long>, PersonFr
     List<Person> findPeopleByAddressZipCode(String zipCode);
 
     List<Person> findByAddressId(Long addressId);
-
-    List<Person> findByAddressStreetNumber(String streetName);
 }
