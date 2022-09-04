@@ -82,7 +82,7 @@ public class ExtraHandler extends BaseAnnotationHandler<HasExtras> {
 		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase(null, fieldName, "Extra");
 		JFieldVar staticExtraField = holder.getGeneratedClass().fields().get(staticFieldName);
 		if (staticExtraField == null) {
-			staticExtraField = holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, classes().STRING, staticFieldName, lit(extraKey));
+			staticExtraField = holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, getClasses().STRING, staticFieldName, lit(extraKey));
 		}
 		return staticExtraField;
 	}
@@ -94,13 +94,13 @@ public class ExtraHandler extends BaseAnnotationHandler<HasExtras> {
 
 		TypeMirror type = codeModelHelper.getActualType(element, hasExtras);
 		JClass elementClass = codeModelHelper.typeMirrorToJClass(element.asType());
-		BundleHelper bundleHelper = new BundleHelper(annotationHelper, type);
+		BundleHelper bundleHelper = new BundleHelper(getEnvironment(), type);
 
 		JFieldRef extraField = JExpr.ref(fieldName);
 		JExpression intent = invoke("getIntent");
 		JBlock ifContainsKey = injectExtrasBlock._if(JExpr.invoke(extras, "containsKey").arg(extraKeyStaticField))._then();
 
-		JExpression restoreMethodCall = bundleHelper.getExpressionToRestoreFromIntentOrBundle(elementClass, intent, extras, extraKeyStaticField, injectExtrasMethod, hasExtras);
+		JExpression restoreMethodCall = bundleHelper.getExpressionToRestoreFromIntentOrBundle(elementClass, intent, extras, extraKeyStaticField, injectExtrasMethod);
 		ifContainsKey.assign(extraField, restoreMethodCall);
 	}
 

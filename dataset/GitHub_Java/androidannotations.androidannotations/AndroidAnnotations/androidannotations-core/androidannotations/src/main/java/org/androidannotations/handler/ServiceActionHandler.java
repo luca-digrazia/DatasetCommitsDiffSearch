@@ -78,7 +78,7 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
 
 	private JFieldVar createStaticActionField(EIntentServiceHolder holder, String extraKey, String methodName) {
 		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase("action", methodName, null);
-		return holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, classes().STRING, staticFieldName, lit(extraKey));
+		return holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, getClasses().STRING, staticFieldName, lit(extraKey));
 	}
 
 	private void addActionInOnHandleIntent(EIntentServiceHolder holder, ExecutableElement executableElement, String methodName, JFieldVar actionKeyField) {
@@ -95,7 +95,7 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
 		if (methodParameters.size() > 0) {
 			// Extras
 			JVar intent = holder.getOnHandleIntentIntent();
-			JVar extras = callActionBlock.decl(classes().BUNDLE, "extras");
+			JVar extras = callActionBlock.decl(getClasses().BUNDLE, "extras");
 			extras.init(intent.invoke("getExtras"));
 			callActionBlock = callActionBlock._if(extras.ne(_null()))._then();
 
@@ -106,8 +106,8 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
 				JFieldVar paramVar = getStaticExtraField(holder, paramName);
 				JClass extraParamClass = codeModelHelper.typeMirrorToJClass(param.asType());
 
-				BundleHelper bundleHelper = new BundleHelper(annotationHelper, param.asType());
-				JExpression getExtraExpression = bundleHelper.getExpressionToRestoreFromIntentOrBundle(extraParamClass, intent, extras, paramVar, onHandleIntentMethod, holder);
+				BundleHelper bundleHelper = new BundleHelper(getEnvironment(), param.asType());
+				JExpression getExtraExpression = bundleHelper.getExpressionToRestoreFromIntentOrBundle(extraParamClass, intent, extras, paramVar, onHandleIntentMethod);
 
 				JVar extraField = callActionBlock.decl(extraParamClass, extraParamName, getExtraExpression);
 				callActionInvocation.arg(extraField);
@@ -141,7 +141,7 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
 		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase(null, extraName, "Extra");
 		JFieldVar staticExtraField = holder.getGeneratedClass().fields().get(staticFieldName);
 		if (staticExtraField == null) {
-			staticExtraField = holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, classes().STRING, staticFieldName, lit(extraName));
+			staticExtraField = holder.getGeneratedClass().field(PUBLIC | STATIC | FINAL, getClasses().STRING, staticFieldName, lit(extraName));
 		}
 		return staticExtraField;
 	}

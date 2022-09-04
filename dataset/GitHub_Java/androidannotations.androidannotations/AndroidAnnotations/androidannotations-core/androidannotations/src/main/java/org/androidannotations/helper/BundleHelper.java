@@ -31,11 +31,10 @@ import javax.lang.model.type.TypeVariable;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.IJStatement;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JMethod;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JMethod;
 
 public class BundleHelper {
 	public static final Map<String, String> METHOD_SUFFIX_BY_TYPE_NAME = new HashMap<>();
@@ -78,14 +77,12 @@ public class BundleHelper {
 
 	private AndroidAnnotationsEnvironment environment;
 	private AnnotationHelper annotationHelper;
-	private ParcelerHelper parcelerHelper;
 	private APTCodeModelHelper codeModelHelper;
 
 	private TypeMirror element;
 
 	private boolean restoreCallNeedCastStatement = false;
 	private boolean restoreCallNeedsSuppressWarning = false;
-	private boolean parcelerBean = false;
 
 	private String methodNameToSave;
 	private String methodNameToRestore;
@@ -96,7 +93,6 @@ public class BundleHelper {
 		this.environment = environment;
 		annotationHelper = new AnnotationHelper(environment);
 		codeModelHelper = new APTCodeModelHelper(environment);
-		parcelerHelper = new ParcelerHelper(environment);
 		this.element = element;
 
 		String typeString = element.toString();
@@ -176,10 +172,6 @@ public class BundleHelper {
 			if (isTypeParcelable(type)) {
 				methodNameToSave = "put" + "Parcelable";
 				methodNameToRestore = "get" + "Parcelable";
-			} else if (parcelerHelper.isParcelType(type)) {
-				methodNameToSave = "put" + "Parcelable";
-				methodNameToRestore = "get" + "Parcelable";
-				parcelerBean = true;
 			} else {
 				methodNameToSave = "put" + "Serializable";
 				methodNameToRestore = "get" + "Serializable";
@@ -211,7 +203,7 @@ public class BundleHelper {
 		return declaredType.getTypeArguments().size() > 0;
 	}
 
-	public IJExpression getExpressionToRestoreFromIntentOrBundle(AbstractJClass variableClass, IJExpression intent, IJExpression extras, IJExpression extraKey, JMethod method) {
+	public JExpression getExpressionToRestoreFromIntentOrBundle(JClass variableClass, JExpression intent, JExpression extras, JExpression extraKey, JMethod method) {
 		if ("byte[]".equals(element.toString())) {
 			return intent.invoke("getByteArrayExtra").arg(extraKey);
 		} else {
@@ -219,10 +211,10 @@ public class BundleHelper {
 		}
 	}
 
-	public IJExpression getExpressionToRestoreFromBundle(AbstractJClass variableClass, IJExpression bundle, IJExpression extraKey, JMethod method) {
-		IJExpression expressionToRestore;
+	public JExpression getExpressionToRestoreFromBundle(JClass variableClass, JExpression bundle, JExpression extraKey, JMethod method) {
+		JExpression expressionToRestore;
 		if (methodNameToRestore.equals("getParcelableArray")) {
-			AbstractJClass erasure;
+			JClass erasure;
 			if (upperBound != null) {
 				erasure = codeModelHelper.typeMirrorToJClass(upperBound).erasure().array();
 			} else {
@@ -233,10 +225,6 @@ public class BundleHelper {
 			expressionToRestore = JExpr.invoke(bundle, methodNameToRestore).arg(extraKey);
 		}
 
-		if (parcelerBean) {
-			expressionToRestore = environment.getJClass(CanonicalNameConstants.PARCELS_UTILITY_CLASS).staticInvoke("unwrap").arg(expressionToRestore);
-		}
-
 		if (restoreCallNeedCastStatement) {
 			expressionToRestore = JExpr.cast(variableClass, expressionToRestore);
 
@@ -245,13 +233,5 @@ public class BundleHelper {
 			}
 		}
 		return expressionToRestore;
-	}
-
-	public IJStatement getExpressionToSaveFromField(IJExpression saveStateBundleParam, IJExpression fieldName, IJExpression variableRef) {
-		IJExpression refExpression = variableRef;
-		if (parcelerBean) {
-			refExpression = environment.getJClass(CanonicalNameConstants.PARCELS_UTILITY_CLASS).staticInvoke("wrap").arg(refExpression);
-		}
-		return JExpr.invoke(saveStateBundleParam, methodNameToSave).arg(fieldName).arg(refExpression);
 	}
 }
