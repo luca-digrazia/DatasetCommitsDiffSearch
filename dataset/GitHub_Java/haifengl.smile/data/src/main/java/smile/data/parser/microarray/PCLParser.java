@@ -18,15 +18,14 @@ package smile.data.parser.microarray;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.text.ParseException;
+
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
-import smile.data.Datum;
 import smile.data.NumericAttribute;
 
 /**
@@ -82,52 +81,52 @@ public class PCLParser {
 
     /**
      * Parse a PCL dataset from given URI.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
-    public AttributeDataset parse(URI uri) throws FileNotFoundException, IOException, ParseException {
+    public AttributeDataset parse(URI uri) throws IOException, ParseException {
         return parse(new File(uri));
     }
 
     /**
      * Parse a PCL dataset from given URI.
      * @param uri the URI of data source.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
-    public AttributeDataset parse(String name, URI uri) throws FileNotFoundException, IOException, ParseException {
+    public AttributeDataset parse(String name, URI uri) throws IOException, ParseException {
         return parse(name, new File(uri));
     }
 
     /**
      * Parse a PCL dataset from given file.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
-    public AttributeDataset parse(String path) throws FileNotFoundException, IOException, ParseException {
+    public AttributeDataset parse(String path) throws IOException, ParseException {
         return parse(new File(path));
     }
 
     /**
      * Parse a PCL dataset from given file.
      * @param path the file path of data source.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
-    public AttributeDataset parse(String name, String path) throws FileNotFoundException, IOException, ParseException {
+    public AttributeDataset parse(String name, String path) throws IOException, ParseException {
         return parse(name, new File(path));
     }
 
     /**
      * Parse a PCL dataset from given file.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
-    public AttributeDataset parse(File file) throws FileNotFoundException, IOException, ParseException {
+    public AttributeDataset parse(File file) throws IOException, ParseException {
         return parse(file.getPath(), new FileInputStream(file));
     }
 
     /**
      * Parse a PCL dataset from given file.
      * @param file the file of data source.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
-    public AttributeDataset parse(String name, File file) throws FileNotFoundException, IOException, ParseException {
+    public AttributeDataset parse(String name, File file) throws IOException, ParseException {
         return parse(name, new FileInputStream(file));
     }
 
@@ -135,7 +134,7 @@ public class PCLParser {
      * Parse a PCL dataset from an input stream.
      * @param name the name of dataset.
      * @param stream the input stream of data.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
     public AttributeDataset parse(String name, InputStream stream) throws IOException, ParseException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
@@ -180,11 +179,10 @@ public class PCLParser {
                 }
             }
 
-            Datum<double[]> datum = new Datum<double[]>(x);
+            AttributeDataset.Row datum = data.add(x);
             datum.name = tokens[0];
             datum.description = tokens[1];
             datum.weight = Double.valueOf(tokens[2]);
-            data.add(datum);
         }
         
         reader.close();
