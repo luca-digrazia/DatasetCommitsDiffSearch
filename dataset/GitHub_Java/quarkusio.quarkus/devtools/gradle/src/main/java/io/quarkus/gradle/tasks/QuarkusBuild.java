@@ -16,9 +16,12 @@ import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
+import io.quarkus.creator.AppCreator;
 import io.quarkus.creator.AppCreatorException;
-import io.quarkus.creator.CuratedApplicationCreator;
-import io.quarkus.creator.phase.augment.AugmentTask;
+import io.quarkus.creator.phase.augment.AugmentPhase;
+import io.quarkus.creator.phase.curate.CurateOutcome;
+import io.quarkus.creator.phase.runnerjar.RunnerJarOutcome;
+import io.quarkus.creator.phase.runnerjar.RunnerJarPhase;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
@@ -149,31 +152,35 @@ public class QuarkusBuild extends QuarkusTask {
                 realProperties.setProperty(key, (String) value);
             }
         }
-        realProperties.putIfAbsent("quarkus.application.name", appArtifact.getArtifactId());
-        realProperties.putIfAbsent("quarkus.application.version", appArtifact.getVersion());
 
-        boolean clear = false;
-        if (uberJar && System.getProperty("quarkus.package.types") == null) {
-            System.setProperty("quarkus.package.types", "uber-jar");
-            clear = true;
-        }
-        try (CuratedApplicationCreator appCreationContext = CuratedApplicationCreator.builder()
+        try (AppCreator appCreator = AppCreator.builder()
+                // configure the build phases we want the app to go through
+                .addPhase(new AugmentPhase()
+                        .setAppClassesDir(extension().outputDirectory().toPath())
+                        .setConfigDir(extension().outputConfigDirectory().toPath())
+                        .setTransformedClassesDir(getTransformedClassesDirectory().toPath())
+                        .setWiringClassesDir(getWiringClassesDirectory().toPath())
+                        .setBuildSystemProperties(realProperties))
+                .addPhase(new RunnerJarPhase()
+                        .setLibDir(getLibDir().toPath())
+                        .setFinalName(extension().finalName())
+                        .setMainClass(getMainClass())
+                        .setUberJar(isUberJar())
+                        .setUserConfiguredIgnoredEntries(getIgnoredEntries()))
                 .setWorkDir(getProject().getBuildDir().toPath())
-                .setModelResolver(modelResolver)
-                .setBaseName(extension().finalName())
-                .setAppArtifact(appArtifact).build()) {
+                .build()) {
 
-            AugmentTask task = AugmentTask.builder().setBuildSystemProperties(realProperties)
-                    .setAppClassesDir(extension().outputDirectory().toPath())
-                    .setConfigDir(extension().outputConfigDirectory().toPath()).build();
-            appCreationContext.runTask(task);
+            // push resolved application state
+            appCreator.pushOutcome(CurateOutcome.builder()
+                    .setAppModelResolver(modelResolver)
+                    .setAppModel(appModel)
+                    .build());
+
+            // resolve the outcome we need here
+            appCreator.resolveOutcome(RunnerJarOutcome.class);
 
         } catch (AppCreatorException e) {
             throw new GradleException("Failed to build a runnable JAR", e);
-        } finally {
-            if (clear) {
-                System.clearProperty("quarkus.package.types");
-            }
         }
     }
 }
