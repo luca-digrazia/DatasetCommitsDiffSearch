@@ -1,10 +1,9 @@
 package io.dropwizard.testing.junit;
 
-import io.dropwizard.testing.app.TestApplication;
-import io.dropwizard.testing.app.TestConfiguration;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import javax.ws.rs.client.ClientBuilder;
 import java.util.Optional;
 
 import static io.dropwizard.testing.ConfigOverride.config;
@@ -16,16 +15,16 @@ public class DropwizardAppRuleConfigOverrideTest {
 
     @ClassRule
     public static final DropwizardAppRule<TestConfiguration> RULE =
-        new DropwizardAppRule<>(TestApplication.class, resourceFilePath("test-config.yaml"),
-            Optional.of("app-rule"),
-            config("app-rule", "message", "A new way to say Hooray!"),
-            config("app-rule", "extra", () -> "supplied"),
-            config("extra", () -> "supplied again"));
+            new DropwizardAppRule<>(TestApplication.class, resourceFilePath("test-config.yaml"),
+                    Optional.of("app-rule"),
+                    config("app-rule", "message", "A new way to say Hooray!"),
+                    config("app-rule", "extra", () -> "supplied"),
+                    config("extra", () -> "supplied again"));
 
     @Test
     public void supportsConfigAttributeOverrides() {
-        final String content = RULE.client().target("http://localhost:" + RULE.getLocalPort() + "/test")
-            .request().get(String.class);
+        final String content = ClientBuilder.newClient().target("http://localhost:" + RULE.getLocalPort() + "/test")
+                .request().get(String.class);
 
         assertThat(content, is("A new way to say Hooray!"));
     }
