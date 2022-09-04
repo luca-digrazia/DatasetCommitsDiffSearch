@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.worker;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
@@ -21,10 +20,10 @@ import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.shell.SubprocessBuilder;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
-import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -42,16 +41,10 @@ import java.util.SortedMap;
  * class.
  */
 class Worker {
-  /** An unique identifier of the work process. */
-  protected final WorkerKey workerKey;
-  /** An unique ID of the worker. It will be used in WorkRequest and WorkResponse as well. */
-  protected final int workerId;
-  /** The execution root of the worker. */
-  protected final Path workDir;
-  /** The path of the log file. */
-  protected final Path logFile;
-  /** Stream for reading the WorkResponse. */
-  protected RecordingInputStream recordingStream;
+  private final WorkerKey workerKey;
+  private final int workerId;
+  private final Path workDir;
+  private final Path logFile;
 
   private Subprocess process;
   private Thread shutdownHook;
@@ -77,12 +70,11 @@ class Worker {
   }
 
   void createProcess() throws IOException {
-    ImmutableList<String> args = workerKey.getArgs();
+    List<String> args = workerKey.getArgs();
     File executable = new File(args.get(0));
     if (!executable.isAbsolute() && executable.getParent() != null) {
-      List<String> newArgs = new ArrayList<>(args);
-      newArgs.set(0, new File(workDir.getPathFile(), newArgs.get(0)).getAbsolutePath());
-      args = ImmutableList.copyOf(newArgs);
+      args = new ArrayList<>(args);
+      args.set(0, new File(workDir.getPathFile(), args.get(0)).getAbsolutePath());
     }
     SubprocessBuilder processBuilder = new SubprocessBuilder();
     processBuilder.setArgv(args);
@@ -123,22 +115,12 @@ class Worker {
     return !process.finished();
   }
 
-  void putRequest(WorkRequest request) throws IOException {
-    request.writeDelimitedTo(process.getOutputStream());
-    process.getOutputStream().flush();
+  InputStream getInputStream() {
+    return process.getInputStream();
   }
 
-  WorkResponse getResponse() throws IOException {
-    recordingStream = new RecordingInputStream(process.getInputStream());
-    recordingStream.startRecording(4096);
-    // response can be null when the worker has already closed stdout at this point and thus
-    // the InputStream is at EOF.
-    return WorkResponse.parseDelimitedFrom(recordingStream);
-  }
-
-  String getRecordingStreamMessage() {
-    recordingStream.readRemaining();
-    return recordingStream.getRecordedDataAsString();
+  OutputStream getOutputStream() {
+    return process.getOutputStream();
   }
 
   public void prepareExecution(
