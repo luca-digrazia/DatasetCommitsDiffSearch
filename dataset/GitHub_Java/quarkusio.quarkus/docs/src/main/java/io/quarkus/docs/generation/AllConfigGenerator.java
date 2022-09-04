@@ -21,10 +21,8 @@ import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResult;
 
 import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 
 import io.quarkus.annotation.processor.generate_doc.ConfigDocItem;
 import io.quarkus.annotation.processor.generate_doc.ConfigDocItemScanner;
@@ -38,24 +36,20 @@ import io.quarkus.docs.generation.ExtensionJson.Extension;
 public class AllConfigGenerator {
     public static void main(String[] args)
             throws AppModelResolverException, JsonParseException, JsonMappingException, IOException {
-        if (args.length != 2) {
+        if (args.length != 1) {
             // exit 1 will break Maven
-            throw new IllegalArgumentException("Usage: <version> <extension.json>");
+            throw new IllegalArgumentException("Missing version parameter.");
         }
         String version = args[0];
-        String extensionFile = args[1];
 
         // This is where we produce the entire list of extensions
-        File jsonFile = new File(extensionFile);
+        File jsonFile = new File("devtools/bom-descriptor-json/target/extensions.json");
         if (!jsonFile.exists()) {
             System.err.println("WARNING: could not generate all-config file because extensions list is missing: " + jsonFile);
             // exit 0 will break Maven
             return;
         }
-        ObjectMapper mapper = new ObjectMapper()
-                .enable(JsonParser.Feature.ALLOW_COMMENTS)
-                .enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS)
-                .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
+        ObjectMapper mapper = new ObjectMapper();
         MavenArtifactResolver resolver = MavenArtifactResolver.builder().build();
 
         // let's read it (and ignore the fields we don't need)
@@ -121,7 +115,6 @@ public class AllConfigGenerator {
         ConfigDocItemScanner configDocItemScanner = new ConfigDocItemScanner();
         Map<String, List<ConfigDocItem>> docItemsByConfigRoots = configDocItemScanner
                 .loadAllExtensionsConfigurationItems();
-        Map<String, String> artifactIdsByName = new HashMap<>();
         ConfigDocWriter configDocWriter = new ConfigDocWriter();
 
         // build a list of sorted config items by extension
@@ -142,15 +135,9 @@ public class AllConfigGenerator {
                     System.err.println("WARNING: Extension name missing for " + extensionGav + " using guessed extension name: "
                             + extensionName);
                 }
-                artifactIdsByName.put(extensionName, entry.getValue().artifactId);
-                List<ConfigDocItem> existingConfigDocItems = sortedConfigItemsByExtension.get(extensionName);
-                if (existingConfigDocItems != null) {
-                    DocGeneratorUtil.appendConfigItemsIntoExistingOnes(existingConfigDocItems, items);
-                } else {
-                    ArrayList<ConfigDocItem> configItems = new ArrayList<>();
-                    sortedConfigItemsByExtension.put(extensionName, configItems);
-                    configItems.addAll(items);
-                }
+                List<ConfigDocItem> configItems = sortedConfigItemsByExtension.computeIfAbsent(extensionName,
+                        k -> new ArrayList<>());
+                configItems.addAll(items);
             }
         }
 
@@ -162,7 +149,6 @@ public class AllConfigGenerator {
             // insert a header
             ConfigDocSection header = new ConfigDocSection();
             header.setSectionDetailsTitle(entry.getKey());
-            header.setAnchorPrefix(artifactIdsByName.get(entry.getKey()));
             allItems.add(new ConfigDocItem(header, null));
             // add all the configs for this extension
             allItems.addAll(configDocItems);
