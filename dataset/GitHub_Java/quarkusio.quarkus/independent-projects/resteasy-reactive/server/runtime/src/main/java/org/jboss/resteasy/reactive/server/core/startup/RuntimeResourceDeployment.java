@@ -94,15 +94,11 @@ public class RuntimeResourceDeployment {
     private final RuntimeInterceptorDeployment runtimeInterceptorDeployment;
     private final DynamicEntityWriter dynamicEntityWriter;
     private final ResourceLocatorHandler resourceLocatorHandler;
-    /**
-     * If the runtime will always default to blocking (e.g. Servlet)
-     */
-    private final boolean defaultBlocking;
 
     public RuntimeResourceDeployment(DeploymentInfo info, Supplier<Executor> executorSupplier,
             Supplier<ServerRestHandler> blockingInputHandlerSupplier,
             RuntimeInterceptorDeployment runtimeInterceptorDeployment, DynamicEntityWriter dynamicEntityWriter,
-            ResourceLocatorHandler resourceLocatorHandler, boolean defaultBlocking) {
+            ResourceLocatorHandler resourceLocatorHandler) {
         this.info = info;
         this.serialisers = info.getSerialisers();
         this.quarkusRestConfig = info.getConfig();
@@ -111,7 +107,6 @@ public class RuntimeResourceDeployment {
         this.runtimeInterceptorDeployment = runtimeInterceptorDeployment;
         this.dynamicEntityWriter = dynamicEntityWriter;
         this.resourceLocatorHandler = resourceLocatorHandler;
-        this.defaultBlocking = defaultBlocking;
     }
 
     public RuntimeResource buildResourceMethod(ResourceClass clazz,
@@ -155,14 +150,11 @@ public class RuntimeResourceDeployment {
 
         // when a method is blocking, we also want all the request filters to run on the worker thread
         // because they can potentially set thread local variables
-        //we don't need to run this for Servlet and other runtimes that default to blocking
-        if (!defaultBlocking) {
-            if (method.isBlocking()) {
-                handlers.add(new BlockingHandler(executorSupplier));
-                score.add(ScoreSystem.Category.Execution, ScoreSystem.Diagnostic.ExecutionBlocking);
-            } else {
-                score.add(ScoreSystem.Category.Execution, ScoreSystem.Diagnostic.ExecutionNonBlocking);
-            }
+        if (method.isBlocking()) {
+            handlers.add(new BlockingHandler(executorSupplier));
+            score.add(ScoreSystem.Category.Execution, ScoreSystem.Diagnostic.ExecutionBlocking);
+        } else {
+            score.add(ScoreSystem.Category.Execution, ScoreSystem.Diagnostic.ExecutionNonBlocking);
         }
 
         //spec doesn't seem to test this, but RESTEasy does not run request filters again for sub resources (which makes sense)
@@ -184,18 +176,16 @@ public class RuntimeResourceDeployment {
             }
         }
         // form params can be everywhere (field, beanparam, param)
-        if (method.isFormParamRequired() && !defaultBlocking) {
+        if (method.isFormParamRequired()) {
             // read the body as multipart in one go
             handlers.add(new ReadBodyHandler(bodyParameter != null));
         } else if (bodyParameter != null) {
-            if (!defaultBlocking) {
-                if (method.isBlocking() && (blockingInputHandlerSupplier != null)) {
-                    // when the method is blocking, we will already be on a worker thread
-                    handlers.add(blockingInputHandlerSupplier.get());
-                } else if (!method.isBlocking()) {
-                    // allow the body to be read by chunks
-                    handlers.add(new InputHandler(quarkusRestConfig.getInputBufferSize(), executorSupplier));
-                }
+            if (method.isBlocking() && (blockingInputHandlerSupplier != null)) {
+                // when the method is blocking, we will already be on a worker thread
+                handlers.add(blockingInputHandlerSupplier.get());
+            } else {
+                // allow the body to be read by chunks
+                handlers.add(new InputHandler(quarkusRestConfig.getInputBufferSize(), executorSupplier));
             }
         }
         // if we need the body, let's deserialize it
@@ -254,7 +244,7 @@ public class RuntimeResourceDeployment {
 
             handlers.add(new ParameterHandler(i, param.getDefaultValue(), extractor,
                     converter, param.parameterType,
-                    param.isObtainedAsCollection()));
+                    param.isObtainedAsCollection(), param.isOptional()));
         }
         addHandlers(handlers, method, info, HandlerChainCustomizer.Phase.BEFORE_METHOD_INVOKE);
         handlers.add(new InvocationHandler(invoker));

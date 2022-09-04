@@ -14,6 +14,7 @@ import java.util.Map;
 
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
+import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.resteasy.reactive.common.model.InjectableBean;
 import org.jboss.resteasy.reactive.common.model.MethodParameter;
@@ -30,7 +31,8 @@ import org.jboss.resteasy.reactive.common.providers.serialisers.jsonp.JsonObject
 import org.jboss.resteasy.reactive.common.providers.serialisers.jsonp.JsonStructureHandler;
 import org.jboss.resteasy.reactive.common.providers.serialisers.jsonp.JsonValueHandler;
 
-public class ClientEndpointIndexer extends EndpointIndexer<ClientEndpointIndexer, ClientEndpointIndexer.ClientIndexedParam> {
+public class ClientEndpointIndexer
+        extends EndpointIndexer<ClientEndpointIndexer, ClientEndpointIndexer.ClientIndexedParam, ResourceMethod> {
     ClientEndpointIndexer(Builder builder) {
         super(builder);
     }
@@ -62,6 +64,11 @@ public class ClientEndpointIndexer extends EndpointIndexer<ClientEndpointIndexer
     }
 
     @Override
+    protected ResourceMethod createResourceMethod(MethodInfo info, Map<String, Object> methodContext) {
+        return new ResourceMethod();
+    }
+
+    @Override
     protected InjectableBean scanInjectableBean(ClassInfo currentClassInfo,
             ClassInfo actualEndpointInfo,
             Map<String, String> existingConverters,
@@ -73,10 +80,10 @@ public class ClientEndpointIndexer extends EndpointIndexer<ClientEndpointIndexer
 
     protected MethodParameter createMethodParameter(ClassInfo currentClassInfo, ClassInfo actualEndpointInfo, boolean encoded,
             Type paramType, ClientIndexedParam parameterResult, String name, String defaultValue, ParameterType type,
-            String elementType, boolean single) {
+            String elementType, boolean single, String signature) {
         return new MethodParameter(name,
-                elementType, toClassName(paramType, currentClassInfo, actualEndpointInfo, index), type, single,
-                defaultValue, parameterResult.isObtainedAsCollection(), encoded);
+                elementType, toClassName(paramType, currentClassInfo, actualEndpointInfo, index), signature, type, single,
+                defaultValue, parameterResult.isObtainedAsCollection(), parameterResult.isOptional(), encoded);
     }
 
     protected void addWriterForType(AdditionalWriters additionalWriters, Type paramType) {
@@ -111,7 +118,7 @@ public class ClientEndpointIndexer extends EndpointIndexer<ClientEndpointIndexer
 
     }
 
-    public static final class Builder extends EndpointIndexer.Builder<ClientEndpointIndexer, Builder> {
+    public static final class Builder extends EndpointIndexer.Builder<ClientEndpointIndexer, Builder, ResourceMethod> {
         @Override
         public ClientEndpointIndexer build() {
             return new ClientEndpointIndexer(this);

@@ -9,24 +9,29 @@ public class MethodParameter {
      * will be the collection type
      */
     public String declaredType;
+    public String signature;
     public ParameterType parameterType;
     public boolean encoded;
     private boolean single;
     private String defaultValue;
+    private boolean optional;
     private boolean isObtainedAsCollection;
 
     public MethodParameter() {
     }
 
-    public MethodParameter(String name, String type, String declaredType, ParameterType parameterType, boolean single,
-            String defaultValue, boolean isObtainedAsCollection, boolean encoded) {
+    public MethodParameter(String name, String type, String declaredType, String signature, ParameterType parameterType,
+            boolean single,
+            String defaultValue, boolean isObtainedAsCollection, boolean optional, boolean encoded) {
         this.name = name;
         this.type = type;
+        this.declaredType = declaredType;
+        this.signature = signature;
         this.parameterType = parameterType;
         this.single = single;
         this.defaultValue = defaultValue;
-        this.declaredType = declaredType;
         this.isObtainedAsCollection = isObtainedAsCollection;
+        this.optional = optional;
         this.encoded = encoded;
     }
 
@@ -83,6 +88,14 @@ public class MethodParameter {
 
     public boolean isObtainedAsCollection() {
         return isObtainedAsCollection;
+    }
+
+    public boolean isOptional() {
+        return optional;
+    }
+
+    public void setOptional(boolean optional) {
+        this.optional = optional;
     }
 
     public MethodParameter setObtainedAsCollection(boolean isObtainedAsCollection) {

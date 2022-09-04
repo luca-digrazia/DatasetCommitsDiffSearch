@@ -38,7 +38,6 @@ import org.jboss.resteasy.reactive.common.processor.EndpointIndexer;
 import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
 import org.jboss.resteasy.reactive.server.core.parameters.ParameterExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.ListConverter;
-import org.jboss.resteasy.reactive.server.core.parameters.converters.LocalDateParamConverter;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.OptionalConverter;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.ParameterConverterSupplier;
 import org.jboss.resteasy.reactive.server.core.parameters.converters.PathSegmentParamConverter;
@@ -131,15 +130,6 @@ public class ServerEndpointIndexer
         }
         serverResourceMethod.setHandlerChainCustomizers(methodCustomizers);
         return serverResourceMethod;
-    }
-
-    @Override
-    protected boolean handleBeanParam(ClassInfo actualEndpointInfo, Type paramType, MethodParameter[] methodParameters, int i) {
-        ClassInfo beanParamClassInfo = index.getClassByName(paramType.name());
-        InjectableBean injectableBean = scanInjectableBean(beanParamClassInfo,
-                actualEndpointInfo,
-                existingConverters, additionalReaders, injectableBeans, hasRuntimeConverters);
-        return injectableBean.isFormParamRequired();
     }
 
     @Override
@@ -281,10 +271,6 @@ public class ServerEndpointIndexer
 
     protected void handlePathSegmentParam(ServerIndexedParameter builder) {
         builder.setConverter(new PathSegmentParamConverter.Supplier());
-    }
-
-    protected void handleLocalDateParam(ServerIndexedParameter builder) {
-        builder.setConverter(new LocalDateParamConverter.Supplier());
     }
 
     protected ParameterConverterSupplier extractConverter(String elementType, IndexView indexView,
