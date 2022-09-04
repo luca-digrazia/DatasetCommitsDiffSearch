@@ -15,7 +15,6 @@ import org.hibernate.boot.archive.scan.spi.Scanner;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.protean.Hibernate;
 import org.hibernate.protean.impl.PersistenceUnitsHolder;
-import org.jboss.logging.Logger;
 import org.jboss.shamrock.jpa.runtime.cdi.SystemEntityManager;
 import org.jboss.shamrock.runtime.BeanContainer;
 import org.jboss.shamrock.runtime.ContextObject;
@@ -34,7 +33,7 @@ public class JPADeploymentTemplate {
     }
 
     public void enlistPersistenceUnit() {
-        Logger.getLogger("org.jboss.shamrock.jpa").infof("List of entities found by Shamrock deployment:%n%s", entities);
+        System.out.println("List of entities found by Shamrock deployment \n" + entities.toString());
     }
 
     public void callHibernateFeatureInit() {

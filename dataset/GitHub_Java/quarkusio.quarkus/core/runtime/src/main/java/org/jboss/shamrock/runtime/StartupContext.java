@@ -1,6 +1,7 @@
 package org.jboss.shamrock.runtime;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -10,17 +11,8 @@ import java.util.Map;
 public class StartupContext implements Closeable {
 
     private final Map<String, Object> values = new HashMap<>();
-    private final List<Runnable> shutdownTasks = new ArrayList<>();
-    private final ShutdownContext shutdownContext = new ShutdownContext() {
-        @Override
-        public void addShutdownTask(Runnable runnable) {
-            shutdownTasks.add(runnable);
-        }
-    };
 
-    public StartupContext() {
-        values.put(ShutdownContext.class.getName(), shutdownContext);
-    }
+    private final List<Closeable> resources = new ArrayList<>();
 
     public void putValue(String name, Object value) {
         values.put(name, value);
@@ -30,17 +22,21 @@ public class StartupContext implements Closeable {
         return values.get(name);
     }
 
+    public void addCloseable(Closeable resource) {
+        resources.add(resource);
+    }
+
     @Override
     public void close() {
-        List<Runnable> toClose = new ArrayList<>(shutdownTasks);
+        List<Closeable> toClose = new ArrayList<>(resources);
         Collections.reverse(toClose);
-        for (Runnable r : toClose) {
+        for(Closeable r : toClose) {
             try {
-                r.run();
-            } catch (Throwable e) {
+                r.close();
+            } catch (IOException e) {
+
                 e.printStackTrace();
             }
         }
-        shutdownTasks.clear();
     }
 }
