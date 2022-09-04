@@ -3,6 +3,7 @@ package io.quarkus.kubernetes.deployment;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import io.dekorate.kubernetes.annotation.ImagePullPolicy;
 import io.dekorate.kubernetes.annotation.ServiceType;
@@ -13,10 +14,10 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 public class KubernetesConfig implements PlatformConfiguration {
 
     /**
-     * The group of the application.
+     * The name of the group this component belongs too
      */
-    @ConfigItem(defaultValue = "${quarkus.container-image.group}")
-    Optional<String> group;
+    @ConfigItem
+    Optional<String> partOf;
 
     /**
      * The name of the application. This value will be used for naming Kubernetes
@@ -32,6 +33,18 @@ public class KubernetesConfig implements PlatformConfiguration {
     Optional<String> version;
 
     /**
+     * The namespace the generated resources should belong to.
+     * If not value is set, then the 'namespace' field will not be
+     * added to the 'metadata' section of the generated manifests.
+     * This in turn means that when the manifests are applied to a cluster,
+     * the namespace will be resolved from the current Kubernetes context
+     * (see https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/#context
+     * for more details).
+     */
+    @ConfigItem
+    Optional<String> namespace;
+
+    /**
      * Custom labels to add to all resources
      */
     @ConfigItem
@@ -44,10 +57,12 @@ public class KubernetesConfig implements PlatformConfiguration {
     Map<String, String> annotations;
 
     /**
-     * Environment variables to add to all containers
+     * Whether or not to add the build timestamp to the Kubernetes annotations
+     * This is a very useful way to have manifests of successive builds of the same
+     * application differ - thus ensuring that Kubernetes will apply the updated resources
      */
-    @ConfigItem
-    Map<String, EnvConfig> envVars;
+    @ConfigItem(defaultValue = "true")
+    boolean addBuildTimestamp;
 
     /**
      * Working directory
@@ -88,15 +103,27 @@ public class KubernetesConfig implements PlatformConfiguration {
     Map<String, PortConfig> ports;
 
     /**
+     * The number of desired pods
+     */
+    @ConfigItem(defaultValue = "1")
+    Integer replicas;
+
+    /**
      * The type of service that will be generated for the application
      */
     @ConfigItem(defaultValue = "ClusterIP")
     ServiceType serviceType;
 
     /**
+     * The nodePort to set when serviceType is set to node-port.
+     */
+    @ConfigItem
+    OptionalInt nodePort;
+
+    /**
      * Image pull policy
      */
-    @ConfigItem(defaultValue = "IfNotPresent")
+    @ConfigItem(defaultValue = "Always")
     ImagePullPolicy imagePullPolicy;
 
     /**
@@ -109,13 +136,19 @@ public class KubernetesConfig implements PlatformConfiguration {
      * The liveness probe
      */
     @ConfigItem
-    Optional<ProbeConfig> livenessProbe;
+    ProbeConfig livenessProbe;
 
     /**
      * The readiness probe
      */
     @ConfigItem
-    Optional<ProbeConfig> readinessProbe;
+    ProbeConfig readinessProbe;
+
+    /**
+     * Prometheus configuration
+     */
+    @ConfigItem
+    PrometheusConfig prometheus;
 
     /**
      * Volume mounts
@@ -175,18 +208,49 @@ public class KubernetesConfig implements PlatformConfiguration {
      * Sidecar containers
      */
     @ConfigItem
-    Map<String, ContainerConfig> containers;
+    Map<String, ContainerConfig> sidecars;
 
     /**
      * The target deployment platform.
-     * Defaults to kubernetes. Can be kubernetes, openshift, knative etc, or any combination of the above as comma separated
+     * Defaults to kubernetes. Can be kubernetes, openshift, knative, minikube etc, or any combination of the above as comma
+     * separated
      * list.
      */
-    @ConfigItem(defaultValue = "kubernetes")
-    List<String> deploymentTarget;
+    @ConfigItem
+    Optional<List<String>> deploymentTarget;
 
-    public Optional<String> getGroup() {
-        return group;
+    /**
+     * The host aliases
+     */
+    @ConfigItem(name = "hostaliases")
+    Map<String, HostAliasConfig> hostAliases;
+
+    /**
+     * Resources requirements
+     */
+    @ConfigItem
+    ResourcesConfig resources;
+
+    /**
+     * If true, a Kubernetes Ingress will be created
+     */
+    @ConfigItem
+    boolean expose;
+
+    /**
+     * If true, the 'app.kubernetes.io/version' label will be part of the selectors of Service and Deployment
+     */
+    @ConfigItem(defaultValue = "true")
+    boolean addVersionToLabelSelectors;
+
+    /**
+     * If set to true, Quarkus will attempt to deploy the application to the target Kubernetes cluster
+     */
+    @ConfigItem(defaultValue = "false")
+    boolean deploy;
+
+    public Optional<String> getPartOf() {
+        return partOf;
     }
 
     public Optional<String> getName() {
@@ -197,6 +261,10 @@ public class KubernetesConfig implements PlatformConfiguration {
         return version;
     }
 
+    public Optional<String> getNamespace() {
+        return namespace;
+    }
+
     public Map<String, String> getLabels() {
         return labels;
     }
@@ -205,8 +273,48 @@ public class KubernetesConfig implements PlatformConfiguration {
         return annotations;
     }
 
+    @Override
+    public boolean isAddBuildTimestamp() {
+        return addBuildTimestamp;
+    }
+
+    @Override
+    public String getTargetPlatformName() {
+        return Constants.KUBERNETES;
+    }
+
+    /**
+     * Environment variables to add to all containers using the old syntax.
+     *
+     * @deprecated Use {@link #env} instead using the new syntax as follows:
+     *             <ul>
+     *             <li>{@code quarkus.kubernetes.env-vars.foo.field=fieldName} becomes
+     *             {@code quarkus.kubernetes.env.fields.foo=fieldName}</li>
+     *             <li>{@code quarkus.kubernetes.env-vars.foo.value=value} becomes
+     *             {@code quarkus.kubernetes.env.vars.foo=bar}</li>
+     *             <li>{@code quarkus.kubernetes.env-vars.bar.configmap=configName} becomes
+     *             {@code quarkus.kubernetes.env.configmaps=configName}</li>
+     *             <li>{@code quarkus.kubernetes.env-vars.baz.secret=secretName} becomes
+     *             {@code quarkus.kubernetes.env.secrets=secretName}</li>
+     *             </ul>
+     */
+    @ConfigItem
+    @Deprecated
+    Map<String, EnvConfig> envVars;
+
+    /**
+     * Environment variables to add to all containers.
+     */
+    @ConfigItem
+    EnvVarsConfig env;
+
+    @Deprecated
     public Map<String, EnvConfig> getEnvVars() {
         return envVars;
+    }
+
+    public EnvVarsConfig getEnv() {
+        return env;
     }
 
     public Optional<String> getWorkingDir() {
@@ -233,8 +341,16 @@ public class KubernetesConfig implements PlatformConfiguration {
         return ports;
     }
 
+    public Integer getReplicas() {
+        return replicas;
+    }
+
     public ServiceType getServiceType() {
         return serviceType;
+    }
+
+    public OptionalInt getNodePort() {
+        return this.nodePort;
     }
 
     public ImagePullPolicy getImagePullPolicy() {
@@ -245,12 +361,16 @@ public class KubernetesConfig implements PlatformConfiguration {
         return imagePullSecrets;
     }
 
-    public Optional<ProbeConfig> getLivenessProbe() {
+    public ProbeConfig getLivenessProbe() {
         return livenessProbe;
     }
 
-    public Optional<ProbeConfig> getReadinessProbe() {
+    public ProbeConfig getReadinessProbe() {
         return readinessProbe;
+    }
+
+    public PrometheusConfig getPrometheusConfig() {
+        return prometheus;
     }
 
     public Map<String, MountConfig> getMounts() {
@@ -289,8 +409,20 @@ public class KubernetesConfig implements PlatformConfiguration {
         return initContainers;
     }
 
-    public Map<String, ContainerConfig> getContainers() {
-        return containers;
+    public Map<String, ContainerConfig> getSidecars() {
+        return sidecars;
     }
 
+    public Map<String, HostAliasConfig> getHostAliases() {
+        return hostAliases;
+    }
+
+    public ResourcesConfig getResources() {
+        return resources;
+    }
+
+    @Override
+    public boolean isExpose() {
+        return expose;
+    }
 }
