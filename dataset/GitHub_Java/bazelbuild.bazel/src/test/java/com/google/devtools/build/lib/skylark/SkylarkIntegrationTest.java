@@ -55,10 +55,10 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -228,7 +228,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         OutputGroupInfo.get(getConfiguredTarget("//test/skylark:lib"))
             .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
     ConfiguredTarget myTarget = getConfiguredTarget("//test/skylark:my");
-    Depset result = (Depset) getMyInfoFromTarget(myTarget).getValue("result");
+    SkylarkNestedSet result = (SkylarkNestedSet) getMyInfoFromTarget(myTarget).getValue("result");
     assertThat(result.getSet(Artifact.class)).containsExactlyElementsIn(hiddenTopLevelArtifacts);
     assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group"))
         .containsExactlyElementsIn(hiddenTopLevelArtifacts);
@@ -254,7 +254,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         OutputGroupInfo.get(getConfiguredTarget("//test/skylark:lib"))
             .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
     ConfiguredTarget myTarget = getConfiguredTarget("//test/skylark:my");
-    Depset result = (Depset) getMyInfoFromTarget(myTarget).getValue("result");
+    SkylarkNestedSet result = (SkylarkNestedSet) getMyInfoFromTarget(myTarget).getValue("result");
     assertThat(result.getSet(Artifact.class)).containsExactlyElementsIn(hiddenTopLevelArtifacts);
     assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group"))
         .containsExactlyElementsIn(hiddenTopLevelArtifacts);
@@ -288,13 +288,13 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
             .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
     ConfiguredTarget myTarget = getConfiguredTarget("//test/skylark:my");
     StructImpl myInfo = getMyInfoFromTarget(myTarget);
-    Depset result = (Depset) myInfo.getValue("result");
+    SkylarkNestedSet result = (SkylarkNestedSet) myInfo.getValue("result");
     assertThat(result.getSet(Artifact.class)).containsExactlyElementsIn(hiddenTopLevelArtifacts);
     assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group"))
         .containsExactlyElementsIn(hiddenTopLevelArtifacts);
     assertThat(myInfo.getValue("has_key1")).isEqualTo(Boolean.TRUE);
     assertThat(myInfo.getValue("has_key2")).isEqualTo(Boolean.FALSE);
-    assertThat((Sequence) myInfo.getValue("all_keys"))
+    assertThat((SkylarkList) myInfo.getValue("all_keys"))
         .containsExactly(
             OutputGroupInfo.HIDDEN_TOP_LEVEL,
             OutputGroupInfo.COMPILATION_PREREQUISITES,
@@ -322,7 +322,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         OutputGroupInfo.get(getConfiguredTarget("//test/skylark:lib"))
             .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
     ConfiguredTarget myTarget = getConfiguredTarget("//test/skylark:my");
-    Depset result = (Depset) getMyInfoFromTarget(myTarget).getValue("result");
+    SkylarkNestedSet result = (SkylarkNestedSet) getMyInfoFromTarget(myTarget).getValue("result");
     assertThat(result.getSet(Artifact.class)).containsExactlyElementsIn(hiddenTopLevelArtifacts);
     assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group"))
         .containsExactlyElementsIn(hiddenTopLevelArtifacts);
@@ -351,7 +351,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         OutputGroupInfo.get(getConfiguredTarget("//test/skylark:lib"))
             .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
     ConfiguredTarget myTarget = getConfiguredTarget("//test/skylark:my");
-    Depset result = (Depset) getMyInfoFromTarget(myTarget).getValue("result");
+    SkylarkNestedSet result = (SkylarkNestedSet) getMyInfoFromTarget(myTarget).getValue("result");
     assertThat(result.getSet(Artifact.class)).containsExactlyElementsIn(hiddenTopLevelArtifacts);
     assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group"))
         .containsExactlyElementsIn(hiddenTopLevelArtifacts);
@@ -380,7 +380,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         OutputGroupInfo.get(getConfiguredTarget("//test/skylark:lib"))
             .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
     ConfiguredTarget myTarget = getConfiguredTarget("//test/skylark:my");
-    Depset result = (Depset) getMyInfoFromTarget(myTarget).getValue("result");
+    SkylarkNestedSet result = (SkylarkNestedSet) getMyInfoFromTarget(myTarget).getValue("result");
     assertThat(result.getSet(Artifact.class)).containsExactlyElementsIn(hiddenTopLevelArtifacts);
     assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group"))
         .containsExactlyElementsIn(hiddenTopLevelArtifacts);
@@ -402,9 +402,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   public void testStackTraceMissingMethod() throws Exception {
     runStackTraceTest(
         "None",
-        "\t\tNone.index"
-            + System.lineSeparator()
-            + "'NoneType' value has no field or method 'index'");
+        "\t\tNone.index(1)" + System.lineSeparator() + "type 'NoneType' has no method index()");
   }
 
   protected void runStackTraceTest(String object, String errorMessage) throws Exception {
@@ -836,7 +834,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     assertThat(
             ActionsTestUtil.baseArtifactNames(
-                ((Depset) getMyInfoFromTarget(target).getValue("provider_key"))
+                ((SkylarkNestedSet) getMyInfoFromTarget(target).getValue("provider_key"))
                     .getSet(Artifact.class)))
         .containsExactly("a.txt");
   }
@@ -1247,7 +1245,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     StructImpl myInfo = getMyInfoFromTarget(target);
     assertThat(myInfo.getValue("o1"))
         .isEqualTo(Label.parseAbsoluteUnchecked("//test/skylark:foo.txt"));
-    assertThat(myInfo.getValue("o2")).isEqualTo(StarlarkList.empty());
+    assertThat(myInfo.getValue("o2")).isEqualTo(MutableList.empty());
   }
 
   @Test
@@ -1271,8 +1269,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
     StructImpl myInfo = getMyInfoFromTarget(target);
-    assertThat(myInfo.getValue("o1")).isEqualTo(Starlark.NONE);
-    assertThat(myInfo.getValue("o2")).isEqualTo(StarlarkList.empty());
+    assertThat(myInfo.getValue("o1")).isEqualTo(Runtime.NONE);
+    assertThat(myInfo.getValue("o2")).isEqualTo(MutableList.empty());
   }
 
   @Test
@@ -1461,7 +1459,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "empty(name = 'test_target')");
 
     getConfiguredTarget("//test/skylark:test_target");
-    assertContainsEvent("function '_impl' called recursively");
+    assertContainsEvent("Recursion was detected when calling '_impl' from '_impl'");
   }
 
   @Test
@@ -1663,6 +1661,54 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
             + "|   //test/skylark:ext3.bzl\n"
             + "|   //test/skylark:ext4.bzl\n"
             + "`-- //test/skylark:ext2.bzl");
+  }
+
+  @Test
+  public void testSymbolPropagateThroughImports() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_no_transitive_loads=false");
+    scratch.file("test/skylark/implementation.bzl", "def custom_rule_impl(ctx):", "  return None");
+
+    scratch.file(
+        "test/skylark/extension2.bzl",
+        "load('//test/skylark:implementation.bzl', 'custom_rule_impl')");
+
+    scratch.file(
+        "test/skylark/extension1.bzl",
+        "load('//test/skylark:extension2.bzl', 'custom_rule_impl')",
+        "",
+        "custom_rule = rule(implementation = custom_rule_impl)");
+
+    scratch.file(
+        "test/skylark/BUILD",
+        "load('//test/skylark:extension1.bzl', 'custom_rule')",
+        "custom_rule(name = 'cr')");
+
+    getConfiguredTarget("//test/skylark:cr");
+  }
+
+  @Test
+  public void testSymbolDoNotPropagateThroughImports() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_no_transitive_loads=true");
+    scratch.file("test/skylark/implementation.bzl", "def custom_rule_impl(ctx):", "  return None");
+
+    scratch.file(
+        "test/skylark/extension2.bzl",
+        "load('//test/skylark:implementation.bzl', 'custom_rule_impl')");
+
+    scratch.file(
+        "test/skylark/extension1.bzl",
+        "load('//test/skylark:extension2.bzl', 'custom_rule_impl')",
+        "",
+        "custom_rule = rule(implementation = custom_rule_impl)");
+
+    scratch.file(
+        "test/skylark/BUILD",
+        "load('//test/skylark:extension1.bzl', 'custom_rule')",
+        "custom_rule(name = 'cr')");
+
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test/skylark:cr");
+    assertContainsEvent("does not contain symbol 'custom_rule_impl'");
   }
 
   @Test
@@ -1990,7 +2036,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     checkError(
         "test/skylark",
         "r",
-        "<target //test/skylark:lib> (rule 'cc_binary') doesn't have provider 'output_group'",
+        "type 'Target' has no method output_group()",
         "load('//test/skylark:extension.bzl',  'my_rule')",
         "cc_binary(name = 'lib', data = ['a.txt'])",
         "my_rule(name='r', dep = ':lib')");
@@ -2227,8 +2273,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     StructImpl outerDepInfo = (StructImpl) outerTarget.get(myDepKey);
     StructImpl innerInfo = (StructImpl) outerDepInfo.getValue("info");
 
-    assertThat((Sequence) outerInfo.getValue("copts")).containsExactly("yeehaw");
-    assertThat((Sequence) innerInfo.getValue("copts")).containsExactly("cowabunga");
+    assertThat((SkylarkList) outerInfo.getValue("copts")).containsExactly("yeehaw");
+    assertThat((SkylarkList) innerInfo.getValue("copts")).containsExactly("cowabunga");
   }
 
   @Test
