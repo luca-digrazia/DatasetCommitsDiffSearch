@@ -51,8 +51,8 @@ import javax.annotation.Nullable;
 @Immutable
 @ThreadSafe
 public final class Label implements Comparable<Label>, Serializable, SkylarkPrintableValue {
-  public static final PathFragment EXTERNAL_PACKAGE_NAME = PathFragment.create("external");
-  public static final PathFragment EXTERNAL_PACKAGE_FILE_NAME = PathFragment.create("WORKSPACE");
+  public static final PathFragment EXTERNAL_PACKAGE_NAME = new PathFragment("external");
+  public static final PathFragment EXTERNAL_PACKAGE_FILE_NAME = new PathFragment("WORKSPACE");
   public static final String DEFAULT_REPOSITORY_DIRECTORY = "__main__";
 
   /**
@@ -61,11 +61,11 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
    */
   public static final ImmutableSet<PathFragment> ABSOLUTE_PACKAGE_NAMES = ImmutableSet.of(
       // Used for select
-      PathFragment.create("conditions"),
+      new PathFragment("conditions"),
       // dependencies that are a function of the configuration
-      PathFragment.create("tools/defaults"),
+      new PathFragment("tools/defaults"),
       // Visibility is labels aren't actually targets
-      PathFragment.create("visibility"),
+      new PathFragment("visibility"),
       // There is only one //external package
       Label.EXTERNAL_PACKAGE_NAME);
 
