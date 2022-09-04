@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -21,31 +21,21 @@ package org.graylog2.security.realm;
 import org.apache.shiro.authc.*;
 import org.apache.shiro.authc.credential.AllowAllCredentialsMatcher;
 import org.apache.shiro.realm.AuthenticatingRealm;
+import org.graylog2.Core;
 import org.graylog2.database.ValidationException;
 import org.graylog2.security.AccessToken;
 import org.graylog2.security.AccessTokenAuthToken;
-import org.graylog2.security.AccessTokenService;
 import org.graylog2.users.User;
-import org.graylog2.users.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.inject.Inject;
 
 public class AccessTokenAuthenticator extends AuthenticatingRealm {
     private static final Logger log = LoggerFactory.getLogger(AccessTokenAuthenticator.class);
 
-    private final AccessTokenService accessTokenService;
-    private final UserService userService;
-    private final LdapUserAuthenticator ldapAuthenticator;
+    private final Core core;
 
-    @Inject
-    public AccessTokenAuthenticator(AccessTokenService accessTokenService,
-                                    UserService userService,
-                                    LdapUserAuthenticator ldapAuthenticator) {
-        this.accessTokenService = accessTokenService;
-        this.userService = userService;
-        this.ldapAuthenticator = ldapAuthenticator;
+    public AccessTokenAuthenticator(Core core) {
+        this.core = core;
         setAuthenticationTokenClass(AccessTokenAuthToken.class);
         // the presence of a valid access token is enough, we don't have any other credentials
         setCredentialsMatcher(new AllowAllCredentialsMatcher());
@@ -54,23 +44,23 @@ public class AccessTokenAuthenticator extends AuthenticatingRealm {
     @Override
     protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
         AccessTokenAuthToken authToken = (AccessTokenAuthToken) token;
-        final AccessToken accessToken = accessTokenService.load(String.valueOf(authToken.getToken()));
+        final AccessToken accessToken = AccessToken.load(String.valueOf(authToken.getToken()), core);
 
         if (accessToken == null) {
             return null;
         }
-        final User user = userService.load(accessToken.getUserName());
+        final User user = User.load(accessToken.getUserName(), core);
         if (user == null) {
             return null;
         }
-        if (user.isExternalUser() && !ldapAuthenticator.isEnabled()) {
+        if (user.isExternalUser() && !core.getLdapAuthenticator().isEnabled()) {
             throw new LockedAccountException("LDAP authentication is currently disabled.");
         }
         if (log.isDebugEnabled()) {
             log.debug("Found user {} for access token.", user);
         }
         try {
-            accessTokenService.touch(accessToken);
+            accessToken.touch();
         } catch (ValidationException e) {
             log.warn("Unable to update access token's last access date.", e);
         }
