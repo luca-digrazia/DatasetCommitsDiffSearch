@@ -1,18 +1,18 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog.plugins.views.search.rest;
 
@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
 import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.glassfish.jersey.server.ChunkedOutput;
@@ -54,7 +55,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-@Api(value = "Search Messages")
+@Api(value = "Search/Messages", description = "Simple search returning (matching) messages only, as CSV.")
 @Path("/views/search/messages")
 @RequiresAuthentication
 public class MessagesResource extends RestResource implements PluginRestResource {
@@ -86,6 +87,10 @@ public class MessagesResource extends RestResource implements PluginRestResource
         this.messagesExporterFactory = context -> new AuditingMessagesExporter(context, eventBus, exporter);
     }
 
+    @ApiOperation(
+            value = "Export messages as CSV",
+            notes = "Use this endpoint, if you want to configure export parameters freely instead of relying on an existing Search"
+    )
     @POST
     @Produces(MoreMediaTypes.TEXT_CSV)
     @NoAuditEvent("Has custom audit events")
@@ -108,13 +113,14 @@ public class MessagesResource extends RestResource implements PluginRestResource
         return request;
     }
 
+    @ApiOperation(value = "Export a search result as CSV")
     @POST
     @Path("{searchId}")
     @Produces(MoreMediaTypes.TEXT_CSV)
     @NoAuditEvent("Has custom audit events")
     public ChunkedOutput<SimpleMessageChunk> retrieveForSearch(
-            @ApiParam @PathParam("searchId") String searchId,
-            @ApiParam @Valid ResultFormat formatFromClient) {
+            @ApiParam(value = "ID of an existing Search", name = "searchId") @PathParam("searchId") String searchId,
+            @ApiParam(value = "Optional overrides") @Valid ResultFormat formatFromClient) {
         ResultFormat format = emptyIfNull(formatFromClient);
 
         Search search = loadSearch(searchId, format.executionState());
@@ -124,14 +130,14 @@ public class MessagesResource extends RestResource implements PluginRestResource
         return asyncRunner.apply(chunkConsumer -> exporter(searchId).export(command, chunkConsumer));
     }
 
+    @ApiOperation(value = "Export a message table as CSV")
     @POST
     @Path("{searchId}/{searchTypeId}")
-    @Produces(MoreMediaTypes.TEXT_CSV)
     @NoAuditEvent("Has custom audit events")
     public ChunkedOutput<SimpleMessageChunk> retrieveForSearchType(
-            @ApiParam @PathParam("searchId") String searchId,
-            @ApiParam @PathParam("searchTypeId") String searchTypeId,
-            @ApiParam @Valid ResultFormat formatFromClient) {
+            @ApiParam(value = "ID of an existing Search", name = "searchId") @PathParam("searchId") String searchId,
+            @ApiParam(value = "ID of a Message Table contained in the Search", name = "searchTypeId") @PathParam("searchTypeId") String searchTypeId,
+            @ApiParam(value = "Optional overrides") @Valid ResultFormat formatFromClient) {
         ResultFormat format = emptyIfNull(formatFromClient);
 
         Search search = loadSearch(searchId, format.executionState());
