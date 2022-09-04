@@ -37,7 +37,6 @@ import java.util.concurrent.TimeUnit;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
-import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -54,7 +53,7 @@ public class LayoutIntegrationTests {
         ConsoleAppenderFactory.class, BaseValidator.newValidator(), objectMapper, "dw-json-log");
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         objectMapper.getSubtypeResolver().registerSubtypes(AccessJsonLayoutBaseFactory.class, EventJsonLayoutBaseFactory.class);
     }
 
@@ -64,7 +63,7 @@ public class LayoutIntegrationTests {
     }
 
     @Test
-    void testDeserializeJson() throws Exception {
+    public void testDeserializeJson() throws Exception {
         ConsoleAppenderFactory<ILoggingEvent> appenderFactory = getAppenderFactory("yaml/json-log.yml");
         DiscoverableLayoutFactory<?> layout = requireNonNull(appenderFactory.getLayout());
         assertThat(layout).isInstanceOf(EventJsonLayoutBaseFactory.class);
@@ -94,7 +93,7 @@ public class LayoutIntegrationTests {
     }
 
     @Test
-    void testDeserializeAccessJson() throws Exception {
+    public void testDeserializeAccessJson() throws Exception {
         ConsoleAppenderFactory<IAccessEvent> appenderFactory = getAppenderFactory("yaml/json-access-log.yml");
         DiscoverableLayoutFactory<?> layout = requireNonNull(appenderFactory.getLayout());
         assertThat(layout).isInstanceOf(AccessJsonLayoutBaseFactory.class);
@@ -122,7 +121,7 @@ public class LayoutIntegrationTests {
     }
 
     @Test
-    void testLogJsonToConsole() throws Exception {
+    public void testLogJsonToConsole() throws Exception {
         ConsoleAppenderFactory<ILoggingEvent> consoleAppenderFactory = getAppenderFactory("yaml/json-log-default.yml");
         DefaultLoggingFactory defaultLoggingFactory = new DefaultLoggingFactory();
         defaultLoggingFactory.setAppenders(Collections.singletonList(consoleAppenderFactory));
@@ -150,10 +149,10 @@ public class LayoutIntegrationTests {
             defaultLoggingFactory.configure(new MetricRegistry(), "json-log-test");
             Marker marker = MarkerFactory.getMarker("marker");
             LoggerFactory.getLogger("com.example.app").info(marker, "Application log");
-            // Need to wait, because the logger is async
-            await().atMost(1, TimeUnit.SECONDS).until(() -> !redirectedStream.toString().isEmpty());
+            Thread.sleep(100); // Need to wait, because the logger is async
 
             JsonNode jsonNode = objectMapper.readTree(redirectedStream.toString());
+            assertThat(jsonNode).isNotNull();
             assertThat(jsonNode.get("timestamp").isTextual()).isTrue();
             assertThat(jsonNode.get("level").asText()).isEqualTo("INFO");
             assertThat(jsonNode.get("logger").asText()).isEqualTo("com.example.app");
@@ -165,7 +164,7 @@ public class LayoutIntegrationTests {
     }
 
     @Test
-    void testLogAccessJsonToConsole() throws Exception {
+    public void testLogAccessJsonToConsole() throws Exception {
         ConsoleAppenderFactory<IAccessEvent> consoleAppenderFactory = getAppenderFactory("yaml/json-access-log-default.yml");
         // Use sys.err, because there are some other log configuration messages in std.out
         consoleAppenderFactory.setTarget(ConsoleAppenderFactory.ConsoleStream.STDERR);
@@ -205,10 +204,10 @@ public class LayoutIntegrationTests {
             when(response.getHeader("Server")).thenReturn("Apache/2.4.12");
 
             requestLog.log(request, response);
-            // Need to wait, because the logger is async
-            await().atMost(1, TimeUnit.SECONDS).until(() -> !redirectedStream.toString().isEmpty());
+            Thread.sleep(100); // Need to wait, because the logger is async
 
             JsonNode jsonNode = objectMapper.readTree(redirectedStream.toString());
+            assertThat(jsonNode).isNotNull();
             assertThat(jsonNode.get("timestamp").isNumber()).isTrue();
             assertThat(jsonNode.get("requestTime").isNumber()).isTrue();
             assertThat(jsonNode.get("remoteAddress").asText()).isEqualTo("10.0.0.1");
