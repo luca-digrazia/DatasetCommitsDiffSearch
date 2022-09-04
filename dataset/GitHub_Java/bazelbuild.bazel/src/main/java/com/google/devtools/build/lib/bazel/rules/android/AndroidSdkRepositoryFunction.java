@@ -64,7 +64,6 @@ public class AndroidSdkRepositoryFunction extends RepositoryFunction {
   private static final Pattern PLATFORMS_API_LEVEL_PATTERN = Pattern.compile("android-(\\d+)");
   private static final Revision MIN_BUILD_TOOLS_REVISION = new Revision(24, 0, 3);
   private static final String PATH_ENV_VAR = "ANDROID_HOME";
-  private static final ImmutableList<String> PATH_ENV_VAR_AS_LIST = ImmutableList.of(PATH_ENV_VAR);
 
   @Override
   public boolean isLocal(Rule rule) {
@@ -72,20 +71,10 @@ public class AndroidSdkRepositoryFunction extends RepositoryFunction {
   }
 
   @Override
-  public boolean verifyMarkerData(Rule rule, Map<String, String> markerData, Environment env)
-      throws InterruptedException {
-    WorkspaceAttributeMapper attributes = WorkspaceAttributeMapper.of(rule);
-    if (attributes.isAttributeValueExplicitlySpecified("path")) {
-      return true;
-    }
-    return super.verifyEnvironMarkerData(markerData, env, PATH_ENV_VAR_AS_LIST);
-  }
-
-  @Override
   public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
       BlazeDirectories directories, Environment env, Map<String, String> markerData)
       throws SkyFunctionException, InterruptedException {
-    declareEnvironmentDependencies(markerData, env, PATH_ENV_VAR_AS_LIST);
+
     prepareLocalRepositorySymlinkTree(rule, outputDirectory);
     WorkspaceAttributeMapper attributes = WorkspaceAttributeMapper.of(rule);
     FileSystem fs = directories.getOutputBase().getFileSystem();
