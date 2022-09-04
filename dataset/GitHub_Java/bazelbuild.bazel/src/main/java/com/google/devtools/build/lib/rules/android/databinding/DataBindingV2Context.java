@@ -26,10 +26,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.android.AndroidApplicationResourceInfo;
 import com.google.devtools.build.lib.rules.android.AndroidCommon;
@@ -191,12 +188,12 @@ class DataBindingV2Context implements DataBindingContext {
           DataBinding.symlinkDepsMetadataIntoOutputTree(ruleContext, transitiveBRFile));
     }
 
-    for (Artifact directSetterStoreFile : getDirectSetterStoreFiles(ruleContext).toList()) {
+    for (Artifact directSetterStoreFile : getDirectSetterStoreFiles(ruleContext)) {
       dataBindingJavaInputs.add(
           DataBinding.symlinkDepsMetadataIntoOutputTree(ruleContext, directSetterStoreFile));
     }
 
-    for (Artifact classInfo : getDirectClassInfo(ruleContext).toList()) {
+    for (Artifact classInfo : getDirectClassInfo(ruleContext)) {
       dataBindingJavaInputs.add(
           DataBinding.symlinkDepsMetadataIntoOutputTree(ruleContext, classInfo));
     }
@@ -218,15 +215,15 @@ class DataBindingV2Context implements DataBindingContext {
     return brFiles.build();
   }
 
-  private static NestedSet<Artifact> getDirectSetterStoreFiles(RuleContext context) {
-    NestedSetBuilder<Artifact> setterStoreFiles = NestedSetBuilder.stableOrder();
+  private static List<Artifact> getDirectSetterStoreFiles(RuleContext context) {
+    ImmutableList.Builder<Artifact> setterStoreFiles = ImmutableList.builder();
     if (context.attributes().has("deps", BuildType.LABEL_LIST)) {
 
       Iterable<DataBindingV2Provider> providers =
           context.getPrerequisites("deps", DataBindingV2Provider.PROVIDER);
 
       for (DataBindingV2Provider provider : providers) {
-        setterStoreFiles.addTransitive(provider.getSetterStores());
+        setterStoreFiles.addAll(provider.getSetterStores());
       }
     }
     return setterStoreFiles.build();
@@ -303,16 +300,17 @@ class DataBindingV2Context implements DataBindingContext {
             .add("-zipSourceOutput", "true")
             .add("-useAndroidX", useAndroidX ? "true" : "false");
 
-    NestedSet<Artifact> dependencyClassInfo = getDirectClassInfo(ruleContext);
-    commandLineBuilder.addExecPaths(
-        VectorArg.addBefore("-dependencyClassInfoList").each(dependencyClassInfo));
+    List<Artifact> dependencyClassInfo = getDirectClassInfo(ruleContext);
+    for (Artifact artifact : dependencyClassInfo) {
+      commandLineBuilder.addExecPath("-dependencyClassInfoList", artifact);
+    }
 
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .setExecutable(exec)
             .setMnemonic("GenerateDataBindingBaseClasses")
             .addInput(layoutInfo)
-            .addTransitiveInputs(dependencyClassInfo)
+            .addInputs(dependencyClassInfo)
             .addOutput(classInfoFile)
             .addOutput(srcOutFile)
             .addCommandLine(commandLineBuilder.build())
@@ -321,15 +319,15 @@ class DataBindingV2Context implements DataBindingContext {
     return ImmutableList.of(srcOutFile);
   }
 
-  private static NestedSet<Artifact> getDirectClassInfo(RuleContext context) {
-    NestedSetBuilder<Artifact> classInfoFiles = NestedSetBuilder.stableOrder();
+  private static List<Artifact> getDirectClassInfo(RuleContext context) {
+    ImmutableList.Builder<Artifact> classInfoFiles = ImmutableList.builder();
     if (context.attributes().has("deps", BuildType.LABEL_LIST)) {
 
       Iterable<DataBindingV2Provider> providers =
           context.getPrerequisites("deps", DataBindingV2Provider.PROVIDER);
 
       for (DataBindingV2Provider provider : providers) {
-        classInfoFiles.addTransitive(provider.getClassInfos());
+        classInfoFiles.addAll(provider.getClassInfos());
       }
     }
     return classInfoFiles.build();

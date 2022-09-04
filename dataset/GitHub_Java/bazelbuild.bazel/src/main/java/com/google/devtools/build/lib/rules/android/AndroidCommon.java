@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.LinkOptions;
 import com.google.devtools.build.lib.rules.java.BootClassPathInfo;
 import com.google.devtools.build.lib.rules.java.ClasspathConfiguredFragment;
 import com.google.devtools.build.lib.rules.java.JavaCcInfoProvider;
+import com.google.devtools.build.lib.rules.java.JavaCcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
@@ -562,7 +563,12 @@ public class AndroidCommon {
       ImmutableList<Artifact> additionalArtifacts) {
     JavaCompilationHelper helper =
         new JavaCompilationHelper(
-            ruleContext, semantics, javaCommon.getJavacOpts(), attributes, additionalArtifacts);
+            ruleContext,
+            semantics,
+            javaCommon.getJavacOpts(),
+            attributes,
+            additionalArtifacts,
+            /*disableStrictDeps=*/ false);
 
     helper.addLibrariesToAttributes(javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
     attributes.setTargetLabel(ruleContext.getLabel());
@@ -835,6 +841,8 @@ public class AndroidCommon {
                 Stream.of(linkoptsCcInfo),
                 JavaInfo.getProvidersFromListOfTargets(JavaCcInfoProvider.class, deps).stream()
                     .map(JavaCcInfoProvider::getCcInfo),
+                AnalysisUtils.getProviders(deps, JavaCcLinkParamsProvider.PROVIDER).stream()
+                    .map(JavaCcLinkParamsProvider::getCcInfo),
                 AnalysisUtils.getProviders(deps, AndroidCcLinkParamsProvider.PROVIDER).stream()
                     .map(AndroidCcLinkParamsProvider::getLinkParams),
                 AnalysisUtils.getProviders(deps, CcInfo.PROVIDER).stream())

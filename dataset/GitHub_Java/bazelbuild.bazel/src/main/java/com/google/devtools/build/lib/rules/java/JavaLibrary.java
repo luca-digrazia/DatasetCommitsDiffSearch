@@ -208,10 +208,6 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
             NestedSetBuilder.wrap(Order.STABLE_ORDER, sourceJarsProvider.getSourceJars()))
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, proguardSpecs);
 
-    if (isJavaPluginRule) {
-      builder.addStarlarkDeclaredProvider(javaPluginInfo);
-    }
-
     Artifact validation =
         AndroidLintActionBuilder.create(
             ruleContext,
