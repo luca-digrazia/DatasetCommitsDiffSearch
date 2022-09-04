@@ -27,8 +27,6 @@ import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.elasticsearch.index.IndexNotFoundException;
-import org.graylog2.audit.jersey.NoAuditEvent;
-import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.indexer.messages.DocumentNotFoundException;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.results.ResultMessage;
@@ -47,7 +45,6 @@ import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
@@ -64,7 +61,6 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static java.util.Objects.requireNonNull;
 
 @RequiresAuthentication
 @Api(value = "Messages", description = "Single messages")
@@ -73,15 +69,13 @@ import static java.util.Objects.requireNonNull;
 public class MessageResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(MessageResource.class);
 
-    private final Messages messages;
-    private final CodecFactory codecFactory;
-    private final IndexSetRegistry indexSetRegistry;
+    private Messages messages;
+    private CodecFactory codecFactory;
 
     @Inject
-    public MessageResource(Messages messages, CodecFactory codecFactory, IndexSetRegistry indexSetRegistry) {
-        this.messages = requireNonNull(messages);
-        this.codecFactory = requireNonNull(codecFactory);
-        this.indexSetRegistry = requireNonNull(indexSetRegistry);
+    public MessageResource(Messages messages, CodecFactory codecFactory) {
+        this.messages = messages;
+        this.codecFactory = codecFactory;
     }
 
     @GET
@@ -141,7 +135,6 @@ public class MessageResource extends RestResource {
             @ApiResponse(code = 404, message = "Specified codec does not exist."),
             @ApiResponse(code = 400, message = "Could not decode message.")
     })
-    @NoAuditEvent("only used to parse a test message")
     public ResultMessage parse(@ApiParam(name = "JSON body", required = true) MessageParseRequest request) {
         Codec codec;
         try {
@@ -164,11 +157,10 @@ public class MessageResource extends RestResource {
         try {
             message = codec.decode(rawMessage);
 
+            if (message == null) {
+                throw new BadRequestException("Could not decode message");
+            }
         } catch (Exception e) {
-            throw new BadRequestException("Could not decode message");
-        }
-
-        if (message == null) {
             throw new BadRequestException("Could not decode message");
         }
 
@@ -179,9 +171,8 @@ public class MessageResource extends RestResource {
         }
 
         // Override source
-        final Configuration configuration = codec.getConfiguration();
-        if (configuration.stringIsSet(Codec.Config.CK_OVERRIDE_SOURCE)) {
-            message.setSource(configuration.getString(Codec.Config.CK_OVERRIDE_SOURCE));
+        if (codec.getConfiguration() != null && codec.getConfiguration().stringIsSet(Codec.Config.CK_OVERRIDE_SOURCE)) {
+            message.setSource(codec.getConfiguration().getString(Codec.Config.CK_OVERRIDE_SOURCE));
         }
 
         return message;
@@ -199,18 +190,10 @@ public class MessageResource extends RestResource {
     public MessageTokens analyze(
             @ApiParam(name = "index", value = "The index the message containing the string is stored in.", required = true)
             @PathParam("index") String index,
-            @ApiParam(name = "analyzer", value = "The analyzer to use.")
-            @QueryParam("analyzer") @Nullable String analyzer,
             @ApiParam(name = "string", value = "The string to analyze.", required = true)
             @QueryParam("string") @NotEmpty String string) {
-
-        final String indexAnalyzer = indexSetRegistry.getForIndex(index)
-                .map(indexSet -> indexSet.getConfig().indexAnalyzer())
-                .orElse("standard");
-        final String messageAnalyzer = analyzer == null ? indexAnalyzer : analyzer;
-
         try {
-            return MessageTokens.create(messages.analyze(string, index, messageAnalyzer));
+            return MessageTokens.create(messages.analyze(string, index));
         } catch (IndexNotFoundException e) {
             final String message = "Index " + index + " does not exist.";
             LOG.error(message, e);
