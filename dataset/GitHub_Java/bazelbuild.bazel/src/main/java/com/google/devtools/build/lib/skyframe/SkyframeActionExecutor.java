@@ -1010,11 +1010,7 @@ public final class SkyframeActionExecutor {
       //
       // It is also unclear why we are posting anything directly to reporter. That probably
       // shouldn't happen.
-      try (SilentCloseable c =
-          profiler.profileAction(
-              ProfilerTask.ACTION,
-              action.describe(),
-              action.getPrimaryOutput().getExecPathString())) {
+      try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION, action.describe())) {
         String message = action.getProgressMessage();
         if (message != null) {
           reporter.startTask(null, prependExecPhaseStats(message));
@@ -1218,6 +1214,7 @@ public final class SkyframeActionExecutor {
           }
         }
 
+        // Success in execution but failure in completion.
         reportActionExecution(
             eventHandler,
             primaryOutputPath,
