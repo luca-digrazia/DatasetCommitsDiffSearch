@@ -50,6 +50,7 @@ import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -124,15 +125,15 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
 
     Rule rule = (Rule) getTargetFromConfiguredTarget(actualConfiguredTarget);
     ImmutableMap<Label, ConfigMatchingProvider> configConditions =
-        actualConfiguredTarget.getConfigConditions();
+        ((RuleConfiguredTarget) actualConfiguredTarget).getConfigConditions();
     ConfiguredAttributeMapper attributeMapper =
         ConfiguredAttributeMapper.of(rule, configConditions);
     if (!attributeMapper.has(attrName)) {
       throw new QueryException(
           caller,
           String.format(
-              "%sconfigured target of type %s does not have attribute '%s'",
-              errorMsgPrefix, rule.getRuleClass(), attrName),
+              "%s %s of type %s does not have attribute '%s'",
+              errorMsgPrefix, actualConfiguredTarget, rule.getRuleClass(), attrName),
           ConfigurableQuery.Code.ATTRIBUTE_MISSING);
     }
     ImmutableList.Builder<ConfiguredTarget> toReturn = ImmutableList.builder();
@@ -160,8 +161,8 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
   }
 
   @Override
-  public ImmutableSet<QueryVisibility<ConfiguredTarget>> getVisibility(
-      QueryExpression caller, ConfiguredTarget from) throws QueryException {
+  public Set<QueryVisibility<ConfiguredTarget>> getVisibility(ConfiguredTarget from)
+      throws QueryException, InterruptedException {
     // TODO(bazel-team): implement this if needed.
     throw new QueryException(
         "visible() is not supported on configured targets",
@@ -229,7 +230,6 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
 
     ToolchainCollection.Builder<UnloadedToolchainContext> toolchainContexts =
         ToolchainCollection.builder();
-    BuildConfigurationValue.Key configurationKey = BuildConfigurationValue.key(config);
     try {
       for (Map.Entry<String, ExecGroup> group : execGroups.entrySet()) {
         ExecGroup execGroup = group.getValue();
@@ -237,7 +237,7 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
             (UnloadedToolchainContext)
                 walkableGraph.getValue(
                     ToolchainContextKey.key()
-                        .configurationKey(configurationKey)
+                        .configurationKey(BuildConfigurationValue.key(config))
                         .requiredToolchainTypeLabels(execGroup.requiredToolchains())
                         .execConstraintLabels(execGroup.execCompatibleWith())
                         .build());
@@ -250,7 +250,7 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
           (UnloadedToolchainContext)
               walkableGraph.getValue(
                   ToolchainContextKey.key()
-                      .configurationKey(configurationKey)
+                      .configurationKey(BuildConfigurationValue.key(config))
                       .requiredToolchainTypeLabels(requiredToolchains)
                       .execConstraintLabels(execConstraintLabels)
                       .build());
