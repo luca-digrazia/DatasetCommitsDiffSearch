@@ -19,13 +19,14 @@
 package controllers;
 
 import com.google.gson.annotations.SerializedName;
-import org.graylog2.restclient.lib.APIException;
-import org.graylog2.restclient.lib.ServerNodes;
-import org.graylog2.restclient.lib.Graylog2ServerUnavailableException;
+import com.google.inject.Inject;
+import lib.APIException;
+import lib.ServerNodes;
+import lib.Graylog2ServerUnavailableException;
 import lib.security.RedirectAuthenticator;
 import models.LoginRequest;
-import org.graylog2.restclient.models.UserService;
-import org.graylog2.restclient.models.api.requests.ApiRequest;
+import models.UserService;
+import models.api.requests.ApiRequest;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationException;
 import org.slf4j.Logger;
@@ -36,7 +37,6 @@ import play.mvc.Http;
 import play.mvc.Result;
 import play.mvc.Security;
 
-import javax.inject.Inject;
 import java.io.IOException;
 import java.util.Date;
 
@@ -47,16 +47,12 @@ public class SessionsController extends BaseController {
 
 	final static Form<LoginRequest> userForm = form(LoginRequest.class);
 
-    private final ServerNodes serverNodes;
-    private final RedirectAuthenticator authenticator;
-
     @Inject
-    public SessionsController(ServerNodes serverNodes, RedirectAuthenticator authenticator) {
-        this.serverNodes = serverNodes;
-        this.authenticator = authenticator;
-    }
+    ServerNodes serverNodes;
+	@Inject
+    RedirectAuthenticator authenticator;
 
-    public Result index(String destination) {
+	public Result index(String destination) {
         // Redirect if already logged in.
         String loggedInUserName = authenticator.getUsername(ctx());
         if (loggedInUserName != null) {
