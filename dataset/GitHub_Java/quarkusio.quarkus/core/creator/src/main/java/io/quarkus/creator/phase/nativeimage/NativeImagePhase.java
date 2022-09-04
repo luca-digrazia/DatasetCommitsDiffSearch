@@ -1,25 +1,10 @@
-/*
- * Copyright 2018 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.creator.phase.nativeimage;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,12 +14,16 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.config.Config;
 import org.jboss.logging.Logger;
+
+import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.creator.AppCreationPhase;
 import io.quarkus.creator.AppCreator;
 import io.quarkus.creator.AppCreatorException;
@@ -43,8 +32,6 @@ import io.quarkus.creator.config.reader.PropertyContext;
 import io.quarkus.creator.outcome.OutcomeProviderRegistration;
 import io.quarkus.creator.phase.augment.AugmentOutcome;
 import io.quarkus.creator.phase.runnerjar.RunnerJarOutcome;
-import io.quarkus.creator.util.IoUtils;
-
 import io.smallrye.config.SmallRyeConfigProviderResolver;
 
 /**
@@ -58,7 +45,25 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
 
     private static final String GRAALVM_HOME = "GRAALVM_HOME";
 
-    private static final String SHAMROCK_PREFIX = "quarkus.";
+    /**
+     * Name of the <em>system</em> property to retrieve JAVA_HOME
+     */
+    private static final String JAVA_HOME_SYS = "java.home";
+
+    /**
+     * Name of the <em>environment</em> variable to retrieve JAVA_HOME
+     */
+    private static final String JAVA_HOME_ENV = "JAVA_HOME";
+
+    private static final String QUARKUS_PREFIX = "quarkus.";
+
+    private static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("linux");
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows");
+
+    /**
+     * The name of the environment variable containing the system path.
+     */
+    private static final String PATH = "PATH";
 
     private Path outputDir;
 
@@ -82,7 +87,11 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
 
     private boolean enableIsolates;
 
+    private boolean enableFallbackImages;
+
     private String graalvmHome;
+
+    private File javaHome;
 
     private boolean enableServer;
 
@@ -94,7 +103,11 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
 
     private String nativeImageXmx;
 
-    private String dockerBuild;
+    private String builderImage = "quay.io/quarkus/ubi-quarkus-native-image:19.1.1";
+
+    private String containerRuntime = "";
+
+    private List<String> containerRuntimeOptions = new ArrayList<>();
 
     private boolean enableVMInspection;
 
@@ -103,6 +116,15 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
     private boolean disableReports;
 
     private List<String> additionalBuildArgs;
+
+    private boolean addAllCharsets;
+
+    private boolean reportExceptionStackTraces = true;
+
+    public NativeImagePhase setAddAllCharsets(boolean addAllCharsets) {
+        this.addAllCharsets = addAllCharsets;
+        return this;
+    }
 
     public NativeImagePhase setOutputDir(Path outputDir) {
         this.outputDir = outputDir;
@@ -159,8 +181,18 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
         return this;
     }
 
+    public NativeImagePhase setEnableFallbackImages(boolean enableFallbackImages) {
+        this.enableFallbackImages = enableFallbackImages;
+        return this;
+    }
+
     public NativeImagePhase setGraalvmHome(String graalvmHome) {
         this.graalvmHome = graalvmHome;
+        return this;
+    }
+
+    public NativeImagePhase setJavaHome(File javaHome) {
+        this.javaHome = javaHome;
         return this;
     }
 
@@ -189,9 +221,42 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
         return this;
     }
 
-
     public NativeImagePhase setDockerBuild(String dockerBuild) {
-        this.dockerBuild = dockerBuild;
+        if (dockerBuild == null) {
+            return this;
+        }
+
+        if ("false".equals(dockerBuild.toLowerCase())) {
+            this.containerRuntime = "";
+        } else {
+            this.containerRuntime = "docker";
+
+            // TODO: use an 'official' image
+            if (!"true".equals(dockerBuild.toLowerCase())) {
+                this.builderImage = dockerBuild;
+            }
+        }
+
+        return this;
+    }
+
+    public NativeImagePhase setContainerRuntime(String containerRuntime) {
+        if (containerRuntime == null) {
+            return this;
+        }
+        if ("podman".equals(containerRuntime) || "docker".equals(containerRuntime)) {
+            this.containerRuntime = containerRuntime;
+        } else {
+            log.warn("container runtime is not docker or podman. fallback to docker");
+            this.containerRuntime = "docker";
+        }
+        return this;
+    }
+
+    public NativeImagePhase setContainerRuntimeOptions(String containerRuntimeOptions) {
+        if (containerRuntimeOptions != null) {
+            this.containerRuntimeOptions = Arrays.asList(containerRuntimeOptions.split(","));
+        }
         return this;
     }
 
@@ -215,6 +280,11 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
         return this;
     }
 
+    public NativeImagePhase setReportExceptionStackTraces(boolean reportExceptionStackTraces) {
+        this.reportExceptionStackTraces = reportExceptionStackTraces;
+        return this;
+    }
+
     @Override
     public void register(OutcomeProviderRegistration registration) throws AppCreatorException {
         registration.provides(NativeImageOutcome.class);
@@ -229,7 +299,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
         Path runnerJar = runnerJarOutcome.getRunnerJar();
         boolean runnerJarCopied = false;
         // this trick is here because docker needs the jar in the project dir
-        if(!runnerJar.getParent().equals(outputDir)) {
+        if (!runnerJar.getParent().equals(outputDir)) {
             try {
                 runnerJar = IoUtils.copy(runnerJar, outputDir.resolve(runnerJar.getFileName()));
             } catch (IOException e) {
@@ -254,40 +324,61 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
 
         final Config config = SmallRyeConfigProviderResolver.instance().getConfig();
 
-        boolean vmVersionOutOfDate = isThisGraalVMRCObsolete();
+        boolean vmVersionOutOfDate = isThisGraalVMVersionObsolete();
 
         HashMap<String, String> env = new HashMap<>(System.getenv());
         List<String> nativeImage;
 
-        if (dockerBuild != null && !dockerBuild.toLowerCase().equals("false")) {
+        String noPIE = "";
 
+        if (!"".equals(containerRuntime)) {
             // E.g. "/usr/bin/docker run -v {{PROJECT_DIR}}:/project --rm quarkus/graalvm-native-image"
             nativeImage = new ArrayList<>();
-            //TODO: use an 'official' image
-            String image;
-            if(dockerBuild.toLowerCase().equals("true")) {
-                image = "swd847/centos-graal-native-image-rc12";
-            } else {
-                //allow the use of a custom image
-                image = dockerBuild;
-            }
-            Collections.addAll(nativeImage, "docker", "run", "-v", outputDir.toAbsolutePath() + ":/project:z", "--rm", image);
-        } else {
-            String graalvmHome = this.graalvmHome;
-            if (graalvmHome != null) {
-                env.put(GRAALVM_HOME, graalvmHome);
-            } else {
-                graalvmHome = env.get(GRAALVM_HOME);
-                if (graalvmHome == null) {
-                    throw new AppCreatorException("GRAALVM_HOME was not set");
+            Collections.addAll(nativeImage, containerRuntime, "run", "-v", outputDir.toAbsolutePath() + ":/project:z", "--rm");
+            if (IS_LINUX) {
+                if ("docker".equals(containerRuntime)) {
+                    String uid = getLinuxID("-ur");
+                    String gid = getLinuxID("-gr");
+                    if (uid != null & gid != null & !"".equals(uid) & !"".equals(gid)) {
+                        Collections.addAll(nativeImage, "--user", uid + ":" + gid);
+                    }
+                } else if ("podman".equals(containerRuntime)) {
+                    // Needed to avoid AccessDeniedExceptions
+                    nativeImage.add("--userns=keep-id");
                 }
             }
-            nativeImage = Collections.singletonList(graalvmHome + File.separator + "bin" + File.separator + "native-image");
+            nativeImage.addAll(containerRuntimeOptions);
+            nativeImage.add(this.builderImage);
+        } else {
+            if (IS_LINUX) {
+                noPIE = detectNoPIE();
+            }
+
+            String graal = this.graalvmHome;
+            File java = this.javaHome;
+            if (graal != null) {
+                env.put(GRAALVM_HOME, graal);
+            } else {
+                graal = env.get(GRAALVM_HOME);
+            }
+            if (java == null) {
+                // try system property first - it will be the JAVA_HOME used by the current JVM
+                String home = System.getProperty(JAVA_HOME_SYS);
+                if (home == null) {
+                    // No luck, somewhat a odd JVM not enforcing this property
+                    // try with the JAVA_HOME environment variable
+                    home = env.get(JAVA_HOME_ENV);
+                }
+
+                if (home != null) {
+                    java = new File(home);
+                }
+            }
+            nativeImage = Collections.singletonList(getNativeImageExecutable(graal, java, env).getAbsolutePath());
         }
 
         try {
-            List<String> command = new ArrayList<>();
-            command.addAll(nativeImage);
+            List<String> command = new ArrayList<>(nativeImage);
             if (cleanupServer) {
                 List<String> cleanup = new ArrayList<>(nativeImage);
                 cleanup.add("--server-shutdown");
@@ -300,7 +391,8 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
                 process.waitFor();
             }
             // TODO this is a temp hack
-            final Path propsFile = ctx.resolveOutcome(AugmentOutcome.class).getAppClassesDir().resolve("native-image.properties");
+            final Path propsFile = ctx.resolveOutcome(AugmentOutcome.class).getAppClassesDir()
+                    .resolve("native-image.properties");
 
             boolean enableSslNative = false;
             if (Files.exists(propsFile)) {
@@ -309,7 +401,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
                     properties.load(reader);
                 }
                 for (String propertyName : properties.stringPropertyNames()) {
-                    if (propertyName.startsWith(SHAMROCK_PREFIX)) {
+                    if (propertyName.startsWith(QUARKUS_PREFIX)) {
                         continue;
                     }
 
@@ -322,24 +414,53 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
                     }
                 }
 
-                enableSslNative = properties.getProperty("quarkus.ssl.native") != null ? Boolean.parseBoolean(properties.getProperty("quarkus.ssl.native"))
+                final String enableSslNativeFromProperties = properties.getProperty("quarkus.ssl.native");
+                enableSslNative = enableSslNativeFromProperties != null
+                        ? Boolean.parseBoolean(enableSslNativeFromProperties)
                         : false;
+
+                if (!enableJni) {
+                    final String enableJniFromProperties = properties.getProperty("quarkus.jni.enable");
+                    enableJni = enableJniFromProperties != null
+                            ? Boolean.parseBoolean(enableJniFromProperties)
+                            : false;
+                }
+
+                if (!addAllCharsets) {
+                    final String nativeEnableAllCharsetsProperty = properties.getProperty("quarkus.native.enable-all-charsets");
+                    addAllCharsets = nativeEnableAllCharsetsProperty != null
+                            ? Boolean.parseBoolean(nativeEnableAllCharsetsProperty)
+                            : false;
+                }
             }
             if (enableSslNative) {
                 enableHttpsUrlHandler = true;
                 enableJni = true;
                 enableAllSecurityServices = true;
             }
+
             if (additionalBuildArgs != null) {
-                additionalBuildArgs.forEach(command::add);
+                command.addAll(additionalBuildArgs);
             }
+            command.add("--initialize-at-build-time=");
             command.add("-H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime"); //the default collection policy results in full GC's 50% of the time
             command.add("-jar");
             command.add(runnerJarName);
             //https://github.com/oracle/graal/issues/660
             command.add("-J-Djava.util.concurrent.ForkJoinPool.common.parallelism=1");
+            if (enableFallbackImages) {
+                command.add("-H:FallbackThreshold=5");
+            } else {
+                //Default: be strict as those fallback images aren't very useful
+                //and tend to cover up real problems.
+                command.add("-H:FallbackThreshold=0");
+            }
+
             if (reportErrorsAtRuntime) {
                 command.add("-H:+ReportUnsupportedElementsAtRuntime");
+            }
+            if (reportExceptionStackTraces) {
+                command.add("-H:+ReportExceptionStackTraces");
             }
             if (debugSymbols) {
                 command.add("-g");
@@ -347,30 +468,39 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             if (debugBuildProcess) {
                 command.add("-J-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=y");
             }
-            if(!disableReports) {
+            if (!disableReports) {
                 command.add("-H:+PrintAnalysisCallTree");
             }
             if (dumpProxies) {
                 command.add("-Dsun.misc.ProxyGenerator.saveGeneratedFiles=true");
                 if (enableServer) {
-                    log.warn( "Options dumpProxies and enableServer are both enabled: this will get the proxies dumped in an unknown external working directory" );
+                    log.warn(
+                            "Options dumpProxies and enableServer are both enabled: this will get the proxies dumped in an unknown external working directory");
                 }
             }
-            if(nativeImageXmx != null) {
+            if (nativeImageXmx != null) {
                 command.add("-J-Xmx" + nativeImageXmx);
             }
             List<String> protocols = new ArrayList<>(2);
-            if(enableHttpUrlHandler) {
+            if (enableHttpUrlHandler) {
                 protocols.add("http");
             }
-            if(enableHttpsUrlHandler) {
+            if (enableHttpsUrlHandler) {
                 protocols.add("https");
             }
-            if(!protocols.isEmpty()) {
-                command.add("-H:EnableURLProtocols="+String.join(",", protocols));
+            if (addAllCharsets) {
+                command.add("-H:+AddAllCharsets");
+            } else {
+                command.add("-H:-AddAllCharsets");
             }
-            if(enableAllSecurityServices) {
+            if (!protocols.isEmpty()) {
+                command.add("-H:EnableURLProtocols=" + String.join(",", protocols));
+            }
+            if (enableAllSecurityServices) {
                 command.add("--enable-all-security-services");
+            }
+            if (!noPIE.isEmpty()) {
+                command.add("-H:NativeLinkerOption=" + noPIE);
             }
             if (enableRetainedHeapReporting) {
                 command.add("-H:+PrintRetainedHeapHistogram");
@@ -378,33 +508,30 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             if (enableCodeSizeReporting) {
                 command.add("-H:+PrintCodeSizeReport");
             }
-            if (! enableIsolates) {
+            if (!enableIsolates) {
                 command.add("-H:-SpawnIsolates");
             }
             if (enableJni) {
                 command.add("-H:+JNI");
-            }
-            else {
+            } else {
                 command.add("-H:-JNI");
             }
-            if(!enableServer) {
+            if (!enableServer && !IS_WINDOWS) {
                 command.add("--no-server");
             }
             if (enableVMInspection) {
                 command.add("-H:+AllowVMInspection");
             }
             if (autoServiceLoaderRegistration) {
-                command.add( "-H:+UseServiceLoaderFeature" );
+                command.add("-H:+UseServiceLoaderFeature");
                 //When enabling, at least print what exactly is being added:
-                command.add( "-H:+TraceServiceLoaderFeature" );
-            }
-            else {
-                command.add( "-H:-UseServiceLoaderFeature" );
+                command.add("-H:+TraceServiceLoaderFeature");
+            } else {
+                command.add("-H:-UseServiceLoaderFeature");
             }
             if (fullStackTraces) {
                 command.add("-H:+StackTrace");
-            }
-            else {
+            } else {
                 command.add("-H:-StackTrace");
             }
 
@@ -417,7 +544,8 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
 
             Process process = pb.start();
-            new Thread(new ErrorReplacingProcessReader(process.getErrorStream(), outputDir.resolve("reports").toFile(), errorReportLatch)).start();
+            new Thread(new ErrorReplacingProcessReader(process.getErrorStream(), outputDir.resolve("reports").toFile(),
+                    errorReportLatch)).start();
             errorReportLatch.await();
             if (process.waitFor() != 0) {
                 throw new RuntimeException("Image generation failed");
@@ -428,24 +556,131 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
         } catch (Exception e) {
             throw new AppCreatorException("Failed to build native image", e);
         } finally {
-            if(runnerJarCopied) {
+            if (runnerJarCopied) {
                 IoUtils.recursiveDelete(runnerJar);
             }
-            if(outputLibDirCopied) {
+            if (outputLibDirCopied) {
                 IoUtils.recursiveDelete(outputLibDir);
             }
         }
     }
 
     //FIXME remove after transition period
-    private boolean isThisGraalVMRCObsolete() {
+    private boolean isThisGraalVMVersionObsolete() {
         final String vmName = System.getProperty("java.vm.name");
         log.info("Running Quarkus native-image plugin on " + vmName);
-        if (vmName.contains("-rc9") || vmName.contains("-rc10") || vmName.contains("-rc11")) {
-            log.error("Out of date RC build of GraalVM detected! Please upgrade to RC12");
+        final List<String> obsoleteGraalVmVersions = Arrays.asList("-rc9", "-rc10", "-rc11", "-rc12", "-rc13", "-rc14",
+                "-rc15", "-rc16", "19.0.", "19.1.0");
+        final boolean vmVersionIsObsolete = obsoleteGraalVmVersions.stream().anyMatch(vmName::contains);
+        if (vmVersionIsObsolete) {
+            log.error("Out of date build of GraalVM detected! Please upgrade to GraalVM 19.1.1.");
             return true;
         }
         return false;
+    }
+
+    private static File getNativeImageExecutable(String graalVmHome, File javaHome, Map<String, String> env)
+            throws AppCreatorException {
+        String imageName = IS_WINDOWS ? "native-image.cmd" : "native-image";
+        if (graalVmHome != null) {
+            File file = Paths.get(graalVmHome, "bin", imageName).toFile();
+            if (file.exists()) {
+                return file;
+            }
+        }
+
+        if (javaHome != null) {
+            File file = new File(javaHome, "bin/" + imageName);
+            if (file.exists()) {
+                return file;
+            }
+        }
+
+        // System path
+        String systemPath = env.get(PATH);
+        if (systemPath != null) {
+            String[] pathDirs = systemPath.split(File.pathSeparator);
+            for (String pathDir : pathDirs) {
+                File dir = new File(pathDir);
+                if (dir.isDirectory()) {
+                    File file = new File(dir, imageName);
+                    if (file.exists()) {
+                        return file;
+                    }
+                }
+            }
+        }
+
+        throw new AppCreatorException("Cannot find the `" + imageName + "` in the GRAALVM_HOME, JAVA_HOME and System " +
+                "PATH. Install it using `gu install native-image`");
+
+    }
+
+    private static String getLinuxID(String option) {
+        Process process;
+
+        try {
+            StringBuilder responseBuilder = new StringBuilder();
+            String line;
+
+            ProcessBuilder idPB = new ProcessBuilder().command("id", option);
+            idPB.redirectError(new File("/dev/null"));
+            idPB.redirectInput(new File("/dev/null"));
+
+            process = idPB.start();
+            try (InputStream inputStream = process.getInputStream()) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+                    while ((line = reader.readLine()) != null) {
+                        responseBuilder.append(line);
+                    }
+                    safeWaitFor(process);
+                    return responseBuilder.toString();
+                }
+            } catch (Throwable t) {
+                safeWaitFor(process);
+                throw t;
+            }
+        } catch (IOException e) { //from process.start()
+            //swallow and return null id
+            return null;
+        }
+    }
+
+    static void safeWaitFor(Process process) {
+        boolean intr = false;
+        try {
+            for (;;)
+                try {
+                    process.waitFor();
+                    return;
+                } catch (InterruptedException ex) {
+                    intr = true;
+                }
+        } finally {
+            if (intr)
+                Thread.currentThread().interrupt();
+        }
+    }
+
+    private static String detectNoPIE() {
+        String argument = testGCCArgument("-no-pie");
+
+        return argument.length() == 0 ? testGCCArgument("-nopie") : argument;
+    }
+
+    private static String testGCCArgument(String argument) {
+        try {
+            Process gcc = new ProcessBuilder("cc", "-v", "-E", argument, "-").start();
+            gcc.getOutputStream().close();
+            if (gcc.waitFor() == 0) {
+                return argument;
+            }
+
+        } catch (IOException | InterruptedException e) {
+            // eat
+        }
+
+        return "";
     }
 
     @Override
@@ -465,7 +700,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             public boolean set(NativeImagePhase t, PropertyContext ctx) {
                 //System.out.println("native-image.set " + ctx.getRelativeName() + "=" + ctx.getValue());
                 final String value = ctx.getValue();
-                switch(ctx.getRelativeName()) {
+                switch (ctx.getRelativeName()) {
                     case "output":
                         t.setOutputDir(Paths.get(value));
                         break;
@@ -499,6 +734,9 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
                     case "enable-isolates":
                         t.setEnableIsolates(Boolean.parseBoolean(value));
                         break;
+                    case "enable-fallback-images":
+                        t.setEnableFallbackImages(Boolean.parseBoolean(value));
+                        break;
                     case "graalvm-home":
                         t.setGraalvmHome(value);
                         break;
@@ -531,6 +769,9 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
                         break;
                     case "additional-build-args":
                         t.setAdditionalBuildArgs(Arrays.asList(value.split(",")));
+                        break;
+                    case "report-exception-stack-traces":
+                        t.setReportExceptionStackTraces(Boolean.parseBoolean(value));
                         break;
                     default:
                         return false;
