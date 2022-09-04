@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -66,12 +67,12 @@ public final class LocationExpander {
   private static final boolean USE_EXEC_PATHS = true;
 
   private final RuleErrorConsumer ruleErrorConsumer;
-  private final ImmutableMap<String, LocationFunction> functions;
+  private final ImmutableMap<String, Function<String, String>> functions;
 
   @VisibleForTesting
   LocationExpander(
       RuleErrorConsumer ruleErrorConsumer,
-      Map<String, LocationFunction> functions) {
+      Map<String, Function<String, String>> functions) {
     this.ruleErrorConsumer = ruleErrorConsumer;
     this.functions = ImmutableMap.copyOf(functions);
   }
@@ -222,7 +223,7 @@ public final class LocationExpander {
   }
 
   @VisibleForTesting
-  static final class LocationFunction {
+  static final class LocationFunction implements Function<String, String> {
     private static final int MAX_PATHS_SHOWN = 5;
 
     private final Label root;
@@ -241,12 +242,7 @@ public final class LocationExpander {
       this.multiple = multiple;
     }
 
-    /**
-     * Looks up the label-like string in the locationMap and returns the resolved path string.
-     *
-     * @param arg The label-like string to be expanded, e.g. ":foo" or "//foo:bar"
-     * @return The expanded value
-     */
+    @Override
     public String apply(String arg) {
       Label label;
       try {
@@ -331,9 +327,9 @@ public final class LocationExpander {
     }
   }
 
-  static ImmutableMap<String, LocationFunction> allLocationFunctions(
+  static ImmutableMap<String, Function<String, String>> allLocationFunctions(
       Label root, Supplier<Map<Label, Collection<Artifact>>> locationMap, boolean execPaths) {
-    return new ImmutableMap.Builder<String, LocationFunction>()
+    return new ImmutableMap.Builder<String, Function<String, String>>()
         .put("location", new LocationFunction(root, locationMap, execPaths, EXACTLY_ONE))
         .put("locations", new LocationFunction(root, locationMap, execPaths, ALLOW_MULTIPLE))
         .put("rootpath", new LocationFunction(root, locationMap, USE_ROOT_PATHS, EXACTLY_ONE))
