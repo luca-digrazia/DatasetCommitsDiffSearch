@@ -222,7 +222,9 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
                           owner.label().map(label -> canonicalizeTarget(remapTarget(label)))))
               .collect(toImmutableSet());
       errWriter.print(
-          dependencyModule.getFixMessage().get(canonicalizedMissing, canonicalizedLabel));
+          dependencyModule
+              .getFixMessage()
+              .get(canonicalizedMissing, canonicalizedLabel, dependencyModule));
     }
   }
 
