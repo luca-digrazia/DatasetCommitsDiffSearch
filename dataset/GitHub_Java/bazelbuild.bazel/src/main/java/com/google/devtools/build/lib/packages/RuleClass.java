@@ -36,13 +36,11 @@ import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate;
 import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate.CannotPrecomputeDefaultsException;
-import com.google.devtools.build.lib.packages.BuildType.LabelConversionContext;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
@@ -631,7 +629,6 @@ public class RuleClass {
     private boolean workspaceOnly = false;
     private boolean isExecutableSkylark = false;
     private boolean isConfigMatcher = false;
-    private boolean hasFunctionTransitionWhitelist = false;
     private ImplicitOutputsFunction implicitOutputsFunction = ImplicitOutputsFunction.NONE;
     private RuleTransitionFactory transitionFactory;
     private ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory = null;
@@ -766,9 +763,6 @@ public class RuleClass {
                 .nonconfigurable("Used in toolchain resolution")
                 .value(ImmutableList.of()));
       }
-      if (skylark) {
-        assertSkylarkRuleClassProperFunctionTransitionUsage();
-      }
 
       return new RuleClass(
           name,
@@ -781,7 +775,6 @@ public class RuleClass {
           binaryOutput,
           workspaceOnly,
           isExecutableSkylark,
-          hasFunctionTransitionWhitelist,
           implicitOutputsFunction,
           isConfigMatcher,
           transitionFactory,
@@ -824,29 +817,7 @@ public class RuleClass {
           type);
     }
 
-    private void assertSkylarkRuleClassProperFunctionTransitionUsage() {
-      boolean hasFunctionTransitionAttribute =
-          attributes.entrySet()
-          .stream()
-          .map(entry -> entry.getValue().hasFunctionTransition())
-          .reduce(false, (a, b) -> a || b);
-
-      if (hasFunctionTransitionAttribute) {
-        Preconditions.checkState(
-            hasFunctionTransitionWhitelist,
-            "Use of function based split transition without whitelist: %s %s",
-            ruleDefinitionEnvironmentLabel,
-            type);
-      } else {
-        Preconditions.checkState(
-            !hasFunctionTransitionWhitelist,
-            "Unused function based split transition whitelist: %s %s",
-            ruleDefinitionEnvironmentLabel,
-            type);
-      }
-    }
-
-      /**
+    /**
      * Declares that the implementation of the associated rule class requires the given
      * fragments to be present in this rule's host and target configurations.
      *
@@ -1169,15 +1140,6 @@ public class RuleClass {
     }
 
     /**
-     * This rule class has the _whitelist_function_transition attribute.  Intended only for Skylark
-     * rules.
-     */
-    public <TYPE> Builder setHasFunctionTransitionWhitelist() {
-      this.hasFunctionTransitionWhitelist = true;
-      return this;
-    }
-
-    /**
      * Sets the kind of output files this rule creates.
      * DO NOT USE! This only exists to support the non-open-sourced {@code fileset} rule.
      * {@see OutputFile.Kind}.
@@ -1350,7 +1312,6 @@ public class RuleClass {
   private final boolean workspaceOnly;
   private final boolean isExecutableSkylark;
   private final boolean isConfigMatcher;
-  private final boolean hasFunctionTransitionWhitelist;
 
   /**
    * A (unordered) mapping from attribute names to small integers indexing into
@@ -1470,7 +1431,6 @@ public class RuleClass {
       boolean binaryOutput,
       boolean workspaceOnly,
       boolean isExecutableSkylark,
-      boolean hasFunctionTransitionWhitelist,
       ImplicitOutputsFunction implicitOutputsFunction,
       boolean isConfigMatcher,
       RuleTransitionFactory transitionFactory,
@@ -1517,7 +1477,6 @@ public class RuleClass {
     this.attributes = ImmutableList.copyOf(attributes);
     this.workspaceOnly = workspaceOnly;
     this.isExecutableSkylark = isExecutableSkylark;
-    this.hasFunctionTransitionWhitelist = hasFunctionTransitionWhitelist;
     this.configurationFragmentPolicy = configurationFragmentPolicy;
     this.supportsConstraintChecking = supportsConstraintChecking;
     this.requiredToolchains = ImmutableSet.copyOf(requiredToolchains);
@@ -1807,8 +1766,7 @@ public class RuleClass {
       EventHandler eventHandler)
       throws InterruptedException, CannotPrecomputeDefaultsException {
     BitSet definedAttrIndices =
-        populateDefinedRuleAttributeValues(
-            rule, pkgBuilder.getRepositoryMapping(), attributeValues, eventHandler);
+        populateDefinedRuleAttributeValues(rule, attributeValues, eventHandler);
     populateDefaultRuleAttributeValues(rule, pkgBuilder, definedAttrIndices, eventHandler);
     // Now that all attributes are bound to values, collect and store configurable attribute keys.
     populateConfigDependenciesAttribute(rule);
@@ -1821,15 +1779,12 @@ public class RuleClass {
    * <p>Handles the special cases of the attribute named {@code "name"} and attributes with value
    * {@link Runtime#NONE}.
    *
-   * <p>Returns a bitset {@code b} where {@code b.get(i)} is {@code true} if this method set a value
-   * for the attribute with index {@code i} in this {@link RuleClass}. Errors are reported on {@code
-   * eventHandler}.
+   * <p>Returns a bitset {@code b} where {@code b.get(i)} is {@code true} if this method set a
+   * value for the attribute with index {@code i} in this {@link RuleClass}. Errors are reported
+   * on {@code eventHandler}.
    */
   private <T> BitSet populateDefinedRuleAttributeValues(
-      Rule rule,
-      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
-      AttributeValues<T> attributeValues,
-      EventHandler eventHandler) {
+      Rule rule, AttributeValues<T> attributeValues, EventHandler eventHandler) {
     BitSet definedAttrIndices = new BitSet();
     for (T attributeAccessor : attributeValues.getAttributeAccessors()) {
       String attributeName = attributeValues.getName(attributeAccessor);
@@ -1854,8 +1809,7 @@ public class RuleClass {
       Object nativeAttributeValue;
       if (attributeValues.valuesAreBuildLanguageTyped()) {
         try {
-          nativeAttributeValue =
-              convertFromBuildLangType(rule, attr, attributeValue, repositoryMapping);
+          nativeAttributeValue = convertFromBuildLangType(rule, attr, attributeValue);
         } catch (ConversionException e) {
           rule.reportError(String.format("%s: %s", rule.getLabel(), e.getMessage()), eventHandler);
           continue;
@@ -2151,19 +2105,13 @@ public class RuleClass {
    * <p>Throws {@link ConversionException} if the conversion fails, or if {@code buildLangValue} is
    * a selector expression but {@code attr.isConfigurable()} is {@code false}.
    */
-  private static Object convertFromBuildLangType(
-      Rule rule,
-      Attribute attr,
-      Object buildLangValue,
-      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
+  private static Object convertFromBuildLangType(Rule rule, Attribute attr, Object buildLangValue)
       throws ConversionException {
-    LabelConversionContext context = new LabelConversionContext(rule.getLabel(), repositoryMapping);
-    Object converted =
-        BuildType.selectableConvert(
-            attr.getType(),
-            buildLangValue,
-            new AttributeConversionContext(attr.getName(), rule.getRuleClass()),
-            context);
+    Object converted = BuildType.selectableConvert(
+        attr.getType(),
+        buildLangValue,
+        new AttributeConversionContext(attr.getName(), rule.getRuleClass()),
+        rule.getLabel());
 
     if ((converted instanceof SelectorList<?>) && !attr.isConfigurable()) {
       throw new ConversionException(
@@ -2341,13 +2289,6 @@ public class RuleClass {
    */
   public boolean isExecutableSkylark() {
     return isExecutableSkylark;
-  }
-
-  /**
-   * Returns true if this rule class has the _whitelist_function_transition attribute.
-   */
-  public boolean hasFunctionTransitionWhitelist() {
-    return hasFunctionTransitionWhitelist;
   }
 
   public ImmutableSet<Label> getRequiredToolchains() {
