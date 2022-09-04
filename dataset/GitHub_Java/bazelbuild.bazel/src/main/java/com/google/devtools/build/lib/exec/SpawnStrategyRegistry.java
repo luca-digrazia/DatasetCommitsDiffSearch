@@ -26,6 +26,7 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionContext;
+import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.DynamicStrategyRegistry;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy;
@@ -242,9 +243,8 @@ public final class SpawnStrategyRegistry
 
     /**
      * Adds a filter limiting any spawn whose {@linkplain
-     * com.google.devtools.build.lib.actions.ActionExecutionMetadata#getProgressMessage() owner's
-     * progress message} matches the regular expression to only use strategies with the given
-     * command-line identifiers, in order.
+     * ActionExecutionMetadata#getProgressMessage() owner's progress message} matches the regular
+     * expression to only use strategies with the given command-line identifiers, in order.
      *
      * <p>If multiple filters match the same spawn (including an identical filter) the order of
      * precedence of calls to this method is determined by {@link
@@ -381,9 +381,8 @@ public final class SpawnStrategyRegistry
 
     /**
      * Adds a filter limiting any spawn whose {@linkplain
-     * com.google.devtools.build.lib.actions.ActionExecutionMetadata#getProgressMessage() owner's
-     * progress message} matches the regular expression to only use strategies with the given
-     * command-line identifiers, in order.
+     * ActionExecutionMetadata#getProgressMessage() owner's progress message} matches the regular
+     * expression to only use strategies with the given command-line identifiers, in order.
      *
      * <p>If multiple filters match the same spawn (including an identical filter) the order of
      * precedence of calls to this method is determined by {@link
