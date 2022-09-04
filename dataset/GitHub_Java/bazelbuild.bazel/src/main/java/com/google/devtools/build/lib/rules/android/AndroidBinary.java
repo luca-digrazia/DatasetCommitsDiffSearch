@@ -120,8 +120,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   }
 
   /** Checks expected rule invariants, throws rule errors if anything is set wrong. */
-  private static void validateRuleContext(RuleContext ruleContext, AndroidDataContext dataContext)
-      throws RuleErrorException {
+  private static void validateRuleContext(RuleContext ruleContext) throws RuleErrorException {
     if (getMultidexMode(ruleContext) != MultidexMode.LEGACY
         && ruleContext
             .attributes()
@@ -131,33 +130,23 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           "The 'main_dex_proguard_specs' attribute is only allowed if 'multidex' is"
               + " set to 'legacy'");
     }
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("proguard_apply_mapping")) {
-      if (dataContext.throwOnProguardApplyMapping()) {
-        ruleContext.throwWithAttributeError(
-            "proguard_apply_mapping", "This attribute is not supported");
-      }
-      if (ruleContext
-          .attributes()
-          .get(ProguardHelper.PROGUARD_SPECS, BuildType.LABEL_LIST)
-          .isEmpty()) {
-        ruleContext.throwWithAttributeError(
-            "proguard_apply_mapping",
-            "'proguard_apply_mapping' can only be used when 'proguard_specs' is also set");
-      }
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("proguard_apply_mapping")
+        && ruleContext
+            .attributes()
+            .get(ProguardHelper.PROGUARD_SPECS, BuildType.LABEL_LIST)
+            .isEmpty()) {
+      ruleContext.throwWithAttributeError(
+          "proguard_apply_mapping",
+          "'proguard_apply_mapping' can only be used when 'proguard_specs' is also set");
     }
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("proguard_apply_dictionary")) {
-      if (dataContext.throwOnProguardApplyDictionary()) {
-        ruleContext.throwWithAttributeError(
-            "proguard_apply_dictionary", "This attribute is not supported");
-      }
-      if (ruleContext
-          .attributes()
-          .get(ProguardHelper.PROGUARD_SPECS, BuildType.LABEL_LIST)
-          .isEmpty()) {
-        ruleContext.throwWithAttributeError(
-            "proguard_apply_dictionary",
-            "'proguard_apply_dictionary' can only be used when 'proguard_specs' is also set");
-      }
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("proguard_apply_dictionary")
+        && ruleContext
+            .attributes()
+            .get(ProguardHelper.PROGUARD_SPECS, BuildType.LABEL_LIST)
+            .isEmpty()) {
+      ruleContext.throwWithAttributeError(
+          "proguard_apply_dictionary",
+          "'proguard_apply_dictionary' can only be used when 'proguard_specs' is also set");
     }
 
     if (AndroidCommon.getAndroidConfig(ruleContext).desugarJava8Libs()
@@ -207,8 +196,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     ResourceDependencies resourceDeps =
         ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink= */ false);
 
-    AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
-    validateRuleContext(ruleContext, dataContext);
+    validateRuleContext(ruleContext);
 
     NativeLibs nativeLibs =
         NativeLibs.fromLinkedNativeDeps(
@@ -220,6 +208,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     // Retrieve and compile the resources defined on the android_binary rule.
     AndroidResources.validateRuleContext(ruleContext);
 
+    final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
     Map<String, String> manifestValues = StampedAndroidManifest.getManifestValues(ruleContext);
 
     StampedAndroidManifest manifest =
@@ -353,6 +342,16 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     Artifact proguardMapping =
         ruleContext.getPrerequisiteArtifact("proguard_apply_mapping", Mode.TARGET);
+    if (proguardMapping != null && dataContext.throwOnProguardApplyMapping()) {
+      throw ruleContext.throwWithAttributeError(
+          "proguard_apply_mapping", "This attribute is not supported");
+    }
+    Artifact proguardDictionary =
+        ruleContext.getPrerequisiteArtifact("proguard_apply_dictionary", Mode.TARGET);
+    if (proguardDictionary != null && dataContext.throwOnProguardApplyDictionary()) {
+      throw ruleContext.throwWithAttributeError(
+          "proguard_apply_dictionary", "This attribute is not supported");
+    }
 
     MobileInstallResourceApks mobileInstallResourceApks =
         AndroidBinaryMobileInstall.createMobileInstallResourceApks(
@@ -375,6 +374,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ImmutableList.<Artifact>of(),
         ImmutableList.<Artifact>of(),
         proguardMapping,
+        proguardDictionary,
         oneVersionOutputArtifact);
   }
 
@@ -395,6 +395,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       ImmutableList<Artifact> apksUnderTest,
       ImmutableList<Artifact> additionalMergedManifests,
       Artifact proguardMapping,
+      Artifact proguardDictionary,
       @Nullable Artifact oneVersionEnforcementArtifact)
       throws InterruptedException, RuleErrorException {
 
@@ -439,6 +440,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             binaryJar,
             proguardSpecs,
             proguardMapping,
+            proguardDictionary,
             proguardOutputMap);
 
     if (dataContext.useResourceShrinking(hasProguardSpecs)) {
@@ -748,6 +750,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       Artifact deployJarArtifact,
       ImmutableList<Artifact> proguardSpecs,
       Artifact proguardMapping,
+      Artifact proguardDictionary,
       @Nullable Artifact proguardOutputMap)
       throws InterruptedException {
     Artifact proguardOutputJar =
@@ -781,8 +784,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_SEEDS);
     Artifact proguardUsage =
         ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_USAGE);
-    Artifact proguardDictionary =
-        ruleContext.getPrerequisiteArtifact("proguard_apply_dictionary", Mode.TARGET);
     ProguardOutput result =
         ProguardHelper.createOptimizationActions(
             ruleContext,
