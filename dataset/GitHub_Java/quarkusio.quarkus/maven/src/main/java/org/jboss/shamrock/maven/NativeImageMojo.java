@@ -1,12 +1,24 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.shamrock.maven;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.nio.file.Path;
 import java.util.List;
-
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -15,12 +27,22 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.jboss.shamrock.creator.AppArtifact;
+import org.jboss.shamrock.creator.AppCreator;
+import org.jboss.shamrock.creator.AppCreatorException;
+import org.jboss.shamrock.creator.phase.augment.AugmentOutcome;
+import org.jboss.shamrock.creator.phase.nativeimage.NativeImagePhase;
+import org.jboss.shamrock.creator.phase.runnerjar.RunnerJarOutcome;
+import org.jboss.shamrock.creator.resolver.maven.ResolvedMavenArtifactDeps;
 
 @Mojo(name = "native-image", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME)
 public class NativeImageMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
+
+    @Parameter(defaultValue = "${project.build.directory}")
+    private File buildDir;
 
     /**
      * The directory for compiled classes.
@@ -37,73 +59,131 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "false")
     private boolean debugSymbols;
 
+    @Parameter(defaultValue = "${native-image.debug-build-process}")
+    private boolean debugBuildProcess;
+
     @Parameter(readonly = true, required = true, defaultValue = "${project.build.finalName}")
     private String finalName;
 
-    @Override
-    public void execute() throws MojoExecutionException, MojoFailureException {
+    @Parameter(defaultValue = "${native-image.new-server}")
+    private boolean cleanupServer;
 
-        List<String> nativeImage;
-        String graalvmCmd = System.getenv("GRAALVM_NATIVE_IMAGE_CMD");
-        if (graalvmCmd != null) {
-            // E.g. "/usr/bin/docker run -v {{PROJECT_DIR}}:/project --rm protean/graalvm-native-image"
-            nativeImage = new ArrayList<>();
-            Collections.addAll(nativeImage, graalvmCmd.replace("{{PROJECT_DIR}}", outputDirectory.getAbsolutePath()).split(" "));
-        } else {
-            String graalvmHome = System.getenv("GRAALVM_HOME");
-            if (graalvmHome == null) {
-                throw new MojoFailureException("GRAALVM_HOME was not set");
-            }
-            nativeImage = Collections.singletonList(graalvmHome + File.separator + "bin" + File.separator + "native-image");
-        }
+    @Parameter
+    private boolean enableHttpUrlHandler;
 
-        try {
-            List<String> command = new ArrayList<>();
-            command.addAll(nativeImage);
-            command.add("--no-server");
-            command.add("-jar");
-            command.add(finalName + "-runner.jar");
-            command.add("-H:IncludeResources=META-INF/.*");
-            if (reportErrorsAtRuntime) {
-                command.add("-H:+ReportUnsupportedElementsAtRuntime");
-            }
-            if (debugSymbols) {
-                command.add("-g");
-            }
-            command.add("-O0");
-            System.out.println(command);
-            Process process = Runtime.getRuntime().exec(command.toArray(new String[0]), null, outputDirectory);
-            new Thread(new ProcessReader(process.getInputStream())).start();
-            new Thread(new ProcessReader(process.getErrorStream())).start();
-            if (process.waitFor() != 0) {
-                throw new RuntimeException("Image generation failed");
-            }
-            System.setProperty("native.image.path", finalName + "-runner");
+    @Parameter
+    private boolean enableHttpsUrlHandler;
 
-        } catch (Exception e) {
-            throw new MojoFailureException("Failed to build native image", e);
-        }
+    @Parameter
+    private boolean enableAllSecurityServices;
+
+    @Parameter
+    private boolean enableRetainedHeapReporting;
+
+    @Parameter
+    private boolean enableIsolates;
+
+    @Parameter
+    private boolean enableCodeSizeReporting;
+
+    @Parameter(defaultValue = "${env.GRAALVM_HOME}")
+    private String graalvmHome;
+
+    @Parameter(defaultValue = "false")
+    private boolean enableServer;
+
+    @Parameter(defaultValue = "false")
+    private boolean enableJni;
+
+    @Parameter(defaultValue = "false")
+    private boolean autoServiceLoaderRegistration;
+
+    @Parameter(defaultValue = "false")
+    private boolean dumpProxies;
+
+    @Parameter(defaultValue = "${native-image.xmx}")
+    private String nativeImageXmx;
+
+    @Parameter(defaultValue = "${native-image.docker-build}")
+    private boolean dockerBuild;
+
+    @Parameter(defaultValue = "false")
+    private boolean enableVMInspection;
+
+    @Parameter(defaultValue = "true")
+    private boolean fullStackTraces;
+
+    @Parameter(defaultValue = "${native-image.disable-reports}")
+    private boolean disableReports;
+
+    @Parameter
+    private List<String> additionalBuildArgs;
+
+    public NativeImageMojo() {
+        MojoLogger.logSupplier = this::getLog;
     }
 
-    private static final class ProcessReader implements Runnable {
+    @Override
+    public void execute() throws MojoExecutionException, MojoFailureException {
+        try {
+            new AppCreator()
+            // init the resolver with the project dependencies
+            .setArtifactResolver(new ResolvedMavenArtifactDeps(project.getGroupId(), project.getArtifactId(),
+                    project.getVersion(), project.getArtifacts()))
 
-        private final InputStream inputStream;
-
-        private ProcessReader(InputStream inputStream) {
-            this.inputStream = inputStream;
-        }
-
-        @Override
-        public void run() {
-            byte[] b = new byte[100];
-            int i;
-            try {
-                while ((i = inputStream.read(b)) > 0) {
-                    System.out.print(new String(b, 0, i));
+            // this mojo runs on the assumption that the outcomes of the augmentation and runner jar building phases
+            // are already available
+            .pushOutcome(AugmentOutcome.class, new AugmentOutcome() {
+                final Path classesDir = new File(outputDirectory, "classes").toPath();
+                @Override
+                public Path getAppClassesDir() {
+                    return classesDir;
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+                @Override
+                public Path getWiringClassesDir() {
+                    return wiringClassesDirectory.toPath();
+                }
+            })
+            .pushOutcome(RunnerJarOutcome.class, new RunnerJarOutcome() {
+                final Path runnerJar = buildDir.toPath().resolve(finalName + "-runner.jar");
+                @Override
+                public Path getRunnerJar() {
+                    return runnerJar;
+                }
+                @Override
+                public Path getLibDir() {
+                    return runnerJar.getParent().resolve("lib");
+                }
+            })
+
+            // add the native phase
+            .addPhase(new NativeImagePhase()
+                    .setAdditionalBuildArgs(additionalBuildArgs)
+                    .setAutoServiceLoaderRegistration(autoServiceLoaderRegistration)
+                    .setOutputDir(buildDir.toPath())
+                    .setCleanupServer(cleanupServer)
+                    .setDebugBuildProcess(debugBuildProcess)
+                    .setDebugSymbols(debugSymbols)
+                    .setDisableReports(disableReports)
+                    .setDockerBuild(dockerBuild)
+                    .setDumpProxies(dumpProxies)
+                    .setEnableAllSecurityServices(enableAllSecurityServices)
+                    .setEnableCodeSizeReporting(enableCodeSizeReporting)
+                    .setEnableHttpsUrlHandler(enableHttpsUrlHandler)
+                    .setEnableHttpUrlHandler(enableHttpUrlHandler)
+                    .setEnableIsolates(enableIsolates)
+                    .setEnableJni(enableJni)
+                    .setEnableRetainedHeapReporting(enableRetainedHeapReporting)
+                    .setEnableServer(enableServer)
+                    .setEnableVMInspection(enableVMInspection)
+                    .setFullStackTraces(fullStackTraces)
+                    .setGraalvmHome(graalvmHome)
+                    .setNativeImageXmx(nativeImageXmx)
+                    .setReportErrorsAtRuntime(reportErrorsAtRuntime)
+                    )
+            .create(new AppArtifact(project.getGroupId(), project.getArtifactId(), project.getVersion()));
+        } catch (AppCreatorException e) {
+            throw new MojoExecutionException("Failed to create application", e);
         }
     }
 }
