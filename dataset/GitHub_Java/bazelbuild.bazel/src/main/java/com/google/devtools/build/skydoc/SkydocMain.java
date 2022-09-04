@@ -505,6 +505,7 @@ public class SkydocMain {
     StarlarkThread thread =
         createStarlarkThread(
             semantics,
+            eventHandler,
             globalFrame(ruleInfoList, providerInfoList, aspectInfoList),
             imports);
 
@@ -648,13 +649,14 @@ public class SkydocMain {
 
   private static StarlarkThread createStarlarkThread(
       StarlarkSemantics semantics,
+      EventHandler eventHandler,
       Module globals,
       Map<String, Extension> imports) {
-    // We use the default print handler, which writes to stderr.
     return StarlarkThread.builder(Mutability.create("Skydoc"))
         .setSemantics(semantics)
         .setGlobals(globals)
         .setImportedExtensions(imports)
+        .setEventHandler(eventHandler)
         .build();
   }
 
