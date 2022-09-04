@@ -15,5 +15,5 @@ import javax.annotation.Nullable;
 
 interface HighlightableDescriptor {
   @Nullable
-  View getViewForHighlighting(Object element);
+  public View getViewForHighlighting(Object element);
 }

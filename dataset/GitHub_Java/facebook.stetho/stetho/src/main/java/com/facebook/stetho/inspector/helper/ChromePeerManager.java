@@ -38,14 +38,8 @@ public class ChromePeerManager {
    * purposes.
    */
   @GuardedBy("this")
-  private final Map<JsonRpcPeer, DisconnectReceiver> mReceivingPeers = new HashMap<>();
-
-  /**
-   * This should be set to null anytime mReceivingPeers is changed. It should always be
-   * retrieved by calling getReceivingPeersSnapshot().
-   */
-  @GuardedBy("this")
-  private JsonRpcPeer[] mReceivingPeersSnapshot;
+  private final Map<JsonRpcPeer, DisconnectReceiver> mReceivingPeers =
+      new HashMap<JsonRpcPeer, DisconnectReceiver>();
 
   @GuardedBy("this")
   private PeerRegistrationListener mListener;
@@ -77,7 +71,6 @@ public class ChromePeerManager {
     DisconnectReceiver disconnectReceiver = new UnregisterOnDisconnect(peer);
     peer.registerDisconnectReceiver(disconnectReceiver);
     mReceivingPeers.put(peer, disconnectReceiver);
-    mReceivingPeersSnapshot = null;
     if (mListener != null) {
       mListener.onPeerRegistered(peer);
     }
@@ -91,7 +84,6 @@ public class ChromePeerManager {
    */
   public synchronized void removePeer(JsonRpcPeer peer) {
     if (mReceivingPeers.remove(peer) != null) {
-      mReceivingPeersSnapshot = null;
       if (mListener != null) {
         mListener.onPeerUnregistered(peer);
       }
@@ -102,12 +94,9 @@ public class ChromePeerManager {
     return !mReceivingPeers.isEmpty();
   }
 
-  private synchronized JsonRpcPeer[] getReceivingPeersSnapshot() {
-    if (mReceivingPeersSnapshot == null) {
-      mReceivingPeersSnapshot = mReceivingPeers.keySet().toArray(
-          new JsonRpcPeer[mReceivingPeers.size()]);
-    }
-    return mReceivingPeersSnapshot;
+  private synchronized ArrayList<JsonRpcPeer> getReceivingPeersCopy() {
+    // This performance should be OK in practice because we rarely have more than 1 peer connected.
+    return new ArrayList<JsonRpcPeer>(mReceivingPeers.keySet());
   }
 
   public void sendNotificationToPeers(String method,
@@ -125,8 +114,10 @@ public class ChromePeerManager {
   private void sendMessageToPeers(String method,
       Object params,
       @Nullable PendingRequestCallback callback) {
-    JsonRpcPeer[] peers = getReceivingPeersSnapshot();
-    for (JsonRpcPeer peer : peers) {
+    ArrayList<JsonRpcPeer> peersCopy = getReceivingPeersCopy();
+    int peersCopyN = peersCopy.size();
+    for (int i = 0; i < peersCopyN; i++) {
+      JsonRpcPeer peer = peersCopy.get(i);
       try {
         peer.invokeMethod(method, params, callback);
       } catch (NotYetConnectedException e) {

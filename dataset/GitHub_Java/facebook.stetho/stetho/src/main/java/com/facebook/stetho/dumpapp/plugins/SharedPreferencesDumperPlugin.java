@@ -9,7 +9,6 @@
 
 package com.facebook.stetho.dumpapp.plugins;
 
-import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -62,8 +61,6 @@ public class SharedPreferencesDumperPlugin implements DumperPlugin {
   /**
    * Executes command to update one value in the shared preferences
    */
-  // We explicitly want commit() so that the dumper blocks while the write occurs.
-  @SuppressLint("CommitPrefEdits")
   private void doWrite(List<String> args) throws DumpUsageException {
     String usagePrefix = "Usage: prefs write <path> <key> <type> <value>, where type is one of: ";
 

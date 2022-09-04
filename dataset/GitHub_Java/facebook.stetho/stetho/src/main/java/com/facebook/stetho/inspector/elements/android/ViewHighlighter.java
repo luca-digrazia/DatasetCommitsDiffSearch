@@ -10,19 +10,21 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.annotation.TargetApi;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
+
 import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.common.Util;
 
-import javax.annotation.Nullable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-abstract class ViewHighlighter {
+import javax.annotation.Nullable;
 
+abstract class ViewHighlighter {
   public static ViewHighlighter newInstance() {
     // TODO: find ways to do highlighting on older versions too
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
@@ -56,7 +58,7 @@ abstract class ViewHighlighter {
     //       causing every single view to allocate a ViewOverlay
 
     private final Handler mHandler;
-    private final ViewHighlightOverlays mHighlightOverlays = ViewHighlightOverlays.newInstance();
+    private final ColorDrawable mHighlightDrawable;
 
     // Only assigned on the UI thread
     private View mHighlightedView;
@@ -73,6 +75,7 @@ abstract class ViewHighlighter {
 
     public OverlayHighlighter() {
       mHandler = new Handler(Looper.getMainLooper());
+      mHighlightDrawable = new ColorDrawable();
     }
 
     @Override
@@ -99,12 +102,13 @@ abstract class ViewHighlighter {
       }
 
       if (mHighlightedView != null) {
-        mHighlightOverlays.removeHighlight(mHighlightedView);
+        mHighlightedView.getOverlay().remove(mHighlightDrawable);
       }
 
       if (viewToHighlight != null) {
-
-        mHighlightOverlays.highlightView(viewToHighlight, mContentColor.get());
+        mHighlightDrawable.setColor(mContentColor.get());
+        mHighlightDrawable.setBounds(0, 0, viewToHighlight.getWidth(), viewToHighlight.getHeight());
+        viewToHighlight.getOverlay().add(mHighlightDrawable);
         mHighlightedView = viewToHighlight;
       }
     }

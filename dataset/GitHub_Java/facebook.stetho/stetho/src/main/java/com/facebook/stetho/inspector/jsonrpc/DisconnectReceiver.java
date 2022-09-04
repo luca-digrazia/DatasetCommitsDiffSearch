@@ -16,5 +16,5 @@ public interface DisconnectReceiver {
   /**
    * Invoked when a WebSocket peer disconnects.
    */
-  void onDisconnect();
+  public void onDisconnect();
 }

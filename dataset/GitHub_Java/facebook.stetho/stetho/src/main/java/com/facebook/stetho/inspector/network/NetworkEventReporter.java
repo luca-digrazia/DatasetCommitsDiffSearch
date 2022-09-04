@@ -37,14 +37,14 @@ public interface NetworkEventReporter {
    * not being used.  It is otherwise safe to invoke methods defined in this interface when
    * the value is false.
    */
-  boolean isEnabled();
+  public boolean isEnabled();
 
   /**
    * Indicates that a request is about to be sent, but has not yet been delivered over the wire.
    *
    * @param request Request descriptor.
    */
-  void requestWillBeSent(InspectorRequest request);
+  public void requestWillBeSent(InspectorRequest request);
 
   /**
    * Indicates that a response message was just received from the network, but the body
@@ -52,7 +52,7 @@ public interface NetworkEventReporter {
    *
    * @param response Response descriptor.
    */
-  void responseHeadersReceived(InspectorResponse response);
+  public void responseHeadersReceived(InspectorResponse response);
 
  /**
   * Indicates that communication with the server has failed. You are expected to call this for any
@@ -64,7 +64,7 @@ public interface NetworkEventReporter {
   * @param errorText Text to report for the error; using {@link IOException#toString()} is
   *     recommended.
    */
-  void httpExchangeFailed(String requestId, String errorText);
+  public void httpExchangeFailed(String requestId, String errorText);
 
   /**
    * Intercept the stream as given by the underlying HTTP library that contains the body of the
@@ -97,7 +97,7 @@ public interface NetworkEventReporter {
    *     otherwise it will return {@code inputStream}
    */
   @Nullable
-  InputStream interpretResponseStream(
+  public InputStream interpretResponseStream(
       String requestId,
       @Nullable String contentType,
       @Nullable String contentEncoding,
@@ -113,7 +113,7 @@ public interface NetworkEventReporter {
    * @param errorText Text to report for the error; using {@link IOException#toString()} is
    *     recommended.
    */
-  void responseReadFailed(String requestId, String errorText);
+  public void responseReadFailed(String requestId, String errorText);
 
   /**
    * Indicates that the response stream has been fully exhausted and the request is now
@@ -122,7 +122,7 @@ public interface NetworkEventReporter {
    *
    * @param requestId Unique identifier for the request as per {@link InspectorRequest#id()}
    */
-  void responseReadFinished(String requestId);
+  public void responseReadFinished(String requestId);
 
   /**
    * Indicates that raw data was sent over the network.  It is permissible to invoke this
@@ -135,14 +135,14 @@ public interface NetworkEventReporter {
    * @param dataLength Uncompressed data segment length
    * @param encodedDataLength Compressed data segment length
    */
-  void dataSent(String requestId, int dataLength, int encodedDataLength);
+  public void dataSent(String requestId, int dataLength, int encodedDataLength);
 
   /**
    * Indicates that raw data was received from the network.
    *
    * @see #dataSent
    */
-  void dataReceived(String requestId, int dataLength, int encodedDataLength);
+  public void dataReceived(String requestId, int dataLength, int encodedDataLength);
 
   /**
    * Represents the request that will be sent over HTTP.  Note that for many implementations
@@ -151,73 +151,73 @@ public interface NetworkEventReporter {
    * etc may not be part of this request but should be injected if necessary.  Some stacks offer
    * inspection of the raw request about to be sent to the server which is preferable.
    */
-  interface InspectorRequest extends InspectorHeaders {
+  public interface InspectorRequest extends InspectorHeaders {
     /**
      * Unique identifier for this request.  This identifier must be used in all other network
      * events corresponding to this request.  Identifiers may be re-used after
      * {@link NetworkEventReporter#httpExchangeFailed} or {@link NetworkEventReporter#loadingFinished}
      * are invoked.
      */
-    String id();
+    public String id();
 
     /**
      * Arbitrary debug-friendly name of the request.
      */
-    String friendlyName();
+    public String friendlyName();
 
     /**
      * Provide an extra integer to decorate the {@link #friendlyName()}.  This shows up next to
      * it in the WebKit Inspector UI and can be used to indicate things like request priority.
      */
     @Nullable
-    Integer friendlyNameExtra();
+    public Integer friendlyNameExtra();
 
-    String url();
+    public String url();
 
     /**
      * HTTP method ("GET", "POST", "DELETE", etc).
      */
-    String method();
+    public String method();
 
     /**
      * Provide the body if part of an entity-enclosing request (like "POST" or "PUT").  May
      * return null otherwise.
      */
     @Nullable
-    byte[] body() throws IOException;
+    public byte[] body() throws IOException;
   }
 
-  interface InspectorResponse extends InspectorHeaders {
+  public interface InspectorResponse extends InspectorHeaders {
     /** @see InspectorRequest#id() */
-    String requestId();
+    public String requestId();
 
-    String url();
+    public String url();
 
-    int statusCode();
-    String reasonPhrase();
+    public int statusCode();
+    public String reasonPhrase();
 
     /**
      * True if the response was furnished on a re-used socket; false otherwise or if unknown.
      */
-    boolean connectionReused();
+    public boolean connectionReused();
 
     /**
      * Unique connection identifier representing the socket that was used to furnish the response.
      */
-    int connectionId();
+    public int connectionId();
 
     /**
      * True if the response was furnished by disk cache; false otherwise or if unknown.
      */
-    boolean fromDiskCache();
+    public boolean fromDiskCache();
   }
 
-  interface InspectorHeaders {
-    int headerCount();
-    String headerName(int index);
-    String headerValue(int index);
+  public interface InspectorHeaders {
+    public int headerCount();
+    public String headerName(int index);
+    public String headerValue(int index);
 
     @Nullable
-    String firstHeaderValue(String name);
+    public String firstHeaderValue(String name);
   }
 }

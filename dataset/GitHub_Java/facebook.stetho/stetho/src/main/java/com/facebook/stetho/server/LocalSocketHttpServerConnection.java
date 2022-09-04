@@ -1,4 +1,11 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 
 package com.facebook.stetho.server;
 
@@ -137,6 +144,16 @@ public class LocalSocketHttpServerConnection extends AbstractHttpServerConnectio
         int bufferSize,
         HttpParams params) throws IOException {
       init(socket.getOutputStream(), bufferSize, params);
+    }
+
+    @Override
+    public void flush() throws IOException {
+      // Do not call through to super.flush() to fix a serious throughput issue due to a
+      // polling/sleep based implementation of LocalSocketImpl#flush.  This is apparently done to
+      // guarantee that after flush is called the write buffer has been fully drained but we don't
+      // need or expect this guarantee since our buffering strategy is entirely at the HTTP
+      // level.
+      flushBuffer();
     }
   }
 }

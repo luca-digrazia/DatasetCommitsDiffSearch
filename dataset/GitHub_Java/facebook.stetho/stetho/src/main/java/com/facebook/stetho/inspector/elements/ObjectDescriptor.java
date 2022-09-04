@@ -51,8 +51,4 @@ public final class ObjectDescriptor extends Descriptor {
   @Override
   public void copyAttributes(Object element, AttributeAccumulator attributes) {
   }
-
-  @Override
-  public void setAttributesAsText(Object element, String text) {
-  }
 }

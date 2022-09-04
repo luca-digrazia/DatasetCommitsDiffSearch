@@ -32,6 +32,4 @@ public interface NodeDescriptor extends ThreadBound {
   public Object getChildAt(Object element, int index);
 
   public void copyAttributes(Object element, AttributeAccumulator attributes);
-
-  public void setAttributesAsText(Object element, String text);
 }

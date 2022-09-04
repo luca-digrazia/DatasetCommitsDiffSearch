@@ -17,5 +17,5 @@ import javax.annotation.Nullable;
 
 interface AndroidDescriptorHost extends Descriptor.Host {
   @Nullable
-  View getHighlightingView(@Nullable Object element);
+  public View getHighlightingView(@Nullable Object element);
 }

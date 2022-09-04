@@ -12,7 +12,6 @@ package com.facebook.stetho.common.android;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
-import android.content.ContextWrapper;
 import android.graphics.PointF;
 import android.os.Build;
 import android.view.View;
@@ -149,31 +148,14 @@ public final class ViewUtil {
     }
 
     Context context = view.getContext();
-
-    Activity activityFromContext = tryGetActivity(context);
-    if (activityFromContext != null) {
-      return activityFromContext;
+    if (context instanceof Activity) {
+      return (Activity)context;
     }
 
     ViewParent parent = view.getParent();
     if (parent instanceof View) {
       View parentView = (View)parent;
       return tryGetActivity(parentView);
-    }
-
-    return null;
-  }
-
-  @Nullable
-  private static Activity tryGetActivity(Context context) {
-    while (context != null) {
-      if (context instanceof Activity) {
-        return (Activity) context;
-      } else if (context instanceof ContextWrapper) {
-        context = ((ContextWrapper) context).getBaseContext();
-      } else {
-        return null;
-      }
     }
 
     return null;

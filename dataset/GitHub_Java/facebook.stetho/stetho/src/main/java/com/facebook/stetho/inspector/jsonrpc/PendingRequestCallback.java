@@ -12,5 +12,5 @@ package com.facebook.stetho.inspector.jsonrpc;
 import com.facebook.stetho.inspector.jsonrpc.protocol.JsonRpcResponse;
 
 public interface PendingRequestCallback {
-  void onResponse(JsonRpcPeer peer, JsonRpcResponse response);
+  public void onResponse(JsonRpcPeer peer, JsonRpcResponse response);
 }

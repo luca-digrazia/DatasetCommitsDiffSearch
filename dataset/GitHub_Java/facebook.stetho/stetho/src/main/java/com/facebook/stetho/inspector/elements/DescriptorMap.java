@@ -17,7 +17,7 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 public final class DescriptorMap {
-  private final Map<Class<?>, Descriptor> mMap = new IdentityHashMap<>();
+  private final Map<Class<?>, Descriptor> mMap = new IdentityHashMap<Class<?>, Descriptor>();
   private boolean mIsInitializing;
   private Descriptor.Host mHost;
 
@@ -53,6 +53,7 @@ public final class DescriptorMap {
     Util.throwIfNotNull(mHost);
 
     mHost = host;
+
     return this;
   }
 
@@ -66,7 +67,7 @@ public final class DescriptorMap {
       final Descriptor descriptor = mMap.get(elementClass);
 
       if (descriptor instanceof ChainedDescriptor) {
-        final ChainedDescriptor chainedDescriptor = (ChainedDescriptor) descriptor;
+        final ChainedDescriptor<?> chainedDescriptor = (ChainedDescriptor<?>) descriptor;
         Class<?> superClass = elementClass.getSuperclass();
         Descriptor superDescriptor = getImpl(superClass);
         chainedDescriptor.setSuper(superDescriptor);
@@ -93,8 +94,10 @@ public final class DescriptorMap {
       if (descriptor != null) {
         return descriptor;
       }
+
       theClass = theClass.getSuperclass();
     }
+
     return null;
   }
 }

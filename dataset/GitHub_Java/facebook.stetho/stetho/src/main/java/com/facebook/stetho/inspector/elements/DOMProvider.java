@@ -30,8 +30,6 @@ public interface DOMProvider extends ThreadBound {
 
   public void setInspectModeEnabled(boolean enabled);
 
-  public void setAttributesAsText(Object element, String text);
-
   public static interface Factory {
     DOMProvider create();
   }

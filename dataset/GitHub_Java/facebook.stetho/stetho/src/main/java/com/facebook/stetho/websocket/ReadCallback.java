@@ -10,5 +10,5 @@
 package com.facebook.stetho.websocket;
 
 interface ReadCallback {
-  void onCompleteFrame(byte opcode, byte[] payload, int payloadLen);
+  public void onCompleteFrame(byte opcode, byte[] payload, int payloadLen);
 }

@@ -9,52 +9,28 @@
 
 package com.facebook.stetho.inspector.protocol.module;
 
-import android.content.Context;
-import android.support.annotation.Nullable;
-import com.facebook.stetho.common.ProcessUtil;
-import com.facebook.stetho.inspector.domstorage.SharedPreferencesHelper;
-import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
-import com.facebook.stetho.inspector.jsonrpc.JsonRpcResult;
-import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
-import com.facebook.stetho.inspector.protocol.ChromeDevtoolsMethod;
-import com.facebook.stetho.inspector.screencast.ScreencastDispatcher;
-import com.facebook.stetho.json.ObjectMapper;
-import com.facebook.stetho.json.annotation.JsonProperty;
-import com.facebook.stetho.json.annotation.JsonValue;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import android.content.Context;
+import com.facebook.stetho.common.ProcessUtil;
+import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
+import com.facebook.stetho.inspector.jsonrpc.JsonRpcResult;
+import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
+import com.facebook.stetho.inspector.protocol.ChromeDevtoolsMethod;
+import com.facebook.stetho.inspector.domstorage.SharedPreferencesHelper;
+import com.facebook.stetho.json.annotation.JsonProperty;
+import com.facebook.stetho.json.annotation.JsonValue;
+
+import org.json.JSONObject;
+
 public class Page implements ChromeDevtoolsDomain {
-  public static final String BANNER = // Note: not using Android resources so we can maintain .jar distribution for now.
-  "_____/\\\\\\\\\\\\\\\\\\\\\\_______________________________________________/\\\\\\_______________________\n" +
-  " ___/\\\\\\/////////\\\\\\____________________________________________\\/\\\\\\_______________________\n" +
-  "  __\\//\\\\\\______\\///______/\\\\\\_________________________/\\\\\\______\\/\\\\\\_______________________\n" +
-  "   ___\\////\\\\\\__________/\\\\\\\\\\\\\\\\\\\\\\_____/\\\\\\\\\\\\\\\\___/\\\\\\\\\\\\\\\\\\\\\\_\\/\\\\\\_____________/\\\\\\\\\\____\n" +
-  "    ______\\////\\\\\\______\\////\\\\\\////____/\\\\\\/////\\\\\\_\\////\\\\\\////__\\/\\\\\\\\\\\\\\\\\\\\____/\\\\\\///\\\\\\__\n" +
-  "     _________\\////\\\\\\______\\/\\\\\\_______/\\\\\\\\\\\\\\\\\\\\\\_____\\/\\\\\\______\\/\\\\\\/////\\\\\\__/\\\\\\__\\//\\\\\\_\n" +
-  "      __/\\\\\\______\\//\\\\\\_____\\/\\\\\\_/\\\\__\\//\\\\///////______\\/\\\\\\_/\\\\__\\/\\\\\\___\\/\\\\\\_\\//\\\\\\__/\\\\\\__\n" +
-  "       _\\///\\\\\\\\\\\\\\\\\\\\\\/______\\//\\\\\\\\\\____\\//\\\\\\\\\\\\\\\\\\\\____\\//\\\\\\\\\\___\\/\\\\\\___\\/\\\\\\__\\///\\\\\\\\\\/___\n" +
-  "        ___\\///////////_________\\/////______\\//////////______\\/////____\\///____\\///_____\\/////_____\n" +
-  "         Welcome to Stetho";
-
-
   private final Context mContext;
-  private final String mMessage;
-  private final ObjectMapper mObjectMapper = new ObjectMapper();
-  @Nullable
-  private ScreencastDispatcher mScreencastDispatcher;
 
   public Page(Context context) {
-    this(context, BANNER);
-  }
-
-  public Page(Context context, String message) {
     mContext = context;
-    mMessage = message;
   }
 
   @ChromeDevtoolsMethod
@@ -80,7 +56,19 @@ public class Page implements ChromeDevtoolsDomain {
     Console.ConsoleMessage message = new Console.ConsoleMessage();
     message.source = Console.MessageSource.JAVASCRIPT;
     message.level = Console.MessageLevel.LOG;
-    message.text = mMessage + "\n" + "          Attached to " + ProcessUtil.getProcessName() + "\n";
+    message.text =
+// Note: not using Android resources so we can maintain .jar distribution for now.
+"_____/\\\\\\\\\\\\\\\\\\\\\\_______________________________________________/\\\\\\_______________________\n" +
+" ___/\\\\\\/////////\\\\\\____________________________________________\\/\\\\\\_______________________\n" +
+"  __\\//\\\\\\______\\///______/\\\\\\_________________________/\\\\\\______\\/\\\\\\_______________________\n" +
+"   ___\\////\\\\\\__________/\\\\\\\\\\\\\\\\\\\\\\_____/\\\\\\\\\\\\\\\\___/\\\\\\\\\\\\\\\\\\\\\\_\\/\\\\\\_____________/\\\\\\\\\\____\n" +
+"    ______\\////\\\\\\______\\////\\\\\\////____/\\\\\\/////\\\\\\_\\////\\\\\\////__\\/\\\\\\\\\\\\\\\\\\\\____/\\\\\\///\\\\\\__\n" +
+"     _________\\////\\\\\\______\\/\\\\\\_______/\\\\\\\\\\\\\\\\\\\\\\_____\\/\\\\\\______\\/\\\\\\/////\\\\\\__/\\\\\\__\\//\\\\\\_\n" +
+"      __/\\\\\\______\\//\\\\\\_____\\/\\\\\\_/\\\\__\\//\\\\///////______\\/\\\\\\_/\\\\__\\/\\\\\\___\\/\\\\\\_\\//\\\\\\__/\\\\\\__\n" +
+"       _\\///\\\\\\\\\\\\\\\\\\\\\\/______\\//\\\\\\\\\\____\\//\\\\\\\\\\\\\\\\\\\\____\\//\\\\\\\\\\___\\/\\\\\\___\\/\\\\\\__\\///\\\\\\\\\\/___\n" +
+"        ___\\///////////_________\\/////______\\//////////______\\/////____\\///____\\///_____\\/////_____\n" +
+"         Welcome to Stetho\n" +
+"          Attached to " + ProcessUtil.getProcessName() + "\n";
     Console.MessageAddedRequest messageAddedRequest = new Console.MessageAddedRequest();
     messageAddedRequest.message = message;
     peer.invokeMethod("Console.messageAdded", messageAddedRequest, null /* callback */);
@@ -142,7 +130,7 @@ public class Page implements ChromeDevtoolsDomain {
 
   @ChromeDevtoolsMethod
   public JsonRpcResult canScreencast(JsonRpcPeer peer, JSONObject params) {
-    return new SimpleBooleanResult(true);
+    return new SimpleBooleanResult(false);
   }
 
   @ChromeDevtoolsMethod
@@ -156,30 +144,6 @@ public class Page implements ChromeDevtoolsDomain {
 
   @ChromeDevtoolsMethod
   public void clearDeviceOrientationOverride(JsonRpcPeer peer, JSONObject params) {
-  }
-
-  @ChromeDevtoolsMethod
-  public void startScreencast(final JsonRpcPeer peer, JSONObject params) {
-    final StartScreencastRequest request = mObjectMapper.convertValue(
-        params, StartScreencastRequest.class);
-    if (mScreencastDispatcher == null) {
-      mScreencastDispatcher = new ScreencastDispatcher();
-      mScreencastDispatcher.startScreencast(peer, request);
-    }
-  }
-
-  @ChromeDevtoolsMethod
-  public void stopScreencast(JsonRpcPeer peer, JSONObject params) {
-    if (mScreencastDispatcher != null) {
-      mScreencastDispatcher.stopScreencast();
-      mScreencastDispatcher = null;
-    }
-  }
-
-  @ChromeDevtoolsMethod
-  public void screencastFrameAck(JsonRpcPeer peer, JSONObject params) {
-    // Nothing to do here, just need to make sure Chrome doesn't get an error that this method
-    // isn't implemented
   }
 
   @ChromeDevtoolsMethod
@@ -275,40 +239,4 @@ public class Page implements ChromeDevtoolsDomain {
     @JsonProperty(required = true)
     public int id;
   }
-
-  public static class ScreencastFrameEvent {
-    @JsonProperty(required = true)
-    public String data;
-
-    @JsonProperty(required = true)
-    public ScreencastFrameEventMetadata metadata;
-  }
-
-  public static class ScreencastFrameEventMetadata {
-    @JsonProperty(required = true)
-    public int pageScaleFactor;
-    @JsonProperty(required = true)
-    public int offsetTop;
-    @JsonProperty(required = true)
-    public int deviceWidth;
-    @JsonProperty(required = true)
-    public int deviceHeight;
-    @JsonProperty(required = true)
-    public int scrollOffsetX;
-    @JsonProperty(required = true)
-    public int scrollOffsetY;
-  }
-
-  public static class StartScreencastRequest {
-    @JsonProperty
-    public String format;
-    @JsonProperty
-    public int quality;
-    @JsonProperty
-    public int maxWidth;
-    @JsonProperty
-    public int maxHeight;
-  }
-
-
 }

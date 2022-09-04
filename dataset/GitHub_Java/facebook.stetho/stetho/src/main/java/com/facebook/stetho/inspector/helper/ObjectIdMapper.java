@@ -1,13 +1,20 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 
 package com.facebook.stetho.inspector.helper;
 
 import android.util.SparseArray;
 
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 public class ObjectIdMapper {
@@ -38,12 +45,26 @@ public class ObjectIdMapper {
     }
   }
 
+  public boolean containsId(int id) {
+    synchronized (mSync) {
+      return mIdToObjectMap.get(id) != null;
+    }
+  }
+
+  public boolean containsObject(Object object) {
+    synchronized (mSync) {
+      return mObjectToIdMap.containsKey(object);
+    }
+  }
+
+  @Nullable
   public Object getObjectForId(int id) {
     synchronized (mSync) {
       return mIdToObjectMap.get(id);
     }
   }
 
+  @Nullable
   public Integer getIdForObject(Object object) {
     synchronized (mSync) {
       return mObjectToIdMap.get(object);
@@ -68,6 +89,25 @@ public class ObjectIdMapper {
     return id;
   }
 
+  @Nullable
+  public Object removeObjectById(int id) {
+    Object object;
+
+    synchronized (mSync) {
+      object = mIdToObjectMap.get(id);
+      if (object == null) {
+        return null;
+      }
+
+      mIdToObjectMap.remove(id);
+      mObjectToIdMap.remove(object);
+    }
+
+    onUnmapped(object, id);
+    return object;
+  }
+
+  @Nullable
   public Integer removeObject(Object object) {
     Integer id;
 
@@ -85,7 +125,9 @@ public class ObjectIdMapper {
   }
 
   public int size() {
-    return mObjectToIdMap.size();
+    synchronized (mSync) {
+      return mObjectToIdMap.size();
+    }
   }
 
   protected void onMapped(Object object, int id) {

@@ -112,7 +112,7 @@ public class MethodDispatcher {
       Class<?> handlerClass = domainHandler.getClass();
       String domainName = handlerClass.getSimpleName();
 
-      for (Method method : handlerClass.getMethods()) {
+      for (Method method : handlerClass.getDeclaredMethods()) {
         if (isDevtoolsMethod(method)) {
           MethodDispatchHelper dispatchHelper = new MethodDispatchHelper(
               objectMapper,

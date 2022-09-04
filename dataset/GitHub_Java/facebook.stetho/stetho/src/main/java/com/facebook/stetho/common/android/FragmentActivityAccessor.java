@@ -17,5 +17,5 @@ public interface FragmentActivityAccessor<
     FRAGMENT_ACTIVITY extends Activity,
     FRAGMENT_MANAGER> {
   @Nullable
-  FRAGMENT_MANAGER getFragmentManager(FRAGMENT_ACTIVITY activity);
+  public FRAGMENT_MANAGER getFragmentManager(FRAGMENT_ACTIVITY activity);
 }

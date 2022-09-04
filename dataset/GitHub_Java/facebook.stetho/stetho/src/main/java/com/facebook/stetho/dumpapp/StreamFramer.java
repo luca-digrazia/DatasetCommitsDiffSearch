@@ -91,29 +91,23 @@ public class StreamFramer implements Closeable {
     mMultiplexedOutputStream.writeInt(intParameter);
   }
 
-  private class FramingOutputStream extends OutputStream {
+  private class FramingOutputStream extends FilterOutputStream {
 
-    private final OutputStream mOut;
     private final byte mPrefix;
-    private boolean mIsClosed;
-    
-    FramingOutputStream(OutputStream innerStream, byte prefix) {
-      mOut = innerStream;
+
+    FramingOutputStream(DataOutputStream innerStream, byte prefix) {
+      super(innerStream);
       mPrefix = prefix;
-      mIsClosed = false;
     }
 
     @Override
     public void write(byte[] buffer, int offset, int length) throws IOException {
-      if(mIsClosed) {
-        throw new IOException("Stream is closed");
-      }
       if (length > 0) {
         try {
           synchronized (StreamFramer.this) {
             writeIntFrame(mPrefix, length);
-            mOut.write(buffer, offset, length);
-            mOut.flush();
+            mMultiplexedOutputStream.write(buffer, offset, length);
+            mMultiplexedOutputStream.flush();
           }
         } catch (IOException e) {
           // I/O error here can indicate the pipe is broken, so we need to prevent any
@@ -132,11 +126,6 @@ public class StreamFramer implements Closeable {
     @Override
     public void write(byte[] buffer) throws IOException {
       write(buffer, 0, buffer.length);
-    }
-
-    @Override
-    public void close() throws IOException{
-      mIsClosed = true;
     }
   }
 }

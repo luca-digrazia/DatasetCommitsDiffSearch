@@ -40,10 +40,10 @@ final class TextViewDescriptor extends ChainedDescriptor<TextView> {
   }
 
   @Override
-  protected void onGetAttributes(TextView element, AttributeAccumulator attributes) {
+  protected void onCopyAttributes(TextView element, AttributeAccumulator attributes) {
     CharSequence text = element.getText();
     if (text.length() != 0) {
-      attributes.store(TEXT_ATTRIBUTE_NAME, text.toString());
+      attributes.add(TEXT_ATTRIBUTE_NAME, text.toString());
     }
   }
 
