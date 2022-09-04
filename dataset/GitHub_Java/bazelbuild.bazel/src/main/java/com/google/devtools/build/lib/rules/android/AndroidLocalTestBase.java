@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.java.ClasspathConfiguredFragment;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
@@ -72,15 +71,12 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
 
     ruleContext.checkSrcsSamePackage(true);
 
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
-
-    AndroidLocalTestConfiguration androidLocalTestConfiguration =
-        ruleContext.getFragment(AndroidLocalTestConfiguration.class);
 
     final JavaCommon javaCommon = new JavaCommon(ruleContext, javaSemantics);
     // Use the regular Java javacopts. Enforcing android-compatible Java
@@ -143,14 +139,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     substitutions.add(
         Substitution.of(
             "%android_custom_package%", resourceApk.getPrimaryResource().getJavaPackage()));
-
-    boolean generateBinaryResources =
-        androidLocalTestConfiguration.useAndroidLocalTestBinaryResources();
-    if (generateBinaryResources) {
-      substitutions.add(
-          Substitution.of(
-              "%android_resource_apk%", resourceApk.getArtifact().getRunfilesPathString()));
-    }
 
     ruleContext.registerAction(
         new TemplateExpansionAction(
@@ -295,13 +283,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
 
     Runfiles defaultRunfiles =
         collectDefaultRunfiles(
-            ruleContext,
-            javaCommon,
-            filesToBuild,
-            manifest,
-            resourcesClassJar,
-            resourcesZip,
-            generateBinaryResources ? resourceApk : null);
+            ruleContext, javaCommon, filesToBuild, manifest, resourcesClassJar, resourcesZip);
 
     RunfilesSupport runfilesSupport =
         RunfilesSupport.withExecutable(ruleContext, defaultRunfiles, executable);
@@ -395,8 +377,8 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
       throws InterruptedException, RuleErrorException {
     ApplicationManifest applicationManifest;
 
-    if (AndroidResources.definesAndroidResources(ruleContext.attributes())) {
-      AndroidResources.validateRuleContext(ruleContext);
+    if (LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
+      LocalResourceContainer.validateRuleContext(ruleContext);
       ApplicationManifest ruleManifest = androidSemantics.getManifestForRule(ruleContext);
       applicationManifest = ruleManifest.mergeWith(ruleContext, resourceDependencies, false);
     } else {
@@ -436,8 +418,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
       NestedSet<Artifact> filesToBuild,
       Artifact manifest,
       Artifact resourcesClassJar,
-      Artifact resourcesZip,
-      @Nullable ResourceApk resourceApk)
+      Artifact resourcesZip)
       throws RuleErrorException {
 
     Runfiles.Builder builder = new Runfiles.Builder(ruleContext.getWorkspaceName());
@@ -447,16 +428,18 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     builder.addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
     builder.add(ruleContext, JavaRunfilesProvider.TO_RUNFILES);
 
-    ImmutableList<TransitiveInfoCollection> depsForRunfiles =
-        ImmutableList.<TransitiveInfoCollection>builder()
-            .addAll(ruleContext.getPrerequisites("$robolectric_implicit_classpath", Mode.TARGET))
-            .addAll(ruleContext.getPrerequisites("runtime_deps", Mode.TARGET))
-            .build();
+    List<TransitiveInfoCollection> depsForRunfiles = new ArrayList<>();
+
+    if (ruleContext.isAttrDefined("$robolectric", LABEL_LIST)) {
+      depsForRunfiles.addAll(ruleContext.getPrerequisites("$robolectric", Mode.TARGET));
+    }
 
     Artifact androidAllJarsPropertiesFile = getAndroidAllJarsPropertiesFile(ruleContext);
     if (androidAllJarsPropertiesFile != null) {
       builder.addArtifact(androidAllJarsPropertiesFile);
     }
+
+    depsForRunfiles.addAll(ruleContext.getPrerequisites("runtime_deps", Mode.TARGET));
 
     builder.addArtifacts(getRuntimeJarsForTargets(getAndCheckTestSupport(ruleContext)));
 
@@ -485,9 +468,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     builder.addArtifact(manifest);
     builder.addArtifact(resourcesClassJar);
     builder.addArtifact(resourcesZip);
-    if (resourceApk != null) {
-      builder.addArtifact(resourceApk.getArtifact());
-    }
 
     return builder.build();
   }
@@ -564,34 +544,12 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
    *
    * @throws RuleErrorException
    */
-  private JavaCompilationHelper getJavaCompilationHelperWithDependencies(
+  protected abstract JavaCompilationHelper getJavaCompilationHelperWithDependencies(
       RuleContext ruleContext,
       JavaSemantics javaSemantics,
       JavaCommon javaCommon,
       JavaTargetAttributes.Builder javaTargetAttributesBuilder)
-      throws RuleErrorException {
-    JavaCompilationHelper javaCompilationHelper =
-        new JavaCompilationHelper(
-            ruleContext, javaSemantics, javaCommon.getJavacOpts(), javaTargetAttributesBuilder);
-
-    if (ruleContext.isAttrDefined("$junit", BuildType.LABEL)) {
-      // JUnit jar must be ahead of android runtime jars since these contain stubbed definitions
-      // for framework.junit.* classes which Robolectric does not re-write.
-      javaCompilationHelper.addLibrariesToAttributes(
-          ruleContext.getPrerequisites("$junit", Mode.TARGET));
-    }
-    // Robolectric jars must be ahead of other potentially conflicting jars
-    // (e.g., Android runtime jars) in the classpath to make sure they always take precedence.
-    javaCompilationHelper.addLibrariesToAttributes(
-        ruleContext.getPrerequisites("$robolectric_implicit_classpath", Mode.TARGET));
-
-    javaCompilationHelper.addLibrariesToAttributes(
-        javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
-
-    javaCompilationHelper.addLibrariesToAttributes(
-        ImmutableList.of(getAndCheckTestSupport(ruleContext)));
-    return javaCompilationHelper;
-  }
+      throws RuleErrorException;
 
   /** Get the testrunner from the rule */
   protected abstract TransitiveInfoCollection getAndCheckTestSupport(RuleContext ruleContext)
