@@ -589,8 +589,4 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public Label getLibcTopLabel() {
     return cppOptions.libcTopLabel;
   }
-
-  public boolean disableGenruleCcToolchainDependency() {
-    return cppOptions.disableGenruleCcToolchainDependency;
-  }
 }
