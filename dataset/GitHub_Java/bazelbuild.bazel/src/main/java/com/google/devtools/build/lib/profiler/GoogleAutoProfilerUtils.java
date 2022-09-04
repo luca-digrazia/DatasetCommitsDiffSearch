@@ -38,8 +38,8 @@ public class GoogleAutoProfilerUtils {
     return AutoProfiler.create(makeReceiver(description, logger, minTimeForLogging));
   }
 
-  public static AutoProfiler logged(String description, Duration duration) {
-    return logged(description, selfLogger, duration);
+  public static AutoProfiler logged(String description, Duration minTimeForLogging) {
+    return logged(description, selfLogger, minTimeForLogging);
   }
 
   public static AutoProfiler logged(String description) {
@@ -62,6 +62,17 @@ public class GoogleAutoProfilerUtils {
         new AutoProfiler.ProfilingElapsedTimeReceiver(taskDescription, profilerTaskType);
     return AutoProfiler.create(
         new SequencedElapsedTimeReceiver(profilingReceiver, createSimpleLogger(taskDescription)));
+  }
+
+  /**
+   * Returns an {@link AutoProfiler} that, when closed, will log if the operation exceeds provided
+   * threshold and call the custom {@link ElapsedTimeReceiver} for any duration.
+   */
+  public static AutoProfiler loggedAndCustomReceiver(
+      String taskDescription, Duration minTimeForLogging, ElapsedTimeReceiver customReceiver) {
+    return AutoProfiler.create(
+        new SequencedElapsedTimeReceiver(
+            makeReceiver(taskDescription, selfLogger, minTimeForLogging), customReceiver));
   }
 
   private static ElapsedTimeReceiver makeReceiver(
