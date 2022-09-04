@@ -24,7 +24,6 @@ import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.streams.StreamService;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.BeforeMethod;
@@ -55,7 +54,7 @@ public class MessageToJsonSerializerTest {
     @Test
     public void shouldSerializeMessageCorrectly() throws Exception {
         final MessageToJsonSerializer serializer = new MessageToJsonSerializer(streamService, inputService);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
+        final DateTime now = DateTime.now();
         final Message message = new Message("test", "localhost", now);
 
         message.setSourceInput(messageInput);
