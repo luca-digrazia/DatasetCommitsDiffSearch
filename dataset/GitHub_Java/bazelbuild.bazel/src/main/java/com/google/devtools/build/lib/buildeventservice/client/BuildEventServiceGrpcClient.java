@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.buildeventservice.client;
 
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.google.common.base.Preconditions;
@@ -34,6 +35,7 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.AbstractStub;
 import io.grpc.stub.StreamObserver;
 import java.time.Duration;
+import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /** Implementation of BuildEventServiceClient that uploads data using gRPC. */
@@ -44,7 +46,6 @@ public abstract class BuildEventServiceGrpcClient implements BuildEventServiceCl
   private final PublishBuildEventStub besAsync;
   private final PublishBuildEventBlockingStub besBlocking;
   private volatile StreamObserver<PublishBuildToolEventStreamRequest> stream;
-  private volatile SettableFuture<Status> streamStatus;
 
   public BuildEventServiceGrpcClient(Channel channel, @Nullable CallCredentials callCredentials) {
     this.besAsync = withCallCredentials(PublishBuildEventGrpc.newStub(channel), callCredentials);
@@ -61,7 +62,6 @@ public abstract class BuildEventServiceGrpcClient implements BuildEventServiceCl
   @Override
   public void publish(PublishLifecycleEventRequest lifecycleEvent)
       throws StatusException, InterruptedException {
-    throwIfInterrupted();
     try {
       besBlocking
           .withDeadlineAfter(RPC_TIMEOUT.toMillis(), MILLISECONDS)
@@ -73,67 +73,61 @@ public abstract class BuildEventServiceGrpcClient implements BuildEventServiceCl
   }
 
   @Override
-  public ListenableFuture<Status> openStream(AckCallback ackCallback) throws InterruptedException {
+  public ListenableFuture<Status> openStream(
+      Function<PublishBuildToolEventStreamResponse, Void> ackCallback)
+      throws StatusException, InterruptedException {
     Preconditions.checkState(
         stream == null, "Starting a new stream without closing the previous one");
-    streamStatus = SettableFuture.create();
+    SettableFuture<Status> streamFinished = SettableFuture.create();
+    stream = createStream(ackCallback, streamFinished);
+    return streamFinished;
+  }
+
+  private StreamObserver<PublishBuildToolEventStreamRequest> createStream(
+      final Function<PublishBuildToolEventStreamResponse, Void> ackCallback,
+      final SettableFuture<Status> streamFinished)
+      throws StatusException, InterruptedException {
     try {
-      stream =
-          besAsync.publishBuildToolEventStream(
-              new StreamObserver<PublishBuildToolEventStreamResponse>() {
-                @Override
-                public void onNext(PublishBuildToolEventStreamResponse response) {
-                  ackCallback.apply(response);
-                }
+      return besAsync.publishBuildToolEventStream(
+          new StreamObserver<PublishBuildToolEventStreamResponse>() {
+            @Override
+            public void onNext(PublishBuildToolEventStreamResponse response) {
+              ackCallback.apply(response);
+            }
 
-                @Override
-                public void onError(Throwable t) {
-                  Status error = Status.fromThrowable(t);
-                  if (error.getCode() == Status.CANCELLED.getCode()
-                      && error.getCause() != null
-                      && Status.fromThrowable(error.getCause()).getCode()
-                          != Status.UNKNOWN.getCode()) {
-                    // gRPC likes to wrap Status(Runtime)Exceptions in StatusRuntimeExceptions. If
-                    // the status is cancelled and has a Status(Runtime)Exception as a cause it
-                    // means the error was generated client side.
-                    error = Status.fromThrowable(error.getCause());
-                  }
-                  stream = null;
-                  streamStatus.set(error);
-                  streamStatus = null;
-                }
+            @Override
+            public void onError(Throwable t) {
+              stream = null;
+              streamFinished.set(Status.fromThrowable(t));
+            }
 
-                @Override
-                public void onCompleted() {
-                  stream = null;
-                  streamStatus.set(Status.OK);
-                  streamStatus = null;
-                }
-              });
+            @Override
+            public void onCompleted() {
+              stream = null;
+              streamFinished.set(Status.OK);
+            }
+          });
     } catch (StatusRuntimeException e) {
       Throwables.throwIfInstanceOf(Throwables.getRootCause(e), InterruptedException.class);
-      setStreamStatus(Status.fromThrowable(e));
+      throw e.getStatus().asException();
     }
-    return streamStatus;
   }
 
   @Override
   public void sendOverStream(PublishBuildToolEventStreamRequest buildEvent)
-      throws InterruptedException {
-    throwIfInterrupted();
+      throws StatusException, InterruptedException {
     StreamObserver<PublishBuildToolEventStreamRequest> stream0 = stream;
+    checkState(stream0 != null, "Attempting to send over a closed stream");
     try {
-      if (stream0 != null) {
-        stream0.onNext(buildEvent);
-      }
+      stream0.onNext(buildEvent);
     } catch (StatusRuntimeException e) {
       Throwables.throwIfInstanceOf(Throwables.getRootCause(e), InterruptedException.class);
-      setStreamStatus(Status.fromThrowable(e));
+      throw e.getStatus().asException();
     }
   }
 
   @Override
-  public void halfCloseStream() {
+  public void closeStream() {
     StreamObserver<PublishBuildToolEventStreamRequest> stream0 = stream;
     if (stream0 != null) {
       stream0.onCompleted();
@@ -149,6 +143,11 @@ public abstract class BuildEventServiceGrpcClient implements BuildEventServiceCl
   }
 
   @Override
+  public boolean isStreamActive() {
+    return stream != null;
+  }
+
+  @Override
   public String userReadableError(Throwable t) {
     if (t instanceof StatusException) {
       Throwable rootCause = Throwables.getRootCause(t);
@@ -161,18 +160,5 @@ public abstract class BuildEventServiceGrpcClient implements BuildEventServiceCl
   }
 
   @Override
-  public abstract void shutdown();
-
-  private void setStreamStatus(Status status) {
-    SettableFuture<Status> streamStatus0 = streamStatus;
-    if (streamStatus0 != null) {
-      streamStatus0.set(status);
-    }
-  }
-
-  private static void throwIfInterrupted() throws InterruptedException {
-    if (Thread.interrupted()) {
-      throw new InterruptedException();
-    }
-  }
+  public abstract void shutdown() throws InterruptedException;
 }
