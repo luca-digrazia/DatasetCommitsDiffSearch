@@ -18,20 +18,25 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSet;
+import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigAlias.XcodeConfigAliasRule;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigRule;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionRule;
 import com.google.devtools.build.lib.rules.apple.cpp.AppleCcToolchainRule;
+import com.google.devtools.build.lib.rules.apple.swift.SwiftCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.swift.SwiftConfiguration;
 import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.objc.AppleBinaryRule;
 import com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleStaticLibraryRule;
+import com.google.devtools.build.lib.rules.objc.AppleStubBinaryRule;
+import com.google.devtools.build.lib.rules.objc.J2ObjcCommandLineOptions;
 import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcBuildInfoFactory;
 import com.google.devtools.build.lib.rules.objc.ObjcBundleLibraryRule;
+import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions;
 import com.google.devtools.build.lib.rules.objc.ObjcConfigurationLoader;
 import com.google.devtools.build.lib.rules.objc.ObjcFrameworkRule;
 import com.google.devtools.build.lib.rules.objc.ObjcImportRule;
@@ -61,15 +66,16 @@ public class ObjcRules implements RuleSet {
 
     builder.addBuildInfoFactory(new ObjcBuildInfoFactory());
 
-    builder.addConfigurationFragment(new ObjcConfigurationLoader());
-    builder.addConfigurationFragment(new AppleConfiguration.Loader());
-    builder.addConfigurationFragment(new SwiftConfiguration.Loader());
+    builder.addConfig(ObjcCommandLineOptions.class, new ObjcConfigurationLoader());
+    builder.addConfig(AppleCommandLineOptions.class, new AppleConfiguration.Loader());
+    builder.addConfig(SwiftCommandLineOptions.class, new SwiftConfiguration.Loader());
     // j2objc shouldn't be here!
-    builder.addConfigurationFragment(new J2ObjcConfiguration.Loader());
+    builder.addConfig(J2ObjcCommandLineOptions.class, new J2ObjcConfiguration.Loader());
 
     builder.addNativeAspectClass(objcProtoAspect);
     builder.addRuleDefinition(new AppleBinaryRule(objcProtoAspect));
     builder.addRuleDefinition(new AppleStaticLibraryRule(objcProtoAspect));
+    builder.addRuleDefinition(new AppleStubBinaryRule());
     builder.addRuleDefinition(new ObjcProtoLibraryRule(objcProtoAspect));
 
     builder.addRuleDefinition(new AppleCcToolchainRule());
