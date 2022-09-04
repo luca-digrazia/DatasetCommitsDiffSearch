@@ -15,6 +15,7 @@
 
 package com.google.devtools.build.lib.bazel.rules.ninja.parser;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
@@ -34,13 +35,20 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public final class NinjaPool {
+  private final ImmutableSortedMap<NinjaPoolVariable, NinjaVariableValue> variables;
+
   private final String name;
   private final Integer depth;
 
-  public NinjaPool(String name, ImmutableSortedMap<NinjaPoolVariable, NinjaVariableValue> variables)
+  public NinjaPool(ImmutableSortedMap<NinjaPoolVariable, NinjaVariableValue> variables)
       throws GenericParsingException {
-    this.name = name;
+    this.variables = variables;
+    this.name = checkNotNull(variables.get(NinjaPoolVariable.NAME)).getRawText();
     this.depth = validateDepth(variables.get(NinjaPoolVariable.DEPTH));
+  }
+
+  public ImmutableSortedMap<NinjaPoolVariable, NinjaVariableValue> getVariables() {
+    return variables;
   }
 
   /** Returns name of the ninja pool. */

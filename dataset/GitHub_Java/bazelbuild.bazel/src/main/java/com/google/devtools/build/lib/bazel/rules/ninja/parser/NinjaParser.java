@@ -47,7 +47,7 @@ public class NinjaParser implements DeclarationConsumer {
   public void declaration(ByteFragmentAtOffset byteFragmentAtOffset)
       throws GenericParsingException, IOException {
     ByteBufferFragment fragment = byteFragmentAtOffset.getFragment();
-    long offset = byteFragmentAtOffset.getFragmentOffset();
+    int offset = byteFragmentAtOffset.getRealStartOffset();
 
     NinjaLexer lexer = new NinjaLexer(fragment);
     if (!lexer.hasNextToken()) {
@@ -62,7 +62,7 @@ public class NinjaParser implements DeclarationConsumer {
       // If fragment contained only newlines.
       return;
     }
-    long declarationStart = offset + lexer.getLastStart();
+    int declarationStart = offset + lexer.getLastStart();
     lexer.undo();
     NinjaParserStep parser = new NinjaParserStep(lexer);
 
@@ -101,23 +101,12 @@ public class NinjaParser implements DeclarationConsumer {
           // So we should subtract the offset of fragment's buffer in file
           // (byteFragmentAtOffset.getOffset()),
           // and start of fragment inside buffer (fragment.getStartIncl()).
-          long fragmentStart =
-              declarationStart - byteFragmentAtOffset.getBufferOffset() - fragment.getStartIncl();
-
-          // While the absolute offset is typed as long (because of larger ninja files), the
-          // fragments are only at most Integer.MAX_VALUE long, so fragmentStart cannot be
-          // larger than that. Sanity check this here.
-          if (fragmentStart > Integer.MAX_VALUE) {
-            throw new GenericParsingException(
-                String.format(
-                    "The fragmentStart value %s is not expected to be larger than max-int, "
-                        + "since each fragment is at most max-int long.",
-                    fragmentStart));
-          }
+          int fragmentStart =
+              declarationStart - byteFragmentAtOffset.getOffset() - fragment.getStartIncl();
           targetFragment =
               new ByteFragmentAtOffset(
-                  byteFragmentAtOffset.getBufferOffset(),
-                  fragment.subFragment((int) fragmentStart, fragment.length()));
+                  byteFragmentAtOffset.getOffset(),
+                  fragment.subFragment(fragmentStart, fragment.length()));
         }
         parseResult.addTarget(targetFragment);
         break;
