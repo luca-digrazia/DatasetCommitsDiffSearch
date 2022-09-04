@@ -18,10 +18,12 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.RuleClass.ToolchainResolutionMode;
+import com.google.devtools.build.lib.packages.Type;
 
 /**
  * Describes the common settings for all platform-related rules.
@@ -33,12 +35,14 @@ public class PlatformBaseRule implements RuleDefinition{
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     return builder
+        .requiresConfigurationFragments(PlatformConfiguration.class)
         .override(
             attr("tags", Type.STRING_LIST)
                 // No need to show up in ":all", etc. target patterns.
                 .value(ImmutableList.of("manual"))
                 .nonconfigurable("low-level attribute, used in platform configuration"))
         .exemptFromConstraintChecking("this rule helps *define* a constraint")
+        .useToolchainResolution(ToolchainResolutionMode.DISABLED)
         .removeAttribute("deps")
         .removeAttribute("data")
         .build();
@@ -49,7 +53,7 @@ public class PlatformBaseRule implements RuleDefinition{
     return RuleDefinition.Metadata.builder()
         .name(RULE_NAME)
         .type(RuleClass.Builder.RuleClassType.ABSTRACT)
-        .ancestors(BaseRuleClasses.RuleBase.class)
+        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
         .build();
   }
 

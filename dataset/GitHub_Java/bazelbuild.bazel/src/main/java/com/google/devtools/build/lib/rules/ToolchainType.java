@@ -52,7 +52,6 @@ public class ToolchainType implements RuleConfiguredTargetFactory {
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
       return builder
           .useToolchainResolution(ToolchainResolutionMode.DISABLED)
-          .advertiseStarlarkProvider(ToolchainTypeInfo.PROVIDER.id())
           .removeAttribute("licenses")
           .removeAttribute("distribs")
           .build();
