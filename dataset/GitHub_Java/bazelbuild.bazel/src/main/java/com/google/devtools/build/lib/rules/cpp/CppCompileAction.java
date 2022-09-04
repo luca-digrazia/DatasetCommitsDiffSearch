@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
@@ -1242,8 +1241,11 @@ public class CppCompileAction extends AbstractAction
     ShowIncludesFilter showIncludesFilterForStdout;
     ShowIncludesFilter showIncludesFilterForStderr;
     if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
-      showIncludesFilterForStdout = new ShowIncludesFilter(getSourceFile().getFilename());
-      showIncludesFilterForStderr = new ShowIncludesFilter(getSourceFile().getFilename());
+      String workspaceName = actionExecutionContext.getExecRoot().getBaseName();
+      showIncludesFilterForStdout =
+          new ShowIncludesFilter(getSourceFile().getFilename(), workspaceName);
+      showIncludesFilterForStderr =
+          new ShowIncludesFilter(getSourceFile().getFilename(), workspaceName);
       FileOutErr originalOutErr = actionExecutionContext.getFileOutErr();
       FileOutErr tempOutErr = originalOutErr.childOutErr();
       spawnContext = actionExecutionContext.withFileOutErr(tempOutErr);
@@ -1260,16 +1262,13 @@ public class CppCompileAction extends AbstractAction
       clearAdditionalInputs();
     }
 
-    SpawnContinuation spawnContinuation =
-        actionExecutionContext
-            .getContext(SpawnActionContext.class)
-            .beginExecution(spawn, spawnContext);
     return new CppCompileActionContinuation(
-        actionExecutionContext,
-        spawnContext,
-        showIncludesFilterForStdout,
-        showIncludesFilterForStderr,
-        spawnContinuation);
+            actionExecutionContext,
+            spawnContext,
+            showIncludesFilterForStdout,
+            showIncludesFilterForStderr,
+            SpawnContinuation.ofBeginExecution(spawn, spawnContext))
+        .execute();
   }
 
   protected byte[] getDotDContents(SpawnResult spawnResult) throws EnvironmentalExecException {
