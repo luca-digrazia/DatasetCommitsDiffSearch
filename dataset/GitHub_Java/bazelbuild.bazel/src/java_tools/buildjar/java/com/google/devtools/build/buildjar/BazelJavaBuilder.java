@@ -130,7 +130,8 @@ public abstract class BazelJavaBuilder {
   public static JavaLibraryBuildRequest parse(List<String> args)
       throws IOException, InvalidCommandLineException {
     OptionsParser optionsParser = new OptionsParser(args);
-    ImmutableList<BlazeJavaCompilerPlugin> plugins = ImmutableList.of(new ErrorPronePlugin());
+    ImmutableList<BlazeJavaCompilerPlugin> plugins =
+        ImmutableList.of(new ErrorPronePlugin(optionsParser.testOnly()));
     JavaLibraryBuildRequest build =
         new JavaLibraryBuildRequest(optionsParser, plugins, new DependencyModule.Builder());
     build.setJavacOpts(JavacOptions.normalizeOptions(build.getJavacOpts()));
