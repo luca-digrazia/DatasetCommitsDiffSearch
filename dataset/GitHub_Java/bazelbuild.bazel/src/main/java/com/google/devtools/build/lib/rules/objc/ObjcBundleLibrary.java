@@ -17,16 +17,13 @@ package com.google.devtools.build.lib.rules.objc;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.NESTED_BUNDLE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.BundlingRule.FAMILIES_ATTR;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.XcodeConfig;
@@ -42,17 +39,9 @@ import java.util.List;
  */
 public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
 
-  @VisibleForTesting
-  static final String INVALID_FAMILIES_ERROR =
-      "Expected one or two strings from the list 'iphone', 'ipad'";
-
-  @VisibleForTesting
-  static final String NO_ASSET_CATALOG_ERROR_FORMAT =
-      "a value was specified (%s), but this app does not have any asset catalogs";
-
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     ObjcCommon common = common(ruleContext);
     Bundling bundling = bundling(ruleContext, common);
 
@@ -81,10 +70,9 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    ObjcProvider nestedBundleProvider =
-        new ObjcProvider.Builder(ruleContext.getAnalysisEnvironment().getSkylarkSemantics())
-            .add(NESTED_BUNDLE, bundling)
-            .build();
+    ObjcProvider nestedBundleProvider = new ObjcProvider.Builder()
+        .add(NESTED_BUNDLE, bundling)
+        .build();
 
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
         .addNativeDeclaredProvider(nestedBundleProvider)
@@ -105,7 +93,7 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
     }
 
     if (families.isEmpty()) {
-      ruleContext.attributeError(FAMILIES_ATTR, INVALID_FAMILIES_ERROR);
+      ruleContext.attributeError(FAMILIES_ATTR, ReleaseBundling.INVALID_FAMILIES_ERROR);
     }
 
     return new Bundling.Builder()
@@ -120,7 +108,7 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
         .build();
   }
 
-  private ObjcCommon common(RuleContext ruleContext) throws InterruptedException {
+  private ObjcCommon common(RuleContext ruleContext) {
     return new ObjcCommon.Builder(ruleContext)
         .setResourceAttributes(new ResourceAttributes(ruleContext))
         .addDepObjcProviders(
