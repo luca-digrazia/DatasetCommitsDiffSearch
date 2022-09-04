@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.util.io;
 
+import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -68,7 +69,7 @@ public final class DelegatingOutErr extends OutErr {
     private final List<OutputStream> sinks = new ArrayList<>();
 
     public void addSink(OutputStream sink) {
-      sinks.add(sink);
+      sinks.add(Preconditions.checkNotNull(sink));
     }
 
     public void removeSink(OutputStream sink) {
@@ -83,20 +84,6 @@ public final class DelegatingOutErr extends OutErr {
     }
 
     @Override
-    public void close() throws IOException {
-      for (OutputStream sink : sinks) {
-        sink.close();
-      }
-    }
-
-    @Override
-    public void flush() throws IOException {
-      for (OutputStream sink : sinks) {
-        sink.flush();
-      }
-    }
-
-    @Override
     public void write(byte[] b, int off, int len) throws IOException {
       for (OutputStream sink : sinks) {
         sink.write(b, off, len);
@@ -107,6 +94,34 @@ public final class DelegatingOutErr extends OutErr {
     public void write(byte[] b) throws IOException {
       for (OutputStream sink : sinks) {
         sink.write(b);
+      }
+    }
+
+    @Override
+    public void close() throws IOException {
+      // Ensure that we close all sinks even if one throws.
+      IOException firstException = null;
+      for (OutputStream sink : sinks) {
+        try {
+          sink.close();
+        } catch (IOException e) {
+          if (firstException == null) {
+            firstException = e;
+          } else {
+            firstException.addSuppressed(e);
+          }
+        }
+      }
+
+      if (firstException != null) {
+        throw firstException;
+      }
+    }
+
+    @Override
+    public void flush() throws IOException {
+      for (OutputStream sink : sinks) {
+        sink.flush();
       }
     }
   }
