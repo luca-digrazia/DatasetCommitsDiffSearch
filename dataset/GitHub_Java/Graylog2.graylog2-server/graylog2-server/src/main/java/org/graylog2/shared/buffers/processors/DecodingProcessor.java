@@ -17,7 +17,6 @@
 
 package org.graylog2.shared.buffers.processors;
 
-import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Strings;
@@ -27,7 +26,6 @@ import com.google.common.net.InetAddresses;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.lmax.disruptor.EventHandler;
-import org.graylog2.plugin.GlobalMetricNames;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.ServerStatus;
@@ -54,10 +52,9 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
     private static final Logger LOG = LoggerFactory.getLogger(DecodingProcessor.class);
 
     private final Timer decodeTime;
-    private final Counter decodedTrafficCounter;
 
     public interface Factory {
-        DecodingProcessor create(@Assisted("decodeTime") Timer decodeTime, @Assisted("parseTime") Timer parseTime);
+        public DecodingProcessor create(@Assisted("decodeTime") Timer decodeTime, @Assisted("parseTime") Timer parseTime);
     }
 
     private final Map<String, Codec.Factory<? extends Codec>> codecFactory;
@@ -81,7 +78,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         // these metrics are global to all processors, thus they are passed in directly to avoid relying on the class name
         this.parseTime = parseTime;
         this.decodeTime = decodeTime;
-        decodedTrafficCounter = metricRegistry.counter(GlobalMetricNames.DECODED_TRAFFIC);
     }
 
     @Override
@@ -197,22 +193,22 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
             switch (node.type) {
                 case SERVER:
                     // Always use the last source node.
-                    if (message.getField(Message.FIELD_GL2_SOURCE_INPUT) != null) {
+                    if (message.getField("gl2_source_input") != null) {
                         LOG.debug("Multiple server nodes ({} {}) set for message id {}",
-                                message.getField(Message.FIELD_GL2_SOURCE_INPUT), node.nodeId, message.getId());
+                                message.getField("gl2_source_input"), node.nodeId, message.getId());
                     }
-                    message.addField(Message.FIELD_GL2_SOURCE_INPUT, node.inputId);
-                    message.addField(Message.FIELD_GL2_SOURCE_NODE, node.nodeId);
+                    message.addField("gl2_source_input", node.inputId);
+                    message.addField("gl2_source_node", node.nodeId);
                     break;
                 // TODO Due to be removed in Graylog 3.x
                 case RADIO:
                     // Always use the last source node.
-                    if (message.getField(Message.FIELD_GL2_SOURCE_RADIO_INPUT) != null) {
+                    if (message.getField("gl2_source_radio_input") != null) {
                         LOG.debug("Multiple radio nodes ({} {}) set for message id {}",
-                                message.getField(Message.FIELD_GL2_SOURCE_RADIO_INPUT), node.nodeId, message.getId());
+                                message.getField("gl2_source_radio_input"), node.nodeId, message.getId());
                     }
-                    message.addField(Message.FIELD_GL2_SOURCE_RADIO_INPUT, node.inputId);
-                    message.addField(Message.FIELD_GL2_SOURCE_RADIO, node.nodeId);
+                    message.addField("gl2_source_radio_input", node.inputId);
+                    message.addField("gl2_source_radio", node.nodeId);
                     break;
             }
         }
@@ -228,12 +224,12 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         final ResolvableInetSocketAddress remoteAddress = raw.getRemoteAddress();
         if (remoteAddress != null) {
             final String addrString = InetAddresses.toAddrString(remoteAddress.getAddress());
-            message.addField(Message.FIELD_GL2_REMOTE_IP, addrString);
+            message.addField("gl2_remote_ip", addrString);
             if (remoteAddress.getPort() > 0) {
-                message.addField(Message.FIELD_GL2_REMOTE_PORT, remoteAddress.getPort());
+                message.addField("gl2_remote_port", remoteAddress.getPort());
             }
             if (remoteAddress.isReverseLookedUp()) { // avoid reverse lookup if the hostname is available
-                message.addField(Message.FIELD_GL2_REMOTE_HOSTNAME, remoteAddress.getHostName());
+                message.addField("gl2_remote_hostname", remoteAddress.getHostName());
             }
             if (Strings.isNullOrEmpty(message.getSource())) {
                 message.setSource(addrString);
@@ -250,7 +246,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         }
 
         metricRegistry.meter(name(baseMetricName, "processedMessages")).mark();
-        decodedTrafficCounter.inc(message.getSize());
         return message;
     }
 }
