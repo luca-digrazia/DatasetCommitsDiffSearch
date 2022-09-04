@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil.NullAction;
-import com.google.devtools.build.lib.bugreport.BugReporter;
 import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
@@ -62,8 +61,9 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.util.FileSystems;
 import com.google.devtools.common.options.OptionsParser;
-import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -77,10 +77,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 /** Tests for {@link DynamicSpawnStrategy}. */
-@RunWith(JUnit4.class)
+@RunWith(Parameterized.class)
 public class DynamicSpawnStrategyTest {
   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
@@ -88,6 +90,16 @@ public class DynamicSpawnStrategyTest {
   private ExecutorService executorServiceForCleanup;
   private FileOutErr outErr;
   private final ActionKeyContext actionKeyContext = new ActionKeyContext();
+
+  @Parameters(name = "{index}: legacy={0}")
+  public static Collection<Object[]> data() {
+    return Arrays.asList(
+        new Object[][] {
+          {true}, {false},
+        });
+  }
+
+  @Parameter public boolean legacyBehavior;
 
   /** Syntactic sugar to decrease and await for a latch in a single line. */
   private static void countDownAndWait(CountDownLatch countDownLatch) throws InterruptedException {
@@ -118,29 +130,21 @@ public class DynamicSpawnStrategyTest {
     @Nullable private volatile Spawn executedSpawn;
 
     /** Tracks whether {@link #exec} completed successfully or not. */
-    private final CountDownLatch succeeded = new CountDownLatch(1);
+    private CountDownLatch succeeded = new CountDownLatch(1);
 
     /** Hook to implement per-test custom logic. */
     private final DoExec doExecBeforeStop;
 
     private final DoExec doExecAfterStop;
 
-    private final boolean canExec;
-
     MockSpawnStrategy(String name) {
       this(name, DoExec.NOTHING, DoExec.NOTHING);
     }
 
     MockSpawnStrategy(String name, DoExec doExecBeforeStop, DoExec doExecAfterStop) {
-      this(name, doExecBeforeStop, doExecAfterStop, true);
-    }
-
-    MockSpawnStrategy(
-        String name, DoExec doExecBeforeStop, DoExec doExecAfterStop, boolean canExec) {
       this.name = name;
       this.doExecBeforeStop = doExecBeforeStop;
       this.doExecAfterStop = doExecAfterStop;
-      this.canExec = canExec;
     }
 
     /** Helper to record an execution failure from within {@link #doExecBeforeStop}. */
@@ -197,7 +201,7 @@ public class DynamicSpawnStrategyTest {
 
     @Override
     public boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
-      return canExec;
+      return true;
     }
 
     @Nullable
@@ -213,7 +217,8 @@ public class DynamicSpawnStrategyTest {
 
   @Before
   public void setUp() throws Exception {
-    testRoot = TestUtils.createUniqueTmpDir(FileSystems.getNativeFileSystem());
+    testRoot = FileSystems.getNativeFileSystem().getPath(TestUtils.tmpDir());
+    testRoot.deleteTreesBelow();
     outErr = new FileOutErr(testRoot.getRelative("stdout"), testRoot.getRelative("stderr"));
   }
 
@@ -312,6 +317,7 @@ public class DynamicSpawnStrategyTest {
     options.dynamicWorkerStrategy = "mock-local";
     options.internalSpawnScheduler = true;
     options.localExecutionDelay = 0;
+    options.legacySpawnScheduler = legacyBehavior;
 
     checkState(executorServiceForCleanup == null);
     executorServiceForCleanup = executorService;
@@ -340,11 +346,10 @@ public class DynamicSpawnStrategyTest {
 
     Executor executor =
         new BlazeExecutor(
-            /*fileSystem=*/ null,
+            null,
             testRoot,
-            /*reporter=*/ null,
-            /*clock=*/ null,
-            BugReporter.defaultInstance(),
+            null,
+            null,
             OptionsParser.builder()
                 .optionsClasses(ImmutableList.of(ExecutionOptions.class))
                 .build(),
@@ -358,18 +363,22 @@ public class DynamicSpawnStrategyTest {
             actionKeyContext,
             outErr,
             testRoot,
-            /*metadataHandler=*/ null);
+            /*metadataHandler=*/ null,
+            /*actionGraph=*/ null);
 
     List<? extends SpawnStrategy> dynamicStrategies =
         spawnStrategyRegistry.getStrategies(
             newCustomSpawn("RunDynamic", ImmutableMap.of()), event -> {});
 
     Optional<? extends SpawnStrategy> optionalContext =
-        dynamicStrategies.stream().filter(c -> c instanceof DynamicSpawnStrategy).findAny();
+        dynamicStrategies.stream()
+            .filter(
+                c -> c instanceof DynamicSpawnStrategy || c instanceof LegacyDynamicSpawnStrategy)
+            .findAny();
     checkState(optionalContext.isPresent(), "Expected module to register a dynamic strategy");
 
     return new AutoValue_DynamicSpawnStrategyTest_StrategyAndContext(
-        optionalContext.get(), actionExecutionContext);
+        (SpawnStrategy) optionalContext.get(), actionExecutionContext);
   }
 
   private static class NullActionWithMnemonic extends NullAction {
@@ -390,13 +399,6 @@ public class DynamicSpawnStrategyTest {
   public void tearDown() throws Exception {
     if (executorServiceForCleanup != null) {
       executorServiceForCleanup.shutdownNow();
-    }
-    if (testRoot != null) {
-      try {
-        testRoot.deleteTree();
-      } catch (FileNotFoundException e) {
-        // This can happen if one of the dynamic threads are still cleaning up. No big deal.
-      }
     }
   }
 
@@ -560,48 +562,6 @@ public class DynamicSpawnStrategyTest {
   }
 
   @Test
-  public void actionSucceedsIfLocalExecutionSucceedsEvenIfRemoteRunsNothing() throws Exception {
-    MockSpawnStrategy localStrategy = new MockSpawnStrategy("MockLocalSpawnStrategy");
-
-    MockSpawnStrategy remoteStrategy =
-        new MockSpawnStrategy("MockRemoteSpawnStrategy", DoExec.NOTHING, DoExec.NOTHING, false);
-
-    StrategyAndContext strategyAndContext = createSpawnStrategy(localStrategy, remoteStrategy);
-
-    Spawn spawn = newDynamicSpawn();
-    strategyAndContext.exec(spawn);
-
-    assertThat(localStrategy.getExecutedSpawn()).isEqualTo(spawn);
-    assertThat(localStrategy.succeeded()).isTrue();
-    assertThat(remoteStrategy.getExecutedSpawn()).isNull();
-    assertThat(remoteStrategy.succeeded()).isFalse();
-
-    assertThat(outErr.outAsLatin1()).contains("output files written with MockLocalSpawnStrategy");
-    assertThat(outErr.outAsLatin1()).doesNotContain("MockRemoteSpawnStrategy");
-  }
-
-  @Test
-  public void actionSucceedsIfRemoteExecutionSucceedsEvenIfLocalRunsNothing() throws Exception {
-    MockSpawnStrategy localStrategy =
-        new MockSpawnStrategy("MockLocalSpawnStrategy", DoExec.NOTHING, DoExec.NOTHING, false);
-
-    MockSpawnStrategy remoteStrategy = new MockSpawnStrategy("MockRemoteSpawnStrategy");
-
-    StrategyAndContext strategyAndContext = createSpawnStrategy(localStrategy, remoteStrategy);
-
-    Spawn spawn = newDynamicSpawn();
-    strategyAndContext.exec(spawn);
-
-    assertThat(localStrategy.getExecutedSpawn()).isNull();
-    assertThat(localStrategy.succeeded()).isFalse();
-    assertThat(remoteStrategy.getExecutedSpawn()).isEqualTo(spawn);
-    assertThat(remoteStrategy.succeeded()).isTrue();
-
-    assertThat(outErr.outAsLatin1()).contains("output files written with MockRemoteSpawnStrategy");
-    assertThat(outErr.outAsLatin1()).doesNotContain("MockLocalSpawnStrategy");
-  }
-
-  @Test
   public void actionFailsIfLocalFailsImmediatelyEvenIfRemoteSucceedsLater() throws Exception {
     CountDownLatch countDownLatch = new CountDownLatch(2);
 
@@ -712,35 +672,14 @@ public class DynamicSpawnStrategyTest {
   }
 
   @Test
-  public void actionFailsIfLocalAndRemoteRunNothing() throws Exception {
-    MockSpawnStrategy localStrategy =
-        new MockSpawnStrategy("MockLocalSpawnStrategy", DoExec.NOTHING, DoExec.NOTHING, false);
-
-    MockSpawnStrategy remoteStrategy =
-        new MockSpawnStrategy("MockRemoteSpawnStrategy", DoExec.NOTHING, DoExec.NOTHING, false);
-
-    StrategyAndContext strategyAndContext = createSpawnStrategy(localStrategy, remoteStrategy);
-
-    Spawn spawn = newDynamicSpawn();
-    ExecException e = assertThrows(UserExecException.class, () -> strategyAndContext.exec(spawn));
-
-    // Has "No usable", followed by both dynamic_local_strategy and dynamic_remote_strategy in,
-    // followed by the action's mnemonic.
-    String regexMatch =
-        "[nN]o usable\\b.*\\bdynamic_local_strategy\\b.*\\bdynamic_remote_strategy\\b.*\\b"
-            + spawn.getMnemonic()
-            + "\\b";
-
-    assertThat(e).hasMessageThat().containsMatch(regexMatch);
-
-    assertThat(localStrategy.getExecutedSpawn()).isNull();
-    assertThat(localStrategy.succeeded()).isFalse();
-    assertThat(remoteStrategy.getExecutedSpawn()).isNull();
-    assertThat(remoteStrategy.succeeded()).isFalse();
-  }
-
-  @Test
   public void stopConcurrentSpawnsWaitForCompletion() throws Exception {
+    if (legacyBehavior) {
+      // The legacy spawn scheduler does not implement cross-cancellations of the two parallel
+      // branches so this test makes no sense in that case.
+      logger.atInfo().log("Skipping test");
+      return;
+    }
+
     CountDownLatch countDownLatch = new CountDownLatch(2);
 
     AtomicBoolean slowCleanupFinished = new AtomicBoolean(false);
@@ -879,15 +818,16 @@ public class DynamicSpawnStrategyTest {
   private void assertThatStrategyWaitsForBothSpawnsToFinish(
       boolean executionFails, boolean interruptThread, CheckExecResult checkExecResult)
       throws Exception {
-    if (true) {
-      // TODO(b/177406907): jmmv@: I spent *days* trying to make these tests work reliably with the
-      // new dynamic spawn scheduler implementation but I keep encountering tricky race conditions
-      // everywhere. I have strong reasons to believe that the races are due to inherent problems in
-      // these tests, not in the actual DynamicSpawnScheduler implementation. So whatever. We should
-      // revisit these as a new set of tests now that the legacy spawn scheduler has gone away.
+    if (!legacyBehavior) {
+      // TODO(jmmv): I've spent *days* trying to make these tests work reliably with the new dynamic
+      // spawn scheduler implementation but I keep encountering tricky race conditions everywhere. I
+      // have strong reasons to believe that the races are due to inherent problems in these tests,
+      // not in the actual DynamicSpawnScheduler implementation. So whatever. I'll revisit these
+      // later as a new set of tests once I'm less tired^W^W^W the legacy spawn scheduler goes away.
       logger.atInfo().log("Skipping test");
       return;
     }
+
     AtomicBoolean stopLocal = new AtomicBoolean(false);
     CountDownLatch executionCanProceed = new CountDownLatch(2);
     CountDownLatch remoteDone = new CountDownLatch(1);
@@ -1075,7 +1015,10 @@ public class DynamicSpawnStrategyTest {
           throw new AssertionError("Not reachable");
         };
 
-    assertThatStrategyPropagatesException(localExec, remoteExec, e);
+    assertThatStrategyPropagatesException(
+        localExec,
+        remoteExec,
+        legacyBehavior ? new UserExecException(e, createFailureDetail("")) : e);
   }
 
   @Test
@@ -1092,7 +1035,10 @@ public class DynamicSpawnStrategyTest {
           throw e;
         };
 
-    assertThatStrategyPropagatesException(localExec, remoteExec, e);
+    assertThatStrategyPropagatesException(
+        localExec,
+        remoteExec,
+        legacyBehavior ? new UserExecException(e, createFailureDetail("")) : e);
   }
 
   private static FailureDetail createFailureDetail(String message) {
