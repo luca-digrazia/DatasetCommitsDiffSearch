@@ -3,68 +3,85 @@ package com.yammer.dropwizard.config;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.sun.jersey.api.core.ResourceConfig;
 import com.sun.jersey.core.reflection.AnnotatedMethod;
 import com.sun.jersey.core.reflection.MethodList;
+import com.sun.jersey.core.spi.scanning.PackageNamesScanner;
 import com.sun.jersey.spi.container.servlet.ServletContainer;
 import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
+import com.yammer.dropwizard.jetty.JettyManaged;
 import com.yammer.dropwizard.json.ObjectMapperFactory;
-import com.yammer.dropwizard.setup.JerseyEnvironment;
-import com.yammer.dropwizard.setup.LifecycleEnvironment;
+import com.yammer.dropwizard.lifecycle.ExecutorServiceManager;
+import com.yammer.dropwizard.lifecycle.Managed;
+import com.yammer.dropwizard.lifecycle.ServerLifecycleListener;
 import com.yammer.dropwizard.setup.ServletEnvironment;
 import com.yammer.dropwizard.tasks.GarbageCollectionTask;
 import com.yammer.dropwizard.tasks.Task;
 import com.yammer.dropwizard.validation.Validator;
 import com.yammer.metrics.core.HealthCheck;
-import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.util.component.AbstractLifeCycle;
+import org.eclipse.jetty.util.component.AggregateLifeCycle;
+import org.eclipse.jetty.util.component.LifeCycle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import javax.ws.rs.HttpMethod;
 import javax.ws.rs.Path;
 import javax.ws.rs.ext.Provider;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
+import java.util.concurrent.*;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+
+// TODO: 10/12/11 <coda> -- test Environment
+/*
+    REVIEW: 11/12/11 <coda> -- Probably better to invert this code.
+    Instead of letting it collect intermediate results and then exposing those via package-private
+    getters, it might be better to pass this a ServletContextHandler, etc., and have it modify
+    those directly. That's easier to test.
+*/
 
 /**
  * A Dropwizard service's environment.
  */
-public class Environment {
+public class Environment extends AbstractLifeCycle {
     private static final Logger LOGGER = LoggerFactory.getLogger(Environment.class);
 
     private final String name;
+    private final Configuration configuration;
+    private final DropwizardResourceConfig config;
     private final ImmutableSet.Builder<HealthCheck> healthChecks;
+    private final ServletContextHandler servletContext;
     private final ImmutableSet.Builder<Task> tasks;
-
+    private final ImmutableList.Builder<ServerLifecycleListener> serverListeners;
+    private final AggregateLifeCycle lifeCycle;
     private final ObjectMapperFactory objectMapperFactory;
     private SessionHandler sessionHandler;
+    private ServletContainer jerseyServletContainer;
     private Validator validator;
 
-    private final DropwizardResourceConfig jerseyConfig;
-    private final AtomicReference<ServletContainer> jerseyServletContainer;
-    private final JerseyEnvironment jerseyEnvironment;
-
-    private final ServletContextHandler servletContext;
     private final ServletEnvironment servletEnvironment;
-
-    private final Server server;
-    private final LifecycleEnvironment lifecycleEnvironment;
 
     /**
      * Creates a new environment.
      *
      * @param name                the name of the service
+     * @param configuration       the service's {@link Configuration}
      * @param objectMapperFactory the {@link ObjectMapperFactory} for the service
      */
     public Environment(String name,
+                       Configuration configuration,
                        ObjectMapperFactory objectMapperFactory,
                        Validator validator) {
         this.name = name;
+        this.configuration = configuration;
         this.objectMapperFactory = objectMapperFactory;
         this.validator = validator;
-        this.jerseyConfig = new DropwizardResourceConfig(false) {
+        this.config = new DropwizardResourceConfig(false) {
             @Override
             public void validate() {
                 super.validate();
@@ -77,22 +94,76 @@ public class Environment {
             }
         };
         this.healthChecks = ImmutableSet.builder();
-        this.tasks = ImmutableSet.builder();
-
         this.servletContext = new ServletContextHandler();
         this.servletEnvironment = new ServletEnvironment(servletContext);
-
-        this.server = new Server();
-        this.lifecycleEnvironment = new LifecycleEnvironment(server);
-
-        this.jerseyServletContainer = new AtomicReference<ServletContainer>(new ServletContainer(jerseyConfig));
-        this.jerseyEnvironment = new JerseyEnvironment(jerseyServletContainer, jerseyConfig);
-
+        this.tasks = ImmutableSet.builder();
+        this.serverListeners = ImmutableList.builder();
+        this.lifeCycle = new AggregateLifeCycle();
+        this.jerseyServletContainer = new ServletContainer(config);
         addTask(new GarbageCollectionTask());
     }
 
-    public JerseyEnvironment getJerseyEnvironment() {
-        return jerseyEnvironment;
+    @Override
+    protected void doStart() throws Exception {
+        lifeCycle.start();
+    }
+
+    @Override
+    protected void doStop() throws Exception {
+        lifeCycle.stop();
+    }
+
+    /**
+     * Adds the given object as a Jersey singleton resource.
+     *
+     * @param resource a Jersey singleton resource
+     */
+    public void addResource(Object resource) {
+        config.getSingletons().add(checkNotNull(resource));
+    }
+
+    /**
+     * Scans the packages and sub-packages of the given {@link Class} objects for resources and
+     * providers.
+     *
+     * @param classes the classes whose packages to scan
+     */
+    public void scanPackagesForResourcesAndProviders(Class<?>... classes) {
+        checkNotNull(classes);
+        final String[] names = new String[classes.length];
+        for (int i = 0; i < classes.length; i++) {
+            names[i] = classes[i].getPackage().getName();
+        }
+        config.init(new PackageNamesScanner(names));
+    }
+
+    /**
+     * Adds the given class as a Jersey resource. <p/><b>N.B.:</b> This class must either have a
+     * no-args constructor or use Jersey's built-in dependency injection.
+     *
+     * @param klass a Jersey resource class
+     */
+    public void addResource(Class<?> klass) {
+        config.getClasses().add(checkNotNull(klass));
+    }
+
+    /**
+     * Adds the given object as a Jersey provider.
+     *
+     * @param provider a Jersey provider
+     */
+    public void addProvider(Object provider) {
+        config.getSingletons().add(checkNotNull(provider));
+    }
+
+    /**
+     * Adds the given class as a Jersey provider. <p/><b>N.B.:</b> This class must either have a
+     * no-args constructor or use Jersey's built-in dependency injection.
+     *
+     * @param klass a Jersey provider class
+     */
+    public void addProvider(Class<?> klass) {
+        config.getClasses().add(checkNotNull(klass));
     }
 
     /**
@@ -104,8 +175,24 @@ public class Environment {
         healthChecks.add(checkNotNull(healthCheck));
     }
 
-    public LifecycleEnvironment getLifecycleEnvironment() {
-        return lifecycleEnvironment;
+    /**
+     * Adds the given {@link Managed} instance to the set of objects managed by the server's
+     * lifecycle. When the server starts, {@code managed} will be started. When the server stops,
+     * {@code managed} will be stopped.
+     *
+     * @param managed a managed object
+     */
+    public void manage(Managed managed) {
+        lifeCycle.addBean(new JettyManaged(checkNotNull(managed)));
+    }
+
+    /**
+     * Adds the given Jetty {@link LifeCycle} instances to the server's lifecycle.
+     *
+     * @param managed a Jetty-managed object
+     */
+    public void manage(LifeCycle managed) {
+        lifeCycle.addBean(checkNotNull(managed));
     }
 
     /**
@@ -130,17 +217,99 @@ public class Environment {
         this.sessionHandler = sessionHandler;
     }
 
-    public SessionHandler getSessionHandler() {
-        return sessionHandler;
+    /**
+     * Enables the Jersey feature with the given name.
+     *
+     * @param name the name of the feature to be enabled
+     * @see ResourceConfig
+     */
+    public void enableJerseyFeature(String name) {
+        config.getFeatures().put(checkNotNull(name), Boolean.TRUE);
+    }
+
+    /**
+     * Disables the Jersey feature with the given name.
+     *
+     * @param name the name of the feature to be disabled
+     * @see ResourceConfig
+     */
+    public void disableJerseyFeature(String name) {
+        config.getFeatures().put(checkNotNull(name), Boolean.FALSE);
+    }
+
+    /**
+     * Sets the given Jersey property.
+     *
+     * @param name  the name of the Jersey property
+     * @param value the value of the Jersey property
+     * @see ResourceConfig
+     */
+    public void setJerseyProperty(String name, @Nullable Object value) {
+        config.getProperties().put(checkNotNull(name), value);
+    }
+
+    /**
+     * Gets the given Jersey property.
+     *
+     * @param name     the name of the Jersey property
+     * @see ResourceConfig
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T getJerseyProperty(String name) {
+        return (T) config.getProperties().get(name);
     }
 
 
-    public ObjectMapperFactory getObjectMapperFactory() {
-        return objectMapperFactory;
+    /**
+     * Creates a new {@link ExecutorService} instance with the given parameters whose lifecycle is
+     * managed by the service.
+     *
+     * @param nameFormat      a {@link String#format(String, Object...)}-compatible format String,
+     *                        to which a unique integer (0, 1, etc.) will be supplied as the single
+     *                        parameter.
+     * @param corePoolSize    the number of threads to keep in the pool, even if they are idle.
+     * @param maximumPoolSize the maximum number of threads to allow in the pool.
+     * @param keepAliveTime   when the number of threads is greater than the core, this is the
+     *                        maximum time that excess idle threads will wait for new tasks before
+     *                        terminating.
+     * @param unit            the time unit for the keepAliveTime argument.
+     * @return a new {@link ExecutorService} instance
+     */
+    public ExecutorService managedExecutorService(String nameFormat,
+                                                  int corePoolSize,
+                                                  int maximumPoolSize,
+                                                  long keepAliveTime,
+                                                  TimeUnit unit) {
+        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(nameFormat)
+                                                                      .build();
+        final ExecutorService executor = new ThreadPoolExecutor(corePoolSize,
+                                                                maximumPoolSize,
+                                                                keepAliveTime,
+                                                                unit,
+                                                                new LinkedBlockingQueue<Runnable>(),
+                                                                threadFactory);
+        manage(new ExecutorServiceManager(executor, 5, TimeUnit.SECONDS, nameFormat));
+        return executor;
     }
 
-    public String getName() {
-        return name;
+    /**
+     * Creates a new {@link ScheduledExecutorService} instance with the given parameters whose
+     * lifecycle is managed by the service.
+     *
+     * @param nameFormat   a {@link String#format(String, Object...)}-compatible format String, to
+     *                     which a unique integer (0, 1, etc.) will be supplied as the single
+     *                     parameter.
+     * @param corePoolSize the number of threads to keep in the pool, even if they are idle.
+     * @return a new {@link ScheduledExecutorService} instance
+     */
+    public ScheduledExecutorService managedScheduledExecutorService(String nameFormat,
+                                                                    int corePoolSize) {
+        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(nameFormat)
+                                                                      .build();
+        final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(corePoolSize,
+                                                                                  threadFactory);
+        manage(new ExecutorServiceManager(executor, 5, TimeUnit.SECONDS, nameFormat));
+        return executor;
     }
 
     public Validator getValidator() {
@@ -167,17 +336,9 @@ public class Environment {
         return tasks.build();
     }
 
-    ServletContainer getJerseyServletContainer() {
-        return jerseyServletContainer.get();
-    }
-
-    Server getServer() {
-        return server;
-    }
-
     private void logManagedObjects() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
-        for (Object bean : server.getBeans()) {
+        for (Object bean : lifeCycle.getBeans()) {
             builder.add(bean.toString());
         }
         LOGGER.debug("managed objects = {}", builder.build());
@@ -201,13 +362,13 @@ public class Environment {
     private void logResources() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
 
-        for (Class<?> klass : jerseyConfig.getClasses()) {
+        for (Class<?> klass : config.getClasses()) {
             if (klass.isAnnotationPresent(Path.class)) {
                 builder.add(klass.getCanonicalName());
             }
         }
 
-        for (Object o : jerseyConfig.getSingletons()) {
+        for (Object o : config.getSingletons()) {
             if (o.getClass().isAnnotationPresent(Path.class)) {
                 builder.add(o.getClass().getCanonicalName());
             }
@@ -219,13 +380,13 @@ public class Environment {
     private void logProviders() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
 
-        for (Class<?> klass : jerseyConfig.getClasses()) {
+        for (Class<?> klass : config.getClasses()) {
             if (klass.isAnnotationPresent(Provider.class)) {
                 builder.add(klass.getCanonicalName());
             }
         }
 
-        for (Object o : jerseyConfig.getSingletons()) {
+        for (Object o : config.getSingletons()) {
             if (o.getClass().isAnnotationPresent(Provider.class)) {
                 builder.add(o.getClass().getCanonicalName());
             }
@@ -238,12 +399,12 @@ public class Environment {
         final StringBuilder stringBuilder = new StringBuilder(1024).append("The following paths were found for the configured resources:\n\n");
 
         final ImmutableList.Builder<Class<?>> builder = ImmutableList.builder();
-        for (Object o : jerseyConfig.getSingletons()) {
+        for (Object o : config.getSingletons()) {
             if (o.getClass().isAnnotationPresent(Path.class)) {
                 builder.add(o.getClass());
             }
         }
-        for (Class<?> klass : jerseyConfig.getClasses()) {
+        for (Class<?> klass : config.getClasses()) {
             if (klass.isAnnotationPresent(Path.class)) {
                 builder.add(klass);
             }
@@ -251,7 +412,7 @@ public class Environment {
 
         for (Class<?> klass : builder.build()) {
             final String path = klass.getAnnotation(Path.class).value();
-            String rootPath = jerseyEnvironment.getUrlPattern();
+            String rootPath = configuration.getHttpConfiguration().getRootPath();
             if (rootPath.endsWith("/*")) {
                 rootPath = rootPath.substring(0, rootPath.length() - (path.startsWith("/") ? 2 : 1));
             }
@@ -299,5 +460,37 @@ public class Environment {
 
     private MethodList annotatedMethods(Class<?> resource) {
         return new MethodList(resource, true).hasMetaAnnotation(HttpMethod.class);
+    }
+
+    public SessionHandler getSessionHandler() {
+        return sessionHandler;
+    }
+
+    public ObjectMapperFactory getObjectMapperFactory() {
+        return objectMapperFactory;
+    }
+
+    public ResourceConfig getJerseyResourceConfig() {
+        return config;
+    }
+
+    public ServletContainer getJerseyServletContainer() {
+        return jerseyServletContainer;
+    }
+
+    public void setJerseyServletContainer(ServletContainer jerseyServletContainer) {
+        this.jerseyServletContainer = jerseyServletContainer;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public List<ServerLifecycleListener> getServerListeners() {
+        return serverListeners.build();
+    }
+
+    public void addServerLifecycleListener(ServerLifecycleListener listener) {
+        serverListeners.add(listener);
     }
 }

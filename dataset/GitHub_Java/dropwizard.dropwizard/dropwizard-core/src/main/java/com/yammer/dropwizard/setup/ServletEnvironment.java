@@ -1,7 +1,6 @@
 package com.yammer.dropwizard.setup;
 
 import com.yammer.dropwizard.jetty.NonblockingServletHolder;
-import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
@@ -109,13 +108,5 @@ public class ServletEnvironment {
 
     public void setResourceBase(String resourceBase) {
         handler.setResourceBase(resourceBase);
-    }
-
-    public void setInitParameter(String name, String value) {
-        handler.setInitParameter(name, value);
-    }
-
-    public void setSessionHandler(SessionHandler sessionHandler) {
-        handler.setSessionHandler(sessionHandler);
     }
 }
