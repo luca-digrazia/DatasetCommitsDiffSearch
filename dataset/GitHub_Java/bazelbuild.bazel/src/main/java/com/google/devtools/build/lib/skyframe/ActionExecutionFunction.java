@@ -589,7 +589,7 @@ public class ActionExecutionFunction implements SkyFunction {
 
     Preconditions.checkState(action.discoversInputs(), action);
     PackageRootResolverWithEnvironment resolver = new PackageRootResolverWithEnvironment(env);
-    List<Artifact> actionCacheInputs =
+    Iterable<Artifact> actionCacheInputs =
         skyframeActionExecutor.getActionCachedInputs(action, resolver);
     if (actionCacheInputs == null) {
       Preconditions.checkState(env.valuesMissing(), action);
@@ -600,7 +600,7 @@ public class ActionExecutionFunction implements SkyFunction {
 
   private static class AllInputs {
     final Iterable<Artifact> defaultInputs;
-    @Nullable final List<Artifact> actionCacheInputs;
+    @Nullable final Iterable<Artifact> actionCacheInputs;
     @Nullable final List<SkyKey> keysRequested;
 
     AllInputs(Iterable<Artifact> defaultInputs) {
@@ -611,7 +611,7 @@ public class ActionExecutionFunction implements SkyFunction {
 
     AllInputs(
         Iterable<Artifact> defaultInputs,
-        List<Artifact> actionCacheInputs,
+        Iterable<Artifact> actionCacheInputs,
         List<SkyKey> keysRequested) {
       this.defaultInputs = Preconditions.checkNotNull(defaultInputs);
       this.actionCacheInputs = Preconditions.checkNotNull(actionCacheInputs);
