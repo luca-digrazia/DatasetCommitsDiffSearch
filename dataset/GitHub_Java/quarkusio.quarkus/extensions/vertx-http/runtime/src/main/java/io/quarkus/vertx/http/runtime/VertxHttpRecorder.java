@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -785,7 +784,6 @@ public class VertxHttpRecorder {
         private final LaunchMode launchMode;
         private volatile boolean clearHttpProperty = false;
         private volatile boolean clearHttpsProperty = false;
-        private volatile Map<String, String> portPropertiesToRestore;
         private final HttpConfiguration.InsecureRequests insecureRequests;
 
         public WebDeploymentVerticle(HttpServerOptions httpOptions, HttpServerOptions httpsOptions,
@@ -894,21 +892,14 @@ public class VertxHttpRecorder {
                             clearHttpProperty = true;
                             schema = "http";
                         }
-                        portPropertiesToRestore = new HashMap<>();
                         String portPropertyValue = String.valueOf(actualPort);
                         String portPropertyName = (launchMode == LaunchMode.TEST ? "quarkus." + schema + ".test-port"
                                 : "quarkus." + schema + ".port");
-                        String prevPortPropertyValue = System.setProperty(portPropertyName, portPropertyValue);
-                        if (prevPortPropertyValue != null) {
-                            portPropertiesToRestore.put(portPropertyName, prevPortPropertyValue);
-                        }
+                        System.setProperty(portPropertyName, portPropertyValue);
                         if (launchMode.isDevOrTest()) {
                             // set the profile property as well to make sure we don't have any inconsistencies
-                            portPropertyName = propertyWithProfilePrefix(portPropertyName);
-                            prevPortPropertyValue = System.setProperty(portPropertyName, portPropertyValue);
-                            if (prevPortPropertyValue != null) {
-                                portPropertiesToRestore.put(portPropertyName, prevPortPropertyValue);
-                            }
+                            System.setProperty(propertyWithProfilePrefix(portPropertyName),
+                                    portPropertyValue);
                         }
                         // Set in HttpOptions to output the port in the Timing class
                         options.setPort(actualPort);
@@ -936,9 +927,6 @@ public class VertxHttpRecorder {
                 if (launchMode.isDevOrTest()) {
                     System.clearProperty(propertyWithProfilePrefix(portPropertyName));
                 }
-            }
-            if (portPropertiesToRestore != null && !portPropertiesToRestore.isEmpty()) {
-                System.getProperties().putAll(portPropertiesToRestore);
             }
 
             final AtomicInteger remainingCount = new AtomicInteger(0);

@@ -34,14 +34,8 @@ public class HttpConfiguration {
 
     /**
      * The HTTP host
-     *
-     * In dev/test mode this defaults to localhost, in prod mode this defaults to 0.0.0.0
-     *
-     * Defaulting to 0.0.0.0 makes it easier to deploy Quarkus to container, however it
-     * is not suitable for dev/test mode as other people on the network can connect to your
-     * development machine.
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "0.0.0.0")
     public String host;
 
     /**
