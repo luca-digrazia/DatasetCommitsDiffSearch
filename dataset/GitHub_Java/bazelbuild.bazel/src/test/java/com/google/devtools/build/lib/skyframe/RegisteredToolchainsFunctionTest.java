@@ -57,20 +57,25 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
     assertThatEvaluationResult(result).hasEntryThat(toolchainsKey).isNotNull();
 
     RegisteredToolchainsValue value = result.get(toolchainsKey);
-    // We have two registered toolchains, and one default for c++
-    assertThat(value.registeredToolchains()).hasSize(3);
+    assertThat(value.registeredToolchains()).hasSize(2);
 
-    assertThat(value.registeredToolchains().stream().anyMatch(toolchain ->
-        (toolchain.toolchainType().equals(testToolchainType))
-            && toolchain.execConstraints().contains(linuxConstraint)
-            && toolchain.targetConstraints().contains(macConstraint)
-            && toolchain.toolchainLabel().equals(makeLabel("//toolchain:test_toolchain_1")))).isTrue();
+    DeclaredToolchainInfo registeredToolchain1 = value.registeredToolchains().get(0);
+    assertThat(registeredToolchain1).isNotNull();
 
-    assertThat(value.registeredToolchains().stream().anyMatch(toolchain ->
-        (toolchain.toolchainType().equals(testToolchainType))
-            && toolchain.execConstraints().contains(macConstraint)
-            && toolchain.targetConstraints().contains(linuxConstraint)
-            && toolchain.toolchainLabel().equals(makeLabel("//toolchain:test_toolchain_2")))).isTrue();
+    assertThat(registeredToolchain1.toolchainType()).isEqualTo(testToolchainType);
+    assertThat(registeredToolchain1.execConstraints()).containsExactly(linuxConstraint);
+    assertThat(registeredToolchain1.targetConstraints()).containsExactly(macConstraint);
+    assertThat(registeredToolchain1.toolchainLabel())
+        .isEqualTo(makeLabel("//toolchain:test_toolchain_1"));
+
+    DeclaredToolchainInfo registeredToolchain2 = value.registeredToolchains().get(1);
+    assertThat(registeredToolchain2).isNotNull();
+
+    assertThat(registeredToolchain2.toolchainType()).isEqualTo(testToolchainType);
+    assertThat(registeredToolchain2.execConstraints()).containsExactly(macConstraint);
+    assertThat(registeredToolchain2.targetConstraints()).containsExactly(linuxConstraint);
+    assertThat(registeredToolchain2.toolchainLabel())
+        .isEqualTo(makeLabel("//toolchain:test_toolchain_2"));
   }
 
   @Test
@@ -118,9 +123,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
         .hasErrorEntryForKeyThat(toolchainsKey)
         .hasExceptionThat()
         .hasMessageThat()
-        .contains(
-            "invalid registered toolchain '//error:not_a_toolchain': "
-                + "target does not provide the DeclaredToolchainInfo provider");
+        .contains("target '//error:not_a_toolchain' does not provide a toolchain");
   }
 
   @Test
@@ -132,7 +135,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
         requestToolchainsFromSkyframe(toolchainsKey);
     assertThatEvaluationResult(result).hasNoError();
     assertToolchainLabels(result.get(toolchainsKey))
-        .contains(makeLabel("//toolchain:test_toolchain_1"));
+        .containsExactly(makeLabel("//toolchain:test_toolchain_1"));
 
     // Re-write the WORKSPACE.
     rewriteWorkspace("register_toolchains('//toolchain:toolchain_2')");
@@ -141,7 +144,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
     result = requestToolchainsFromSkyframe(toolchainsKey);
     assertThatEvaluationResult(result).hasNoError();
     assertToolchainLabels(result.get(toolchainsKey))
-        .contains(makeLabel("//toolchain:test_toolchain_2"));
+        .containsExactly(makeLabel("//toolchain:test_toolchain_2"));
   }
 
   @Test

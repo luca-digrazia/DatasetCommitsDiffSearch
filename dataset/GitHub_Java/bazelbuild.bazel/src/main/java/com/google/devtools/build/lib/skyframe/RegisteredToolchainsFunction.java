@@ -93,34 +93,25 @@ public class RegisteredToolchainsFunction implements SkyFunction {
 
     Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> values =
         env.getValuesOrThrow(keys, ConfiguredValueCreationException.class);
+    if (env.valuesMissing()) {
+      return null;
+    }
     ImmutableList.Builder<DeclaredToolchainInfo> toolchains = new ImmutableList.Builder<>();
-    boolean valuesMissing = false;
     for (SkyKey key : keys) {
       ConfiguredTargetKey configuredTargetKey = (ConfiguredTargetKey) key.argument();
       Label toolchainLabel = configuredTargetKey.getLabel();
       try {
-        ValueOrException<ConfiguredValueCreationException> valueOrException = values.get(key);
-        if (valueOrException.get() == null) {
-          valuesMissing = true;
-          continue;
-        }
         ConfiguredTarget target =
-            ((ConfiguredTargetValue) valueOrException.get()).getConfiguredTarget();
+            ((ConfiguredTargetValue) values.get(key).get()).getConfiguredTarget();
         DeclaredToolchainInfo toolchainInfo = target.getProvider(DeclaredToolchainInfo.class);
-
         if (toolchainInfo == null) {
           throw new RegisteredToolchainsFunctionException(
-              new InvalidToolchainLabelException(toolchainLabel), Transience.PERSISTENT);
+              new InvalidTargetException(toolchainLabel), Transience.PERSISTENT);
         }
         toolchains.add(toolchainInfo);
       } catch (ConfiguredValueCreationException e) {
-        throw new RegisteredToolchainsFunctionException(
-            new InvalidToolchainLabelException(toolchainLabel, e), Transience.PERSISTENT);
+        throw new RegisteredToolchainsFunctionException(e, Transience.PERSISTENT);
       }
-    }
-
-    if (valuesMissing) {
-      return null;
     }
     return toolchains.build();
   }
@@ -135,22 +126,12 @@ public class RegisteredToolchainsFunction implements SkyFunction {
    * Used to indicate that the given {@link Label} represents a {@link ConfiguredTarget} which is
    * not a valid {@link DeclaredToolchainInfo} provider.
    */
-  public static final class InvalidToolchainLabelException extends Exception {
+  public static final class InvalidTargetException extends Exception {
 
     private final Label invalidLabel;
 
-    public InvalidToolchainLabelException(Label invalidLabel) {
-      super(
-          String.format(
-              "invalid registered toolchain '%s': "
-                  + "target does not provide the DeclaredToolchainInfo provider",
-              invalidLabel));
-      this.invalidLabel = invalidLabel;
-    }
-
-    public InvalidToolchainLabelException(Label invalidLabel, ConfiguredValueCreationException e) {
-      super(
-          String.format("invalid registered toolchain '%s': %s", invalidLabel, e.getMessage()), e);
+    public InvalidTargetException(Label invalidLabel) {
+      super(String.format("target '%s' does not provide a toolchain", invalidLabel));
       this.invalidLabel = invalidLabel;
     }
 
@@ -166,8 +147,13 @@ public class RegisteredToolchainsFunction implements SkyFunction {
   public static class RegisteredToolchainsFunctionException extends SkyFunctionException {
 
     public RegisteredToolchainsFunctionException(
-        InvalidToolchainLabelException cause, Transience transience) {
+        InvalidTargetException cause, Transience transience) {
       super(cause, transience);
+    }
+
+    public RegisteredToolchainsFunctionException(
+        ConfiguredValueCreationException cause, Transience persistent) {
+      super(cause, persistent);
     }
   }
 }
