@@ -62,7 +62,6 @@ public class CoreLibraryInvocationRewriter extends ClassVisitor {
           desc = InterfaceDesugaring.companionDefaultMethodDescriptor(owner, desc);
           opcode = Opcodes.INVOKESTATIC;
         }
-        owner = newOwner;
         itf = false; // assuming a class
       } else if (coreInterface != null) {
         String coreInterfaceName = coreInterface.getName().replace('.', '/');
