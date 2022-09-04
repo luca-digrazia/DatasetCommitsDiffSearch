@@ -77,7 +77,6 @@ import com.google.common.io.LittleEndianDataInputStream;
 import com.google.devtools.build.android.aapt2.CompiledResources;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.proto.SerializeFormat.Header;
-import com.google.devtools.build.android.resources.Visibility;
 import com.google.devtools.build.android.xml.ResourcesAttribute.AttributeType;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -279,16 +278,11 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
               DataSource dataSource = DataSource.of(dependencyInfo, Paths.get(source));
 
               Value resourceValue = configValue.getValue();
-              // TODO(b/26297204): use visibility from ResourceTable instead of UNKNOWN
               DataResource dataResource =
                   resourceValue.getItem().hasFile()
-                      ? DataValueFile.of(Visibility.UNKNOWN, dataSource)
+                      ? DataValueFile.of(dataSource)
                       : DataResourceXml.from(
-                          resourceValue,
-                          Visibility.UNKNOWN,
-                          dataSource,
-                          resourceType,
-                          packageResolver);
+                          resourceValue, dataSource, resourceType, packageResolver);
 
               if (!fqn.isOverwritable()) {
                 consumers.combiningConsumer.accept(fqn, dataResource);
@@ -536,8 +530,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     FullyQualifiedName fqn = fqnFactory.parse(sourcePath);
     DataSource dataSource = DataSource.of(dependencyInfo, sourcePath);
 
-    // TODO(b/26297204): use visibility from ResourceTable instead of UNKNOWN
-    consumers.overwritingConsumer.accept(fqn, DataValueFile.of(Visibility.UNKNOWN, dataSource));
+    consumers.overwritingConsumer.accept(fqn, DataValueFile.of(dataSource));
 
     for (CompiledFile.Symbol exportedSymbol : compiledFile.getExportedSymbolList()) {
       if (!exportedSymbol.getResourceName().startsWith("android:")) {
@@ -547,13 +540,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
                 ResourceType.ID, exportedSymbol.getResourceName().replaceFirst("id/", ""));
 
         DataResourceXml dataResourceXml =
-            DataResourceXml.from(
-                Value.getDefaultInstance(),
-                // TODO(b/26297204): use visibility from ResourceTable instead of UNKNOWN
-                Visibility.UNKNOWN,
-                dataSource,
-                ResourceType.ID,
-                /*packageResolver=*/ null);
+            DataResourceXml.from(null, dataSource, ResourceType.ID, null);
         consumers.combiningConsumer.accept(symbolFqn, dataResourceXml);
       }
     }
@@ -599,7 +586,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
       for (ZipEntry entry = zipStream.getNextEntry();
           entry != null;
           entry = zipStream.getNextEntry()) {
-        if (entry.getName().endsWith(CompiledResources.ATTRIBUTES_FILE_EXTENSION)) {
+        if (entry.getName().endsWith(".attributes")) {
           readAttributesFile(
               // Don't care about origin of ".attributes" values, since they don't feed into field
               // initializers.
@@ -650,7 +637,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
           FullyQualifiedName.Factory fqnFactory =
               FullyQualifiedName.Factory.fromDirectoryName(dirNameAndQualifiers);
 
-          if (fileZipPath.endsWith(CompiledResources.ATTRIBUTES_FILE_EXTENSION)) {
+          if (fileZipPath.endsWith(".attributes")) {
             readAttributesFile(
                 dependencyInfo,
                 resourceFileStream,
