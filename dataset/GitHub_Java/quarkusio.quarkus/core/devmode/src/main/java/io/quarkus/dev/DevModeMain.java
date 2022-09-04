@@ -1,155 +1,158 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.dev;
 
 import java.io.Closeable;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.net.URI;
 import java.net.URL;
-import java.net.URLClassLoader;
-import org.eclipse.microprofile.config.Config;
-import org.jboss.logging.Logger;
-import io.quarkus.runner.RuntimeRunner;
-import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.Timing;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.locks.LockSupport;
 
-import io.smallrye.config.PropertiesConfigSource;
-import io.smallrye.config.SmallRyeConfigProviderResolver;
+import org.jboss.logging.Logger;
+
+import io.quarkus.bootstrap.app.AdditionalDependency;
+import io.quarkus.bootstrap.app.CuratedApplication;
+import io.quarkus.bootstrap.app.QuarkusBootstrap;
 
 /**
  * The main entry point for the dev mojo execution
  */
-public class DevModeMain {
+public class DevModeMain implements Closeable {
 
+    public static final String DEV_MODE_CONTEXT = "META-INF/dev-mode-context.dat";
     private static final Logger log = Logger.getLogger(DevModeMain.class);
 
-    private static volatile ClassLoader currentAppClassLoader;
-    private static volatile URLClassLoader runtimeCl;
-    private static File classesRoot;
-    private static File wiringDir;
-    private static File cacheDir;
+    private final DevModeContext context;
 
-    private static Closeable closeable;
-    static volatile Throwable deploymentProblem;
-    static RuntimeUpdatesProcessor runtimeUpdatesProcessor;
+    private static volatile CuratedApplication curatedApplication;
+    private Closeable realCloseable;
+
+    public DevModeMain(DevModeContext context) {
+        this.context = context;
+    }
 
     public static void main(String... args) throws Exception {
 
-        Timing.staticInitStarted();
-
-
-
-        //the path that contains the compiled classes
-        classesRoot = new File(args[0]);
-        wiringDir = new File(args[1]);
-        cacheDir = new File(args[2]);
-
-        //first lets look for some config, as it is not on the current class path
-        //and we need to load it to start undertow eagerly
-        File config = new File(classesRoot, "META-INF/microprofile-config.properties");
-        if(config.exists()) {
+        try (InputStream devModeCp = DevModeMain.class.getClassLoader().getResourceAsStream(DEV_MODE_CONTEXT)) {
+            DevModeContext context;
             try {
-                Config built = SmallRyeConfigProviderResolver.instance().getBuilder()
-                        .addDefaultSources()
-                        .addDiscoveredConverters()
-                        .addDiscoveredSources()
-                        .withSources(new PropertiesConfigSource(config.toURL())).build();
-                SmallRyeConfigProviderResolver.instance().registerConfig(built, Thread.currentThread().getContextClassLoader());
+                context = (DevModeContext) new ObjectInputStream(new DataInputStream(devModeCp)).readObject();
             } catch (Exception e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException(
+                        "Unable to deserialize the dev mode context. Does the Quarkus plugin version match the version of Quarkus that is in use?",
+                        e);
+            }
+            try (DevModeMain devModeMain = new DevModeMain(context)) {
+                devModeMain.start();
+
+                LockSupport.park();
+            }
+        }
+    }
+
+    public void start() throws Exception {
+        //propagate system props
+        for (Map.Entry<String, String> i : context.getSystemProperties().entrySet()) {
+            if (!System.getProperties().containsKey(i.getKey())) {
+                System.setProperty(i.getKey(), i.getValue());
             }
         }
 
-        runtimeUpdatesProcessor = RuntimeCompilationSetup.setup();
-        if(runtimeUpdatesProcessor != null) {
-            runtimeUpdatesProcessor.scanForChangedClasses();
-        }
-        //TODO: we can't handle an exception on startup with hot replacement, as Undertow might not have started
-
-        doStart();
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                synchronized (DevModeMain.class) {
-                    if (closeable != null) {
-                        try {
-                            closeable.close();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                    if(runtimeCl != null) {
-                        try {
-                            runtimeCl.close();
-                        } catch(IOException e) {
-                            e.printStackTrace();
-                        }
+        try {
+            URL thisArchive = getClass().getResource(DevModeMain.class.getSimpleName() + ".class");
+            int endIndex = thisArchive.getPath().indexOf("!");
+            Path path;
+            if (endIndex != -1) {
+                path = Paths.get(new URI(thisArchive.getPath().substring(0, endIndex)));
+            } else {
+                path = Paths.get(thisArchive.toURI());
+                path = path.getParent();
+                for (char i : DevModeMain.class.getName().toCharArray()) {
+                    if (i == '.') {
+                        path = path.getParent();
                     }
                 }
             }
-        }, "Quarkus Shutdown Thread"));
-    }
-
-    private static synchronized void doStart() {
-        try {
-            runtimeCl = new URLClassLoader(new URL[]{classesRoot.toURL()}, ClassLoader.getSystemClassLoader());
-            currentAppClassLoader = runtimeCl;
-            ClassLoader old = Thread.currentThread().getContextClassLoader();
-            //we can potentially throw away this class loader, and reload the app
-            try {
-                Thread.currentThread().setContextClassLoader(runtimeCl);
-                RuntimeRunner runner = RuntimeRunner.builder()
-                        .setLaunchMode(LaunchMode.DEVELOPMENT)
-                        .setClassLoader(runtimeCl)
-                        .setTarget(classesRoot.toPath())
-                        .setFrameworkClassesPath(wiringDir.toPath())
-                        .setTransformerCache(cacheDir.toPath())
-                        .build();
-                runner.run();
-                closeable = runner;
-                deploymentProblem = null;
-            } finally {
-                Thread.currentThread().setContextClassLoader(old);
+            QuarkusBootstrap.Builder bootstrapBuilder = QuarkusBootstrap.builder(context.getClassesRoots().get(0).toPath())
+                    .setIsolateDeployment(true)
+                    .setLocalProjectDiscovery(context.isLocalProjectDiscovery())
+                    .addAdditionalDeploymentArchive(path)
+                    .setMode(QuarkusBootstrap.Mode.DEV);
+            if (context.getProjectDir() != null) {
+                bootstrapBuilder.setProjectRoot(context.getProjectDir().toPath());
+            } else {
+                bootstrapBuilder.setProjectRoot(new File(".").toPath());
             }
+            for (int i = 1; i < context.getClassesRoots().size(); ++i) {
+                bootstrapBuilder.addAdditionalApplicationArchive(
+                        new AdditionalDependency(context.getClassesRoots().get(i).toPath(), false, false));
+            }
+
+            for (DevModeContext.ModuleInfo i : context.getModules()) {
+                if (i.getClassesPath() != null) {
+                    Path classesPath = Paths.get(i.getClassesPath());
+                    bootstrapBuilder.addAdditionalApplicationArchive(new AdditionalDependency(classesPath, true, false));
+
+                }
+            }
+
+            copyDotEnvFile();
+
+            Properties buildSystemProperties = new Properties();
+            buildSystemProperties.putAll(context.getBuildSystemProperties());
+            bootstrapBuilder.setBuildSystemProperties(buildSystemProperties);
+            curatedApplication = bootstrapBuilder.setTest(context.isTest()).build().bootstrap();
+            realCloseable = (Closeable) curatedApplication.runInAugmentClassLoader(IsolatedDevModeMain.class.getName(),
+                    Collections.singletonMap(DevModeContext.class.getName(), context));
         } catch (Throwable t) {
-            deploymentProblem = t;
-            log.error("Failed to start quarkus", t);
+            log.error("Quarkus dev mode failed to start in curation phase", t);
+            throw new RuntimeException(t);
+            //System.exit(1);
         }
     }
 
-    public static synchronized void restartApp() {
-        if (closeable != null) {
-            ClassLoader old = Thread.currentThread().getContextClassLoader();
-            Thread.currentThread().setContextClassLoader(runtimeCl);
+    // copies the .env file to the directory where the process is running
+    // this is done because for the .env file to take effect, it needs to be
+    // in the same directory as the running process
+    private void copyDotEnvFile() {
+        File projectDir = context.getProjectDir();
+        if (projectDir == null) { // this is the case for QuarkusDevModeTest
+            return;
+        }
+        Path currentDir = Paths.get("").toAbsolutePath().normalize();
+        Path dotEnvPath = projectDir.toPath().resolve(".env");
+        if (Files.exists(dotEnvPath)) {
             try {
-                closeable.close();
+                Path link = currentDir.resolve(".env");
+                silentDeleteFile(link);
+                // create a symlink to ensure that user updates to the file have the expected effect in dev-mode
+                Files.createSymbolicLink(link, dotEnvPath);
             } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                Thread.currentThread().setContextClassLoader(old);
+                log.warn("Unable to copy .env file", e);
             }
         }
-        SmallRyeConfigProviderResolver.instance().releaseConfig(SmallRyeConfigProviderResolver.instance().getConfig());
-        closeable = null;
-        Timing.restart();
-        doStart();
     }
 
-    public static ClassLoader getCurrentAppClassLoader() {
-        return currentAppClassLoader;
+    private void silentDeleteFile(Path path) {
+        try {
+            Files.delete(path);
+        } catch (IOException ignored) {
+
+        }
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (realCloseable != null) {
+            realCloseable.close();
+        }
     }
 }
