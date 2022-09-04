@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.runtime;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,7 +40,8 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.bugreport.BugReport;
+import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
 import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Aborted;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Aborted.AbortReason;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId.NamedSetOfFilesId;
@@ -68,17 +67,16 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.NoAnalyzeEvent;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.DetailedExitCode;
-import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.util.FileSystems;
 import com.google.devtools.common.options.Options;
+import com.google.protobuf.ByteString;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -92,28 +90,36 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import javax.annotation.Nullable;
 import org.apache.commons.lang.time.StopWatch;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 /** Tests {@link BuildEventStreamer}. */
 @RunWith(JUnit4.class)
-public final class BuildEventStreamerTest extends FoundationTestCase {
+public class BuildEventStreamerTest extends FoundationTestCase {
+  private CountingArtifactGroupNamer artifactGroupNamer;
+  private RecordingBuildEventTransport transport;
+  private BuildEventStreamer streamer;
 
-  private static final String OOM_MESSAGE = "Please build fewer targets.";
+  @Before
+  public void setUp() {
+    artifactGroupNamer = new CountingArtifactGroupNamer();
+    transport = new RecordingBuildEventTransport(artifactGroupNamer, true);
+    streamer =
+        new BuildEventStreamer(ImmutableSet.<BuildEventTransport>of(transport), artifactGroupNamer);
+  }
 
-  private final CountingArtifactGroupNamer artifactGroupNamer = new CountingArtifactGroupNamer();
-  private final RecordingBuildEventTransport transport =
-      new RecordingBuildEventTransport(artifactGroupNamer);
-
-  private final BuildEventStreamer streamer =
-      new BuildEventStreamer.Builder()
-          .artifactGroupNamer(artifactGroupNamer)
-          .buildEventTransports(ImmutableSet.of(transport))
-          .besStreamOptions(new BuildEventStreamOptions())
-          .oomMessage(OOM_MESSAGE)
-          .build();
+  @After
+  public void tearDown() {
+    artifactGroupNamer = null;
+    transport = null;
+    streamer = null;
+  }
 
   private static BuildEventContext getTestBuildEventContext(ArtifactGroupNamer artifactGroupNamer) {
     return new BuildEventContext() {
@@ -124,7 +130,12 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
 
       @Override
       public PathConverter pathConverter() {
-        return Path::toString;
+        return new PathConverter() {
+          @Override
+          public String apply(Path path) {
+            return path.toString();
+          }
+        };
       }
 
       @Override
@@ -138,20 +149,20 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
       new ActionExecutedEvent(
           ActionsTestUtil.DUMMY_ARTIFACT.getExecPath(),
           new ActionsTestUtil.NullAction(),
-          /*exception=*/ null,
+          /* exception= */ null,
           ActionsTestUtil.DUMMY_ARTIFACT.getPath(),
-          /*stdout=*/ null,
-          /*stderr=*/ null,
-          /*actionMetadataLogs=*/ ImmutableList.of(),
+          /* stdout= */ null,
+          /* stderr= */ null,
+          /* actionMetadataLogs= */ ImmutableList.of(),
           ErrorTiming.NO_ERROR,
-          /*isInMemoryFs=*/ false);
+          /* isInMemoryFs= */ false);
 
-  private static final class RecordingBuildEventTransport implements BuildEventTransport {
+  private static class RecordingBuildEventTransport implements BuildEventTransport {
     private final List<BuildEvent> events = new ArrayList<>();
     private final List<BuildEventStreamProtos.BuildEvent> eventsAsProtos = new ArrayList<>();
-    private final ArtifactGroupNamer artifactGroupNamer;
+    private ArtifactGroupNamer artifactGroupNamer;
 
-    RecordingBuildEventTransport(ArtifactGroupNamer namer) {
+    RecordingBuildEventTransport(ArtifactGroupNamer namer, boolean recordEvents) {
       this.artifactGroupNamer = namer;
     }
 
@@ -168,12 +179,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     @Override
     public synchronized void sendBuildEvent(BuildEvent event) {
       events.add(event);
-      try {
-        eventsAsProtos.add(event.asStreamProto(getTestBuildEventContext(this.artifactGroupNamer)));
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new IllegalStateException("interrupts not supported in test instance");
-      }
+      eventsAsProtos.add(event.asStreamProto(getTestBuildEventContext(this.artifactGroupNamer)));
     }
 
     @Override
@@ -232,7 +238,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     }
   }
 
-  private static final class GenericArtifactReportingEvent implements EventReportingArtifacts {
+  private static class GenericArtifactReportingEvent implements EventReportingArtifacts {
     private final BuildEventId id;
     private final Collection<BuildEventId> children;
     private final Collection<NestedSet<Artifact>> artifacts;
@@ -247,7 +253,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     }
 
     GenericArtifactReportingEvent(BuildEventId id, Collection<NestedSet<Artifact>> artifacts) {
-      this(id, ImmutableSet.of(), artifacts);
+      this(id, ImmutableSet.<BuildEventId>of(), artifacts);
     }
 
     @Override
@@ -270,7 +276,10 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
       BuildEventStreamProtos.NamedSetOfFiles.Builder builder =
           BuildEventStreamProtos.NamedSetOfFiles.newBuilder();
       for (NestedSet<Artifact> artifactset : artifacts) {
-        builder.addFileSets(converters.artifactGroupNamer().apply(artifactset.toNode()));
+        builder.addFileSets(
+            converters
+                .artifactGroupNamer()
+                .apply((new NestedSetView<Artifact>(artifactset)).identifier()));
       }
       return GenericBuildEvent.protoChaining(this).setNamedSetOfFiles(builder.build()).build();
     }
@@ -289,7 +298,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     }
 
     GenericConfigurationEvent(BuildEventId id, BuildEvent configuration) {
-      this(id, ImmutableSet.of(), ImmutableSet.of(configuration));
+      this(id, ImmutableSet.<BuildEventId>of(), ImmutableSet.of(configuration));
     }
 
     @Override
@@ -330,6 +339,11 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     void transportClosed(BuildEventTransportClosedEvent evt) {
       transportSet.remove(evt.transport());
     }
+  }
+
+  @Before
+  public void setup() {
+    MockitoAnnotations.initMocks(this);
   }
 
   @Test(timeout = 5000)
@@ -388,7 +402,8 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     BuildEvent startEvent =
         new GenericBuildEvent(
             testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
-    BuildEvent unexpectedEvent = new GenericBuildEvent(testId("unexpected"), ImmutableSet.of());
+    BuildEvent unexpectedEvent =
+        new GenericBuildEvent(testId("unexpected"), ImmutableSet.<BuildEventId>of());
 
     streamer.buildEvent(startEvent);
     streamer.buildEvent(unexpectedEvent);
@@ -411,7 +426,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     // the initial progress event is used instead to chain that event; in this way, new
     // progress updates can always be chained in.
     BuildEvent unexpectedStartEvent =
-        new GenericBuildEvent(testId("unexpected start"), ImmutableSet.of());
+        new GenericBuildEvent(testId("unexpected start"), ImmutableSet.<BuildEventId>of());
 
     streamer.buildEvent(unexpectedStartEvent);
 
@@ -427,7 +442,8 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     // The initial event should also announce a new progress event; we test this
     // by streaming another unannounced event.
 
-    BuildEvent unexpectedEvent = new GenericBuildEvent(testId("unexpected"), ImmutableSet.of());
+    BuildEvent unexpectedEvent =
+        new GenericBuildEvent(testId("unexpected"), ImmutableSet.<BuildEventId>of());
 
     streamer.buildEvent(unexpectedEvent);
 
@@ -451,9 +467,10 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     BuildEvent startEvent =
         new GenericBuildEvent(
             testId("Initial"),
-            ImmutableSet.of(
+            ImmutableSet.<BuildEventId>of(
                 ProgressEvent.INITIAL_PROGRESS_UPDATE, BuildEventIdUtil.buildFinished()));
-    BuildEvent earlyEvent = new GenericBuildEvent(testId("unexpected"), ImmutableSet.of());
+    BuildEvent earlyEvent =
+        new GenericBuildEvent(testId("unexpected"), ImmutableSet.<BuildEventId>of());
     BuildEvent lateReference =
         new GenericBuildEvent(testId("late reference"), ImmutableSet.of(earlyEvent.getEventId()));
 
@@ -480,10 +497,12 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     BuildEventId expectedId = testId("the target");
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE, expectedId));
-    BuildEvent rootCause = new GenericBuildEvent(testId("failure event"), ImmutableSet.of());
+            testId("Initial"),
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE, expectedId));
+    BuildEvent rootCause =
+        new GenericBuildEvent(testId("failure event"), ImmutableSet.<BuildEventId>of());
     BuildEvent failedTarget =
-        new GenericOrderEvent(expectedId, ImmutableSet.of(rootCause.getEventId()));
+        new GenericOrderEvent(expectedId, ImmutableSet.<BuildEventId>of(rootCause.getEventId()));
 
     streamer.buildEvent(startEvent);
     streamer.buildEvent(failedTarget);
@@ -568,6 +587,10 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
       StopWatch watch = new StopWatch();
       watch.start();
 
+      transport = new RecordingBuildEventTransport(artifactGroupNamer, /*recordEvents=*/ false);
+      streamer =
+          new BuildEventStreamer(
+              ImmutableSet.<BuildEventTransport>of(transport), artifactGroupNamer);
       BuildEvent startEvent =
           new GenericBuildEvent(
               testId("Initial"),
@@ -623,12 +646,13 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     BuildEvent startEvent =
         new GenericBuildEvent(
             testId("Initial"),
-            ImmutableSet.of(
+            ImmutableSet.<BuildEventId>of(
                 ProgressEvent.INITIAL_PROGRESS_UPDATE,
                 expectedId,
                 BuildEventIdUtil.buildFinished()));
     BuildEventId rootCauseId = testId("failure event");
-    BuildEvent failedTarget = new GenericOrderEvent(expectedId, ImmutableSet.of(rootCauseId));
+    BuildEvent failedTarget =
+        new GenericOrderEvent(expectedId, ImmutableSet.<BuildEventId>of(rootCauseId));
 
     streamer.buildEvent(startEvent);
     streamer.buildEvent(failedTarget);
@@ -652,9 +676,10 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     BuildEventId waitId = testId("Waiting for initial event");
     BuildEvent startEvent =
         new GenericBuildEvent(
-            initialId, ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE, waitId));
+            initialId,
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE, waitId));
     BuildEvent waitingForStart =
-        new GenericOrderEvent(waitId, ImmutableSet.of(), ImmutableSet.of(initialId));
+        new GenericOrderEvent(waitId, ImmutableSet.<BuildEventId>of(), ImmutableSet.of(initialId));
 
     streamer.buildEvent(waitingForStart);
     streamer.buildEvent(startEvent);
@@ -677,7 +702,8 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     // Verify that reported artifacts are correctly unfolded into the stream
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
+            testId("Initial"),
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
 
     Artifact a = makeArtifact("path/a");
     Artifact b = makeArtifact("path/b");
@@ -716,15 +742,18 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   public void testStdoutReported() {
     // Verify that stdout and stderr are reported in the build-event stream on progress
     // events.
-    BuildEventStreamer.OutErrProvider outErr = mock(BuildEventStreamer.OutErrProvider.class);
+    BuildEventStreamer.OutErrProvider outErr =
+        Mockito.mock(BuildEventStreamer.OutErrProvider.class);
     String stdoutMsg = "Some text that was written to stdout.";
     String stderrMsg = "The UI text that bazel wrote to stderr.";
-    when(outErr.getOut()).thenReturn(ImmutableList.of(stdoutMsg));
-    when(outErr.getErr()).thenReturn(ImmutableList.of(stderrMsg));
+    when(outErr.getOut()).thenReturn(ImmutableList.of(ByteString.copyFromUtf8(stdoutMsg)));
+    when(outErr.getErr()).thenReturn(ImmutableList.of(ByteString.copyFromUtf8(stderrMsg)));
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
-    BuildEvent unexpectedEvent = new GenericBuildEvent(testId("unexpected"), ImmutableSet.of());
+            testId("Initial"),
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
+    BuildEvent unexpectedEvent =
+        new GenericBuildEvent(testId("unexpected"), ImmutableSet.<BuildEventId>of());
 
     streamer.registerOutErrProvider(outErr);
     streamer.buildEvent(startEvent);
@@ -754,19 +783,21 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   public void testStdoutReportedAfterCrash() {
     // Verify that stdout and stderr are reported in the build-event stream on progress
     // events.
-    BuildEventStreamer.OutErrProvider outErr = mock(BuildEventStreamer.OutErrProvider.class);
+    BuildEventStreamer.OutErrProvider outErr =
+        Mockito.mock(BuildEventStreamer.OutErrProvider.class);
     String stdoutMsg = "Some text that was written to stdout.";
     String stderrMsg = "The UI text that bazel wrote to stderr.";
-    when(outErr.getOut()).thenReturn(ImmutableList.of(stdoutMsg));
-    when(outErr.getErr()).thenReturn(ImmutableList.of(stderrMsg));
+    when(outErr.getOut()).thenReturn(ImmutableList.of(ByteString.copyFromUtf8(stdoutMsg)));
+    when(outErr.getErr()).thenReturn(ImmutableList.of(ByteString.copyFromUtf8(stderrMsg)));
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
+            testId("Initial"),
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
 
     streamer.registerOutErrProvider(outErr);
     streamer.buildEvent(startEvent);
-    // Simulate a crash with an abrupt call to #closeOnAbort().
-    streamer.closeOnAbort(AbortReason.INTERNAL);
+    // Simulate a crash with an abrupt call to #close().
+    streamer.close();
     assertThat(streamer.isClosed()).isTrue();
 
     List<BuildEvent> eventsSeen = transport.getEvents();
@@ -784,56 +815,61 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
     verify(outErr, times(1)).getErr();
   }
 
-  private static <T> ImmutableList<ImmutableList<Pair<T, T>>> consumeToLists(
-      Iterable<T> left, Iterable<T> right) {
-    ImmutableList.Builder<Pair<T, T>> consumerBuilder = ImmutableList.builder();
-    ImmutableList.Builder<Pair<T, T>> lastConsumerBuilder = ImmutableList.builder();
-
-    BuildEventStreamer.consumeAsPairs(
-        left,
-        right,
-        (t1, t2) -> consumerBuilder.add(Pair.of(t1, t2)),
-        (t1, t2) -> lastConsumerBuilder.add(Pair.of(t1, t2)));
-
-    return ImmutableList.of(consumerBuilder.build(), lastConsumerBuilder.build());
-  }
-
-  @Test
-  public void testConsumeAsPairs() {
-    assertThat(consumeToLists(ImmutableList.of(1, 2, 3), ImmutableList.of(4, 5, 6)))
-        .containsExactly(
-            ImmutableList.of(Pair.of(1, null), Pair.of(2, null), Pair.of(3, 4), Pair.of(null, 5)),
-            ImmutableList.of(Pair.of(null, 6)))
-        .inOrder();
-
-    assertThat(consumeToLists(ImmutableList.of(), ImmutableList.of()))
-        .containsExactly(ImmutableList.of(), ImmutableList.of(Pair.of(null, null)))
-        .inOrder();
-
-    assertThat(consumeToLists(ImmutableList.of(1), ImmutableList.of(2)))
-        .containsExactly(ImmutableList.of(), ImmutableList.of(Pair.of(1, 2)))
-        .inOrder();
-
-    assertThat(consumeToLists(ImmutableList.of(1), ImmutableList.of(2, 3)))
-        .containsExactly(ImmutableList.of(Pair.of(1, 2)), ImmutableList.of(Pair.of(null, 3)))
-        .inOrder();
-
-    assertThat(consumeToLists(ImmutableList.of(1, 2), ImmutableList.of()))
-        .containsExactly(ImmutableList.of(Pair.of(1, null)), ImmutableList.of(Pair.of(2, null)))
-        .inOrder();
-
-    assertThat(consumeToLists(ImmutableList.of(), ImmutableList.of(1)))
-        .containsExactly(ImmutableList.of(), ImmutableList.of(Pair.of(null, 1)))
-        .inOrder();
-  }
+  // private static ImmutableList<ImmutableList<Pair<String, String>>> consumeToLists(
+  //     Iterable<String> left, Iterable<String> right) {
+  //   ImmutableList.Builder<Pair<String, String>> consumerBuilder = ImmutableList.builder();
+  //   ImmutableList.Builder<Pair<String, String>> lastConsumerBuilder = ImmutableList.builder();
+  //
+  //   BuildEventStreamer.consumeAsPairs(
+  //       left,
+  //       right,
+  //       (t1, t2) -> consumerBuilder.add(Pair.of(t1, t2)),
+  //       (t1, t2) -> lastConsumerBuilder.add(Pair.of(t1, t2)));
+  //
+  //   return ImmutableList.of(consumerBuilder.build(), lastConsumerBuilder.build());
+  // }
+  //
+  // @Test
+  // public void testConsumeAsPairs() {
+  //   assertThat(consumeToLists(ImmutableList.of("1", "2", "3"), ImmutableList.of("4", "5", "6")))
+  //       .containsExactly(
+  //           ImmutableList.of(
+  //               Pair.of("1", null), Pair.of("2", null), Pair.of("3", "4"), Pair.of(null, "5")),
+  //           ImmutableList.of(Pair.of(null, "6")))
+  //       .inOrder();
+  //
+  //   assertThat(consumeToLists(ImmutableList.of(), ImmutableList.of()))
+  //       .containsExactly(ImmutableList.of(), ImmutableList.of(Pair.of(null, null)))
+  //       .inOrder();
+  //
+  //   assertThat(consumeToLists(ImmutableList.of("1"), ImmutableList.of("2")))
+  //       .containsExactly(ImmutableList.of(), ImmutableList.of(Pair.of("1", "2")))
+  //       .inOrder();
+  //
+  //   assertThat(consumeToLists(ImmutableList.of("1"), ImmutableList.of("2", "3")))
+  //       .containsExactly(ImmutableList.of(Pair.of("1", "2")), ImmutableList.of(Pair.of(null,
+  // "3")))
+  //       .inOrder();
+  //
+  //   assertThat(consumeToLists(ImmutableList.of("1", "2"), ImmutableList.of()))
+  //       .containsExactly(ImmutableList.of(Pair.of("1", null)), ImmutableList.of(Pair.of("2",
+  // null)))
+  //       .inOrder();
+  //
+  //   assertThat(consumeToLists(ImmutableList.of(), ImmutableList.of("1")))
+  //       .containsExactly(ImmutableList.of(), ImmutableList.of(Pair.of(null, "1")))
+  //       .inOrder();
+  // }
 
   @Test
   public void testReportedConfigurations() throws Exception {
     // Verify that configuration events are posted, but only once.
-    BuildOptions defaultBuildOptions = BuildOptions.of(ImmutableList.of(CoreOptions.class));
+    BuildOptions defaultBuildOptions =
+        BuildOptions.of(ImmutableList.<Class<? extends FragmentOptions>>of(CoreOptions.class));
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
+            testId("Initial"),
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
     BuildConfiguration configuration =
         new BuildConfiguration(
             new BlazeDirectories(
@@ -841,13 +877,12 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
                 rootDirectory,
                 /* defaultSystemJavabase= */ null,
                 "productName"),
-            /* fragmentsMap= */ ImmutableMap.of(),
+            /* fragmentsMap= */ ImmutableMap.<Class<? extends Fragment>, Fragment>of(),
             defaultBuildOptions,
             BuildOptions.diffForReconstruction(defaultBuildOptions, defaultBuildOptions),
             /* reservedActionMnemonics= */ ImmutableSet.of(),
             ActionEnvironment.EMPTY,
-            "workspace",
-            /* siblingRepositoryLayout= */ false);
+            "workspace");
     BuildEvent firstWithConfiguration =
         new GenericConfigurationEvent(testId("first"), configuration.toBuildEvent());
     BuildEvent secondWithConfiguration =
@@ -870,23 +905,25 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testEarlyFlush() {
+  public void testEarlyFlush() throws Exception {
     // Verify that the streamer can handle early calls to flush() and still correctly
     // reports stdout and stderr in the build-event stream.
-    BuildEventStreamer.OutErrProvider outErr = mock(BuildEventStreamer.OutErrProvider.class);
+    BuildEventStreamer.OutErrProvider outErr =
+        Mockito.mock(BuildEventStreamer.OutErrProvider.class);
     String firstStdoutMsg = "Some text that was written to stdout.";
     String firstStderrMsg = "The UI text that bazel wrote to stderr.";
     String secondStdoutMsg = "More text that was written to stdout, still before the start event.";
     String secondStderrMsg = "More text written to stderr, still before the start event.";
     when(outErr.getOut())
-        .thenReturn(ImmutableList.of(firstStdoutMsg))
-        .thenReturn(ImmutableList.of(secondStdoutMsg));
+        .thenReturn(ImmutableList.of(ByteString.copyFromUtf8(firstStdoutMsg)))
+        .thenReturn(ImmutableList.of(ByteString.copyFromUtf8(secondStdoutMsg)));
     when(outErr.getErr())
-        .thenReturn(ImmutableList.of(firstStderrMsg))
-        .thenReturn(ImmutableList.of(secondStderrMsg));
+        .thenReturn(ImmutableList.of(ByteString.copyFromUtf8(firstStderrMsg)))
+        .thenReturn(ImmutableList.of(ByteString.copyFromUtf8(secondStderrMsg)));
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
+            testId("Initial"),
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
 
     streamer.registerOutErrProvider(outErr);
     streamer.flush();
@@ -913,18 +950,26 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testChunkedFlush() {
+  public void testChunkedFlush() throws Exception {
     // Verify that the streamer calls to flush() that return multiple chunked buffers.
-    BuildEventStreamer.OutErrProvider outErr = mock(BuildEventStreamer.OutErrProvider.class);
+    BuildEventStreamer.OutErrProvider outErr =
+        Mockito.mock(BuildEventStreamer.OutErrProvider.class);
     String firstStdoutMsg = "Some text that was written to stdout.";
     String firstStderrMsg = "The UI text that bazel wrote to stderr.";
     String secondStdoutMsg = "More text that was written to stdout, still before the start event.";
     String secondStderrMsg = "More text written to stderr, still before the start event.";
-    when(outErr.getOut()).thenReturn(ImmutableList.of(firstStdoutMsg, secondStdoutMsg));
-    when(outErr.getErr()).thenReturn(ImmutableList.of(firstStderrMsg, secondStderrMsg));
+    when(outErr.getOut())
+        .thenReturn(
+            ImmutableList.of(
+                ByteString.copyFromUtf8(firstStdoutMsg), ByteString.copyFromUtf8(secondStdoutMsg)));
+    when(outErr.getErr())
+        .thenReturn(
+            ImmutableList.of(
+                ByteString.copyFromUtf8(firstStderrMsg), ByteString.copyFromUtf8(secondStderrMsg)));
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
+            testId("Initial"),
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
 
     streamer.registerOutErrProvider(outErr);
     streamer.buildEvent(startEvent);
@@ -957,16 +1002,22 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testNoopFlush() {
+  public void testNoopFlush() throws Exception {
     // Verify that the streamer ignores a flush, if neither stream produces any output.
-    BuildEventStreamer.OutErrProvider outErr = mock(BuildEventStreamer.OutErrProvider.class);
+    BuildEventStreamer.OutErrProvider outErr =
+        Mockito.mock(BuildEventStreamer.OutErrProvider.class);
     String stdoutMsg = "Some text that was written to stdout.";
     String stderrMsg = "The UI text that bazel wrote to stderr.";
-    when(outErr.getOut()).thenReturn(ImmutableList.of(stdoutMsg)).thenReturn(ImmutableList.of());
-    when(outErr.getErr()).thenReturn(ImmutableList.of(stderrMsg)).thenReturn(ImmutableList.of());
+    when(outErr.getOut())
+        .thenReturn(ImmutableList.of(ByteString.copyFromUtf8(stdoutMsg)))
+        .thenReturn(ImmutableList.of());
+    when(outErr.getErr())
+        .thenReturn(ImmutableList.of(ByteString.copyFromUtf8(stderrMsg)))
+        .thenReturn(ImmutableList.of());
     BuildEvent startEvent =
         new GenericBuildEvent(
-            testId("Initial"), ImmutableSet.of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
+            testId("Initial"),
+            ImmutableSet.<BuildEventId>of(ProgressEvent.INITIAL_PROGRESS_UPDATE));
 
     streamer.registerOutErrProvider(outErr);
     streamer.buildEvent(startEvent);
@@ -982,21 +1033,22 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testEarlyFlushBadInitialEvent() {
+  public void testEarlyFlushBadInitialEvent() throws Exception {
     // Verify that an early flush works correctly with an unusual start event.
     // In this case, we expect 3 events in the stream, in that order:
     // - an artificial progress event as initial event, to properly link in
     //   all events
     // - the unusal first event we have seen, and
     // - a progress event reporting the flushed messages.
-    BuildEventStreamer.OutErrProvider outErr = mock(BuildEventStreamer.OutErrProvider.class);
+    BuildEventStreamer.OutErrProvider outErr =
+        Mockito.mock(BuildEventStreamer.OutErrProvider.class);
     String stdoutMsg = "Some text that was written to stdout.";
     String stderrMsg = "The UI text that bazel wrote to stderr.";
-    when(outErr.getOut()).thenReturn(ImmutableList.of(stdoutMsg));
-    when(outErr.getErr()).thenReturn(ImmutableList.of(stderrMsg));
+    when(outErr.getOut()).thenReturn(ImmutableList.of(ByteString.copyFromUtf8(stdoutMsg)));
+    when(outErr.getErr()).thenReturn(ImmutableList.of(ByteString.copyFromUtf8(stderrMsg)));
 
     BuildEvent unexpectedStartEvent =
-        new GenericBuildEvent(testId("unexpected start"), ImmutableSet.of());
+        new GenericBuildEvent(testId("unexpected start"), ImmutableSet.<BuildEventId>of());
 
     streamer.registerOutErrProvider(outErr);
     streamer.flush();
@@ -1030,7 +1082,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testEarlyAbort() {
+  public void testEarlyAbort() throws Exception {
     // For a build that is aborted before a build-started event is generated,
     // we still expect that, if a build-started event is forced by some order
     // constraint (e.g., CommandLine wants to come after build started), then
@@ -1057,7 +1109,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testFinalEventsLate() {
+  public void testFinalEventsLate() throws Exception {
     // Verify that we correctly handle late events (i.e., events coming only after the
     // BuildCompleteEvent) that are sent to the streamer after the BuildCompleteEvent.
     BuildEvent startEvent =
@@ -1083,7 +1135,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testFinalEventsEarly() {
+  public void testFinalEventsEarly() throws Exception {
     // Verify that we correctly handle late events (i.e., events coming only after the
     // BuildCompleteEvent) that are sent to the streamer before the BuildCompleteEvent,
     // but with an order constraint to come afterwards.
@@ -1114,24 +1166,18 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
   public void testSuccessfulActionsAreNotPublishedByDefault() {
     EventBusHandler handler = new EventBusHandler();
     eventBus.register(handler);
+
     ActionExecutedEvent failedActionExecutedEvent =
         new ActionExecutedEvent(
             ActionsTestUtil.DUMMY_ARTIFACT.getExecPath(),
             new ActionsTestUtil.NullAction(),
-            new ActionExecutionException(
-                "Exception",
-                /* action= */ null,
-                /* catastrophe= */ false,
-                DetailedExitCode.of(
-                    FailureDetail.newBuilder()
-                        .setSpawn(Spawn.newBuilder().setCode(Code.EXECUTION_DENIED))
-                        .build())),
+            new ActionExecutionException("Exception", /* action= */ null, /* catastrophe= */ false),
             ActionsTestUtil.DUMMY_ARTIFACT.getPath(),
-            /*stdout=*/ null,
-            /*stderr=*/ null,
-            /*actionMetadataLogs=*/ ImmutableList.of(),
+            /* stdout= */ null,
+            /* stderr= */ null,
+            /* actionMetadataLogs= */ ImmutableList.of(),
             ErrorTiming.BEFORE_EXECUTION,
-            /*isInMemoryFs=*/ false);
+            /* isInMemoryFs= */ false);
 
     streamer.buildEvent(SUCCESSFUL_ACTION_EXECUTED_EVENT);
     streamer.buildEvent(failedActionExecutedEvent);
@@ -1161,14 +1207,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
         new ActionExecutedEvent(
             ActionsTestUtil.DUMMY_ARTIFACT.getExecPath(),
             new ActionsTestUtil.NullAction(),
-            new ActionExecutionException(
-                "Exception",
-                /* action= */ null,
-                /* catastrophe= */ false,
-                DetailedExitCode.of(
-                    FailureDetail.newBuilder()
-                        .setSpawn(Spawn.newBuilder().setCode(Code.EXECUTION_DENIED))
-                        .build())),
+            new ActionExecutionException("Exception", /* action= */ null, /* catastrophe= */ false),
             ActionsTestUtil.DUMMY_ARTIFACT.getPath(),
             /* stdout= */ null,
             /* stderr= */ null,
@@ -1196,7 +1235,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
                 ProgressEvent.INITIAL_PROGRESS_UPDATE,
                 BuildEventIdUtil.buildFinished()));
     BuildCompleteEvent buildCompleteEvent =
-        buildCompleteEvent(createGenericDetailedExitCode(), true, null, false);
+        buildCompleteEvent(ExitCode.BUILD_FAILURE, true, null, false);
 
     streamer.buildEvent(startEvent);
     streamer.buildEvent(buildCompleteEvent);
@@ -1204,7 +1243,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
 
     BuildEventStreamProtos.BuildEvent aborted = getBepEvent(buildEventId);
     assertThat(aborted).isNotNull();
-    assertThat(aborted.hasAborted()).isTrue();
+    assertThat(aborted.hasAborted()).isNotNull();
     assertThat(aborted.getAborted().getReason()).isEqualTo(AbortReason.INCOMPLETE);
     assertThat(aborted.getAborted().getDescription()).isEmpty();
   }
@@ -1220,7 +1259,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
                 ProgressEvent.INITIAL_PROGRESS_UPDATE,
                 BuildEventIdUtil.buildFinished()));
     BuildCompleteEvent buildCompleteEvent =
-        buildCompleteEvent(createGenericDetailedExitCode(), true, new RuntimeException(), false);
+        buildCompleteEvent(ExitCode.BUILD_FAILURE, true, new RuntimeException(), false);
 
     streamer.buildEvent(startEvent);
     streamer.buildEvent(buildCompleteEvent);
@@ -1228,7 +1267,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
 
     BuildEventStreamProtos.BuildEvent aborted = getBepEvent(buildEventId);
     assertThat(aborted).isNotNull();
-    assertThat(aborted.hasAborted()).isTrue();
+    assertThat(aborted.hasAborted()).isNotNull();
     assertThat(aborted.getAborted().getReason()).isEqualTo(AbortReason.INTERNAL);
     assertThat(aborted.getAborted().getDescription()).isEmpty();
   }
@@ -1244,7 +1283,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
                 ProgressEvent.INITIAL_PROGRESS_UPDATE,
                 BuildEventIdUtil.buildFinished()));
     BuildCompleteEvent buildCompleteEvent =
-        buildCompleteEvent(createGenericDetailedExitCode(), true, null, true);
+        buildCompleteEvent(ExitCode.BUILD_FAILURE, true, null, true);
 
     streamer.buildEvent(startEvent);
     streamer.buildEvent(buildCompleteEvent);
@@ -1252,7 +1291,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
 
     BuildEventStreamProtos.BuildEvent aborted = getBepEvent(buildEventId);
     assertThat(aborted).isNotNull();
-    assertThat(aborted.hasAborted()).isTrue();
+    assertThat(aborted.hasAborted()).isNotNull();
     assertThat(aborted.getAborted().getReason()).isEqualTo(AbortReason.INTERNAL);
     assertThat(aborted.getAborted().getDescription()).isEmpty();
   }
@@ -1269,17 +1308,17 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
                 BuildEventIdUtil.buildFinished()));
 
     streamer.buildEvent(startEvent);
-    streamer.closeOnAbort(AbortReason.TIME_OUT);
+    streamer.close(AbortReason.TIME_OUT);
 
     BuildEventStreamProtos.BuildEvent aborted0 = getBepEvent(buildEventId);
     assertThat(aborted0).isNotNull();
-    assertThat(aborted0.hasAborted()).isTrue();
+    assertThat(aborted0.hasAborted()).isNotNull();
     assertThat(aborted0.getAborted().getReason()).isEqualTo(AbortReason.TIME_OUT);
     assertThat(aborted0.getAborted().getDescription()).isEmpty();
 
     BuildEventStreamProtos.BuildEvent aborted1 = getBepEvent(BuildEventIdUtil.buildFinished());
     assertThat(aborted1).isNotNull();
-    assertThat(aborted1.hasAborted()).isTrue();
+    assertThat(aborted1.hasAborted()).isNotNull();
     assertThat(aborted1.getAborted().getReason()).isEqualTo(AbortReason.TIME_OUT);
     assertThat(aborted1.getAborted().getDescription()).isEmpty();
   }
@@ -1295,7 +1334,7 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
                 ProgressEvent.INITIAL_PROGRESS_UPDATE,
                 BuildEventIdUtil.buildFinished()));
     BuildCompleteEvent buildCompleteEvent =
-        buildCompleteEvent(createGenericDetailedExitCode(), false, new RuntimeException(), false);
+        buildCompleteEvent(ExitCode.BUILD_FAILURE, false, new RuntimeException(), false);
 
     streamer.buildEvent(startEvent);
     streamer.noAnalyze(new NoAnalyzeEvent());
@@ -1304,50 +1343,10 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
 
     BuildEventStreamProtos.BuildEvent aborted = getBepEvent(buildEventId);
     assertThat(aborted).isNotNull();
-    assertThat(aborted.hasAborted()).isTrue();
+    assertThat(aborted.hasAborted()).isNotNull();
     assertThat(aborted.getAborted().getReason()).isEqualTo(AbortReason.INTERNAL);
     assertThat(aborted.getAborted().getDescription())
         .isEqualTo("Multiple abort reasons reported: [NO_ANALYZE, INTERNAL]");
-  }
-
-  @Test
-  public void nonOomAbortReason_doesNotIncludeOomMessage() {
-    BuildEventId buildEventId = testId("abort_expected");
-    BuildEvent startEvent =
-        new GenericBuildEvent(
-            BuildEventIdUtil.buildStartedId(),
-            ImmutableSet.of(
-                buildEventId,
-                ProgressEvent.INITIAL_PROGRESS_UPDATE,
-                BuildEventIdUtil.buildFinished()));
-
-    streamer.buildEvent(startEvent);
-    streamer.closeOnAbort(AbortReason.INTERNAL);
-
-    assertThat(getBepEvent(buildEventId).getAborted())
-        .isEqualTo(Aborted.newBuilder().setReason(AbortReason.INTERNAL).build());
-  }
-
-  @Test
-  public void oomAbortReason_includesOomMessage() {
-    BuildEventId buildEventId = testId("abort_expected");
-    BuildEvent startEvent =
-        new GenericBuildEvent(
-            BuildEventIdUtil.buildStartedId(),
-            ImmutableSet.of(
-                buildEventId,
-                ProgressEvent.INITIAL_PROGRESS_UPDATE,
-                BuildEventIdUtil.buildFinished()));
-
-    streamer.buildEvent(startEvent);
-    streamer.closeOnAbort(AbortReason.OUT_OF_MEMORY);
-
-    assertThat(getBepEvent(buildEventId).getAborted())
-        .isEqualTo(
-            Aborted.newBuilder()
-                .setReason(AbortReason.OUT_OF_MEMORY)
-                .setDescription(BugReport.constructOomExitMessage(OOM_MESSAGE))
-                .build());
   }
 
   @Nullable
@@ -1358,13 +1357,10 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
         .orElse(null);
   }
 
-  private static BuildCompleteEvent buildCompleteEvent(
-      DetailedExitCode detailedExitCode,
-      boolean stopOnFailure,
-      Throwable crash,
-      boolean catastrophe) {
+  private BuildCompleteEvent buildCompleteEvent(
+      ExitCode exitCode, boolean stopOnFailure, Throwable crash, boolean catastrophe) {
     BuildResult result = new BuildResult(0);
-    result.setDetailedExitCode(detailedExitCode);
+    result.setDetailedExitCode(DetailedExitCode.justExitCode(exitCode));
     result.setStopOnFirstFailure(stopOnFailure);
     if (catastrophe) {
       result.setCatastrophe();
@@ -1399,17 +1395,18 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
 
     ActionExecutedEvent withLogsEvent =
         createActionExecutedEventWithLogs(ImmutableList.of(testMetadataLog1, testMetadataLog2));
+    ActionExecutedEvent withNoLogsEvent = SUCCESSFUL_ACTION_EXECUTED_EVENT;
 
     assertWithMessage("List parameter should return list of log path values")
         .that(withLogsEvent.getActionMetadataLogs())
         .containsExactly(testMetadataLog1, testMetadataLog2);
     assertWithMessage("Null logs parameter should return empty list.")
-        .that(SUCCESSFUL_ACTION_EXECUTED_EVENT.getActionMetadataLogs())
+        .that(withNoLogsEvent.getActionMetadataLogs())
         .isEmpty();
   }
 
   @Test
-  public void testActionExcutedEventProtoLogs() throws Exception {
+  public void testActionExcutedEventProtoLogs() {
     String metadataLogName = "action_metadata";
     Path testPath1 = FileSystems.getJavaIoFileSystem().getPath("/path/to/logs-1");
     Path testPath2 = FileSystems.getJavaIoFileSystem().getPath("/path/to/logs-2");
@@ -1419,12 +1416,12 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
             ImmutableList.of(
                 new MetadataLog(metadataLogName, testPath1),
                 new MetadataLog(metadataLogName, testPath2)));
+    ActionExecutedEvent withNoLogsEvents = SUCCESSFUL_ACTION_EXECUTED_EVENT;
 
     BuildEventStreamProtos.BuildEvent buildEventLogs =
         withLogsEvent.asStreamProto(getTestBuildEventContext(artifactGroupNamer));
     BuildEventStreamProtos.BuildEvent buildEventNoLogs =
-        SUCCESSFUL_ACTION_EXECUTED_EVENT.asStreamProto(
-            getTestBuildEventContext(artifactGroupNamer));
+        withNoLogsEvents.asStreamProto(getTestBuildEventContext(artifactGroupNamer));
 
     assertWithMessage("With logs build event action should contain 2 log files")
         .that(buildEventLogs.getAction().getActionMetadataLogsCount())
@@ -1438,12 +1435,5 @@ public final class BuildEventStreamerTest extends FoundationTestCase {
                 .map(File::getUri)
                 .collect(ImmutableList.toImmutableList()))
         .containsExactly(testPath1.toString(), testPath2.toString());
-  }
-
-  private static DetailedExitCode createGenericDetailedExitCode() {
-    return DetailedExitCode.of(
-        FailureDetail.newBuilder()
-            .setSpawn(Spawn.newBuilder().setCode(Code.NON_ZERO_EXIT))
-            .build());
   }
 }
