@@ -350,7 +350,7 @@ public final class AndroidRuleClasses {
               AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR,
               AndroidRuleClasses.ANDROID_LIBRARY_AAR);
 
-          if (AndroidResources.definesAndroidResources(attributes)) {
+          if (LocalResourceContainer.definesAndroidResources(attributes)) {
             implicitOutputs.add(
                 AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR,
                 AndroidRuleClasses.ANDROID_R_TXT,
@@ -612,6 +612,11 @@ public final class AndroidRuleClasses {
                   .cfg(HostTransition.INSTANCE)
                   .exec()
                   .value(env.getToolsLabel(DEFAULT_RESOURCES_BUSYBOX)))
+          .add(
+              attr("$import_deps_checker", LABEL)
+                  .cfg(HostTransition.INSTANCE)
+                  .exec()
+                  .value(env.getToolsLabel("//tools/android:aar_import_deps_checker")))
           .build();
     }
 
