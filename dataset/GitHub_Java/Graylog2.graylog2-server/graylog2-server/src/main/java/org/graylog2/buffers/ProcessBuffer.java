@@ -20,35 +20,33 @@
 
 package org.graylog2.buffers;
 
-import com.codahale.metrics.Meter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.lmax.disruptor.MultiThreadedClaimStrategy;
+import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
-import com.lmax.disruptor.dsl.ProducerType;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
 import org.graylog2.Core;
 import org.graylog2.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.buffers.ProcessingDisabledException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class ProcessBuffer extends Buffer {
+public class ProcessBuffer implements Buffer {
 
     private static final Logger LOG = LoggerFactory.getLogger(ProcessBuffer.class);
-
-    public static final String SOURCE_INPUT_ATTR_NAME = "gl2_source_input";
-    public static final String SOURCE_NODE_ATTR_NAME = "gl2_source_node";
-
+    
+    protected static RingBuffer<MessageEvent> ringBuffer;
 
     protected ExecutorService executor = Executors.newCachedThreadPool(
             new ThreadFactoryBuilder()
@@ -59,26 +57,21 @@ public class ProcessBuffer extends Buffer {
     private Core server;
     
     private final Cache masterCache;
-
-    private final Meter incomingMessages;
-    private final Meter rejectedMessages;
-    private final Meter cachedMessages;
+    
+    private final Meter incomingMessages = Metrics.newMeter(ProcessBuffer.class, "InsertedMessages", "messages", TimeUnit.SECONDS);
+    private final Meter rejectedMessages = Metrics.newMeter(ProcessBuffer.class, "RejectedMessages", "messages", TimeUnit.SECONDS);
+    private final Meter cachedMessages = Metrics.newMeter(ProcessBuffer.class, "CachedMessages", "messages", TimeUnit.SECONDS);
 
     public ProcessBuffer(Core server, Cache masterCache) {
         this.server = server;
         this.masterCache = masterCache;
-
-        incomingMessages = server.metrics().meter(name(ProcessBuffer.class, "incomingMessages"));
-        rejectedMessages = server.metrics().meter(name(ProcessBuffer.class, "rejectedMessages"));
-        cachedMessages = server.metrics().meter(name(ProcessBuffer.class, "cachedMessages"));
     }
 
     public void initialize() {
-        Disruptor disruptor = new Disruptor<MessageEvent>(
+        Disruptor<MessageEvent> disruptor = new Disruptor<MessageEvent>(
                 MessageEvent.EVENT_FACTORY,
-                server.getConfiguration().getRingSize(),
                 executor,
-                ProducerType.MULTI,
+                new MultiThreadedClaimStrategy(server.getConfiguration().getRingSize()),
                 server.getConfiguration().getProcessorWaitStrategy()
         );
         
@@ -98,10 +91,7 @@ public class ProcessBuffer extends Buffer {
     }
     
     @Override
-    public void insertCached(Message message, String sourceInputId) {
-        message.addField(SOURCE_INPUT_ATTR_NAME, sourceInputId);
-        message.addField(SOURCE_NODE_ATTR_NAME, server.getNodeId());
-
+    public void insertCached(Message message) {
         if (!server.isProcessing()) {
             LOG.debug("Message processing is paused. Writing to cache.");
             cachedMessages.mark();
@@ -115,15 +105,17 @@ public class ProcessBuffer extends Buffer {
             masterCache.add(message);
             return;
         }
-
+        
         insert(message);
     }
 
     @Override
-    public void insertFailFast(Message message, String sourceInputId) throws BufferOutOfCapacityException, ProcessingDisabledException {
-        message.addField(SOURCE_INPUT_ATTR_NAME, sourceInputId);
-        message.addField(SOURCE_NODE_ATTR_NAME, server.getNodeId());
+    public boolean isEmpty() {
+        return ringBuffer.getBufferSize() == 0;
+    }
 
+    @Override
+    public void insertFailFast(Message message) throws BufferOutOfCapacityException, ProcessingDisabledException {
         if (!server.isProcessing()) {
             LOG.debug("Rejecting message, because message processing is paused.");
             throw new ProcessingDisabledException();
@@ -134,7 +126,7 @@ public class ProcessBuffer extends Buffer {
             rejectedMessages.mark();
             throw new BufferOutOfCapacityException();
         }
-
+        
         insert(message);
     }
     
@@ -146,6 +138,11 @@ public class ProcessBuffer extends Buffer {
 
         server.processBufferWatermark().incrementAndGet();
         incomingMessages.mark();
+    }
+
+    @Override
+    public boolean hasCapacity() {
+        return ringBuffer.remainingCapacity() > 0;
     }
 
 }

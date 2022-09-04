@@ -20,30 +20,32 @@
 
 package org.graylog2.buffers;
 
-import com.codahale.metrics.Meter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.lmax.disruptor.MultiThreadedClaimStrategy;
+import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
-import com.lmax.disruptor.dsl.ProducerType;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
 import org.graylog2.Core;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.buffers.MessageEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class OutputBuffer extends Buffer {
+public class OutputBuffer implements Buffer {
 
     private static final Logger LOG = LoggerFactory.getLogger(OutputBuffer.class);
+    
+    protected static RingBuffer<MessageEvent> ringBuffer;
 
     protected ExecutorService executor = Executors.newCachedThreadPool(
             new ThreadFactoryBuilder()
@@ -55,25 +57,20 @@ public class OutputBuffer extends Buffer {
     
     private final Cache overflowCache;
 
-    private final Meter incomingMessages;
-    private final Meter rejectedMessages;
-    private final Meter cachedMessages;
+    private final Meter incomingMessages = Metrics.newMeter(OutputBuffer.class, "InsertedMessages", "messages", TimeUnit.SECONDS);
+    private final Meter rejectedMessages = Metrics.newMeter(OutputBuffer.class, "RejectedMessages", "messages", TimeUnit.SECONDS);
+    private final Meter cachedMessages = Metrics.newMeter(OutputBuffer.class, "CachedMessages", "messages", TimeUnit.SECONDS);
 
     public OutputBuffer(Core server, Cache overflowCache) {
         this.server = server;
         this.overflowCache = overflowCache;
-
-        incomingMessages = server.metrics().meter(name(OutputBuffer.class, "incomingMessages"));
-        rejectedMessages = server.metrics().meter(name(OutputBuffer.class, "rejectedMessages"));
-        cachedMessages = server.metrics().meter(name(OutputBuffer.class, "cachedMessages"));
     }
 
     public void initialize() {
-        Disruptor disruptor = new Disruptor<MessageEvent>(
+        Disruptor<MessageEvent> disruptor = new Disruptor<MessageEvent>(
                 MessageEvent.EVENT_FACTORY,
-                server.getConfiguration().getRingSize(),
                 executor,
-                ProducerType.MULTI,
+                new MultiThreadedClaimStrategy(server.getConfiguration().getRingSize()),
                 server.getConfiguration().getProcessorWaitStrategy()
         );
         
@@ -93,7 +90,7 @@ public class OutputBuffer extends Buffer {
     }
 
     @Override
-    public void insertCached(Message message, String sourceInputId) {
+    public void insertCached(Message message) {
         if (!hasCapacity()) {
             LOG.debug("Out of capacity. Writing to cache.");
             cachedMessages.mark();
@@ -105,7 +102,12 @@ public class OutputBuffer extends Buffer {
     }
 
     @Override
-    public void insertFailFast(Message message, String sourceInputIds) throws BufferOutOfCapacityException {
+    public boolean isEmpty() {
+        return ringBuffer.getBufferSize() == 0;
+    }
+
+    @Override
+    public void insertFailFast(Message message) throws BufferOutOfCapacityException {
         if (!hasCapacity()) {
             LOG.debug("Rejecting message, because I am full and caching was disabled by input. Raise my size or add more processors.");
             rejectedMessages.mark();
@@ -123,6 +125,11 @@ public class OutputBuffer extends Buffer {
 
         server.outputBufferWatermark().incrementAndGet();
         incomingMessages.mark();
+    }
+
+    @Override
+    public boolean hasCapacity() {
+        return ringBuffer.remainingCapacity() > 0;
     }
 
 }
