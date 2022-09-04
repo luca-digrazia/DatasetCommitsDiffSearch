@@ -27,8 +27,6 @@ import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.TransitionResolver;
-import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
@@ -423,7 +421,7 @@ public abstract class DependencyResolver {
    * transition does not apply.
    *
    * <p>Even though the attribute may have a split, splits don't have to apply in every
-   * configuration (see {@link SplitTransition#split}).
+   * configuration (see {@link Attribute.SplitTransition#split}).
    */
   private static Collection<BuildOptions> getSplitOptions(ConfiguredAttributeMapper attributeMap,
       Attribute attribute,
@@ -431,7 +429,9 @@ public abstract class DependencyResolver {
     if (!attribute.hasSplitConfigurationTransition()) {
       return ImmutableList.<BuildOptions>of();
     }
-    SplitTransition transition = attribute.getSplitTransition(attributeMap);
+    @SuppressWarnings("unchecked") // Attribute.java doesn't have the BuildOptions symbol.
+    Attribute.SplitTransition<BuildOptions> transition =
+        (Attribute.SplitTransition<BuildOptions>) attribute.getSplitTransition(attributeMap);
     return transition.split(ruleConfig.getOptions());
   }
 
@@ -723,7 +723,7 @@ public abstract class DependencyResolver {
       if (toTarget == null) {
         return; // Skip this round: we still need to Skyframe-evaluate the dep's target.
       }
-      Transition transition = transitionResolver.evaluateTransition(
+      Attribute.Transition transition = transitionResolver.evaluateTransition(
           ruleConfig, rule, attributeAndOwner.attribute, toTarget, attributeMap);
       outgoingEdges.put(
           attributeAndOwner.attribute,

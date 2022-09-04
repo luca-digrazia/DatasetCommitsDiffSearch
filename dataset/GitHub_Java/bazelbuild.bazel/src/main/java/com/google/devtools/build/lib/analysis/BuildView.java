@@ -45,8 +45,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
-import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.analysis.constraints.TopLevelConstraintSemantics;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
@@ -63,6 +61,8 @@ import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
+import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -166,6 +166,17 @@ public class BuildView {
    * BuildConfiguration.
    */
   public static class Options extends OptionsBase {
+    @Option(
+      name = "loading_phase_threads",
+      defaultValue = "-1",
+      category = "what",
+      converter = LoadingPhaseThreadCountConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "Number of parallel threads to use for the loading/analysis phase."
+    )
+    public int loadingPhaseThreads;
+
     @Option(
       name = "analysis_warnings_as_errors",
       deprecationWarning =
@@ -454,7 +465,6 @@ public class BuildView {
       List<String> aspects,
       Options viewOptions,
       boolean keepGoing,
-      int loadingPhaseThreads,
       TopLevelArtifactContext topLevelOptions,
       ExtendedEventHandler eventHandler,
       EventBus eventBus)
@@ -569,7 +579,12 @@ public class BuildView {
     try {
       skyframeAnalysisResult =
           skyframeBuildView.configureTargets(
-              eventHandler, topLevelCtKeys, aspectKeys, eventBus, keepGoing, loadingPhaseThreads);
+              eventHandler,
+              topLevelCtKeys,
+              aspectKeys,
+              eventBus,
+              keepGoing,
+              viewOptions.loadingPhaseThreads);
       setArtifactRoots(skyframeAnalysisResult.getPackageRoots());
     } finally {
       skyframeBuildView.clearInvalidatedConfiguredTargets();
@@ -941,7 +956,7 @@ public class BuildView {
           Iterable<BuildOptions> buildOptions) {
         Preconditions.checkArgument(ct.getConfiguration().fragmentClasses().equals(fragments));
         Dependency asDep = Dependency.withTransitionAndAspects(ct.getLabel(),
-            ConfigurationTransitionProxy.NONE, AspectCollection.EMPTY);
+            Attribute.ConfigurationTransition.NONE, AspectCollection.EMPTY);
         ImmutableList.Builder<BuildConfiguration> builder = ImmutableList.builder();
         for (BuildOptions options : buildOptions) {
           builder.add(Iterables.getOnlyElement(
@@ -1020,27 +1035,27 @@ public class BuildView {
           .getTarget(handler, label)
           .getAssociatedRule();
     } catch (NoSuchPackageException | NoSuchTargetException e) {
-      return ConfigurationTransitionProxy.NONE;
+      return ConfigurationTransition.NONE;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new AssertionError("Configuration of " + label + " interrupted");
     }
     if (rule == null) {
-      return ConfigurationTransitionProxy.NONE;
+      return ConfigurationTransition.NONE;
     }
     RuleTransitionFactory factory = rule
         .getRuleClassObject()
         .getTransitionFactory();
     if (factory == null) {
-      return ConfigurationTransitionProxy.NONE;
+      return ConfigurationTransition.NONE;
     }
 
-    // dynamicTransitionMapper is only needed because of ConfigurationTransitionProxy.DATA:
+    // dynamicTransitionMapper is only needed because of Attribute.ConfigurationTransition.DATA:
     // this is C++-specific but non-C++ rules declare it. So they can't directly provide the
     // C++-specific patch transition that implements it.
     PatchTransition transition = (PatchTransition)
         ruleClassProvider.getDynamicTransitionMapper().map(factory.buildTransitionFor(rule));
-    return (transition == null) ? ConfigurationTransitionProxy.NONE : transition;
+    return (transition == null) ? ConfigurationTransition.NONE : transition;
   }
 
   /**
