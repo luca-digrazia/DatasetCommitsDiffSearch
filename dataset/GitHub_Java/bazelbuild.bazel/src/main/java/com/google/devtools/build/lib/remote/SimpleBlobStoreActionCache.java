@@ -241,7 +241,7 @@ public final class SimpleBlobStoreActionCache implements RemoteActionCache {
     }
   }
 
-  public Digest uploadBlob(Digest digest, InputStream in)
+  private Digest uploadBlob(Digest digest, InputStream in)
       throws IOException, InterruptedException {
     blobStore.put(digest.getHash(), in);
     return digest;

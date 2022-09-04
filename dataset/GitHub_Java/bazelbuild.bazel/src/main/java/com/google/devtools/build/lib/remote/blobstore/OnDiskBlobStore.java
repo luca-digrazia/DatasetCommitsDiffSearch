@@ -46,12 +46,6 @@ public final class OnDiskBlobStore implements SimpleBlobStore {
   }
 
   @Override
-  public boolean getActionResult(String key, OutputStream out)
-      throws IOException, InterruptedException {
-    return get(key, out);
-  }
-
-  @Override
   public void put(String key, InputStream in) throws IOException {
     // Write a temporary file first, and then rename, to avoid data corruption in case of a crash.
     Path temp = toPath(UUID.randomUUID().toString());
@@ -62,11 +56,6 @@ public final class OnDiskBlobStore implements SimpleBlobStore {
     // crashes (the OS may reorder the writes and the rename).
     Path f = toPath(key);
     temp.renameTo(f);
-  }
-
-  @Override
-  public void putActionResult(String key, InputStream in) throws IOException, InterruptedException {
-    put(key, in);
   }
 
   @Override
