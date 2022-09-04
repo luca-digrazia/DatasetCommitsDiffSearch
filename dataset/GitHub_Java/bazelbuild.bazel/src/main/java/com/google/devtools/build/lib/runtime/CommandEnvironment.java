@@ -77,7 +77,6 @@ public final class CommandEnvironment {
   private final Set<String> visibleActionEnv = new TreeSet<>();
   private final Set<String> visibleTestEnv = new TreeSet<>();
   private final Map<String, String> actionClientEnv = new TreeMap<>();
-  private final Map<String, String> repoEnv = new TreeMap<>();
   private final TimestampGranularityMonitor timestampGranularityMonitor;
   private final Thread commandThread;
   private final Command command;
@@ -201,14 +200,6 @@ public final class CommandEnvironment {
         if (entry.getValue() == null) {
           visibleTestEnv.add(entry.getKey());
         }
-      }
-    }
-
-    repoEnv.putAll(actionClientEnv);
-    BuildConfiguration.Options configOpts = options.getOptions(BuildConfiguration.Options.class);
-    if (configOpts != null) {
-      for (Map.Entry<String, String> entry : configOpts.repositoryEnvironment) {
-        repoEnv.put(entry.getKey(), entry.getValue());
       }
     }
   }
@@ -676,10 +667,6 @@ public final class CommandEnvironment {
     Path workspace = getWorkspace();
     Path workingDirectory;
     if (inWorkspace()) {
-      if (commonOptions.clientCwd.containsUplevelReferences()) {
-        throw new AbruptExitException(
-            "Client cwd contains uplevel references", ExitCode.COMMAND_LINE_ERROR);
-      }
       workingDirectory = workspace.getRelative(commonOptions.clientCwd);
     } else {
       workspace = FileSystemUtils.getWorkingDirectory(getRuntime().getFileSystem());
@@ -724,10 +711,5 @@ public final class CommandEnvironment {
    */
   public Map<String, String> getActionClientEnv() {
     return Collections.unmodifiableMap(actionClientEnv);
-  }
-
-  /** Returns the client environment with all settings from --action_env and --repo_env. */
-  public Map<String, String> getRepoEnv() {
-    return Collections.unmodifiableMap(repoEnv);
   }
 }
