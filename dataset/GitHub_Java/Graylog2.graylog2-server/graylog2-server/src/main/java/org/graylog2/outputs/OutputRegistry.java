@@ -76,11 +76,12 @@ public class OutputRegistry {
     }
 
     protected MessageOutput launchOutput(Output output) throws MessageOutputConfigurationException {
-        final MessageOutput messageOutput = messageOutputFactory.fromStreamOutput(output);
-        if (messageOutput == null)
-            throw new IllegalArgumentException("Failed to instantiate MessageOutput from Output: " + output);
-
-        messageOutput.initialize(new Configuration(output.getConfiguration()));
+        MessageOutput messageOutput = messageOutputFactory.fromStreamOutput(output);
+        try {
+            messageOutput.initialize(new Configuration(output.getConfiguration()));
+        } catch (Exception e) {
+            LOG.error("Exception during output initialization: {}", e.toString());
+        }
 
         return messageOutput;
     }
