@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -143,6 +143,8 @@ public @interface Receiver {
 		OnResumeOnPause, //
 		/**
 		 * Register in the onAttach method, unregister in the onDetach method.
+		 * Except for View which will register in the onAttachedToWindow and
+		 * unregister in the onDetachedFromWindow.
 		 */
 		OnAttachOnDetach
 	}
@@ -151,10 +153,14 @@ public @interface Receiver {
 	 * <p>
 	 * Should be used on any native, {@link android.os.Parcelable} or
 	 * {@link java.io.Serializable} parameter of a method annotated with
-	 * {@link ReceiverAction} to inject the extra put in the intent parameter of
+	 * {@link Receiver} to inject the extra put in the intent parameter of
 	 * {@code void onReceive(Context context, Intent intent)}. The key of this
-	 * extra is the value of the annotation {@link ReceiverAction.Extra} if it
+	 * extra is the value of the annotation {@link Receiver.Extra} if it
 	 * is set or the name of the parameter.
+	 * If <a href="http://parceler.org">Parceler</a> is on the classpath, extras
+	 * annotated with &#064;Parcel, or collections supported by Parceler will be
+	 * automatically marshaled using a {@link android.os.Parcelable Parcelable}
+	 * through the Parcels utility class.
 	 * </p>
 	 */
 	@Retention(RetentionPolicy.CLASS)
