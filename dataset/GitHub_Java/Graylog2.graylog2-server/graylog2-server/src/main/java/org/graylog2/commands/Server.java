@@ -24,9 +24,6 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.spi.Message;
 import com.mongodb.MongoException;
-import org.graylog.events.EventsModule;
-import org.graylog.scheduler.JobSchedulerConfiguration;
-import org.graylog.scheduler.JobSchedulerModule;
 import org.graylog.plugins.cef.CEFInputModule;
 import org.graylog.plugins.map.MapWidgetModule;
 import org.graylog.plugins.netflow.NetFlowPluginModule;
@@ -81,7 +78,6 @@ import org.graylog2.shared.bindings.ObjectMapperModule;
 import org.graylog2.shared.bindings.RestApiBindings;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
-import org.graylog2.system.processing.ProcessingStatusConfig;
 import org.graylog2.system.shutdown.GracefulShutdown;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,8 +107,6 @@ public class Server extends ServerBootstrap {
     private final NettyTransportConfiguration nettyTransportConfiguration = new NettyTransportConfiguration();
     private final PipelineConfig pipelineConfiguration = new PipelineConfig();
     private final ViewsConfig viewsConfiguration = new ViewsConfig();
-    private final ProcessingStatusConfig processingStatusConfig = new ProcessingStatusConfig();
-    private final JobSchedulerConfiguration jobSchedulerConfiguration = new JobSchedulerConfiguration();
 
     public Server() {
         super("server", configuration);
@@ -158,9 +152,7 @@ public class Server extends ServerBootstrap {
             new SidecarModule(),
             new ContentPacksModule(),
             new ViewsBindings(),
-            new ESBackendModule(),
-            new JobSchedulerModule(),
-            new EventsModule()
+            new ESBackendModule()
         );
 
         return modules.build();
@@ -178,9 +170,7 @@ public class Server extends ServerBootstrap {
                 kafkaJournalConfiguration,
                 nettyTransportConfiguration,
                 pipelineConfiguration,
-                viewsConfiguration,
-                processingStatusConfig,
-                jobSchedulerConfiguration);
+                viewsConfiguration);
     }
 
     @Override
