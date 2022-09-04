@@ -13,12 +13,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
-public class ClassCreator implements AutoCloseable, AnnotatedElement {
+public class ClassCreator implements AutoCloseable {
 
     public static Builder builder() {
         return new Builder();
@@ -29,7 +28,6 @@ public class ClassCreator implements AutoCloseable, AnnotatedElement {
     private final String[] interfaces;
     private final Map<MethodDescriptor, MethodCreatorImpl> methods = new HashMap<>();
     private final Map<FieldDescriptor, FieldCreatorImpl> fields = new HashMap<>();
-    private final List<AnnotationCreatorImpl> annotations = new ArrayList<>();
     private final String className;
     private final String signature;
 
@@ -128,29 +126,10 @@ public class ClassCreator implements AutoCloseable, AnnotatedElement {
         for (Map.Entry<MethodDescriptor, MethodCreatorImpl> method : methods.entrySet()) {
             method.getValue().write(file);
         }
-        for(AnnotationCreatorImpl annotation : annotations) {
-            AnnotationVisitor av = file.visitAnnotation(DescriptorUtils.extToInt(annotation.getAnnotationType()), true);
-            for(Map.Entry<String, Object> e : annotation.getValues().entrySet()) {
-                av.visit(e.getKey(), e.getValue());
-            }
-            av.visitEnd();
-        }
 
         file.visitEnd();
 
         classOutput.write(className, file.toByteArray());
-    }
-
-    @Override
-    public AnnotationCreator addAnnotation(String annotationType) {
-        AnnotationCreatorImpl ac = new AnnotationCreatorImpl(annotationType);
-        annotations.add(ac);
-        return ac;
-    }
-
-    @Override
-    public AnnotationCreator addAnnotation(Class<?> annotationType) {
-        return addAnnotation(annotationType.getName());
     }
 
     public static class Builder {
