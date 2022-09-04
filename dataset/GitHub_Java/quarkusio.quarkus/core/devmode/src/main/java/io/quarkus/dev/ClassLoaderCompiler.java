@@ -122,19 +122,12 @@ public class ClassLoaderCompiler {
                             }
                             Object classPath = mf.getMainAttributes().get(Attributes.Name.CLASS_PATH);
                             if (classPath != null) {
-                                for (String classPathEntry : WHITESPACE_PATTERN.split(classPath.toString())) {
-                                    final URI cpEntryURI = new URI(classPathEntry);
+                                for (String i : WHITESPACE_PATTERN.split(classPath.toString())) {
                                     File f;
-                                    // if it's a "file" scheme URI, then use the path as a file system path
-                                    // without the need to resolve it
-                                    if (cpEntryURI.isAbsolute() && cpEntryURI.getScheme().equals("file")) {
-                                        f = new File(cpEntryURI.getPath());
-                                    } else {
-                                        try {
-                                            f = Paths.get(new URI("file", null, "/", null).resolve(cpEntryURI)).toFile();
-                                        } catch (URISyntaxException e) {
-                                            f = new File(file.getParentFile(), classPathEntry);
-                                        }
+                                    try {
+                                        f = Paths.get(new URI("file", null, "/", null).resolve(new URI(i))).toFile();
+                                    } catch (URISyntaxException e) {
+                                        f = new File(file.getParentFile(), i);
                                     }
                                     if (f.exists()) {
                                         toParse.add(f.getAbsolutePath());
