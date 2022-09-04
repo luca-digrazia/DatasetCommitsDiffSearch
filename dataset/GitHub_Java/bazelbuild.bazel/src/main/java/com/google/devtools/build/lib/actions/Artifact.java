@@ -678,6 +678,10 @@ public abstract class Artifact
     return getRootRelativePath().getPathString();
   }
 
+  public final String getOutputDirRelativePathString() {
+    return getOutputDirRelativePath().getPathString();
+  }
+
   public final String getRepositoryRelativePathString() {
     return getRepositoryRelativePath().getPathString();
   }
