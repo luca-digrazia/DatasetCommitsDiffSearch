@@ -112,6 +112,8 @@ public abstract class StarlarkSemantics {
       AutoValue_StarlarkSemantics.class;
 
   // <== Add new options here in alphabetic order ==>
+  public abstract boolean checkThirdPartyTargetsHaveLicenses();
+
   public abstract boolean experimentalBuildSettingApi();
 
   public abstract ImmutableList<String> experimentalCcSkylarkApiEnabledPackages();
@@ -176,6 +178,7 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean internalSkylarkFlagTestCanary();
 
+  public abstract boolean incompatibleUseToolchainProvidersInJavaCommon();
 
   public abstract boolean incompatibleDoNotSplitLinkingCmdline();
 
@@ -194,6 +197,7 @@ public abstract class StarlarkSemantics {
   public static final StarlarkSemantics DEFAULT_SEMANTICS =
       builder()
           // <== Add new options here in alphabetic order ==>
+          .checkThirdPartyTargetsHaveLicenses(true)
           .experimentalBuildSettingApi(false)
           .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
           .experimentalEnableAndroidMigrationApis(false)
@@ -201,10 +205,11 @@ public abstract class StarlarkSemantics {
           .experimentalPlatformsApi(false)
           .experimentalRestrictNamedParams(false)
           .experimentalStarlarkConfigTransitions(false)
+          .incompatibleUseToolchainProvidersInJavaCommon(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(false)
-          .incompatibleDisableThirdPartyLicenseChecking(true)
+          .incompatibleDisableThirdPartyLicenseChecking(false)
           .incompatibleDisableDeprecatedAttrParams(false)
           .incompatibleDisableObjcProviderResources(false)
           .incompatibleDisallowDictPlus(true)
@@ -234,6 +239,8 @@ public abstract class StarlarkSemantics {
   public abstract static class Builder {
 
     // <== Add new options here in alphabetic order ==>
+    public abstract Builder checkThirdPartyTargetsHaveLicenses(boolean value);
+
     public abstract Builder experimentalBuildSettingApi(boolean value);
 
     public abstract Builder experimentalCcSkylarkApiEnabledPackages(List<String> value);
@@ -296,6 +303,7 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder incompatibleStringJoinRequiresStrings(boolean value);
 
+    public abstract Builder incompatibleUseToolchainProvidersInJavaCommon(boolean value);
 
     public abstract Builder internalSkylarkFlagTestCanary(boolean value);
 

@@ -118,6 +118,7 @@ public class SkylarkSemanticsConsistencyTest {
   private static StarlarkSemanticsOptions buildRandomOptions(Random rand) throws Exception {
     return parseOptions(
         // <== Add new options here in alphabetic order ==>
+        "--check_third_party_targets_have_licenses=" + rand.nextBoolean(),
         "--experimental_build_setting_api=" + rand.nextBoolean(),
         "--experimental_cc_skylark_api_enabled_packages="
             + rand.nextDouble()
@@ -155,6 +156,7 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_remap_main_repo=" + rand.nextBoolean(),
         "--incompatible_remove_native_maven_jar=" + rand.nextBoolean(),
         "--incompatible_string_join_requires_strings=" + rand.nextBoolean(),
+        "--incompatible_use_toolchain_providers_in_java_common=" + rand.nextBoolean(),
         "--internal_skylark_flag_test_canary=" + rand.nextBoolean(),
         "--incompatible_do_not_split_linking_cmdline=" + rand.nextBoolean());
   }
@@ -166,6 +168,7 @@ public class SkylarkSemanticsConsistencyTest {
   private static StarlarkSemantics buildRandomSemantics(Random rand) {
     return StarlarkSemantics.builder()
         // <== Add new options here in alphabetic order ==>
+        .checkThirdPartyTargetsHaveLicenses(rand.nextBoolean())
         .experimentalBuildSettingApi(rand.nextBoolean())
         .experimentalCcSkylarkApiEnabledPackages(
             ImmutableList.of(String.valueOf(rand.nextDouble()), String.valueOf(rand.nextDouble())))
@@ -199,6 +202,7 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleRemapMainRepo(rand.nextBoolean())
         .incompatibleRemoveNativeMavenJar(rand.nextBoolean())
         .incompatibleStringJoinRequiresStrings(rand.nextBoolean())
+        .incompatibleUseToolchainProvidersInJavaCommon(rand.nextBoolean())
         .internalSkylarkFlagTestCanary(rand.nextBoolean())
         .incompatibleDoNotSplitLinkingCmdline(rand.nextBoolean())
         .build();
