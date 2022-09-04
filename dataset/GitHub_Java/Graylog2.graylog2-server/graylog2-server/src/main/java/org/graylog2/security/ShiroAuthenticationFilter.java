@@ -20,7 +20,6 @@
 package org.graylog2.security;
 
 import org.apache.shiro.authc.AuthenticationException;
-import org.apache.shiro.authc.LockedAccountException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,9 +50,6 @@ public class ShiroAuthenticationFilter implements ContainerRequestFilter {
             try {
                 log.trace("Logging in {}", context.getSubject());
                 context.loginSubject();
-            } catch (LockedAccountException e) {
-                log.debug("Unable to authenticate user, account is locked.", e);
-                throw new NotAuthorizedException(e, "Basic", "Graylog2 Server");
             } catch (AuthenticationException e) {
                 log.debug("Unable to authenticate user.", e);
                 throw new NotAuthorizedException(e, "Basic", "Graylog2 Server");

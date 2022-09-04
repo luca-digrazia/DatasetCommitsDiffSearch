@@ -20,7 +20,6 @@
 package org.graylog2.security;
 
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,15 +43,6 @@ public class ShiroSecurityBinding implements DynamicFeature {
                 resourceClass.isAnnotationPresent(RequiresAuthentication.class)) {
             log.info("Resource method {}#{} requires an authenticated user.", resourceClass.getCanonicalName(), resourceMethod.getName());
             context.register(new ShiroAuthenticationFilter());
-        }
-        if (resourceMethod.isAnnotationPresent(RequiresPermissions.class) ||
-                resourceClass.isAnnotationPresent(RequiresPermissions.class)) {
-            RequiresPermissions a = resourceClass.getAnnotation(RequiresPermissions.class);
-            if (a == null) {
-                a = resourceMethod.getAnnotation(RequiresPermissions.class);
-            }
-            log.info("Resource method {}#{} requires an authorization checks.", resourceClass.getCanonicalName(), resourceMethod.getName());
-            context.register(new ShiroAuthorizationFilter(a));
         }
     }
 }
