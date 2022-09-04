@@ -3,6 +3,8 @@ package io.dropwizard.configuration;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.io.Resources;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.validation.BaseValidator;
@@ -16,9 +18,7 @@ import javax.validation.Validator;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -59,10 +59,10 @@ public class ConfigurationFactoryTest {
         List<String> type;
 
         @JsonProperty
-        private Map<String, String> properties = new LinkedHashMap<>();
+        private Map<String, String> properties = Maps.newLinkedHashMap();
 
         @JsonProperty
-        private List<ExampleServer> servers = new ArrayList<>();
+        private List<ExampleServer> servers = Lists.newArrayList();
 
         public String getName() {
             return name;

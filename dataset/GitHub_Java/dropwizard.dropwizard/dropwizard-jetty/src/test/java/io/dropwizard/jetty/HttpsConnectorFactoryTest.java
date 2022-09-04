@@ -109,6 +109,11 @@ public class HttpsConnectorFactoryTest {
     }
 
     private <T> Collection<String> getViolationProperties(Set<ConstraintViolation<T>> violations) {
-        return Collections2.transform(violations, input -> input.getPropertyPath().toString());
+        return Collections2.transform(violations, new Function<ConstraintViolation<T>, String>() {
+            @Override
+            public String apply(ConstraintViolation<T> input) {
+                return input.getPropertyPath().toString();
+            }
+        });
     }
 }

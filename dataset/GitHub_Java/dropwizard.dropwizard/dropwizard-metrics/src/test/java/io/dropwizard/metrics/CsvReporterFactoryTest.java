@@ -3,8 +3,7 @@ package io.dropwizard.metrics;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
-
-import io.dropwizard.configuration.YamlConfigurationFactory;
+import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
@@ -18,10 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class CsvReporterFactoryTest {
     private final ObjectMapper objectMapper = Jackson.newObjectMapper();
-    private final YamlConfigurationFactory<MetricsFactory> factory =
-            new YamlConfigurationFactory<>(MetricsFactory.class,
-                                           BaseValidator.newValidator(),
-                                           objectMapper, "dw");
+    private final ConfigurationFactory<MetricsFactory> factory =
+            new ConfigurationFactory<>(MetricsFactory.class,
+                                       BaseValidator.newValidator(),
+                                       objectMapper, "dw");
 
     @Before
     public void setUp() throws Exception {

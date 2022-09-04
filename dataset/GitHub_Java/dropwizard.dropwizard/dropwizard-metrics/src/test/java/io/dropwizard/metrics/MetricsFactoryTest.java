@@ -10,6 +10,7 @@ import io.dropwizard.validation.BaseValidator;
 import org.junit.Before;
 import org.junit.Test;
 
+import javax.validation.Validation;
 import java.io.File;
 
 import static org.assertj.core.api.Assertions.assertThat;
