@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -35,7 +34,6 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -183,7 +181,7 @@ public final class CcLibraryHelper {
    * context.
    */
   public static final class Info {
-    private final TransitiveInfoProviderMapBuilder providers;
+    private final TransitiveInfoProviderMap.Builder providers;
     private final ImmutableMap<String, NestedSet<Artifact>> outputGroups;
     private final CcCompilationOutputs compilationOutputs;
     private final CcLinkingOutputs linkingOutputs;
@@ -1039,8 +1037,8 @@ public final class CcLibraryHelper {
 
     // By very careful when adding new providers here - it can potentially affect a lot of rules.
     // We should consider merging most of these providers into a single provider.
-    TransitiveInfoProviderMapBuilder providers =
-        new TransitiveInfoProviderMapBuilder()
+    TransitiveInfoProviderMap.Builder providers =
+        TransitiveInfoProviderMap.builder()
             .add(
                 new CppRunfilesProvider(cppStaticRunfiles, cppSharedRunfiles),
                 cppCompilationContext,
@@ -1386,11 +1384,6 @@ public final class CcLibraryHelper {
           featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES)
               || featureConfiguration.isEnabled(CppRuleClasses.COMPILE_ALL_MODULES);
       Iterable<CppModuleMap> dependentModuleMaps = collectModuleMaps();
-      Optional<Artifact> umbrellaHeader = cppModuleMap.getUmbrellaHeader();
-      if (umbrellaHeader.isPresent()) {
-        ruleContext.registerAction(
-            createUmbrellaHeaderAction(umbrellaHeader.get(), publicHeaders));
-      }
       ruleContext.registerAction(
           createModuleMapAction(cppModuleMap, publicHeaders, dependentModuleMaps, compiled));
       if (model.getGeneratesPicHeaderModule()) {
@@ -1417,17 +1410,6 @@ public final class CcLibraryHelper {
 
     semantics.setupCompilationContext(ruleContext, contextBuilder);
     return contextBuilder.build();
-  }
-
-  private UmbrellaHeaderAction createUmbrellaHeaderAction(Artifact umbrellaHeader,
-      PublicHeaders publicHeaders) {
-    return new UmbrellaHeaderAction(
-        ruleContext.getActionOwner(),
-        umbrellaHeader,
-        featureConfiguration.isEnabled(CppRuleClasses.ONLY_DOTH_HEADERS_IN_MODULE_MAPS)
-            ? Iterables.filter(publicHeaders.getModuleMapHeaders(), CppFileTypes.MODULE_MAP_HEADER)
-            : publicHeaders.getModuleMapHeaders(),
-        additionalExportedHeaders);
   }
 
   private CppModuleMapAction createModuleMapAction(
@@ -1485,8 +1467,7 @@ public final class CcLibraryHelper {
       RuleContext ruleContext, CcCompilationOutputs ccCompilationOutputs) {
     NestedSetBuilder<Artifact> headerTokens = NestedSetBuilder.stableOrder();
     for (OutputGroupProvider dep :
-        ruleContext.getPrerequisites("deps", Mode.TARGET,
-            OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey(), OutputGroupProvider.class)) {
+        ruleContext.getPrerequisites("deps", Mode.TARGET, OutputGroupProvider.class)) {
       headerTokens.addTransitive(dep.getOutputGroup(CcLibraryHelper.HIDDEN_HEADER_TOKENS));
     }
     if (ruleContext.getFragment(CppConfiguration.class).processHeadersInDependencies()) {
