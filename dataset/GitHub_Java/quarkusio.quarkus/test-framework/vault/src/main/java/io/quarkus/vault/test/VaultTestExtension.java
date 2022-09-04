@@ -48,7 +48,6 @@ import org.testcontainers.containers.output.OutputFrame;
 import io.quarkus.vault.VaultException;
 import io.quarkus.vault.VaultKVSecretEngine;
 import io.quarkus.vault.runtime.VaultConfigHolder;
-import io.quarkus.vault.runtime.VaultVersions;
 import io.quarkus.vault.runtime.client.VaultClientException;
 import io.quarkus.vault.runtime.client.backend.VaultInternalSystemBackend;
 import io.quarkus.vault.runtime.client.dto.sys.VaultInitResponse;
@@ -178,7 +177,6 @@ public class VaultTestExtension {
         vaultBootstrapConfig.tls.caCert = Optional.empty();
         vaultBootstrapConfig.connectTimeout = Duration.ofSeconds(5);
         vaultBootstrapConfig.readTimeout = Duration.ofSeconds(1);
-        vaultBootstrapConfig.nonProxyHosts = Optional.empty();
         vaultBootstrapConfig.authentication = new VaultAuthenticationConfig();
         vaultBootstrapConfig.authentication.kubernetes = new VaultKubernetesAuthenticationConfig();
         return new TestVaultClient(new VaultConfigHolder().setVaultBootstrapConfig(vaultBootstrapConfig));
@@ -246,7 +244,7 @@ public class VaultTestExtension {
     }
 
     private String getVaultImage() {
-        return "vault:" + VaultVersions.VAULT_TEST_VERSION;
+        return "vault:1.6.3";
     }
 
     private void initVault() throws InterruptedException, IOException {
