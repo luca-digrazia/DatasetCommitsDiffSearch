@@ -59,10 +59,6 @@ public abstract class ResourceTest {
         return test.client();
     }
 
-    protected JerseyTest getJerseyTest() {
-        return test;
-    }
-
     @Before
     public void setUpJersey() throws Exception {
         setUpResources();
