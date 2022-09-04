@@ -78,10 +78,7 @@ public class KeyUtil {
         trustStore.load(null, null);
         loadCertificates(trustStore, tlsClientAuthCertFile, CertificateFactory.getInstance("X.509"));
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Client authentication certificate file: {}", tlsClientAuthCertFile);
-            LOG.debug("Aliases: {}", join(trustStore.aliases()));
-        }
+        LOG.info("TrustStore: {}, aliases: {}", trustStore, join(trustStore.aliases()));
 
         final TrustManagerFactory instance = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         instance.init(trustStore);
@@ -118,7 +115,7 @@ public class KeyUtil {
         final char[] password = Strings.nullToEmpty(tlsKeyPassword).toCharArray();
         ks.setKeyEntry("key", privateKey, password, certChain.toArray(new Certificate[certChain.size()]));
 
-        if (LOG.isDebugEnabled()) {
+        if(LOG.isDebugEnabled()) {
             LOG.debug("Private key file: {}", tlsKeyFile);
             LOG.debug("Certificate file: {}", tlsCertFile);
             LOG.debug("Aliases: {}", join(ks.aliases()));
