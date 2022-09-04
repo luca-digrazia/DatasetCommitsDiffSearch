@@ -47,8 +47,6 @@ import java.util.UUID;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 @Path("/system/inputs")
-@Consumes(MediaType.APPLICATION_JSON)
-@Produces(MediaType.APPLICATION_JSON)
 public class InputsResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(InputsResource.class);
@@ -57,6 +55,7 @@ public class InputsResource extends RestResource {
     private InputRegistry inputRegistry;
 
     @GET @Timed
+    @Produces(MediaType.APPLICATION_JSON)
     public String list() {
         List<Map<String, Object>> inputStates = Lists.newArrayList();
 
@@ -72,6 +71,7 @@ public class InputsResource extends RestResource {
     }
 
     @GET @Timed
+    @Produces(MediaType.APPLICATION_JSON)
     @Path("/{inputId}")
     public String single(@PathParam("inputId") String inputId) {
         MessageInput input = inputRegistry.getRunningInput(inputId);
@@ -86,6 +86,8 @@ public class InputsResource extends RestResource {
     }
 
     @POST @Timed
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
     public Response launch(String body) {
 
         InputLaunchRequest lr;
@@ -162,6 +164,7 @@ public class InputsResource extends RestResource {
 
     @GET @Timed
     @Path("/types")
+    @Produces(MediaType.APPLICATION_JSON)
     public String types() {
         Map<String, Object> result = Maps.newHashMap();
         result.put("types", inputRegistry.getAvailableInputs());
@@ -171,6 +174,7 @@ public class InputsResource extends RestResource {
 
     @GET @Timed
     @Path("/types/{inputType}")
+    @Produces(MediaType.APPLICATION_JSON)
     public String info(@PathParam("inputType") String inputType) {
 
         MessageInput input;
@@ -193,6 +197,7 @@ public class InputsResource extends RestResource {
 
     @POST @Timed
     @Path("/{inputId}/launch")
+    @Produces(MediaType.APPLICATION_JSON)
     public Response launchExisting(@PathParam("inputId") String inputId) {
         MessageInput isr = inputRegistry.getPersisted(inputId);
         if (isr == null) {
