@@ -14,7 +14,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -46,7 +45,6 @@ import io.quarkus.runtime.StartupEvent;
 public class KafkaStreamsTopologyManager {
 
     private static final Logger LOGGER = Logger.getLogger(KafkaStreamsTopologyManager.class.getName());
-    private static final Pattern COMMA_PATTERN = Pattern.compile(",");
 
     private final ExecutorService executor;
     private KafkaStreams streams;
@@ -108,7 +106,7 @@ public class KafkaStreamsTopologyManager {
         Properties streamsProperties = getStreamsProperties(properties, bootstrapServersConfig, runtimeConfig);
 
         Set<String> topicsToAwait = runtimeConfig.topics
-                .map(n -> COMMA_PATTERN.split(n))
+                .map(n -> n.split(","))
                 .map(Arrays::asList)
                 .map(HashSet::new)
                 .map(Collections::unmodifiableSet)
