@@ -18,12 +18,12 @@
 package org.graylog2.indexer.rotation.strategies;
 
 import com.google.common.base.MoreObjects;
-import org.graylog2.audit.AuditEventSender;
+import org.graylog2.auditlog.AuditLogger;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.rotation.RotationStrategyConfig;
-import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeField;
 import org.joda.time.DateTimeFieldType;
@@ -36,7 +36,6 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.text.MessageFormat;
-import java.util.Locale;
 
 import static org.joda.time.DateTimeFieldType.dayOfMonth;
 import static org.joda.time.DateTimeFieldType.hourOfDay;
@@ -56,9 +55,9 @@ public class TimeBasedRotationStrategy extends AbstractRotationStrategy {
     private DateTime anchor;
 
     @Inject
-    public TimeBasedRotationStrategy(Indices indices, NodeId nodeId,
-                                     ClusterConfigService clusterConfigService, AuditEventSender auditEventSender) {
-        super(auditEventSender, nodeId);
+    public TimeBasedRotationStrategy(Indices indices, Deflector deflector,
+                                     ClusterConfigService clusterConfigService, AuditLogger auditLogger) {
+        super(deflector, auditLogger);
         this.clusterConfigService = clusterConfigService;
         this.anchor = null;
         this.lastRotation = null;
@@ -137,7 +136,6 @@ public class TimeBasedRotationStrategy extends AbstractRotationStrategy {
     @Nullable
     @Override
     protected Result shouldRotate(String index) {
-        // TODO 2.2: Rotation strategy config is per write target, not global.
         final TimeBasedRotationStrategyConfig config = clusterConfigService.get(TimeBasedRotationStrategyConfig.class);
 
         if (config == null) {
@@ -159,9 +157,7 @@ public class TimeBasedRotationStrategy extends AbstractRotationStrategy {
 
         final DateTime nextRotation = anchor.plus(rotationPeriod);
         if (nextRotation.isAfter(now)) {
-            final String message = new MessageFormat("Next rotation at {0}", Locale.ENGLISH)
-                    .format(new Object[]{nextRotation});
-            return new SimpleResult(false, message);
+            return new SimpleResult(false, MessageFormat.format("Next rotation at {0}", nextRotation));
         }
 
         // determine new anchor (push it to within less then one period before now) in case we missed one or more periods
@@ -172,9 +168,7 @@ public class TimeBasedRotationStrategy extends AbstractRotationStrategy {
         } while (tmpAnchor.isBefore(now));
         anchor = anchor.withPeriodAdded(rotationPeriod, multiplicator - 1);
         lastRotation = now;
-        final String message = new MessageFormat("Rotation period {0} elapsed, next rotation at {1}", Locale.ENGLISH)
-                .format(new Object[]{lastRotation, anchor});
-        return new SimpleResult(true, message);
+        return new SimpleResult(true, MessageFormat.format("Rotation period {0} elapsed, next rotation at {1}", rotationPeriod, anchor));
     }
 
     private static class SimpleResult implements AbstractRotationStrategy.Result {
