@@ -371,7 +371,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
                                          MetricRegistry metrics,
                                          HealthCheckRegistry healthChecks) {
         configureSessionsAndSecurity(handler, server);
-        handler.setServer(server);  
         handler.getServletContext().setAttribute(MetricsServlet.METRICS_REGISTRY, metrics);
         handler.getServletContext().setAttribute(HealthCheckServlet.HEALTH_CHECK_REGISTRY, healthChecks);
         handler.addServlet(new NonblockingServletHolder(new AdminServlet()), "/*");
@@ -405,7 +404,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
             handler.addServlet(new NonblockingServletHolder(jerseyContainer), jersey.getUrlPattern());
         }
         final InstrumentedHandler instrumented = new InstrumentedHandler(metricRegistry);
-        instrumented.setServer(server);
         instrumented.setHandler(handler);
         return instrumented;
     }
@@ -425,7 +423,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
         server.addLifeCycleListener(buildSetUIDListener());
         lifecycle.attach(server);
         final ErrorHandler errorHandler = new ErrorHandler();
-        errorHandler.setServer(server);
         errorHandler.setShowStacks(false);
         server.addBean(errorHandler);
         server.setStopAtShutdown(true);
