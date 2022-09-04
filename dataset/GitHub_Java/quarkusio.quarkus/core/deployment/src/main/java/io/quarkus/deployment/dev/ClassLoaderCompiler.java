@@ -1,5 +1,6 @@
 package io.quarkus.deployment.dev;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -31,7 +32,7 @@ import io.quarkus.bootstrap.model.AppDependency;
  *
  * @author Stuart Douglas
  */
-public class ClassLoaderCompiler {
+public class ClassLoaderCompiler implements Closeable {
 
     private static final Logger log = Logger.getLogger(ClassLoaderCompiler.class);
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile(" ");
@@ -56,7 +57,6 @@ public class ClassLoaderCompiler {
                 urls.add(p.toUri().toURL());
             }
         }
-        urls.addAll(context.getClassPath());
 
         Set<String> parsedFiles = new HashSet<>();
         Deque<String> toParse = new ArrayDeque<>();
@@ -64,7 +64,7 @@ public class ClassLoaderCompiler {
             toParse.add(new File(URLDecoder.decode(url.getPath(), StandardCharsets.UTF_8.name())).getAbsolutePath());
         }
         Set<File> classPathElements = new HashSet<>();
-        for (DevModeContext.ModuleInfo i : context.getModules()) {
+        for (DevModeContext.ModuleInfo i : context.getAllModules()) {
             if (i.getClassesPath() != null) {
                 classPathElements.add(new File(i.getClassesPath()));
             }
@@ -134,7 +134,7 @@ public class ClassLoaderCompiler {
                 }
             }
         }
-        for (DevModeContext.ModuleInfo i : context.getModules()) {
+        for (DevModeContext.ModuleInfo i : context.getAllModules()) {
             if (!i.getSourcePaths().isEmpty()) {
                 if (i.getClassesPath() == null) {
                     log.warn("No classes directory found for module '" + i.getName()
@@ -146,7 +146,7 @@ public class ClassLoaderCompiler {
                             new CompilationProvider.Context(
                                     i.getName(),
                                     classPathElements,
-                                    new File(i.getProjectDirectory()),
+                                    i.getProjectDirectory() == null ? null : new File(i.getProjectDirectory()),
                                     new File(sourcePath),
                                     new File(i.getClassesPath()),
                                     context.getSourceEncoding(),
@@ -189,5 +189,12 @@ public class ClassLoaderCompiler {
             }
         }
         return null;
+    }
+
+    @Override
+    public void close() throws IOException {
+        for (CompilationProvider i : compilationProviders) {
+            i.close();
+        }
     }
 }
