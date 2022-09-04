@@ -17,12 +17,12 @@ package com.google.devtools.build.lib.exec;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -37,15 +37,12 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.test.TestActionContext;
-import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
 import com.google.devtools.build.lib.analysis.test.TestRunnerAction.ResolvedPaths;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.TestResult.ExecutionInfo;
 import com.google.devtools.build.lib.buildeventstream.TestFileNameConstants;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
@@ -120,9 +117,6 @@ public class StandaloneTestStrategy extends TestStrategy {
       executionInfo.put(ExecutionRequirements.NO_CACHE, "");
     }
     executionInfo.put(ExecutionRequirements.TIMEOUT, "" + getTimeout(action).getSeconds());
-    if (action.getConfiguration().getFragment(TestConfiguration.class).isPersistentTestRunner()) {
-      executionInfo.put(ExecutionRequirements.SUPPORTS_WORKERS, "1");
-    }
 
     ResourceSet localResourceUsage =
         action
@@ -138,11 +132,9 @@ public class StandaloneTestStrategy extends TestStrategy {
             ImmutableMap.copyOf(executionInfo),
             action.getRunfilesSupplier(),
             ImmutableMap.of(),
-            /*inputs=*/ action.getInputs(),
-            action.getConfiguration().getFragment(TestConfiguration.class).isPersistentTestRunner()
-                ? action.getTools()
-                : NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-            ImmutableSet.copyOf(action.getSpawnOutputs()),
+            /*inputs=*/ ImmutableList.copyOf(action.getInputs()),
+            /*tools=*/ ImmutableList.<Artifact>of(),
+            ImmutableList.copyOf(action.getSpawnOutputs()),
             localResourceUsage);
     return new StandaloneTestRunnerSpawn(
         action, actionExecutionContext, spawn, tmpDir, workingDirectory, execRoot);
@@ -406,10 +398,9 @@ public class StandaloneTestStrategy extends TestStrategy {
         ImmutableMap.copyOf(action.getExecutionInfo()),
         null,
         ImmutableMap.of(),
-        /*inputs=*/ NestedSetBuilder.create(
-            Order.STABLE_ORDER, action.getTestXmlGeneratorScript(), action.getTestLog()),
-        /*tools=*/ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-        /*outputs=*/ ImmutableSet.of(ActionInputHelper.fromPath(action.getXmlOutputPath())),
+        /*inputs=*/ ImmutableList.of(action.getTestXmlGeneratorScript(), action.getTestLog()),
+        /*tools=*/ ImmutableList.<Artifact>of(),
+        /*outputs=*/ ImmutableList.of(ActionInputHelper.fromPath(action.getXmlOutputPath())),
         SpawnAction.DEFAULT_RESOURCE_SET);
   }
 

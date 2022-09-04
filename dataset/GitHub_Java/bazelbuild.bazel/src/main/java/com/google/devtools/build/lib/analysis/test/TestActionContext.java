@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.test;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionContext;
@@ -66,7 +65,7 @@ public interface TestActionContext extends ActionContext {
     boolean hasPassed();
 
     /** Returns a list of spawn results for this test attempt. */
-    ImmutableList<SpawnResult> spawnResults();
+    List<SpawnResult> spawnResults();
   }
 
   /**
