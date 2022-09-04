@@ -896,7 +896,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
         advertisedProviders,
         configuredTargetFunction,
         externalBindingsFunction,
-        /*optionReferenceFunction=*/ RuleClass.NO_OPTION_REFERENCE,
         ruleDefinitionEnvironment,
         ruleDefinitionEnvironmentHashCode,
         new ConfigurationFragmentPolicy.Builder()

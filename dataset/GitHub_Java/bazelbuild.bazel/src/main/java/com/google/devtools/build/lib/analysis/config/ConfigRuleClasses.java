@@ -17,17 +17,19 @@ package com.google.devtools.build.lib.analysis.config;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
 
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.syntax.Type;
-import java.util.Set;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * Definitions for rule classes that specify or manipulate configuration settings.
@@ -106,16 +108,6 @@ public class ConfigRuleClasses {
      */
     public static final String SETTINGS_ATTRIBUTE = "values";
 
-    private static final Function<Rule, Set<String>> CONFIG_SETTING_OPTION_REFERENCE =
-        new Function<Rule, Set<String>>() {
-          @Override
-          public Set<String> apply(Rule rule) {
-            return NonconfigurableAttributeMapper.of(rule)
-                .get(SETTINGS_ATTRIBUTE, Type.STRING_DICT)
-                .keySet();
-          }
-        };
-
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
@@ -153,12 +145,9 @@ public class ConfigRuleClasses {
           <p>This attribute cannot be empty.
           </p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(
-              attr(SETTINGS_ATTRIBUTE, STRING_DICT)
-                  .mandatory()
-                  .nonconfigurable(NONCONFIGURABLE_ATTRIBUTE_REASON))
+          .add(attr(SETTINGS_ATTRIBUTE, STRING_DICT).mandatory()
+              .nonconfigurable(NONCONFIGURABLE_ATTRIBUTE_REASON))
           .setIsConfigMatcherForConfigSettingOnly()
-          .setOptionReferenceFunctionForConfigSettingOnly(CONFIG_SETTING_OPTION_REFERENCE)
           .build();
     }
 
@@ -171,7 +160,28 @@ public class ConfigRuleClasses {
           .factoryClass(ConfigSetting.class)
           .build();
     }
+
+    /**
+     * config_setting can't use {@link RuleClass.Builder#requiresConfigurationFragments} because
+     * config_setting's dependencies come from option names as strings. This special override
+     * computes that properly.
+     */
+    public static List<Class<? extends BuildConfiguration.Fragment>> requiresConfigurationFragments(
+        Rule rule, Map<String, Class<? extends BuildConfiguration.Fragment>> optionsToFragmentMap) {
+      ImmutableList.Builder<Class<? extends BuildConfiguration.Fragment>> builder =
+          ImmutableList.builder();
+      AttributeMap attributes = NonconfigurableAttributeMapper.of(rule);
+      for (String optionName : attributes.get(SETTINGS_ATTRIBUTE, Type.STRING_DICT).keySet()) {
+        Class<? extends BuildConfiguration.Fragment> value = optionsToFragmentMap.get(optionName);
+        // Null values come from BuildConfiguration.Options, which is implicitly included.
+        if (value != null) {
+          builder.add(value);
+        }
+      }
+      return builder.build();
+    }
   }
+
 /*<!-- #BLAZE_RULE (NAME = config_setting, TYPE = OTHER, FAMILY = General)[GENERIC_RULE] -->
 
 <p>
