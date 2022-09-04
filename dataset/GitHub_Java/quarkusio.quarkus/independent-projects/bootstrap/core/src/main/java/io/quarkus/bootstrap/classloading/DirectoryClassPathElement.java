@@ -51,7 +51,7 @@ public class DirectoryClassPathElement extends AbstractClassPathElement {
             //we don't allow absolute paths
             return null;
         }
-        if (!normal.endsWith(Paths.get(cn)) && !cn.isEmpty()) {
+        if (!normal.endsWith(Paths.get(cn))) {
             //make sure the case is correct
             //if the file on disk does not match the case of name return null
             return null;
@@ -72,15 +72,7 @@ public class DirectoryClassPathElement extends AbstractClassPathElement {
                 @Override
                 public URL getUrl() {
                     try {
-                        URI uri = file.toUri();
-                        // the URLClassLoader doesn't add trailing slashes to directories, so we make sure we return
-                        // the same URL as it would to avoid having QuarkusClassLoader return different URLs
-                        // (one with a trailing slash and one without) for same resource
-                        if (uri.getPath().endsWith("/")) {
-                            String uriStr = uri.toString();
-                            return new URL(uriStr.substring(0, uriStr.length() - 1));
-                        }
-                        return uri.toURL();
+                        return file.toUri().toURL();
                     } catch (MalformedURLException e) {
                         throw new RuntimeException(e);
                     }
