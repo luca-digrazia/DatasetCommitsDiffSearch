@@ -70,7 +70,7 @@ public abstract class Search {
         return builder.build();
     }
 
-    public abstract Builder toBuilder();
+    abstract Builder toBuilder();
 
     public static Builder builder() {
         return Builder.create().parameters(of());
