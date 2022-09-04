@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 
@@ -31,5 +30,5 @@ public interface ConfiguredAspectFactory {
    */
   ConfiguredAspect create(
       ConfiguredTargetAndData ctadBase, RuleContext context, AspectParameters parameters)
-      throws ActionConflictException, InterruptedException;
+      throws InterruptedException;
 }

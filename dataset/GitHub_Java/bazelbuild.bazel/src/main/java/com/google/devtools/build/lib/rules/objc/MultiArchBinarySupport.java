@@ -301,7 +301,7 @@ public class MultiArchBinarySupport {
       IntermediateArtifacts intermediateArtifacts,
       List<ConfiguredTargetAndData> propagatedConfiguredTargetAndDataDeps,
       List<ObjcProvider> nonPropagatedObjcDeps,
-      Iterable<ObjcProvider> additionalDepProviders) throws InterruptedException {
+      Iterable<ObjcProvider> additionalDepProviders) {
 
     ObjcCommon.Builder commonBuilder =
         new ObjcCommon.Builder(ruleContext, buildConfiguration)

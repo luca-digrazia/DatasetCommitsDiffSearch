@@ -194,7 +194,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
           initializeLinkingHelper(featureConfiguration)
               .link(
                   compilationInfo.getCcCompilationOutputs(),
-                  compilationInfo.getCcCompilationContextInfo());
+                  compilationInfo.getCcCompilationInfo());
 
       ccLibraryProviders =
           new TransitiveInfoProviderMapBuilder()
@@ -220,7 +220,6 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
     private FeatureConfiguration getFeatureConfiguration(SupportData supportData) {
       ImmutableSet.Builder<String> requestedFeatures = new ImmutableSet.Builder<>();
       ImmutableSet.Builder<String> unsupportedFeatures = new ImmutableSet.Builder<>();
-      unsupportedFeatures.addAll(ruleContext.getDisabledFeatures());
       unsupportedFeatures.add(CppRuleClasses.PARSE_HEADERS);
       unsupportedFeatures.add(CppRuleClasses.LAYERING_CHECK);
       if (!areSrcsBlacklisted() && supportData.hasProtoSources()) {

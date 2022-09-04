@@ -14,98 +14,33 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skyframe.serialization.Memoizer.Deserializer;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecRegistry.CodecDescriptor;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecs.MemoizationPermission;
+import com.google.devtools.build.lib.skyframe.serialization.Memoizer.MemoizingAfterObjectCodecAdapter;
+import com.google.devtools.build.lib.skyframe.serialization.Memoizer.MemoizingCodec;
+import com.google.devtools.build.lib.skyframe.serialization.Memoizer.Serializer;
+import com.google.devtools.build.lib.skyframe.serialization.Memoizer.Strategy;
 import com.google.protobuf.CodedInputStream;
+import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
-import java.util.function.Function;
-import javax.annotation.CheckReturnValue;
+import javax.annotation.Nullable;
 
-/**
- * Stateful class for providing additional context to a single deserialization "session". This class
- * is thread-safe so long as {@link #deserializer} is null. If it is not null, this class is not
- * thread-safe and should only be accessed on a single thread for deserializing one serialized
- * object (that may contain other serialized objects inside it).
- */
+/** Stateful class for providing additional context to a single deserialization "session". */
+// TODO(bazel-team): This class is just a shell, fill in.
 public class DeserializationContext {
+
   private final ObjectCodecRegistry registry;
   private final ImmutableMap<Class<?>, Object> dependencies;
-  private final MemoizationPermission memoizationPermission;
-  private final Memoizer.Deserializer deserializer;
 
-  private DeserializationContext(
-      ObjectCodecRegistry registry,
-      ImmutableMap<Class<?>, Object> dependencies,
-      MemoizationPermission memoizationPermission,
-      Deserializer deserializer) {
-    this.registry = registry;
-    this.dependencies = dependencies;
-    this.memoizationPermission = memoizationPermission;
-    this.deserializer = deserializer;
-  }
-
-  @VisibleForTesting
   public DeserializationContext(
       ObjectCodecRegistry registry, ImmutableMap<Class<?>, Object> dependencies) {
-    this(registry, dependencies, MemoizationPermission.ALLOWED, /*deserializer=*/ null);
+    this.registry = registry;
+    this.dependencies = dependencies;
   }
 
-  @VisibleForTesting
   public DeserializationContext(ImmutableMap<Class<?>, Object> dependencies) {
     this(AutoRegistry.get(), dependencies);
-  }
-
-  DeserializationContext disableMemoization() {
-    Preconditions.checkState(
-        memoizationPermission == MemoizationPermission.ALLOWED, "memoization already disabled");
-    Preconditions.checkState(deserializer == null, "deserializer already present");
-    return new DeserializationContext(
-        registry, dependencies, MemoizationPermission.DISABLED, deserializer);
-  }
-
-  /**
-   * Returns a {@link DeserializationContext} that will memoize values it encounters (using
-   * reference equality), the inverse of the memoization performed by a {@link SerializationContext}
-   * returned by {@link SerializationContext#newMemoizingContext}. The context returned here should
-   * be used instead of the original: memoization may only occur when using the returned context.
-   *
-   * <p>A new {@link DeserializationContext} will be created for each call of this method, since it
-   * is assumed that each codec that calls this method has data that it needs to inject into its
-   * children that should mask its parents' injected data. Thus, over-eagerly calling this method
-   * will reduce the effectiveness of memoization.
-   */
-  @CheckReturnValue
-  public DeserializationContext newMemoizingContext(Object additionalData) {
-    Preconditions.checkNotNull(additionalData);
-    Preconditions.checkState(
-        memoizationPermission == MemoizationPermission.ALLOWED, "memoization disabled");
-    // TODO(janakr,brandjon): De we want to support a single context with data that gets pushed and
-    // popped.
-    return new DeserializationContext(
-        this.registry, this.dependencies, memoizationPermission, new Deserializer(additionalData));
-  }
-
-  /**
-   * Construct an initial value for the currently deserializing value from the additional data
-   * stored in a memoizing deserializer. The additional data must have type {@code klass}. The given
-   * {@code initialValueFunction} should be a hermetic function that does not interact with this
-   * context or {@code codedIn in any way}: it should be a pure function of an element of type
-   * {@link A}.
-   */
-  public <A, T> T makeInitialValue(Function<A, T> initialValueFunction, Class<A> klass) {
-    // TODO(janakr): Possibly remove the "additional data" mechanism entirely now that it's no
-    // longer needed to thread Skylark Mutability's around. Instead of initial value functions, we
-    // can just have codecs construct their initial values directly. The only reasons to keep
-    // additional data around are 1) if we think something else might need it in the future (but
-    // YAGNI), or 2) if we want to share the same Mutability across multiple deserializations
-    // (within a single thread) to reduce garbage. For 2), we could even access the Mutability
-    // through dedicated methods instead of a generic "additional data" mechanism, though it might
-    // require subclassing DeserializationContext to avoid adding a dependency on Skylark.
-    return deserializer.makeInitialValue(initialValueFunction, klass);
   }
 
   // TODO(shahan): consider making codedIn a member of this class.
@@ -116,17 +51,69 @@ public class DeserializationContext {
       return null;
     }
     T constant = (T) registry.maybeGetConstantByTag(tag);
-    if (constant != null) {
-      return constant;
-    }
-    CodecDescriptor codecDescriptor = registry.getCodecDescriptorByTag(tag);
-    if (deserializer == null) {
-      return (T) codecDescriptor.deserialize(this, codedIn);
-    } else {
-      return deserializer.deserialize(this, (ObjectCodec<T>) codecDescriptor.getCodec(), codedIn);
-    }
+    return constant == null
+        ? (T) registry.getCodecDescriptorByTag(tag).deserialize(this, codedIn)
+        : constant;
   }
 
+  /**
+   * Returns a {@link MemoizingCodec} appropriate for deserializing the next object on the wire.
+   * Only for use by {@link Memoizer.Deserializer}.
+   */
+  @SuppressWarnings("unchecked")
+  public MemoizingCodec<?> getMemoizingCodecRecordedInInput(CodedInputStream codedIn)
+      throws IOException, SerializationException {
+    int tag = codedIn.readSInt32();
+    if (tag == 0) {
+      return new InitializedMemoizingCodec<>(null);
+    }
+    Object constant = registry.maybeGetConstantByTag(tag);
+    if (constant != null) {
+      return new InitializedMemoizingCodec<>(constant);
+    }
+    MemoizingCodec<?> codec = registry.maybeGetMemoizingCodecByTag(tag);
+    if (codec != null) {
+      return codec;
+    }
+    return new MemoizingAfterObjectCodecAdapter<>(registry.getCodecDescriptorByTag(tag).getCodec());
+  }
+
+  private static class InitializedMemoizingCodec<T> implements MemoizingCodec<T> {
+    private final T obj;
+    private boolean deserialized = false;
+
+    private InitializedMemoizingCodec(T obj) {
+      this.obj = obj;
+    }
+
+    @Override
+    public Strategy getStrategy() {
+      return Strategy.DO_NOT_MEMOIZE;
+    }
+
+    @Override
+    public void serializePayload(
+        SerializationContext context, T obj, CodedOutputStream codedOut, Serializer serializer) {
+      throw new UnsupportedOperationException("Unexpected serialize: " + obj);
+    }
+
+    @Override
+    public T deserializePayload(
+        DeserializationContext context,
+        @Nullable T initial,
+        CodedInputStream codedIn,
+        Deserializer deserializer) {
+      Preconditions.checkState(!deserialized, "Already deserialized: %s", obj);
+      deserialized = true;
+      return obj;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public Class<T> getEncodedClass() {
+      return (Class<T>) obj.getClass();
+    }
+  }
   @SuppressWarnings("unchecked")
   public <T> T getDependency(Class<T> type) {
     Preconditions.checkNotNull(type);

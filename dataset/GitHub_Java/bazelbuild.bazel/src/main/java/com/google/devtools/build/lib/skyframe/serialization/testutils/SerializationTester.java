@@ -22,8 +22,9 @@ import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skyframe.serialization.AutoRegistry;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.Memoizer;
+import com.google.devtools.build.lib.skyframe.serialization.Memoizer.Deserializer;
+import com.google.devtools.build.lib.skyframe.serialization.Memoizer.MemoizingCodec;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecRegistry;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecs;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
@@ -61,8 +62,12 @@ public class SerializationTester {
 
   private final ImmutableList<Object> subjects;
   private final ImmutableMap.Builder<Class<?>, Object> dependenciesBuilder;
-  private final ArrayList<ObjectCodec<?>> additionalCodecs = new ArrayList<>();
-  private boolean memoize;
+  private final ArrayList<MemoizingCodec<?>> memoizingCodecs = new ArrayList<>();
+  // TODO(janakr): in future, there may be tests that want to start with default serialization but
+  // need memoizing codecs, so they should be able to set this to false even after adding a
+  // memoizing codec.
+  private boolean useMemoization = false;
+  private Object additionalDeserializationData;
 
   @SuppressWarnings("rawtypes")
   private VerificationFunction verificationFunction =
@@ -85,13 +90,15 @@ public class SerializationTester {
     return this;
   }
 
-  public SerializationTester addCodec(ObjectCodec<?> codec) {
-    additionalCodecs.add(codec);
+  public SerializationTester addMemoizingCodec(MemoizingCodec<?> memoizingCodec) {
+    memoizingCodecs.add(memoizingCodec);
+    useMemoization = true;
     return this;
   }
 
-  public SerializationTester makeMemoizing() {
-    this.memoize = true;
+  public SerializationTester setAdditionalDeserializationData(
+      Object additionalDeserializationData) {
+    this.additionalDeserializationData = additionalDeserializationData;
     return this;
   }
 
@@ -115,8 +122,8 @@ public class SerializationTester {
     for (Object val : dependencies.values()) {
       registryBuilder.addConstant(val);
     }
-    for (ObjectCodec<?> codec : additionalCodecs) {
-      registryBuilder.add(codec);
+    for (MemoizingCodec<?> memoizingCodec : memoizingCodecs) {
+      registryBuilder.addMemoizing(memoizingCodec);
     }
     ObjectCodecs codecs = new ObjectCodecs(registryBuilder.build(), dependencies);
     testSerializeDeserialize(codecs);
@@ -126,24 +133,26 @@ public class SerializationTester {
 
   private ByteString serialize(Object subject, ObjectCodecs codecs)
       throws SerializationException, IOException {
-    if (!memoize) {
+    if (!useMemoization) {
       return codecs.serialize(subject);
     }
     ByteString.Output output = ByteString.newOutput();
     CodedOutputStream codedOut = CodedOutputStream.newInstance(output);
-    codecs.getSerializationContextForTesting().getMemoizingContext().serialize(subject, codedOut);
+    new Memoizer.Serializer()
+        .serialize(codecs.getSerializationContextForTesting(), subject, codedOut);
     codedOut.flush();
     return output.toByteString();
   }
 
   private Object deserialize(ByteString serialized, ObjectCodecs codecs)
       throws SerializationException, IOException {
-    if (!memoize) {
+    if (!useMemoization) {
       return codecs.deserialize(serialized);
     }
-    DeserializationContext context =
-        codecs.getDeserializationContextForTesting().getMemoizingContext();
-    return context.deserialize(serialized.newCodedInput());
+    return (additionalDeserializationData == null
+            ? new Deserializer()
+            : new Memoizer.Deserializer(additionalDeserializationData))
+        .deserialize(codecs.getDeserializationContextForTesting(), serialized.newCodedInput());
   }
 
   /** Runs serialization/deserialization tests. */

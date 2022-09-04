@@ -73,7 +73,6 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -144,7 +143,6 @@ public final class ObjcCommon {
 
   static class Builder {
     private final RuleContext context;
-    private final SkylarkSemantics semantics;
     private final BuildConfiguration buildConfiguration;
     private Optional<CompilationAttributes> compilationAttributes = Optional.absent();
     private Optional<ResourceAttributes> resourceAttributes = Optional.absent();
@@ -174,7 +172,7 @@ public final class ObjcCommon {
      * Builder for {@link ObjcCommon} obtaining both attribute data and configuration data from
      * the given rule context.
      */
-    Builder(RuleContext context) throws InterruptedException {
+    Builder(RuleContext context) {
       this(context, context.getConfiguration());
     }
 
@@ -183,10 +181,8 @@ public final class ObjcCommon {
      * configuration data from the given configuration object for use in situations where a single
      * target's outputs are under multiple configurations.
      */
-    Builder(RuleContext context, BuildConfiguration buildConfiguration)
-        throws InterruptedException {
+    Builder(RuleContext context, BuildConfiguration buildConfiguration) {
       this.context = Preconditions.checkNotNull(context);
-      this.semantics = context.getAnalysisEnvironment().getSkylarkSemantics();
       this.buildConfiguration = Preconditions.checkNotNull(buildConfiguration);
     }
 
@@ -398,7 +394,7 @@ public final class ObjcCommon {
       Iterable<BundleableFile> bundleImports = BundleableFile.bundleImportsFromRule(context);
 
       ObjcProvider.Builder objcProvider =
-          new ObjcProvider.Builder(semantics)
+          new ObjcProvider.Builder()
               .addAll(IMPORTED_LIBRARY, extraImportLibraries)
               .addAll(BUNDLE_FILE, bundleImports)
               .addAll(SDK_FRAMEWORK, extraSdkFrameworks)
