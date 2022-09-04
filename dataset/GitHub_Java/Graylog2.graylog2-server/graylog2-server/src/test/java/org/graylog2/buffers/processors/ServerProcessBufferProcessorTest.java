@@ -24,7 +24,8 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.filters.MessageFilter;
-import org.graylog2.shared.journal.Journal;
+import org.graylog2.plugin.inputs.MessageInput;
+import org.mockito.Matchers;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
@@ -55,8 +56,7 @@ public class ServerProcessBufferProcessorTest {
                 first,
                 second);
         final ServerProcessBufferProcessor processor = new ServerProcessBufferProcessor(mock(
-                MetricRegistry.class), filters, mock(Configuration.class), serverStatus, mock(OutputBuffer.class), mock(
-                Journal.class));
+                MetricRegistry.class), filters, mock(Configuration.class), serverStatus, 0, 1, mock(OutputBuffer.class));
         final List<MessageFilter> filterRegistry = processor.getFilterRegistry();
 
         assertEquals(filterRegistry.get(0), first);
@@ -70,14 +70,15 @@ public class ServerProcessBufferProcessorTest {
         AtomicInteger processBufferWatermark = new AtomicInteger();
         OutputBuffer outputBuffer = mock(OutputBuffer.class);
         final Configuration configuration = mock(Configuration.class);
+        when(configuration.isDisableOutputCache()).thenReturn(false);
 
         final ServerProcessBufferProcessor emptyFilters =
                 new ServerProcessBufferProcessor(metricRegistry,
                                                  Sets.<MessageFilter>newHashSet(),
                                                  configuration,
                                                  mock(ServerStatus.class),
-                                                 outputBuffer,
-                                                 mock(Journal.class));
+                                                 0, 1,
+                                                 outputBuffer);
         try {
             emptyFilters.handleMessage(new Message("test", "source", Tools.iso8601()));
             fail("A processor with empty filter set should throw an exception");
@@ -90,6 +91,7 @@ public class ServerProcessBufferProcessorTest {
         AtomicInteger processBufferWatermark = new AtomicInteger();
         OutputBuffer outputBuffer = mock(OutputBuffer.class);
         final Configuration configuration = mock(Configuration.class);
+        when(configuration.isDisableOutputCache()).thenReturn(false);
 
         MessageFilter filterOnlyFirst = new MessageFilter() {
             private boolean filterOut = true;
@@ -115,25 +117,22 @@ public class ServerProcessBufferProcessorTest {
             }
         };
 
-        final Journal journal = mock(Journal.class);
         final ServerProcessBufferProcessor filterTest =
                 new ServerProcessBufferProcessor(metricRegistry,
                                                  Sets.newHashSet(filterOnlyFirst),
                                                  configuration,
                                                  serverStatus,
-                                                 outputBuffer,
-                                                 journal);
+                                                 0, 1,
+                                                 outputBuffer);
         try {
             Message filteredoutMessage = new Message("filtered out", "source", Tools.iso8601());
-            filteredoutMessage.setJournalOffset(1);
             Message unfilteredMessage = new Message("filtered out", "source", Tools.iso8601());
 
             filterTest.handleMessage(filteredoutMessage);
             filterTest.handleMessage(unfilteredMessage);
 
-            verify(outputBuffer, times(0)).insertBlocking(same(filteredoutMessage));
-            verify(outputBuffer, times(1)).insertBlocking(same(unfilteredMessage));
-            verify(journal, times(1)).markJournalOffsetCommitted(1);
+            verify(outputBuffer, times(0)).insertCached(same(filteredoutMessage), Matchers.<MessageInput>anyObject());
+            verify(outputBuffer, times(1)).insertCached(same(unfilteredMessage), Matchers.<MessageInput>anyObject());
             assertTrue(filteredoutMessage.getFilterOut());
             assertFalse(unfilteredMessage.getFilterOut());
 
