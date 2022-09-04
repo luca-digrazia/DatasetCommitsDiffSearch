@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,7 +19,6 @@ import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.FocusChange;
 
 import android.view.View;
-import android.widget.Button;
 
 @EActivity(R.layout.clickable_widgets)
 public class FocusChangeHandledActivity extends EventsHandledAbstractActivity {
@@ -31,11 +30,6 @@ public class FocusChangeHandledActivity extends EventsHandledAbstractActivity {
 	@FocusChange
 	public void conventionButton(View evt, boolean hasFocus) {
 
-	}
-
-	@FocusChange
-	public void buttonWithButtonArgument(Button evt, boolean hasFocus) {
-		view = evt;
 	}
 
 	@FocusChange
