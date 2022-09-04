@@ -35,7 +35,6 @@ import javax.persistence.spi.PersistenceUnitTransactionType;
 
 import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.MetricType;
-import org.hibernate.MultiTenancyStrategy;
 import org.hibernate.annotations.Proxy;
 import org.hibernate.boot.archive.scan.spi.ClassDescriptor;
 import org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl;
@@ -74,6 +73,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
+import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
@@ -105,7 +105,6 @@ import io.quarkus.hibernate.orm.runtime.dialect.QuarkusH2Dialect;
 import io.quarkus.hibernate.orm.runtime.dialect.QuarkusPostgreSQL10Dialect;
 import io.quarkus.hibernate.orm.runtime.metrics.HibernateCounter;
 import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
-import io.quarkus.hibernate.orm.runtime.tenant.DataSourceTenantConnectionResolver;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.smallrye.metrics.deployment.spi.MetricBuildItem;
 import net.bytebuddy.description.type.TypeDescription;
@@ -165,56 +164,32 @@ public final class HibernateOrmProcessor {
         return watchedFiles;
     }
 
+    @SuppressWarnings("unchecked")
     @BuildStep
-    public void parsePersistenceXmlDescriptors(
-            BuildProducer<PersistenceXmlDescriptorBuildItem> persistenceXmlDescriptorBuildItemBuildProducer) {
-        List<ParsedPersistenceXmlDescriptor> explicitDescriptors = QuarkusPersistenceXmlParser.locatePersistenceUnits();
-        for (ParsedPersistenceXmlDescriptor desc : explicitDescriptors) {
-            persistenceXmlDescriptorBuildItemBuildProducer.produce(new PersistenceXmlDescriptorBuildItem(desc));
-        }
-    }
-
-    @BuildStep
-    public void configurationDescriptorBuilding(
-            List<JdbcDataSourceBuildItem> jdbcDataSourcesBuildItem,
-            List<PersistenceXmlDescriptorBuildItem> persistenceXmlDescriptors,
-            BuildProducer<NativeImageResourceBuildItem> resourceProducer,
-            ApplicationArchivesBuildItem applicationArchivesBuildItem,
-            LaunchModeBuildItem launchMode,
-            JpaEntitiesBuildItem domainObjects,
+    @Record(STATIC_INIT)
+    public void build(RecorderContext recorderContext, HibernateOrmRecorder recorder,
+            List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems,
             List<NonJpaModelBuildItem> nonJpaModelBuildItems,
-            BuildProducer<SystemPropertyBuildItem> systemPropertyProducer,
-            BuildProducer<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorProducer) {
-
-        final boolean enableORM = hasEntities(domainObjects, nonJpaModelBuildItems);
-
-        if (!enableORM) {
-            // we have to bail out early as we might not have a datasource configuration
-            return;
-        }
-
-        // we only support the default datasource for now
-        Optional<JdbcDataSourceBuildItem> defaultJdbcDataSourceBuildItem = jdbcDataSourcesBuildItem.stream()
-                .filter(i -> i.isDefault())
-                .findFirst();
-
-        // handle the implicit persistence unit
-        List<ParsedPersistenceXmlDescriptor> allDescriptors = new ArrayList<>(persistenceXmlDescriptors.size() + 1);
-        for (PersistenceXmlDescriptorBuildItem persistenceXmlDescriptorBuildItem : persistenceXmlDescriptors) {
-            allDescriptors.add(persistenceXmlDescriptorBuildItem.getDescriptor());
-        }
-        handleHibernateORMWithNoPersistenceXml(allDescriptors, resourceProducer, systemPropertyProducer,
-                defaultJdbcDataSourceBuildItem, applicationArchivesBuildItem, launchMode.getLaunchMode());
-
-        for (ParsedPersistenceXmlDescriptor descriptor : allDescriptors) {
-            persistenceUnitDescriptorProducer.produce(new PersistenceUnitDescriptorBuildItem(descriptor));
-        }
-    }
-
-    @BuildStep
-    public JpaModelIndexBuildItem jpaEntitiesIndexer(
+            List<IgnorableNonIndexedClasses> ignorableNonIndexedClassesBuildItems,
             CombinedIndexBuildItem index,
-            List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems) {
+            ArchiveRootBuildItem archiveRoot,
+            ApplicationArchivesBuildItem applicationArchivesBuildItem,
+            List<JdbcDataSourceBuildItem> jdbcDataSourcesBuildItem,
+            BuildProducer<FeatureBuildItem> feature,
+            BuildProducer<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorProducer,
+            BuildProducer<NativeImageResourceBuildItem> resourceProducer,
+            BuildProducer<SystemPropertyBuildItem> systemPropertyProducer,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<JpaEntitiesBuildItem> domainObjectsProducer,
+            BuildProducer<BeanContainerListenerBuildItem> beanContainerListener,
+            BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer,
+            List<HibernateOrmIntegrationBuildItem> integrations,
+            LaunchModeBuildItem launchMode) throws Exception {
+
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_ORM));
+
+        List<ParsedPersistenceXmlDescriptor> explicitDescriptors = QuarkusPersistenceXmlParser.locatePersistenceUnits();
+
         // build a composite index with additional jpa model classes
         Indexer indexer = new Indexer();
         Set<DotName> additionalIndex = new HashSet<>();
@@ -223,17 +198,6 @@ public final class HibernateOrmProcessor {
                     HibernateOrmProcessor.class.getClassLoader());
         }
         CompositeIndex compositeIndex = CompositeIndex.create(index.getIndex(), indexer.complete());
-        return new JpaModelIndexBuildItem(compositeIndex);
-    }
-
-    @BuildStep
-    public void defineJpaEntities(
-            JpaModelIndexBuildItem indexBuildItem,
-            BuildProducer<JpaEntitiesBuildItem> domainObjectsProducer,
-            List<IgnorableNonIndexedClasses> ignorableNonIndexedClassesBuildItems,
-            List<NonJpaModelBuildItem> nonJpaModelBuildItems,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            List<PersistenceXmlDescriptorBuildItem> persistenceXmlDescriptors) throws Exception {
 
         Set<String> nonJpaModelClasses = nonJpaModelBuildItems.stream()
                 .map(NonJpaModelBuildItem::getClassName)
@@ -247,49 +211,12 @@ public final class HibernateOrmProcessor {
             }
         }
 
-        JpaJandexScavenger scavenger = new JpaJandexScavenger(reflectiveClass, persistenceXmlDescriptors,
-                indexBuildItem.getIndex(),
+        JpaJandexScavenger scavenger = new JpaJandexScavenger(reflectiveClass, explicitDescriptors, compositeIndex,
                 nonJpaModelClasses, ignorableNonIndexedClasses);
         final JpaEntitiesBuildItem domainObjects = scavenger.discoverModelAndRegisterForReflection();
+
+        // remember how to run the enhancers later
         domainObjectsProducer.produce(domainObjects);
-    }
-
-    @BuildStep
-    public ProxyDefinitionsBuildItem pregenProxies(
-            JpaEntitiesBuildItem domainObjects,
-            JpaModelIndexBuildItem indexBuildItem,
-            List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
-            BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer) {
-
-        Set<String> entitiesToGenerateProxiesFor = new HashSet<>(domainObjects.getEntityClassNames());
-
-        List<ParsedPersistenceXmlDescriptor> allDescriptors = new ArrayList<>();
-        for (PersistenceUnitDescriptorBuildItem pud : persistenceUnitDescriptorBuildItems) {
-            allDescriptors.add(pud.getDescriptor());
-        }
-
-        for (ParsedPersistenceXmlDescriptor unit : allDescriptors) {
-            entitiesToGenerateProxiesFor.addAll(unit.getManagedClassNames());
-        }
-
-        PreGeneratedProxies proxyDefinitions = generatedProxies(entitiesToGenerateProxiesFor, indexBuildItem.getIndex(),
-                generatedClassBuildItemBuildProducer);
-        return new ProxyDefinitionsBuildItem(proxyDefinitions);
-    }
-
-    @SuppressWarnings("unchecked")
-    @BuildStep
-    @Record(STATIC_INIT)
-    public void build(RecorderContext recorderContext, HibernateOrmRecorder recorder,
-            JpaEntitiesBuildItem domainObjects,
-            List<NonJpaModelBuildItem> nonJpaModelBuildItems,
-            List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
-            List<HibernateOrmIntegrationBuildItem> integrations,
-            ProxyDefinitionsBuildItem proxyDefinitions,
-            BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<BeanContainerListenerBuildItem> beanContainerListener) throws Exception {
-
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_ORM));
 
         final boolean enableORM = hasEntities(domainObjects, nonJpaModelBuildItems);
         recorder.callHibernateFeatureInit(enableORM);
@@ -297,6 +224,21 @@ public final class HibernateOrmProcessor {
         if (!enableORM) {
             // we can bail out early
             return;
+        }
+
+        // we only support the default datasource for now
+        Optional<JdbcDataSourceBuildItem> defaultJdbcDataSourceBuildItem = jdbcDataSourcesBuildItem.stream()
+                .filter(i -> i.isDefault())
+                .findFirst();
+
+        // handle the implicit persistence unit
+        List<ParsedPersistenceXmlDescriptor> allDescriptors = new ArrayList<>(explicitDescriptors.size() + 1);
+        allDescriptors.addAll(explicitDescriptors);
+        handleHibernateORMWithNoPersistenceXml(allDescriptors, resourceProducer, systemPropertyProducer, archiveRoot,
+                defaultJdbcDataSourceBuildItem, applicationArchivesBuildItem, launchMode.getLaunchMode());
+
+        for (ParsedPersistenceXmlDescriptor descriptor : allDescriptors) {
+            persistenceUnitDescriptorProducer.produce(new PersistenceUnitDescriptorBuildItem(descriptor));
         }
 
         for (String className : domainObjects.getEntityClassNames()) {
@@ -333,27 +275,16 @@ public final class HibernateOrmProcessor {
                     .add((Class<? extends ServiceContributor>) recorderContext.classProxy(serviceContributorClassName));
         }
 
-        List<ParsedPersistenceXmlDescriptor> allDescriptors = new ArrayList<>();
-        for (PersistenceUnitDescriptorBuildItem pud : persistenceUnitDescriptorBuildItems) {
-            allDescriptors.add(pud.getDescriptor());
+        Set<String> entitiesToGenerateProxiesFor = new HashSet<>(domainObjects.getEntityClassNames());
+        for (ParsedPersistenceXmlDescriptor unit : allDescriptors) {
+            entitiesToGenerateProxiesFor.addAll(unit.getManagedClassNames());
         }
-
-        // Multi tenancy mode (DATABASE, DISCRIMINATOR, NONE, SCHEMA)
-        MultiTenancyStrategy strategy = getMultiTenancyStrategy();
-        if (strategy == MultiTenancyStrategy.DISCRIMINATOR) {
-            // See https://hibernate.atlassian.net/browse/HHH-6054
-            throw new ConfigurationError("The Hibernate ORM multi tenancy strategy "
-                    + MultiTenancyStrategy.DISCRIMINATOR + " is currently not supported");
-        }
-
+        PreGeneratedProxies proxyDefinitions = generatedProxies(entitiesToGenerateProxiesFor, compositeIndex,
+                generatedClassBuildItemBuildProducer);
         beanContainerListener
                 .produce(new BeanContainerListenerBuildItem(
                         recorder.initMetadata(allDescriptors, scanner, integratorClasses, serviceContributorClasses,
-                                proxyDefinitions.getProxies(), strategy)));
-    }
-
-    private MultiTenancyStrategy getMultiTenancyStrategy() {
-        return MultiTenancyStrategy.valueOf(hibernateConfig.multitenant.orElse(MultiTenancyStrategy.NONE.name()));
+                                proxyDefinitions)));
     }
 
     private PreGeneratedProxies generatedProxies(Set<String> entityClassNames, IndexView combinedIndex,
@@ -476,16 +407,9 @@ public final class HibernateOrmProcessor {
             return;
         }
 
-        List<Class<?>> unremovableClasses = new ArrayList<>();
-        unremovableClasses.add(JPAConfig.class);
-        unremovableClasses.add(TransactionEntityManagers.class);
-        unremovableClasses.add(RequestScopedEntityManagerHolder.class);
-        if (getMultiTenancyStrategy() != MultiTenancyStrategy.NONE) {
-            unremovableClasses.add(DataSourceTenantConnectionResolver.class);
-        }
-
         additionalBeans.produce(AdditionalBeanBuildItem.builder().setUnremovable()
-                .addBeanClasses(unremovableClasses.toArray(new Class<?>[unremovableClasses.size()]))
+                .addBeanClasses(JPAConfig.class, TransactionEntityManagers.class,
+                        RequestScopedEntityManagerHolder.class)
                 .build());
 
         if (descriptors.size() == 1) {
@@ -520,12 +444,9 @@ public final class HibernateOrmProcessor {
         if (!hasEntities(jpaEntities, nonJpaModels)) {
             return;
         }
-        MultiTenancyStrategy strategy = MultiTenancyStrategy
-                .valueOf(hibernateConfig.multitenant.orElse(MultiTenancyStrategy.NONE.name()));
-        buildProducer.produce(new BeanContainerListenerBuildItem(
-                recorder.initializeJpa(capabilities.isCapabilityPresent(Capabilities.TRANSACTIONS), strategy,
-                        hibernateConfig.multitenantSchemaDatasource.orElse(null))));
 
+        buildProducer.produce(new BeanContainerListenerBuildItem(
+                recorder.initializeJpa(capabilities.isCapabilityPresent(Capabilities.TRANSACTIONS))));
         // Bootstrap all persistence units
         for (PersistenceUnitDescriptorBuildItem persistenceUnitDescriptor : descriptors) {
             buildProducer.produce(new BeanContainerListenerBuildItem(
@@ -745,6 +666,7 @@ public final class HibernateOrmProcessor {
             List<ParsedPersistenceXmlDescriptor> descriptors,
             BuildProducer<NativeImageResourceBuildItem> resourceProducer,
             BuildProducer<SystemPropertyBuildItem> systemProperty,
+            ArchiveRootBuildItem root,
             Optional<JdbcDataSourceBuildItem> driverBuildItem,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             LaunchMode launchMode) {

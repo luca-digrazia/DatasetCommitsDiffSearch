@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
@@ -74,28 +73,13 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
     private volatile ClassLoader transformerClassLoader;
     private volatile ClassLoaderState state;
 
-    static final ClassLoader PLATFORM_CLASS_LOADER;
-
-    static {
-        ClassLoader cl = null;
-        try {
-            cl = (ClassLoader) ClassLoader.class.getDeclaredMethod("getPlatformClassLoader").invoke(null);
-        } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
-
-        }
-        PLATFORM_CLASS_LOADER = cl;
-    }
-
     private QuarkusClassLoader(Builder builder) {
         //we need the parent to be null
         //as MP has super broken class loading where it attempts to resolve stuff from the parent
         //will hopefully be fixed in 1.4
         //e.g. https://github.com/eclipse/microprofile-config/issues/390
         //e.g. https://github.com/eclipse/microprofile-reactive-streams-operators/pull/130
-        //to further complicate things we also have https://github.com/quarkusio/quarkus/issues/8985
-        //where getParent must work to load JDK services on JDK9+
-        //to get around this we pass in the platform ClassLoader, if it exists
-        super(PLATFORM_CLASS_LOADER);
+        super(null);
         this.name = builder.name;
         this.elements = builder.elements;
         this.bytecodeTransformers = builder.bytecodeTransformers;
@@ -146,12 +130,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         //for single resources we still respect this
         boolean banned = state.bannedResources.contains(name);
         Set<URL> resources = new LinkedHashSet<>();
-        //ClassPathElement[] providers = loadableResources.get(name);
-        //if (providers != null) {
-        //    for (ClassPathElement element : providers) {
-        //        resources.add(element.getResource(nm).getUrl());
-        //    }
-        //}
 
         //this is a big of a hack, but is necessary to prevent service leakage
         //in some situations (looking at you gradle) the parent can contain the same
@@ -173,10 +151,12 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
                 //ignore
             }
         }
-        for (ClassPathElement i : elements) {
-            ClassPathResource res = i.getResource(nm);
-            if (res != null) {
-                resources.add(res.getUrl());
+        //TODO: in theory resources could have been added in dev mode
+        //but I don't thing this really matters for this code path
+        ClassPathElement[] providers = state.loadableResources.get(name);
+        if (providers != null) {
+            for (ClassPathElement element : providers) {
+                resources.add(element.getResource(nm).getUrl());
             }
         }
         if (!banned) {
@@ -253,15 +233,20 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         if (state.bannedResources.contains(name)) {
             return null;
         }
-        //        ClassPathElement[] providers = loadableResources.get(name);
-        //        if (providers != null) {
-        //            return providers[0].getResource(nm).getUrl();
-        //        }
-        //TODO: because of dev mode we can't use the fast path her, we need to iterate
-        for (ClassPathElement i : elements) {
-            ClassPathResource res = i.getResource(name);
-            if (res != null) {
-                return res.getUrl();
+        //TODO: because of dev mode we iterate, to see if any resources were added
+        //not for .class files though, adding them causes a restart
+        //this is very important for bytebuddy performance
+        if (nm.endsWith(".class")) {
+            ClassPathElement[] providers = state.loadableResources.get(name);
+            if (providers != null) {
+                return providers[0].getResource(nm).getUrl();
+            }
+        } else {
+            for (ClassPathElement i : elements) {
+                ClassPathResource res = i.getResource(name);
+                if (res != null) {
+                    return res.getUrl();
+                }
             }
         }
         return parent.getResource(nm);
@@ -274,15 +259,18 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         if (state.bannedResources.contains(name)) {
             return null;
         }
-        //        ClassPathElement[] providers = loadableResources.get(name);
-        //        if (providers != null) {
-        //            return new ByteArrayInputStream(providers[0].getResource(nm).getData());
-        //        }
-        //TODO: because of dev mode we can't use the fast path her, we need to iterate
-        for (ClassPathElement i : elements) {
-            ClassPathResource res = i.getResource(name);
-            if (res != null) {
-                return new ByteArrayInputStream(res.getData());
+        //dev mode may have added some files, so we iterate to check, but not for classes
+        if (nm.endsWith(".class")) {
+            ClassPathElement[] providers = state.loadableResources.get(name);
+            if (providers != null) {
+                return new ByteArrayInputStream(providers[0].getResource(nm).getData());
+            }
+        } else {
+            for (ClassPathElement i : elements) {
+                ClassPathResource res = i.getResource(name);
+                if (res != null) {
+                    return new ByteArrayInputStream(res.getData());
+                }
             }
         }
         return parent.getResourceAsStream(nm);

@@ -31,6 +31,7 @@ import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.api.validation.ResteasyConstraintViolation;
 import org.jboss.resteasy.api.validation.ViolationReport;
+import org.jboss.resteasy.core.ResteasyDeploymentImpl;
 import org.jboss.resteasy.microprofile.config.FilterConfigSource;
 import org.jboss.resteasy.microprofile.config.ServletConfigSource;
 import org.jboss.resteasy.microprofile.config.ServletContextConfigSource;
@@ -70,7 +71,6 @@ import io.quarkus.resteasy.common.deployment.ResteasyCommonProcessor.ResteasyCom
 import io.quarkus.resteasy.common.deployment.ResteasyDotNames;
 import io.quarkus.resteasy.common.runtime.QuarkusInjectorFactory;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
-import io.quarkus.resteasy.server.common.runtime.QuarkusResteasyDeployment;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceDefiningAnnotationBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodParamAnnotations;
@@ -289,7 +289,7 @@ public class ResteasyServerCommonProcessor {
 
         Map<String, String> resteasyInitParameters = new HashMap<>();
 
-        ResteasyDeployment deployment = new QuarkusResteasyDeployment();
+        ResteasyDeployment deployment = new ResteasyDeploymentImpl();
         registerProviders(deployment, resteasyInitParameters, reflectiveClass, unremovableBeans,
                 jaxrsProvidersToRegisterBuildItem);
 
