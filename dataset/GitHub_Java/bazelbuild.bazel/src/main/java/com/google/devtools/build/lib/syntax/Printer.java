@@ -67,15 +67,7 @@ public class Printer {
    * @return new {@link BasePrinter}
    */
   public static BasePrinter getPrinter() {
-    return new BasePrinter(new StringBuilder());
-  }
-
-  /**
-   * Creates an instance of {@link BasePrinter} with an empty buffer and whose format strings allow
-   * only %s and %%.
-   */
-  public static BasePrinter getSimplifiedPrinter() {
-    return new BasePrinter(new StringBuilder(), /*simplifiedFormatStrings=*/ true);
+    return getPrinter(new StringBuilder());
   }
 
   private Printer() {}
