@@ -17,11 +17,13 @@
 
 package smile.data.vector;
 
-import java.util.stream.DoubleStream;
-import java.util.stream.IntStream;
 import smile.data.measure.CategoricalMeasure;
 import smile.data.measure.Measure;
 import smile.data.type.StructField;
+
+import java.util.Optional;
+import java.util.stream.DoubleStream;
+import java.util.stream.IntStream;
 
 /**
  * An immutable float vector.
@@ -60,8 +62,8 @@ class FloatVectorImpl implements FloatVector {
     }
 
     @Override
-    public Measure measure() {
-        return measure;
+    public Optional<Measure> measure() {
+        return Optional.ofNullable(measure);
     }
 
     @Override

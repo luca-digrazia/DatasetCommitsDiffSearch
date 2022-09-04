@@ -17,11 +17,13 @@
 
 package smile.data.vector;
 
-import java.util.Arrays;
-import java.util.stream.LongStream;
 import smile.data.measure.NumericalMeasure;
 import smile.data.measure.Measure;
 import smile.data.type.StructField;
+
+import java.util.Arrays;
+import java.util.Optional;
+import java.util.stream.LongStream;
 
 /**
  * An immutable long vector.
@@ -60,8 +62,8 @@ class LongVectorImpl implements LongVector {
     }
 
     @Override
-    public Measure measure() {
-        return measure;
+    public Optional<Measure> measure() {
+        return Optional.ofNullable(measure);
     }
 
     @Override

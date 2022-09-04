@@ -62,8 +62,8 @@ class IntVectorImpl implements IntVector {
     }
 
     @Override
-    public Measure measure() {
-        return measure;
+    public Optional<Measure> measure() {
+        return Optional.ofNullable(measure);
     }
 
     @Override

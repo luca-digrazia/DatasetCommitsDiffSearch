@@ -61,8 +61,8 @@ class ByteVectorImpl implements ByteVector {
     }
 
     @Override
-    public Measure measure() {
-        return measure;
+    public Optional<Measure> measure() {
+        return Optional.ofNullable(measure);
     }
 
     @Override
