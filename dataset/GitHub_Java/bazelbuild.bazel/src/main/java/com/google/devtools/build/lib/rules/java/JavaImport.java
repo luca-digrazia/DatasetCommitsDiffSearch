@@ -73,7 +73,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     ImmutableBiMap.Builder<Artifact, Artifact> compilationToRuntimeJarMapBuilder =
         ImmutableBiMap.builder();
     ImmutableList<Artifact> interfaceJars =
-        processWithIjarIfNeeded(jars, ruleContext, compilationToRuntimeJarMapBuilder);
+        processWithIjar(jars, ruleContext, compilationToRuntimeJarMapBuilder);
 
     JavaCompilationArtifacts javaArtifacts = collectJavaArtifacts(jars, interfaceJars);
     common.setJavaCompilationArtifacts(javaArtifacts);
@@ -234,21 +234,17 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     return ImmutableList.copyOf(jars);
   }
 
-  private ImmutableList<Artifact> processWithIjarIfNeeded(ImmutableList<Artifact> jars,
+  private ImmutableList<Artifact> processWithIjar(ImmutableList<Artifact> jars,
       RuleContext ruleContext,
       ImmutableMap.Builder<Artifact, Artifact> compilationToRuntimeJarMap) {
     ImmutableList.Builder<Artifact> interfaceJarsBuilder = ImmutableList.builder();
-    boolean useIjar = ruleContext.getFragment(JavaConfiguration.class).getUseIjars();
     for (Artifact jar : jars) {
-      Artifact interfaceJar = useIjar
-          ? JavaCompilationHelper.createIjarAction(
-              ruleContext,
-              JavaCompilationHelper.getJavaToolchainProvider(ruleContext),
-              jar,
-              true)
-          : jar;
-      interfaceJarsBuilder.add(interfaceJar);
-      compilationToRuntimeJarMap.put(interfaceJar, jar);
+      Artifact ijar = JavaCompilationHelper.createIjarAction(
+          ruleContext,
+          JavaCompilationHelper.getJavaToolchainProvider(ruleContext),
+          jar, true);
+      interfaceJarsBuilder.add(ijar);
+      compilationToRuntimeJarMap.put(ijar, jar);
     }
     return interfaceJarsBuilder.build();
   }
