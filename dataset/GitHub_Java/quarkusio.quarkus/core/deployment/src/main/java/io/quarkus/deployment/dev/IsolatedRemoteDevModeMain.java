@@ -22,7 +22,6 @@ import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -39,7 +38,6 @@ import io.quarkus.deployment.dev.remote.RemoteDevClientProvider;
 import io.quarkus.deployment.mutability.DevModeTask;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.steps.JarResultBuildStep;
-import io.quarkus.deployment.steps.ClassTransformingBuildStep;
 import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.dev.spi.HotReplacementSetup;
 import io.quarkus.dev.spi.RemoteDevState;
@@ -115,9 +113,10 @@ public class IsolatedRemoteDevModeMain implements BiConsumer<CuratedApplication,
                 compilationProviders.add(provider);
                 context.getAllModules().forEach(moduleInfo -> moduleInfo.addSourcePaths(provider.handledSourcePaths()));
             }
-            QuarkusCompiler compiler;
+            ClassLoaderCompiler compiler;
             try {
-                compiler = new QuarkusCompiler(curatedApplication, compilationProviders, context);
+                compiler = new ClassLoaderCompiler(Thread.currentThread().getContextClassLoader(), curatedApplication,
+                        compilationProviders, context);
             } catch (Exception e) {
                 log.error("Failed to create compiler, runtime compilation will be unavailable", e);
                 return null;
@@ -130,12 +129,7 @@ public class IsolatedRemoteDevModeMain implements BiConsumer<CuratedApplication,
                         public void accept(DevModeContext.ModuleInfo moduleInfo, String s) {
                             copiedStaticResources.computeIfAbsent(moduleInfo, ss -> new HashSet<>()).add(s);
                         }
-                    }, new BiFunction<String, byte[], byte[]>() {
-                        @Override
-                        public byte[] apply(String s, byte[] bytes) {
-                            return ClassTransformingBuildStep.transform(s, bytes);
-                        }
-                    }, null);
+                    });
 
             for (HotReplacementSetup service : ServiceLoader.load(HotReplacementSetup.class,
                     curatedApplication.getBaseRuntimeClassLoader())) {
@@ -148,7 +142,7 @@ public class IsolatedRemoteDevModeMain implements BiConsumer<CuratedApplication,
         return null;
     }
 
-    void regenerateApplication(Set<String> ignore, ClassScanResult ignore2) {
+    void regenerateApplication(Set<String> ignore) {
         generateApplication();
     }
 
@@ -179,7 +173,7 @@ public class IsolatedRemoteDevModeMain implements BiConsumer<CuratedApplication,
     @Override
     public void accept(CuratedApplication o, Map<String, Object> o2) {
         LoggingSetupRecorder.handleFailedStart(); //we are not going to actually run an app
-        Timing.staticInitStarted(o.getBaseRuntimeClassLoader(), false);
+        Timing.staticInitStarted(o.getBaseRuntimeClassLoader());
         try {
             curatedApplication = o;
             Object potentialContext = o2.get(DevModeContext.class.getName());
@@ -199,7 +193,7 @@ public class IsolatedRemoteDevModeMain implements BiConsumer<CuratedApplication,
 
             if (RuntimeUpdatesProcessor.INSTANCE != null) {
                 RuntimeUpdatesProcessor.INSTANCE.checkForFileChange();
-                RuntimeUpdatesProcessor.INSTANCE.checkForChangedClasses(true);
+                RuntimeUpdatesProcessor.INSTANCE.checkForChangedClasses();
             }
 
             JarResult result = generateApplication();
@@ -262,7 +256,7 @@ public class IsolatedRemoteDevModeMain implements BiConsumer<CuratedApplication,
             boolean scanResult = RuntimeUpdatesProcessor.INSTANCE.doScan(true);
             if (!scanResult && !copiedStaticResources.isEmpty()) {
                 scanResult = true;
-                regenerateApplication(Collections.emptySet(), new ClassScanResult());
+                regenerateApplication(Collections.emptySet());
             }
             copiedStaticResources.clear();
             if (scanResult) {
