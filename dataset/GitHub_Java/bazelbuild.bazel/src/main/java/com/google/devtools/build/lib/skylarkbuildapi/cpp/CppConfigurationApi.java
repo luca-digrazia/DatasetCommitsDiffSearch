@@ -34,15 +34,15 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
 
   @SkylarkCallable(name = "compiler", structField = true, doc = "C++ compiler.")
   @Deprecated
-  String getCompiler() throws EvalException;
+  public String getCompiler();
 
   @SkylarkCallable(name = "libc", structField = true, doc = "libc version string.")
   @Deprecated
-  String getTargetLibc() throws EvalException;
+  public String getTargetLibc();
 
   @SkylarkCallable(name = "cpu", structField = true, doc = "Target CPU of the C++ toolchain.")
   @Deprecated
-  String getTargetCpu() throws EvalException;
+  public String getTargetCpu();
 
   @SkylarkCallable(
     name = "built_in_include_directories",
@@ -52,14 +52,14 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
             + " should be relative to the exec directory. They may be absolute if they are also"
             + " installed on the remote build nodes or for local compilation."
   )
-  ImmutableList<String> getBuiltInIncludeDirectoriesForSkylark()
-      throws InvalidConfigurationExceptionT, EvalException;
+  public ImmutableList<String> getBuiltInIncludeDirectoriesForSkylark()
+      throws InvalidConfigurationExceptionT;
 
   @SkylarkCallable(name = "sysroot", structField = true,
       doc = "Returns the sysroot to be used. If the toolchain compiler does not support "
       + "different sysroots, or the sysroot is the same as the default sysroot, then "
       + "this method returns <code>None</code>.")
-  String getSysroot() throws EvalException;
+  public String getSysroot();
 
   @SkylarkCallable(
     name = "compiler_options",
@@ -79,8 +79,7 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
     }
   )
   @Deprecated
-  ImmutableList<String> getCompilerOptions(Iterable<String> featuresNotUsedAnymore)
-      throws EvalException;
+  public ImmutableList<String> getCompilerOptions(Iterable<String> featuresNotUsedAnymore);
 
   @SkylarkCallable(
       name = "c_options",
@@ -89,7 +88,7 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
           "Returns the list of additional C-specific options to use for compiling C. "
               + "These should be go on the command line after the common options returned by "
               + "<code>compiler_options</code>")
-  ImmutableList<String> getCOptionsForSkylark() throws EvalException;
+  public ImmutableList<String> getCOptions();
 
   @SkylarkCallable(
     name = "cxx_options",
@@ -108,8 +107,7 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
     }
   )
   @Deprecated
-  ImmutableList<String> getCxxOptions(Iterable<String> featuresNotUsedAnymore)
-      throws EvalException;
+  public ImmutableList<String> getCxxOptions(Iterable<String> featuresNotUsedAnymore);
 
   @SkylarkCallable(
     name = "unfiltered_compiler_options",
@@ -126,8 +124,8 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
       )
     }
   )
-  ImmutableList<String> getUnfilteredCompilerOptionsWithLegacySysroot(
-      Iterable<String> featuresNotUsedAnymore) throws EvalException;
+  public ImmutableList<String> getUnfilteredCompilerOptionsWithLegacySysroot(
+      Iterable<String> featuresNotUsedAnymore);
 
   @SkylarkCallable(
     name = "link_options",
@@ -136,7 +134,7 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
         "Returns the set of command-line linker options, including any flags "
             + "inferred from the command-line options."
   )
-  ImmutableList<String> getLinkOptionsWithLegacySysroot() throws EvalException;
+  public ImmutableList<String> getLinkOptionsWithLegacySysroot();
 
   @SkylarkCallable(
     name = "fully_static_link_options",
@@ -162,7 +160,7 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
     }
   )
   @Deprecated
-  ImmutableList<String> getFullyStaticLinkOptions(
+  public ImmutableList<String> getFullyStaticLinkOptions(
       Iterable<String> featuresNotUsedAnymore, Boolean sharedLib) throws EvalException;
 
   @SkylarkCallable(
@@ -189,8 +187,8 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
     }
   )
   @Deprecated
-  ImmutableList<String> getMostlyStaticLinkOptions(
-      Iterable<String> featuresNotUsedAnymore, Boolean sharedLib) throws EvalException;
+  public ImmutableList<String> getMostlyStaticLinkOptions(
+      Iterable<String> featuresNotUsedAnymore, Boolean sharedLib);
 
   @SkylarkCallable(
     name = "dynamic_link_options",
@@ -216,63 +214,63 @@ public interface CppConfigurationApi <InvalidConfigurationExceptionT extends Exc
     }
   )
   @Deprecated
-  ImmutableList<String> getDynamicLinkOptions(
-      Iterable<String> featuresNotUsedAnymore, Boolean sharedLib) throws EvalException;
+  public ImmutableList<String> getDynamicLinkOptions(
+      Iterable<String> featuresNotUsedAnymore, Boolean sharedLib);
 
   @SkylarkCallable(name = "ld_executable", structField = true, doc = "Path to the linker binary.")
-  String getLdExecutableForSkylark() throws EvalException;
+  public String getLdExecutableForSkylark();
 
   @SkylarkCallable(
     name = "objcopy_executable",
     structField = true,
     doc = "Path to GNU binutils 'objcopy' binary."
   )
-  String getObjCopyExecutableForSkylark() throws EvalException;
+  public String getObjCopyExecutableForSkylark();
 
   @SkylarkCallable(
     name = "compiler_executable",
     structField = true,
     doc = "Path to C/C++ compiler binary."
   )
-  String getCppExecutableForSkylark() throws EvalException;
+  public String getCppExecutableForSkylark();
 
   @SkylarkCallable(
     name = "preprocessor_executable",
     structField = true,
     doc = "Path to C/C++ preprocessor binary."
   )
-  String getCpreprocessorExecutableForSkylark() throws EvalException;
+  public String getCpreprocessorExecutableForSkylark();
 
   @SkylarkCallable(
     name = "nm_executable",
     structField = true,
     doc = "Path to GNU binutils 'nm' binary."
   )
-  String getNmExecutableForSkylark() throws EvalException;
+  public String getNmExecutableForSkylark();
 
   @SkylarkCallable(
     name = "objdump_executable",
     structField = true,
     doc = "Path to GNU binutils 'objdump' binary."
   )
-  String getObjdumpExecutableForSkylark() throws EvalException;
+  public String getObjdumpExecutableForSkylark();
 
   @SkylarkCallable(
     name = "ar_executable",
     structField = true,
     doc = "Path to GNU binutils 'ar' binary."
   )
-  String getArExecutableForSkylark() throws EvalException;
+  public String getArExecutableForSkylark();
 
   @SkylarkCallable(
     name = "strip_executable",
     structField = true,
     doc = "Path to GNU binutils 'strip' binary."
   )
-  String getStripExecutableForSkylark() throws EvalException;
+  public String getStripExecutableForSkylark();
 
   @SkylarkCallable(name = "target_gnu_system_name", structField = true,
       doc = "The GNU System Name.")
   @Deprecated
-  String getTargetGnuSystemName() throws EvalException;
+  public String getTargetGnuSystemName();
 }
