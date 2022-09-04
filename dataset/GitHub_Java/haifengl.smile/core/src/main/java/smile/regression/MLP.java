@@ -19,11 +19,9 @@ package smile.regression;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import smile.base.mlp.*;
-import smile.math.Scaler;
 import smile.math.MathEx;
 import smile.math.TimeFunction;
 
@@ -44,9 +42,6 @@ import smile.math.TimeFunction;
  public class MLP extends MultilayerPerceptron implements Regression<double[]> {
     private static final long serialVersionUID = 2L;
 
-    /** The scaling function of output values. */
-    private final Scaler scaler;
-
     /**
      * Constructor.
      *
@@ -55,19 +50,6 @@ import smile.math.TimeFunction;
      */
     public MLP(int p, LayerBuilder... builders) {
         super(net(p, builders));
-        scaler = null;
-    }
-
-    /**
-     * Constructor.
-     *
-     * @param scaler the scaling function of output values.
-     * @param p the number of variables in input layer.
-     * @param builders the builders of hidden layers from bottom to top.
-     */
-    public MLP(Scaler scaler, int p, LayerBuilder... builders) {
-        super(net(p, builders));
-        this.scaler = scaler;
     }
 
     /** Builds the layers. */
@@ -87,8 +69,7 @@ import smile.math.TimeFunction;
     @Override
     public double predict(double[] x) {
         propagate(x);
-        double y = output.output()[0];
-        return scaler == null ? y : scaler.inv(y);
+        return output.output()[0];
     }
 
     @Override
@@ -100,7 +81,7 @@ import smile.math.TimeFunction;
     @Override
     public void update(double[] x, double y) {
         propagate(x);
-        target.get()[0] = scaler == null ? y : scaler.f(y);
+        target.get()[0] = y;
         backpropagate(x, true);
         t++;
     }
@@ -111,7 +92,7 @@ import smile.math.TimeFunction;
         double[] target = this.target.get();
         for (int i = 0; i < x.length; i++) {
             propagate(x[i]);
-            target[0] = scaler == null ? y[i] : scaler.f(y[i]);
+            target[0] = y[i];
             backpropagate(x[i], false);
         }
 
@@ -129,29 +110,13 @@ import smile.math.TimeFunction;
     public static MLP fit(double[][] x, double[] y, Properties prop) {
         int p = x[0].length;
 
-        String scaling = prop.getProperty("smile.mlp.scaler", "standardizer");
-        Scaler scaler;
-        switch (scaling.toLowerCase(Locale.ROOT)) {
-            case "scaler":
-                scaler = Scaler.of(y);
-                break;
-            case "winsor":
-                scaler = Scaler.winsor(y);
-                break;
-            case "standardizer":
-                scaler = Scaler.standardizer(y, true);
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid smile.mlp.scaler: " + scaling);
-        }
-
         String activation = prop.getProperty("smile.mlp.activation", "ReLU");
         List<LayerBuilder> layers = Arrays.stream(prop.getProperty("smile.mlp.layers", "100").split(","))
                 .mapToInt(Integer::parseInt)
                 .mapToObj(nodes -> Layer.builder(activation, nodes))
                 .collect(Collectors.toList());
         layers.add(Layer.mse(1, OutputFunction.SIGMOID));
-        MLP model = new MLP(scaler, p, layers.toArray(new LayerBuilder[0]));
+        MLP model = new MLP(p, layers.toArray(new LayerBuilder[0]));
 
         String learningRate = prop.getProperty("smile.mlp.learning_rate", "0.01");
         model.setLearningRate(TimeFunction.of(learningRate));
