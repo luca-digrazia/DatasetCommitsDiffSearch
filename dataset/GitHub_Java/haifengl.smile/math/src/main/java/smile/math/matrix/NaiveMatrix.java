@@ -30,7 +30,7 @@ import smile.stat.distribution.GaussianDistribution;
  * 
  * @author Haifeng Li
  */
-public class NaiveMatrix extends DenseMatrix {
+public class NaiveMatrix extends DenseMatrix implements MatrixMultiplication<NaiveMatrix, NaiveMatrix> {
 
     /**
      * The original matrix.
@@ -108,26 +108,6 @@ public class NaiveMatrix extends DenseMatrix {
                 A[i][j] = g.rand();
             }
         }
-    }
-
-    /**
-     * Returns an n-by-n identity matrix with ones on the main diagonal and zeros elsewhere.
-     */
-    public static NaiveMatrix eye(int n) {
-        return eye(n, n);
-    }
-
-    /**
-     * Returns an n-by-n identity matrix with ones on the main diagonal and zeros elsewhere.
-     */
-    public static NaiveMatrix eye(int m, int n) {
-        double[][] x = new double[m][n];
-        int l = Math.min(m, n);
-        for (int i = 0; i < l; i++) {
-            x[i][i] = 1.0;
-        }
-
-        return new NaiveMatrix(x);
     }
 
     @Override
@@ -233,71 +213,8 @@ public class NaiveMatrix extends DenseMatrix {
     }
 
     @Override
-    public NaiveMatrix abmm(DenseMatrix b) {
-        if (A[0].length != b.nrows()) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", A.length, A[0].length, b.nrows(), b.ncols()));
-        }
-
-        int m = A.length;
-        int n = b.ncols();
-        int l = b.nrows();
-
-        double[][] C = new double[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                C[i][j] = 0.0;
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[i][k] * b.get(k, j);
-                }
-            }
-        }
-
-        return new NaiveMatrix(C);
-    }
-
-    @Override
-    public NaiveMatrix abtmm(DenseMatrix b) {
-        if (A[0].length != b.nrows()) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", A.length, A[0].length, b.nrows(), b.ncols()));
-        }
-
-        int m = A.length;
-        int n = b.nrows();
-        int l = b.ncols();
-
-        double[][] C = new double[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                C[i][j] = 0.0;
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[i][k] * b.get(j, k);
-                }
-            }
-        }
-        return new NaiveMatrix(C);
-    }
-
-    @Override
-    public NaiveMatrix atbmm(DenseMatrix b) {
-        if (A[0].length != b.nrows()) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", A.length, A[0].length, b.nrows(), b.ncols()));
-        }
-
-        int m = A[0].length;
-        int n = b.ncols();
-        int l = b.nrows();
-
-        double[][] C = new double[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                C[i][j] = 0.0;
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[k][i] * b.get(k, j);
-                }
-            }
-        }
-
-        return new NaiveMatrix(C);
+    public NaiveMatrix mm(NaiveMatrix b) {
+        return new NaiveMatrix(Math.abmm(A, b.A));
     }
 
     /**
