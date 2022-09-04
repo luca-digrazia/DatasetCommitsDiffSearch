@@ -30,6 +30,7 @@ import models.UserService;
 import models.api.requests.ChangePasswordRequest;
 import models.api.requests.ChangeUserRequest;
 import models.api.requests.CreateUserRequest;
+import org.apache.shiro.crypto.hash.SimpleHash;
 import play.data.Form;
 import play.mvc.Result;
 import views.html.system.users.edit;
@@ -166,6 +167,8 @@ public class UsersController extends AuthenticatedController {
 
         final ChangePasswordRequest request = requestForm.get();
         final User user = userService.load(username);
+        request.old_password = new SimpleHash("SHA-256", request.old_password).toString();
+        request.password = new SimpleHash("SHA-256", request.password).toString();
 
         if (requestForm.hasErrors() || !user.updatePassword(request)) {
             flash("error", "Could not update the password.");
