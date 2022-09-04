@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
@@ -58,6 +57,7 @@ import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -1721,6 +1721,27 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     assertContainsEvent(
         "file '//test/skylark:ext1.bzl' does not contain symbol 'myvariables' "
             + "(did you mean 'myvariable'?)");
+  }
+
+  @Test
+  public void testLoadSucceedsDespiteSyntaxError() throws Exception {
+    reporter.removeHandler(failFastHandler);
+    scratch.file(
+        "test/skylark/macro.bzl",
+        "x = 5");
+
+    scratch.file(
+        "test/skylark/BUILD",
+        "load('//test/skylark:macro.bzl', 'x')",
+        "pass", // syntax error
+        "print(1 // (5 - x)"); // division by 0
+
+    // Make sure that evaluation continues and load() succeeds, despite a syntax
+    // error in the file.
+    // We can get the division by 0 only if x was correctly loaded.
+    getConfiguredTarget("//test/skylark:a");
+    assertContainsEvent("syntax error");
+    assertContainsEvent("integer division by zero");
   }
 
   @Test

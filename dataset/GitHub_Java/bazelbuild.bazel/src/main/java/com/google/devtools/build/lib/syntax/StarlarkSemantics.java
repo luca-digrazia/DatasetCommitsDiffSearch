@@ -277,7 +277,7 @@ public abstract class StarlarkSemantics {
           .incompatibleRemapMainRepo(false)
           .incompatibleRemoveNativeMavenJar(false)
           .incompatibleRunShellCommandString(false)
-          .incompatibleRestrictNamedParams(true)
+          .incompatibleRestrictNamedParams(false)
           .incompatibleStringJoinRequiresStrings(true)
           .internalSkylarkFlagTestCanary(false)
           .incompatibleDoNotSplitLinkingCmdline(true)
