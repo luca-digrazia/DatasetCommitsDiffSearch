@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.PrintActionVisitor;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
@@ -178,17 +179,9 @@ public final class PrintActionCommand implements BlazeCommand {
         throws PrintActionException, InterruptedException {
       BlazeRuntime runtime = env.getRuntime();
       String commandName = PrintActionCommand.this.getClass().getAnnotation(Command.class).name();
-
-      BuildRequest request =
-          BuildRequest.builder()
-              .setCommandName(commandName)
-              .setId(env.getCommandId())
-              .setOptions(options)
-              .setStartupOptions(runtime.getStartupOptionsProvider())
-              .setOutErr(outErr)
-              .setTargets(targets)
-              .setStartTimeMillis(env.getCommandStartTime())
-              .build();
+      BuildRequest request = BuildRequest.create(commandName, options,
+          runtime.getStartupOptionsProvider(),
+          targets, outErr, env.getCommandId(), env.getCommandStartTime());
       BuildResult result = new BuildTool(env).processRequest(request, null);
       if (hasFatalBuildFailure(result)) {
         return result;
@@ -396,6 +389,7 @@ public final class PrintActionCommand implements BlazeCommand {
 
       // C++ header files show up in the dependency on the Target, but not the ConfiguredTarget, so
       // we also check the target's header files there.
+      RuleConfiguredTarget ruleConfiguredTarget = (RuleConfiguredTarget) configuredTarget;
       Rule rule;
       try {
         rule =
@@ -410,7 +404,7 @@ public final class PrintActionCommand implements BlazeCommand {
       }
 
       List<Label> hdrs =
-          ConfiguredAttributeMapper.of(rule, configuredTarget.getConfigConditions())
+          ConfiguredAttributeMapper.of(rule, ruleConfiguredTarget.getConfigConditions())
               .get("hdrs", BuildType.LABEL_LIST);
       if (hdrs != null) {
         for (Label hdrLabel : hdrs) {
