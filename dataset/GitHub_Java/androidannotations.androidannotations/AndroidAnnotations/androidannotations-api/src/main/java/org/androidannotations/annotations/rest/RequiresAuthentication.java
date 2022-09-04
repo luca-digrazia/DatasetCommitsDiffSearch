@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,27 +20,22 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import org.androidannotations.api.rest.RestClientHeaders;
+
 /**
- * <p>
  * Use on {@link Get}, {@link Post}, … annotated methods to use authentication
  * on the request.
- * </p>
- * <p>
+ * <p/>
  * To set the current authentication object to use, you MUST either let your
- * RestClient interface extends of
- * {@link org.androidannotations.api.rest.RestClientHeaders RestClientHeaders}
- * or add the following method to your interface :
- * <code>void setAuthentication(org.springframework.http.HttpAuthentication auth)</code>
- * .
- * </p>
- * <p>
- * You can also add a specific method for <a
+ * RestClient interface extends of {@link RestClientHeaders} or add the
+ * following method to your interface :
+ * <code>void setAuthentication(org.springframework.http.HttpAuthentication auth)</code>.
+ * <p/>
+ * You can also add this specific method for <a
  * href="https://en.wikipedia.org/wiki/Basic_access_authentication">Basic
  * Authentication</a> :
- * <code>setHttpBasicAuth(String username, String password)</code> or <a
- * href="https://tools.ietf.org/html/rfc6750" >Bearer (OAuth) authentication</a>
- * : <code>setBearerAuth(String token)</code>.
- * </p>
+ * <code>setHttpBasicAuth(String username, String password)</code>.
+ * <p/>
  * <blockquote>
  * 
  * <b>Example :</b>
