@@ -23,7 +23,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Variant;
-import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.ReaderInterceptor;
 import javax.ws.rs.ext.WriterInterceptor;
@@ -162,20 +161,8 @@ public class InvocationState implements Handler<HttpClientResponse> {
             throws IOException {
         if (in == null)
             return null;
-        List<MessageBodyReader<?>> readers = serialisers.findReaders(configuration, responseType.getRawType(),
-                mediaType, RuntimeType.CLIENT);
-        // FIXME
-        Annotation[] annotations = null;
-        for (MessageBodyReader<?> reader : readers) {
-            if (reader.isReadable(responseType.getRawType(), responseType.getType(), annotations,
-                    mediaType)) {
-                return (T) Serialisers.invokeClientReader(annotations, responseType.getRawType(), responseType.getType(),
-                        mediaType, properties, metadata, reader, in, getReaderInterceptors());
-            }
-        }
-
-        // FIXME: exception?
-        return null;
+        return (T) Serialisers.invokeClientReader(null, responseType.getRawType(), responseType.getType(),
+                mediaType, properties, metadata, serialisers, in, getReaderInterceptors(), configuration);
     }
 
     ReaderInterceptor[] getReaderInterceptors() {
@@ -184,8 +171,9 @@ public class InvocationState implements Handler<HttpClientResponse> {
 
     private QuarkusRestClientResponseContext initialiseResponse(HttpClientResponse vertxResponse) {
         MultivaluedMap<String, String> headers = new CaseInsensitiveMap<>();
-        for (String i : vertxResponse.headers().names()) {
-            headers.addAll(i, vertxResponse.getHeader(i));
+        MultiMap vertxHeaders = vertxResponse.headers();
+        for (String i : vertxHeaders.names()) {
+            headers.addAll(i, vertxHeaders.getAll(i));
         }
         this.vertxClientResponse = vertxResponse;
         return new QuarkusRestClientResponseContext(vertxResponse.statusCode(), vertxResponse.statusMessage(), headers);
@@ -194,24 +182,25 @@ public class InvocationState implements Handler<HttpClientResponse> {
     private <T> Buffer setRequestHeadersAndPrepareBody(HttpClientRequest httpClientRequest)
             throws IOException {
         MultivaluedMap<String, String> headerMap = requestHeaders.asMap();
-        MultiMap vertxHttpHeaders = httpClientRequest.headers();
-        for (Map.Entry<String, List<String>> entry : headerMap.entrySet()) {
-            vertxHttpHeaders.add(entry.getKey(), entry.getValue());
-        }
         Buffer actualEntity = QuarkusRestAsyncInvoker.EMPTY_BUFFER;
         if (entity != null) {
-            if (entity.getMediaType() != null) {
-                vertxHttpHeaders.set(HttpHeaders.CONTENT_TYPE, entity.getMediaType().toString());
-            }
+            // no need to set the entity.getMediaType, it comes from the variant
             if (entity.getVariant() != null) {
                 Variant v = entity.getVariant();
-                vertxHttpHeaders.set(HttpHeaders.CONTENT_TYPE, v.getMediaType().toString());
-                vertxHttpHeaders.set(HttpHeaders.CONTENT_LANGUAGE, v.getLanguageString());
-                vertxHttpHeaders.set(HttpHeaders.CONTENT_ENCODING, v.getEncoding());
+                headerMap.putSingle(HttpHeaders.CONTENT_TYPE, v.getMediaType().toString());
+                if (v.getLanguageString() != null)
+                    headerMap.putSingle(HttpHeaders.CONTENT_LANGUAGE, v.getLanguageString());
+                if (v.getEncoding() != null)
+                    headerMap.putSingle(HttpHeaders.CONTENT_ENCODING, v.getEncoding());
             }
 
             actualEntity = writeEntity(entity, headerMap,
                     configuration.getWriterInterceptors().toArray(Serialisers.NO_WRITER_INTERCEPTOR));
+        }
+        // set the Vertx headers after we've run the interceptors because they can modify them
+        MultiMap vertxHttpHeaders = httpClientRequest.headers();
+        for (Map.Entry<String, List<String>> entry : headerMap.entrySet()) {
+            vertxHttpHeaders.add(entry.getKey(), entry.getValue());
         }
         return actualEntity;
     }

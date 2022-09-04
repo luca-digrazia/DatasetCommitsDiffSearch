@@ -15,6 +15,8 @@ import java.util.regex.Pattern;
 
 import javax.ws.rs.core.MultivaluedMap;
 
+import io.vertx.core.net.impl.URIDecoder;
+
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  */
@@ -210,7 +212,11 @@ public class Encode {
     private static final Pattern encodedCharsMulti = Pattern.compile("((%[a-fA-F0-9][a-fA-F0-9])+)");
 
     public static String decodePath(String path) {
-        return URLUtils.decode(path, StandardCharsets.UTF_8, false, null);
+        // FIXME: this doesn't appear to pass the TCK, because it fails to decode what it throws at it
+        // also it doesn't decode slashes (it should) and it decodes + (it should not)
+        //        return URLUtils.decode(path, StandardCharsets.UTF_8, false, null);
+        // So let's use the Vertx decoder for now
+        return URIDecoder.decodeURIComponent(path, false);
     }
 
     private static String decodeBytes(String enc, CharsetDecoder decoder) {
@@ -447,7 +453,7 @@ public class Encode {
      * @return decoded map
      */
     public static MultivaluedMap<String, String> decode(MultivaluedMap<String, String> map) {
-        MultivaluedMapImpl<String, String> decoded = new MultivaluedMapImpl<String, String>();
+        MultivaluedMap<String, String> decoded = new QuarkusMultivaluedHashMap<String, String>();
         for (Map.Entry<String, List<String>> entry : map.entrySet()) {
             List<String> values = entry.getValue();
             for (String value : values) {
@@ -472,7 +478,7 @@ public class Encode {
         if (charset == null) {
             charset = UTF_8;
         }
-        MultivaluedMapImpl<String, String> decoded = new MultivaluedMapImpl<String, String>();
+        MultivaluedMap<String, String> decoded = new QuarkusMultivaluedHashMap<String, String>();
         for (Map.Entry<String, List<String>> entry : map.entrySet()) {
             List<String> values = entry.getValue();
             for (String value : values) {
@@ -487,7 +493,7 @@ public class Encode {
     }
 
     public static MultivaluedMap<String, String> encode(MultivaluedMap<String, String> map) {
-        MultivaluedMapImpl<String, String> decoded = new MultivaluedMapImpl<String, String>();
+        MultivaluedMap<String, String> decoded = new QuarkusMultivaluedHashMap<String, String>();
         for (Map.Entry<String, List<String>> entry : map.entrySet()) {
             List<String> values = entry.getValue();
             for (String value : values) {

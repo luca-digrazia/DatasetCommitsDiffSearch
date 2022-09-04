@@ -26,6 +26,7 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.ReaderInterceptor;
+import javax.ws.rs.ext.RuntimeDelegate;
 import javax.ws.rs.ext.WriterInterceptor;
 
 import io.quarkus.rest.runtime.core.Serialisers;
@@ -164,8 +165,17 @@ public class QuarkusRestConfiguration implements Configuration {
     }
 
     public String toString(Object value) {
-        // FIXME: this is weird
         return value.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    public String toHeaderString(Object obj) {
+        if (obj instanceof String) {
+            return (String) obj;
+        } else {
+            // TODO: we probably want a more direct way to get the delegate instead of going through all the indirection
+            return RuntimeDelegate.getInstance().createHeaderDelegate((Class<Object>) obj.getClass()).toString(obj);
+        }
     }
 
     public void property(String name, Object value) {

@@ -20,16 +20,18 @@ import javax.ws.rs.core.EntityTag;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Link;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.ResponseBuilder;
 import javax.ws.rs.core.Variant;
 
+import io.quarkus.rest.runtime.QuarkusRestRecorder;
+import io.quarkus.rest.runtime.core.QuarkusRestDeployment;
 import io.quarkus.rest.runtime.util.CaseInsensitiveMap;
 import io.quarkus.rest.runtime.util.HeaderHelper;
 import io.quarkus.rest.runtime.util.HttpHeaderNames;
+import io.quarkus.rest.runtime.util.QuarkusMultivaluedHashMap;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.vertx.core.http.HttpServerRequest;
 
@@ -141,7 +143,7 @@ public class QuarkusRestResponseBuilder extends ResponseBuilder {
         responseBuilder.status = status;
         responseBuilder.reasonPhrase = reasonPhrase;
         responseBuilder.entity = entity;
-        responseBuilder.metadata = new MultivaluedHashMap<>();
+        responseBuilder.metadata = new QuarkusMultivaluedHashMap<>();
         responseBuilder.metadata.putAll(metadata);
         return responseBuilder;
     }
@@ -255,8 +257,16 @@ public class QuarkusRestResponseBuilder extends ResponseBuilder {
                         port = Integer.parseInt(host.substring(index + 1));
                         host = host.substring(0, index);
                     }
+                    String prefix = "";
+                    QuarkusRestDeployment deployment = QuarkusRestRecorder.getCurrentDeployment();
+                    if (deployment != null) {
+                        // prefix is already sanitised
+                        prefix = deployment.getPrefix();
+                    }
+                    // Spec says relative to request, but TCK tests relative to Base URI, so we do that
                     location = new URI(req.scheme(), null, host, port,
-                            location.getPath().startsWith("/") ? location.getPath() : "/" + location.getPath(),
+                            prefix +
+                                    (location.getPath().startsWith("/") ? location.getPath() : "/" + location.getPath()),
                             location.getQuery(), null);
                 } catch (URISyntaxException e) {
                     throw new RuntimeException(e);
