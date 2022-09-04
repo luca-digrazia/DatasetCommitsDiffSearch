@@ -14,23 +14,12 @@
 
 package com.google.devtools.build.lib.packages.util;
 
-import com.google.devtools.build.lib.rules.proto.ProtoCommon;
-import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import java.io.IOException;
 
 /**
  * Creates mock BUILD files required for the proto_library rule.
  */
 public final class MockProtoSupport {
-  private MockProtoSupport() {
-    throw new UnsupportedOperationException();
-  }
-
-  /** This is workarround for tests that do not use {@code Scratch} (e.g. aquery-tests). */
-  public static final String MIGRATION_TAG =
-      String.format("tags = ['%s'],", ProtoCommon.PROTO_RULES_MIGRATION_LABEL);
-
   /**
    * Setup the support for building proto_library. You additionally need to setup support for each
    * of the languages used in the specific test.
@@ -87,7 +76,7 @@ public final class MockProtoSupport {
     config.create(
         "java/com/google/protobuf/BUILD",
         "package(default_visibility=['//visibility:public'])",
-        "proto_library(name = 'protobuf_proto_sources', srcs = [])");
+        "filegroup(name = 'protobuf_proto_sources', srcs = [])");
 
     // RPC generator plugins.
     config.create("net/rpc/compiler/BUILD",
@@ -159,9 +148,7 @@ public final class MockProtoSupport {
         "java_library(name = 'rpc3_noloas_internal',",
         "             deps = ['//java/com/google/net/rpc:rpc_noloas_internal'],",
         "             srcs = [ 'Rpc3Noloas.java' ])");
-    config.create(
-        "net/proto2/proto/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
+    config.create("net/proto2/proto/BUILD",
         "package(default_visibility=['//visibility:public'])",
         "genrule(name = 'go_internal_bootstrap_hack',",
         "        srcs = [ 'descriptor.pb.go-prebuilt' ],",
@@ -214,46 +201,24 @@ public final class MockProtoSupport {
         "    srcs = ['plugin.cc'])");
     config.create(
         "javascript/apps/jspb/BUILD",
-        "load('//tools/build_defs/js:rules.bzl', 'js_library')",
+        "load('//tools/build_defs/js:rules.bzl', 'js_lib')",
         "package(default_visibility=['//visibility:public'])",
-        "js_library(name = 'message',",
+        "js_lib(name = 'message',",
         "       srcs = ['message.js'],",
         "       deps_mgmt = 'legacy')");
     config.create(
         "javascript/closure/array/BUILD",
-        "load('//tools/build_defs/js:rules.bzl', 'js_library')",
+        "load('//tools/build_defs/js:rules.bzl', 'js_lib')",
         "package(default_visibility=['//visibility:public'])",
-        "js_library(name = 'array',",
+        "js_lib(name = 'array',",
         "       srcs = ['array.js'],",
         "       deps_mgmt = 'legacy')");
     config.create(
         "javascript/apps/xid/BUILD",
-        "load('//tools/build_defs/js:rules.bzl', 'js_library')",
+        "load('//tools/build_defs/js:rules.bzl', 'js_lib')",
         "package(default_visibility=['//visibility:public'])",
-        "js_library(name = 'xid',",
+        "js_lib(name = 'xid',",
         "       srcs = ['xid.js'],",
         "       deps_mgmt = 'legacy')");
-  }
-
-  public static void setupWorkspace(Scratch scratch) throws Exception {
-    scratch.appendFile(
-        "WORKSPACE",
-        "local_repository(",
-        "    name = 'rules_proto',",
-        "    path = 'third_party/rules_proto',",
-        ")");
-    scratch.file("third_party/rules_proto/WORKSPACE");
-    scratch.file("third_party/rules_proto/proto/BUILD", "licenses(['notice'])");
-    scratch.file(
-        "third_party/rules_proto/proto/defs.bzl",
-        "def _add_tags(kargs):",
-        "    if 'tags' in kargs:",
-        "        kargs['tags'] += ['__PROTO_RULES_MIGRATION_DO_NOT_USE_WILL_BREAK__']",
-        "    else:",
-        "        kargs['tags'] = ['__PROTO_RULES_MIGRATION_DO_NOT_USE_WILL_BREAK__']",
-        "    return kargs",
-        "",
-        "def proto_library(**kargs): native.proto_library(**_add_tags(kargs))",
-        "def proto_lang_toolchain(**kargs): native.proto_lang_toolchain(**_add_tags(kargs))");
   }
 }
