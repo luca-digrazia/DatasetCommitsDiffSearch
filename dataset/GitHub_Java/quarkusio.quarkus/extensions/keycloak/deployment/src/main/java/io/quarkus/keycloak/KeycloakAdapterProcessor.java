@@ -1,3 +1,18 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.quarkus.keycloak;
 
 import java.util.HashMap;
@@ -12,7 +27,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
+import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.elytron.security.deployment.AuthConfigBuildItem;
 import io.quarkus.elytron.security.runtime.AuthConfig;
 import io.quarkus.undertow.deployment.ServletExtensionBuildItem;
@@ -23,14 +38,14 @@ public class KeycloakAdapterProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    BeanContainerListenerBuildItem configureAdapter(KeycloakRecorder recorder, BuildProducer<AuthConfigBuildItem> authConfig,
-            BuildProducer<HotDeploymentWatchedFileBuildItem> resources,
+    BeanContainerListenerBuildItem configureAdapter(KeycloakTemplate template, BuildProducer<AuthConfigBuildItem> authConfig,
+            BuildProducer<HotDeploymentConfigFileBuildItem> resources,
             BuildProducer<ServletExtensionBuildItem> servletExtension) {
         // configure login info
         authConfig.produce(new AuthConfigBuildItem(new AuthConfig("KEYCLOAK", "KEYCLOAK", Object.class)));
 
         // in case keycloak.json is used, register it as a hot deployment config file
-        resources.produce(new HotDeploymentWatchedFileBuildItem("keycloak.json"));
+        resources.produce(new HotDeploymentConfigFileBuildItem("keycloak.json"));
 
         AdapterConfig adapterConfig = null;
 
@@ -39,12 +54,12 @@ public class KeycloakAdapterProcessor {
             adapterConfig = createAdapterConfig(keycloakConfig);
         }
 
-        QuarkusDeploymentContext deploymentContext = recorder.createKeycloakDeploymentContext(adapterConfig);
+        QuarkusDeploymentContext deploymentContext = template.createKeycloakDeploymentContext(adapterConfig);
 
         // register keycloak servlet extension
-        servletExtension.produce(new ServletExtensionBuildItem(recorder.createServletExtension(deploymentContext)));
+        servletExtension.produce(new ServletExtensionBuildItem(template.createServletExtension(deploymentContext)));
 
-        return new BeanContainerListenerBuildItem(recorder.createBeanContainerListener(deploymentContext));
+        return new BeanContainerListenerBuildItem(template.createBeanContainerListener(deploymentContext));
     }
 
     private AdapterConfig createAdapterConfig(KeycloakConfig keycloakConfig) {

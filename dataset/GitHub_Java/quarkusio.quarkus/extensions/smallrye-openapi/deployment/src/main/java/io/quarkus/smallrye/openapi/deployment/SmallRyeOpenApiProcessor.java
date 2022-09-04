@@ -1,4 +1,22 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.smallrye.openapi.deployment;
+
+import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,11 +26,8 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -26,28 +41,28 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.Indexer;
 import org.jboss.jandex.Type;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
+import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.index.IndexingUtil;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.resteasy.deployment.ResteasyJaxrsConfigBuildItem;
 import io.quarkus.smallrye.openapi.common.deployment.SmallRyeOpenApiConfig;
 import io.quarkus.smallrye.openapi.runtime.OpenApiDocumentProducer;
 import io.quarkus.smallrye.openapi.runtime.OpenApiServlet;
-import io.quarkus.undertow.deployment.GeneratedWebResourceBuildItem;
 import io.quarkus.undertow.deployment.ServletBuildItem;
 import io.smallrye.openapi.api.OpenApiConfig;
 import io.smallrye.openapi.api.OpenApiConfigImpl;
@@ -83,16 +98,17 @@ public class SmallRyeOpenApiProcessor {
 
     SmallRyeOpenApiConfig openapi;
 
-    List<HotDeploymentWatchedFileBuildItem> configFiles() {
+    List<HotDeploymentConfigFileBuildItem> configFiles() {
         return Stream.of(META_INF_OPENAPI_YAML, WEB_INF_CLASSES_META_INF_OPENAPI_YAML,
                 META_INF_OPENAPI_YML, WEB_INF_CLASSES_META_INF_OPENAPI_YML,
-                META_INF_OPENAPI_JSON, WEB_INF_CLASSES_META_INF_OPENAPI_JSON).map(HotDeploymentWatchedFileBuildItem::new)
+                META_INF_OPENAPI_JSON, WEB_INF_CLASSES_META_INF_OPENAPI_JSON).map(HotDeploymentConfigFileBuildItem::new)
                 .collect(Collectors.toList());
     }
 
     @BuildStep
     ServletBuildItem servlet() {
-        return ServletBuildItem.builder("openapi", OpenApiServlet.class.getName()).addMapping(openapi.path).build();
+        return ServletBuildItem.builder("openapi", OpenApiServlet.class.getName())
+                .addMapping(openapi.path).build();
     }
 
     @BuildStep
@@ -186,7 +202,8 @@ public class SmallRyeOpenApiProcessor {
     public void build(ApplicationArchivesBuildItem archivesBuildItem,
             CombinedIndexBuildItem combinedIndexBuildItem, BuildProducer<FeatureBuildItem> feature,
             Optional<ResteasyJaxrsConfigBuildItem> resteasyJaxrsConfig,
-            BuildProducer<GeneratedWebResourceBuildItem> resourceBuildItemBuildProducer) throws Exception {
+            BuildProducer<GeneratedResourceBuildItem> resourceBuildItemBuildProducer,
+            BuildProducer<SubstrateResourceBuildItem> substrateResourceBuildItemBuildProducer) throws Exception {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_OPENAPI));
         OpenAPI staticModel = generateStaticModel(archivesBuildItem);
         OpenAPI annotationModel;
@@ -197,9 +214,10 @@ public class SmallRyeOpenApiProcessor {
         }
         OpenApiDocument finalDocument = loadDocument(staticModel, annotationModel);
         for (OpenApiSerializer.Format format : OpenApiSerializer.Format.values()) {
-            String name = OpenApiServlet.GENERATED_DOC_BASE + format;
-            resourceBuildItemBuildProducer.produce(new GeneratedWebResourceBuildItem(name,
+            String name = OpenApiServlet.BASE_NAME + format;
+            resourceBuildItemBuildProducer.produce(new GeneratedResourceBuildItem(name,
                     OpenApiSerializer.serialize(finalDocument.get(), format).getBytes(StandardCharsets.UTF_8)));
+            substrateResourceBuildItemBuildProducer.produce(new SubstrateResourceBuildItem(name));
         }
     }
 
@@ -221,25 +239,10 @@ public class SmallRyeOpenApiProcessor {
     }
 
     private OpenAPI generateAnnotationModel(IndexView indexView, ResteasyJaxrsConfigBuildItem jaxrsConfig) {
-        // build a composite index with additional JDK classes, because SmallRye-OpenAPI will check if some
-        // app types implement Map and Collection and will go through super classes until Object is reached,
-        // and yes, it even checks Object
-        // see https://github.com/quarkusio/quarkus/issues/2961
-        Indexer indexer = new Indexer();
-        Set<DotName> additionalIndex = new HashSet<>();
-        IndexingUtil.indexClass(Collection.class.getName(), indexer, indexView, additionalIndex,
-                SmallRyeOpenApiProcessor.class.getClassLoader());
-        IndexingUtil.indexClass(Map.class.getName(), indexer, indexView, additionalIndex,
-                SmallRyeOpenApiProcessor.class.getClassLoader());
-        IndexingUtil.indexClass(Object.class.getName(), indexer, indexView, additionalIndex,
-                SmallRyeOpenApiProcessor.class.getClassLoader());
-
-        CompositeIndex compositeIndex = CompositeIndex.create(indexView, indexer.complete());
-
         Config config = ConfigProvider.getConfig();
         OpenApiConfig openApiConfig = new OpenApiConfigImpl(config);
-        return new OpenApiAnnotationScanner(openApiConfig, compositeIndex,
-                Collections.singletonList(new RESTEasyExtension(jaxrsConfig, compositeIndex))).scan();
+        return new OpenApiAnnotationScanner(openApiConfig, indexView,
+                Collections.singletonList(new RESTEasyExtension(jaxrsConfig, indexView))).scan();
     }
 
     private Result findStaticModel(ApplicationArchivesBuildItem archivesBuildItem) {
