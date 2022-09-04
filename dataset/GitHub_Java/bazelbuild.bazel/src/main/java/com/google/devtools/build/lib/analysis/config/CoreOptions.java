@@ -393,9 +393,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help =
-          "If true, write runfiles manifests for all targets. If false, omit them. Local tests will"
-              + " fail to run when false.")
+      help = "If true, write runfiles manifests for all targets.  " + "If false, omit them.")
   public boolean buildRunfilesManifests;
 
   @Option(
