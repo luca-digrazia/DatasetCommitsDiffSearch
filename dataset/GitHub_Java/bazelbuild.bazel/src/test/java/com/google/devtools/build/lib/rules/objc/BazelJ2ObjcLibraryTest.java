@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -35,14 +34,11 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.ActionTemplate.ActionTemplateExpansionException;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionTemplate;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
 import com.google.devtools.build.lib.rules.cpp.UmbrellaHeaderAction;
@@ -60,21 +56,6 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
-
-  /**
-   * Gets the target with the given label, using the apple_binary multi-arch split transition with
-   * the default version of iOS as the platform.
-   */
-  private ConfiguredTarget getConfiguredTargetInAppleBinaryTransition(String label)
-      throws Exception {
-    BuildConfiguration childConfig =
-        Iterables.getOnlyElement(
-            getSplitConfigurations(
-                targetConfig,
-                new MultiArchSplitTransitionProvider.AppleBinaryTransition(
-                    PlatformType.IOS, Optional.<DottedVersion>absent())));
-    return getConfiguredTarget(label, childConfig);
-  }
 
   @Test
   public void testJ2ObjCInformationExportedFromJ2ObjcLibrary() throws Exception {
@@ -284,8 +265,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
         (CommandAction)
             getGeneratingAction(
                 getBinArtifact(
-                    String.format("%s_bin", labelName),
-                    getConfiguredTargetInAppleBinaryTransition(targetLabel)));
+                    String.format("%s_bin", labelName), getConfiguredTarget(targetLabel)));
 
     checkObjcCompileActions(
         getFirstArtifactEndingWith(linkAction.getInputs(), archiveFileName),
@@ -478,23 +458,18 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
   protected void addSimpleBinaryTarget(String j2objcLibraryTargetDep) throws Exception {
     scratch.file("app/app.m");
     scratch.file("app/Info.plist");
-    scratch.file(
-        "app/BUILD",
+    scratch.file("app/BUILD",
         "package(default_visibility=['//visibility:public'])",
         "objc_library(",
         "    name = 'lib',",
         "    deps = ['" + j2objcLibraryTargetDep + "'])",
         "",
-        "apple_binary(",
+        "objc_binary(",
         "    name = 'app',",
-        "    platform_type = 'ios',",
-        "    deps = [':main_lib'],",
-        ")",
-        "objc_library(",
-        "    name = 'main_lib',",
         "    srcs = ['app.m'],",
         "    deps = [':lib'],",
         ")");
+
   }
 
   protected void addSimpleJ2ObjcLibraryWithEntryClasses() throws Exception {
@@ -623,20 +598,27 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
         "    name = 'j2',",
         "    deps = [ '//java/c/y:ylib' ],",
         "    jre_deps = [ '//third_party/java/j2objc:jre_io_lib' ])",
-        "apple_binary(",
-        "    name = 'test',",
-        "    platform_type = 'ios',",
-        "    deps = [':main_lib'],",
+        "ios_application(",
+        "    name = 'app',",
+        "    binary = ':bin',",
+        "    infoplist = 'info.plist',",
         ")",
-        "objc_library(",
-        "    name = 'main_lib',",
+        "objc_binary(",
+        "    name = 'bin',",
+        "    srcs = ['bin.m'],",
+        "    deps = [':j2'],",
+        ")",
+        "ios_test(",
+        "    name = 'test',",
         "    srcs = ['test.m'],",
         "    deps = [':j2'],",
+        "    xctest = 1,",
+        "    xctest_app = ':app',",
         ")");
 
     CommandAction linkAction = linkAction("//x:test");
     List<String> linkArgs = normalizeBashArgs(linkAction.getArguments());
-    ConfiguredTarget target = getConfiguredTargetInAppleBinaryTransition("//x:test");
+    ConfiguredTarget target = getConfiguredTarget("//x:test");
     String binDir =
         target.getConfiguration().getBinDirectory(RepositoryName.MAIN).getExecPathString();
     Artifact fileList = getFirstArtifactEndingWith(linkAction.getInputs(), "test-linker.objlist");
@@ -862,7 +844,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
     addSimpleJ2ObjcLibraryWithEntryClasses();
     addSimpleBinaryTarget("//java/com/google/app/test:transpile");
 
-    ConfiguredTarget appTarget = getConfiguredTargetInAppleBinaryTransition("//app:app");
+    ConfiguredTarget appTarget = getConfiguredTarget("//app:app", getAppleCrosstoolConfiguration());
     Artifact prunedArchive =
         getBinArtifact(
             "_j2objc_pruned/app/java/com/google/app/test/libtest_j2objc_pruned.a", appTarget);
@@ -870,7 +852,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
         getBinArtifact("_j2objc_pruned/app/java/com/google/app/test/test.param.j2objc", appTarget);
 
     ConfiguredTarget javaTarget =
-        getConfiguredTargetInAppleBinaryTransition("//java/com/google/app/test:test");
+        getConfiguredTarget("//java/com/google/app/test:test", getAppleCrosstoolConfiguration());
     Artifact inputArchive = getBinArtifact("libtest_j2objc.a", javaTarget);
     Artifact headerMappingFile = getBinArtifact("test.mapping.j2objc", javaTarget);
     Artifact dependencyMappingFile = getBinArtifact("test.dependency_mapping.j2objc", javaTarget);
