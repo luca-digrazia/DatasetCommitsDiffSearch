@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
@@ -77,14 +76,14 @@ public class AndroidDevice implements RuleConfiguredTargetFactory {
   private static final int MIN_LCD_DENSITY = 30;
 
   private static final Predicate<Artifact> SOURCE_PROPERTIES_SELECTOR =
-      (Artifact artifact) -> "source.properties".equals(artifact.getExecPath().getBaseName());
+      (Artifact artifact) -> "source.properties".equals(artifact.getPath().getBaseName());
 
   private static final Predicate<Artifact> SOURCE_PROPERTIES_FILTER =
       Predicates.not(SOURCE_PROPERTIES_SELECTOR);
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     checkWhitelist(ruleContext);
     Artifact executable = ruleContext.createOutputArtifact();
     Artifact metadata =
