@@ -92,8 +92,6 @@ public class VanillaJavaBuilderTest {
                 output.toString(),
                 "--bootclasspath",
                 Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--tempdir",
-                temporaryFolder.newFolder().toString(),
                 "--classdir",
                 temporaryFolder.newFolder().toString()));
 
@@ -137,8 +135,6 @@ public class VanillaJavaBuilderTest {
                 output.toString(),
                 "--bootclasspath",
                 Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--tempdir",
-                temporaryFolder.newFolder().toString(),
                 "--classdir",
                 temporaryFolder.newFolder().toString()));
 
@@ -178,8 +174,6 @@ public class VanillaJavaBuilderTest {
                 output.toString(),
                 "--bootclasspath",
                 Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--tempdir",
-                temporaryFolder.newFolder().toString(),
                 "--classdir",
                 temporaryFolder.newFolder().toString()));
 
@@ -224,8 +218,6 @@ public class VanillaJavaBuilderTest {
                 output.toString(),
                 "--bootclasspath",
                 Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--tempdir",
-                temporaryFolder.newFolder().toString(),
                 "--classdir",
                 classDir.toString()));
 
@@ -270,63 +262,10 @@ public class VanillaJavaBuilderTest {
                 output.toString(),
                 "--bootclasspath",
                 Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--tempdir",
-                temporaryFolder.newFolder().toString(),
                 "--classdir",
                 temporaryFolder.newFolder().toString()));
 
     assertThat(result.output()).isEmpty();
     assertThat(result.ok()).isTrue();
-  }
-
-  @Test
-  public void nativeHeaders() throws Exception {
-    Path foo = temporaryFolder.newFile("FooWithNativeMethod.java").toPath();
-    Path bar = temporaryFolder.newFile("BarWithNativeMethod.java").toPath();
-    Path output = temporaryFolder.newFile("out.jar").toPath();
-    Path nativeHeaderOutput = temporaryFolder.newFile("out-native-headers.jar").toPath();
-    Files.write(
-        foo,
-        ImmutableList.of(
-            "package test;",
-            "public class FooWithNativeMethod {",
-            "  public static native byte[] g(String s);",
-            "}"),
-        UTF_8);
-    Files.write(
-        bar,
-        ImmutableList.of(
-            "package test;",
-            "public class BarWithNativeMethod {",
-            "  public static native byte[] g(String s);",
-            "}"),
-        UTF_8);
-
-    VanillaJavaBuilderResult result =
-        run(
-            ImmutableList.of(
-                "--javacopts",
-                "-Xep:FallThrough:ERROR",
-                "--",
-                "--sources",
-                foo.toString(),
-                bar.toString(),
-                "--output",
-                output.toString(),
-                "--native_header_output",
-                nativeHeaderOutput.toString(),
-                "--bootclasspath",
-                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--tempdir",
-                temporaryFolder.newFolder().toString(),
-                "--classdir",
-                temporaryFolder.newFolder().toString()));
-
-    assertThat(result.output()).isEmpty();
-    assertThat(result.ok()).isTrue();
-
-    ImmutableMap<String, byte[]> outputEntries = readJar(nativeHeaderOutput.toFile());
-    assertThat(outputEntries.keySet())
-        .containsAllOf("test_BarWithNativeMethod.h", "test_FooWithNativeMethod.h");
   }
 }
