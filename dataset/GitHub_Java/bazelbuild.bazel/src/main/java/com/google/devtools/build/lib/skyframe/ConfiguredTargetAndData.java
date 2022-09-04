@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -30,9 +29,10 @@ import javax.annotation.Nullable;
 
 /**
  * A container class for a {@link ConfiguredTarget} and associated data, {@link Target}, {@link
- * BuildConfiguration}, and transition keys. In the future, {@link ConfiguredTarget} objects will no
- * longer contain their associated {@link BuildConfiguration}. Consumers that need the {@link
- * Target} or {@link BuildConfiguration} must therefore have access to one of these objects.
+ * BuildConfiguration}, and an optional transition key. In the future, {@link ConfiguredTarget}
+ * objects will no longer contain their associated {@link BuildConfiguration}. Consumers that need
+ * the {@link Target} or {@link BuildConfiguration} must therefore have access to one of these
+ * objects.
  *
  * <p>These objects are intended to be short-lived, never stored in Skyframe, since they pair three
  * heavyweight objects, a {@link ConfiguredTarget}, a {@link Target} (which holds a {@link
@@ -42,18 +42,18 @@ public class ConfiguredTargetAndData {
   private final ConfiguredTarget configuredTarget;
   private final Target target;
   private final BuildConfiguration configuration;
-  private final ImmutableList<String> transitionKeys;
+  @Nullable private final String transitionKey;
 
   @VisibleForTesting
   public ConfiguredTargetAndData(
       ConfiguredTarget configuredTarget,
       Target target,
       BuildConfiguration configuration,
-      ImmutableList<String> transitionKeys) {
+      String transitionKey) {
     this.configuredTarget = configuredTarget;
     this.target = target;
     this.configuration = configuration;
-    this.transitionKeys = transitionKeys;
+    this.transitionKey = transitionKey;
     Preconditions.checkState(
         configuredTarget.getLabel().equals(target.getLabel()),
         "Unable to construct ConfiguredTargetAndData:"
@@ -123,7 +123,7 @@ public class ConfiguredTargetAndData {
     if (configuredTarget.equals(maybeNew)) {
       return this;
     }
-    return new ConfiguredTargetAndData(maybeNew, target, configuration, transitionKeys);
+    return new ConfiguredTargetAndData(maybeNew, target, configuration, transitionKey);
   }
 
   public Target getTarget() {
@@ -138,7 +138,8 @@ public class ConfiguredTargetAndData {
     return configuredTarget;
   }
 
-  public ImmutableList<String> getTransitionKeys() {
-    return transitionKeys;
+  @Nullable
+  public String getTransitionKey() {
+    return transitionKey;
   }
 }

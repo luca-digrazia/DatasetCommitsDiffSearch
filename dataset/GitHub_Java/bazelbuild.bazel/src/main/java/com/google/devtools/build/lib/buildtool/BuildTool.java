@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.DummyEnviron
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
+import com.google.devtools.build.lib.buildtool.PostAnalysisQueryBuildTool.PostAnalysisQueryCommandLineException;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
@@ -105,7 +106,7 @@ public class BuildTool {
   public void buildTargets(BuildRequest request, BuildResult result, TargetValidator validator)
       throws BuildFailedException, InterruptedException, ViewCreationFailedException,
           TargetParsingException, LoadingFailedException, AbruptExitException,
-          InvalidConfigurationException, TestExecException, QueryCommandLineException {
+          InvalidConfigurationException, TestExecException, PostAnalysisQueryCommandLineException {
     try (SilentCloseable c = Profiler.instance().profile("validateOptions")) {
       validateOptions(request);
     }
@@ -245,8 +246,12 @@ public class BuildTool {
    * This class is meant to be overridden by classes that want to perform the Analysis phase and
    * then process the results in some interesting way. See {@link CqueryBuildTool} as an example.
    */
-  protected void postProcessAnalysisResult(BuildRequest request, AnalysisResult analysisResult)
-      throws InterruptedException, ViewCreationFailedException, QueryCommandLineException {}
+  protected void postProcessAnalysisResult(
+      BuildRequest request,
+      AnalysisResult analysisResult)
+      throws InterruptedException, ViewCreationFailedException,
+          PostAnalysisQueryCommandLineException {
+  }
 
   private void reportExceptionError(Exception e) {
     if (e.getMessage() != null) {
@@ -313,7 +318,7 @@ public class BuildTool {
     } catch (TargetParsingException | LoadingFailedException | ViewCreationFailedException e) {
       detailedExitCode = DetailedExitCode.justExitCode(ExitCode.PARSING_FAILURE);
       reportExceptionError(e);
-    } catch (QueryCommandLineException e) {
+    } catch (PostAnalysisQueryCommandLineException e) {
       detailedExitCode = DetailedExitCode.justExitCode(ExitCode.COMMAND_LINE_ERROR);
       reportExceptionError(e);
     } catch (TestExecException e) {
@@ -440,12 +445,5 @@ public class BuildTool {
 
   private Reporter getReporter() {
     return env.getReporter();
-  }
-
-  /** Exceptions in parsing the supplied query options. */
-  protected static class QueryCommandLineException extends Exception {
-    QueryCommandLineException(String message) {
-      super(message);
-    }
   }
 }

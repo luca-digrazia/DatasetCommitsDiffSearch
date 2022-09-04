@@ -21,14 +21,12 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
-import com.google.devtools.build.lib.cmdline.TargetPattern.TargetsBelowDirectory;
-import com.google.devtools.build.lib.concurrent.BatchCallback;
 import com.google.devtools.build.lib.concurrent.ParallelVisitor.UnusedException;
+import com.google.devtools.build.lib.concurrent.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -43,8 +41,11 @@ import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.WalkableGraph;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A {@link com.google.devtools.build.lib.pkgcache.RecursivePackageProvider} backed by a {@link
@@ -59,7 +60,8 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
   private final RootPackageExtractor rootPackageExtractor;
   private final ImmutableList<TargetPattern> universeTargetPatterns;
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger =
+      Logger.getLogger(GraphBackedRecursivePackageProvider.class.getName());
 
   public GraphBackedRecursivePackageProvider(
       WalkableGraph graph,
@@ -109,9 +111,13 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
 
     SetView<SkyKey> unknownKeys = Sets.difference(pkgKeys, packages.keySet());
     if (!Iterables.isEmpty(unknownKeys)) {
-      logger.atWarning().log(
-          "Unable to find %s in the batch lookup of %s. Successfully looked up %s",
-          unknownKeys, pkgKeys, packages.keySet());
+      logger.warning(
+          "Unable to find "
+              + unknownKeys
+              + " in the batch lookup of "
+              + pkgKeys
+              + ". Successfully looked up "
+              + packages.keySet());
     }
     for (Map.Entry<SkyKey, Exception> missingOrExceptionEntry :
         graph.getMissingAndExceptions(unknownKeys).entrySet()) {
@@ -157,25 +163,23 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
     return packageLookupValue.packageExists();
   }
 
-  private ImmutableList<Root> checkValidDirectoryAndGetRoots(
+  private List<Root> checkValidDirectoryAndGetRoots(
       RepositoryName repository,
       PathFragment directory,
-      ImmutableSet<PathFragment> ignoredSubdirectories,
+      ImmutableSet<PathFragment> blacklistedSubdirectories,
       ImmutableSet<PathFragment> excludedSubdirectories)
       throws InterruptedException {
-    if (ignoredSubdirectories.contains(directory) || excludedSubdirectories.contains(directory)) {
+    if (blacklistedSubdirectories.contains(directory)
+        || excludedSubdirectories.contains(directory)) {
       return ImmutableList.of();
     }
 
     // Check that this package is covered by at least one of our universe patterns.
     boolean inUniverse = false;
     for (TargetPattern pattern : universeTargetPatterns) {
-      if (!pattern.getType().equals(TargetPattern.Type.TARGETS_BELOW_DIRECTORY)) {
-        continue;
-      }
+      boolean isTBD = pattern.getType().equals(TargetPattern.Type.TARGETS_BELOW_DIRECTORY);
       PackageIdentifier packageIdentifier = PackageIdentifier.create(repository, directory);
-      if (((TargetsBelowDirectory) pattern)
-          .containsAllTransitiveSubdirectories(packageIdentifier)) {
+      if (isTBD && pattern.containsAllTransitiveSubdirectoriesForTBD(packageIdentifier)) {
         inUniverse = true;
         break;
       }
@@ -185,8 +189,9 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
       return ImmutableList.of();
     }
 
+    List<Root> roots = new ArrayList<>();
     if (repository.isMain()) {
-      return pkgRoots;
+      roots.addAll(pkgRoots);
     } else {
       RepositoryDirectoryValue repositoryValue =
           (RepositoryDirectoryValue) graph.getValue(RepositoryDirectoryValue.key(repository));
@@ -195,22 +200,23 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
         // "nothing".
         return ImmutableList.of();
       }
-      return ImmutableList.of(Root.fromPath(repositoryValue.getPath()));
+      roots.add(Root.fromPath(repositoryValue.getPath()));
     }
+    return roots;
   }
 
   @Override
   public void streamPackagesUnderDirectory(
-      BatchCallback<PackageIdentifier, UnusedException> results,
+      ThreadSafeBatchCallback<PackageIdentifier, UnusedException> results,
       ExtendedEventHandler eventHandler,
       RepositoryName repository,
       PathFragment directory,
-      ImmutableSet<PathFragment> ignoredSubdirectories,
+      ImmutableSet<PathFragment> blacklistedSubdirectories,
       ImmutableSet<PathFragment> excludedSubdirectories)
       throws InterruptedException {
-    ImmutableList<Root> roots =
+    List<Root> roots =
         checkValidDirectoryAndGetRoots(
-            repository, directory, ignoredSubdirectories, excludedSubdirectories);
+            repository, directory, blacklistedSubdirectories, excludedSubdirectories);
 
     rootPackageExtractor.streamPackagesFromRoots(
         results,
@@ -219,7 +225,7 @@ public final class GraphBackedRecursivePackageProvider extends AbstractRecursive
         eventHandler,
         repository,
         directory,
-        ignoredSubdirectories,
+        blacklistedSubdirectories,
         excludedSubdirectories);
   }
 }

@@ -118,7 +118,7 @@ public final class ConfigurationResolver {
       BuildConfiguration hostConfiguration,
       RuleClassProvider ruleClassProvider,
       BuildOptions defaultBuildOptions)
-      throws DependencyEvaluationException, InterruptedException {
+      throws ConfiguredTargetFunction.DependencyEvaluationException, InterruptedException {
 
     // Maps each Skyframe-evaluated BuildConfiguration to the dependencies that need that
     // configuration paired with a transition key corresponding to the BuildConfiguration. For cases
@@ -206,7 +206,8 @@ public final class ConfigurationResolver {
                     + " trimming mode.";
             env.getListener()
                 .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-            throw new DependencyEvaluationException(new InvalidConfigurationException(message));
+            throw new ConfiguredTargetFunction.DependencyEvaluationException(
+                new InvalidConfigurationException(message));
           }
           // The dep uses the same exact configuration. Let's re-use the current configuration and
           // skip adding a Skyframe dependency edge on it.
@@ -229,7 +230,8 @@ public final class ConfigurationResolver {
                     + " trimming mode.";
             env.getListener()
                 .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-            throw new DependencyEvaluationException(new InvalidConfigurationException(message));
+            throw new ConfiguredTargetFunction.DependencyEvaluationException(
+                new InvalidConfigurationException(message));
           }
           putOnlyEntry(
               resolvedDeps,
@@ -257,7 +259,7 @@ public final class ConfigurationResolver {
                   buildSettingPackages,
                   env.getListener());
         } catch (TransitionException e) {
-          throw new DependencyEvaluationException(e);
+          throw new ConfiguredTargetFunction.DependencyEvaluationException(e);
         }
         transitionsMap.put(transitionKey, toOptions);
       }
@@ -275,7 +277,8 @@ public final class ConfigurationResolver {
                   + " trimming mode.";
           env.getListener()
               .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-          throw new DependencyEvaluationException(new InvalidConfigurationException(message));
+          throw new ConfiguredTargetFunction.DependencyEvaluationException(
+              new InvalidConfigurationException(message));
         }
         putOnlyEntry(
             resolvedDeps,
@@ -318,7 +321,8 @@ public final class ConfigurationResolver {
           }
         }
       } catch (OptionsParsingException e) {
-        throw new DependencyEvaluationException(new InvalidConfigurationException(e));
+        throw new ConfiguredTargetFunction.DependencyEvaluationException(
+            new InvalidConfigurationException(e));
       }
     }
 
@@ -364,7 +368,8 @@ public final class ConfigurationResolver {
                     + " trimming mode.";
             env.getListener()
                 .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-            throw new DependencyEvaluationException(new InvalidConfigurationException(message));
+            throw new ConfiguredTargetFunction.DependencyEvaluationException(
+                new InvalidConfigurationException(message));
           }
           DependencyEdge attr = new DependencyEdge(info.first.getKey(), originalDep.getLabel());
           Dependency resolvedDep =
@@ -379,7 +384,7 @@ public final class ConfigurationResolver {
         }
       }
     } catch (InvalidConfigurationException e) {
-      throw new DependencyEvaluationException(e);
+      throw new ConfiguredTargetFunction.DependencyEvaluationException(e);
     }
 
     return sortResolvedDeps(originalDeps, resolvedDeps, attributesAndLabels);
@@ -587,7 +592,7 @@ public final class ConfigurationResolver {
       Attribute attribute,
       Dependency dep,
       Set<Class<? extends BuildConfiguration.Fragment>> expectedDepFragments)
-      throws DependencyEvaluationException {
+      throws ConfiguredTargetFunction.DependencyEvaluationException {
     Set<String> ctgFragmentNames = new HashSet<>();
     for (BuildConfiguration.Fragment fragment :
         ctgValue.getConfiguration().getFragmentsMap().values()) {
@@ -607,7 +612,8 @@ public final class ConfigurationResolver {
               attribute == null ? "(null)" : attribute.getName(),
               Joiner.on(", ").join(missing));
       env.getListener().handle(Event.error(msg));
-      throw new DependencyEvaluationException(new InvalidConfigurationException(msg));
+      throw new ConfiguredTargetFunction.DependencyEvaluationException(
+          new InvalidConfigurationException(msg));
     }
   }
 

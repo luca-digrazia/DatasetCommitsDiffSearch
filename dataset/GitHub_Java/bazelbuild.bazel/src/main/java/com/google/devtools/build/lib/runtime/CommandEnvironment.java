@@ -27,8 +27,8 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
-import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingResult;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -85,21 +84,21 @@ public class CommandEnvironment {
   private final Map<String, String> clientEnv;
   private final Set<String> visibleActionEnv = new TreeSet<>();
   private final Set<String> visibleTestEnv = new TreeSet<>();
+  private final Map<String, String> actionClientEnv = new TreeMap<>();
   private final Map<String, String> repoEnv = new TreeMap<>();
   private final TimestampGranularityMonitor timestampGranularityMonitor;
   private final Thread commandThread;
   private final Command command;
   private final OptionsParsingResult options;
   private final PathPackageLocator packageLocator;
-  private final Path workingDirectory;
-  private final PathFragment relativeWorkingDirectory;
-  private final Duration waitTime;
-  private final long commandStartTime;
 
+  private PathFragment relativeWorkingDirectory = PathFragment.EMPTY_FRAGMENT;
+  private long commandStartTime;
   private OutputService outputService;
   private TopDownActionCache topDownActionCache;
+  private Path workingDirectory;
   private String workspaceName;
-  private boolean hasSyncedPackageLoading = false;
+  private boolean haveSetupPackageCache = false;
 
   // This AtomicReference is set to:
   //   - null, if neither BlazeModuleEnvironment#exit nor #precompleteCommand have been called
@@ -149,9 +148,7 @@ public class CommandEnvironment {
       Thread commandThread,
       Command command,
       OptionsParsingResult options,
-      List<String> warnings,
-      long waitTimeInMs,
-      long commandStartTime) {
+      List<String> warnings) {
     this.runtime = runtime;
     this.workspace = workspace;
     this.directories = workspace.getDirectories();
@@ -168,30 +165,12 @@ public class CommandEnvironment {
     // the command's execution.
     timestampGranularityMonitor.setCommandStartTime();
 
-    CommonCommandOptions commandOptions =
-        Preconditions.checkNotNull(
-            options.getOptions(CommonCommandOptions.class),
-            "CommandEnvironment needs its options provider to have CommonCommandOptions loaded.");
+    // TODO(ulfjack): We don't call beforeCommand() in tests, but rely on workingDirectory being set
+    // in setupPackageCache(). This leads to NPE if we don't set it here.
     Path workspacePath = directories.getWorkspace();
-    Path workingDirectory;
-    try {
-      workingDirectory = computeWorkingDirectory(commandOptions);
-    } catch (AbruptExitException e) {
-      // We'll exit very soon, but set the working directory to something reasonable so remainder of
-      // setup can finish.
-      this.blazeModuleEnvironment.exit(e);
-      workingDirectory = workspacePath;
-    }
-    this.workingDirectory = workingDirectory;
-    if (getWorkspace() != null) {
-      this.relativeWorkingDirectory = workingDirectory.relativeTo(getWorkspace());
-    } else {
-      this.relativeWorkingDirectory = PathFragment.EMPTY_FRAGMENT;
-    }
+    this.setWorkingDirectory(workspacePath);
     this.workspaceName = null;
 
-    this.waitTime = Duration.ofMillis(waitTimeInMs + commandOptions.waitTime);
-    this.commandStartTime = commandStartTime - commandOptions.startupTime;
     // If this command supports --package_path we initialize the package locator scoped
     // to the command environment
     if (commandHasPackageOptions(command) && workspacePath != null) {
@@ -199,7 +178,9 @@ public class CommandEnvironment {
           workspace
               .getSkyframeExecutor()
               .createPackageLocator(
-                  reporter, options.getOptions(PackageOptions.class).packagePath, workingDirectory);
+                  reporter,
+                  options.getOptions(PackageCacheOptions.class).packagePath,
+                  workingDirectory);
     } else {
       this.packageLocator = null;
     }
@@ -210,11 +191,17 @@ public class CommandEnvironment {
             options.getOptions(ClientOptions.class),
             "CommandEnvironment needs its options provider to have ClientOptions loaded.");
 
+    CommonCommandOptions commandOptions =
+        Preconditions.checkNotNull(
+            options.getOptions(CommonCommandOptions.class),
+            "CommandEnvironment needs its options provider to have CommonCommandOptions loaded.");
     this.clientEnv = makeMapFromMapEntries(clientOptions.clientEnv);
     this.commandId = computeCommandId(commandOptions.invocationId, warnings);
     this.buildRequestId = computeBuildRequestId(commandOptions.buildRequestId, warnings);
 
-    this.repoEnv.putAll(clientEnv);
+    // actionClientEnv contains the environment where values from actionEnvironment are overridden.
+    actionClientEnv.putAll(clientEnv);
+
     if (command.builds()) {
       // Compute the set of environment variables that are whitelisted on the commandline
       // for inheritance.
@@ -224,7 +211,7 @@ public class CommandEnvironment {
           visibleActionEnv.add(entry.getKey());
         } else {
           visibleActionEnv.remove(entry.getKey());
-          repoEnv.put(entry.getKey(), entry.getValue());
+          actionClientEnv.put(entry.getKey(), entry.getValue());
         }
       }
       for (Map.Entry<String, String> entry :
@@ -235,37 +222,13 @@ public class CommandEnvironment {
       }
     }
 
+    repoEnv.putAll(actionClientEnv);
     CoreOptions configOpts = options.getOptions(CoreOptions.class);
     if (configOpts != null) {
       for (Map.Entry<String, String> entry : configOpts.repositoryEnvironment) {
         repoEnv.put(entry.getKey(), entry.getValue());
       }
     }
-  }
-
-  private Path computeWorkingDirectory(CommonCommandOptions commandOptions)
-      throws AbruptExitException {
-    Path workspace = getWorkspace();
-    Path workingDirectory;
-    if (inWorkspace()) {
-      if (commandOptions.clientCwd.containsUplevelReferences()) {
-        throw new AbruptExitException(
-            DetailedExitCode.of(
-                ExitCode.COMMAND_LINE_ERROR,
-                FailureDetail.newBuilder()
-                    .setMessage("Client cwd contains uplevel references")
-                    .setClientEnvironment(
-                        FailureDetails.ClientEnvironment.newBuilder()
-                            .setCode(FailureDetails.ClientEnvironment.Code.CLIENT_CWD_MALFORMED)
-                            .build())
-                    .build()));
-      }
-      workingDirectory = workspace.getRelative(commandOptions.clientCwd);
-    } else {
-      workspace = FileSystemUtils.getWorkingDirectory(getRuntime().getFileSystem());
-      workingDirectory = workspace;
-    }
-    return workingDirectory;
   }
 
   // Returns whether the given command supports --package_path
@@ -278,7 +241,7 @@ public class CommandEnvironment {
       return false;
     }
     for (int i = 0; i < command.options().length; ++i) {
-      if (command.options()[i] == PackageOptions.class) {
+      if (command.options()[i] == PackageCacheOptions.class) {
         return true;
       }
     }
@@ -428,10 +391,6 @@ public class CommandEnvironment {
 
   public PathFragment getRelativeWorkingDirectory() {
     return relativeWorkingDirectory;
-  }
-
-  public Duration getWaitTime() {
-    return waitTime;
   }
 
   List<OutErr> getOutputListeners() {
@@ -633,23 +592,25 @@ public class CommandEnvironment {
   }
 
   /**
-   * Initializes and syncs the graph with the given options, readying it for the next evaluation.
+   * Initializes the package cache using the given options, and syncs the package cache. Also
+   * injects the skylark semantics using the options for the {@link
+   * com.google.devtools.build.lib.analysis.config.BuildConfiguration}.
    */
-  public void syncPackageLoading(OptionsProvider options)
+  public void setupPackageCache(OptionsProvider options)
       throws InterruptedException, AbruptExitException {
-    // We want to ensure that we're never calling #syncPackageLoading twice in the same build
-    // because it does the very expensive work of diffing the cache between incremental builds.
+    // We want to ensure that we're never calling #setupPackageCache twice in the same build because
+    // it does the very expensive work of diffing the cache between incremental builds.
     // {@link SequencedSkyframeExecutor#handleDiffs} is the particular method we don't want to be
     // calling twice. We could feasibly factor it out of this call.
-    if (hasSyncedPackageLoading) {
+    if (this.haveSetupPackageCache) {
       throw new IllegalStateException(
           "We should never call this method more than once over the course of a single command");
     }
-    hasSyncedPackageLoading = true;
+    this.haveSetupPackageCache = true;
     getSkyframeExecutor()
         .sync(
             reporter,
-            options.getOptions(PackageOptions.class),
+            options.getOptions(PackageCacheOptions.class),
             packageLocator,
             options.getOptions(StarlarkSemanticsOptions.class),
             getCommandId(),
@@ -662,8 +623,24 @@ public class CommandEnvironment {
     workspace.recordLastExecutionTime(getCommandStartTime());
   }
 
+  public void recordCommandStartTime(long commandStartTime) {
+    this.commandStartTime = commandStartTime;
+  }
+
   public long getCommandStartTime() {
     return commandStartTime;
+  }
+
+  @VisibleForTesting
+  public void setWorkingDirectoryForTesting(Path workingDirectory) {
+    setWorkingDirectory(workingDirectory);
+  }
+
+  private void setWorkingDirectory(Path workingDirectory) {
+    this.workingDirectory = workingDirectory;
+    if (getWorkspace() != null) {
+      this.relativeWorkingDirectory = workingDirectory.relativeTo(getWorkspace());
+    }
   }
 
   /**
@@ -671,8 +648,10 @@ public class CommandEnvironment {
    *
    * @throws AbruptExitException if this command is unsuitable to be run as specified
    */
-  void beforeCommand(InvocationPolicy invocationPolicy) throws AbruptExitException {
+  void beforeCommand(long waitTimeInMs, InvocationPolicy invocationPolicy)
+      throws AbruptExitException {
     CommonCommandOptions commonOptions = options.getOptions(CommonCommandOptions.class);
+    commandStartTime -= commonOptions.startupTime;
     eventBus.post(new BuildMetadataEvent(makeMapFromMapEntries(commonOptions.buildMetadata)));
     eventBus.post(
         new GotOptionsEvent(runtime.getStartupOptionsProvider(), options, invocationPolicy));
@@ -714,6 +693,29 @@ public class CommandEnvironment {
     skyframeExecutor.setOutputService(outputService);
     skyframeExecutor.noteCommandStart();
 
+    // Ensure that the working directory will be under the workspace directory.
+    Path workspace = getWorkspace();
+    Path workingDirectory;
+    if (inWorkspace()) {
+      if (commonOptions.clientCwd.containsUplevelReferences()) {
+        throw new AbruptExitException(
+            DetailedExitCode.of(
+                ExitCode.COMMAND_LINE_ERROR,
+                FailureDetail.newBuilder()
+                    .setMessage("Client cwd contains uplevel references")
+                    .setClientEnvironment(
+                        FailureDetails.ClientEnvironment.newBuilder()
+                            .setCode(FailureDetails.ClientEnvironment.Code.CLIENT_CWD_MALFORMED)
+                            .build())
+                    .build()));
+      }
+      workingDirectory = workspace.getRelative(commonOptions.clientCwd);
+    } else {
+      workspace = FileSystemUtils.getWorkingDirectory(getRuntime().getFileSystem());
+      workingDirectory = workspace;
+    }
+    this.setWorkingDirectory(workingDirectory);
+
     // Fail fast in the case where a Blaze command forgets to install the package path correctly.
     skyframeExecutor.setActive(false);
     // Let skyframe figure out how much incremental state it will be keeping.
@@ -727,9 +729,17 @@ public class CommandEnvironment {
     // Start the performance and memory profilers.
     runtime.beforeCommand(this, commonOptions);
 
-    eventBus.post(new CommandStartEvent());
+    eventBus.post(
+        new CommandStartEvent(
+            command.name(),
+            getCommandId(),
+            getBuildRequestId(),
+            getClientEnv(),
+            workingDirectory,
+            getDirectories(),
+            waitTimeInMs + commonOptions.waitTime));
 
-    // Modules that are subscribed to CommandStartEvent may create pending exceptions.
+    // Modules that are subscribed to CommandStartEvents may create pending exceptions.
     throwPendingException();
   }
 
@@ -745,6 +755,13 @@ public class CommandEnvironment {
       }
     }
     return workspace.getOutputBaseFilesystemTypeName();
+  }
+
+  /**
+   * Returns the client environment combined with all fixed env var settings from --action_env.
+   */
+  public Map<String, String> getActionClientEnv() {
+    return Collections.unmodifiableMap(actionClientEnv);
   }
 
   /** Returns the client environment with all settings from --action_env and --repo_env. */

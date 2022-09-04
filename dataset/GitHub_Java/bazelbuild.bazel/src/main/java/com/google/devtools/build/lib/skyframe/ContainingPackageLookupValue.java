@@ -104,7 +104,10 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
     return message;
   }
 
-  /** {@link com.google.devtools.build.skyframe.SkyKey} for {@code ContainingPackageLookupValue}. */
+  /**
+   * {@link com/google/devtools/build/lib/skyframe/ContainingPackageLookupValue.java used only in
+   * javadoc: com.google.devtools.build.skyframe.SkyKey} for {@code ContainingPackageLookupValue}.
+   */
   @AutoCodec
   public static class Key extends AbstractSkyKey<PackageIdentifier> {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();

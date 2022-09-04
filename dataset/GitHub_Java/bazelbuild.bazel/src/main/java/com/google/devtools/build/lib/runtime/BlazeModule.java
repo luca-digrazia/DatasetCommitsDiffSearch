@@ -15,7 +15,9 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.SubscriberExceptionHandler;
+import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
@@ -31,8 +33,8 @@ import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
 import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.PackageLoadingListener;
 import com.google.devtools.build.lib.packages.PackageValidator;
+import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.TopDownActionCache;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -288,7 +290,8 @@ public abstract class BlazeModule {
       CommandEnvironment env,
       BuildRequest request,
       BuildOptions buildOptions,
-      Iterable<ConfiguredTarget> configuredTargets)
+      Iterable<ConfiguredTarget> configuredTargets,
+      ImmutableSet<AspectValue> aspects)
       throws InterruptedException, ViewCreationFailedException {}
 
   /**
@@ -301,7 +304,7 @@ public abstract class BlazeModule {
    * @param builder the builder to add action context providers and consumers to
    */
   public void executorInit(CommandEnvironment env, BuildRequest request, ExecutorBuilder builder)
-      throws AbruptExitException {}
+      throws ExecutorInitException {}
 
   /**
    * Registers any action contexts this module provides with the execution phase. They will be
@@ -314,13 +317,13 @@ public abstract class BlazeModule {
    * @param registryBuilder builder with which to register action contexts
    * @param env environment for the current command
    * @param buildRequest the current build request
-   * @throws AbruptExitException if there are fatal issues creating or registering action contexts
+   * @throws ExecutorInitException if there are fatal issues creating or registering action contexts
    */
   public void registerActionContexts(
       ModuleActionContextRegistry.Builder registryBuilder,
       CommandEnvironment env,
       BuildRequest buildRequest)
-      throws AbruptExitException {}
+      throws ExecutorInitException {}
 
   /**
    * Registers any spawn strategies this module provides with the execution phase.
@@ -329,11 +332,11 @@ public abstract class BlazeModule {
    *
    * @param registryBuilder builder with which to register strategies
    * @param env environment for the current command
-   * @throws AbruptExitException if there are fatal issues creating or registering strategies
+   * @throws ExecutorInitException if there are fatal issues creating or registering strategies
    */
   public void registerSpawnStrategies(
       SpawnStrategyRegistry.Builder registryBuilder, CommandEnvironment env)
-      throws AbruptExitException {}
+      throws ExecutorInitException {}
 
   /**
    * Called after each command.
@@ -401,7 +404,8 @@ public abstract class BlazeModule {
    *
    * <p>Note that only one helper per Bazel/Blaze runtime is allowed.
    */
-  public Package.Builder.Helper getPackageBuilderHelper() {
+  public Package.Builder.Helper getPackageBuilderHelper(
+      ConfiguredRuleClassProvider ruleClassProvider, FileSystem fs) {
     return null;
   }
 
@@ -411,26 +415,10 @@ public abstract class BlazeModule {
    *
    * <p>Called once during server startup some time after {@link #serverInit}.
    *
-   * <p>Note that only one instance per Bazel/Blaze runtime is allowed.
+   * <p>Note that only one helper per Bazel/Blaze runtime is allowed.
    */
   @Nullable
   public PackageValidator getPackageValidator() {
-    return null;
-  }
-
-  /**
-   * Returns a {@link PackageLoadingListener} for observing successful package loading, or null if
-   * the module does not provide any validator.
-   *
-   * <p>Called once during server startup some time after {@link #serverInit}.
-   *
-   * <p>Note that only one instance per Bazel/Blaze runtime is allowed.
-   */
-  @Nullable
-  public PackageLoadingListener getPackageLoadingListener(
-      Package.Builder.Helper packageBuilderHelper,
-      ConfiguredRuleClassProvider ruleClassProvider,
-      FileSystem fs) {
     return null;
   }
 

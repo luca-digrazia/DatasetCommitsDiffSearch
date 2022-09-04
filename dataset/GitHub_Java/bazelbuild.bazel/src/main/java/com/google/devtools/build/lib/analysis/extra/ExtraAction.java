@@ -29,15 +29,12 @@ import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLines;
 import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
-import com.google.devtools.build.lib.actions.EnvironmentalExecException;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.server.FailureDetails.Execution.Code;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.io.IOException;
 import java.util.Collection;
@@ -122,6 +119,9 @@ public final class ExtraAction extends SpawnAction {
   public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     Preconditions.checkState(discoversInputs(), this);
+    // We depend on the outputs of actions doing input discovery and they should know their inputs
+    // after having been executed
+    Preconditions.checkState(shadowedAction.inputsDiscovered());
 
     // We need to update our inputs to take account of any additional
     // inputs the shadowed action may need to do its work.
@@ -156,17 +156,13 @@ public final class ExtraAction extends SpawnAction {
   @Override
   protected void afterExecute(
       ActionExecutionContext actionExecutionContext, List<SpawnResult> spawnResults)
-      throws ExecException {
+      throws IOException {
     // PHASE 3: create dummy output.
     // If the user didn't specify output, we need to create dummy output
     // to make blaze schedule this action.
     if (createDummyOutput) {
       for (Artifact output : getOutputs()) {
-        try {
-          FileSystemUtils.touchFile(actionExecutionContext.getInputPath(output));
-        } catch (IOException e) {
-          throw new EnvironmentalExecException(e, Code.EXTRA_ACTION_OUTPUT_CREATION_FAILURE);
-        }
+        FileSystemUtils.touchFile(actionExecutionContext.getInputPath(output));
       }
     }
   }

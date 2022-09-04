@@ -14,24 +14,49 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableSet;
-import java.util.Map;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
 
-/** Provides a mapping between a TransitiveInfoProvider class and an instance. */
+/**
+ * Provides a mapping between an identifier for transitive information and its instance. (between
+ * provider identifier and provider instance)
+ *
+ * <p>We have three kinds of provider identifiers:
+ *
+ * <ul>
+ *   <li>Declared providers. They are exposed to Skylark and identified by {@link
+ *       com.google.devtools.build.lib.packages.Provider.Key}. Provider instances are {@link
+ *       com.google.devtools.build.lib.packages.Info}s.
+ *   <li>Native providers. They are identified by their {@link Class} and their instances are
+ *       instances of that class. They should implement {@link TransitiveInfoProvider} marker
+ *       interface.
+ *   <li>Legacy Skylark providers (deprecated). They are identified by simple strings, and their
+ *       instances are more-less random objects.
+ * </ul>
+ */
 @Immutable
-public interface TransitiveInfoProviderMap {
+public interface TransitiveInfoProviderMap extends ProviderCollection {
+  /**
+   * Returns a count of providers.
+   *
+   * Upper bound for {@code index} in {@link #getProviderKeyAt(int index)}
+   * and {@link #getProviderInstanceAt(int index)} }.
+   *
+   * Low-level method, use with care.
+   */
+  int getProviderCount();
 
-  /** Returns the instance for the provided providerClass, or <tt>null</tt> if not present. */
-  @Nullable
-  <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass);
+  /**
+   * Return value is one of:
+   *
+   * <ul>
+   *   <li>{@code Class<? extends TransitiveInfoProvider>}
+   *   <li>String
+   *   <li>{@link com.google.devtools.build.lib.packages.Provider.Key}
+   * </ul>
+   *
+   * Low-level method, use with care.
+   */
+  Object getProviderKeyAt(int index);
 
-  ImmutableSet<Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>>
-      entrySet();
-
-  ImmutableCollection<TransitiveInfoProvider> values();
-
-  TransitiveInfoProviderMapBuilder toBuilder();
+  Object getProviderInstanceAt(int index);
 }

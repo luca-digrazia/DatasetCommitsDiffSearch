@@ -28,9 +28,6 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.TestAction;
-import com.google.devtools.build.lib.server.FailureDetails.TestAction.Code;
 import java.util.List;
 import java.util.Map;
 
@@ -70,16 +67,13 @@ public class TestTargetProperties {
   private final boolean isExternal;
   private final String language;
   private final ImmutableMap<String, String> executionInfo;
-  private final boolean isPersistentTestRunner;
 
   /**
-   * Creates test target properties instance. Constructor expects that it will be called only for
-   * test configured targets.
+   * Creates test target properties instance. Constructor expects that it
+   * will be called only for test configured targets.
    */
-  TestTargetProperties(
-      RuleContext ruleContext,
-      ExecutionInfo executionRequirements,
-      boolean isPersistentTestRunner) {
+  TestTargetProperties(RuleContext ruleContext,
+      ExecutionInfo executionRequirements) {
     Rule rule = ruleContext.getRule();
 
     Preconditions.checkState(TargetUtils.isTestRule(rule));
@@ -90,28 +84,11 @@ public class TestTargetProperties {
     // We need to use method on ruleConfiguredTarget to perform validation.
     isFlaky = ruleContext.attributes().get("flaky", Type.BOOLEAN);
     isExternal = TargetUtils.isExternalTestRule(rule);
-    this.isPersistentTestRunner = isPersistentTestRunner;
 
     Map<String, String> executionInfo = Maps.newLinkedHashMap();
     executionInfo.putAll(TargetUtils.getExecutionInfo(rule));
-
-    boolean incompatibleExclusiveTestSandboxed = false;
-
-    TestConfiguration testConfiguration = ruleContext.getFragment(TestConfiguration.class);
-    if (testConfiguration != null) {
-      incompatibleExclusiveTestSandboxed = testConfiguration.incompatibleExclusiveTestSandboxed();
-    }
-
-    if (incompatibleExclusiveTestSandboxed) {
-      if (TargetUtils.isLocalTestRule(rule)) {
-        executionInfo.put(ExecutionRequirements.LOCAL, "");
-      } else if (TargetUtils.isExclusiveTestRule(rule)) {
-        executionInfo.put(ExecutionRequirements.NO_REMOTE_EXEC, "");
-      }
-    } else {
-      if (TargetUtils.isLocalTestRule(rule) || TargetUtils.isExclusiveTestRule(rule)) {
-        executionInfo.put(ExecutionRequirements.LOCAL, "");
-      }
+    if (TargetUtils.isLocalTestRule(rule) || TargetUtils.isExclusiveTestRule(rule)) {
+      executionInfo.put(ExecutionRequirements.LOCAL, "");
     }
 
     if (executionRequirements != null) {
@@ -153,10 +130,6 @@ public class TestTargetProperties {
     return isExternal;
   }
 
-  public boolean isPersistentTestRunner() {
-    return isPersistentTestRunner;
-  }
-
   public ResourceSet getLocalResourceUsage(Label label, boolean usingLocalTestJobs)
       throws UserExecException {
     if (usingLocalTestJobs) {
@@ -165,18 +138,17 @@ public class TestTargetProperties {
 
     ResourceSet testResourcesFromSize = TestTargetProperties.getResourceSetFromSize(size);
 
-    // Tests can override their CPU reservation with a "cpu:<n>" tag.
+    // Tests can override their CPU reservation with a "cpus:<n>" tag.
     ResourceSet testResourcesFromTag = null;
     for (String tag : executionInfo.keySet()) {
       try {
         String cpus = ExecutionRequirements.CPU.parseIfMatches(tag);
         if (cpus != null) {
           if (testResourcesFromTag != null) {
-            String message =
+            throw new UserExecException(
                 String.format(
                     "%s has more than one '%s' tag, but duplicate tags aren't allowed",
-                    label, ExecutionRequirements.CPU.userFriendlyName());
-            throw new UserExecException(createFailureDetail(message, Code.DUPLICATE_CPU_TAGS));
+                    label, ExecutionRequirements.CPU.userFriendlyName()));
           }
           testResourcesFromTag =
               ResourceSet.create(
@@ -185,25 +157,17 @@ public class TestTargetProperties {
                   testResourcesFromSize.getLocalTestCount());
         }
       } catch (ValidationException e) {
-        String message =
+        throw new UserExecException(
             String.format(
                 "%s has a '%s' tag, but its value '%s' didn't pass validation: %s",
                 label,
                 ExecutionRequirements.CPU.userFriendlyName(),
                 e.getTagValue(),
-                e.getMessage());
-        throw new UserExecException(createFailureDetail(message, Code.INVALID_CPU_TAG));
+                e.getMessage()));
       }
     }
 
     return testResourcesFromTag != null ? testResourcesFromTag : testResourcesFromSize;
-  }
-
-  private static FailureDetail createFailureDetail(String message, Code detailedCode) {
-    return FailureDetail.newBuilder()
-        .setMessage(message)
-        .setTestAction(TestAction.newBuilder().setCode(detailedCode))
-        .build();
   }
 
   /**

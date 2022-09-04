@@ -19,10 +19,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.Type;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.Collection;
 
 /**
  * An {@link AttributeMap} that supports attribute type queries on both a rule and its aspects and
@@ -47,6 +45,13 @@ class AspectAwareAttributeMapper implements AttributeMap {
       ImmutableMap<String, Attribute> aspectAttributes) {
     this.ruleAttributes = ruleAttributes;
     this.aspectAttributes = aspectAttributes;
+  }
+
+  /**
+   * Don't use this except where absolutely necessary. This exposes internal implementation details.
+   */
+  ImmutableMap<String, Attribute> getAspectAttributes() {
+    return aspectAttributes;
   }
 
   @Override
@@ -128,17 +133,12 @@ class AspectAwareAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public void visitAllLabels(BiConsumer<Attribute, Label> consumer) {
+  public Collection<DepEdge> visitLabels() throws InterruptedException {
     throw new UnsupportedOperationException("rule + aspects label visition is not supported");
   }
 
   @Override
-  public void visitLabels(Attribute attribute, Consumer<Label> consumer) {
-    throw new UnsupportedOperationException("rule + aspects label visition is not supported");
-  }
-
-  @Override
-  public void visitLabels(DependencyFilter filter, BiConsumer<Attribute, Label> consumer) {
+  public Collection<DepEdge> visitLabels(Attribute attribute) throws InterruptedException {
     throw new UnsupportedOperationException("rule + aspects label visition is not supported");
   }
 

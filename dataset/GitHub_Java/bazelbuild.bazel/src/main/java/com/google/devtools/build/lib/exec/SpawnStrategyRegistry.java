@@ -27,17 +27,14 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.DynamicStrategyRegistry;
+import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.ExecutionOptions.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.RegexFilter;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -222,7 +219,7 @@ public final class SpawnStrategyRegistry
 
   /** Returns a new {@link Builder} suitable for creating instances of SpawnStrategyRegistry. */
   public static Builder builder() {
-    return new Builder();
+    return new BuilderImpl();
   }
 
   /**
@@ -239,7 +236,133 @@ public final class SpawnStrategyRegistry
    * all registered strategies, in registration order (i.e. the earliest strategy registered will be
    * first in the list of strategies returned by {@link SpawnStrategyRegistry#getStrategies}).
    */
-  public static final class Builder {
+  // TODO(katre): This exists only to allow incremental migration from SpawnActionContextMaps.
+  // Delete ASAP.
+  public interface Builder {
+
+    /**
+     * Adds a filter limiting any spawn whose {@linkplain
+     * com.google.devtools.build.lib.actions.ActionExecutionMetadata#getProgressMessage() owner's
+     * progress message} matches the regular expression to only use strategies with the given
+     * command-line identifiers, in order.
+     *
+     * <p>If multiple filters match the same spawn (including an identical filter) the order of
+     * precedence of calls to this method is determined by {@link
+     * #useLegacyDescriptionFilterPrecedence()}.
+     */
+    SpawnStrategyRegistry.Builder addDescriptionFilter(
+        RegexFilter filter, List<String> identifiers);
+
+    /**
+     * Adds a filter limiting any spawn whose {@linkplain Spawn#getMnemonic() mnemonic}
+     * (case-sensitively) matches the given mnemonic to only use strategies with the given
+     * command-line identifiers, in order.
+     *
+     * <p>If the same mnemonic is registered multiple times the last such call will take precedence.
+     *
+     * <p>Note that if a spawn matches a {@linkplain #addDescriptionFilter registered description
+     * filter} that filter will take precedence over any mnemonic-based filters.
+     */
+    // last one wins
+    SpawnStrategyRegistry.Builder addMnemonicFilter(String mnemonic, List<String> identifiers);
+
+    default SpawnStrategyRegistry.Builder registerStrategy(
+        SpawnStrategy strategy, String... commandlineIdentifiers) {
+      return registerStrategy(strategy, ImmutableList.copyOf(commandlineIdentifiers));
+    }
+
+    /**
+     * Registers a strategy implementation with this collector, distinguishing it from other
+     * strategies with the given command-line identifiers (of which at least one is required).
+     *
+     * <p>If multiple strategies are registered with the same command-line identifier the last one
+     * so registered will take precedence.
+     */
+    SpawnStrategyRegistry.Builder registerStrategy(
+        SpawnStrategy strategy, List<String> commandlineIdentifiers);
+
+    /**
+     * Instructs this collector to use the legacy description filter precedence, i.e. to prefer the
+     * first regular expression filter that matches a spawn over any later registered filters.
+     *
+     * <p>The default behavior of this collector is to prefer the last registered description filter
+     * over any previously registered matching filters.
+     */
+    SpawnStrategyRegistry.Builder useLegacyDescriptionFilterPrecedence();
+
+    /**
+     * Explicitly sets the identifiers of default strategies to use if a spawn matches no filters.
+     *
+     * <p>Note that if this method is not called on the builder, all registered strategies are
+     * considered default strategies, in registration order. See also the {@linkplain Builder class
+     * documentation}.
+     */
+    SpawnStrategyRegistry.Builder setDefaultStrategies(List<String> defaultStrategies);
+
+    /**
+     * Reset the default strategies (see {@link #setDefaultStrategies}) to the reverse of the order
+     * they were registered in.
+     */
+    SpawnStrategyRegistry.Builder resetDefaultStrategies();
+
+    /**
+     * Sets the strategy names to use in the remote branch of dynamic execution for a given action
+     * mnemonic.
+     *
+     * <p>During execution, each strategy is {@linkplain SpawnStrategy#canExec(Spawn,
+     * ActionContextRegistry) asked} whether it can execute a given Spawn. The first strategy in the
+     * list that says so will get the job.
+     */
+    SpawnStrategyRegistry.Builder addDynamicRemoteStrategiesByMnemonic(
+        String mnemonic, List<String> strategies);
+
+    /**
+     * Sets the strategy names to use in the local branch of dynamic execution for a given action
+     * mnemonic.
+     *
+     * <p>During execution, each strategy is {@linkplain SpawnStrategy#canExec(Spawn,
+     * ActionContextRegistry) asked} whether it can execute a given Spawn. The first strategy in the
+     * list that says so will get the job.
+     */
+    SpawnStrategyRegistry.Builder addDynamicLocalStrategiesByMnemonic(
+        String mnemonic, List<String> strategies);
+
+    /**
+     * Sets the commandline identifier of the strategy to be used when falling back from remote to
+     * local execution.
+     *
+     * <p>Note that this is an optional setting, if not provided {@link
+     * SpawnStrategyRegistry#getRemoteLocalFallbackStrategy()} will return {@code null}. If the
+     * value <b>is</b> provided it must match the commandline identifier of a registered strategy
+     * (at {@linkplain #build build} time).
+     */
+    SpawnStrategyRegistry.Builder setRemoteLocalFallbackStrategyIdentifier(
+        String commandlineIdentifier);
+
+    /**
+     * Finalizes the construction of the registry.
+     *
+     * @throws ExecutorInitException if a strategy command-line identifier was used in a filter or
+     *     the default strategies but no strategy for that identifier was registered
+     */
+    SpawnStrategyRegistry build() throws ExecutorInitException;
+  }
+
+  /**
+   * Builder collecting the strategies and restrictions thereon for a {@link SpawnStrategyRegistry}.
+   *
+   * <p>To {@linkplain SpawnStrategyRegistry#getStrategies match a strategy to a spawn} it needs to
+   * be both {@linkplain #registerStrategy registered} and its registered command-line identifier
+   * has to match {@linkplain #addDescriptionFilter a filter on the spawn's progress message},
+   * {@linkplain #addMnemonicFilter a filter on the spawn's mnemonic} or be part of the default
+   * strategies (see below).
+   *
+   * <p><strong>Default strategies</strong> are either {@linkplain #setDefaultStrategies set
+   * explicitly} or, if {@link #setDefaultStrategies} is not called on this builder, comprised of
+   * all registered strategies, in registration order (i.e. the earliest strategy registered will be
+   * first in the list of strategies returned by {@link SpawnStrategyRegistry#getStrategies}).
+   */
+  private static final class BuilderImpl implements Builder {
 
     private ImmutableList<String> explicitDefaultStrategies = ImmutableList.of();
     // TODO(schmitt): Using a list and autovalue so as to be able to reverse order while legacy sort
@@ -266,6 +389,7 @@ public final class SpawnStrategyRegistry
      * precedence of calls to this method is determined by {@link
      * #useLegacyDescriptionFilterPrecedence()}.
      */
+    @Override
     public Builder addDescriptionFilter(RegexFilter filter, List<String> identifiers) {
       filterAndIdentifiers.add(
           new AutoValue_SpawnStrategyRegistry_FilterAndIdentifiers(
@@ -284,6 +408,7 @@ public final class SpawnStrategyRegistry
      * filter} that filter will take precedence over any mnemonic-based filters.
      */
     // last one wins
+    @Override
     public Builder addMnemonicFilter(String mnemonic, List<String> identifiers) {
       mnemonicToIdentifiers.put(mnemonic, identifiers);
       return this;
@@ -296,6 +421,7 @@ public final class SpawnStrategyRegistry
      * <p>If multiple strategies are registered with the same command-line identifier the last one
      * so registered will take precedence.
      */
+    @Override
     public Builder registerStrategy(SpawnStrategy strategy, List<String> commandlineIdentifiers) {
       Preconditions.checkArgument(
           commandlineIdentifiers.size() >= 1, "At least one commandLineIdentifier must be given");
@@ -306,10 +432,6 @@ public final class SpawnStrategyRegistry
       return this;
     }
 
-    public Builder registerStrategy(SpawnStrategy strategy, String... commandlineIdentifiers) {
-      return registerStrategy(strategy, ImmutableList.copyOf(commandlineIdentifiers));
-    }
-
     /**
      * Instructs this collector to use the legacy description filter precedence, i.e. to prefer the
      * first regular expression filter that matches a spawn over any later registered filters.
@@ -317,6 +439,7 @@ public final class SpawnStrategyRegistry
      * <p>The default behavior of this collector is to prefer the last registered description filter
      * over any previously registered matching filters.
      */
+    @Override
     public Builder useLegacyDescriptionFilterPrecedence() {
       legacyFilterIterationOrder = true;
       return this;
@@ -329,6 +452,7 @@ public final class SpawnStrategyRegistry
      * considered default strategies, in registration order. See also the {@linkplain Builder class
      * documentation}.
      */
+    @Override
     public Builder setDefaultStrategies(List<String> defaultStrategies) {
       // Ensure there are actual strategies and the contents are not empty.
       Preconditions.checkArgument(!defaultStrategies.isEmpty());
@@ -342,6 +466,7 @@ public final class SpawnStrategyRegistry
      * Reset the default strategies (see {@link #setDefaultStrategies}) to the reverse of the order
      * they were registered in.
      */
+    @Override
     public Builder resetDefaultStrategies() {
       this.explicitDefaultStrategies = ImmutableList.of();
       return this;
@@ -355,6 +480,7 @@ public final class SpawnStrategyRegistry
      * ActionContextRegistry) asked} whether it can execute a given Spawn. The first strategy in the
      * list that says so will get the job.
      */
+    @Override
     public Builder addDynamicRemoteStrategiesByMnemonic(String mnemonic, List<String> strategies) {
       mnemonicToRemoteIdentifiers.put(mnemonic, strategies);
       return this;
@@ -368,6 +494,7 @@ public final class SpawnStrategyRegistry
      * ActionContextRegistry) asked} whether it can execute a given Spawn. The first strategy in the
      * list that says so will get the job.
      */
+    @Override
     public Builder addDynamicLocalStrategiesByMnemonic(String mnemonic, List<String> strategies) {
       mnemonicToLocalIdentifiers.put(mnemonic, strategies);
       return this;
@@ -382,6 +509,7 @@ public final class SpawnStrategyRegistry
      * value <b>is</b> provided it must match the commandline identifier of a registered strategy
      * (at {@linkplain #build build} time).
      */
+    @Override
     public Builder setRemoteLocalFallbackStrategyIdentifier(String commandlineIdentifier) {
       this.remoteLocalFallbackStrategyIdentifier = commandlineIdentifier;
       return this;
@@ -390,10 +518,11 @@ public final class SpawnStrategyRegistry
     /**
      * Finalizes the construction of the registry.
      *
-     * @throws AbruptExitException if a strategy command-line identifier was used in a filter or the
-     *     default strategies but no strategy for that identifier was registered
+     * @throws ExecutorInitException if a strategy command-line identifier was used in a filter or
+     *     the default strategies but no strategy for that identifier was registered
      */
-    public SpawnStrategyRegistry build() throws AbruptExitException {
+    @Override
+    public SpawnStrategyRegistry build() throws ExecutorInitException {
       List<FilterAndIdentifiers> orderedFilterAndIdentifiers = filterAndIdentifiers;
 
       if (!legacyFilterIterationOrder) {
@@ -435,13 +564,12 @@ public final class SpawnStrategyRegistry
             toStrategy("remote fallback strategy", remoteLocalFallbackStrategyIdentifier);
         if (!(strategy instanceof AbstractSpawnStrategy)) {
           // TODO(schmitt): Check if all strategies can use the same base and remove check if so.
-          throw createExitException(
+          throw new ExecutorInitException(
               String.format(
-                  "'%s' was requested for the remote fallback strategy but is not an"
-                      + " abstract spawn strategy (which is required for remote"
-                      + " fallback execution).",
+                  "'%s' was requested for the remote fallback strategy but is not an abstract "
+                      + "spawn strategy (which is required for remote fallback execution).",
                   strategy.getClass().getSimpleName()),
-              Code.REMOTE_FALLBACK_STRATEGY_NOT_ABSTRACT_SPAWN);
+              ExitCode.COMMAND_LINE_ERROR);
         }
 
         remoteLocalFallbackStrategy = (AbstractSpawnStrategy) strategy;
@@ -465,7 +593,7 @@ public final class SpawnStrategyRegistry
     }
 
     private ImmutableList<? extends SpawnStrategy> toStrategies(
-        List<String> identifiers, Object requestName) throws AbruptExitException {
+        List<String> identifiers, Object requestName) throws ExecutorInitException {
       ImmutableList.Builder<SpawnStrategy> strategies = ImmutableList.builder();
       for (String identifier : identifiers) {
         if (identifier.isEmpty()) {
@@ -477,30 +605,30 @@ public final class SpawnStrategyRegistry
     }
 
     private SpawnStrategy toStrategy(Object requestName, String identifier)
-        throws AbruptExitException {
+        throws ExecutorInitException {
       SpawnStrategy strategy = identifierToStrategy.get(identifier);
       if (strategy == null) {
-        throw createExitException(
+        throw new ExecutorInitException(
             String.format(
                 "'%s' was requested for %s but no strategy with that identifier was registered. "
                     + "Valid values are: [%s]",
                 identifier, requestName, Joiner.on(", ").join(identifierToStrategy.keySet())),
-            Code.STRATEGY_NOT_FOUND);
+            ExitCode.COMMAND_LINE_ERROR);
       }
       return strategy;
     }
 
     private Iterable<? extends SandboxedSpawnStrategy> toSandboxedStrategies(
-        List<String> identifiers, Object requestName) throws AbruptExitException {
+        List<String> identifiers, Object requestName) throws ExecutorInitException {
       Iterable<? extends SpawnStrategy> strategies = toStrategies(identifiers, requestName);
       for (SpawnStrategy strategy : strategies) {
         if (!(strategy instanceof SandboxedSpawnStrategy)) {
-          throw createExitException(
+          throw new ExecutorInitException(
               String.format(
                   "'%s' was requested for %s but is not a sandboxed strategy (which is required for"
                       + " dynamic execution).",
                   strategy.getClass().getSimpleName(), requestName),
-              Code.DYNAMIC_STRATEGY_NOT_SANDBOXED);
+              ExitCode.COMMAND_LINE_ERROR);
         }
       }
 
@@ -509,16 +637,6 @@ public final class SpawnStrategyRegistry
           (Iterable<? extends SandboxedSpawnStrategy>) strategies;
       return sandboxedStrategies;
     }
-  }
-
-  private static AbruptExitException createExitException(String message, Code detailedCode) {
-    return new AbruptExitException(
-        DetailedExitCode.of(
-            FailureDetail.newBuilder()
-                .setMessage(message)
-                .setExecutionOptions(
-                    FailureDetails.ExecutionOptions.newBuilder().setCode(detailedCode))
-                .build()));
   }
 
   @AutoValue

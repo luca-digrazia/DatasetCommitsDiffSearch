@@ -66,6 +66,7 @@ import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.profiler.memory.CurrentRuleTracker;
+import com.google.devtools.build.lib.skyframe.AspectFunction.AspectFunctionException;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.util.ClassName;
@@ -602,7 +603,7 @@ public final class ConfiguredTargetFactory {
       BuildConfiguration aspectConfiguration,
       BuildConfiguration hostConfiguration,
       ActionLookupValue.ActionLookupKey aspectKey)
-      throws InterruptedException, ActionConflictException {
+      throws AspectFunctionException, InterruptedException {
 
     RuleContext.Builder builder =
         new RuleContext.Builder(
@@ -643,12 +644,17 @@ public final class ConfiguredTargetFactory {
       return null;
     }
 
-    ConfiguredAspect configuredAspect =
-        aspectFactory.create(
-            associatedTarget,
-            ruleContext,
-            aspect.getParameters(),
-            ruleClassProvider.getToolsRepository());
+    ConfiguredAspect configuredAspect;
+    try {
+      configuredAspect =
+          aspectFactory.create(
+              associatedTarget,
+              ruleContext,
+              aspect.getParameters(),
+              ruleClassProvider.getToolsRepository());
+    } catch (ActionConflictException e) {
+      throw new AspectFunctionException(e);
+    }
     if (configuredAspect != null) {
       validateAdvertisedProviders(
           configuredAspect, aspect.getDefinition().getAdvertisedProviders(),

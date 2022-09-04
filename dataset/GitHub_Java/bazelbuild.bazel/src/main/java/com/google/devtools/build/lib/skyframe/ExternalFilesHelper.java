@@ -14,14 +14,13 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.repository.ExternalPackageHelper;
+import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
@@ -30,19 +29,19 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Logger;
 
 /** Common utilities for dealing with paths outside the package roots. */
 public class ExternalFilesHelper {
   private static final boolean IN_TEST = System.getenv("TEST_TMPDIR") != null;
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(ExternalFilesHelper.class.getName());
 
   private final AtomicReference<PathPackageLocator> pkgLocator;
   private final ExternalFileAction externalFileAction;
   private final BlazeDirectories directories;
   private final int maxNumExternalFilesToLog;
   private final AtomicInteger numExternalFilesLogged = new AtomicInteger(0);
-  private final ExternalPackageHelper externalPackageHelper;
 
   // These variables are set to true from multiple threads, but only read in the main thread.
   // So volatility or an AtomicBoolean is not needed.
@@ -56,36 +55,27 @@ public class ExternalFilesHelper {
       ExternalFileAction externalFileAction,
       BlazeDirectories directories,
       int maxNumExternalFilesToLog,
-      ManagedDirectoriesKnowledge managedDirectoriesKnowledge,
-      ExternalPackageHelper externalPackageHelper) {
+      ManagedDirectoriesKnowledge managedDirectoriesKnowledge) {
     this.pkgLocator = pkgLocator;
     this.externalFileAction = externalFileAction;
     this.directories = directories;
     this.maxNumExternalFilesToLog = maxNumExternalFilesToLog;
     this.managedDirectoriesKnowledge = managedDirectoriesKnowledge;
-    this.externalPackageHelper = externalPackageHelper;
   }
 
   public static ExternalFilesHelper create(
       AtomicReference<PathPackageLocator> pkgLocator,
       ExternalFileAction externalFileAction,
       BlazeDirectories directories,
-      ManagedDirectoriesKnowledge managedDirectoriesKnowledge,
-      ExternalPackageHelper externalPackageHelper) {
+      ManagedDirectoriesKnowledge managedDirectoriesKnowledge) {
     return IN_TEST
-        ? createForTesting(
-            pkgLocator,
-            externalFileAction,
-            directories,
-            managedDirectoriesKnowledge,
-            externalPackageHelper)
+        ? createForTesting(pkgLocator, externalFileAction, directories, managedDirectoriesKnowledge)
         : new ExternalFilesHelper(
             pkgLocator,
             externalFileAction,
             directories,
             /*maxNumExternalFilesToLog=*/ 100,
-            managedDirectoriesKnowledge,
-            externalPackageHelper);
+            managedDirectoriesKnowledge);
   }
 
   public static ExternalFilesHelper createForTesting(
@@ -96,36 +86,21 @@ public class ExternalFilesHelper {
         pkgLocator,
         externalFileAction,
         directories,
-        BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER);
-  }
-
-  public static ExternalFilesHelper createForTesting(
-      AtomicReference<PathPackageLocator> pkgLocator,
-      ExternalFileAction externalFileAction,
-      BlazeDirectories directories,
-      ExternalPackageHelper externalPackageHelper) {
-    return createForTesting(
-        pkgLocator,
-        externalFileAction,
-        directories,
-        ManagedDirectoriesKnowledge.NO_MANAGED_DIRECTORIES,
-        externalPackageHelper);
+        ManagedDirectoriesKnowledge.NO_MANAGED_DIRECTORIES);
   }
 
   private static ExternalFilesHelper createForTesting(
       AtomicReference<PathPackageLocator> pkgLocator,
       ExternalFileAction externalFileAction,
       BlazeDirectories directories,
-      ManagedDirectoriesKnowledge managedDirectoriesKnowledge,
-      ExternalPackageHelper externalPackageHelper) {
+      ManagedDirectoriesKnowledge managedDirectoriesKnowledge) {
     return new ExternalFilesHelper(
         pkgLocator,
         externalFileAction,
         directories,
         // These log lines are mostly spam during unit and integration tests.
         /*maxNumExternalFilesToLog=*/ 0,
-        managedDirectoriesKnowledge,
-        externalPackageHelper);
+        managedDirectoriesKnowledge);
   }
 
 
@@ -235,8 +210,7 @@ public class ExternalFilesHelper {
         externalFileAction,
         directories,
         maxNumExternalFilesToLog,
-        managedDirectoriesKnowledge,
-        externalPackageHelper);
+        managedDirectoriesKnowledge);
   }
 
   public FileType getAndNoteFileType(RootedPath rootedPath) {
@@ -310,7 +284,7 @@ public class ExternalFilesHelper {
         break;
       case EXTERNAL:
         if (numExternalFilesLogged.incrementAndGet() < maxNumExternalFilesToLog) {
-          logger.atInfo().log("Encountered an external path %s", rootedPath);
+          logger.info("Encountered an external path " + rootedPath);
         }
         // fall through
       case OUTPUT:
@@ -323,8 +297,7 @@ public class ExternalFilesHelper {
         Preconditions.checkState(
             externalFileAction == ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
             externalFileAction);
-        RepositoryFunction.addExternalFilesDependencies(
-            rootedPath, isDirectory, directories, env, externalPackageHelper);
+        RepositoryFunction.addExternalFilesDependencies(rootedPath, isDirectory, directories, env);
         break;
     }
     return fileType;
