@@ -22,6 +22,7 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -32,7 +33,6 @@ import io.quarkus.kafka.streams.runtime.KafkaStreamsRecorder;
 import io.quarkus.kafka.streams.runtime.KafkaStreamsRuntimeConfig;
 import io.quarkus.kafka.streams.runtime.KafkaStreamsTopologyManager;
 import io.quarkus.runtime.LaunchMode;
-import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 
 class KafkaStreamsProcessor {
 
@@ -43,6 +43,7 @@ class KafkaStreamsProcessor {
             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
             BuildProducer<RuntimeReinitializedClassBuildItem> reinitialized,
             BuildProducer<NativeImageResourceBuildItem> nativeLibs,
+            BuildProducer<JniBuildItem> jni,
             LaunchModeBuildItem launchMode,
             NativeConfig config) throws IOException {
 
@@ -51,6 +52,7 @@ class KafkaStreamsProcessor {
         registerClassesThatAreLoadedThroughReflection(reflectiveClasses, launchMode);
         addSupportForRocksDbLib(nativeLibs, config);
         enableLoadOfNativeLibs(reinitialized);
+        enableJniForNativeBuild(jni);
     }
 
     private void registerClassesThatAreLoadedThroughReflection(BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
@@ -107,7 +109,7 @@ class KafkaStreamsProcessor {
 
     private void addSupportForRocksDbLib(BuildProducer<NativeImageResourceBuildItem> nativeLibs, NativeConfig nativeConfig) {
         // for RocksDB, either add linux64 native lib when targeting containers
-        if (nativeConfig.containerRuntime.isPresent() || nativeConfig.containerBuild) {
+        if (nativeConfig.containerBuild) {
             nativeLibs.produce(new NativeImageResourceBuildItem("librocksdbjni-linux64.so"));
         }
         // otherwise the native lib of the platform this build runs on
@@ -118,6 +120,10 @@ class KafkaStreamsProcessor {
 
     private void enableLoadOfNativeLibs(BuildProducer<RuntimeReinitializedClassBuildItem> reinitialized) {
         reinitialized.produce(new RuntimeReinitializedClassBuildItem("org.rocksdb.RocksDB"));
+    }
+
+    private void enableJniForNativeBuild(BuildProducer<JniBuildItem> jni) {
+        jni.produce(new JniBuildItem());
     }
 
     private void registerClassName(BuildProducer<ReflectiveClassBuildItem> reflectiveClasses, String defaultKeySerdeClass) {
@@ -189,17 +195,5 @@ class KafkaStreamsProcessor {
     @BuildStep
     AdditionalBeanBuildItem registerBean() {
         return AdditionalBeanBuildItem.unremovableOf(KafkaStreamsTopologyManager.class);
-    }
-
-    @BuildStep
-    void addHealthChecks(KafkaStreamsBuildTimeConfig buildTimeConfig, BuildProducer<HealthBuildItem> healthChecks) {
-        healthChecks.produce(
-                new HealthBuildItem(
-                        "io.quarkus.kafka.streams.runtime.health.KafkaStreamsTopicsHealthCheck",
-                        buildTimeConfig.healthEnabled, "kafka-streams"));
-        healthChecks.produce(
-                new HealthBuildItem(
-                        "io.quarkus.kafka.streams.runtime.health.KafkaStreamsStateHealthCheck",
-                        buildTimeConfig.healthEnabled, "kafka-streams"));
     }
 }
