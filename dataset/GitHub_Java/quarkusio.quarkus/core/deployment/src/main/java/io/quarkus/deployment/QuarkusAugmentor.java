@@ -90,6 +90,7 @@ public class QuarkusAugmentor {
             chainBuilder.loadProviders(classLoader);
 
             chainBuilder
+                    .addInitial(QuarkusConfig.class)
                     .addInitial(ArchiveRootBuildItem.class)
                     .addInitial(ShutdownContextBuildItem.class)
                     .addInitial(LaunchModeBuildItem.class)
@@ -114,6 +115,7 @@ public class QuarkusAugmentor {
                 rootFs = FileSystems.newFileSystem(root, null);
             }
             BuildExecutionBuilder execBuilder = chain.createExecutionBuilder("main")
+                    .produce(QuarkusConfig.INSTANCE)
                     .produce(liveReloadBuildItem)
                     .produce(new ArchiveRootBuildItem(root, rootFs == null ? root : rootFs.getPath("/"), excludedFromIndexing))
                     .produce(new ShutdownContextBuildItem())
