@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.config.SymlinkDefinition;
+import com.google.devtools.build.lib.analysis.config.ConvenienceSymlinks.SymlinkDefinition;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -25,7 +25,7 @@ import java.util.Map;
 public final class PathPrettyPrinter {
   private static final String NO_CREATE_SYMLINKS_PREFIX = "/";
 
-  private final Map<PathFragment, PathFragment> resolvedSymlinks;
+  private final Map<PathFragment, Path> resolvedSymlinks;
   private final String symlinkPrefix;
   private final String productName;
   private final Path workspaceDirectory;
@@ -48,9 +48,8 @@ public final class PathPrettyPrinter {
     this.resolvedSymlinks = resolve(symlinkDefinitions);
   }
 
-  private Map<PathFragment, PathFragment> resolve(
-      ImmutableList<SymlinkDefinition> symlinkDefinitions) {
-    Map<PathFragment, PathFragment> result = new LinkedHashMap<>();
+  private Map<PathFragment, Path> resolve(ImmutableList<SymlinkDefinition> symlinkDefinitions) {
+    Map<PathFragment, Path> result = new LinkedHashMap<>();
     String workspaceBaseName = workspaceDirectory.getBaseName();
     for (SymlinkDefinition link : symlinkDefinitions) {
       String linkName = link.getLinkName(symlinkPrefix, productName, workspaceBaseName);
@@ -59,7 +58,7 @@ public final class PathPrettyPrinter {
       try {
         PathFragment levelOneLinkTarget = dir.readSymbolicLink();
         if (levelOneLinkTarget.isAbsolute()) {
-          result.put(linkFragment, dir.getRelative(levelOneLinkTarget).asFragment());
+          result.put(linkFragment, dir.getRelative(levelOneLinkTarget));
         }
       } catch (IOException ignored) {
         // We don't guarantee that the convenience symlinks exist - e.g., we might be running in a
@@ -78,14 +77,14 @@ public final class PathPrettyPrinter {
    * <p>This method must be called after the symlinks are created at the end of a build. If called
    * before, the pretty path may be incorrect if the symlinks end up pointing somewhere new.
    */
-  public PathFragment getPrettyPath(PathFragment file) {
+  public PathFragment getPrettyPath(Path file) {
     if (NO_CREATE_SYMLINKS_PREFIX.equals(symlinkPrefix)) {
-      return file;
+      return file.asFragment();
     }
 
-    for (Map.Entry<PathFragment, PathFragment> e : resolvedSymlinks.entrySet()) {
+    for (Map.Entry<PathFragment, Path> e : resolvedSymlinks.entrySet()) {
       PathFragment linkFragment = e.getKey();
-      PathFragment linkTarget = e.getValue();
+      Path linkTarget = e.getValue();
       if (file.startsWith(linkTarget)) {
         PathFragment outputLink =
             workingDirectory.equals(workspaceDirectory)
@@ -95,6 +94,6 @@ public final class PathPrettyPrinter {
       }
     }
 
-    return file;
+    return file.asFragment();
   }
 }
