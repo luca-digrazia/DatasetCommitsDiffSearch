@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -24,14 +25,13 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
 import com.google.devtools.build.lib.syntax.Type;
-import java.util.Map;
+import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -167,8 +167,6 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
             .setHeadersCheckingMode(HeadersCheckingMode.STRICT)
             .compile();
 
-    Map<String, NestedSet<Artifact>> outputGroups =
-        CcCompilationHelper.buildOutputGroups(compilationInfo.getCcCompilationOutputs());
     RuleConfiguredTargetBuilder result =
         new RuleConfiguredTargetBuilder(ruleContext)
             .addProvider(compilationInfo.getCppDebugFileProvider())
@@ -177,7 +175,7 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
                     .setCcCompilationContext(compilationInfo.getCcCompilationContext())
                     .setCcLinkingContext(ccLinkingContext)
                     .build())
-            .addOutputGroups(outputGroups)
+            .addOutputGroups(compilationInfo.getOutputGroups())
             .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY));
 
     CcSkylarkApiProvider.maybeAdd(ruleContext, result);
@@ -208,5 +206,12 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
           "'interface library' must be specified when using cc_import for shared library on"
               + " Windows");
     }
+  }
+
+  private <T extends Object> List<T> asList(Object object, Class<T> type) {
+    if (object == null) {
+      return ImmutableList.of();
+    }
+    return ImmutableList.of(type.cast(object));
   }
 }
