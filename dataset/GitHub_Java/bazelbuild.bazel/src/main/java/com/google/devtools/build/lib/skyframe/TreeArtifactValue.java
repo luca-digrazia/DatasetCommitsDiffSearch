@@ -61,7 +61,9 @@ class TreeArtifactValue implements SkyValue {
     Map<String, Metadata> digestBuilder =
         Maps.newHashMapWithExpectedSize(childFileValues.size());
     for (Map.Entry<TreeFileArtifact, FileArtifactValue> e : childFileValues.entrySet()) {
-      digestBuilder.put(e.getKey().getParentRelativePath().getPathString(), e.getValue());
+      digestBuilder.put(
+          e.getKey().getParentRelativePath().getPathString(),
+          new Metadata(e.getValue().getDigest()));
     }
 
     return new TreeArtifactValue(
@@ -74,7 +76,7 @@ class TreeArtifactValue implements SkyValue {
   }
 
   Metadata getMetadata() {
-    return getSelfData();
+    return new Metadata(digest.clone());
   }
 
   Set<PathFragment> getChildPaths() {
