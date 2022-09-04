@@ -1,13 +1,10 @@
 package io.quarkus.flyway.runtime;
 
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
 
 import javax.sql.DataSource;
 
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.callback.Callback;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 
 class FlywayCreator {
@@ -16,17 +13,11 @@ class FlywayCreator {
 
     private final FlywayDataSourceRuntimeConfig flywayRuntimeConfig;
     private final FlywayDataSourceBuildTimeConfig flywayBuildTimeConfig;
-    private Collection<Callback> callbacks = Collections.emptyList();
 
     public FlywayCreator(FlywayDataSourceRuntimeConfig flywayRuntimeConfig,
             FlywayDataSourceBuildTimeConfig flywayBuildTimeConfig) {
         this.flywayRuntimeConfig = flywayRuntimeConfig;
         this.flywayBuildTimeConfig = flywayBuildTimeConfig;
-    }
-
-    public FlywayCreator withCallbacks(Collection<Callback> callbacks) {
-        this.callbacks = callbacks;
-        return this;
     }
 
     public Flyway createFlyway(DataSource dataSource) {
@@ -51,7 +42,6 @@ class FlywayCreator {
         configure.baselineOnMigrate(flywayRuntimeConfig.baselineOnMigrate);
         configure.validateOnMigrate(flywayRuntimeConfig.validateOnMigrate);
         configure.ignoreMissingMigrations(flywayRuntimeConfig.ignoreMissingMigrations);
-        configure.ignoreFutureMigrations(flywayRuntimeConfig.ignoreFutureMigrations);
         configure.outOfOrder(flywayRuntimeConfig.outOfOrder);
         if (flywayRuntimeConfig.baselineVersion.isPresent()) {
             configure.baselineVersion(flywayRuntimeConfig.baselineVersion.get());
@@ -67,9 +57,7 @@ class FlywayCreator {
         if (flywayRuntimeConfig.placeholderSuffix.isPresent()) {
             configure.placeholderSuffix(flywayRuntimeConfig.placeholderSuffix.get());
         }
-        if (!callbacks.isEmpty()) {
-            configure.callbacks(callbacks.toArray(new Callback[0]));
-        }
+
         /*
          * Ensure that no classpath scanning takes place by setting the ClassProvider and the ResourceProvider
          * (see Flyway#createResourceAndClassProviders)
