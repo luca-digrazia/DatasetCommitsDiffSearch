@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.remote;
 
-import static java.lang.String.format;
-
 import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.ActionCacheGrpc;
 import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheBlockingStub;
@@ -46,13 +44,12 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.remote.merkletree.MerkleTree;
+import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.protobuf.Message;
 import io.grpc.CallCredentials;
 import io.grpc.Context;
 import io.grpc.Status;
@@ -62,6 +59,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -200,41 +199,49 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
    * end-point from the executor itself, so the functionality lives here.
    */
   public void ensureInputsPresent(
-      MerkleTree merkleTree, Map<Digest, Message> additionalInputs, Path execRoot)
+      TreeNodeRepository repository, Path execRoot, TreeNode root, Action action, Command command)
       throws IOException, InterruptedException {
+    repository.computeMerkleDigests(root);
+    Digest actionDigest = digestUtil.compute(action);
+    Digest commandDigest = digestUtil.compute(command);
+    // TODO(olaola): avoid querying all the digests, only ask for novel subtrees.
     ImmutableSet<Digest> missingDigests =
-        getMissingDigests(Iterables.concat(merkleTree.getAllDigests(), additionalInputs.keySet()));
-    List<Chunker> inputsToUpload = new ArrayList<>(missingDigests.size());
-    for (Digest missingDigest : missingDigests) {
-      Directory node = merkleTree.getDirectoryByDigest(missingDigest);
-      final Chunker c;
-      if (node != null) {
-        c = Chunker.builder(digestUtil).setInput(missingDigest, node.toByteArray()).build();
-        inputsToUpload.add(c);
-        continue;
-      }
+        getMissingDigests(
+            Iterables.concat(
+                repository.getAllDigests(root), ImmutableList.of(actionDigest, commandDigest)));
 
-      ActionInput file = merkleTree.getInputByDigest(missingDigest);
-      if (file != null) {
-        c = Chunker.builder(digestUtil).setInput(missingDigest, file, execRoot).build();
-        inputsToUpload.add(c);
-        continue;
-      }
+    List<Chunker> toUpload = new ArrayList<>();
+    // Only upload data that was missing from the cache.
+    Map<Digest, ActionInput> missingActionInputs = new HashMap<>();
+    Map<Digest, Directory> missingTreeNodes = new HashMap<>();
+    HashSet<Digest> missingTreeDigests = new HashSet<>(missingDigests);
+    missingTreeDigests.remove(commandDigest);
+    missingTreeDigests.remove(actionDigest);
+    repository.getDataFromDigests(missingTreeDigests, missingActionInputs, missingTreeNodes);
 
-      Message message = additionalInputs.get(missingDigest);
-      if (message != null) {
-        c = Chunker.builder(digestUtil).setInput(missingDigest, message.toByteArray()).build();
-        inputsToUpload.add(c);
-        continue;
-      }
-
-      throw new IOException(
-          format(
-              "getMissingDigests returned a missing digest that has not been requested: %s",
-              missingDigest));
+    if (missingDigests.contains(actionDigest)) {
+      toUpload.add(
+          Chunker.builder(digestUtil).setInput(actionDigest, action.toByteArray()).build());
     }
-
-    uploader.uploadBlobs(inputsToUpload, /* forceUpload= */ true);
+    if (missingDigests.contains(commandDigest)) {
+      toUpload.add(
+          Chunker.builder(digestUtil).setInput(commandDigest, command.toByteArray()).build());
+    }
+    if (!missingTreeNodes.isEmpty()) {
+      for (Map.Entry<Digest, Directory> entry : missingTreeNodes.entrySet()) {
+        Digest digest = entry.getKey();
+        Directory d = entry.getValue();
+        toUpload.add(Chunker.builder(digestUtil).setInput(digest, d.toByteArray()).build());
+      }
+    }
+    if (!missingActionInputs.isEmpty()) {
+      for (Map.Entry<Digest, ActionInput> entry : missingActionInputs.entrySet()) {
+        Digest digest = entry.getKey();
+        ActionInput actionInput = entry.getValue();
+        toUpload.add(Chunker.builder(digestUtil).setInput(digest, actionInput, execRoot).build());
+      }
+    }
+    uploader.uploadBlobs(toUpload, true);
   }
 
   @Override
@@ -301,10 +308,14 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
       Command command,
       Path execRoot,
       Collection<Path> files,
-      FileOutErr outErr)
+      FileOutErr outErr,
+      boolean uploadAction)
       throws ExecException, IOException, InterruptedException {
     ActionResult.Builder result = ActionResult.newBuilder();
-    upload(execRoot, actionKey, action, command, files, outErr, result);
+    upload(execRoot, actionKey, action, command, files, outErr, uploadAction, result);
+    if (!uploadAction) {
+      return;
+    }
     try {
       retrier.execute(
           () ->
@@ -327,6 +338,7 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
       Command command,
       Collection<Path> files,
       FileOutErr outErr,
+      boolean uploadAction,
       ActionResult.Builder result)
       throws ExecException, IOException, InterruptedException {
     UploadManifest manifest =
@@ -337,7 +349,9 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
             options.incompatibleRemoteSymlinks,
             options.allowSymlinkUpload);
     manifest.addFiles(files);
-    manifest.addAction(actionKey, action, command);
+    if (uploadAction) {
+      manifest.addAction(actionKey, action, command);
+    }
 
     List<Chunker> filesToUpload = new ArrayList<>();
 
