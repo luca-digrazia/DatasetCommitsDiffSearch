@@ -14,7 +14,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
@@ -43,12 +42,12 @@ public class CodeFlowTest {
             webClient.getOptions().setRedirectEnabled(false);
             WebResponse webResponse = webClient
                     .loadWebResponse(new WebRequest(URI.create("http://localhost:8081/index.html").toURL()));
-            verifyLocationHeader(webClient, webResponse.getResponseHeaderValue("location"), null, false);
+            verifyLocationHeader(webClient, webResponse.getResponseHeaderValue("location"));
 
             webClient.getOptions().setRedirectEnabled(true);
             HtmlPage page = webClient.getPage("http://localhost:8081/index.html");
 
-            assertEquals("/index.html", getStateCookieSavedPath(webClient, null));
+            assertEquals("/index.html", getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -69,23 +68,10 @@ public class CodeFlowTest {
         }
     }
 
-    @Test
-    public void testCodeFlowForceHttpsRedirectUri() throws IOException {
-        try (final WebClient webClient = createWebClient()) {
-            webClient.getOptions().setRedirectEnabled(false);
-            WebResponse webResponse = webClient
-                    .loadWebResponse(
-                            new WebRequest(URI.create("http://localhost:8081/tenant-https").toURL()));
-            verifyLocationHeader(webClient, webResponse.getResponseHeaderValue("location"), "tenant-https", true);
-            webClient.getCookieManager().clearCookies();
-        }
-    }
-
-    private void verifyLocationHeader(WebClient webClient, String loc, String tenant, boolean forceHttps) {
+    private void verifyLocationHeader(WebClient webClient, String loc) {
         assertTrue(loc.startsWith("http://localhost:8180/auth/realms/quarkus/protocol/openid-connect/auth"));
-        String scheme = forceHttps ? "https" : "http";
-        assertTrue(loc.contains("redirect_uri=" + scheme + "%3A%2F%2Flocalhost%3A8081%2Fweb-app"));
-        assertTrue(loc.contains("state=" + getStateCookieStateParam(webClient, tenant)));
+        assertTrue(loc.contains("redirect_uri=http%3A%2F%2Flocalhost%3A8081%2Fweb-app"));
+        assertTrue(loc.contains("state=" + getStateCookieStateParam(webClient)));
         assertTrue(loc.contains("scope=openid+profile+email+phone"));
         assertTrue(loc.contains("response_type=code"));
         assertTrue(loc.contains("client_id=quarkus-app"));
@@ -97,7 +83,7 @@ public class CodeFlowTest {
     public void testTokenTimeoutLogout() throws IOException, InterruptedException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/index.html");
-            assertEquals("/index.html", getStateCookieSavedPath(webClient, null));
+            assertEquals("/index.html", getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -109,8 +95,8 @@ public class CodeFlowTest {
             page = loginForm.getInputByName("login").click();
 
             assertEquals("Welcome to Test App", page.getTitleText());
-            assertNull(getStateCookie(webClient, null));
-            Cookie sessionCookie = getSessionCookie(webClient, null);
+            assertNull(getStateCookie(webClient));
+            Cookie sessionCookie = getSessionCookie(webClient);
             assertNotNull(sessionCookie);
             assertEquals("/", sessionCookie.getPath());
 
@@ -125,7 +111,7 @@ public class CodeFlowTest {
                             WebResponse webResponse = webClient
                                     .loadWebResponse(new WebRequest(URI.create("http://localhost:8081/index.html").toURL()));
                             assertEquals(302, webResponse.getStatusCode());
-                            assertNull(getSessionCookie(webClient, null));
+                            assertNull(getSessionCookie(webClient));
                             return true;
                         }
                     });
@@ -139,7 +125,6 @@ public class CodeFlowTest {
     }
 
     @Test
-    @Disabled
     public void testRPInitiatedLogout() throws IOException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/tenant-logout");
@@ -149,11 +134,11 @@ public class CodeFlowTest {
             loginForm.getInputByName("password").setValueAttribute("alice");
             page = loginForm.getInputByName("login").click();
             assertTrue(page.asText().contains("Tenant Logout"));
-            assertNotNull(getSessionCookie(webClient, "tenant-logout"));
+            assertNotNull(getSessionCookie(webClient));
 
             page = webClient.getPage("http://localhost:8081/tenant-logout/logout");
             assertTrue(page.asText().contains("You were logged out"));
-            assertNull(getSessionCookie(webClient, "tenant-logout"));
+            assertNull(getSessionCookie(webClient));
 
             page = webClient.getPage("http://localhost:8081/tenant-logout");
             assertEquals("Log in to logout-realm", page.getTitleText());
@@ -163,7 +148,7 @@ public class CodeFlowTest {
             page = loginForm.getInputByName("login").click();
             assertTrue(page.asText().contains("Tenant Logout"));
 
-            Cookie sessionCookie = getSessionCookie(webClient, "tenant-logout");
+            Cookie sessionCookie = getSessionCookie(webClient);
             assertNotNull(sessionCookie);
             String idToken = getIdToken(sessionCookie);
 
@@ -176,9 +161,8 @@ public class CodeFlowTest {
                             webClient.getOptions().setRedirectEnabled(false);
                             WebResponse webResponse = webClient
                                     .loadWebResponse(new WebRequest(URI.create("http://localhost:8081/tenant-logout").toURL()));
-                            assertEquals(200, webResponse.getStatusCode());
                             // Should not redirect to OP but silently refresh token
-                            Cookie newSessionCookie = getSessionCookie(webClient, "tenant-logout");
+                            Cookie newSessionCookie = getSessionCookie(webClient);
                             assertNotNull(newSessionCookie);
                             return !idToken.equals(getIdToken(newSessionCookie));
                         }
@@ -187,7 +171,7 @@ public class CodeFlowTest {
             // local session refreshed and still valid
             page = webClient.getPage("http://localhost:8081/tenant-logout");
             assertTrue(page.asText().contains("Tenant Logout"));
-            assertNotNull(getSessionCookie(webClient, "tenant-logout"));
+            assertNotNull(getSessionCookie(webClient));
 
             //wait now so that we reach the refresh timeout
             await().atMost(20, TimeUnit.SECONDS)
@@ -202,7 +186,7 @@ public class CodeFlowTest {
                             int statusCode = webResponse.getStatusCode();
 
                             if (statusCode == 302) {
-                                assertNull(getSessionCookie(webClient, "tenant-logout"));
+                                assertNull(getSessionCookie(webClient));
                                 return true;
                             }
 
@@ -213,7 +197,7 @@ public class CodeFlowTest {
             // session invalidated because it ended at the OP, should redirect to login page at the OP
             webClient.getOptions().setRedirectEnabled(true);
             page = webClient.getPage("http://localhost:8081/tenant-logout");
-            assertNull(getSessionCookie(webClient, "tenant-logout"));
+            assertNull(getSessionCookie(webClient));
             assertEquals("Log in to logout-realm", page.getTitleText());
         }
     }
@@ -222,7 +206,7 @@ public class CodeFlowTest {
     public void testIdTokenInjection() throws IOException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/index.html");
-            assertEquals("/index.html", getStateCookieSavedPath(webClient, null));
+            assertEquals("/index.html", getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -246,8 +230,8 @@ public class CodeFlowTest {
     public void testIdTokenInjectionWithoutRestoredPath() throws IOException, InterruptedException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/web-app/callback-before-redirect");
-            assertNotNull(getStateCookieStateParam(webClient, "tenant-1"));
-            assertNull(getStateCookieSavedPath(webClient, "tenant-1"));
+            assertNotNull(getStateCookieStateParam(webClient));
+            assertNull(getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -270,9 +254,8 @@ public class CodeFlowTest {
             WebResponse webResponse = webClient
                     .loadWebResponse(
                             new WebRequest(URI.create("http://localhost:8081/web-app/callback-jwt-before-redirect").toURL()));
-            assertNotNull(getStateCookie(webClient, "tenant-jwt"));
-            assertNotNull(getStateCookieStateParam(webClient, "tenant-jwt"));
-            assertNull(getStateCookieSavedPath(webClient, "tenant-jwt"));
+            assertNotNull(getStateCookieStateParam(webClient));
+            assertNull(getStateCookieSavedPath(webClient));
 
             HtmlPage page = webClient.getPage(webResponse.getResponseHeaderValue("location"));
             assertEquals("Log in to quarkus", page.getTitleText());
@@ -303,8 +286,8 @@ public class CodeFlowTest {
     public void testIdTokenInjectionJwtMethodButPostMethodUsed() throws IOException, InterruptedException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/web-app/callback-jwt-not-used-before-redirect");
-            assertNotNull(getStateCookieStateParam(webClient, "tenant-jwt-not-used"));
-            assertNull(getStateCookieSavedPath(webClient, "tenant-jwt-not-used"));
+            assertNotNull(getStateCookieStateParam(webClient));
+            assertNull(getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -328,8 +311,8 @@ public class CodeFlowTest {
     public void testIdTokenInjectionWithoutRestoredPathDifferentRoot() throws IOException, InterruptedException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/web-app2/callback-before-redirect?tenantId=tenant-2");
-            assertNotNull(getStateCookieStateParam(webClient, "tenant-2"));
-            assertNull(getStateCookieSavedPath(webClient, "tenant-2"));
+            assertNotNull(getStateCookieStateParam(webClient));
+            assertNull(getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -346,8 +329,8 @@ public class CodeFlowTest {
 
             assertEquals("web-app2:alice", page.getBody().asText());
 
-            assertNull(getStateCookie(webClient, "tenant-2"));
-            Cookie sessionCookie = getSessionCookie(webClient, "tenant-2");
+            assertNull(getStateCookie(webClient));
+            Cookie sessionCookie = getSessionCookie(webClient);
             assertNotNull(sessionCookie);
             assertEquals("/web-app2", sessionCookie.getPath());
 
@@ -356,7 +339,7 @@ public class CodeFlowTest {
             WebResponse webResponse = webClient
                     .loadWebResponse(new WebRequest(URI.create("http://localhost:8081/web-app2/name").toURL()));
             assertEquals(302, webResponse.getStatusCode());
-            assertNull(getSessionCookie(webClient, "tenant-2"));
+            assertNull(getSessionCookie(webClient));
 
             webClient.getOptions().setRedirectEnabled(true);
             page = webClient.getPage("http://localhost:8081/web-app2/name");
@@ -415,11 +398,10 @@ public class CodeFlowTest {
     }
 
     @Test
-    @Disabled
     public void testAccessTokenInjection() throws IOException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/index.html");
-            assertEquals("/index.html", getStateCookieSavedPath(webClient, null));
+            assertEquals("/index.html", getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -443,7 +425,7 @@ public class CodeFlowTest {
     public void testAccessAndRefreshTokenInjection() throws IOException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/index.html");
-            assertEquals("/index.html", getStateCookieSavedPath(webClient, null));
+            assertEquals("/index.html", getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -467,7 +449,7 @@ public class CodeFlowTest {
     public void testAccessAndRefreshTokenInjectionWithoutIndexHtml() throws IOException, InterruptedException {
         try (final WebClient webClient = createWebClient()) {
             HtmlPage page = webClient.getPage("http://localhost:8081/web-app/refresh");
-            assertEquals("/web-app/refresh", getStateCookieSavedPath(webClient, null));
+            assertEquals("/web-app/refresh", getStateCookieSavedPath(webClient));
 
             assertEquals("Log in to quarkus", page.getTitleText());
 
@@ -497,21 +479,21 @@ public class CodeFlowTest {
         return webClient;
     }
 
-    private Cookie getStateCookie(WebClient webClient, String tenantId) {
-        return webClient.getCookieManager().getCookie("q_auth" + (tenantId == null ? "" : "_" + tenantId));
+    private Cookie getStateCookie(WebClient webClient) {
+        return webClient.getCookieManager().getCookie("q_auth");
     }
 
-    private String getStateCookieStateParam(WebClient webClient, String tenantId) {
-        return getStateCookie(webClient, tenantId).getValue().split("___")[0];
+    private String getStateCookieStateParam(WebClient webClient) {
+        return getStateCookie(webClient).getValue().split("___")[0];
     }
 
-    private String getStateCookieSavedPath(WebClient webClient, String tenantId) {
-        String[] parts = getStateCookie(webClient, tenantId).getValue().split("___");
+    private String getStateCookieSavedPath(WebClient webClient) {
+        String[] parts = getStateCookie(webClient).getValue().split("___");
         return parts.length == 2 ? parts[1] : null;
     }
 
-    private Cookie getSessionCookie(WebClient webClient, String tenantId) {
-        return webClient.getCookieManager().getCookie("q_session" + (tenantId == null ? "" : "_" + tenantId));
+    private Cookie getSessionCookie(WebClient webClient) {
+        return webClient.getCookieManager().getCookie("q_session");
     }
 
     private String getIdToken(Cookie sessionCookie) {

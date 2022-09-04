@@ -40,7 +40,7 @@ public class OidcTenantConfig {
 
     /**
      * The base URL of the OpenID Connect (OIDC) server, for example, 'https://host:port/auth'.
-     * OIDC discovery endpoint will be called by appending a '/.well-known/openid-configuration' path segment to this URL.
+     * All the other OIDC server page and service URLs are derived from this URL.
      * Note if you work with Keycloak OIDC server, make sure the base URL is in the following format:
      * 'https://host:port/auth/realms/{realm}' where '{realm}' has to be replaced by the name of the Keycloak realm.
      */
@@ -507,13 +507,6 @@ public class OidcTenantConfig {
         public boolean removeRedirectParameters = true;
 
         /**
-         * Force 'https' as the 'redirect_uri' parameter scheme when running behind an SSL terminating reverse proxy.
-         * This property, if enabled, will also affect the logout `post_logout_redirect_uri` and the local redirect requests.
-         */
-        @ConfigItem(defaultValue = "false")
-        public boolean forceRedirectHttpsScheme;
-
-        /**
          * List of scopes
          */
         @ConfigItem
@@ -554,14 +547,6 @@ public class OidcTenantConfig {
 
         public void setExtraParams(Map<String, String> extraParams) {
             this.extraParams = extraParams;
-        }
-
-        public boolean isForceRedirectHttpsScheme() {
-            return forceRedirectHttpsScheme;
-        }
-
-        public void setForceRedirectHttpsScheme(boolean forceRedirectHttpsScheme) {
-            this.forceRedirectHttpsScheme = forceRedirectHttpsScheme;
         }
 
         public boolean isRestorePathAfterRedirect() {
@@ -638,12 +623,6 @@ public class OidcTenantConfig {
         @ConfigItem
         public boolean refreshExpired;
 
-        /**
-         * Forced JWK set refresh interval in minutes.
-         */
-        @ConfigItem(defaultValue = "10M")
-        public Duration forcedJwkRefreshInterval = Duration.ofMinutes(10);
-
         public Optional<String> getIssuer() {
             return issuer;
         }
@@ -682,14 +661,6 @@ public class OidcTenantConfig {
 
         public void setRefreshExpired(boolean refreshExpired) {
             this.refreshExpired = refreshExpired;
-        }
-
-        public Duration getForcedJwkRefreshInterval() {
-            return forcedJwkRefreshInterval;
-        }
-
-        public void setForcedJwkRefreshInterval(Duration forcedJwkRefreshInterval) {
-            this.forcedJwkRefreshInterval = forcedJwkRefreshInterval;
         }
     }
 
