@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Red Hat, Inc.
+ * Copyright 2019 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.jboss.shamrock.reactivemessaging.deployment;
 import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,9 +34,11 @@ import org.jboss.protean.arc.processor.BeanInfo;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.Record;
+import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
+import org.jboss.shamrock.arc.deployment.BeanContainerBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanDeploymentValidatorBuildItem;
-import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
-import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
+import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
+import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.reactivemessaging.runtime.ReactiveMessagingLifecycle;
@@ -89,6 +92,12 @@ public class ReactiveMessagingProcessor {
                 }
             }
         });
+    }
+
+    @BuildStep
+    public List<UnremovableBeanBuildItem> removalExclusions() {
+        return Arrays.asList(new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(NAME_INCOMING)),
+                new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(NAME_OUTGOING)));
     }
 
     @BuildStep

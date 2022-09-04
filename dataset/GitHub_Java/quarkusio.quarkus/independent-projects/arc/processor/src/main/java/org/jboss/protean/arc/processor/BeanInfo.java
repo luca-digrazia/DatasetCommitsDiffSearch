@@ -16,7 +16,6 @@
 
 package org.jboss.protean.arc.processor;
 
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -30,7 +29,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import javax.enterprise.inject.spi.DefinitionException;
 import javax.enterprise.inject.spi.InterceptionType;
 
 import org.jboss.jandex.AnnotationInstance;
@@ -260,7 +258,7 @@ public class BeanInfo {
     public boolean hasLifecycleInterceptors() {
         return !lifecycleInterceptors.isEmpty();
     }
- 
+
     boolean isSubclassRequired() {
         return !interceptedMethods.isEmpty() || lifecycleInterceptors.containsKey(InterceptionType.PRE_DESTROY);
     }
@@ -322,25 +320,6 @@ public class BeanInfo {
 
     Map<String, Object> getParams() {
         return params;
-    }
-
-    void validate(List<Throwable> errors) {
-        if (isClassBean()) {
-            if (!target.get().asClass().hasNoArgsConstructor()) {
-                if (scope.isNormal()) {
-                    errors.add(new DefinitionException("Normal scoped bean must declare a no-args constructor: " + this));
-                }
-            }
-            if (Modifier.isFinal(target.get().asClass().flags())) {
-                if (scope.isNormal()) {
-                    errors.add(new DefinitionException("Normal scoped bean must not be final: " + this));
-                }
-                if (isSubclassRequired()) {
-                    errors.add(new DefinitionException("Bean that has a bound interceptor must not be final: " + this));
-                }
-            }
-        }
-        // TODO we should add way more validations
     }
 
     void init() {
