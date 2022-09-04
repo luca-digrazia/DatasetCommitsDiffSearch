@@ -38,20 +38,8 @@ public class AndroidManifest {
     return new AndroidManifest(manifest, /* pkg = */ null, /* exported = */ true);
   }
 
-  /**
-   * Gets the manifest for this rule.
-   *
-   * <p>If no manifest is specified in the rule's attributes, an empty manifest will be generated.
-   */
   public static AndroidManifest from(RuleContext ruleContext, AndroidSemantics androidSemantics)
       throws RuleErrorException, InterruptedException {
-    if (!AndroidResources.definesAndroidResources(ruleContext.attributes())) {
-      // Generate a dummy manifest
-      return StampedAndroidManifest.createEmpty(ruleContext, /* exported = */ false);
-    }
-
-    AndroidResources.validateRuleContext(ruleContext);
-
     return new AndroidManifest(
         androidSemantics.getManifestForRule(ruleContext).getManifest(),
         getAndroidPackage(ruleContext),
@@ -77,23 +65,7 @@ public class AndroidManifest {
         exported);
   }
 
-  /**
-   * Merges the manifest with any dependent manifests.
-   *
-   * <p>The resulting manifest will be stamped, even if no merging was done.
-   */
-  public StampedAndroidManifest mergeWithDeps(RuleContext ruleContext) {
-    return ApplicationManifest.maybeMergeWith(
-            ruleContext,
-            manifest,
-            ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
-            ApplicationManifest.getManifestValues(ruleContext))
-        .map(merged -> new StampedAndroidManifest(merged, pkg, exported))
-        // If we don't merge, we still need to guarantee the manifest is stamped correctly
-        .orElseGet(() -> stamp(ruleContext));
-  }
-
-  public Artifact getManifest() {
+  Artifact getManifest() {
     return manifest;
   }
 

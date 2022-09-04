@@ -214,11 +214,7 @@ public class AndroidResourceParsingActionBuilder {
     build(ruleContext);
 
     ResourceContainer.Builder builder =
-        resourceContainer
-            .toBuilder()
-            .setSymbols(output)
-            .setAndroidAssets(assets)
-            .setAndroidResources(resources);
+        resourceContainer.toBuilder().setSymbols(output).setAssets(assets).setResources(resources);
 
     if (compiledSymbols != null) {
       builder.setCompiledSymbols(compiledSymbols);

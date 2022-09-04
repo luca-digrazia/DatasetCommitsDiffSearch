@@ -41,8 +41,4 @@ public class StampedAndroidManifest extends AndroidManifest {
   Artifact getManifest() {
     return super.getManifest();
   }
-
-  ProcessedAndroidManifest withProcessedManifest(Artifact processedManifest) {
-    return new ProcessedAndroidManifest(processedManifest, getPackage(), isExported());
-  }
 }
