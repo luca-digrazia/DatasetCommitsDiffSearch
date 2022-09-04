@@ -26,10 +26,8 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SpawnCache;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionPolicy;
+import com.google.devtools.build.lib.remote.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
-import com.google.devtools.build.lib.remote.util.DigestUtil;
-import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
-import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.skyframe.FileArtifactValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -99,6 +97,7 @@ final class RemoteSpawnCache implements SpawnCache {
     Command command = RemoteSpawnRunner.buildCommand(spawn.getArguments(), spawn.getEnvironment());
     Action action =
         RemoteSpawnRunner.buildAction(
+            execRoot,
             spawn.getOutputFiles(),
             digestUtil.compute(command),
             repository.getMerkleDigest(inputRoot),
@@ -128,7 +127,6 @@ final class RemoteSpawnCache implements SpawnCache {
                 .setStatus(Status.SUCCESS)
                 .setExitCode(result.getExitCode())
                 .setCacheHit(true)
-                .setRunnerName("remote cache hit")
                 .build();
         return SpawnCache.success(spawnResult);
       }
@@ -160,8 +158,8 @@ final class RemoteSpawnCache implements SpawnCache {
         }
 
         @Override
-        public void store(SpawnResult result)
-            throws ExecException, InterruptedException, IOException {
+        public void store(SpawnResult result, Collection<Path> files)
+            throws InterruptedException, IOException {
           if (options.experimentalGuardAgainstConcurrentChanges) {
             try {
               checkForConcurrentModifications();
@@ -175,8 +173,6 @@ final class RemoteSpawnCache implements SpawnCache {
                   && Status.SUCCESS.equals(result.status())
                   && result.exitCode() == 0;
           Context previous = withMetadata.attach();
-          Collection<Path> files =
-              RemoteSpawnRunner.resolveActionInputs(execRoot, spawn.getOutputFiles());
           try {
             remoteCache.upload(actionKey, execRoot, files, policy.getFileOutErr(), uploadAction);
           } catch (IOException e) {
