@@ -78,6 +78,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 
 /** Action that represents some kind of C++ compilation step. */
 @ThreadCompatible
@@ -214,8 +215,9 @@ public class CppCompileAction extends AbstractAction
    */
   private final UUID actionClassId;
 
-  /** Whether this action needs to discover inputs. */
-  private final boolean discoversInputs;
+  // This can be read/written from multiple threads, and so accesses should be synchronized.
+  @GuardedBy("this")
+  private boolean inputsKnown = false;
 
   /**
    * Set when the action prepares for execution. Used to preserve state between preparation and
@@ -265,6 +267,8 @@ public class CppCompileAction extends AbstractAction
    * @param lipoScannables List of artifacts to include-scan when this action is a lipo action
    * @param additionalIncludeScannables list of additional artifacts to include-scan
    * @param actionClassId TODO(bazel-team): Add parameter description
+   * @param executionRequirements out-of-band hints to be passed to the execution backend to signal
+   *     platform requirements
    * @param environment TODO(bazel-team): Add parameter description
    * @param builtinIncludeFiles List of include files that may be included even if they are not
    *     mentioned in the source file or any of the headers included by it
@@ -334,7 +338,7 @@ public class CppCompileAction extends AbstractAction
     Preconditions.checkArgument(!shouldPruneModules || shouldScanIncludes, this);
     this.usePic = usePic;
     this.useHeaderModules = useHeaderModules;
-    this.discoversInputs = shouldScanIncludes || cppSemantics.needsDotdInputPruning();
+    this.inputsKnown = !shouldScanIncludes && !cppSemantics.needsDotdInputPruning();
     this.cppCompileCommandLine =
         new CppCompileCommandLine(
             sourceFile, dotdFile, copts, coptsFilter, features, variables, actionName);
@@ -401,6 +405,11 @@ public class CppCompileAction extends AbstractAction
     return super.getMandatoryOutputs();
   }
 
+  @Override
+  public synchronized boolean inputsKnown() {
+    return inputsKnown;
+  }
+
   /**
    * Returns the list of additional inputs found by dependency discovery, during action preparation,
    * and clears the stored list. {@link #prepare} must be called before this method is called, on
@@ -419,7 +428,7 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   public boolean discoversInputs() {
-    return discoversInputs;
+    return true;
   }
 
   @VisibleForTesting  // productionVisibility = Visibility.PRIVATE
@@ -752,7 +761,7 @@ public class CppCompileAction extends AbstractAction
     }
     info.setOutputFile(outputFile.getExecPathString());
     info.setSourceFile(getSourceFile().getExecPathString());
-    if (inputsDiscovered()) {
+    if (inputsKnown()) {
       info.addAllSourcesAndHeaders(Artifact.toExecPaths(getInputs()));
     } else {
       info.addSourcesAndHeaders(getSourceFile().getExecPathString());
@@ -949,10 +958,11 @@ public class CppCompileAction extends AbstractAction
    *
    * @throws ActionExecutionException iff any errors happen during update.
    */
-  @VisibleForTesting  // productionVisibility = Visibility.PRIVATE
+  @VisibleForTesting
   @ThreadCompatible
-  public final void updateActionInputs(NestedSet<Artifact> discoveredInputs)
+  public final synchronized void updateActionInputs(NestedSet<Artifact> discoveredInputs)
       throws ActionExecutionException {
+    inputsKnown = false;
     NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
     Profiler.instance().startTask(ProfilerTask.ACTION_UPDATE, this);
     try {
@@ -962,9 +972,12 @@ public class CppCompileAction extends AbstractAction
       }
       inputs.addAll(context.getTransitiveCompilationPrerequisites());
       inputs.addTransitive(discoveredInputs);
-      updateInputs(inputs.build());
+      inputsKnown = true;
     } finally {
       Profiler.instance().completeTask(ProfilerTask.ACTION_UPDATE);
+      synchronized (this) {
+        setInputs(inputs.build());
+      }
     }
   }
 
@@ -998,6 +1011,18 @@ public class CppCompileAction extends AbstractAction
         new CcToolchainFeatures.Variables.Builder();
     variableBuilder.addStringSequenceVariable("module_files", usedModulePaths.build());
     return variableBuilder.build();
+  }
+
+  @Override protected void setInputs(Iterable<Artifact> inputs) {
+    super.setInputs(inputs);
+  }
+
+  @Override
+  public synchronized void updateInputs(Iterable<Artifact> inputs) {
+    inputsKnown = true;
+    synchronized (this) {
+      setInputs(inputs);
+    }
   }
 
   @Override
