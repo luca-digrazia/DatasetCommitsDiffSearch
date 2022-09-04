@@ -441,10 +441,10 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
     when(spawnActionContext.exec(any(), any()))
         .thenAnswer(
             (invocation) -> {
-              Spawn spawn = invocation.getArgument(0);
+              Spawn spawn = invocation.getArgumentAt(0, Spawn.class);
               if (spawn.getOutputFiles().size() != 1) {
-                ActionExecutionContext context = invocation.getArgument(1);
-                FileOutErr outErr = context.getFileOutErr();
+                FileOutErr outErr =
+                    invocation.getArgumentAt(1, ActionExecutionContext.class).getFileOutErr();
                 try (OutputStream stream = outErr.getOutputStream()) {
                   stream.write("This will not appear in the test output: bla\n".getBytes(UTF_8));
                   stream.write((TestLogHelper.HEADER_DELIMITER + "\n").getBytes(UTF_8));
@@ -519,7 +519,6 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
         "    name = \"failing_test\",",
         "    size = \"small\",",
         "    srcs = [\"failing_test.sh\"],",
-        "    tags = [\"local\"],",
         ")");
     TestRunnerAction testRunnerAction = getTestAction("//standalone:failing_test");
 
@@ -538,11 +537,9 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
     when(spawnActionContext.exec(any(), any()))
         .thenAnswer(
             (invocation) -> {
-              Spawn spawn = invocation.getArgument(0);
-              // Test that both spawns have the local tag attached as a execution info
-              assertThat(spawn.getExecutionInfo()).containsKey("local");
-              ActionExecutionContext context = invocation.getArgument(1);
-              FileOutErr outErr = context.getFileOutErr();
+              Spawn spawn = invocation.getArgumentAt(0, Spawn.class);
+              FileOutErr outErr =
+                  invocation.getArgumentAt(1, ActionExecutionContext.class).getFileOutErr();
               called.add(outErr);
               if (spawn.getOutputFiles().size() != 1) {
                 try (OutputStream stream = outErr.getOutputStream()) {
