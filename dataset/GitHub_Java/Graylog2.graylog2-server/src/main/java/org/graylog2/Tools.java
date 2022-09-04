@@ -207,8 +207,4 @@ public final class Tools {
 
         return addr.getHostName();
     }
-
-    public static int getTimestampDaysAgo(int ts, int days) {
-        return (ts - (days*86400));
-    }
 }
