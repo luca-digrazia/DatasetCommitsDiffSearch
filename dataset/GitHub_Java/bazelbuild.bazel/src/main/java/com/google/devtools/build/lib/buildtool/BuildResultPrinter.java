@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.AspectValue;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
@@ -33,6 +32,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.util.io.OutErr;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -73,8 +73,7 @@ class BuildResultPrinter {
             env.getWorkspace(),
             request.getBuildOptions().printWorkspaceInOutputPathsIfNeeded
                 ? env.getWorkingDirectory()
-                : env.getWorkspace(),
-            request.getBuildOptions().experimentalNoProductNameOutSymlink);
+                : env.getWorkspace());
     OutErr outErr = request.getOutErr();
     Collection<ConfiguredTarget> targetsToPrint = filterTargetsToPrint(configuredTargets);
     Collection<AspectValue> aspectsToPrint = filterAspectsToPrint(aspects);
@@ -103,8 +102,7 @@ class BuildResultPrinter {
         boolean headerFlag = true;
         for (Artifact artifact :
             TopLevelArtifactHelper.getAllArtifactsToBuild(target, context)
-                .getImportantArtifacts()
-                .toList()) {
+                .getImportantArtifacts()) {
           if (shouldPrint(artifact)) {
             if (headerFlag) {
               outErr.printErr("Target " + label + " up-to-date:\n");
@@ -124,8 +122,7 @@ class BuildResultPrinter {
         // (ie, preprocessed and assembler files).
         OutputGroupInfo topLevelProvider = OutputGroupInfo.get(target);
         if (topLevelProvider != null) {
-          for (Artifact temp :
-              topLevelProvider.getOutputGroup(OutputGroupInfo.TEMP_FILES).toList()) {
+          for (Artifact temp : topLevelProvider.getOutputGroup(OutputGroupInfo.TEMP_FILES)) {
             if (temp.getPath().exists()) {
               outErr.printErrLn("  See temp at " + prettyPrinter.getPrettyPath(temp.getPath()));
             }
@@ -152,7 +149,7 @@ class BuildResultPrinter {
         boolean headerFlag = true;
         NestedSet<Artifact> importantArtifacts =
             TopLevelArtifactHelper.getAllArtifactsToBuild(aspect, context).getImportantArtifacts();
-        for (Artifact importantArtifact : importantArtifacts.toList()) {
+        for (Artifact importantArtifact : importantArtifacts) {
           if (headerFlag) {
             outErr.printErr("Aspect " + aspectName + " of " + label + " up-to-date:\n");
             headerFlag = false;
@@ -215,7 +212,7 @@ class BuildResultPrinter {
     outErr.printErrLn("Build artifacts:");
 
     NestedSet<Artifact> artifacts = artifactsBuilder.build();
-    for (Artifact artifact : artifacts.toList()) {
+    for (Artifact artifact : artifacts) {
       if (!artifact.isSourceArtifact()) {
         outErr.printErrLn(">>>" + artifact.getPath());
       }
@@ -252,8 +249,8 @@ class BuildResultPrinter {
         TransitiveInfoCollection generatingRule =
             ((OutputFileConfiguredTarget) configuredTarget).getGeneratingRule();
         if (CollectionUtils.containsAll(
-                generatingRule.getProvider(FileProvider.class).getFilesToBuild().toList(),
-                configuredTarget.getProvider(FileProvider.class).getFilesToBuild().toList())
+                generatingRule.getProvider(FileProvider.class).getFilesToBuild(),
+                configuredTarget.getProvider(FileProvider.class).getFilesToBuild())
             && configuredTargets.contains(generatingRule)) {
           continue;
         }

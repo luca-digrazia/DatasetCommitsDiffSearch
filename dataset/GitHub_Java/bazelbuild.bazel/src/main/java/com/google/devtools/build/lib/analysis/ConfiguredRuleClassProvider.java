@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.analysis.skylark.SkylarkModules;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.Node;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -52,12 +53,14 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicens
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
-import com.google.devtools.build.lib.skylarkbuildapi.core.Bootstrap;
+import com.google.devtools.build.lib.skylarkbuildapi.Bootstrap;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.SkylarkUtils;
+import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
@@ -798,7 +801,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
       Label fileLabel,
       Mutability mutability,
       StarlarkSemantics starlarkSemantics,
-      StarlarkThread.PrintHandler printHandler,
+      EventHandler eventHandler,
       String astFileContentHashCode,
       Map<String, Extension> importMap,
       ClassObject nativeModule,
@@ -810,13 +813,12 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
         StarlarkThread.builder(mutability)
             .setGlobals(Module.createForBuiltins(env).withLabel(fileLabel))
             .setSemantics(starlarkSemantics)
+            .setEventHandler(eventHandler)
             .setFileContentHashCode(astFileContentHashCode)
             .setImportedExtensions(importMap)
             .build();
-    thread.setPrintHandler(printHandler);
 
     new BazelStarlarkContext(
-            BazelStarlarkContext.Phase.LOADING,
             toolsRepository,
             configurationFragmentMap,
             repoMapping,
@@ -824,6 +826,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
             /* analysisRuleLabel= */ null)
         .storeInThread(thread);
 
+    SkylarkUtils.setPhase(thread, Phase.LOADING);
     return thread;
   }
 

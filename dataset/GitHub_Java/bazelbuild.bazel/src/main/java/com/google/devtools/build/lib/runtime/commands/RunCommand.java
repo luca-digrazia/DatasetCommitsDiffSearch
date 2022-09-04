@@ -83,6 +83,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
+import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingResult;
@@ -126,6 +127,23 @@ public class RunCommand implements BlazeCommand  {
               + "and the executable is connected to the terminal's stdin."
     )
     public PathFragment scriptPath;
+
+    @Option(
+        name = "incompatible_windows_bashless_run_command",
+        documentationCategory = OptionDocumentationCategory.TESTING,
+        effectTags = {
+          OptionEffectTag.HOST_MACHINE_RESOURCE_OPTIMIZATIONS,
+        },
+        metadataTags = {
+          OptionMetadataTag.INCOMPATIBLE_CHANGE,
+          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
+        },
+        defaultValue = "true",
+        help =
+            "On Windows: if true, the \"run\" command runs the binary directly instead of running "
+                + "through Bash; when false, then the binary is ran through Bash. On other "
+                + "platforms: no-op.")
+    public boolean bashlessRun;
   }
 
   // Thrown when a method needs Bash but ShToolchain.getPath yields none.
@@ -499,7 +517,7 @@ public class RunCommand implements BlazeCommand  {
         .setWorkingDirectory(
             ByteString.copyFrom(workingDir.getPathString(), StandardCharsets.ISO_8859_1));
 
-    if (OS.getCurrent() == OS.WINDOWS) {
+    if (OS.getCurrent() == OS.WINDOWS && runOptions.bashlessRun) {
       for (String arg : cmdLine) {
         execDescription.addArgv(
             ByteString.copyFrom(ShellUtils.windowsEscapeArg(arg), StandardCharsets.ISO_8859_1));
@@ -567,23 +585,11 @@ public class RunCommand implements BlazeCommand  {
       workingDir = workingDir.getRelative(runfilesSupport.getRunfiles().getSuffix());
     }
 
-    // Always create runfiles directory and the workspace-named directory underneath, even if we
-    // run with --enable_runfiles=no (which is the default on Windows as of 2020-01-24).
-    // If the binary we run is in fact a test, it will expect to be able to chdir into the runfiles
-    // directory. See https://github.com/bazelbuild/bazel/issues/10621
-    try {
-      runfilesSupport
-          .getRunfilesDirectory()
-          .getRelative(runfilesSupport.getWorkspaceName())
-          .createDirectoryAndParents();
-    } catch (IOException e) {
-      throw new EnvironmentalExecException(e);
-    }
-
     // When runfiles are not generated, getManifest() returns the
     // .runfiles_manifest file, otherwise it returns the MANIFEST file. This is
     // a handy way to check whether runfiles were built or not.
     if (!RUNFILES_MANIFEST.matches(manifest.getFilename())) {
+      // Runfiles already built, nothing to do.
       return workingDir;
     }
 
@@ -714,12 +720,9 @@ public class RunCommand implements BlazeCommand  {
     Target target;
     try {
       target = env.getPackageManager().getTarget(env.getReporter(), configuredTarget.getLabel());
-    } catch (InterruptedException e) {
-      env.getReporter().handle(Event.error("interrupted"));
-      return ExitCode.INTERRUPTED;
-    } catch (NoSuchTargetException | NoSuchPackageException e) {
+    } catch (NoSuchTargetException | NoSuchPackageException | InterruptedException e) {
       env.getReporter().handle(Event.error("Failed to find a target to validate. " + e));
-      throw new IllegalStateException("Failed to find a target to validate", e);
+      throw new IllegalStateException("Failed to find a target to validate");
     }
 
     String targetError = validateTarget(target);

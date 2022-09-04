@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
+import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -46,9 +47,6 @@ import com.google.devtools.build.lib.analysis.actions.SymlinkTreeActionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.ConvenienceSymlink;
-import com.google.devtools.build.lib.buildtool.BuildRequestOptions.ConvenienceSymlinksMode;
-import com.google.devtools.build.lib.buildtool.buildevent.ConvenienceSymlinksIdentifiedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecRootPreparedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionPhaseCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionStartingEvent;
@@ -62,6 +60,7 @@ import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.CheckUpToDateFilter;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
+import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
 import com.google.devtools.build.lib.exec.SymlinkTreeStrategy;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
@@ -119,6 +118,7 @@ public class ExecutionTool {
   private final BlazeRuntime runtime;
   private final BuildRequest request;
   private BlazeExecutor executor;
+  private final MetadataProvider fileCache;
   private final ActionInputPrefetcher prefetcher;
   private final ImmutableList<ActionContextProvider> actionContextProviders;
   private SpawnActionContextMaps spawnActionContextMaps;
@@ -148,9 +148,18 @@ public class ExecutionTool {
     builder
         .addStrategyByContext(WorkspaceStatusAction.Context.class, "")
         .addStrategyByContext(SymlinkTreeActionContext.class, "");
-      
+
+    // Unfortunately, the exec root cache is not shared with caches in the remote execution client.
+    this.fileCache =
+        new SingleBuildFileCache(env.getExecRoot().getPathString(), runtime.getFileSystem());
     this.prefetcher = builder.getActionInputPrefetcher();
+
     this.actionContextProviders = builder.getActionContextProviders();
+    for (ActionContextProvider provider : actionContextProviders) {
+      try (SilentCloseable closeable = Profiler.instance().profile(provider + ".init")) {
+        provider.init(fileCache);
+      }
+    }
 
     // There are many different SpawnActions, and we want to control the action context they use
     // independently from each other, for example, to run genrules locally and Java compile action
@@ -242,7 +251,7 @@ public class ExecutionTool {
       createActionLogDirectory();
     }
 
-    handleConvenienceSymlinks(analysisResult);
+    createConvenienceSymlinks(request.getBuildOptions(), analysisResult);
 
     ActionCache actionCache = getActionCache();
     actionCache.resetStatistics();
@@ -455,23 +464,6 @@ public class ExecutionTool {
   }
 
   /**
-   * Handles what action to perform on the convenience symlinks. If the the mode is {@link
-   * ConvenienceSymlinksMode.IGNORE}, then skip any creating or cleaning of convenience symlinks.
-   * Otherwise, manage the convenience symlinks and then post a {@link
-   * ConvenienceSymlinksIdentifiedEvent} build event.
-   */
-  private void handleConvenienceSymlinks(AnalysisResult analysisResult) {
-    ImmutableList<ConvenienceSymlink> convenienceSymlinks = ImmutableList.of();
-    if (request.getBuildOptions().experimentalConvenienceSymlinks
-        != ConvenienceSymlinksMode.IGNORE) {
-      convenienceSymlinks = createConvenienceSymlinks(request.getBuildOptions(), analysisResult);
-    }
-    if (request.getBuildOptions().experimentalConvenienceSymlinksBepEvent) {
-      env.getEventBus().post(new ConvenienceSymlinksIdentifiedEvent(convenienceSymlinks));
-    }
-  }
-
-  /**
    * Creates convenience symlinks based on the target configurations.
    *
    * <p>Exactly what target configurations we consider depends on the value of {@code
@@ -484,7 +476,7 @@ public class ExecutionTool {
    * path the symlink should point to, it gets created; otherwise, the symlink is not created, and
    * in fact gets removed if it was already present from a previous invocation.
    */
-  private ImmutableList<ConvenienceSymlink> createConvenienceSymlinks(
+  private void createConvenienceSymlinks(
       BuildRequestOptions buildRequestOptions, AnalysisResult analysisResult) {
     SkyframeExecutor executor = env.getSkyframeExecutor();
     Reporter reporter = env.getReporter();
@@ -502,14 +494,16 @@ public class ExecutionTool {
                 analysisResult.getConfigurationCollection().getTargetConfigurations());
 
     String productName = runtime.getProductName();
+    String workspaceName = env.getWorkspaceName();
     try (SilentCloseable c =
         Profiler.instance().profile("OutputDirectoryLinksUtils.createOutputDirectoryLinks")) {
-      return OutputDirectoryLinksUtils.createOutputDirectoryLinks(
+      OutputDirectoryLinksUtils.createOutputDirectoryLinks(
           runtime.getRuleClassProvider().getSymlinkDefinitions(),
           buildRequestOptions,
-          env.getWorkspaceName(),
+          workspaceName,
           env.getWorkspace(),
-          env.getDirectories(),
+          env.getDirectories().getExecRoot(workspaceName),
+          env.getDirectories().getOutputPath(workspaceName),
           getReporter(),
           targetConfigurations,
           options -> getConfiguration(executor, reporter, options),
@@ -677,7 +671,7 @@ public class ExecutionTool {
         request.getPackageCacheOptions().checkOutputFiles
             ? modifiedOutputFiles
             : ModifiedFileSet.NOTHING_MODIFIED,
-        env.getFileCache(),
+        fileCache,
         prefetcher);
   }
 
