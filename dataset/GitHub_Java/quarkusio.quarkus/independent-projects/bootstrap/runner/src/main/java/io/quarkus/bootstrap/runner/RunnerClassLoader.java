@@ -53,11 +53,7 @@ public class RunnerClassLoader extends ClassLoader {
         }
         String packageName = getPackageNameFromClassName(name);
         if (parentFirstPackages.contains(packageName)) {
-            try {
-                return getParent().loadClass(name);
-            } catch (ClassNotFoundException e) {
-                //fall through
-            }
+            return getParent().loadClass(name);
         }
         synchronized (getClassLoadingLock(name)) {
             Class<?> loaded = findLoadedClass(name);
