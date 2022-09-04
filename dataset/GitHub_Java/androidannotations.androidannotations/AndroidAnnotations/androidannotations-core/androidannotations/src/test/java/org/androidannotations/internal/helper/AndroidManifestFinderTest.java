@@ -26,11 +26,9 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Objects;
 
-import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.mockito.Mockito;
 
 @RunWith(Parameterized.class)
 public class AndroidManifestFinderTest {
@@ -160,10 +158,7 @@ public class AndroidManifestFinderTest {
 
 	@Test
 	public void testFindManifestInKnownPathsStartingFromGenFolder() throws IOException {
-		AndroidAnnotationsEnvironment mockEnvironment = Mockito.mock(AndroidAnnotationsEnvironment.class);
-		Mockito.when(mockEnvironment.getOptionBooleanValue(AndroidManifestFinder.OPTION_INSTANT_FEATURE)).thenReturn(false);
-
-		AndroidManifestFinder finder = new AndroidManifestFinder(mockEnvironment);
+		AndroidManifestFinder finder = new AndroidManifestFinder(null);
 		tempDirectory = Files.createTempDirectory("AA");
 
 		File genFolder = createGenFolder(genFolderPath);
