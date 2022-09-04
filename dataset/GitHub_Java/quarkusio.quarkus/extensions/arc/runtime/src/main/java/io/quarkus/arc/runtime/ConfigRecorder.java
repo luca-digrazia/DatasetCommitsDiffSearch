@@ -63,12 +63,11 @@ public class ConfigRecorder {
                 return char.class;
             case "void":
                 return void.class;
-            default:
-                try {
-                    return Class.forName(className, true, cl);
-                } catch (ClassNotFoundException e) {
-                    throw new IllegalStateException("Unable to load the config property type: " + className, e);
-                }
+        }
+        try {
+            return Class.forName(className, true, cl);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("Unable to load the config property type: " + className, e);
         }
     }
 
