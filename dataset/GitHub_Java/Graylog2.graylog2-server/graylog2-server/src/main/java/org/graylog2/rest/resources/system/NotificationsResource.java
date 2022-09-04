@@ -60,7 +60,11 @@ public class NotificationsResource extends RestResource {
                 continue;
             }
 
-            Map<String, Object> notification = n.asMap();
+            Map<String, Object> notification = Maps.newHashMap();
+            notification.put("timestamp", Tools.getISO8601String(n.getTimestamp()));
+            notification.put("severity", n.getSeverity().toString().toLowerCase());
+            notification.put("type", notificationType);
+
             try {
                 notifications.add(notification);
             } catch(IllegalArgumentException e) {

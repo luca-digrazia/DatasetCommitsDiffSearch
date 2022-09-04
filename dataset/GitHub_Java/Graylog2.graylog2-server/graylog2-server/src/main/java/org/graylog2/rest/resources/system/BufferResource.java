@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.resources.system;
 
@@ -22,18 +23,13 @@ import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.Configuration;
-import org.graylog2.buffers.OutputBufferWatermark;
-import org.graylog2.inputs.InputCache;
-import org.graylog2.inputs.OutputCache;
+import org.graylog2.Core;
 import org.graylog2.plugin.buffers.BufferWatermark;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
-import org.graylog2.shared.buffers.ProcessBufferWatermark;
 
-import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -48,44 +44,25 @@ import java.util.Map;
 @Path("/system/buffers")
 public class BufferResource extends RestResource {
 
-    private final InputCache inputCache;
-    private final OutputCache outputCache;
-    private final ProcessBufferWatermark processBufferWatermark;
-    private final OutputBufferWatermark outputBufferWatermark;
-    private final Configuration configuration;
-
-    @Inject
-    public BufferResource(InputCache inputCache,
-                          OutputCache outputCache,
-                          ProcessBufferWatermark processBufferWatermark,
-                          OutputBufferWatermark outputBufferWatermark,
-                          Configuration configuration) {
-        this.inputCache = inputCache;
-        this.outputCache = outputCache;
-        this.processBufferWatermark = processBufferWatermark;
-        this.outputBufferWatermark = outputBufferWatermark;
-        this.configuration = configuration;
-    }
-
     @GET @Timed
     @ApiOperation(value = "Get current utilization of buffers and caches of this node.")
     @RequiresPermissions(RestPermissions.BUFFERS_READ)
     @Produces(MediaType.APPLICATION_JSON)
     public String utilization() {
         Map<String, Object> result = Maps.newHashMap();
-        result.put("buffers", buffers());
-        result.put("master_caches", masterCaches());
+        result.put("buffers", buffers(core));
+        result.put("master_caches", masterCaches(core));
 
         return json(result);
     }
 
-    private Map<String, Object> masterCaches() {
+    private Map<String, Object> masterCaches(Core core) {
         Map<String, Object> caches = Maps.newHashMap();
         Map<String, Object> input = Maps.newHashMap();
         Map<String, Object> output = Maps.newHashMap();
 
-        input.put("size", inputCache.size());
-        output.put("size", outputCache.size());
+        input.put("size", core.getInputCache().size());
+        output.put("size", core.getOutputCache().size());
 
         caches.put("input", input);
         caches.put("output", output);
@@ -93,18 +70,18 @@ public class BufferResource extends RestResource {
         return caches;
     }
 
-    private Map<String, Object> buffers() {
+    private Map<String, Object> buffers(Core core) {
         Map<String, Object> buffers = Maps.newHashMap();
         Map<String, Object> input = Maps.newHashMap();
         Map<String, Object> output = Maps.newHashMap();
 
-        int ringSize = configuration.getRingSize();
+        int ringSize = core.getConfiguration().getRingSize();
 
-        BufferWatermark pWm = new BufferWatermark(ringSize, processBufferWatermark);
+        BufferWatermark pWm = new BufferWatermark(ringSize, core.processBufferWatermark());
         input.put("utilization_percent", pWm.getUtilizationPercentage());
         input.put("utilization", pWm.getUtilization());
 
-        BufferWatermark oWm = new BufferWatermark(ringSize, outputBufferWatermark);
+        BufferWatermark oWm = new BufferWatermark(ringSize, core.outputBufferWatermark());
         output.put("utilization_percent", oWm.getUtilizationPercentage());
         output.put("utilization", oWm.getUtilization());
 

@@ -27,7 +27,6 @@ import org.bson.types.ObjectId;
 import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputRegistry;
-import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.inputs.NoSuchInputTypeException;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
@@ -70,7 +69,7 @@ public class InputsResource extends RestResource {
     public String single(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
         checkPermission(RestPermissions.INPUTS_READ, inputId);
 
-        MessageInput input = core.inputs().getRunningInput(inputId);
+        MessageInput input = core.inputs().getRunningInputs().get(inputId);
 
         if (input == null) {
             LOG.info("Input [{}] not found. Returning HTTP 404.", inputId);
@@ -85,14 +84,16 @@ public class InputsResource extends RestResource {
     @ApiOperation(value = "Get all inputs of this node")
     @Produces(MediaType.APPLICATION_JSON)
     public String list() {
-        List<Map<String, Object>> inputStates = Lists.newArrayList();
+        List<Map<String, Object>> inputs = Lists.newArrayList();
+
+        for (MessageInput input : core.inputs().getRunningInputs().values()) {
+            checkPermission(RestPermissions.INPUTS_READ, input.getId());
+            inputs.add(input.asMap());
+        }
+
         Map<String, Object> result = Maps.newHashMap();
-        for (InputState inputState : core.inputs().getInputStates()) {
-			checkPermission(RestPermissions.INPUTS_READ, inputState.getMessageInput().getId());
-            inputStates.add(inputState.asMap());
-		}
-        result.put("inputs", inputStates);
-        result.put("total", inputStates.size());
+        result.put("inputs", inputs);
+        result.put("total", core.inputs().runningCount());
 
         return json(result);
     }
@@ -127,7 +128,6 @@ public class InputsResource extends RestResource {
             input = InputRegistry.factory(lr.type);
             input.initialize(inputConfig, core);
             input.setTitle(lr.title);
-            input.setGlobal(lr.global);
             input.setCreatorUserId(lr.creatorUserId);
             input.setCreatedAt(createdAt);
 
@@ -150,10 +150,7 @@ public class InputsResource extends RestResource {
         inputData.put("creator_user_id", lr.creatorUserId);
         inputData.put("configuration", lr.configuration);
         inputData.put("created_at", createdAt);
-        if (lr.global)
-            inputData.put("global", true);
-        else
-            inputData.put("node_id", core.getNodeId());
+        inputData.put("node_id", core.getNodeId());
 
         // ... and check if it would pass validation. We don't need to go on if it doesn't.
         Input mongoInput = new Input(core, inputData);
@@ -168,6 +165,9 @@ public class InputsResource extends RestResource {
             throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
+        // Launch input. (this will run async and clean up itself in case of an error.)
+        core.inputs().launch(input, inputId);
+
         // Persist input.
         ObjectId id;
         try {
@@ -177,9 +177,6 @@ public class InputsResource extends RestResource {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
-
-        // Launch input. (this will run async and clean up itself in case of an error.)
-        core.inputs().launch(input, inputId);
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("input_id", inputId);
@@ -209,64 +206,24 @@ public class InputsResource extends RestResource {
     public Response terminate(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
         checkPermission(RestPermissions.INPUTS_TERMINATE, inputId);
 
-        MessageInput input = core.inputs().getRunningInput(inputId);
+        MessageInput input = core.inputs().getRunningInputs().get(inputId);
+
+        String msg = "Attempting to terminate input [" + input.getName()+ "]. Reason: REST request.";
+        LOG.info(msg);
+        core.getActivityWriter().write(new Activity(msg, InputsResource.class));
 
         if (input == null) {
             LOG.info("Cannot terminate input. Input not found.");
             throw new WebApplicationException(404);
         }
 
-        String msg = "Attempting to terminate input [" + input.getName()+ "]. Reason: REST request.";
-        LOG.info(msg);
-        core.getActivityWriter().write(new Activity(msg, InputsResource.class));
-
         // Shutdown actual input.
         input.stop();
 
-        if (core.isMaster() || !input.getGlobal()) {
-            // Remove from list and mongo.
-            core.inputs().cleanInput(input);
-        }
-        core.inputs().removeFromRunning(input);
+        // Remove from list and mongo.
+        core.inputs().cleanInput(input);
 
         String msg2 = "Terminated input [" + input.getName()+ "]. Reason: REST request.";
-        LOG.info(msg2);
-        core.getActivityWriter().write(new Activity(msg2, InputsResource.class));
-
-        return Response.status(Response.Status.ACCEPTED).build();
-    }
-
-    @GET @Timed
-    @Path("/{inputId}/launch")
-    @ApiOperation(value = "Launch existing input on this node")
-    @Produces(MediaType.APPLICATION_JSON)
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "No such input on this node.")
-    })
-    public Response launchExisting(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
-        MessageInput input = null;
-        try {
-             input = InputRegistry.getMessageInput(Input.findForThisNode(core, inputId), core);
-        } catch (NoSuchInputTypeException e) {
-            LOG.info("Cannot launch input. Input not found.");
-            throw new WebApplicationException(404);
-        } catch (ConfigurationException e) {
-            LOG.info("Cannot launch input. Configuration is invalid.");
-            throw new WebApplicationException(404);
-        }
-
-        if (input == null) {
-            LOG.info("Cannot launch input. Input not found.");
-            throw new WebApplicationException(404);
-        }
-
-        String msg = "Launching existing input [" + input.getName()+ "]. Reason: REST request.";
-        LOG.info(msg);
-        core.getActivityWriter().write(new Activity(msg, InputsResource.class));
-
-        core.inputs().launch(input);
-
-        String msg2 = "Launched existing input [" + input.getName()+ "]. Reason: REST request.";
         LOG.info(msg2);
         core.getActivityWriter().write(new Activity(msg2, InputsResource.class));
 

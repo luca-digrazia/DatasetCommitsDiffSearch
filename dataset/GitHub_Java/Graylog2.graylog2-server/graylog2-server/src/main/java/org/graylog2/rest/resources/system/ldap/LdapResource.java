@@ -82,7 +82,6 @@ public class LdapResource extends RestResource {
         result.put("display_name_attribute", ldapSettings.getDisplayNameAttribute());
         result.put("active_directory", ldapSettings.isActiveDirectory());
         result.put("use_start_tls", ldapSettings.isUseStartTls());
-        result.put("default_group", ldapSettings.getDefaultGroup());
 
         return ok(json(result)).build();
     }
@@ -199,7 +198,6 @@ public class LdapResource extends RestResource {
         ldapSettings.setSearchBase(request.searchBase);
         ldapSettings.setEnabled(request.enabled);
         ldapSettings.setDisplayNameAttribute(request.displayNameAttribute);
-        ldapSettings.setDefaultGroup(request.defaultGroup);
 
         try {
             ldapSettings.save();

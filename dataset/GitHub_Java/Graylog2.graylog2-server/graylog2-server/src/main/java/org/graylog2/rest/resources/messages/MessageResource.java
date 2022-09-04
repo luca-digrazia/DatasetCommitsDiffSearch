@@ -64,10 +64,10 @@ public class MessageResource extends RestResource {
 		try {
 			return json(core.getIndexer().messages().get(messageId, index));
 		} catch (IndexMissingException e) {
-        	LOG.error("Index {} does not exist. Returning HTTP 404.", e.index().name());
+        	LOG.error("Index does not exist. Returning HTTP 404.");
         	throw new WebApplicationException(404);
 		} catch (DocumentNotFoundException e1) {
-        	LOG.error("Message {} does not exist in index {}. Returning HTTP 404.", messageId, index);
+        	LOG.error("Message does not exist. Returning HTTP 404.");
         	throw new WebApplicationException(404);
 		}
     }

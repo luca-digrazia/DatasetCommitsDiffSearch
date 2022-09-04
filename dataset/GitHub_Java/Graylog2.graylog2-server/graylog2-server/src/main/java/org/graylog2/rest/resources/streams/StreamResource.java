@@ -81,7 +81,6 @@ public class StreamResource extends RestResource {
         // Create stream.
         Map<String, Object> streamData = Maps.newHashMap();
         streamData.put("title", cr.title);
-        streamData.put("description", cr.description);
         streamData.put("creator_user_id", cr.creatorUserId);
         streamData.put("created_at", new DateTime(DateTimeZone.UTC));
 

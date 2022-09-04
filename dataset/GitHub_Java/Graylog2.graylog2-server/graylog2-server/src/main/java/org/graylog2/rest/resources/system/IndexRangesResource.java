@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.resources.system;
 
@@ -23,9 +24,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.ranges.IndexRange;
-import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.plugin.Tools;
 import org.graylog2.rest.documentation.annotations.Api;
@@ -36,12 +35,10 @@ import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.system.jobs.SystemJob;
 import org.graylog2.system.jobs.SystemJobConcurrencyException;
-import org.graylog2.system.jobs.SystemJobManager;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -58,18 +55,6 @@ public class IndexRangesResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(IndexRangesResource.class);
 
-    @Inject
-    private IndexRangeService indexRangeService;
-
-    @Inject
-    private RebuildIndexRangesJob.Factory rebuildIndexRangesJobFactory;
-
-    @Inject
-    private Deflector deflector;
-
-    @Inject
-    private SystemJobManager systemJobManager;
-
     @GET @Timed
     @ApiOperation(value = "Get a list of all index ranges")
     @Produces(MediaType.APPLICATION_JSON)
@@ -77,7 +62,7 @@ public class IndexRangesResource extends RestResource {
         Map<String, Object> result = Maps.newHashMap();
         List<Map<String, Object>> ranges = Lists.newArrayList();
 
-        for (IndexRange range : indexRangeService.getFrom(0)) {
+        for (IndexRange range : IndexRange.getFrom(core, 0)) {
             if (!isPermitted(RestPermissions.INDEXRANGES_READ, range.getIndexName())) {
                 continue;
             }
@@ -118,9 +103,9 @@ public class IndexRangesResource extends RestResource {
     })
     @Produces(MediaType.APPLICATION_JSON)
     public Response rebuild() {
-        SystemJob rebuildJob = rebuildIndexRangesJobFactory.create(this.deflector);
+        SystemJob rebuildJob = new RebuildIndexRangesJob(core);
         try {
-            this.systemJobManager.submit(rebuildJob);
+            core.getSystemJobManager().submit(rebuildJob);
         } catch (SystemJobConcurrencyException e) {
             LOG.error("Concurrency level of this job reached: " + e.getMessage());
             throw new WebApplicationException(403);
