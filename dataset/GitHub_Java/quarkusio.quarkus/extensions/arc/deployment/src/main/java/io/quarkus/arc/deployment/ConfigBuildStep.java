@@ -96,10 +96,7 @@ public class ConfigBuildStep {
                     customBeanTypes.add(requiredType);
                 }
 
-                if (DotNames.OPTIONAL.equals(requiredType.name())
-                        || DotNames.OPTIONAL_INT.equals(requiredType.name())
-                        || DotNames.OPTIONAL_LONG.equals(requiredType.name())
-                        || DotNames.OPTIONAL_DOUBLE.equals(requiredType.name())) {
+                if (DotNames.OPTIONAL.equals(requiredType.name())) {
                     // Never validate Optional values
                     continue;
                 }
@@ -193,9 +190,6 @@ public class ConfigBuildStep {
         }
         return DotNames.STRING.equals(type.name()) ||
                 DotNames.OPTIONAL.equals(type.name()) ||
-                DotNames.OPTIONAL_INT.equals(type.name()) ||
-                DotNames.OPTIONAL_LONG.equals(type.name()) ||
-                DotNames.OPTIONAL_DOUBLE.equals(type.name()) ||
                 SET_NAME.equals(type.name()) ||
                 LIST_NAME.equals(type.name()) ||
                 DotNames.LONG.equals(type.name()) ||
