@@ -301,7 +301,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
   private static final Object NULL_MARKER = new Object();
 
   // Values in this cache are either VariableValue, String error message, or NULL_MARKER.
-  private Map<String, Object> structuredVariableCache;
+  private Map<String, Object> cache;
 
   /**
    * Retrieves a {@link StringSequence} variable named {@code variableName} from {@code variables}
@@ -344,21 +344,19 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
   private VariableValue lookupVariable(
       String name, boolean throwOnMissingVariable, @Nullable ArtifactExpander expander)
       throws ExpansionException {
-    VariableValue var = getNonStructuredVariable(name);
-    if (var != null) {
-      return var;
+    if (cache == null) {
+      cache = Maps.newConcurrentMap();
     }
-
-    if (structuredVariableCache == null) {
-      structuredVariableCache = Maps.newConcurrentMap();
-    }
-
     Object variableOrError =
-        structuredVariableCache.computeIfAbsent(
+        cache.computeIfAbsent(
             name,
             n -> {
+              VariableValue variable = getNonStructuredVariable(n);
+              if (variable != null) {
+                return variable;
+              }
               try {
-                VariableValue variable = getStructureVariable(n, throwOnMissingVariable, expander);
+                variable = getStructureVariable(n, throwOnMissingVariable, expander);
                 return variable != null ? variable : NULL_MARKER;
               } catch (ExpansionException e) {
                 if (throwOnMissingVariable) {
