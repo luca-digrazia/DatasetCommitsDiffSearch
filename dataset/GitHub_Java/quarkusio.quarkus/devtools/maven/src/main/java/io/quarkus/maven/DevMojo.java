@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.maven;
 
 import java.io.ByteArrayOutputStream;
@@ -225,7 +241,6 @@ public class DevMojo extends AbstractMojo {
             for (Map.Entry<Object, Object> e : System.getProperties().entrySet()) {
                 devModeContext.getSystemProperties().put(e.getKey().toString(), (String) e.getValue());
             }
-            devModeContext.getBuildSystemProperties().putAll((Map) project.getProperties());
 
             final AppModel appModel;
             try {
@@ -274,12 +289,8 @@ public class DevMojo extends AbstractMojo {
             }
 
             args.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
-            //wiring devmode is used for CDI beans that are not part of the user application (i.e. beans in 3rd party jars)
-            //we need this because these beans cannot be loaded by the runtime class loader, they must be loaded by the platform
-            //class loader
             File wiringClassesDirectory = new File(buildDir, "wiring-devmode");
             wiringClassesDirectory.mkdirs();
-
             addToClassPaths(classPathManifest, devModeContext, wiringClassesDirectory);
 
             //we also want to add the maven plugin jar to the class path
