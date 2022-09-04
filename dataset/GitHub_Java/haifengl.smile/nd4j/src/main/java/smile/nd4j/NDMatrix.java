@@ -16,6 +16,7 @@
 
 package smile.nd4j;
 
+import java.util.Arrays;
 import smile.math.matrix.DenseMatrix;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
