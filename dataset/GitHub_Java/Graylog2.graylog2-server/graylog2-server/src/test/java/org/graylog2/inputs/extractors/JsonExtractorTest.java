@@ -62,14 +62,16 @@ public class JsonExtractorTest {
         assertThat(results).contains(
                 new Extractor.Result("foobar", "text", -1, -1),
                 new Extractor.Result(1234.5678, "number", -1, -1),
-                new Extractor.Result(true, "bool", -1, -1),
-                new Extractor.Result(null, "null", -1, -1)
+                new Extractor.Result(true, "bool", -1, -1)
         );
+
+        // Null values should be ignored!
+        assertThat(results).doesNotContain(new Extractor.Result(null, "null", -1, -1));
     }
 
     @Test
     public void testRunWithArray() throws Exception {
-        final String value = "{\"array\": [\"foobar\", \"foobaz\"]}";
+        final String value = "{\"array\": [\"foobar\", \"foobaz\", null]}";
         final Extractor.Result[] results = jsonExtractor.run(value);
 
         assertThat(results).contains(new Extractor.Result("foobar, foobaz", "array", -1, -1));
@@ -92,10 +94,10 @@ public class JsonExtractorTest {
         final Extractor.Result[] results = jsonExtractor.run(value);
 
         assertThat(results).contains(
-                new Extractor.Result("foobar", "object.text", -1, -1),
-                new Extractor.Result(1234.5678, "object.number", -1, -1),
-                new Extractor.Result(true, "object.bool", -1, -1),
-                new Extractor.Result("foobar", "object.nested.text", -1, -1)
+                new Extractor.Result("foobar", "object_text", -1, -1),
+                new Extractor.Result(1234.5678, "object_number", -1, -1),
+                new Extractor.Result(true, "object_bool", -1, -1),
+                new Extractor.Result("foobar", "object_nested_text", -1, -1)
         );
     }
 
@@ -104,7 +106,15 @@ public class JsonExtractorTest {
         final JsonExtractor jsonExtractor = new JsonExtractor(new MetricRegistry(), "json", "title", 0L, Extractor.CursorStrategy.COPY,
                 "source", "target", ImmutableMap.<String, Object>of("flatten", true), "user", Collections.<Converter>emptyList(), Extractor.ConditionType.NONE,
                 "");
-        final String value = "{\"object\": {\"text\": \"foobar\", \"number\": 1234.5678, \"bool\": true, \"nested\": {\"text\": \"foobar\"}}}";
+        final String value = "{"
+                + "\"object\": {"
+                + "\"text\": \"foobar\", "
+                + "\"number\": 1234.5678, "
+                + "\"bool\": true, "
+                + "\"null\": null, "
+                + "\"nested\": {\"text\": \"foobar\"}"
+                + "}"
+                + "}";
         final Extractor.Result[] results = jsonExtractor.run(value);
 
         assertThat(results).contains(
@@ -138,6 +148,87 @@ public class JsonExtractorTest {
 
         assertThat(results).contains(
                 new Extractor.Result("text:foobar, number:1234.5678, bool:true, nested:{text=foobar}", "object", -1, -1)
+        );
+    }
+
+    @Test
+    public void issue2375() throws Exception {
+        final String value = "{\"Source\" : \"Myserver#DS\",\"Observer\" : {\"Account\" : {\"Domain\" : \"MYDOMAIN\",\"Name\" : \"CN=domain,OU=service,O=org,C=DE\"},\"Entity\" : {\"SysAddr\" : \"123.123.123.123\",\"SysName\" : \"dir\"}},\"Initiator\" : {\"Account\" : {\"Domain\" : \"Domain\"},\"Entity\" : {\"SysAddr\" : \"0.0.0.0:0\"}},\"Target\" : {\"Data\" : {\"Attribute Name\" : \"Purge Vector\",\"Attribute Value\" : \"Seconds: 1466090058, Replica Number: 3, Event: 1\",\"ClassName\" : \"Organizational Unit\",\"Syntax\" : \"19\"},\"Account\" : {\"Domain\" : \"Domain\",\"Name\" : \"OU=myOrg,O=org,C=DE\",\"Id\" : \"34621\"}},\"Action\" : {\"Event\" : {\"Id\" : \"0.0.0.2\",\"Name\" : \"DISABLE_ACCOUNT\",\"CorrelationID\" : \"eDirectory#0#6b2c7a3d-a223-19da-85ad-3d7a1c6b82a3\",\"SubEvent\" : \"DSE_ADD_VALUE\"},\"Time\" : {\"Offset\" : 1466090106},\"Log\" : {\"Severity\" : 7},\"Outcome\" : \"0\",\"ExtendedOutcome\" : \"0\"}}";
+        final Extractor.Result[] results = jsonExtractor.run(value);
+
+        assertThat(results).contains(
+            new Extractor.Result("Myserver#DS", "Source", -1, -1),
+            new Extractor.Result("Purge Vector", "Target_Data_Attribute Name", -1, -1)
+        );
+    }
+
+    @Test
+    public void testRunWithWhitespaceInKey() throws Exception {
+        final String value = "{\"text string\": \"foobar\", \"num   b er\": 1234.5678, \"bool\": true, \"null\": null}";
+
+        final JsonExtractor jsonExtractor1 = new JsonExtractor(new MetricRegistry(), "json", "title", 0L, Extractor.CursorStrategy.COPY,
+                "source", "target", Collections.emptyMap(), "user", Collections.emptyList(), Extractor.ConditionType.NONE,
+                "");
+
+        final JsonExtractor jsonExtractor2 = new JsonExtractor(new MetricRegistry(), "json", "title", 0L, Extractor.CursorStrategy.COPY,
+                "source", "target", ImmutableMap.of("replace_key_whitespace", true), "user", Collections.emptyList(), Extractor.ConditionType.NONE,
+                "");
+
+        final JsonExtractor jsonExtractor3 = new JsonExtractor(new MetricRegistry(), "json", "title", 0L, Extractor.CursorStrategy.COPY,
+                "source", "target", ImmutableMap.of("replace_key_whitespace", true, "key_whitespace_replacement", ":"), "user", Collections.emptyList(), Extractor.ConditionType.NONE,
+                "");
+
+        assertThat(jsonExtractor1.run(value)).contains(
+                new Extractor.Result("foobar", "text string", -1, -1),
+                new Extractor.Result(1234.5678, "num   b er", -1, -1),
+                new Extractor.Result(true, "bool", -1, -1)
+        );
+        assertThat(jsonExtractor2.run(value)).contains(
+                new Extractor.Result("foobar", "text_string", -1, -1),
+                new Extractor.Result(1234.5678, "num___b_er", -1, -1),
+                new Extractor.Result(true, "bool", -1, -1)
+        );
+        assertThat(jsonExtractor3.run(value)).contains(
+                new Extractor.Result("foobar", "text:string", -1, -1),
+                new Extractor.Result(1234.5678, "num:::b:er", -1, -1),
+                new Extractor.Result(true, "bool", -1, -1)
+        );
+    }
+
+    @Test
+    public void testRunWithWhitespaceInNestedKey() throws Exception {
+        final String value = "{\"foo\":{\"b a r\":{\"b a z\": 42}}}";
+        final JsonExtractor jsonExtractor = new JsonExtractor(
+                new MetricRegistry(),
+                "json",
+                "title",
+                0L,
+                Extractor.CursorStrategy.COPY,
+                "source",
+                "target",
+                ImmutableMap.of("replace_key_whitespace", true, "key_whitespace_replacement", "-"),
+                "user",
+                Collections.emptyList(),
+                Extractor.ConditionType.NONE,
+                "");
+
+        assertThat(jsonExtractor.run(value)).containsOnly(
+                new Extractor.Result(42, "foo_b-a-r_b-a-z", -1, -1)
+        );
+    }
+
+    @Test
+    public void testRunWithKeyPrefix() throws Exception {
+        final String value = "{\"text string\": \"foobar\", \"num   b er\": 1234.5678, \"bool\": true, \"null\": null}";
+
+        final JsonExtractor jsonExtractor1 = new JsonExtractor(new MetricRegistry(), "json", "title", 0L, Extractor.CursorStrategy.COPY,
+                "source", "target", ImmutableMap.of("key_prefix", "test_"), "user", Collections.emptyList(), Extractor.ConditionType.NONE,
+                "");
+
+        assertThat(jsonExtractor1.run(value)).contains(
+                new Extractor.Result("foobar", "test_text string", -1, -1),
+                new Extractor.Result(1234.5678, "test_num   b er", -1, -1),
+                new Extractor.Result(true, "test_bool", -1, -1)
         );
     }
 }
