@@ -50,7 +50,6 @@ import javax.interceptor.InterceptorBinding;
 import javax.interceptor.InvocationContext;
 
 import io.quarkus.arc.Arc;
-import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
@@ -81,11 +80,8 @@ public class BeanManagerTest {
         @SuppressWarnings("unchecked")
         Bean<Fool> foolBean = (Bean<Fool>) foolBeans.iterator().next();
         Fool fool1 = (Fool) beanManager.getReference(foolBean, Fool.class, beanManager.createCreationalContext(foolBean));
-        
-        ManagedContext requestContext = Arc.container().requestContext();
-        requestContext.activate();
-        assertEquals(fool1.getId(), ((Fool) beanManager.getReference(foolBean, Fool.class, beanManager.createCreationalContext(foolBean))).getId());
-        requestContext.terminate();
+        Arc.container().withinRequest(() -> assertEquals(fool1.getId(),
+                ((Fool) beanManager.getReference(foolBean, Fool.class, beanManager.createCreationalContext(foolBean))).getId())).run();
         assertTrue(Fool.DESTROYED.get());
 
         Set<Bean<?>> legacyBeans = beanManager.getBeans(AlternativeLegacy.class);

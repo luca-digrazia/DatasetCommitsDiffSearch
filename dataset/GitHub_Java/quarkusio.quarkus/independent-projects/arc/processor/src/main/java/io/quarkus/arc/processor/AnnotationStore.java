@@ -16,9 +16,6 @@
 
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.processor.AnnotationsTransformer.TransformationContext;
-import io.quarkus.arc.processor.BuildExtension.BuildContext;
-import io.quarkus.arc.processor.BuildExtension.Key;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -26,10 +23,14 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.DotName;
+import io.quarkus.arc.processor.AnnotationsTransformer.TransformationContext;
+import io.quarkus.arc.processor.BuildExtension.BuildContext;
+import io.quarkus.arc.processor.BuildExtension.Key;
 
 /**
  * Applies {@link AnnotationsTransformer}s and caches the results of transformations.
@@ -42,7 +43,7 @@ public class AnnotationStore {
     private final ConcurrentMap<AnnotationTarget, Collection<AnnotationInstance>> transformed;
 
     private final EnumMap<Kind, List<AnnotationsTransformer>> transformersMap;
-
+    
     private final BuildContext buildContext;
 
     AnnotationStore(Collection<AnnotationsTransformer> transformers, BuildContext buildContext) {
@@ -117,7 +118,7 @@ public class AnnotationStore {
         }
         return transformationContext.getAnnotations();
     }
-
+    
     private Collection<AnnotationInstance> getOriginalAnnotations(AnnotationTarget target) {
         switch (target.kind()) {
             case CLASS:
@@ -147,11 +148,11 @@ public class AnnotationStore {
     }
 
     class TransformationContextImpl implements TransformationContext {
-
+        
         private final AnnotationTarget target;
-
+        
         private Collection<AnnotationInstance> annotations;
-
+        
         TransformationContextImpl(AnnotationTarget target, Collection<AnnotationInstance> annotations) {
             this.target = target;
             this.annotations = annotations;
@@ -176,7 +177,7 @@ public class AnnotationStore {
         public Collection<AnnotationInstance> getAnnotations() {
             return annotations;
         }
-
+        
         void setAnnotations(Collection<AnnotationInstance> annotations) {
             this.annotations = annotations;
         }
@@ -185,7 +186,7 @@ public class AnnotationStore {
         public Transformation transform() {
             return new Transformation(this);
         }
-
+        
     }
 
 }

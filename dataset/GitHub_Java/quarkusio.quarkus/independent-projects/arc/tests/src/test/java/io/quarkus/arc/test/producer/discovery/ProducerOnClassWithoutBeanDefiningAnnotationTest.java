@@ -18,9 +18,10 @@ package io.quarkus.arc.test.producer.discovery;
 
 import static org.junit.Assert.assertEquals;
 
+import javax.enterprise.inject.Produces;
+
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.test.ArcTestContainer;
-import javax.enterprise.inject.Produces;
 import org.junit.Rule;
 import org.junit.Test;
 

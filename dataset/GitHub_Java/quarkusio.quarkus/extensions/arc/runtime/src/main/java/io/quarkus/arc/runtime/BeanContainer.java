@@ -16,6 +16,7 @@
 
 package io.quarkus.arc.runtime;
 
+import java.io.Closeable;
 import java.lang.annotation.Annotation;
 
 import io.quarkus.arc.ManagedContext;

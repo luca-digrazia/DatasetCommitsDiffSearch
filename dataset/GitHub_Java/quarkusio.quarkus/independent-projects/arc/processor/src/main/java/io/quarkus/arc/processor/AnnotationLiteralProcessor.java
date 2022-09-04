@@ -67,12 +67,11 @@ class AnnotationLiteralProcessor {
      * @param classOutput
      * @param annotationClass
      * @param annotationInstance
-     * @param targetPackage Target package is only used if annotation literals are not shared
+     * @param targetPackage
      * @return an annotation literal result handle
      */
     ResultHandle process(BytecodeCreator bytecode, ClassOutput classOutput, ClassInfo annotationClass, AnnotationInstance annotationInstance,
             String targetPackage) {
-        Objects.requireNonNull(annotationClass, "Annotation class not available: " + annotationInstance);
         if (cache != null) {
             Literal literal = cache.getValue(new Key(annotationInstance.name(), annotationClass));
 

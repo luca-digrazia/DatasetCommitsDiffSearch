@@ -34,10 +34,10 @@ import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
 import io.quarkus.arc.BeanCreator;
 import io.quarkus.arc.BeanDestroyer;
-import io.quarkus.gizmo.FieldDescriptor;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
+import org.jboss.protean.gizmo.FieldDescriptor;
+import org.jboss.protean.gizmo.MethodCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 
 /**
  * Synthetic bean configurator. An alternative to {@link javax.enterprise.inject.spi.configurator.BeanConfigurator}.
@@ -82,7 +82,7 @@ public final class BeanConfigurator<T> {
         this.beanConsumer = beanConsumer;
         this.types = new HashSet<>();
         this.qualifiers = new HashSet<>();
-        this.scope = BuiltinScope.DEPENDENT.getInfo();
+        this.scope = ScopeInfo.DEPENDENT;
         this.params = new HashMap<>();
         this.name = null;
     }
@@ -198,6 +198,8 @@ public final class BeanConfigurator<T> {
         this.destroyerConsumer = methodCreatorConsumer;
         return cast(this);
     }
+
+    // TODO stereotypes?
 
     /**
      * Perform sanity checks and register the bean.

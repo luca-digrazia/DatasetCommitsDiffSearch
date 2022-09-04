@@ -37,18 +37,15 @@ public interface BeanRegistrar extends BuildExtension {
         /**
          *
          * @param beanClass
-         * @return a new synthetic bean configurator
+         * @return a new synthetic bean builder
          */
         <T> BeanConfigurator<T> configure(DotName beanClassName);
 
-        /**
-         * 
-         * @param beanClass
-         * @return a new synthetic bean configurator
-         */
         default <T> BeanConfigurator<T> configure(Class<?> beanClass) {
             return configure(DotName.createSimple(beanClass.getName()));
         }
+
+        // TODO add synthetic observer?
 
     }
 

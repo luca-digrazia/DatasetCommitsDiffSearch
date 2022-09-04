@@ -71,7 +71,6 @@ public class DisposerTest {
         // A new instance is created for produce and dispose
         assertEquals(2, StringProducer.DESTROYED.get());
         // Both producer and produced bean are application scoped
-        @SuppressWarnings("serial")
         Comparable<BigDecimal> bigDecimal = Arc.container().instance(new TypeLiteral<Comparable<BigDecimal>>() {
         }).get();
         assertEquals(0, bigDecimal.compareTo(BigDecimal.ONE));

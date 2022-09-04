@@ -18,12 +18,13 @@ package io.quarkus.arc.test.producer.primitive;
 
 import static org.junit.Assert.assertEquals;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.test.ArcTestContainer;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -58,13 +59,13 @@ public class PrimitiveProducerTest {
         }
 
     }
-
+    
     @Singleton
     static class PrimitiveConsumer {
-
+        
         @Inject
         int intFoo;
-
+        
         @Inject
         long longFoo;
 
@@ -75,6 +76,6 @@ public class PrimitiveProducerTest {
         long getLongFoo() {
             return longFoo;
         }
-
+        
     }
 }

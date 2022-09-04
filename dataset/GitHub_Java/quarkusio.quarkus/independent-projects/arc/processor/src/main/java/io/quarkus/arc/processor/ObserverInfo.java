@@ -21,8 +21,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
+
 import javax.enterprise.inject.spi.DefinitionException;
 import javax.enterprise.inject.spi.ObserverMethod;
+
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.MethodInfo;
@@ -102,8 +104,7 @@ public class ObserverInfo {
     public Set<AnnotationInstance> getQualifiers() {
         Set<AnnotationInstance> qualifiers = new HashSet<>();
         for (AnnotationInstance annotation : declaringBean.getDeployment().getAnnotations(observerMethod)) {
-            if (annotation.target().equals(eventParameter)
-                    && declaringBean.getDeployment().getQualifier(annotation.name()) != null) {
+            if (annotation.target().equals(eventParameter) && declaringBean.getDeployment().getQualifier(annotation.name()) != null) {
                 qualifiers.add(annotation);
             }
         }

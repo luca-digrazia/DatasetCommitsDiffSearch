@@ -35,6 +35,11 @@ import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
 import org.jboss.logging.Logger;
+import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.ClassOutput;
+import org.jboss.protean.gizmo.MethodCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 import org.quartz.CronExpression;
 import org.quartz.simpl.CascadingClassLoadHelper;
 import org.quartz.simpl.RAMJobStore;
@@ -55,8 +60,8 @@ import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanDeploymentValidator;
 import io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext;
 import io.quarkus.arc.processor.BeanInfo;
-import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
+import io.quarkus.arc.processor.ScopeInfo;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -65,19 +70,15 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.HashUtil;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.ClassOutput;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.scheduler.Scheduled;
-import io.quarkus.scheduler.ScheduledExecution;
+import io.quarkus.scheduler.api.Scheduled;
+import io.quarkus.scheduler.api.ScheduledExecution;
 import io.quarkus.scheduler.runtime.QuartzScheduler;
 import io.quarkus.scheduler.runtime.ScheduledInvoker;
 import io.quarkus.scheduler.runtime.SchedulerConfiguration;
 import io.quarkus.scheduler.runtime.SchedulerDeploymentTemplate;
 
 /**
+ *
  * @author Martin Kouba
  */
 public class SchedulerProcessor {
@@ -282,7 +283,7 @@ public class SchedulerProcessor {
                     beanInstanceHandle, invoke.getMethodParam(0));
         }
         // handle.destroy() - destroy dependent instance afterwards
-        if (BuiltinScope.DEPENDENT.is(bean.getScope())) {
+        if (bean.getScope() == ScopeInfo.DEPENDENT) {
             invoke.invokeInterfaceMethod(MethodDescriptor.ofMethod(InstanceHandle.class, "destroy", void.class),
                     instanceHandle);
         }

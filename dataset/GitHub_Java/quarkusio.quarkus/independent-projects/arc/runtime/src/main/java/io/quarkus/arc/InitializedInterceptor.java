@@ -19,6 +19,7 @@ package io.quarkus.arc;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Set;
+
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.inject.spi.InterceptionType;
 import javax.interceptor.InvocationContext;

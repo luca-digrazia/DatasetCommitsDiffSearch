@@ -17,6 +17,7 @@
 package io.quarkus.arc.processor.types;
 
 import java.util.List;
+
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 

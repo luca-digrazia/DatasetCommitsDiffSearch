@@ -94,9 +94,6 @@ public class ArcAnnotationProcessor {
     List<BeanRegistrarBuildItem> beanRegistrars;
 
     @Inject
-    List<ContextRegistrarBuildItem> contextRegistrars;
-
-    @Inject
     List<BeanDeploymentValidatorBuildItem> beanDeploymentValidators;
 
     @Inject
@@ -220,9 +217,6 @@ public class ArcAnnotationProcessor {
         });
         for (BeanRegistrarBuildItem item : beanRegistrars) {
             builder.addBeanRegistrar(item.getBeanRegistrar());
-        }
-        for (ContextRegistrarBuildItem item : contextRegistrars) {
-            builder.addContextRegistrar(item.getContextRegistrar());
         }
         for (BeanDeploymentValidatorBuildItem item : beanDeploymentValidators) {
             builder.addBeanDeploymentValidator(item.getBeanDeploymentValidator());

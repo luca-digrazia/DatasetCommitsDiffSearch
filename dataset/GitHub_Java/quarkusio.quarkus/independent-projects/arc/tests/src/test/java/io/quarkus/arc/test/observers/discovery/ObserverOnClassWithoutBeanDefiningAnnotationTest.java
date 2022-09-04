@@ -18,12 +18,14 @@ package io.quarkus.arc.test.observers.discovery;
 
 import static org.junit.Assert.assertEquals;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.test.ArcTestContainer;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+
 import javax.enterprise.event.Observes;
 import javax.enterprise.inject.spi.BeanManager;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 

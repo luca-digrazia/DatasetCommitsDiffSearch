@@ -16,10 +16,11 @@
 
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.Arc;
 import java.lang.reflect.Modifier;
+
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
+import io.quarkus.arc.Arc;
 
 abstract class AbstractGenerator {
 
@@ -69,5 +70,6 @@ abstract class AbstractGenerator {
         }
         return packageName;
     }
+
 
 }

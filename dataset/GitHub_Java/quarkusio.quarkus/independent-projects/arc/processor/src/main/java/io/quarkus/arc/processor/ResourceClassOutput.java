@@ -16,12 +16,13 @@
 
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.processor.ResourceOutput.Resource;
-import io.quarkus.arc.processor.ResourceOutput.Resource.SpecialType;
-import io.quarkus.gizmo.ClassOutput;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
+
+import io.quarkus.arc.processor.ResourceOutput.Resource;
+import io.quarkus.arc.processor.ResourceOutput.Resource.SpecialType;
+import org.jboss.protean.gizmo.ClassOutput;
 
 /**
  *
@@ -46,8 +47,7 @@ public class ResourceClassOutput implements ClassOutput {
 
     @Override
     public void write(String name, byte[] data) {
-        resources.add(ResourceImpl.javaClass(name, data, specialTypeFunction != null ? specialTypeFunction.apply(name) : null,
-                applicationClass));
+        resources.add(ResourceImpl.javaClass(name, data, specialTypeFunction != null ? specialTypeFunction.apply(name) : null, applicationClass));
     }
 
     List<Resource> getResources() {

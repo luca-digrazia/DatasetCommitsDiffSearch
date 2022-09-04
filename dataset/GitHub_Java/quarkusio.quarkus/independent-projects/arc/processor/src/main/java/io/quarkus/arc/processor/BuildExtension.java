@@ -17,6 +17,7 @@
 package io.quarkus.arc.processor;
 
 import java.util.List;
+
 import org.jboss.jandex.IndexView;
 
 /**

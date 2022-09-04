@@ -6,7 +6,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.math.BigDecimal;
 
-import javax.annotation.PostConstruct;
 import javax.annotation.Priority;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.event.Observes;
@@ -15,7 +14,6 @@ import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
 import javax.inject.Named;
-import javax.inject.Provider;
 import javax.inject.Singleton;
 
 import io.quarkus.arc.Arc;
@@ -28,7 +26,7 @@ public class RemoveUnusedBeansTest {
 
     @Rule
     public ArcTestContainer container = ArcTestContainer.builder()
-            .beanClasses(HasObserver.class, Foo.class, FooAlternative.class, HasName.class, UnusedProducers.class, InjectedViaInstance.class, InjectedViaProvider.class, Excluded.class, UsedProducers.class)
+            .beanClasses(HasObserver.class, Foo.class, FooAlternative.class, HasName.class, UnusedProducers.class, InjectedViaInstance.class, Excluded.class, UsedProducers.class)
             .removeUnusedBeans(true)
             .addRemovalExclusion(b -> b.getBeanClass().toString().equals(Excluded.class.getName()))
             .build();
@@ -39,15 +37,12 @@ public class RemoveUnusedBeansTest {
         assertTrue(container.instance(HasObserver.class).isAvailable());
         assertTrue(container.instance(HasName.class).isAvailable());
         assertTrue(container.instance(InjectedViaInstance.class).isAvailable());
-        assertTrue(container.instance(InjectedViaProvider.class).isAvailable());
         assertTrue(container.instance(String.class).isAvailable());
         assertTrue(container.instance(UsedProducers.class).isAvailable());
         assertFalse(container.instance(UnusedProducers.class).isAvailable());
         assertFalse(container.instance(BigDecimal.class).isAvailable());
         // Foo is injected in HasObserver#observe()
-        Foo foo = container.instance(Foo.class).get();
-        assertEquals(FooAlternative.class.getName(), foo.ping());
-        assertTrue(foo.provider.get().isValid());
+        assertEquals(FooAlternative.class.getName(), container.instance(Foo.class).get().ping());
         assertEquals(1, container.beanManager().getBeans(Foo.class).size());
         assertEquals("pong", container.instance(Excluded.class).get().ping());
     }
@@ -68,9 +63,6 @@ public class RemoveUnusedBeansTest {
 
     @Dependent
     static class Foo {
-        
-        @Inject
-        Provider<InjectedViaProvider> provider;
 
         String ping() {
             return getClass().getName();
@@ -85,7 +77,7 @@ public class RemoveUnusedBeansTest {
 
         @Inject
         Instance<InjectedViaInstance> instance;
-
+        
         @Inject
         String foo;
 
@@ -93,22 +85,6 @@ public class RemoveUnusedBeansTest {
 
     @Singleton
     static class InjectedViaInstance {
-
-    }
-    
-    @Singleton
-    static class InjectedViaProvider {
-        
-        private boolean isValid;
-        
-        @PostConstruct
-        void init() {
-            isValid = true;
-        }
-        
-        boolean isValid() {
-            return isValid;
-        }
 
     }
 

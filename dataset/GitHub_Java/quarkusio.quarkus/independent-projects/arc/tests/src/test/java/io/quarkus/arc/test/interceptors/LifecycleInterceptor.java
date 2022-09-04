@@ -16,15 +16,17 @@
 
 package io.quarkus.arc.test.interceptors;
 
-import io.quarkus.arc.InvocationContextImpl;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Priority;
 import javax.interceptor.AroundConstruct;
 import javax.interceptor.Interceptor;
 import javax.interceptor.InvocationContext;
+
+import io.quarkus.arc.InvocationContextImpl;
 
 @Lifecycle
 @Priority(1)

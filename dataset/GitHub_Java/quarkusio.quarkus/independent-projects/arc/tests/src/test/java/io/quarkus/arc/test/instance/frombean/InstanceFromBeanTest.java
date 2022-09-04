@@ -18,12 +18,14 @@ package io.quarkus.arc.test.instance.frombean;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.UUID;
+
+import javax.annotation.PostConstruct;
+import javax.inject.Singleton;
+
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.test.ArcTestContainer;
-import java.util.UUID;
-import javax.annotation.PostConstruct;
-import javax.inject.Singleton;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -35,8 +37,7 @@ public class InstanceFromBeanTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testDestroy() {
-        InjectableBean<Alpha> bean1 = (InjectableBean<Alpha>) Arc.container().beanManager().getBeans(Alpha.class).iterator()
-                .next();
+        InjectableBean<Alpha> bean1 = (InjectableBean<Alpha>) Arc.container().beanManager().getBeans(Alpha.class).iterator().next();
         InjectableBean<Alpha> bean2 = Arc.container().bean(bean1.getIdentifier());
         assertEquals(bean1, bean2);
         assertEquals(Arc.container().instance(bean2).get().getId(), Arc.container().instance(bean2).get().getId());
@@ -46,7 +47,7 @@ public class InstanceFromBeanTest {
     static class Alpha {
 
         private String id;
-
+        
         @PostConstruct
         void init() {
             this.id = UUID.randomUUID().toString();
@@ -57,5 +58,6 @@ public class InstanceFromBeanTest {
         }
 
     }
+
 
 }

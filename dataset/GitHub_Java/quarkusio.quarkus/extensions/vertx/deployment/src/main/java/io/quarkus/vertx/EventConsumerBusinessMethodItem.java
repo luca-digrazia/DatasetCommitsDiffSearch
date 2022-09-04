@@ -3,7 +3,8 @@ package io.quarkus.vertx;
 import org.jboss.builder.item.MultiBuildItem;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.MethodInfo;
-import org.jboss.quarkus.arc.processor.BeanInfo;
+
+import io.quarkus.arc.processor.BeanInfo;
 
 public final class EventConsumerBusinessMethodItem extends MultiBuildItem {
 
@@ -29,5 +30,4 @@ public final class EventConsumerBusinessMethodItem extends MultiBuildItem {
         return consumeEvent;
     }
 
-    
 }

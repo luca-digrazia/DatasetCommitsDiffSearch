@@ -84,7 +84,6 @@ public class BeanProcessor {
 
     private final List<AnnotationsTransformer> annotationTransformers;
     private final List<BeanRegistrar> beanRegistrars;
-    private final List<ContextRegistrar> contextRegistrars;
     private final List<BeanDeploymentValidator> beanDeploymentValidators;
 
     private final BuildContextImpl buildContext;
@@ -96,7 +95,7 @@ public class BeanProcessor {
 
     private BeanProcessor(String name, IndexView index, Collection<BeanDefiningAnnotation> additionalBeanDefiningAnnotations, ResourceOutput output,
             boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration, List<AnnotationsTransformer> annotationTransformers,
-            Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars, List<ContextRegistrar> contextRegistrars, List<DeploymentEnhancer> deploymentEnhancers,
+            Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars, List<DeploymentEnhancer> deploymentEnhancers,
             List<BeanDeploymentValidator> beanDeploymentValidators, Predicate<DotName> applicationClassPredicate, boolean unusedBeansRemovalEnabled,
             List<Predicate<BeanInfo>> unusedExclusions) {
 
@@ -150,14 +149,13 @@ public class BeanProcessor {
 
         this.annotationTransformers = initAndSort(annotationTransformers, buildContext);
         this.beanRegistrars = initAndSort(beanRegistrars, buildContext);
-        this.contextRegistrars = initAndSort(contextRegistrars, buildContext);
         this.beanDeploymentValidators = initAndSort(beanDeploymentValidators, buildContext);
     }
     
     public BeanDeployment process() throws IOException {
 
         BeanDeployment beanDeployment = new BeanDeployment(new IndexWrapper(index), additionalBeanDefiningAnnotations, annotationTransformers,
-                resourceAnnotations, beanRegistrars, contextRegistrars, buildContext, removeUnusedBeans, unusedExclusions);
+                resourceAnnotations, beanRegistrars, buildContext, removeUnusedBeans, unusedExclusions);
         beanDeployment.init();
         beanDeployment.validate(buildContext, beanDeploymentValidators);
         
@@ -270,7 +268,6 @@ public class BeanProcessor {
 
         private final List<AnnotationsTransformer> annotationTransformers = new ArrayList<>();
         private final List<BeanRegistrar> beanRegistrars = new ArrayList<>();
-        private final List<ContextRegistrar> contextRegistrars = new ArrayList<>();
         private final List<DeploymentEnhancer> deploymentEnhancers = new ArrayList<>();
         private final List<BeanDeploymentValidator> beanDeploymentValidators = new ArrayList<>();
 
@@ -329,11 +326,6 @@ public class BeanProcessor {
             this.beanRegistrars.add(registrar);
             return this;
         }
-        
-        public Builder addContextRegistrar(ContextRegistrar registrar) {
-            this.contextRegistrars.add(registrar);
-            return this;
-        }
 
         public Builder addDeploymentEnhancer(DeploymentEnhancer enhancer) {
             this.deploymentEnhancers.add(enhancer);
@@ -385,7 +377,7 @@ public class BeanProcessor {
 
         public BeanProcessor build() {
             return new BeanProcessor(name, addBuiltinClasses(index), additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
-                    reflectionRegistration, annotationTransformers, resourceAnnotations, beanRegistrars, contextRegistrars, deploymentEnhancers, beanDeploymentValidators,
+                    reflectionRegistration, annotationTransformers, resourceAnnotations, beanRegistrars, deploymentEnhancers, beanDeploymentValidators,
                     applicationClassPredicate, removeUnusedBeans, removalExclusions);
         }
 

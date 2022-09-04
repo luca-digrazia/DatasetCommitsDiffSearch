@@ -32,7 +32,7 @@ public interface InjectableContext extends AlterableContext {
      *
      * @return all existing contextual instances
      */
-    Collection<ContextInstanceHandle<?>> getAll();
+    Collection<InstanceHandle<?>> getAll();
 
     /**
      * Destroy all existing contextual instances.

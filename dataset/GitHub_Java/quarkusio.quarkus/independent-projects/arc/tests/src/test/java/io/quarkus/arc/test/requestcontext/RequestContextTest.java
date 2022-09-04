@@ -26,7 +26,6 @@ import javax.enterprise.context.ContextNotActiveException;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
-import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
@@ -40,7 +39,6 @@ public class RequestContextTest {
     public void testRequestContext() {
 
         ArcContainer arc = Arc.container();
-        ManagedContext requestContext = arc.requestContext();
 
         try {
             arc.instance(Controller.class).get().getId();
@@ -48,13 +46,13 @@ public class RequestContextTest {
         } catch (ContextNotActiveException expected) {
         }
 
-        requestContext.activate();
+        arc.requestContext().activate();
         assertFalse(Controller.DESTROYED.get());
         Controller controller1 = arc.instance(Controller.class).get();
         Controller controller2 = arc.instance(Controller.class).get();
         String controller2Id = controller2.getId();
         assertEquals(controller1.getId(), controller2Id);
-        requestContext.terminate();
+        arc.requestContext().terminate();
         assertTrue(Controller.DESTROYED.get());
 
         try {
@@ -65,15 +63,11 @@ public class RequestContextTest {
 
         // Id must be different in a different request
         Controller.DESTROYED.set(false);
-        requestContext.activate();
-        assertNotEquals(controller2Id, arc.instance(Controller.class).get().getId());
-        requestContext.terminate();
+        arc.withinRequest(() -> assertNotEquals(controller2Id, arc.instance(Controller.class).get().getId())).run();
         assertTrue(Controller.DESTROYED.get());
 
         Controller.DESTROYED.set(false);
-        requestContext.activate();
-        assertNotEquals(controller2Id, arc.instance(Controller.class).get().getId());
-        requestContext.terminate();
+        assertNotEquals(controller2Id, arc.withinRequest(() -> arc.instance(Controller.class).get().getId()).get());
         assertTrue(Controller.DESTROYED.get());
 
         // @ActivateRequestContext

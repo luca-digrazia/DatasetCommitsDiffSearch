@@ -35,7 +35,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Supplier;
 
-import javax.enterprise.context.RequestScoped;
 import javax.enterprise.event.Event;
 import javax.enterprise.event.NotificationOptions;
 import javax.enterprise.event.ObserverException;
@@ -114,21 +113,7 @@ class EventImpl<T> implements Event<T> {
             return event;
         };
 
-        Supplier<U> withinRequest = () -> {
-            ArcContainer container = Arc.container();
-            if (container.getActiveContext(RequestScoped.class) != null) {
-                return notifyLogic.get();
-            } else {
-                ManagedContext requestContext = container.requestContext();
-                try {
-                    requestContext.activate();
-                    return notifyLogic.get();
-                } finally {
-                    requestContext.terminate();
-                }
-            }
-        };
-        CompletableFuture<U> completableFuture = CompletableFuture.supplyAsync(withinRequest, executor);
+        CompletableFuture<U> completableFuture = CompletableFuture.supplyAsync(Arc.container().withinRequest(notifyLogic), executor);
         return new AsyncEventDeliveryStage<>(completableFuture, executor);
     }
 

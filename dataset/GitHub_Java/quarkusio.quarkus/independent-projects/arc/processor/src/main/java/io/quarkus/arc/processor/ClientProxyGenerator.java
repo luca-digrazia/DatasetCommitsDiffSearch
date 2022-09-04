@@ -28,28 +28,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
-import javax.enterprise.context.ContextNotActiveException;
-
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.TypeVariable;
-
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.arc.CreationalContextImpl;
 import io.quarkus.arc.InjectableBean;
+import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
-import io.quarkus.gizmo.AssignableResultHandle;
-import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.DescriptorUtils;
-import io.quarkus.gizmo.FieldCreator;
-import io.quarkus.gizmo.FieldDescriptor;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
+import org.jboss.protean.gizmo.AssignableResultHandle;
+import org.jboss.protean.gizmo.BytecodeCreator;
+import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.DescriptorUtils;
+import org.jboss.protean.gizmo.FieldCreator;
+import org.jboss.protean.gizmo.FieldDescriptor;
+import org.jboss.protean.gizmo.MethodCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 
 /**
  *
@@ -170,17 +170,16 @@ public class ClientProxyGenerator extends AbstractGenerator {
     }
 
     void implementDelegate(ClassCreator clientProxy, String providerTypeName, FieldDescriptor beanField) {
+        // Arc.container().getContext(bean.getScope()).get(bean, new CreationalContextImpl<>());
         MethodCreator creator = clientProxy.getMethodCreator("delegate", providerTypeName).setModifiers(Modifier.PRIVATE);
         // Arc.container()
-        ResultHandle container = creator.invokeStaticMethod(MethodDescriptors.ARC_CONTAINER);
+        ResultHandle container = creator.invokeStaticMethod(MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class));
         // bean.getScope()
         ResultHandle bean = creator.readInstanceField(beanField, creator.getThis());
         ResultHandle scope = creator.invokeInterfaceMethod(MethodDescriptor.ofMethod(InjectableBean.class, "getScope", Class.class), bean);
         // getContext()
-        ResultHandle context = creator.invokeInterfaceMethod(MethodDescriptors.ARC_CONTAINER_GET_ACTIVE_CONTEXT,
+        ResultHandle context = creator.invokeInterfaceMethod(MethodDescriptor.ofMethod(ArcContainer.class, "getContext", InjectableContext.class, Class.class),
                 container, scope);
-        BytecodeCreator inactiveBranch = creator.ifNull(context).trueBranch();
-        inactiveBranch.throwException(ContextNotActiveException.class, "");
         AssignableResultHandle ret = creator.createVariable(Object.class);
         creator.assign(ret, creator.invokeInterfaceMethod(MethodDescriptors.CONTEXT_GET_IF_PRESENT, context, bean));
         BytecodeCreator isNullBranch = creator.ifNull(ret).trueBranch();

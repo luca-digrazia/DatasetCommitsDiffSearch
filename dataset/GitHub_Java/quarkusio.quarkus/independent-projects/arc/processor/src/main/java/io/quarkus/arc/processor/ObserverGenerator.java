@@ -47,13 +47,13 @@ import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.arc.processor.ResourceOutput.Resource.SpecialType;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.ClassOutput;
-import io.quarkus.gizmo.FieldCreator;
-import io.quarkus.gizmo.FieldDescriptor;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
+import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.ClassOutput;
+import org.jboss.protean.gizmo.FieldCreator;
+import org.jboss.protean.gizmo.FieldDescriptor;
+import org.jboss.protean.gizmo.MethodCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 
 /**
  *
@@ -229,7 +229,7 @@ public class ObserverGenerator extends AbstractGenerator {
         }
 
         // If the declaring bean is @Dependent we must destroy the instance afterwards
-        if (BuiltinScope.DEPENDENT.is(observer.getDeclaringBean().getScope())) {
+        if (ScopeInfo.DEPENDENT.equals(observer.getDeclaringBean().getScope())) {
             notify.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_BEAN_DESTROY, declaringProviderHandle, declaringProviderInstanceHandle, ctxHandle);
         }
 

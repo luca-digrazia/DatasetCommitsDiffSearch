@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.ParameterizedType;
@@ -188,25 +187,18 @@ final class Methods {
 
     static class MethodKey {
 
-        final String name;
-        final List<DotName> params;
         final MethodInfo method;
 
         public MethodKey(MethodInfo method) {
             this.method = method;
-            this.name = method.name();
-            this.params = new ArrayList<>();
-            for(Type i : method.parameters()) {
-                params.add(i.name());
-            }
         }
 
         @Override
         public int hashCode() {
             final int prime = 31;
             int result = 1;
-            result = prime * result + ((name == null) ? 0 : name.hashCode());
-            result = prime * result + ((params == null) ? 0 : params.hashCode());
+            result = prime * result + ((method.name() == null) ? 0 : method.name().hashCode());
+            result = prime * result + ((method.parameters() == null) ? 0 : method.parameters().hashCode());
             return result;
         }
 
@@ -222,10 +214,11 @@ final class Methods {
                 return false;
             }
             MethodKey other = (MethodKey) obj;
-            if (!name.equals(other.name)) {
+            if (!method.name().equals(other.method.name())) {
                 return false;
             }
-            if (!params.equals(other.params)) {
+            // FIXME this does not handle generics!!!
+            if (!method.parameters().equals(other.method.parameters())) {
                 return false;
             }
             return true;
