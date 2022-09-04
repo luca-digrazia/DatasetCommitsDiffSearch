@@ -14,14 +14,14 @@
 
 package com.google.devtools.build.lib.rules.java.proto;
 
+
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.WrappingProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.syntax.Type;
 
 public class StrictDepsUtils {
 
@@ -34,18 +34,11 @@ public class StrictDepsUtils {
   public static JavaCompilationArgsProvider constructJcapFromAspectDeps(
       RuleContext ruleContext,
       Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders) {
-    return constructJcapFromAspectDeps(
-        ruleContext, javaProtoLibraryAspectProviders, /* alwaysStrict= */ false);
-  }
-
-  public static JavaCompilationArgsProvider constructJcapFromAspectDeps(
-      RuleContext ruleContext,
-      Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders,
-      boolean alwaysStrict) {
     JavaCompilationArgsProvider strictCompProvider =
         JavaCompilationArgsProvider.merge(
-            ruleContext.getPrerequisites("deps", Mode.TARGET, JavaCompilationArgsProvider.class));
-    if (alwaysStrict || StrictDepsUtils.isStrictDepsJavaProtoLibrary(ruleContext)) {
+            WrappingProvider.Helper.unwrapProviders(
+                javaProtoLibraryAspectProviders, JavaCompilationArgsProvider.class));
+    if (StrictDepsUtils.isStrictDepsJavaProtoLibrary(ruleContext)) {
       return strictCompProvider;
     } else {
       JavaCompilationArgsProvider.Builder nonStrictDirectJars =
@@ -57,7 +50,8 @@ public class StrictDepsUtils {
             .addDirectCompileTimeJars(
                 /* interfaceJars= */ args.getDirectCompileTimeJars(),
                 /* fullJars= */ args.getDirectFullCompileTimeJars())
-            .addTransitiveCompileTimeJars(args.getTransitiveCompileTimeJars());
+            .addTransitiveCompileTimeJars(args.getTransitiveCompileTimeJars())
+            .addInstrumentationMetadata(args.getInstrumentationMetadata());
       }
       // Don't collect .jdeps recursively for legacy "feature" compatibility reasons. Collecting
       // .jdeps here is probably a mistake; see JavaCompilationArgsProvider#makeNonStrict.
@@ -97,8 +91,7 @@ public class StrictDepsUtils {
    * <p>Using this method requires requesting the JavaConfiguration fragment.
    */
   public static boolean isStrictDepsJavaProtoLibrary(RuleContext ruleContext) {
-    if (ruleContext.getFragment(JavaConfiguration.class).strictDepsJavaProtos()
-        || !ruleContext.attributes().has("strict_deps", Type.BOOLEAN)) {
+    if (ruleContext.getFragment(JavaConfiguration.class).strictDepsJavaProtos()) {
       return true;
     }
     return (boolean) ruleContext.getRule().getAttributeContainer().getAttr("strict_deps");
