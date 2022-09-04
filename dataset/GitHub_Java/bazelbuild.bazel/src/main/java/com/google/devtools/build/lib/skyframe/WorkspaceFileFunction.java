@@ -47,18 +47,15 @@ public class WorkspaceFileFunction implements SkyFunction {
   private final PackageFactory packageFactory;
   private final BlazeDirectories directories;
   private final RuleClassProvider ruleClassProvider;
-  private final SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining;
   private static final PackageIdentifier rootPackage = PackageIdentifier.createInMainRepo("");
 
   public WorkspaceFileFunction(
       RuleClassProvider ruleClassProvider,
       PackageFactory packageFactory,
-      BlazeDirectories directories,
-      SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining) {
+      BlazeDirectories directories) {
     this.packageFactory = packageFactory;
     this.directories = directories;
     this.ruleClassProvider = ruleClassProvider;
-    this.skylarkImportLookupFunctionForInlining = skylarkImportLookupFunctionForInlining;
   }
 
   @Override
@@ -108,7 +105,8 @@ public class WorkspaceFileFunction implements SkyFunction {
               key.getIndex() == 0,
               directories.getEmbeddedBinariesRoot(),
               directories.getWorkspace(),
-              directories.getLocalJavabase());
+              directories.getLocalJavabase(),
+              skylarkSemantics);
       if (key.getIndex() > 0) {
         prevValue =
             (WorkspaceFileValue)
@@ -124,12 +122,7 @@ public class WorkspaceFileFunction implements SkyFunction {
       BuildFileAST ast = workspaceASTValue.getASTs().get(key.getIndex());
       PackageFunction.SkylarkImportResult importResult =
           PackageFunction.fetchImportsFromBuildFile(
-              repoWorkspace,
-              rootPackage,
-              ast,
-              key.getIndex(),
-              env,
-              skylarkImportLookupFunctionForInlining);
+              repoWorkspace.asPath().asFragment(), rootPackage, ast, env, null);
       if (importResult == null) {
         return null;
       }

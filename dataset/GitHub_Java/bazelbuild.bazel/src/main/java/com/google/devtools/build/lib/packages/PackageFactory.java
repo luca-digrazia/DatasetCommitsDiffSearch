@@ -1024,7 +1024,8 @@ public final class PackageFactory {
     // We are explicit about types we don't understand so we minimize changes to existing callers
     // if we add more types that we can represent.
     throw new NotRepresentableException(
-        String.format("cannot represent %s (%s) in Starlark", val, val.getClass()));
+        String.format(
+            "cannot represent %s (%s) in skylark", val.toString(), val.getClass().toString()));
   }
 
 
@@ -1529,7 +1530,10 @@ public final class PackageFactory {
     return StructProvider.STRUCT.create(builder.build(), "no native function or rule '%s'");
   }
 
-  private void buildPkgEnv(Environment pkgEnv, PackageContext context) {
+  private void buildPkgEnv(
+      Environment pkgEnv,
+      PackageContext context,
+      PackageIdentifier packageId) {
     // TODO(bazel-team): remove the naked functions that are redundant with the nativeModule,
     // or if not possible, at least make them straight copies from the native module variant.
     // or better, use a common Environment.Frame for these common bindings
@@ -1566,6 +1570,10 @@ public final class PackageFactory {
     }
 
     pkgEnv.setupDynamic(PKG_CONTEXT, context);
+    if (!pkgEnv.getSemantics().incompatiblePackageNameIsAFunction()) {
+      pkgEnv.setupDynamic(Runtime.PKG_NAME, packageId.getPackageFragment().getPathString());
+      pkgEnv.setupDynamic(Runtime.REPOSITORY_NAME, packageId.getRepository().toString());
+    }
   }
 
   /**
@@ -1640,7 +1648,7 @@ public final class PackageFactory {
       PackageContext context =
           new PackageContext(
               pkgBuilder, globber, eventHandler, ruleFactory.getAttributeContainerFactory());
-      buildPkgEnv(pkgEnv, context);
+      buildPkgEnv(pkgEnv, context, packageId);
 
       if (!validatePackageIdentifier(packageId, buildFileAST.getLocation(), eventHandler)) {
         pkgBuilder.setContainsErrors();

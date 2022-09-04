@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.events.PrintingEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.skyframe.packages.BazelPackageLoader;
 import com.google.devtools.build.lib.skyframe.packages.PackageLoader;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
 import com.google.devtools.build.lib.vfs.Path;
@@ -42,7 +41,7 @@ public class BazelPackagePrinter {
               + "package/to/print");
       System.exit(1);
     }
-    FileSystem fileSystem = new JavaIoFileSystem(DigestHashFunction.MD5);
+    FileSystem fileSystem = new JavaIoFileSystem();
     PackageLoader loader =
         newPackageLoader(
             Root.fromPath(fileSystem.getPath(getAbsPathFlag(args[0], "--workspace_root="))),

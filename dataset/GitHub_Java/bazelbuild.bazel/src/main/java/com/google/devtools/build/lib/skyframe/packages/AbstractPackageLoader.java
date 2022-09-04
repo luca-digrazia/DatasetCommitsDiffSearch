@@ -77,7 +77,6 @@ import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.BuildDriver;
 import com.google.devtools.build.skyframe.Differencer;
 import com.google.devtools.build.skyframe.ErrorInfo;
-import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.GraphInconsistencyReceiver;
@@ -306,13 +305,8 @@ public abstract class AbstractPackageLoader implements PackageLoader {
       keys.add(PackageValue.key(pkgId));
     }
 
-    EvaluationContext evaluationContext =
-        EvaluationContext.newBuilder()
-            .setKeepGoing(true)
-            .setNumThreads(skyframeThreads)
-            .setEventHander(reporter)
-            .build();
-    EvaluationResult<PackageValue> evalResult = makeFreshDriver().evaluate(keys, evaluationContext);
+    EvaluationResult<PackageValue> evalResult =
+        makeFreshDriver().evaluate(keys, /*keepGoing=*/ true, skyframeThreads, reporter);
 
     ImmutableMap.Builder<PackageIdentifier, PackageLoader.PackageOrException> result =
         ImmutableMap.builder();

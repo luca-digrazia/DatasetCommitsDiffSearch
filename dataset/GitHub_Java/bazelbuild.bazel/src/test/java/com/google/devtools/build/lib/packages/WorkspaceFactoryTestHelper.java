@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -38,7 +38,7 @@ class WorkspaceFactoryTestHelper {
   private Package.Builder builder;
   private Exception exception;
   private ImmutableList<Event> events;
-  private StarlarkSemantics starlarkSemantics;
+  private SkylarkSemantics skylarkSemantics;
 
   private final boolean allowOverride;
 
@@ -51,7 +51,7 @@ class WorkspaceFactoryTestHelper {
     this.exception = null;
     this.events = null;
     this.allowOverride = allowOverride;
-    this.starlarkSemantics = StarlarkSemantics.DEFAULT_SEMANTICS;
+    this.skylarkSemantics = SkylarkSemantics.DEFAULT_SEMANTICS;
   }
 
   void parse(String... args) {
@@ -76,14 +76,15 @@ class WorkspaceFactoryTestHelper {
             allowOverride,
             root.asPath(),
             root.asPath(),
-            /* defaultSystemJavabaseDir= */ null);
+            /* defaultSystemJavabaseDir= */ null,
+            /* skylarkSemantics= */ SkylarkSemantics.DEFAULT_SEMANTICS);
     Exception exception = null;
     try {
       byte[] bytes =
           FileSystemUtils.readWithKnownFileSize(workspaceFilePath, workspaceFilePath.getFileSize());
-      factory.parseForTesting(
+      factory.parse(
           ParserInputSource.create(bytes, workspaceFilePath.asFragment()),
-          starlarkSemantics,
+          skylarkSemantics,
           eventHandler);
     } catch (BuildFileContainsErrorsException e) {
       exception = e;
@@ -115,15 +116,14 @@ class WorkspaceFactoryTestHelper {
   }
 
   protected void setSkylarkSemantics(String... options) throws Exception {
-    starlarkSemantics = parseSkylarkSemanticsOptions(options);
+    skylarkSemantics = parseSkylarkSemanticsOptions(options);
   }
 
-  private static StarlarkSemantics parseSkylarkSemanticsOptions(String... options)
+  private static SkylarkSemantics parseSkylarkSemanticsOptions(String... options)
       throws Exception {
-    OptionsParser parser =
-        OptionsParser.builder().optionsClasses(StarlarkSemanticsOptions.class).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(SkylarkSemanticsOptions.class);
     parser.parse(options);
-    return parser.getOptions(StarlarkSemanticsOptions.class).toSkylarkSemantics();
+    return parser.getOptions(SkylarkSemanticsOptions.class).toSkylarkSemantics();
   }
 
 }
