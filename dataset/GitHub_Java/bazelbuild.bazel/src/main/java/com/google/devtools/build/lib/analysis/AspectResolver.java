@@ -16,21 +16,21 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
+import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
-import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.skyframe.AspectFunction;
-import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
+import com.google.devtools.build.lib.skyframe.AspectCreationException;
+import com.google.devtools.build.lib.skyframe.AspectValueKey;
+import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException2;
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -50,19 +50,19 @@ public final class AspectResolver {
   @Nullable
   public static OrderedSetMultimap<Dependency, ConfiguredAspect> resolveAspectDependencies(
       SkyFunction.Environment env,
-      Map<SkyKey, ConfiguredTarget> configuredTargetMap,
+      Map<SkyKey, ConfiguredTargetAndData> configuredTargetMap,
       Iterable<Dependency> deps,
-      NestedSetBuilder<Package> transitivePackages)
-      throws AspectFunction.AspectCreationException, InterruptedException {
+      @Nullable NestedSetBuilder<Package> transitivePackages)
+      throws AspectCreationException, InterruptedException {
     OrderedSetMultimap<Dependency, ConfiguredAspect> result = OrderedSetMultimap.create();
     Set<SkyKey> allAspectKeys = new HashSet<>();
     for (Dependency dep : deps) {
       allAspectKeys.addAll(getAspectKeys(dep).values());
     }
 
-    Map<SkyKey, ValueOrException2<AspectFunction.AspectCreationException, NoSuchThingException>>
-        depAspects = env.getValuesOrThrow(allAspectKeys,
-            AspectFunction.AspectCreationException.class, NoSuchThingException.class);
+    Map<SkyKey, ValueOrException2<AspectCreationException, NoSuchThingException>> depAspects =
+        env.getValuesOrThrow(
+            allAspectKeys, AspectCreationException.class, NoSuchThingException.class);
 
     for (Dependency dep : deps) {
       Map<AspectDescriptor, SkyKey> aspectToKeys = getAspectKeys(dep);
@@ -76,12 +76,11 @@ public final class AspectResolver {
           // instances and merge them into a single Exception to get full root cause data.
           aspectValue = (AspectValue) depAspects.get(aspectKey).get();
         } catch (NoSuchThingException e) {
-          throw new AspectFunction.AspectCreationException(
+          throw new AspectCreationException(
               String.format(
                   "Evaluation of aspect %s on %s failed: %s",
-                  depAspect.getAspect().getAspectClass().getName(),
-                  dep.getLabel(),
-                  e.toString()));
+                  depAspect.getAspect().getAspectClass().getName(), dep.getLabel(), e),
+              new LabelCause(dep.getLabel(), e.getMessage()));
         }
 
         if (aspectValue == null) {
@@ -90,14 +89,17 @@ public final class AspectResolver {
         }
 
         // Validate that aspect is applicable to "bare" configured target.
-        ConfiguredTarget associatedTarget = configuredTargetMap
-            .get(ConfiguredTargetValue.key(dep.getLabel(), dep.getConfiguration()));
+        ConfiguredTargetAndData associatedTarget =
+            configuredTargetMap.get(dep.getConfiguredTargetKey());
         if (!aspectMatchesConfiguredTarget(associatedTarget, aspectValue.getAspect())) {
           continue;
         }
 
         result.put(dep, aspectValue.getConfiguredAspect());
-        transitivePackages.addTransitive(aspectValue.getTransitivePackages());
+        if (transitivePackages != null) {
+          transitivePackages.addTransitive(
+              aspectValue.getTransitivePackagesForPackageRootResolution());
+        }
       }
     }
     return result;
@@ -111,20 +113,24 @@ public final class AspectResolver {
    * combinations of aspects for a particular configured target, so it would result in a
    * combinatorial explosion of Skyframe nodes.
    */
-  public static OrderedSetMultimap<Attribute, ConfiguredTarget> mergeAspects(
-      OrderedSetMultimap<Attribute, Dependency> depValueNames,
-      Map<SkyKey, ConfiguredTarget> depConfiguredTargetMap,
+  public static OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> mergeAspects(
+      OrderedSetMultimap<DependencyKind, Dependency> depValueNames,
+      Map<SkyKey, ConfiguredTargetAndData> depConfiguredTargetMap,
       OrderedSetMultimap<Dependency, ConfiguredAspect> depAspectMap)
-      throws MergedConfiguredTarget.DuplicateException {
-    OrderedSetMultimap<Attribute, ConfiguredTarget> result = OrderedSetMultimap.create();
+      throws DuplicateException {
+    OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> result =
+        OrderedSetMultimap.create();
 
-    for (Map.Entry<Attribute, Dependency> entry : depValueNames.entries()) {
+    for (Map.Entry<DependencyKind, Dependency> entry : depValueNames.entries()) {
       Dependency dep = entry.getValue();
-      SkyKey depKey = ConfiguredTargetValue.key(dep.getLabel(), dep.getConfiguration());
-      ConfiguredTarget depConfiguredTarget = depConfiguredTargetMap.get(depKey);
+      SkyKey depKey = dep.getConfiguredTargetKey();
+      ConfiguredTargetAndData depConfiguredTarget = depConfiguredTargetMap.get(depKey);
 
-      result.put(entry.getKey(),
-          MergedConfiguredTarget.of(depConfiguredTarget, depAspectMap.get(dep)));
+      result.put(
+          entry.getKey(),
+          depConfiguredTarget.fromConfiguredTarget(
+              MergedConfiguredTarget.of(
+                  depConfiguredTarget.getConfiguredTarget(), depAspectMap.get(dep))));
     }
 
     return result;
@@ -139,33 +145,39 @@ public final class AspectResolver {
     return result;
   }
 
-  private static AspectValue.AspectKey buildAspectKey(AspectCollection.AspectDeps aspectDeps,
-      HashMap<AspectDescriptor, SkyKey> result, Dependency dep) {
+  private static AspectKey buildAspectKey(
+      AspectCollection.AspectDeps aspectDeps,
+      HashMap<AspectDescriptor, SkyKey> result,
+      Dependency dep) {
     if (result.containsKey(aspectDeps.getAspect())) {
-      return (AspectValue.AspectKey) result.get(aspectDeps.getAspect()).argument();
+      return (AspectKey) result.get(aspectDeps.getAspect()).argument();
     }
 
-    ImmutableList.Builder<AspectValue.AspectKey> dependentAspects = ImmutableList.builder();
+    ImmutableList.Builder<AspectKey> dependentAspects = ImmutableList.builder();
     for (AspectCollection.AspectDeps path : aspectDeps.getDependentAspects()) {
       dependentAspects.add(buildAspectKey(path, result, dep));
     }
-    AspectValue.AspectKey aspectKey = AspectValue.createAspectKey(
-        dep.getLabel(), dep.getConfiguration(),
-        dependentAspects.build(),
-        aspectDeps.getAspect(),
-        dep.getAspectConfiguration(aspectDeps.getAspect()));
-    result.put(aspectKey.getAspectDescriptor(), aspectKey.getSkyKey());
+    AspectKey aspectKey =
+        AspectValueKey.createAspectKey(
+            dep.getLabel(),
+            dep.getConfiguration(),
+            dependentAspects.build(),
+            aspectDeps.getAspect(),
+            dep.getAspectConfiguration(aspectDeps.getAspect()));
+    result.put(aspectKey.getAspectDescriptor(), aspectKey);
     return aspectKey;
   }
 
-  public static boolean aspectMatchesConfiguredTarget(final ConfiguredTarget dep, Aspect aspect) {
-    if (!aspect.getDefinition().applyToFiles() && !(dep.getTarget() instanceof Rule)) {
+  public static boolean aspectMatchesConfiguredTarget(ConfiguredTargetAndData dep, Aspect aspect) {
+    if (!aspect.getDefinition().applyToFiles()
+        && !aspect.getDefinition().applyToGeneratingRules()
+        && !(dep.getTarget() instanceof Rule)) {
       return false;
     }
     if (dep.getTarget().getAssociatedRule() == null) {
       // even aspects that 'apply to files' cannot apply to input files.
       return false;
     }
-    return dep.satisfies(aspect.getDefinition().getRequiredProviders());
+    return dep.getConfiguredTarget().satisfies(aspect.getDefinition().getRequiredProviders());
   }
 }
