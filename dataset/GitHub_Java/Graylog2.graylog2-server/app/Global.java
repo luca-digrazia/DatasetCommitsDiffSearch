@@ -24,11 +24,13 @@ import com.google.inject.Module;
 import com.google.inject.name.Names;
 import lib.ApiClient;
 import lib.ServerNodesRefreshService;
-import lib.security.*;
-import models.LocalAdminUser;
+import lib.security.LocalAdminUserRealm;
+import lib.security.PlayAuthenticationListener;
+import lib.security.RethrowingFirstSuccessfulStrategy;
+import lib.security.ServerRestInterfaceRealm;
 import models.ModelFactoryModule;
 import models.Node;
-import models.UserService;
+import models.User;
 import models.api.responses.NodeSummaryResponse;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationListener;
@@ -93,15 +95,12 @@ public class Global extends GlobalSettings {
         injector = Guice.createInjector(modules);
 
         // start the services that need starting
-        final ApiClient api = injector.getInstance(ApiClient.class);
-        api.start();
+        injector.getInstance(ApiClient.class).start();
         injector.getInstance(ServerNodesRefreshService.class).start();
-        // TODO replace with custom AuthenticatedAction filter
-        RedirectAuthenticator.userService = injector.getInstance(UserService.class);
 
         LocalAdminUserRealm localAdminRealm = new LocalAdminUserRealm("local-accounts");
         localAdminRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA1"));
-        setupLocalUser(api, localAdminRealm, app);
+        setupLocalUser(localAdminRealm, app);
 
         Realm serverRestInterfaceRealm = injector.getInstance(ServerRestInterfaceRealm.class);
         final DefaultSecurityManager securityManager =
@@ -125,7 +124,7 @@ public class Global extends GlobalSettings {
         return injector.getInstance(controllerClass);
     }
 
-    private void setupLocalUser(ApiClient api, SimpleAccountRealm realm, Application app) {
+    private void setupLocalUser(SimpleAccountRealm realm, Application app) {
 		final Configuration config = app.configuration();
         final String username = config.getString("local-user.name", "localadmin");
         final String passwordHash = config.getString("local-user.password-sha1");
@@ -140,7 +139,7 @@ public class Global extends GlobalSettings {
                 passwordHash,
 				"local-admin"
 		);
-        LocalAdminUser.createSharedInstance(api, username, passwordHash);
+        User.LocalAdminUser.createSharedInstance(username, passwordHash);
     }
 
 }
