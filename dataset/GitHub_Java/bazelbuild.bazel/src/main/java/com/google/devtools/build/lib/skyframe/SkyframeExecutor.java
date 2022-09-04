@@ -171,7 +171,6 @@ import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.PrintStream;
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -318,7 +317,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   private final PathResolverFactory pathResolverFactory = new PathResolverFactoryImpl();
   @Nullable private final NonexistentFileReceiver nonexistentFileReceiver;
-  private final MutableSupplier<BigInteger> nonceVersion = new MutableSupplier<>();
 
   /** An {@link ArtifactResolverSupplier} that supports setting of an {@link ArtifactFactory}. */
   public static class MutableArtifactFactorySupplier implements ArtifactResolverSupplier {
@@ -516,8 +514,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             shouldStoreTransitivePackagesInLoadingAndAnalysis(),
             shouldUnblockCpuWorkWhenFetchingDeps,
             defaultBuildOptions,
-            configuredTargetProgress,
-            nonceVersion));
+            configuredTargetProgress));
     map.put(
         SkyFunctions.ASPECT,
         new AspectFunction(
@@ -525,8 +522,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             ruleClassProvider,
             skylarkImportLookupFunctionForInlining,
             shouldStoreTransitivePackagesInLoadingAndAnalysis(),
-            defaultBuildOptions,
-            nonceVersion));
+            defaultBuildOptions));
     map.put(
         SkyFunctions.LOAD_SKYLARK_ASPECT,
         new ToplevelSkylarkAspectFunction(skylarkImportLookupFunctionForInlining));
@@ -628,11 +624,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     lastConcurrencyLevel = concurrencyLevel;
     perBuildSyscallCache = newPerBuildSyscallCache(concurrencyLevel);
     return perBuildSyscallCache;
-  }
-
-  /** Do not use except in subclasses. */
-  protected void setNonceVersion(BigInteger nonceVersion) {
-    this.nonceVersion.set(nonceVersion);
   }
 
  @ThreadCompatible
@@ -2376,7 +2367,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         new ActionArtifactCycleReporter(packageManager),
         new ConfiguredTargetCycleReporter(packageManager),
         new TestSuiteCycleReporter(packageManager),
-        new RegisteredToolchainsCycleReporter(),
         // TODO(ulfjack): The SkylarkModuleCycleReporter swallows previously reported cycles
         // unconditionally! Is that intentional?
         new SkylarkModuleCycleReporter());
@@ -2608,3 +2598,4 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return buildDriver.evaluate(roots, evaluationContext);
   }
 }
+
