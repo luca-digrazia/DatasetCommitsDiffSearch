@@ -45,7 +45,7 @@ final public class Constants {
 
     public static final Set<String> SUPPORTED_ANNOTATIONS_TYPES = new HashSet<>();
     public static final Map<String, String> ALIASED_TYPES = new HashMap<>();
-    public static final String DOCS_SRC_MAIN_ASCIIDOC_GENERATED = "/target/asciidoc/generated/config/";
+    public static final String DOCS_SRC_MAIN_ASCIIDOC_GENERATED = "/docs/src/main/asciidoc/generated/";
     public static final Path GENERATED_DOCS_PATH = Paths
             .get(System.getProperties().getProperty("maven.multiModuleProjectDirectory")
                     + Constants.DOCS_SRC_MAIN_ASCIIDOC_GENERATED);
@@ -61,7 +61,7 @@ final public class Constants {
     public static final String MEMORY_SIZE_INFORMATION = String.format(Constants.MORE_INFO_ABOUT_TYPE_FORMAT,
             Constants.MEMORY_SIZE_NOTE_ANCHOR, "MemorySize");
 
-    public static final String CONFIG_PHASE_RUNTIME_ILLUSTRATION = "icon:cogs[title=Overridable at runtime]";
+    public static final String CONFIG_PHASE_RUNTIME_ILLUSTRATION = "icon:gears[title=Overridable at runtime]";
     public static final String CONFIG_PHASE_BUILD_TIME_ILLUSTRATION = "icon:archive[title=Fixed at build time]";
     public static final String CONFIG_PHASE_LEGEND = String.format(
             "\n%s Configuration property fixed at build time - %s️ Configuration property overridable at runtime \n",
