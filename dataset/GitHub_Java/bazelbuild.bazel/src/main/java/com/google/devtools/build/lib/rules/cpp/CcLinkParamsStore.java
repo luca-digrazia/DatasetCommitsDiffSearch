@@ -27,26 +27,30 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 public final class CcLinkParamsStore extends AbstractCcLinkParamsStore {
   public static final ObjectCodec<com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore> CODEC =
       new CcLinkParamsStore_AutoCodec();
-  public static final Function<TransitiveInfoCollection, CcLinkingInfo> TO_LINK_PARAMS =
+  public static final Function<TransitiveInfoCollection, AbstractCcLinkParamsStore> TO_LINK_PARAMS =
       input -> {
         // ... then try Skylark.
-        return input.get(CcLinkingInfo.PROVIDER);
+        CcLinkingInfo provider = input.get(CcLinkingInfo.PROVIDER);
+        return provider == null ? null : provider.getCcLinkParamsStore();
       };
 
   @AutoCodec
   @VisibleForSerialization
   static class CcLinkParamsInfoCollection extends AbstractCcLinkParamsStore {
-    private final Iterable<CcLinkingInfo> ccLinkingInfos;
+    private final Iterable<com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore>
+        ccLinkParamStores;
 
-    CcLinkParamsInfoCollection(Iterable<CcLinkingInfo> ccLinkingInfos) {
-      this.ccLinkingInfos = ccLinkingInfos;
+    CcLinkParamsInfoCollection(
+        Iterable<com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore> ccLinkParamStores) {
+      this.ccLinkParamStores = ccLinkParamStores;
     }
 
     @Override
     protected void collect(
         CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
-      for (CcLinkingInfo ccLinkingInfo : ccLinkingInfos) {
-        builder.add(ccLinkingInfo);
+      for (com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore ccLinkParamsStore :
+          ccLinkParamStores) {
+        builder.add(ccLinkParamsStore);
       }
     }
   }
@@ -73,7 +77,7 @@ public final class CcLinkParamsStore extends AbstractCcLinkParamsStore {
   }
 
   public static com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore merge(
-      final Iterable<CcLinkingInfo> providers) {
+      final Iterable<com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore> providers) {
     return new com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore(
         new CcLinkParamsInfoCollection(providers));
   }

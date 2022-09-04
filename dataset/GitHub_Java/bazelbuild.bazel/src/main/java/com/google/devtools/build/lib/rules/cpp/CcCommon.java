@@ -20,6 +20,7 @@ import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -48,8 +49,9 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.SourceCategory;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProvidesException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
-import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
+import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -155,20 +157,24 @@ public final class CcCommon {
 
   public static final String CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME = ":cc_toolchain";
 
+  /** C++ configuration */
+  private final CppConfiguration cppConfiguration;
+
   private final RuleContext ruleContext;
 
   private final CcToolchainProvider ccToolchain;
 
-  private final FdoProvider fdoProvider;
+  private final FdoSupportProvider fdoSupport;
 
   public CcCommon(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
+    this.cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     this.ccToolchain =
         Preconditions.checkNotNull(
             CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext));
-    this.fdoProvider =
+    this.fdoSupport =
         Preconditions.checkNotNull(
-            CppHelper.getFdoProviderUsingDefaultCcToolchainAttribute(ruleContext));
+            CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext));
   }
 
   /**
@@ -246,6 +252,12 @@ public final class CcCommon {
     Iterable<String> ourLinkopts = ruleContext.attributes().get("linkopts", Type.STRING_LIST);
     List<String> result;
     if (ourLinkopts != null) {
+      boolean allowDashStatic =
+          !cppConfiguration.forceIgnoreDashStatic()
+              && (cppConfiguration.getDynamicModeFlag() != DynamicMode.FULLY);
+      if (!allowDashStatic) {
+        ourLinkopts = Iterables.filter(ourLinkopts, (v) -> !"-static".equals(v));
+      }
       result = CppHelper.expandLinkopts(ruleContext, "linkopts", ourLinkopts);
     } else {
       result = ImmutableList.of();
@@ -410,8 +422,8 @@ public final class CcCommon {
   /**
    * Returns the C++ FDO optimization support provider.
    */
-  public FdoProvider getFdoProvider() {
-    return fdoProvider;
+  public FdoSupportProvider getFdoSupport() {
+    return fdoSupport;
   }
 
   /**
@@ -579,14 +591,22 @@ public final class CcCommon {
         .getPathUnderExecRoot();
     result.add(rulePackage);
 
-    if (ruleContext
-            .getConfiguration()
-            .getOptions()
-            .get(CppOptions.class)
-            .experimentalIncludesAttributeSubpackageTraversal
-        && ruleContext.getRule().isAttributeValueExplicitlySpecified("includes")) {
-      PathFragment packageFragment =
-          ruleContext.getLabel().getPackageIdentifier().getPathUnderExecRoot();
+    // Gather up all the dirs from the rule's srcs as well as any of the srcs outputs.
+    if (hasAttribute("srcs", BuildType.LABEL_LIST)) {
+      for (TransitiveInfoCollection src :
+          ruleContext.getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class)) {
+        result.add(src.getLabel().getPackageIdentifier().getPathUnderExecRoot());
+        for (Artifact a : src.getProvider(FileProvider.class).getFilesToBuild()) {
+          // Attempt to gather subdirectories that might contain include files.
+          result.add(a.getRootRelativePath().getParentDirectory());
+        }
+      }
+    }
+
+    // Add in any 'includes' attribute values as relative path fragments
+    if (ruleContext.getRule().isAttributeValueExplicitlySpecified("includes")) {
+      PathFragment packageFragment = ruleContext.getLabel().getPackageIdentifier()
+          .getPathUnderExecRoot();
       // For now, anything with an 'includes' needs a blanket declaration
       result.add(packageFragment.getRelative("**"));
     }
