@@ -1,25 +1,24 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.plugins.views.search.db;
 
 import org.graylog.plugins.views.search.Search;
-import org.graylog.plugins.views.search.SearchSummary;
-import org.graylog.plugins.views.search.views.ViewSummaryDTO;
-import org.graylog.plugins.views.search.views.ViewSummaryService;
+import org.graylog.plugins.views.search.views.ViewDTO;
+import org.graylog.plugins.views.search.views.ViewService;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Duration;
@@ -31,8 +30,6 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,7 +45,7 @@ public class SearchesCleanUpJobTest {
     public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
     @Mock
-    private ViewSummaryService viewService;
+    private ViewService viewService;
 
     @Mock
     private SearchDbService searchDbService;
@@ -72,7 +69,7 @@ public class SearchesCleanUpJobTest {
 
     @Test
     public void testForEmptySearches() {
-        final ViewSummaryDTO view = mock(ViewSummaryDTO.class);
+        final ViewDTO view = mock(ViewDTO.class);
 
         when(viewService.streamAll()).thenReturn(Stream.of(view));
         when(searchDbService.streamAll()).thenReturn(Stream.empty());
@@ -101,7 +98,7 @@ public class SearchesCleanUpJobTest {
     @Test
     public void testForReferencedSearches() {
         final String searchId = "This search is in use";
-        final ViewSummaryDTO view = mock(ViewSummaryDTO.class);
+        final ViewDTO view = mock(ViewDTO.class);
         when(view.searchId()).thenReturn(searchId);
         when(viewService.streamAll()).thenReturn(Stream.of(view));
 
@@ -119,23 +116,22 @@ public class SearchesCleanUpJobTest {
     @Test
     public void testForMixedReferencedNonReferencedExpiredAndNonexpiredSearches() {
         final String searchId = "This search is in use";
-        final ViewSummaryDTO view = mock(ViewSummaryDTO.class);
+        final ViewDTO view = mock(ViewDTO.class);
         when(view.searchId()).thenReturn(searchId);
         when(viewService.streamAll()).thenReturn(Stream.of(view));
 
-        final SearchSummary search1 = mock(SearchSummary.class);
+        final Search search1 = mock(Search.class);
         when(search1.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardDays(30)));
         when(search1.id()).thenReturn(searchId);
 
-        final SearchSummary search2 = mock(SearchSummary.class);
+        final Search search2 = mock(Search.class);
         when(search2.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardHours(2)));
 
-        final SearchSummary search3 = mock(SearchSummary.class);
+        final Search search3 = mock(Search.class);
         when(search3.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardDays(30)));
         when(search3.id()).thenReturn("This search is expired and should be deleted");
 
-        when(searchDbService.findSummaries()).thenReturn(Stream.of(search1, search2, search3));
-        when(searchDbService.getExpiredSearches(any(), any())).thenCallRealMethod();
+        when(searchDbService.streamAll()).thenReturn(Stream.of(search1, search2, search3));
 
         this.searchesCleanUpJob.doRun();
 
@@ -148,24 +144,10 @@ public class SearchesCleanUpJobTest {
     public void testForEmptyViews() {
         when(viewService.streamAll()).thenReturn(Stream.empty());
 
-        final SearchSummary search = mock(SearchSummary.class);
+        final Search search = mock(Search.class);
         when(search.createdAt()).thenReturn(DateTime.now(DateTimeZone.UTC).minus(Duration.standardDays(30)));
         when(search.id()).thenReturn("This search is expired and should be deleted");
-        when(searchDbService.findSummaries()).thenReturn(Stream.of(search));
-        when(searchDbService.getExpiredSearches(any(), any())).thenCallRealMethod();
-
-        this.searchesCleanUpJob.doRun();
-
-        final ArgumentCaptor<String> deletedSearchId = ArgumentCaptor.forClass(String.class);
-        verify(searchDbService, times(1)).delete(deletedSearchId.capture());
-        assertThat(deletedSearchId.getValue()).isEqualTo("This search is expired and should be deleted");
-    }
-
-    @Test
-    public void testForEmptyViews2() {
-        when(viewService.streamAll()).thenReturn(Stream.empty());
-
-        when(searchDbService.getExpiredSearches(any(), any())).thenReturn(new HashSet<>(Arrays.asList("This search is expired and should be deleted")));
+        when(searchDbService.streamAll()).thenReturn(Stream.of(search));
 
         this.searchesCleanUpJob.doRun();
 
