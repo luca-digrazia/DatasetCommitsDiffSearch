@@ -13,6 +13,6 @@ public class JpaProducer {
     EntityManagerFactory emf;
 
     @Produces
-    @PersistenceContext
+    @PersistenceContext(unitName = "templatePU")
     EntityManager em;
 }

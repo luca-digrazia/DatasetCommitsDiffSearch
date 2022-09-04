@@ -115,8 +115,4 @@ public interface ProcessorContext {
      * @return
      */
     boolean isCapabilityPresent(String capability);
-
-    <T> void setProperty(String key, T value);
-
-    <T> T getProperty(String key);
 }
