@@ -19,14 +19,12 @@ package org.graylog2.rest.resources.tools;
 
 import com.codahale.metrics.annotation.Timed;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.audit.jersey.NoAuditEvent;
 import org.graylog2.rest.models.tools.requests.RegexTestRequest;
 import org.graylog2.rest.models.tools.responses.RegexTesterResponse;
-import org.graylog2.rest.models.tools.responses.RegexValidationResponse;
 import org.graylog2.shared.rest.resources.RestResource;
+import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.Valid;
-import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
@@ -55,27 +53,8 @@ public class RegexTesterResource extends RestResource {
     @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @NoAuditEvent("only used to test regex values")
     public RegexTesterResponse testRegex(@Valid @NotNull RegexTestRequest regexTestRequest) {
         return doTestRegex(regexTestRequest.string(), regexTestRequest.regex());
-    }
-
-    @GET
-    @Path("/validate")
-    @Timed
-    @Produces(MediaType.APPLICATION_JSON)
-    public RegexValidationResponse validateRegex(@QueryParam("regex") @NotEmpty String regex) {
-        final RegexValidationResponse.Builder response = RegexValidationResponse.builder()
-                .regex(regex);
-
-        try {
-            Pattern.compile(regex, Pattern.DOTALL);
-            response.isValid(true);
-        } catch (PatternSyntaxException e) {
-            response.isValid(false).validationMessage(e.getMessage());
-        }
-
-        return response.build();
     }
 
     private RegexTesterResponse doTestRegex(String example, String regex) {
