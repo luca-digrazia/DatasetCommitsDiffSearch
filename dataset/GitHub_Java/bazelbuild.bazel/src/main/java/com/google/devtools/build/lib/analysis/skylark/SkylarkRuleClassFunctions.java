@@ -522,8 +522,7 @@ public class SkylarkRuleClassFunctions {
           if (implicitOutputs != Runtime.NONE) {
             if (implicitOutputs instanceof BaseFunction) {
               BaseFunction func = (BaseFunction) implicitOutputs;
-              SkylarkCallbackFunction callback =
-                  new SkylarkCallbackFunction(func, ast, funcallEnv.getSemantics());
+              SkylarkCallbackFunction callback = new SkylarkCallbackFunction(func, ast, funcallEnv);
               builder.setImplicitOutputsFunction(
                   new SkylarkImplicitOutputsFunctionWithCallback(callback, ast.getLocation()));
             } else {
