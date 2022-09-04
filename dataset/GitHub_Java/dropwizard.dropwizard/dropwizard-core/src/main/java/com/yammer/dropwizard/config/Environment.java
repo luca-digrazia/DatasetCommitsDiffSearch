@@ -1,10 +1,15 @@
 package com.yammer.dropwizard.config;
 
+import com.google.common.base.Function;
 import com.google.common.collect.*;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.sun.jersey.api.core.ResourceConfig;
 import com.sun.jersey.core.reflection.AnnotatedMethod;
 import com.sun.jersey.core.reflection.MethodList;
+import com.sun.jersey.core.spi.scanning.PackageNamesScanner;
+import com.sun.jersey.core.spi.scanning.Scanner;
+import com.sun.jersey.core.spi.scanning.ScannerException;
+import com.sun.jersey.core.spi.scanning.ScannerListener;
 import com.yammer.dropwizard.AbstractService;
 import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
 import com.yammer.dropwizard.jetty.JettyManaged;
@@ -28,6 +33,8 @@ import javax.servlet.http.HttpServlet;
 import javax.ws.rs.HttpMethod;
 import javax.ws.rs.Path;
 import javax.ws.rs.ext.Provider;
+
+import java.util.Arrays;
 import java.util.EventListener;
 import java.util.concurrent.*;
 
@@ -73,7 +80,6 @@ public class Environment extends AbstractLifeCycle {
                 logHealthChecks();
                 logManagedObjects();
                 logEndpoints();
-                logTasks();
             }
         };
         this.healthChecks = ImmutableSet.builder();
@@ -107,6 +113,21 @@ public class Environment extends AbstractLifeCycle {
      */
     public void addResource(Object resource) {
         config.getSingletons().add(checkNotNull(resource));
+    }
+
+    /**
+     * Scans the packages and sub-packages of the given {@link Class} objects for resources and
+     * providers.
+     *  
+     * @param classes     the classes whose packages to scan
+     */
+    public void scanPackages(Class<?>... classes) {
+        checkNotNull(classes);
+        final String[] names = new String[classes.length];
+        for(int i = 0; i < classes.length; i++) {
+            names[i] = classes[i].getPackage().getName();
+        }
+        config.init(new PackageNamesScanner(names));
     }
 
     /**
@@ -463,17 +484,6 @@ public class Environment extends AbstractLifeCycle {
             }
         }
 
-        LOG.info(stringBuilder.toString());
-    }
-
-    private void logTasks() {
-        final StringBuilder stringBuilder = new StringBuilder(1024).append("\n\n");
-        
-        for (Task task : tasks.build()) {
-            stringBuilder.append(String.format("    %-7s /tasks/%s (%s)\n",
-                                               "POST", task.getName(), task.getClass().getCanonicalName()));
-        }
-        
         LOG.info(stringBuilder.toString());
     }
 
