@@ -234,7 +234,7 @@ public class SpawnIncludeScanner {
     }
 
     @Override
-    public NestedSet<Artifact> getMandatoryInputs() {
+    public Iterable<Artifact> getMandatoryInputs() {
       throw new UnsupportedOperationException();
     }
 

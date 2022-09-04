@@ -246,7 +246,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   public Artifact getPrimaryInput() {
     // The default behavior is to return the first input artifact.
     // Call through the method, not the field, because it may be overridden.
-    return Iterables.getFirst(getInputs().toList(), null);
+    return Iterables.getFirst(getInputs(), null);
   }
 
   @Override
@@ -396,7 +396,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
       EventHandler eventHandler, MetadataProvider metadataProvider) throws IOException {
     // Report "directory dependency checking" warning only for non-generated directories (generated
     // ones will be reported earlier).
-    for (Artifact input : getMandatoryInputs().toList()) {
+    for (Artifact input : getMandatoryInputs()) {
       // Assume that if the file did not exist, we would not have gotten here.
       if (input.isSourceArtifact() && metadataProvider.getMetadata(input).getType().isDirectory()) {
         // TODO(ulfjack): What about dependency checking of special files?
@@ -520,7 +520,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
 
   @Override
   public Depset getSkylarkInputs() {
-    return Depset.of(Artifact.TYPE, getInputs());
+    return Depset.of(Artifact.TYPE, NestedSetBuilder.wrap(Order.STABLE_ORDER, getInputs()));
   }
 
   @Override
