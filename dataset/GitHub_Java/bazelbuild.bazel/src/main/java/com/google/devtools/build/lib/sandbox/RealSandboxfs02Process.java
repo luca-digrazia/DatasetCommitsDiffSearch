@@ -18,7 +18,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.vfs.Path;
@@ -39,6 +38,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -48,7 +49,8 @@ import javax.annotation.concurrent.GuardedBy;
  * <p>This implementation provides support for the reconfiguration protocol introduced in 0.2.0.
  */
 final class RealSandboxfs02Process extends RealSandboxfsProcess {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+
+  private static final Logger log = Logger.getLogger(RealSandboxfsProcess.class.getName());
 
   /**
    * Writer with which to send data to the sandboxfs instance. Null only after {@link #destroy()}
@@ -138,7 +140,7 @@ final class RealSandboxfs02Process extends RealSandboxfsProcess {
       } catch (EOFException e) {
         // OK, nothing to do.
       } catch (IOException e) {
-        logger.atWarning().withCause(e).log("Failed to read responses from sandboxfs");
+        log.log(Level.WARNING, "Failed to read responses from sandboxfs", e);
       }
 
       // sandboxfs has either replied with an unrecoverable error or has stopped providing
@@ -250,8 +252,7 @@ final class RealSandboxfs02Process extends RealSandboxfsProcess {
     try {
       responsesReader.join();
     } catch (InterruptedException e) {
-      logger.atWarning().withCause(e).log(
-          "Interrupted while waiting for responses processor thread");
+      log.warning("Interrupted while waiting for responses processor thread");
       Thread.currentThread().interrupt();
     }
 
