@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleVisibility;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
@@ -384,16 +383,16 @@ public final class ConfiguredTargetFactory {
       }
     }
 
-    for (SkylarkProviderIdentifier providerId : advertisedProviders.getSkylarkProviders()) {
+    for (String providerName : advertisedProviders.getSkylarkProviders()) {
       SkylarkProviders skylarkProviders = configuredAspect.getProvider(SkylarkProviders.class);
-      if (skylarkProviders == null || skylarkProviders.get(providerId) == null) {
+      if (skylarkProviders == null || skylarkProviders.getValue(providerName) == null) {
         eventHandler.handle(Event.error(
             target.getLocation(),
             String.format(
                 "Aspect '%s', applied to '%s', does not provide advertised provider '%s'",
                 configuredAspect.getName(),
                 target.getLabel(),
-                providerId
+                providerName
             )));
       }
     }
