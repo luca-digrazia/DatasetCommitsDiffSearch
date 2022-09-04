@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 
-import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -67,7 +66,7 @@ public class MongoClientConfig {
      * The addressed are passed as {@code host:port}.
      */
     @ConfigItem
-    public Optional<List<String>> hosts;
+    public List<String> hosts;
 
     /**
      * Configure the database name.
@@ -181,9 +180,8 @@ public class MongoClientConfig {
     public Optional<Duration> heartbeatFrequency;
 
     /**
-     * Write concern
+     * Configures the write concern.
      */
-    @ConfigDocSection
     public WriteConcernConfig writeConcern;
 
     /**
@@ -194,9 +192,8 @@ public class MongoClientConfig {
     public Optional<String> readPreference;
 
     /**
-     * Credentials and authentication mechanism
+     * Configures the credentials and the authentication mechanism.
      */
-    @ConfigDocSection
     public CredentialConfig credentials;
 
     /**

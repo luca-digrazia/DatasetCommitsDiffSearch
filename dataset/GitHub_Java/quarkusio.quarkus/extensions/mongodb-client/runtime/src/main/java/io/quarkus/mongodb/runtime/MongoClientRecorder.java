@@ -16,8 +16,6 @@ import java.util.stream.Collectors;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistries;
 import org.bson.codecs.configuration.CodecRegistry;
-import org.bson.codecs.pojo.Conventions;
-import org.bson.codecs.pojo.PojoCodecProvider;
 import org.jboss.logging.Logger;
 
 import com.mongodb.AuthenticationMechanism;
@@ -88,19 +86,11 @@ public class MongoClientRecorder {
             settings.applyConnectionString(connectionString);
         }
 
-        List<CodecProvider> providers = new ArrayList<>();
+        CodecRegistry registry = defaultCodecRegistry;
         if (!codecProviders.isEmpty()) {
-            providers.addAll(getCodecProviders(codecProviders));
+            registry = CodecRegistries.fromRegistries(defaultCodecRegistry,
+                    CodecRegistries.fromProviders(getCodecProviders(codecProviders)));
         }
-        // add pojo codec provider with automatic capabilities
-        // it always needs to be the last codec provided
-        CodecProvider pojoCodecProvider = PojoCodecProvider.builder()
-                .automatic(true)
-                .conventions(Conventions.DEFAULT_CONVENTIONS)
-                .build();
-        providers.add(pojoCodecProvider);
-        CodecRegistry registry = CodecRegistries.fromRegistries(defaultCodecRegistry,
-                CodecRegistries.fromProviders(providers));
         settings.codecRegistry(registry);
 
         config.applicationName.ifPresent(settings::applicationName);
@@ -186,7 +176,6 @@ public class MongoClientRecorder {
                 LOGGER.warnf("Unable to load the codec provider class %s", name, e);
             }
         }
-
         return providers;
     }
 
