@@ -102,13 +102,10 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
             transitiveImports,
             protoSources,
             checkDepsProtoSources,
-            protosInDirectDeps,
             descriptorSetOutput,
             transitiveDescriptorSetOutput,
-            protoSourceRoot,
-            directProtoSourceRoots,
             protoPathFlags,
-            protosInExports);
+            protoSourceRoot);
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(NestedSetBuilder.create(STABLE_ORDER, descriptorSetOutput))
