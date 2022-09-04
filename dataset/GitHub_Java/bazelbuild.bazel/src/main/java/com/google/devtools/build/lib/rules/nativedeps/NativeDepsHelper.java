@@ -217,8 +217,8 @@ public abstract class NativeDepsHelper {
     }
     ImmutableMap.Builder<Artifact, Artifact> ltoBitcodeFilesMap = new ImmutableMap.Builder<>();
     for (LibraryToLink lib : linkerInputs) {
-      if (!lib.getLtoBitcodeFiles().isEmpty()) {
-        ltoBitcodeFilesMap.putAll(lib.getLtoBitcodeFiles());
+      if (!lib.getLTOBitcodeFiles().isEmpty()) {
+        ltoBitcodeFilesMap.putAll(lib.getLTOBitcodeFiles());
       }
     }
     builder
@@ -231,15 +231,17 @@ public abstract class NativeDepsHelper {
         .addLinkopts(linkopts)
         .setNativeDeps(true)
         .addLinkstamps(linkstamps)
-        .addLtoBitcodeFiles(ltoBitcodeFilesMap.build());
+        .addLTOBitcodeFiles(ltoBitcodeFilesMap.build());
 
     if (!builder.getLtoBitcodeFiles().isEmpty()
         && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
-      builder.setLtoIndexing(true);
-      builder.setUsePicForLtoBackendActions(CppHelper.usePic(ruleContext, false));
+      builder.setLTOIndexing(true);
+      builder.setUsePicForLTOBackendActions(CppHelper.usePic(ruleContext, false));
+      builder.setUseFissionForLTOBackendActions(
+          ruleContext.getFragment(CppConfiguration.class).useFission());
       CppLinkAction indexAction = builder.build();
       ruleContext.registerAction(indexAction);
-      builder.setLtoIndexing(false);
+      builder.setLTOIndexing(false);
     }
 
     CppLinkAction linkAction = builder.build();
