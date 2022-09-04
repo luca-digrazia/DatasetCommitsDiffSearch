@@ -30,7 +30,7 @@ import javax.annotation.Nullable;
  * <p>Not thread-safe. Access should be synchronized from the referencing {@link
  * InMemoryFileSystem}.
  */
-final class InMemoryDirectoryInfo extends InMemoryContentInfo {
+class InMemoryDirectoryInfo extends InMemoryContentInfo {
 
   private static final boolean CASE_SENSITIVE = OsPathPolicy.getFilePathOs().isCaseSensitive();
 
@@ -39,8 +39,14 @@ final class InMemoryDirectoryInfo extends InMemoryContentInfo {
   private final Map<Object, InMemoryContentInfo> directoryContent = new HashMap<>();
 
   InMemoryDirectoryInfo(Clock clock) {
-    super(clock);
-    setExecutable(true);
+    this(clock, true);
+  }
+
+  protected InMemoryDirectoryInfo(Clock clock, boolean isMutable) {
+    super(clock, isMutable);
+    if (isMutable) {
+      setExecutable(true);
+    }
   }
 
   /**
@@ -107,11 +113,6 @@ final class InMemoryDirectoryInfo extends InMemoryContentInfo {
   @Override
   public long getSize() {
     return directoryContent.size();
-  }
-
-  @Override
-  InMemoryDirectoryInfo asDirectory() {
-    return this;
   }
 
   private static Object key(String name) {
