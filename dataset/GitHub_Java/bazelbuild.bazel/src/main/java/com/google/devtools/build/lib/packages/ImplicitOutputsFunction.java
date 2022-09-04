@@ -301,10 +301,10 @@ public abstract class ImplicitOutputsFunction {
     if (attrName.equals("name")) {
       return singleton(rule.getName());
     } else if (attrName.equals("dirname")) {
-      PathFragment dir = PathFragment.create(rule.getName()).getParentDirectory();
+      PathFragment dir = new PathFragment(rule.getName()).getParentDirectory();
       return (dir.segmentCount() == 0) ? singleton("") : singleton(dir.getPathString() + "/");
     } else if (attrName.equals("basename")) {
-      return singleton(PathFragment.create(rule.getName()).getBaseName());
+      return singleton(new PathFragment(rule.getName()).getBaseName());
     }
 
     Type<?> attrType = rule.getAttributeType(attrName);

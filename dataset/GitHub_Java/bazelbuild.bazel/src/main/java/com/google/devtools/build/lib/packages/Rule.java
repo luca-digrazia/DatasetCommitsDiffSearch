@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -475,21 +476,16 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
       throws LabelSyntaxException, InterruptedException {
     Preconditions.checkState(outputFiles == null);
     // Order is important here: implicit before explicit
-    ImmutableList.Builder<OutputFile> outputFilesBuilder = ImmutableList.builder();
-    ImmutableListMultimap.Builder<String, OutputFile> outputFileMapBuilder =
-        ImmutableListMultimap.builder();
-    populateImplicitOutputFiles(eventHandler, pkgBuilder, outputFilesBuilder);
-    populateExplicitOutputFiles(eventHandler, outputFilesBuilder, outputFileMapBuilder);
-    outputFiles = outputFilesBuilder.build();
-    outputFileMap = outputFileMapBuilder.build();
+    outputFiles = Lists.newArrayList();
+    outputFileMap = LinkedListMultimap.create();
+    populateImplicitOutputFiles(eventHandler, pkgBuilder);
+    populateExplicitOutputFiles(eventHandler);
+    outputFiles = ImmutableList.copyOf(outputFiles);
+    outputFileMap = ImmutableListMultimap.copyOf(outputFileMap);
   }
 
   // Explicit output files are user-specified attributes of type OUTPUT.
-  private void populateExplicitOutputFiles(
-      EventHandler eventHandler,
-      ImmutableList.Builder<OutputFile> outputFilesBuilder,
-      ImmutableListMultimap.Builder<String, OutputFile> outputFileMapBuilder)
-      throws LabelSyntaxException {
+  private void populateExplicitOutputFiles(EventHandler eventHandler) throws LabelSyntaxException {
     NonconfigurableAttributeMapper nonConfigurableAttributes =
         NonconfigurableAttributeMapper.of(this);
     for (Attribute attribute : ruleClass.getAttributes()) {
@@ -498,31 +494,27 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
       if (type == BuildType.OUTPUT) {
         Label outputLabel = nonConfigurableAttributes.get(name, BuildType.OUTPUT);
         if (outputLabel != null) {
-          addLabelOutput(
-              attribute, outputLabel, eventHandler, outputFilesBuilder, outputFileMapBuilder);
+          addLabelOutput(attribute, outputLabel, eventHandler);
         }
       } else if (type == BuildType.OUTPUT_LIST) {
         for (Label label : nonConfigurableAttributes.get(name, BuildType.OUTPUT_LIST)) {
-          addLabelOutput(attribute, label, eventHandler, outputFilesBuilder, outputFileMapBuilder);
+          addLabelOutput(attribute, label, eventHandler);
         }
       }
     }
   }
 
   /**
-   * Implicit output files come from rule-specific patterns, and are a function of the rule's
-   * "name", "srcs", and other attributes.
+   * Implicit output files come from rule-specific patterns, and are a function
+   * of the rule's "name", "srcs", and other attributes.
    */
-  private void populateImplicitOutputFiles(
-      EventHandler eventHandler,
-      Package.Builder pkgBuilder,
-      ImmutableList.Builder<OutputFile> outputFilesBuilder)
+  private void populateImplicitOutputFiles(EventHandler eventHandler, Package.Builder pkgBuilder)
       throws InterruptedException {
     try {
       RawAttributeMapper attributeMap = RawAttributeMapper.of(this);
       for (String out : implicitOutputsFunction.getImplicitOutputs(attributeMap)) {
         try {
-          addOutputFile(pkgBuilder.createLabel(out), eventHandler, outputFilesBuilder);
+          addOutputFile(pkgBuilder.createLabel(out), eventHandler);
         } catch (LabelSyntaxException e) {
           reportError(
               "illegal output file name '"
@@ -539,12 +531,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
     }
   }
 
-  private void addLabelOutput(
-      Attribute attribute,
-      Label label,
-      EventHandler eventHandler,
-      ImmutableList.Builder<OutputFile> outputFilesBuilder,
-      ImmutableListMultimap.Builder<String, OutputFile> outputFileMapBuilder)
+  private void addLabelOutput(Attribute attribute, Label label, EventHandler eventHandler)
       throws LabelSyntaxException {
     if (!label.getPackageIdentifier().equals(pkg.getPackageIdentifier())) {
       throw new IllegalStateException("Label for attribute " + attribute
@@ -555,14 +542,11 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
     if (label.getName().equals(".")) {
       throw new LabelSyntaxException("output file name can't be equal '.'");
     }
-    OutputFile outputFile = addOutputFile(label, eventHandler, outputFilesBuilder);
-    outputFileMapBuilder.put(attribute.getName(), outputFile);
+    OutputFile outputFile = addOutputFile(label, eventHandler);
+    outputFileMap.put(attribute.getName(), outputFile);
   }
 
-  private OutputFile addOutputFile(
-      Label label,
-      EventHandler eventHandler,
-      ImmutableList.Builder<OutputFile> outputFilesBuilder) {
+  private OutputFile addOutputFile(Label label, EventHandler eventHandler) {
     if (label.getName().equals(getName())) {
       // TODO(bazel-team): for now (23 Apr 2008) this is just a warning.  After
       // June 1st we should make it an error.
@@ -570,7 +554,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
                     + "another name for the rule", eventHandler);
     }
     OutputFile outputFile = new OutputFile(pkg, label, this);
-    outputFilesBuilder.add(outputFile);
+    outputFiles.add(outputFile);
     return outputFile;
   }
 
@@ -728,6 +712,6 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    * @return The repository name.
    */
   public RepositoryName getRepository() {
-    return RepositoryName.createFromValidStrippedName(pkg.getWorkspaceName());
+    return getLabel().getPackageIdentifier().getRepository();
   }
 }
