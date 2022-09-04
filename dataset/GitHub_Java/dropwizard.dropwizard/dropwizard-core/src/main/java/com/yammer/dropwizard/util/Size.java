@@ -2,23 +2,17 @@ package com.yammer.dropwizard.util;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableMap;
-import org.codehaus.jackson.annotate.JsonCreator;
-import org.codehaus.jackson.annotate.JsonValue;
 
-import java.util.regex.Pattern;
-
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class Size {
-    private static final Pattern PATTERN = Pattern.compile("[\\d]+[\\s]*(B|byte(s)?|" +
-                                                                   "KB|KiB|kilobyte(s)?|" +
-                                                                   "MB|MiB|megabyte(s)?|" +
-                                                                   "GB|GiB|gigabyte(s)?|" +
-                                                                   "TB|TiB|terabyte(s)?)");
+    public static final String VALID_SIZE = "[\\d]+[\\s]*(B|byte(s)?|" +
+                                                         "KB|KiB|kilobyte(s)?|" +
+                                                         "MB|MiB|megabyte(s)?|" +
+                                                         "GB|GiB|gigabyte(s)?|" +
+                                                         "TB|TiB|terabyte(s)?)";
 
     private static final ImmutableMap<String, SizeUnit> SUFFIXES;
-
     static {
         final ImmutableMap.Builder<String, SizeUnit> suffixes = ImmutableMap.builder();
         suffixes.put("B", SizeUnit.BYTES);
@@ -69,7 +63,6 @@ public class Size {
     }
 
     private static long parseCount(String s) {
-        checkArgument(PATTERN.matcher(s).matches(), "Invalid size: %s", s);
         final String value = CharMatcher.WHITESPACE.removeFrom(s);
         return Long.parseLong(CharMatcher.JAVA_LETTER.trimTrailingFrom(value));
     }
@@ -77,12 +70,18 @@ public class Size {
     private static SizeUnit parseUnit(String s) {
         final String value = CharMatcher.WHITESPACE.removeFrom(s);
         final String suffix = CharMatcher.DIGIT.trimLeadingFrom(value).trim();
-        return SUFFIXES.get(suffix);
+        final SizeUnit unit = SUFFIXES.get(suffix);
+        if (unit != null) {
+            return unit;
+        }
+        throw new IllegalArgumentException("Unable to parse as size: " + s);
     }
-
-    @JsonCreator
+    
     public static Size parse(String size) {
-        return new Size(parseCount(size), parseUnit(size));
+        if (size.matches(VALID_SIZE)) {
+            return new Size(parseCount(size), parseUnit(size));
+        }
+        throw new IllegalArgumentException("Unable to parse size: " + size);
     }
 
     private final long count;
@@ -114,25 +113,24 @@ public class Size {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj) { return true; }
-        if ((obj == null) || (getClass() != obj.getClass())) { return false; }
-        final Size size = (Size) obj;
-        return (count == size.count) && (unit == size.unit);
+    public boolean equals(Object o) {
+        if (this == o) { return true; }
+        if (o == null || getClass() != o.getClass()) { return false; }
+        final Size size = (Size) o;
+        return count == size.count && unit == size.unit;
     }
 
     @Override
     public int hashCode() {
-        return (31 * (int) (count ^ (count >>> 32))) + unit.hashCode();
+        return 31 * (int) (count ^ (count >>> 32)) + unit.hashCode();
     }
 
     @Override
-    @JsonValue
     public String toString() {
         String units = unit.toString().toLowerCase();
         if (count == 1) {
             units = units.substring(0, units.length() - 1);
         }
-        return Long.toString(count) + ' ' + units;
+        return Long.toString(count) + " " + units;
     }
 }

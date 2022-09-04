@@ -2,27 +2,21 @@ package com.yammer.dropwizard.util;
 
 import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableMap;
-import org.codehaus.jackson.annotate.JsonCreator;
-import org.codehaus.jackson.annotate.JsonValue;
 
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class Duration {
-    private static final Pattern PATTERN = Pattern.compile("[\\d]+[\\s]*(" +
-            "ns|nanosecond(s)?|" +
-            "us|microsecond(s)?|" +
-            "ms|millisecond(s)?|" +
-            "s|second(s)?|" +
-            "m|minute(s)?|" +
-            "h|hour(s)?|" +
-            "d|day(s)?" +
-            ')');
+    public static final String VALID_DURATION = "[\\d]+[\\s]*(ns|nanosecond(s)?|" +
+                                                             "us|microsecond(s)?|" +
+                                                             "ms|millisecond(s)?|" +
+                                                             "s|second(s)?|" +
+                                                             "m|minute(s)?|" +
+                                                             "h|hour(s)?|" +
+                                                             "d|day(s)?)";
+    
     private static final ImmutableMap<String, TimeUnit> SUFFIXES;
-
     static {
         final ImmutableMap.Builder<String, TimeUnit> suffixes = ImmutableMap.builder();
 
@@ -86,7 +80,6 @@ public class Duration {
     }
     
     private static long parseCount(String s) {
-        checkArgument(PATTERN.matcher(s).matches(), "Invalid duration: %s", s);
         final String value = CharMatcher.WHITESPACE.removeFrom(s);
         return Long.parseLong(CharMatcher.JAVA_LETTER.trimTrailingFrom(value));
     }
@@ -94,12 +87,18 @@ public class Duration {
     private static TimeUnit parseUnit(String s) {
         final String value = CharMatcher.WHITESPACE.removeFrom(s);
         final String suffix = CharMatcher.DIGIT.trimLeadingFrom(value);
-        return SUFFIXES.get(suffix);
+        final TimeUnit unit = SUFFIXES.get(suffix);
+        if (unit != null) {
+            return unit;
+        }
+        throw new IllegalArgumentException("Unable to parse as duration: " + s);
     }
 
-    @JsonCreator
     public static Duration parse(String duration) {
-        return new Duration(parseCount(duration), parseUnit(duration));
+        if (duration.matches(VALID_DURATION)) {
+            return new Duration(parseCount(duration), parseUnit(duration));
+        }
+        throw new IllegalArgumentException("Unable to parse as duration: " + duration);
     }
 
     private final long count;
@@ -139,26 +138,25 @@ public class Duration {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj) { return true; }
-        if ((obj == null) || (getClass() != obj.getClass())) { return false; }
-        final Duration duration = (Duration) obj;
-        return (count == duration.count) && (unit == duration.unit);
+    public boolean equals(Object o) {
+        if (this == o) { return true; }
+        if (o == null || getClass() != o.getClass()) { return false; }
+        final Duration duration = (Duration) o;
+        return count == duration.count && unit == duration.unit;
 
     }
 
     @Override
     public int hashCode() {
-        return (31 * (int) (count ^ (count >>> 32))) + unit.hashCode();
+        return 31 * (int) (count ^ (count >>> 32)) + unit.hashCode();
     }
 
     @Override
-    @JsonValue
     public String toString() {
         String units = unit.toString().toLowerCase();
         if (count == 1) {
             units = units.substring(0, units.length() - 1);
         }
-        return Long.toString(count) + ' ' + units;
+        return Long.toString(count) + " " + units;
     }
 }
