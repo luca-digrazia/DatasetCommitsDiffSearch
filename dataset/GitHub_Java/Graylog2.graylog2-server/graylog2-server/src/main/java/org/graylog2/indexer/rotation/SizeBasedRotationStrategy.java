@@ -17,25 +17,23 @@
 package org.graylog2.indexer.rotation;
 
 import com.google.inject.Inject;
-import org.graylog2.configuration.ElasticsearchConfiguration;
+import org.graylog2.Configuration;
 import org.graylog2.indexer.indices.IndexStatistics;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
 
 import javax.annotation.Nullable;
-import javax.inject.Singleton;
 import java.text.MessageFormat;
 
-@Singleton
 public class SizeBasedRotationStrategy implements RotationStrategy {
 
     private final Indices indices;
     private final long maxSize;
 
     @Inject
-    public SizeBasedRotationStrategy(ElasticsearchConfiguration configuration, Indices indices) {
+    public SizeBasedRotationStrategy(Configuration configuration, Indices indices) {
         this.indices = indices;
-        maxSize = configuration.getMaxSizePerIndex();
+        maxSize = configuration.getElasticSearchMaxSizePerIndex();
     }
 
     @Nullable

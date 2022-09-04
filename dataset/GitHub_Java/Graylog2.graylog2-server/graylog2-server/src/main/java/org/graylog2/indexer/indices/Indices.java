@@ -21,11 +21,11 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
-import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest;
+import org.elasticsearch.action.admin.indices.alias.get.IndicesGetAliasesRequest;
 import org.elasticsearch.action.admin.indices.close.CloseIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
@@ -36,7 +36,7 @@ import org.elasticsearch.action.admin.indices.flush.FlushRequest;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.action.admin.indices.open.OpenIndexRequest;
 import org.elasticsearch.action.admin.indices.optimize.OptimizeRequest;
-import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsRequest;
+import org.elasticsearch.action.admin.indices.settings.UpdateSettingsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
@@ -68,13 +68,15 @@ import org.graylog2.plugin.indexer.retention.IndexManagement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @Singleton
 public class Indices implements IndexManagement {
 
@@ -121,7 +123,7 @@ public class Indices implements IndexManagement {
                 BulkResponse response = c.bulk(request.request()).actionGet();
 
                 LOG.info("Moving index <{}> to <{}>: Bulk indexed {} messages, took {} ms, failures: {}",
-                        source, target, response.getItems().length, response.getTookInMillis(), response.hasFailures());
+                         source, target, response.getItems().length, response.getTookInMillis(), response.hasFailures());
 
                 if (response.hasFailures()) {
                     throw new RuntimeException("Failed to move a message. Check your indexer log.");
@@ -180,12 +182,12 @@ public class Indices implements IndexManagement {
     }
 
     public boolean aliasExists(String alias) {
-        return c.admin().indices().aliasesExist(new GetAliasesRequest(alias)).actionGet().exists();
+        return c.admin().indices().aliasesExist(new IndicesGetAliasesRequest(alias)).actionGet().exists();
     }
 
     public String aliasTarget(String alias) {
         // The ES return value of this has an awkward format: The first key of the hash is the target index. Thanks.
-        return c.admin().indices().getAliases(new GetAliasesRequest(alias)).actionGet().getAliases().keysIt().next();
+        return c.admin().indices().getAliases(new IndicesGetAliasesRequest(alias)).actionGet().getAliases().keysIt().next();
     }
 
     public boolean create(String indexName) {
@@ -206,7 +208,8 @@ public class Indices implements IndexManagement {
             return false;
         }
         final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(c, indexName, configuration.getElasticSearchAnalyzer());
-        return c.admin().indices().putMapping(mappingRequest).actionGet().isAcknowledged();
+        final boolean mappingCreated = c.admin().indices().putMapping(mappingRequest).actionGet().isAcknowledged();
+        return mappingCreated;
     }
 
     public ImmutableMap<String, IndexMetaData> getMetadata() {
@@ -222,7 +225,7 @@ public class Indices implements IndexManagement {
     public Set<String> getAllMessageFields() {
         Set<String> fields = Sets.newHashSet();
 
-        ClusterStateRequest csr = new ClusterStateRequest().blocks(true).nodes(true).indices(allIndicesAlias());
+        ClusterStateRequest csr = new ClusterStateRequest().filterBlocks(true).filterNodes(true).filteredIndices(allIndicesAlias());
         ClusterState cs = c.admin().cluster().state(csr).actionGet().getState();
 
         for (ObjectObjectCursor<String, IndexMetaData> m : cs.getMetaData().indices()) {
@@ -278,7 +281,9 @@ public class Indices implements IndexManagement {
     public void reopenIndex(String index) {
         // Mark this index as re-opened. It will never be touched by retention.
         UpdateSettingsRequest settings = new UpdateSettingsRequest(index);
-        settings.settings(Collections.<String, Object>singletonMap("graylog2_reopened", true));
+        settings.settings(new HashMap<String,Object>() {{
+            put("graylog2_reopened", true);
+        }});
         c.admin().indices().updateSettings(settings).actionGet();
 
         // Open index.
@@ -300,22 +305,22 @@ public class Indices implements IndexManagement {
         final Set<String> closedIndices = Sets.newHashSet();
 
         ClusterStateRequest csr = new ClusterStateRequest()
-                .nodes(true)
-                .routingTable(true)
-                .blocks(true)
-                .metaData(false);
+                .filterNodes(true)
+                .filterRoutingTable(true)
+                .filterBlocks(true)
+                .filterMetaData(false);
 
         ClusterState state = c.admin().cluster().state(csr).actionGet().getState();
 
         UnmodifiableIterator<IndexMetaData> it = state.getMetaData().getIndices().valuesIt();
 
-        while (it.hasNext()) {
+        while(it.hasNext()) {
             IndexMetaData indexMeta = it.next();
             // Only search in our indices.
             if (!indexMeta.getIndex().startsWith(configuration.getElasticSearchIndexPrefix())) {
                 continue;
             }
-            if (indexMeta.getState().equals(IndexMetaData.State.CLOSE)) {
+            if(indexMeta.getState().equals(IndexMetaData.State.CLOSE)) {
                 closedIndices.add(indexMeta.getIndex());
             }
         }
@@ -337,7 +342,7 @@ public class Indices implements IndexManagement {
             for (ShardStats shardStats : indexStats.getShards()) {
                 stats.addShardRouting(shardStats.getShardRouting());
             }
-        } catch (ElasticsearchException e) {
+        } catch (ElasticSearchException e) {
             return null;
         }
         return stats;
@@ -367,4 +372,6 @@ public class Indices implements IndexManagement {
 
         c.admin().indices().optimize(or).actionGet();
     }
+
+
 }
