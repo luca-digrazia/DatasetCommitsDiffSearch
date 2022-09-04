@@ -284,10 +284,18 @@ public final class HibernateOrmProcessor {
             JpaModelIndexBuildItem indexBuildItem,
             List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
             BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer) {
+
         Set<String> entitiesToGenerateProxiesFor = new HashSet<>(domainObjects.getEntityClassNames());
+
+        List<ParsedPersistenceXmlDescriptor> allDescriptors = new ArrayList<>();
         for (PersistenceUnitDescriptorBuildItem pud : persistenceUnitDescriptorBuildItems) {
-            pud.addListedEntityClassNamesTo(entitiesToGenerateProxiesFor);
+            allDescriptors.add(pud.getDescriptor());
         }
+
+        for (ParsedPersistenceXmlDescriptor unit : allDescriptors) {
+            entitiesToGenerateProxiesFor.addAll(unit.getManagedClassNames());
+        }
+
         PreGeneratedProxies proxyDefinitions = generatedProxies(entitiesToGenerateProxiesFor, indexBuildItem.getIndex(),
                 generatedClassBuildItemBuildProducer);
         return new ProxyDefinitionsBuildItem(proxyDefinitions);

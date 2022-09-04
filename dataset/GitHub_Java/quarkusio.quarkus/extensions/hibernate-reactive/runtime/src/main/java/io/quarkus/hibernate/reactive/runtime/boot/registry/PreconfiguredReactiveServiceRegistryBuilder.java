@@ -22,11 +22,11 @@ import org.hibernate.persister.internal.PersisterFactoryInitiator;
 import org.hibernate.property.access.internal.PropertyAccessStrategyResolverInitiator;
 import org.hibernate.reactive.id.impl.ReactiveIdentifierGeneratorFactoryInitiator;
 import org.hibernate.reactive.provider.service.NoJdbcConnectionProviderInitiator;
-import org.hibernate.reactive.provider.service.NoJtaPlatformInitiator;
 import org.hibernate.reactive.provider.service.ReactiveMarkerServiceInitiator;
 import org.hibernate.reactive.provider.service.ReactivePersisterClassResolverInitiator;
 import org.hibernate.reactive.provider.service.ReactiveQueryTranslatorFactoryInitiator;
 import org.hibernate.reactive.provider.service.ReactiveSessionFactoryBuilderInitiator;
+import org.hibernate.resource.beans.spi.ManagedBeanRegistryInitiator;
 import org.hibernate.resource.transaction.internal.TransactionCoordinatorBuilderInitiator;
 import org.hibernate.service.internal.ProvidedService;
 import org.hibernate.service.internal.SessionFactoryServiceRegistryFactoryInitiator;
@@ -34,9 +34,9 @@ import org.hibernate.tool.hbm2ddl.ImportSqlCommandExtractorInitiator;
 import org.hibernate.tool.schema.internal.SchemaManagementToolInitiator;
 
 import io.quarkus.hibernate.orm.runtime.boot.registry.MirroringIntegratorService;
-import io.quarkus.hibernate.orm.runtime.cdi.QuarkusManagedBeanRegistryInitiator;
 import io.quarkus.hibernate.orm.runtime.customized.DisabledBytecodeProviderInitiator;
 import io.quarkus.hibernate.orm.runtime.customized.QuarkusJndiServiceInitiator;
+import io.quarkus.hibernate.orm.runtime.customized.QuarkusJtaPlatformInitiator;
 import io.quarkus.hibernate.orm.runtime.customized.QuarkusRuntimeProxyFactoryFactoryInitiator;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 import io.quarkus.hibernate.orm.runtime.service.CfgXmlAccessServiceInitiatorQuarkus;
@@ -63,17 +63,11 @@ public class PreconfiguredReactiveServiceRegistryBuilder {
     private final StandardServiceRegistryImpl destroyedRegistry;
 
     public PreconfiguredReactiveServiceRegistryBuilder(RecordedState rs) {
-        checkIsReactive(rs);
         this.initiators = buildQuarkusServiceInitiatorList(rs);
         this.integrators = rs.getIntegrators();
         this.destroyedRegistry = (StandardServiceRegistryImpl) rs.getMetadata().getOriginalMetadata()
                 .getMetadataBuildingOptions()
                 .getServiceRegistry();
-    }
-
-    private static void checkIsReactive(RecordedState rs) {
-        if (rs.isReactive() == false)
-            throw new IllegalStateException("Booting an Hibernate Reactive serviceregistry on a non-reactive RecordedState!");
     }
 
     public PreconfiguredReactiveServiceRegistryBuilder applySetting(String settingName, Object value) {
@@ -192,15 +186,13 @@ public class PreconfiguredReactiveServiceRegistryBuilder {
         serviceInitiators.add(JdbcServicesInitiator.INSTANCE);
         serviceInitiators.add(RefCursorSupportInitiator.INSTANCE);
 
-        // Custom for Hibernate Reactive:
         //serviceInitiators.add(QueryTranslatorFactoryInitiator.INSTANCE);
         serviceInitiators.add(ReactiveQueryTranslatorFactoryInitiator.INSTANCE);
 
         // Disabled: IdentifierGenerators are no longer initiated after Metadata was generated.
         // serviceInitiators.add(MutableIdentifierGeneratorFactoryInitiator.INSTANCE);
 
-        // Custom for Hibernate Reactive:
-        serviceInitiators.add(NoJtaPlatformInitiator.INSTANCE);
+        serviceInitiators.add(new QuarkusJtaPlatformInitiator(false));
 
         serviceInitiators.add(SessionFactoryServiceRegistryFactoryInitiator.INSTANCE);
 
@@ -209,12 +201,10 @@ public class PreconfiguredReactiveServiceRegistryBuilder {
 
         serviceInitiators.add(TransactionCoordinatorBuilderInitiator.INSTANCE);
 
-        // Replaces ManagedBeanRegistryInitiator.INSTANCE
-        serviceInitiators.add(QuarkusManagedBeanRegistryInitiator.INSTANCE);
+        serviceInitiators.add(ManagedBeanRegistryInitiator.INSTANCE);
 
         serviceInitiators.add(EntityCopyObserverFactoryInitiator.INSTANCE);
 
-        // Custom for Hibernate Reactive:
         serviceInitiators.add(ReactiveIdentifierGeneratorFactoryInitiator.INSTANCE);
 
         serviceInitiators.trimToSize();

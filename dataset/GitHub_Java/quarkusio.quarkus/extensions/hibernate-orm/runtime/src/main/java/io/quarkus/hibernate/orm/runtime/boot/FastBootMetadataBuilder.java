@@ -47,6 +47,7 @@ import org.hibernate.boot.registry.internal.BootstrapServiceRegistryImpl;
 import org.hibernate.boot.registry.selector.spi.StrategySelector;
 import org.hibernate.boot.spi.MetadataBuilderContributor;
 import org.hibernate.boot.spi.MetadataBuilderImplementor;
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cache.internal.CollectionCacheInvalidator;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.beanvalidation.BeanValidationIntegrator;
@@ -98,6 +99,7 @@ public class FastBootMetadataBuilder {
     private final StandardServiceRegistry standardServiceRegistry;
     private final ManagedResources managedResources;
     private final MetadataBuilderImplementor metamodelBuilder;
+    private final Object validatorFactory;
     private final Collection<Class<? extends Integrator>> additionalIntegrators;
     private final Collection<ProvidedService> providedServices;
     private final PreGeneratedProxies preGeneratedProxies;
@@ -115,6 +117,7 @@ public class FastBootMetadataBuilder {
         // Copying semantics from: new EntityManagerFactoryBuilderImpl( unit,
         // integration, instance );
         // Except we remove support for several legacy features and XML binding
+        final ClassLoader providedClassLoader = null;
 
         LogHelper.logPersistenceUnitInformation(persistenceUnit);
 
@@ -165,12 +168,16 @@ public class FastBootMetadataBuilder {
         if (scanner != null) {
             this.metamodelBuilder.applyScanner(scanner);
         }
-        populate(metamodelBuilder, mergedSettings.cacheRegionDefinitions);
+        populate(metamodelBuilder, mergedSettings.cacheRegionDefinitions, standardServiceRegistry);
 
         this.managedResources = MetadataBuildingProcess.prepare(metadataSources,
                 metamodelBuilder.getBootstrapContext());
 
         applyMetadataBuilderContributor();
+
+        // BVAL integration:
+        this.validatorFactory = withValidatorFactory(
+                buildTimeSettings.get(org.hibernate.cfg.AvailableSettings.JPA_VALIDATION_FACTORY));
 
         // Unable to automatically handle:
         // AvailableSettings.ENHANCER_ENABLE_DIRTY_TRACKING,
@@ -329,13 +336,13 @@ public class FastBootMetadataBuilder {
         Dialect dialect = extractDialect();
         PrevalidatedQuarkusMetadata storeableMetadata = trimBootstrapMetadata(fullMeta);
         //Make sure that the service is destroyed after the metadata has been validated and trimmed, as validation needs to use it.
-        destroyServiceRegistry();
+        destroyServiceRegistry(fullMeta);
         ProxyDefinitions proxyClassDefinitions = ProxyDefinitions.createFromMetadata(storeableMetadata, preGeneratedProxies);
         return new RecordedState(dialect, storeableMetadata, buildTimeSettings, getIntegrators(),
                 providedServices, integrationSettingsBuilder.build(), proxyClassDefinitions, multiTenancyStrategy);
     }
 
-    private void destroyServiceRegistry() {
+    private void destroyServiceRegistry(MetadataImplementor fullMeta) {
         final AbstractServiceRegistryImpl serviceRegistry = (AbstractServiceRegistryImpl) metamodelBuilder.getBootstrapContext()
                 .getServiceRegistry();
         serviceRegistry.close();
@@ -531,7 +538,8 @@ public class FastBootMetadataBuilder {
      * org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.MergedSettings,
      * org.hibernate.boot.registry.StandardServiceRegistry, java.util.List)
      */
-    protected void populate(MetadataBuilder metamodelBuilder, List<CacheRegionDefinition> cacheRegionDefinitions) {
+    protected void populate(MetadataBuilder metamodelBuilder, List<CacheRegionDefinition> cacheRegionDefinitions,
+            StandardServiceRegistry ssr) {
 
         ((MetadataBuilderImplementor) metamodelBuilder).getBootstrapContext().markAsJpaBootstrap();
 
@@ -591,6 +599,13 @@ public class FastBootMetadataBuilder {
         if (metadataBuilderContributor != null) {
             metadataBuilderContributor.contribute(metamodelBuilder);
         }
+    }
+
+    public Object withValidatorFactory(Object validatorFactory) {
+        if (validatorFactory != null) {
+            BeanValidationIntegrator.validateFactory(validatorFactory);
+        }
+        return validatorFactory;
     }
 
 }
