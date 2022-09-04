@@ -24,13 +24,15 @@ import org.elasticsearch.action.count.CountRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.search.facet.FacetBuilders;
 import org.elasticsearch.search.facet.datehistogram.DateHistogramFacet;
 import org.elasticsearch.search.facet.datehistogram.DateHistogramFacetBuilder;
 import org.graylog2.Core;
-import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.DateHistogramResult;
+import org.graylog2.plugin.Tools;
 
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 
@@ -50,5 +52,23 @@ public class Counts {
     public long total() {
         return c.count(new CountRequest(server.getDeflector().getAllDeflectorIndexNames())).actionGet().getCount();
     }
+	
+	public DateHistogramResult histogram(Indexer.DateHistogramInterval interval, int timerange) {
+		String from = Tools.buildElasticSearchTimeFormat(Tools.getUTCTimestamp()-timerange);
+		FilterBuilder timestampFilter = FilterBuilders.rangeFilter("timestamp").from(from);
+		
+		DateHistogramFacetBuilder fb = FacetBuilders.dateHistogramFacet("histogram")
+				.field("timestamp")
+				.facetFilter(timestampFilter)
+				.interval(interval.toString().toLowerCase());
+		
+		SearchRequestBuilder srb = c.prepareSearch();
+		srb.setIndices(server.getDeflector().getAllDeflectorIndexNames()); // XXX 020: have a method that builds time ranged index requests
+		srb.setQuery(matchAllQuery());
+		srb.addFacet(fb);
+		
+		SearchResponse r = c.search(srb.request()).actionGet();
+		return new DateHistogramResult((DateHistogramFacet) r.getFacets().facet("histogram"), "match_all", interval, r.getTook());
+	}
 	
 }

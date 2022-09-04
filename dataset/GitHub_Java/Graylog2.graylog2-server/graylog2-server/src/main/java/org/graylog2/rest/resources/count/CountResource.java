@@ -26,12 +26,9 @@ import com.sun.jersey.api.core.ResourceConfig;
 import org.graylog2.Core;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.DateHistogramResult;
-import org.graylog2.rest.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Maps;
-import com.sun.jersey.api.core.ResourceConfig;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -46,7 +43,7 @@ import java.util.Map;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 @Path("/count")
-public class CountResource extends RestResource {
+public class CountResource {
 	
     private static final Logger LOG = LoggerFactory.getLogger(CountResource.class);
 
@@ -62,7 +59,16 @@ public class CountResource extends RestResource {
         Map<String, Long> result = Maps.newHashMap();
         result.put("events", core.getIndexer().counts().total());
 
-        return json(result, prettyPrint);
+        try {
+            if (prettyPrint) {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
+            } else {
+                return objectMapper.writeValueAsString(result);
+            }
+        } catch (JsonProcessingException e) {
+            LOG.error("Error while generating JSON", e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @GET @Path("/histogram")
@@ -97,6 +103,15 @@ public class CountResource extends RestResource {
         result.put("results", dhr.getResults());
         result.put("time", dhr.took().millis());
 
-        return json(result, prettyPrint);
+        try {
+            if (prettyPrint) {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
+            } else {
+                return objectMapper.writeValueAsString(result);
+            }
+        } catch (JsonProcessingException e) {
+            LOG.error("Error while generating JSON", e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
+        }
     }
 }
