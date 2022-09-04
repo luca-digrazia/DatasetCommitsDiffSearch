@@ -44,7 +44,7 @@ import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
 import com.google.devtools.build.lib.pkgcache.ParsingFailedEvent;
 import com.google.devtools.build.lib.pkgcache.TargetParsingCompleteEvent;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
-import com.google.devtools.build.lib.repository.ExternalPackageHelper;
+import com.google.devtools.build.lib.repository.ExternalPackageUtil;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue.TargetPatternPhaseKey;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternSkyKeyOrException;
@@ -67,10 +67,7 @@ import javax.annotation.Nullable;
  */
 final class TargetPatternPhaseFunction implements SkyFunction {
 
-  private final ExternalPackageHelper externalPackageHelper;
-
-  public TargetPatternPhaseFunction(ExternalPackageHelper externalPackageHelper) {
-    this.externalPackageHelper = externalPackageHelper;
+  public TargetPatternPhaseFunction() {
   }
 
   @Override
@@ -78,7 +75,7 @@ final class TargetPatternPhaseFunction implements SkyFunction {
     TargetPatternPhaseKey options = (TargetPatternPhaseKey) key.argument();
     WorkspaceNameValue workspaceName = (WorkspaceNameValue) env.getValue(WorkspaceNameValue.key());
     ImmutableSortedSet<String> notSymlinkedInExecrootDirectories =
-        externalPackageHelper.getNotSymlinkedInExecrootDirectories(env);
+        ExternalPackageUtil.getNotSymlinkedInExecrootDirectories(env);
     if (env.valuesMissing()) {
       return null;
     }
@@ -157,17 +154,15 @@ final class TargetPatternPhaseFunction implements SkyFunction {
         }
       } else /*if (determineTests)*/ {
         testsToRun = testTargets.getTargets();
-        targets =
-            ResolvedTargets.<Target>builder()
-                .merge(targets)
-                // Merging in all testsToRun guarantees that targets that will be built (because
-                // they are tests) are not considered to be "filtered out", even if they were
-                // initially filtered out. We can't merge in testTargets because its set of
-                // filteredTargets could include targets that we're building but not testing.
-                .merge(ResolvedTargets.<Target>builder().addAll(testsToRun).build())
-                .mergeError(testTargets.hasError())
-                .build();
-        filteredTargets = targets.getFilteredTargets();
+        targets = ResolvedTargets.<Target>builder()
+            .merge(targets)
+            // Avoid merge() here which would remove the filteredTargets from the targets.
+            .addAll(testsToRun)
+            .mergeError(testTargets.hasError())
+            .build();
+        // filteredTargets is correct in this case - it cannot contain tests that got back in
+        // through test_suite expansion, because the test determination would also filter those out.
+        // However, that's not obvious, and it might be better to explicitly recompute it.
       }
       if (testsToRun != null) {
         // Note that testsToRun can still be null here, if buildTestsOnly && !shouldRunTests.
@@ -258,7 +253,7 @@ final class TargetPatternPhaseFunction implements SkyFunction {
    * Interprets the command-line arguments by expanding each pattern to targets and populating the
    * list of {@code failedPatterns}.
    *
-   * @param env the Starlark environment
+   * @param env the Skylark environment
    * @param options the command-line arguments in structured form
    * @param failedPatterns a list into which failed patterns are added
    */
