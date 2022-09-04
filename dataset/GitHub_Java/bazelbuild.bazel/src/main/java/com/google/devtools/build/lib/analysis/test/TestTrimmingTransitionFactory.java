@@ -13,23 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.test;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptionsCache;
 import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.common.options.Options;
 
 /**
@@ -42,35 +38,21 @@ public final class TestTrimmingTransitionFactory implements TransitionFactory<Ru
 
   /**
    * Trimming transition which removes the test config fragment if --trim_test_configuration is on.
-   *
-   * <p>At the moment, need to know the value of the testonly attribute from the underlying rule. So
-   * the factory, which has access to attributes but not the configuration, attaches the appropriate
-   * TestTrimmingTransition, which will have access to the configuration.
    */
-  public static class TestTrimmingTransition implements PatchTransition {
-    // These are essentially a cache of the two versions of the transition depending on if
-    // the associated rule is testonly = true or not.
-    private static final TestTrimmingTransition TESTONLY_TRUE = new TestTrimmingTransition(true);
-    private static final TestTrimmingTransition TESTONLY_FALSE = new TestTrimmingTransition(false);
-    @VisibleForTesting public static final TestTrimmingTransition INSTANCE = TESTONLY_FALSE;
-
-    private final boolean testonly;
-
-    private TestTrimmingTransition(boolean testonly) {
-      this.testonly = testonly;
-    }
+  public enum TestTrimmingTransition implements PatchTransition {
+    INSTANCE;
 
     // This cache is to prevent major slowdowns when using --trim_test_configuration. This
     // transition is always invoked on every target in the top-level invocation. Thus, a wide
     // invocation, like //..., will cause the transition to be invoked on a large number of targets
     // leading to significant performance degradation. (Notably, the transition itself is somewhat
-    // fast; however, the post-processing of the BuildOptions into the actual BuildConfiguration
+    // fast; however, the post-processing of the BuildOptions results into a BuildConfiguration
     // takes a significant amount of time).
     private static final BuildOptionsCache<Integer> cache = new BuildOptionsCache<>();
 
     @Override
     public ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments() {
-      return ImmutableSet.of(TestOptions.class, CoreOptions.class);
+      return ImmutableSet.of(TestOptions.class);
     }
 
     @Override
@@ -79,15 +61,9 @@ public final class TestTrimmingTransitionFactory implements TransitionFactory<Ru
         // nothing to do, already trimmed this fragment
         return originalOptions.underlying();
       }
-      CoreOptions originalCoreOptions = originalOptions.get(CoreOptions.class);
       TestOptions originalTestOptions = originalOptions.get(TestOptions.class);
-      if (!originalTestOptions.trimTestConfiguration
-          || (originalTestOptions.experimentalRetainTestConfigurationAcrossTestonly && testonly)
-          || !originalCoreOptions.useDistinctHostConfiguration) {
+      if (!originalTestOptions.trimTestConfiguration) {
         // nothing to do, trimming is disabled
-        // Due to repercussions of b/117932061, do not trim when `--nodistinct_host_configuration`
-        // TODO(twigg): See if can remove distinct_host_configuration read here and thus
-        // dependency on CoreOptions above.
         return originalOptions.underlying();
       }
       return cache.applyTransition(
@@ -121,13 +97,6 @@ public final class TestTrimmingTransitionFactory implements TransitionFactory<Ru
     }
 
     // Non-test rule. Trim it!
-    // Use an attribute mapper to ensure testonly is resolved to an actual boolean value.
-    // It is expected all rules should have a boolean testonly value so the `has` check is only
-    //   there as an over-abundance of caution.
-    NonconfigurableAttributeMapper attrs = NonconfigurableAttributeMapper.of(rule);
-    if (attrs.has("testonly", Type.BOOLEAN) && attrs.get("testonly", Type.BOOLEAN)) {
-      return TestTrimmingTransition.TESTONLY_TRUE;
-    }
-    return TestTrimmingTransition.TESTONLY_FALSE;
+    return TestTrimmingTransition.INSTANCE;
   }
 }
