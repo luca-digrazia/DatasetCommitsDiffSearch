@@ -16,41 +16,38 @@
  */
 package controllers.api;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Multimap;
 import com.google.common.io.Files;
+import com.google.gson.Gson;
+import com.google.inject.Inject;
 import controllers.AuthenticatedController;
-import org.graylog2.restclient.models.api.requests.CreateBundleRequest;
+import org.glassfish.grizzly.utils.Charsets;
 import org.graylog2.restclient.models.bundles.BundleService;
 import org.graylog2.restclient.models.bundles.ConfigurationBundle;
+import org.graylog2.restclient.models.api.requests.CreateBundleRequest;
 import play.Logger;
-import play.libs.Json;
-import play.mvc.BodyParser;
+import play.Play;
 import play.mvc.Http.MultipartFormData;
 import play.mvc.Http.MultipartFormData.FilePart;
 import play.mvc.Result;
 
-import javax.inject.Inject;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 public class BundlesApiController extends AuthenticatedController {
-    private final BundleService bundleService;
-
     @Inject
-    public BundlesApiController(BundleService bundleService) {
-        this.bundleService = bundleService;
-    }
+    private BundleService bundleService;
 
     public Result index() {
         Multimap<String, ConfigurationBundle> bundles = bundleService.all();
 
-        return ok(Json.toJson(bundles.asMap()));
+        return ok(new Gson().toJson(bundles.asMap())).as("application/json");
     }
 
-    @BodyParser.Of(BodyParser.MultipartFormData.class)
     public Result create() {
         String path = getRefererPath();
         MultipartFormData body = request().body().asMultipartFormData();
@@ -59,8 +56,9 @@ public class BundlesApiController extends AuthenticatedController {
             CreateBundleRequest cbr;
             try {
                 File file = bundle.getFile();
-                String bundleContents = Files.toString(file, StandardCharsets.UTF_8);
-                cbr = Json.fromJson(Json.parse(bundleContents), CreateBundleRequest.class);
+                String bundleContents = Files.toString(file, Charsets.UTF8_CHARSET);
+                ObjectMapper om = new ObjectMapper();
+                cbr = om.readValue(bundleContents, CreateBundleRequest.class);
             } catch (IOException e) {
                 Logger.error("Could not parse uploaded bundle: " + e);
                 flash("error", "The uploaded bundle could not be applied: does it have the right format?");
@@ -83,16 +81,6 @@ public class BundlesApiController extends AuthenticatedController {
             flash("success", "Bundle applied successfully");
         } catch (Exception e) {
             flash("error", "Could not apply bundle: " + e);
-        }
-        return redirect(getRefererPath());
-    }
-
-    public Result delete(String bundleId) {
-        try {
-            bundleService.delete(bundleId);
-            flash("success", "Bundle successfully deleted");
-        } catch (Exception e) {
-            flash("error", "Could not delete bundle: " + e);
         }
         return redirect(getRefererPath());
     }
