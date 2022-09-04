@@ -198,6 +198,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         return String.format("blaze-out/ios_%s-fastbuild/", arch);
       case IOS_EXTENSION: // Intentional fall-through.
       case IOS_APPLICATION:
+      case WATCH_OS1_EXTENSION:
       case APPLEBIN_IOS:
         return String.format("blaze-out/ios-%1$s-min%3$s-%2$s-ios_%1$s-fastbuild/",
             arch, configurationDistinguisher.toString().toLowerCase(Locale.US), minOsVersion);
@@ -233,6 +234,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       String arch, ConfigurationDistinguisher configurationDistinguisher) {
     switch (configurationDistinguisher) {
       case IOS_EXTENSION:
+      case WATCH_OS1_EXTENSION:
       case APPLEBIN_IOS:
         return String.format("blaze-out/%s-ios_%s-fastbuild/bin/",
             configurationDistinguisher.toString().toLowerCase(Locale.US), arch);
@@ -257,6 +259,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       case IOS_APPLICATION:
       case APPLEBIN_IOS:
         return DEFAULT_IOS_SDK_VERSION;
+      case WATCH_OS1_EXTENSION:
+        return WatchUtils.MINIMUM_OS_VERSION;
       case APPLEBIN_WATCHOS:
         return DottedVersion.fromString(XcodeVersionProperties.DEFAULT_WATCHOS_SDK_VERSION);
       default:
@@ -4457,35 +4461,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     // Linkopts should also be grouped together.
     assertThat(Joiner.on(" ").join(linkAction("//x").getArguments()))
         .contains("-another-opt -Wl,--other-opt -one-more-opt");
-  }
-
-  protected void checkObjcProviderLinkInputsInLinkAction(RuleType ruleType) throws Exception {
-    useConfiguration("--experimental_disable_jvm", "--cpu=ios_i386");
-
-    scratch.file("bin/defs.bzl",
-        "def _custom_rule_impl(ctx):",
-        "  return struct(objc=apple_common.new_objc_provider(",
-        "      link_inputs=depset(ctx.files.link_inputs)))",
-        "custom_rule = rule(",
-        "    _custom_rule_impl,",
-        "    attrs={'link_inputs': attr.label_list(allow_files=True)},",
-        ")");
-
-    scratch.file("bin/input.txt");
-
-    scratch.file("bin/BUILD",
-        "load('//bin:defs.bzl', 'custom_rule')",
-        "custom_rule(",
-        "    name = 'custom',",
-        "    link_inputs = ['input.txt'],",
-        ")");
-
-    ruleType.scratchTarget(scratch,
-        "srcs", "['main.m']",
-        "deps", "['//bin:custom']");
-
-    Artifact inputFile = getSourceArtifact("bin/input.txt");
-    assertThat(linkAction("//x").getInputs()).contains(inputFile);
   }
 
   protected void checkAppleSdkVersionEnv(RuleType ruleType) throws Exception {

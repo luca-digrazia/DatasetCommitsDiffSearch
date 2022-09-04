@@ -335,7 +335,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
     }
 
     // Add module map arguments.
-    if (moduleMap.isPresent() && !getCustomModuleMap(ruleContext).isPresent()) {
+    if (moduleMap.isPresent()) {
       // If modules are enabled for the rule, -fmodules is added to the copts already. (This implies
       // module map usage). Otherwise, we need to pass -fmodule-maps.
       if (!attributes.enableModules()) {

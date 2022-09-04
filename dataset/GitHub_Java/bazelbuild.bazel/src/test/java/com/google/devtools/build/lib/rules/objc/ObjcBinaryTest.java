@@ -910,9 +910,4 @@ public class ObjcBinaryTest extends ObjcRuleTestCase {
   public void testFilesToCompileOutputGroup() throws Exception {
     checkFilesToCompileOutputGroup(RULE_TYPE);
   }
-
-  @Test
-  public void testCustomModuleMap() throws Exception {
-    checkCustomModuleMap(RULE_TYPE);
-  }
 }
