@@ -6,7 +6,6 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.TextView;
 
 import com.shuyu.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.model.GSYVideoModel;
@@ -20,8 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 只支持每个片头广告播放的类
- * 其实就是根据实体，判断播放列表中哪个是广告，哪个不是，从而处理不同的UI显示效果
+ * 广告播放
  * Created by guoshuyu on 2018/1/26.
  */
 
@@ -30,8 +28,6 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
     protected View mJumpAd;
 
     protected ViewGroup mWidgetContainer;
-
-    protected TextView mADTime;
 
     protected boolean isAdModel = false;
 
@@ -53,16 +49,13 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
     protected void init(Context context) {
         super.init(context);
         mJumpAd = findViewById(R.id.jump_ad);
-        mADTime = (TextView) findViewById(R.id.ad_time);
         mWidgetContainer = (ViewGroup) findViewById(R.id.widget_container);
-        if (mJumpAd != null) {
-            mJumpAd.setOnClickListener(new OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    playNext();
-                }
-            });
-        }
+        mJumpAd.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                playNext();
+            }
+        });
 
     }
 
@@ -147,16 +140,14 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
 
     @Override
     protected void updateStartImage() {
-        if (mStartButton != null) {
-            if (mStartButton instanceof ImageView) {
-                ImageView imageView = (ImageView) mStartButton;
-                if (mCurrentState == CURRENT_STATE_PLAYING) {
-                    imageView.setImageResource(R.drawable.video_click_pause_selector);
-                } else if (mCurrentState == CURRENT_STATE_ERROR) {
-                    imageView.setImageResource(R.drawable.video_click_play_selector);
-                } else {
-                    imageView.setImageResource(R.drawable.video_click_play_selector);
-                }
+        if (mStartButton instanceof ImageView) {
+            ImageView imageView = (ImageView) mStartButton;
+            if (mCurrentState == CURRENT_STATE_PLAYING) {
+                imageView.setImageResource(R.drawable.video_click_pause_selector);
+            } else if (mCurrentState == CURRENT_STATE_ERROR) {
+                imageView.setImageResource(R.drawable.video_click_play_selector);
+            } else {
+                imageView.setImageResource(R.drawable.video_click_play_selector);
             }
         }
     }
@@ -215,24 +206,6 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
 
 
     @Override
-    protected void hideAllWidget() {
-        if (isFirstPrepared && isAdModel) {
-            return;
-        }
-        super.hideAllWidget();
-    }
-
-    @Override
-    protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime) {
-        super.setProgressAndTime(progress, secProgress, currentTime, totalTime);
-        if (mADTime != null && currentTime > 0) {
-            int totalSeconds = totalTime / 1000;
-            int currentSeconds = currentTime / 1000;
-            mADTime.setText("" + (totalSeconds - currentSeconds));
-        }
-    }
-
-    @Override
     protected void cloneParams(GSYBaseVideoPlayer from, GSYBaseVideoPlayer to) {
         super.cloneParams(from, to);
         GSYSampleADVideoPlayer sf = (GSYSampleADVideoPlayer) from;
@@ -247,29 +220,14 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
      * 根据是否广告url修改ui显示状态
      */
     protected void changeAdUIState() {
-        if (mJumpAd != null) {
-            mJumpAd.setVisibility((isFirstPrepared && isAdModel) ? VISIBLE : GONE);
-        }
-        if (mADTime != null) {
-            mADTime.setVisibility((isFirstPrepared && isAdModel) ? VISIBLE : GONE);
-        }
-        if (mWidgetContainer != null) {
-            mWidgetContainer.setVisibility((isFirstPrepared && isAdModel) ? GONE : VISIBLE);
-        }
-        if (mBottomContainer != null) {
-            int color = (isFirstPrepared && isAdModel) ? Color.TRANSPARENT : getContext().getResources().getColor(R.color.bottom_container_bg);
-            mBottomContainer.setBackgroundColor(color);
-        }
-        if (mCurrentTimeTextView != null) {
-            mCurrentTimeTextView.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
-        }
-        if (mTotalTimeTextView != null) {
-            mTotalTimeTextView.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
-        }
-        if (mProgressBar != null) {
-            mProgressBar.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
-            mProgressBar.setEnabled(!(isFirstPrepared && isAdModel));
-        }
+        mJumpAd.setVisibility((isFirstPrepared && isAdModel) ? VISIBLE : GONE);
+        mWidgetContainer.setVisibility((isFirstPrepared && isAdModel) ? GONE : VISIBLE);
+        int color = (isFirstPrepared && isAdModel) ? Color.TRANSPARENT : getContext().getResources().getColor(R.color.bottom_container_bg);
+        mBottomContainer.setBackgroundColor(color);
+        mCurrentTimeTextView.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
+        mTotalTimeTextView.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
+        mProgressBar.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
+        mProgressBar.setEnabled(!(isFirstPrepared && isAdModel));
     }
 
 

@@ -70,7 +70,7 @@ public class DetailADPlayer extends GSYBaseActivityDetail<ListGSYVideoPlayer> {
         detailPlayer.setShowFullAnimation(false);
         detailPlayer.setNeedLockFull(true);
 
-        detailPlayer.setVideoAllCallBack(this);
+        detailPlayer.setStandardVideoAllCallBack(this);
 
         detailPlayer.setLockClickListener(new LockClickListener() {
             @Override
