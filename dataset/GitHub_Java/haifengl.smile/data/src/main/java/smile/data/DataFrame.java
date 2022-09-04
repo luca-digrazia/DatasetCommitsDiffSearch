@@ -36,7 +36,7 @@ import smile.util.Strings;
  *
  * @author Haifeng Li
  */
-public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
+public interface DataFrame extends Dataset<Tuple> {
     /** Returns the schema of DataFrame. */
     StructType schema();
 
