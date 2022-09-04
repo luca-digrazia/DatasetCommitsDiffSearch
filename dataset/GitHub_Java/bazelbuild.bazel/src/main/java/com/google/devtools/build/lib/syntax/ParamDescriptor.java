@@ -17,10 +17,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /** A value class for storing {@link Param} metadata to avoid using Java proxies. */
@@ -28,10 +25,14 @@ final class ParamDescriptor {
 
   private final String name;
   @Nullable private final Object defaultValue;
+  private final Class<?> type;
+  private final Class<?> generic1;
   private final boolean noneable;
   private final boolean named;
   private final boolean positional;
-  private final List<Class<?>> allowedClasses; // non-empty
+  // While the type can be inferred completely by the Param annotation, this tuple allows for the
+  // type of a given parameter to be determined only once, as it is an expensive operation.
+  private final SkylarkType skylarkType;
   // The semantics flag responsible for disabling this parameter, or null if enabled.
   // It is an error for Starlark code to supply a value to a disabled parameter.
   @Nullable private final String disabledByFlag;
@@ -39,17 +40,21 @@ final class ParamDescriptor {
   private ParamDescriptor(
       String name,
       String defaultExpr,
+      Class<?> type,
+      Class<?> generic1,
       boolean noneable,
       boolean named,
       boolean positional,
-      List<Class<?>> allowedClasses,
+      SkylarkType skylarkType,
       @Nullable String disabledByFlag) {
     this.name = name;
     this.defaultValue = defaultExpr.isEmpty() ? null : evalDefault(name, defaultExpr);
+    this.type = type;
+    this.generic1 = generic1;
     this.noneable = noneable;
     this.named = named;
     this.positional = positional;
-    this.allowedClasses = allowedClasses;
+    this.skylarkType = skylarkType;
     this.disabledByFlag = disabledByFlag;
   }
 
@@ -58,6 +63,10 @@ final class ParamDescriptor {
    * given semantics.
    */
   static ParamDescriptor of(Param param, StarlarkSemantics starlarkSemantics) {
+    Class<?> type = param.type();
+    Class<?> generic = param.generic1();
+    boolean noneable = param.noneable();
+
     String defaultExpr = param.defaultValue();
     String disabledByFlag = null;
     if (!starlarkSemantics.isFeatureEnabledBasedOnTogglingFlags(
@@ -70,30 +79,15 @@ final class ParamDescriptor {
       Preconditions.checkState(!disabledByFlag.isEmpty());
     }
 
-    // Compute set of allowed classes.
-    ParamType[] allowedTypes = param.allowedTypes();
-    List<Class<?>> allowedClasses = new ArrayList<>();
-    if (allowedTypes.length > 0) {
-      for (ParamType pt : allowedTypes) {
-        allowedClasses.add(pt.type());
-      }
-    } else {
-      allowedClasses.add(param.type());
-    }
-    if (param.noneable()) {
-      // A few annotations redundantly declare NoneType.
-      if (!allowedClasses.contains(NoneType.class)) {
-        allowedClasses.add(NoneType.class);
-      }
-    }
-
     return new ParamDescriptor(
         param.name(),
         defaultExpr,
-        param.noneable(),
+        type,
+        generic,
+        noneable,
         param.named(),
         param.positional(),
-        allowedClasses,
+        getType(type, generic, param.allowedTypes(), noneable),
         disabledByFlag);
   }
 
@@ -102,13 +96,37 @@ final class ParamDescriptor {
     return name;
   }
 
-  /** Returns a description of allowed argument types suitable for an error message. */
-  String getTypeErrorMessage() {
-    return allowedClasses.stream().map(Starlark::classType).collect(Collectors.joining(" or "));
+  /** @see Param#type() */
+  Class<?> getType() {
+    return type;
   }
 
-  List<Class<?>> getAllowedClasses() {
-    return allowedClasses;
+  private static SkylarkType getType(
+      Class<?> type, Class<?> generic, ParamType[] allowedTypes, boolean noneable) {
+    SkylarkType result = SkylarkType.BOTTOM;
+    if (allowedTypes.length > 0) {
+      Preconditions.checkState(Object.class.equals(type));
+      for (ParamType paramType : allowedTypes) {
+        Class<?> generic1 = paramType.generic1();
+        SkylarkType t =
+            generic1 != Object.class
+                ? SkylarkType.of(paramType.type(), generic1)
+                : SkylarkType.of(paramType.type());
+        result = SkylarkType.Union.of(result, t);
+      }
+    } else {
+      result = generic != Object.class ? SkylarkType.of(type, generic) : SkylarkType.of(type);
+    }
+
+    if (noneable) {
+      result = SkylarkType.Union.of(result, SkylarkType.NONE);
+    }
+    return result;
+  }
+
+  /** @see Param#generic1() */
+  Class<?> getGeneric1() {
+    return generic1;
   }
 
   /** @see Param#noneable() */
@@ -130,6 +148,10 @@ final class ParamDescriptor {
   @Nullable
   Object getDefaultValue() {
     return defaultValue;
+  }
+
+  SkylarkType getSkylarkType() {
+    return skylarkType;
   }
 
   /** Returns the flag responsible for disabling this parameter, or null if it is enabled. */
@@ -195,7 +217,7 @@ final class ParamDescriptor {
       x = EvalUtils.eval(ParserInput.fromLines(expr), FileOptions.DEFAULT, module, thread);
     } catch (InterruptedException ex) {
       throw new IllegalStateException(ex); // can't happen
-    } catch (SyntaxError.Exception | EvalException ex) {
+    } catch (SyntaxError | EvalException ex) {
       throw new IllegalArgumentException(
           String.format(
               "failed to evaluate default value '%s' of parameter '%s': %s",

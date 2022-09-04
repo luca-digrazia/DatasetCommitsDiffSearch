@@ -196,6 +196,25 @@ public final class SkylarkEvaluationTest extends EvaluationTestCase {
     }
 
     @SkylarkCallable(
+      name = "legacy_method",
+      documented = false,
+      parameters = {
+        @Param(name = "pos", positional = true, type = Boolean.class),
+        @Param(name = "legacyNamed", type = Boolean.class, positional = true, named = false,
+            legacyNamed = true),
+        @Param(name = "named", type = Boolean.class, positional = false, named = true),
+      })
+    public String legacyMethod(Boolean pos, Boolean legacyNamed, Boolean named) {
+      return "legacy_method("
+          + pos
+          + ", "
+          + legacyNamed
+          + ", "
+          + named
+          + ")";
+    }
+
+    @SkylarkCallable(
         name = "with_params",
         documented = false,
         parameters = {
@@ -1430,6 +1449,14 @@ public final class SkylarkEvaluationTest extends EvaluationTestCase {
   }
 
   @Test
+  public void testUnionSet() throws Exception {
+    new Scenario("--incompatible_depset_union=false")
+        .testExpression("str(depset([1, 3]) | depset([1, 2]))", "depset([1, 2, 3])")
+        .testExpression("str(depset([1, 2]) | [1, 3])", "depset([1, 2, 3])")
+        .testIfExactError("unsupported binary operation: int | bool", "2 | False");
+  }
+
+  @Test
   public void testSetIsNotIterable() throws Exception {
     new Scenario()
         .testIfErrorContains("not iterable", "list(depset(['a', 'b']))")
@@ -1866,6 +1893,7 @@ public final class SkylarkEvaluationTest extends EvaluationTestCase {
             "function",
             "interrupted_struct_field",
             "is_empty",
+            "legacy_method",
             "nullfunc_failing",
             "nullfunc_working",
             "proxy_methods_object",
