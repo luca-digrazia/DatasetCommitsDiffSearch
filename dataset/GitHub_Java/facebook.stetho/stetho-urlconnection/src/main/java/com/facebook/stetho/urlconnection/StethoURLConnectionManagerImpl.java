@@ -12,13 +12,13 @@ package com.facebook.stetho.urlconnection;
 import com.facebook.stetho.inspector.network.DefaultResponseHandler;
 import com.facebook.stetho.inspector.network.NetworkEventReporter;
 import com.facebook.stetho.inspector.network.NetworkEventReporterImpl;
+import com.facebook.stetho.inspector.network.RequestBodyHelper;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Isolated implementation class to allow us to escape the verifier if Stetho is not
@@ -27,20 +27,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * APK.
  */
 class StethoURLConnectionManagerImpl {
-  private static final AtomicInteger sSequenceNumberGenerator = new AtomicInteger(0);
-
   private final NetworkEventReporter mStethoHook = NetworkEventReporterImpl.get();
-  private final int mRequestId;
+  private final String mRequestId;
   @Nullable
   private final String mFriendlyName;
 
-  @Nullable private String mRequestIdString;
-
   private HttpURLConnection mConnection;
   @Nullable private URLConnectionInspectorRequest mInspectorRequest;
+  @Nullable private RequestBodyHelper mRequestBodyHelper;
 
   public StethoURLConnectionManagerImpl(@Nullable String friendlyName) {
-    mRequestId = sSequenceNumberGenerator.getAndIncrement();
+    mRequestId = mStethoHook.nextRequestId();
     mFriendlyName = friendlyName;
   }
 
@@ -57,11 +54,13 @@ class StethoURLConnectionManagerImpl {
     throwIfConnection();
     mConnection = connection;
     if (isStethoActive()) {
+      mRequestBodyHelper = new RequestBodyHelper(mStethoHook, getStethoRequestId());
       mInspectorRequest = new URLConnectionInspectorRequest(
           getStethoRequestId(),
           mFriendlyName,
           connection,
-          requestEntity);
+          requestEntity,
+          mRequestBodyHelper);
       mStethoHook.requestWillBeSent(mInspectorRequest);
     }
   }
@@ -72,11 +71,8 @@ class StethoURLConnectionManagerImpl {
   public void postConnect() throws IOException {
     throwIfNoConnection();
     if (isStethoActive()) {
-      if (mInspectorRequest != null) {
-        byte[] body = mInspectorRequest.body();
-        if (body != null) {
-          mStethoHook.dataSent(getStethoRequestId(), body.length, body.length);
-        }
+      if (mRequestBodyHelper != null && mRequestBodyHelper.hasBody()) {
+        mRequestBodyHelper.reportDataSent();
       }
       mStethoHook.responseHeadersReceived(
           new URLConnectionInspectorResponse(
@@ -140,9 +136,6 @@ class StethoURLConnectionManagerImpl {
    */
   @Nonnull
   public String getStethoRequestId() {
-    if (mRequestIdString == null) {
-      mRequestIdString = String.valueOf(mRequestId);
-    }
-    return mRequestIdString;
+    return mRequestId;
   }
 }

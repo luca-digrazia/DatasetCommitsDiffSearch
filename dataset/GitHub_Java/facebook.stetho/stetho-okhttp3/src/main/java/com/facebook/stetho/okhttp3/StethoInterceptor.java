@@ -223,7 +223,7 @@ public class StethoInterceptor implements Interceptor {
 
     @Override
     public int connectionId() {
-      return mConnection == null ? 0 : mConnection.hashCode();
+      return mConnection.hashCode();
     }
 
     @Override
