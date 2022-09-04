@@ -3,10 +3,8 @@ package io.quarkus.vertx.web.deployment;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
-import org.jboss.jandex.Type.Kind;
 
 import io.quarkus.hibernate.validator.spi.BeanValidationAnnotationsBuildItem;
-import io.quarkus.vertx.http.runtime.HandlerType;
 
 /**
  * Describe a request handler.
@@ -15,24 +13,10 @@ class HandlerDescriptor {
 
     private final MethodInfo method;
     private final BeanValidationAnnotationsBuildItem validationAnnotations;
-    private final HandlerType handlerType;
-    private final Type contentType;
 
-    HandlerDescriptor(MethodInfo method, BeanValidationAnnotationsBuildItem bvAnnotations, HandlerType handlerType) {
+    HandlerDescriptor(MethodInfo method, BeanValidationAnnotationsBuildItem bvAnnotations) {
         this.method = method;
         this.validationAnnotations = bvAnnotations;
-        this.handlerType = handlerType;
-        Type returnType = method.returnType();
-        if (returnType.kind() == Kind.VOID) {
-            contentType = null;
-        } else {
-            if (returnType.name().equals(DotNames.UNI) || returnType.name().equals(DotNames.MULTI)
-                    || returnType.name().equals(DotNames.COMPLETION_STAGE)) {
-                contentType = returnType.asParameterizedType().arguments().get(0);
-            } else {
-                contentType = returnType;
-            }
-        }
     }
 
     Type getReturnType() {
@@ -49,10 +33,6 @@ class HandlerDescriptor {
 
     boolean isReturningMulti() {
         return method.returnType().name().equals(DotNames.MULTI);
-    }
-
-    boolean isReturningCompletionStage() {
-        return method.returnType().name().equals(DotNames.COMPLETION_STAGE);
     }
 
     /**
@@ -87,7 +67,16 @@ class HandlerDescriptor {
     }
 
     Type getContentType() {
-        return contentType;
+        if (isReturningVoid()) {
+            return null;
+        }
+        if (isReturningUni()) {
+            return getReturnType().asParameterizedType().arguments().get(0);
+        }
+        if (isReturningMulti()) {
+            return getReturnType().asParameterizedType().arguments().get(0);
+        }
+        return getReturnType();
     }
 
     boolean isContentTypeString() {
@@ -106,16 +95,20 @@ class HandlerDescriptor {
         return type.name().equals(DotNames.BUFFER);
     }
 
+    boolean isContentTypeRxBuffer() {
+        Type type = getContentType();
+        if (type == null) {
+            return false;
+        }
+        return type.name().equals(DotNames.RX_BUFFER);
+    }
+
     boolean isContentTypeMutinyBuffer() {
         Type type = getContentType();
         if (type == null) {
             return false;
         }
         return type.name().equals(DotNames.MUTINY_BUFFER);
-    }
-
-    HandlerType getHandlerType() {
-        return handlerType;
     }
 
 }
