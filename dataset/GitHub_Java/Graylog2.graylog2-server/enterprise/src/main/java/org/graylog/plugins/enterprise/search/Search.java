@@ -1,8 +1,10 @@
 package org.graylog.plugins.enterprise.search;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
@@ -10,6 +12,8 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.mongojack.Id;
 import org.mongojack.ObjectId;
 
@@ -21,8 +25,10 @@ import static com.google.common.collect.ImmutableSet.of;
 
 @AutoValue
 @JsonAutoDetect
-@JsonDeserialize(builder = AutoValue_Search.Builder.class)
+@JsonDeserialize(builder = Search.Builder.class)
 public abstract class Search {
+    private static final String FIELD_CREATED_AT = "created_at";
+    public static final String FIELD_OWNER = "owner";
 
     // generated during build to help quickly find a query by id.
     private ImmutableMap<String, Query> queryIndex;
@@ -42,18 +48,36 @@ public abstract class Search {
     @JsonProperty
     public abstract ImmutableSet<Parameter> parameters();
 
+    @JsonProperty(FIELD_OWNER)
+    public abstract Optional<String> owner();
+
+    @JsonProperty(FIELD_CREATED_AT)
+    public abstract DateTime createdAt();
+
     public Search applyExecutionState(ObjectMapper objectMapper, Map<String, Object> executionState) {
-        //noinspection unchecked
-        final ImmutableSet<Query> queries = queries().stream()
-                .map(query -> query.applyExecutionState(objectMapper, (Map<String, Object>) executionState.get(query.id())))
-                .collect(ImmutableSet.toImmutableSet());
-        return toBuilder().queries(queries).build();
+        final Builder builder = toBuilder();
+
+        final JsonNode state = objectMapper.convertValue(executionState, JsonNode.class);
+
+        if (state.hasNonNull("parameter_bindings")) {
+            final ImmutableSet<Parameter> parameters = parameters().stream()
+                    .map(param -> param.applyExecutionState(objectMapper, state.path("parameter_bindings")))
+                    .collect(ImmutableSet.toImmutableSet());
+            builder.parameters(parameters);
+        }
+        if (state.hasNonNull("queries")) {
+            final ImmutableSet<Query> queries = queries().stream()
+                    .map(query -> query.applyExecutionState(objectMapper, state.path("queries").path(query.id())))
+                    .collect(ImmutableSet.toImmutableSet());
+            builder.queries(queries);
+        }
+        return builder.build();
     }
 
-    abstract Builder toBuilder();
+    public abstract Builder toBuilder();
 
     public static Builder builder() {
-        return new AutoValue_Search.Builder().parameters(of());
+        return Builder.create().parameters(of()).queries(ImmutableSet.<Query>builder().build());
     }
 
     @JsonIgnore
@@ -79,14 +103,22 @@ public abstract class Search {
         @JsonProperty
         public abstract Builder parameters(ImmutableSet<Parameter> parameters);
 
-        abstract Optional<ImmutableSet<Parameter>> parameters();
+        @JsonProperty(FIELD_OWNER)
+        public abstract Builder owner(String owner);
+
+        @JsonProperty(FIELD_CREATED_AT)
+        public abstract Builder createdAt(DateTime createdAt);
 
         abstract Search autoBuild();
 
+        @JsonCreator
+        public static Builder create() {
+            return new AutoValue_Search.Builder()
+                    .createdAt(DateTime.now(DateTimeZone.UTC))
+                    .parameters(of());
+        }
+
         public Search build() {
-            if (!parameters().isPresent()) {
-                parameters(of());
-            }
             final Search search = autoBuild();
             search.queryIndex = Maps.uniqueIndex(search.queries(), Query::id);
             search.parameterIndex = Maps.uniqueIndex(search.parameters(), Parameter::name);

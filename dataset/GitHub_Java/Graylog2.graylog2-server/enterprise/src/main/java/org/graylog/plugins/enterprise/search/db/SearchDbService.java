@@ -1,10 +1,10 @@
 package org.graylog.plugins.enterprise.search.db;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Streams;
 import com.mongodb.BasicDBObject;
 import org.bson.types.ObjectId;
 import org.graylog.plugins.enterprise.search.Search;
-import org.graylog.plugins.enterprise.search.SearchRequirements;
 import org.graylog.plugins.enterprise.search.views.ViewService;
 import org.graylog.plugins.enterprise.search.views.sharing.IsViewSharedForUser;
 import org.graylog.plugins.enterprise.search.views.sharing.ViewSharingService;
@@ -20,6 +20,7 @@ import org.mongojack.WriteResult;
 
 import javax.inject.Inject;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -39,19 +40,16 @@ public class SearchDbService {
     private final ViewService viewService;
     private final ViewSharingService viewSharingService;
     private final IsViewSharedForUser isViewSharedForUser;
-    private final SearchRequirements.Factory searchRequirementsFactory;
 
     @Inject
     protected SearchDbService(MongoConnection mongoConnection,
                               MongoJackObjectMapperProvider mapper,
                               ViewService viewService,
                               ViewSharingService viewSharingService,
-                              IsViewSharedForUser isViewSharedForUser,
-                              SearchRequirements.Factory searchRequirementsFactory) {
+                              IsViewSharedForUser isViewSharedForUser) {
         this.viewService = viewService;
         this.viewSharingService = viewSharingService;
         this.isViewSharedForUser = isViewSharedForUser;
-        this.searchRequirementsFactory = searchRequirementsFactory;
         db = JacksonDBCollection.wrap(mongoConnection.getDatabase().getCollection("searches"),
                 Search.class,
                 ObjectId.class,
@@ -60,49 +58,47 @@ public class SearchDbService {
     }
 
     public Optional<Search> get(String id) {
-        return Optional.ofNullable(db.findOneById(new ObjectId(id)))
-                .map(this::requirementsForSearch);
+        return Optional.ofNullable(db.findOneById(new ObjectId(id)));
     }
 
     public Optional<Search> getForUser(String id, User user, Predicate<String> permissionChecker) {
-        final Optional<Search> search = get(id).map(this::requirementsForSearch);
+        final Search search = db.findOneById(new ObjectId(id));
 
-        if (!search.isPresent()) {
+        if (search == null) {
             return Optional.empty();
         }
 
-        if (search.map(s -> s.owner().map(owner -> owner.equals(user.getName())).orElse(false)).orElse(false)) {
-            return search;
+        if (search.owner().map(owner -> owner.equals(user.getName())).orElse(false)) {
+            return Optional.of(search);
         }
 
         if (viewService.forSearch(id).stream()
                 .map(view -> viewSharingService.forView(view.id()))
                 .anyMatch(viewSharing -> viewSharing.map(sharing -> isViewSharedForUser.isAllowedToSee(user, sharing)).orElse(false))) {
-            return search;
+            return Optional.of(search);
         }
 
         if (viewService.forSearch(id).stream()
                 .anyMatch(view -> permissionChecker.test(view.id()))) {
-            return search;
+            return Optional.of(search);
         }
 
         return Optional.empty();
     }
 
     public Search save(Search search) {
-        final Search searchToSave = requirementsForSearch(search);
-        if (searchToSave.id() != null) {
+        if (search.id() != null) {
             db.update(
                     DBQuery.is("_id", search.id()),
-                    searchToSave,
+                    search,
                     true,
                     false
             );
 
-            return searchToSave;
+            return search;
         }
 
-        final WriteResult<Search, ObjectId> save = db.insert(searchToSave);
+        final WriteResult<Search, ObjectId> save = db.insert(search);
 
         return save.getSavedObject();
     }
@@ -114,12 +110,11 @@ public class SearchDbService {
                 .limit(perPage)
                 .skip(perPage * Math.max(0, page - 1));
 
-        return new PaginatedList<>(
-                Streams.stream((Iterable<Search>) cursor).map(this::requirementsForSearch).collect(Collectors.toList()),
-                cursor.count(),
-                page,
-                perPage
-        );
+        return new PaginatedList<>(asImmutableList(cursor), cursor.count(), page, perPage);
+    }
+
+    private ImmutableList<Search> asImmutableList(Iterator<? extends Search> cursor) {
+        return ImmutableList.copyOf(cursor);
     }
 
     public void delete(String id) {
@@ -127,17 +122,10 @@ public class SearchDbService {
     }
 
     public Collection<Search> findByIds(Set<String> idSet) {
-        return Streams.stream((Iterable<Search>) db.find(DBQuery.in("_id", idSet.stream().map(ObjectId::new).collect(Collectors.toList()))))
-                .map(this::requirementsForSearch)
-                .collect(Collectors.toList());
+        return asImmutableList(db.find(DBQuery.in("_id", idSet.stream().map(ObjectId::new).collect(Collectors.toList()))));
     }
 
     public Stream<Search> streamAll() {
-        return Streams.stream((Iterable<Search>) db.find()).map(this::requirementsForSearch);
-    }
-
-    private Search requirementsForSearch(Search search) {
-        return searchRequirementsFactory.create(search)
-                .rebuildRequirements(Search::requires, (s, newRequirements) -> s.toBuilder().requires(newRequirements).build());
+        return Streams.stream((Iterable<Search>) db.find());
     }
 }
