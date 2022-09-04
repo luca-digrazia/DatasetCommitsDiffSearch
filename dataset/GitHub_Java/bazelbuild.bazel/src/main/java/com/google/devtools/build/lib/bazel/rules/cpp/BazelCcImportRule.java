@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.cpp.CcImportRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
@@ -30,7 +31,7 @@ import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 /** Rule definition for the cc_import rule. */
 public final class BazelCcImportRule implements RuleDefinition {
   @Override
-  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .requiresConfigurationFragments(CppConfiguration.class)
         .add(
