@@ -12,10 +12,8 @@ import net.sourceforge.argparse4j.inf.Subparser;
 
 import java.util.SortedMap;
 
-// TODO: 5/15/13 <coda> -- add tests for Cli
-
 /**
- * The command-line runner for Dropwizard application.
+ * The command-line runner for Dropwizard services.
  */
 public class Cli {
     private static final String COMMAND_NAME_ATTR = "command";
@@ -26,10 +24,10 @@ public class Cli {
     private final ArgumentParser parser;
 
     /**
-     * Create a new CLI interface for a application and its bootstrapped environment.
+     * Create a new CLI interface for a service and its bootstrapped environment.
      *
-     * @param location     the location of the application
-     * @param bootstrap    the bootstrap for the application
+     * @param location     the location of the service
+     * @param bootstrap    the bootstrap for the service
      */
     public Cli(JarLocation location, Bootstrap<?> bootstrap) {
         this.commands = Maps.newTreeMap();
@@ -64,11 +62,11 @@ public class Cli {
         final ArgumentParser p = ArgumentParsers.newArgumentParser(usage)
                                                 .defaultHelp(true);
         p.version(location.getVersion().or(
-                "No application version detected. Add a Implementation-Version " +
+                "No service version detected. Add a Implementation-Version " +
                         "entry to your JAR's manifest to enable this."));
         p.addArgument("-v", "--version")
          .action(new VersionArgumentAction())
-         .help("show the application version and exit");
+         .help("show the service version and exit");
         return p;
     }
 
