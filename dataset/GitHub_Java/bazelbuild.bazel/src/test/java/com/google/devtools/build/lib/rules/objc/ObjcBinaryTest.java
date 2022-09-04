@@ -928,11 +928,16 @@ public class ObjcBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCustomModuleMap() throws Exception {
-    checkCustomModuleMap(RULE_TYPE);
+    checkCustomModuleMap(RULE_TYPE, false);
   }
 
   @Test
   public void testGenruleDependency() throws Exception {
     checkGenruleDependency(RULE_TYPE);
+  }
+
+  @Test
+  public void testLinkActionWithTransitiveCppDependency() throws Exception {
+    checkLinkActionWithTransitiveCppDependency(RULE_TYPE, new ExtraLinkArgs());
   }
 }
