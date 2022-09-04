@@ -135,7 +135,6 @@ public class BundleExporter {
         }
 
         final Input inputDescription = new Input();
-        inputDescription.setId(input.getId());
         inputDescription.setTitle(input.getTitle());
         inputDescription.setType(input.getType());
         inputDescription.setGlobal(input.isGlobal());
@@ -327,9 +326,7 @@ public class BundleExporter {
         @SuppressWarnings("unchecked")
         final Map<String, Object> positions = (Map<String, Object>) dashboard.asMap().get("positions");
         if (fields.containsKey(DashboardImpl.EMBEDDED_WIDGETS)) {
-            @SuppressWarnings("unchecked")
-            final List<BasicDBObject> embeddedWidgets = (List<BasicDBObject>) fields.get(DashboardImpl.EMBEDDED_WIDGETS);
-            for (BasicDBObject widgetFields : embeddedWidgets) {
+            for (BasicDBObject widgetFields : (List<BasicDBObject>) fields.get(DashboardImpl.EMBEDDED_WIDGETS)) {
                 org.graylog2.dashboards.widgets.DashboardWidget widget;
                 try {
                     widget = dashboardWidgetCreator.fromPersisted(widgetFields);
@@ -358,14 +355,14 @@ public class BundleExporter {
                 final Map<String, Integer> widgetPosition = (Map<String, Integer>) positions.get(widget.getId());
 
                 if (widgetPosition != null) {
-                    final int row = widgetPosition.getOrDefault("row", 0);
-                    final int col = widgetPosition.getOrDefault("col", 0);
-                    final int height = widgetPosition.getOrDefault("height", 0);
-                    final int width = widgetPosition.getOrDefault("width", 0);
-                    dashboardWidgetDescription.setRow(row);
-                    dashboardWidgetDescription.setCol(col);
-                    dashboardWidgetDescription.setHeight(height);
-                    dashboardWidgetDescription.setWidth(width);
+                    final Integer row = widgetPosition.get("row");
+                    final Integer col = widgetPosition.get("col");
+                    final Integer height = widgetPosition.get("height");
+                    final Integer width = widgetPosition.get("width");
+                    dashboardWidgetDescription.setRow(row == null ? 0 : row);
+                    dashboardWidgetDescription.setCol(col == null ? 0 : col);
+                    dashboardWidgetDescription.setHeight(height == null ? 0 : height);
+                    dashboardWidgetDescription.setWidth(width == null ? 0 : width);
                 } else {
                     LOG.debug("Couldn't find position for widget {} on dashboard {}, using defaults (0, 0, 0, 0).",
                             widget.getId(), dashboard.getTitle());

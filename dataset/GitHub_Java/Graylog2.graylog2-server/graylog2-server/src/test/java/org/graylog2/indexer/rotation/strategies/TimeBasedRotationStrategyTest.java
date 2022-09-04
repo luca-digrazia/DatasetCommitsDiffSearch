@@ -19,20 +19,19 @@ package org.graylog2.indexer.rotation.strategies;
 
 import org.graylog2.audit.AuditEventSender;
 import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.indexset.IndexSetConfig;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.InstantMillisProvider;
+import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
 import org.joda.time.Period;
 import org.junit.After;
-import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import static org.joda.time.Period.minutes;
 import static org.joda.time.Period.seconds;
@@ -44,15 +43,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
 
+@RunWith(MockitoJUnitRunner.class)
 public class TimeBasedRotationStrategyTest {
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+    @Mock
+    private ClusterConfigService clusterConfigService;
 
     @Mock
     private IndexSet indexSet;
-
-    @Mock
-    private IndexSetConfig indexSetConfig;
 
     @Mock
     private Indices indices;
@@ -128,11 +125,10 @@ public class TimeBasedRotationStrategyTest {
         final InstantMillisProvider clock = new InstantMillisProvider(initialTime);
         DateTimeUtils.setCurrentMillisProvider(clock);
 
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         when(indices.indexCreationDate(anyString())).thenReturn(initialTime.minus(minutes(5)));
+        when(clusterConfigService.get(TimeBasedRotationStrategyConfig.class)).thenReturn(TimeBasedRotationStrategyConfig.create(period));
 
-        final TimeBasedRotationStrategy hourlyRotation = new TimeBasedRotationStrategy(indices, nodeId, auditEventSender);
+        final TimeBasedRotationStrategy hourlyRotation = new TimeBasedRotationStrategy(indices, nodeId, clusterConfigService, auditEventSender);
 
         // Should not rotate the first index.
         when(indexSet.getNewestTargetName()).thenReturn("ignored");
@@ -144,8 +140,6 @@ public class TimeBasedRotationStrategyTest {
 
         // Crossed rotation period.
         when(indexSet.getNewestTargetName()).thenReturn("ignored");
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         hourlyRotation.rotate(indexSet);
         verify(indexSet, times(1)).cycle();
         reset(indexSet);
@@ -154,8 +148,6 @@ public class TimeBasedRotationStrategyTest {
 
         // Did not cross rotation period.
         when(indexSet.getNewestTargetName()).thenReturn("ignored");
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         hourlyRotation.rotate(indexSet);
         verify(indexSet, never()).cycle();
         reset(indexSet);
@@ -169,17 +161,14 @@ public class TimeBasedRotationStrategyTest {
 
         final InstantMillisProvider clock = new InstantMillisProvider(initialTime);
         DateTimeUtils.setCurrentMillisProvider(clock);
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         when(indices.indexCreationDate(anyString())).thenReturn(initialTime.minus(minutes(11)));
+        when(clusterConfigService.get(TimeBasedRotationStrategyConfig.class)).thenReturn(TimeBasedRotationStrategyConfig.create(period));
 
-        final TimeBasedRotationStrategy tenMinRotation = new TimeBasedRotationStrategy(indices, nodeId, auditEventSender);
+        final TimeBasedRotationStrategy tenMinRotation = new TimeBasedRotationStrategy(indices, nodeId, clusterConfigService, auditEventSender);
 
         // Should rotate the first index.
         // time is 01:55:00, index was created at 01:44:00, so we missed one period, and should rotate
         when(indexSet.getNewestTargetName()).thenReturn("ignored");
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         tenMinRotation.rotate(indexSet);
         verify(indexSet, times(1)).cycle();
         reset(indexSet);
@@ -189,8 +178,6 @@ public class TimeBasedRotationStrategyTest {
 
         // Did not cross rotation period.
         when(indexSet.getNewestTargetName()).thenReturn("ignored");
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         tenMinRotation.rotate(indexSet);
         verify(indexSet, never()).cycle();
         reset(indexSet);
@@ -200,8 +187,6 @@ public class TimeBasedRotationStrategyTest {
 
         // Crossed rotation period.
         when(indexSet.getNewestTargetName()).thenReturn("ignored");
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         tenMinRotation.rotate(indexSet);
         verify(indexSet, times(1)).cycle();
         reset(indexSet);
@@ -212,8 +197,6 @@ public class TimeBasedRotationStrategyTest {
 
         // Crossed multiple rotation periods.
         when(indexSet.getNewestTargetName()).thenReturn("ignored");
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         tenMinRotation.rotate(indexSet);
         verify(indexSet, times(1)).cycle();
         reset(indexSet);
@@ -222,8 +205,6 @@ public class TimeBasedRotationStrategyTest {
         // this should not cycle again, because next valid rotation time is 3:00:00
         clock.tick(minutes(1));
         when(indexSet.getNewestTargetName()).thenReturn("ignored");
-        when(indexSet.getConfig()).thenReturn(indexSetConfig);
-        when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         tenMinRotation.rotate(indexSet);
         verify(indexSet, never()).cycle();
         reset(indexSet);

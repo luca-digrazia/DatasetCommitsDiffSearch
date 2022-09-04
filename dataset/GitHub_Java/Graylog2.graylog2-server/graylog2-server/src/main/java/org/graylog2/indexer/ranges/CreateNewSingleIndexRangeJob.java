@@ -18,34 +18,28 @@ package org.graylog2.indexer.ranges;
 
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.indices.Indices;
+import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class CreateNewSingleIndexRangeJob extends RebuildIndexRangesJob {
     private static final Logger LOG = LoggerFactory.getLogger(CreateNewSingleIndexRangeJob.class);
     private final String indexName;
-    private final Indices indices;
 
     public interface Factory {
-        CreateNewSingleIndexRangeJob create(Set<IndexSet> indexSets, String indexName);
+        CreateNewSingleIndexRangeJob create(IndexSetRegistry indexSetRegistry, String indexName);
     }
 
     @AssistedInject
-    public CreateNewSingleIndexRangeJob(@Assisted Set<IndexSet> indexSets,
+    public CreateNewSingleIndexRangeJob(@Assisted IndexSetRegistry indexSetRegistry,
                                         @Assisted String indexName,
                                         ActivityWriter activityWriter,
-                                        Indices indices,
                                         IndexRangeService indexRangeService) {
-        super(indexSets, activityWriter, indexRangeService);
+        super(indexSetRegistry, activityWriter, indexRangeService);
         this.indexName = checkNotNull(indexName);
-        this.indices = indices;
     }
 
     @Override
@@ -60,10 +54,6 @@ public class CreateNewSingleIndexRangeJob extends RebuildIndexRangesJob {
 
     @Override
     public void execute() {
-        if (indices.isClosed(indexName)) {
-            LOG.debug("Not running job for closed index <{}>", indexName);
-            return;
-        }
         LOG.info("Calculating ranges for index {}.", indexName);
         try {
             final IndexRange indexRange = indexRangeService.calculateRange(indexName);

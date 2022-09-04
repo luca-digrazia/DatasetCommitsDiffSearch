@@ -18,7 +18,6 @@ package org.graylog2.indexer.counts;
 
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.client.Client;
-import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.IndexSetRegistry;
 
 import javax.inject.Inject;
@@ -36,21 +35,7 @@ public class Counts {
     }
 
     public long total() {
-        return totalCount(indexSetRegistry.getManagedIndicesNames());
-    }
-
-    public long total(final IndexSet indexSet) {
-        return totalCount(indexSet.getManagedIndicesNames());
-    }
-
-    private long totalCount(final String[] indexNames) {
-        // Return 0 if there are no indices in the given index set. If we run the query with an empty index list,
-        // Elasticsearch will count all documents in all indices and thus return a wrong count.
-        if (indexNames.length == 0) {
-            return 0L;
-        }
-
-        final SearchRequest request = c.prepareSearch(indexNames)
+        final SearchRequest request = c.prepareSearch(indexSetRegistry.getManagedIndicesNames())
                 .setSize(0)
                 .request();
         return c.search(request).actionGet().getHits().totalHits();

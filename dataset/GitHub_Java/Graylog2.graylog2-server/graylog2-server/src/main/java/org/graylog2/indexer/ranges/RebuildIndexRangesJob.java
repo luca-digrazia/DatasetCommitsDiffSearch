@@ -17,26 +17,20 @@
 package org.graylog2.indexer.ranges;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.MultimapBuilder;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-
-import org.graylog2.database.NotFoundException;
-import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.indices.TooManyAliasesException;
+import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class RebuildIndexRangesJob extends SystemJob {
     public interface Factory {
-        RebuildIndexRangesJob create(Set<IndexSet> indexSets);
+        RebuildIndexRangesJob create(IndexSetRegistry indexSetRegistry);
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(RebuildIndexRangesJob.class);
@@ -46,15 +40,15 @@ public class RebuildIndexRangesJob extends SystemJob {
     private volatile int indicesToCalculate = 0;
     private volatile int indicesCalculated = 0;
 
-    protected final Set<IndexSet> indexSets;
+    protected final IndexSetRegistry indexSetRegistry;
     private final ActivityWriter activityWriter;
     protected final IndexRangeService indexRangeService;
 
     @AssistedInject
-    public RebuildIndexRangesJob(@Assisted Set<IndexSet> indexSets,
+    public RebuildIndexRangesJob(@Assisted IndexSetRegistry indexSetRegistry,
                                  ActivityWriter activityWriter,
                                  IndexRangeService indexRangeService) {
-        this.indexSets = indexSets;
+        this.indexSetRegistry = indexSetRegistry;
         this.activityWriter = activityWriter;
         this.indexRangeService = indexRangeService;
     }
@@ -81,72 +75,38 @@ public class RebuildIndexRangesJob extends SystemJob {
 
     @Override
     public void execute() {
-        info("Recalculating index ranges.");
+        info("Re-calculating index ranges.");
 
-        // for each index set we know about
-        final ListMultimap<IndexSet, String> indexSets = MultimapBuilder.hashKeys().arrayListValues().build();
-        for (IndexSet indexSet : this.indexSets) {
-            final String[] managedIndicesNames = indexSet.getManagedIndices();
-            for (String name : managedIndicesNames) {
-                indexSets.put(indexSet, name);
-            }
-        }
-
-        if (indexSets.size() == 0) {
+        String[] indices = indexSetRegistry.getManagedIndicesNames();
+        if (indices == null || indices.length == 0) {
             info("No indices, nothing to calculate.");
             return;
         }
-        indicesToCalculate = indexSets.values().size();
+        indicesToCalculate = indices.length;
 
         Stopwatch sw = Stopwatch.createStarted();
-        for (IndexSet indexSet : indexSets.keySet()) {
-            LOG.info("Recalculating index ranges for index set {} ({}): {} indices affected.",
-                    indexSet.getConfig().title(),
-                    indexSet.getIndexWildcard(),
-                    indexSets.get(indexSet).size());
-            for (String index : indexSets.get(indexSet)) {
-                try {
-                    if (index.equals(indexSet.getActiveWriteIndex())) {
-                        LOG.debug("{} is current write target, do not calculate index range for it", index);
-                        final IndexRange emptyRange = indexRangeService.createUnknownRange(index);
-                        try {
-                            final IndexRange indexRange = indexRangeService.get(index);
-                            if (indexRange.begin().getMillis() != 0 || indexRange.end().getMillis() != 0) {
-                                LOG.info("Invalid date ranges for write index {}, resetting it.", index);
-                                indexRangeService.save(emptyRange);
-                            }
-                        } catch (NotFoundException e) {
-                            LOG.info("No index range found for write index {}, recreating it.", index);
-                            indexRangeService.save(emptyRange);
-                        }
+        for (String index : indices) {
+            if (indexSetRegistry.isCurrentWriteIndexAlias(index)) {
+                continue;
+            }
+            if (cancelRequested) {
+                info("Stop requested. Not calculating next index range, not updating ranges.");
+                sw.stop();
+                return;
+            }
 
-                        indicesCalculated++;
-                        continue;
-                    }
-                } catch (TooManyAliasesException e) {
-                    LOG.error("Multiple write alias targets found, this is a bug.");
-                    indicesCalculated++;
-                    continue;
-                }
-                if (cancelRequested) {
-                    info("Stop requested. Not calculating next index range, not updating ranges.");
-                    sw.stop();
-                    return;
-                }
-
-                try {
-                    final IndexRange indexRange = indexRangeService.calculateRange(index);
-                    indexRangeService.save(indexRange);
-                    LOG.info("Created ranges for index {}: {}", index, indexRange);
-                } catch (Exception e) {
-                    LOG.info("Could not calculate range of index [" + index + "]. Skipping.", e);
-                } finally {
-                    indicesCalculated++;
-                }
+            try {
+                final IndexRange indexRange = indexRangeService.calculateRange(index);
+                indexRangeService.save(indexRange);
+                LOG.debug("Created ranges for index {}: {}", index, indexRange);
+            } catch (Exception e) {
+                LOG.info("Could not calculate range of index [" + index + "]. Skipping.", e);
+            } finally {
+                indicesCalculated++;
             }
         }
 
-        info("Done calculating index ranges for " + indicesToCalculate + " indices. Took " + sw.stop().elapsed(TimeUnit.MILLISECONDS) + "ms.");
+        info("Done calculating index ranges for " + indices.length + " indices. Took " + sw.stop().elapsed(TimeUnit.MILLISECONDS) + "ms.");
     }
 
     protected void info(String what) {

@@ -19,10 +19,8 @@ package org.graylog2.rest.resources.system.indexer;
 import com.codahale.metrics.annotation.Timed;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.indices.Indices;
@@ -40,9 +38,7 @@ import org.graylog2.shared.rest.resources.RestResource;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.ServiceUnavailableException;
 import javax.ws.rs.core.MediaType;
@@ -62,6 +58,7 @@ public class IndexerOverviewResource extends RestResource {
     private final Indices indices;
     private final Cluster cluster;
 
+    // TODO 2.2: Resource needs to be adjusted to return overview for a specific write target
     @Inject
     public IndexerOverviewResource(DeflectorResource deflectorResource,
                                    IndexerClusterResource indexerClusterResource,
@@ -83,67 +80,41 @@ public class IndexerOverviewResource extends RestResource {
     @Timed
     @ApiOperation(value = "Get overview of current indexing state, including deflector config, cluster state, index ranges & message counts.")
     @Produces(MediaType.APPLICATION_JSON)
-    @Deprecated
     public IndexerOverview index() throws TooManyAliasesException {
         if (!cluster.isConnected()) {
             throw new ServiceUnavailableException("Elasticsearch cluster is not available, check your configuration and logs for more information.");
         }
 
-        try {
-            return getIndexerOverview(indexSetRegistry.getDefault());
-        } catch (IllegalStateException e) {
-            throw new NotFoundException("Default index set not found");
-        }
-    }
-
-    @GET
-    @Timed
-    @Path("/{indexSetId}")
-    @ApiOperation(value = "Get overview of current indexing state for the given index set, including deflector config, cluster state, index ranges & message counts.")
-    @Produces(MediaType.APPLICATION_JSON)
-    public IndexerOverview index(@ApiParam(name = "indexSetId") @PathParam("indexSetId") String indexSetId) throws TooManyAliasesException {
-        if (!cluster.isConnected()) {
-            throw new ServiceUnavailableException("Elasticsearch cluster is not available, check your configuration and logs for more information.");
-        }
-
-        final IndexSet indexSet = getIndexSet(indexSetRegistry, indexSetId);
-
-        return getIndexerOverview(indexSet);
-    }
-
-    private IndexerOverview getIndexerOverview(IndexSet indexSet) throws TooManyAliasesException {
-        final String indexSetId = indexSet.getConfig().id();
-
-        final DeflectorSummary deflectorSummary = deflectorResource.deflector(indexSetId);
+        final DeflectorSummary deflectorSummary = deflectorResource.deflector();
         final List<IndexRangeSummary> indexRanges = indexRangesResource.list().ranges();
-        final Map<String, IndexStats> allDocCounts = indices.getAllDocCounts(indexSet).entrySet().stream()
+        final Map<String, IndexStats> allDocCounts = indices.getAllDocCounts().entrySet().stream()
+                .filter(entry -> indexSetRegistry.isManagedIndex(entry.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         final Map<String, Boolean> areReopened = indices.areReopened(allDocCounts.keySet());
         final Map<String, IndexSummary> indicesSummaries = allDocCounts.values()
-                .stream()
-                .parallel()
-                .collect(Collectors.toMap(IndexStats::getIndex,
-                        (indexStats) -> IndexSummary.create(
-                                IndexSizeSummary.create(indexStats.getPrimaries().getDocs().getCount(),
-                                        indexStats.getPrimaries().getDocs().getDeleted(),
-                                        indexStats.getPrimaries().getStore().sizeInBytes()),
-                                indexRanges.stream().filter((indexRangeSummary) -> indexRangeSummary.indexName().equals(indexStats.getIndex())).findFirst().orElse(null),
-                                deflectorSummary.currentTarget() != null && deflectorSummary.currentTarget().equals(indexStats.getIndex()),
-                                false,
-                                areReopened.get(indexStats.getIndex()))
-                ));
+            .stream()
+            .parallel()
+            .collect(Collectors.toMap(IndexStats::getIndex,
+                (indexStats) -> IndexSummary.create(
+                    IndexSizeSummary.create(indexStats.getPrimaries().getDocs().getCount(),
+                        indexStats.getPrimaries().getDocs().getDeleted(),
+                        indexStats.getPrimaries().getStore().sizeInBytes()),
+                    indexRanges.stream().filter((indexRangeSummary) -> indexRangeSummary.indexName().equals(indexStats.getIndex())).findFirst().orElse(null),
+                    deflectorSummary.currentTarget().equals(indexStats.getIndex()),
+                    false,
+                    areReopened.get(indexStats.getIndex()))
+            ));
 
-        indices.getClosedIndices(indexSet).forEach(indexName -> indicesSummaries.put(indexName, IndexSummary.create(
+        indices.getClosedIndices().forEach(indexName -> indicesSummaries.put(indexName, IndexSummary.create(
                 null,
                 indexRanges.stream().filter((indexRangeSummary) -> indexRangeSummary.indexName().equals(indexName)).findFirst().orElse(null),
-                deflectorSummary.currentTarget() != null && deflectorSummary.equals(indexName),
+                deflectorSummary.currentTarget().equals(indexName),
                 true,
                 false
         )));
 
         return IndexerOverview.create(deflectorSummary,
-                IndexerClusterOverview.create(indexerClusterResource.clusterHealth(), indexerClusterResource.clusterName().name()),
-                countResource.total(indexSetId),indicesSummaries);
+            IndexerClusterOverview.create(indexerClusterResource.clusterHealth(), indexerClusterResource.clusterName().name()),
+            countResource.total(),indicesSummaries);
     }
-
 }

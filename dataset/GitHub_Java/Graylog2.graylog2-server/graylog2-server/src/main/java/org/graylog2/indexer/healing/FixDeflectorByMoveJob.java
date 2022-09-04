@@ -68,12 +68,6 @@ public class FixDeflectorByMoveJob extends SystemJob {
     }
 
     public void doExecute(IndexSet indexSet) {
-        if (!indexSet.getConfig().isWritable()) {
-            LOG.debug("No need to fix deflector for non-writable index set <{}> ({})", indexSet.getConfig().id(),
-                    indexSet.getConfig().title());
-            return;
-        }
-
         if (indexSet.isUp() || !indices.exists(indexSet.getWriteIndexAlias())) {
             LOG.error("There is no index <{}>. No need to run this job. Aborting.", indexSet.getWriteIndexAlias());
             return;
@@ -94,7 +88,7 @@ public class FixDeflectorByMoveJob extends SystemJob {
             // Copy messages to new index.
             String newTarget = null;
             try {
-                newTarget = indexSet.getNewestIndex();
+                newTarget = indexSet.getNewestTargetName();
 
                 LOG.info("Starting to move <{}> to <{}>.", indexSet.getWriteIndexAlias(), newTarget);
                 indices.move(indexSet.getWriteIndexAlias(), newTarget);

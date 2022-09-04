@@ -49,20 +49,20 @@ public abstract class AbstractRotationStrategy implements RotationStrategy {
     }
 
     @Nullable
-    protected abstract Result shouldRotate(String indexName, IndexSet indexSet);
+    protected abstract Result shouldRotate(String indexName);
 
     @Override
     public void rotate(IndexSet indexSet) {
         final String strategyName = this.getClass().getCanonicalName();
         final String indexName;
         try {
-            indexName = indexSet.getNewestIndex();
+            indexName = indexSet.getNewestTargetName();
         } catch (NoTargetIndexException e) {
             LOG.error("Could not find current deflector target. Aborting.", e);
             return;
         }
 
-        final Result rotate = shouldRotate(indexName, indexSet);
+        final Result rotate = shouldRotate(indexName);
         if (rotate == null) {
             LOG.error("Cannot perform rotation at this moment.");
             return;

@@ -26,6 +26,7 @@ import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.grok.GrokPatternService;
+import org.graylog2.indexer.searches.Searches;
 import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.converters.ConverterFactory;
 import org.graylog2.inputs.extractors.ExtractorFactory;
@@ -465,7 +466,6 @@ public class BundleImporter {
                     new ObjectId(org.graylog2.plugin.streams.Stream.DEFAULT_STREAM_ID),
                     streamData.build(),
                     Collections.emptyList(),
-                    Collections.emptySet(),
                     Collections.emptySet());
         } else {
             stream = streamService.create(streamData.build());

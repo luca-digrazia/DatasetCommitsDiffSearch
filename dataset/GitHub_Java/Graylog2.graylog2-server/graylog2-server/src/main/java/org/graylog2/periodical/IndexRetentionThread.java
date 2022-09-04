@@ -1,107 +1,146 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.periodical;
 
-import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.graylog2.indexer.IndexHelper;
-import org.graylog2.indexer.NoTargetIndexException;
-import org.graylog2.indexer.ranges.IndexRange;
-import org.graylog2.indexer.retention.RetentionStrategyFactory;
+import org.graylog2.configuration.ElasticsearchConfiguration;
+import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.cluster.Cluster;
+import org.graylog2.indexer.management.IndexManagementConfig;
+import org.graylog2.notifications.Notification;
+import org.graylog2.notifications.NotificationService;
+import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.retention.RetentionStrategy;
-import org.graylog2.system.activities.Activity;
+import org.graylog2.plugin.periodical.Periodical;
+import org.graylog2.plugin.system.NodeId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.graylog2.Core;
 
+import javax.inject.Inject;
+import javax.inject.Provider;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@socketfeed.com>
- */
-public class IndexRetentionThread implements Runnable {
+import static java.util.concurrent.TimeUnit.MINUTES;
 
+public class IndexRetentionThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(IndexRetentionThread.class);
 
-    private final Core server;
-    
-    public static final int INITIAL_DELAY = 0;
-    public static final int PERIOD = 60; // Run every minute.
+    private final ElasticsearchConfiguration configuration;
+    private final IndexSetRegistry indexSetRegistry;
+    private final Cluster cluster;
+    private final ClusterConfigService clusterConfigService;
+    private final NodeId nodeId;
+    private final NotificationService notificationService;
+    private final Map<String, Provider<RetentionStrategy>> retentionStrategyMap;
 
-    public IndexRetentionThread(Core server) {
-        this.server = server;
+    @Inject
+    public IndexRetentionThread(ElasticsearchConfiguration configuration,
+                                IndexSetRegistry indexSetRegistry,
+                                Cluster cluster,
+                                ClusterConfigService clusterConfigService,
+                                NodeId nodeId,
+                                NotificationService notificationService,
+                                Map<String, Provider<RetentionStrategy>> retentionStrategyMap) {
+        this.configuration = configuration;
+        this.indexSetRegistry = indexSetRegistry;
+        this.cluster = cluster;
+        this.clusterConfigService = clusterConfigService;
+        this.nodeId = nodeId;
+        this.notificationService = notificationService;
+        this.retentionStrategyMap = retentionStrategyMap;
     }
 
     @Override
-    public void run() {
-        Map<String, IndexStats> indices = server.getDeflector().getAllDeflectorIndices();
-        int indexCount = indices.size();
-        int maxIndices = server.getConfiguration().getMaxNumberOfIndices();
-
-        // Do we have more indices than the configured maximum?
-        if (indexCount <= maxIndices) {
-            LOG.debug("Number of indices ({}) lower than limit ({}). Not performing any retention actions.",
-                    indexCount, maxIndices);
+    public void doRun() {
+        if (!cluster.isConnected() || !cluster.isHealthy()) {
+            LOG.info("Elasticsearch cluster not available, skipping index retention checks.");
             return;
         }
 
-        // We have more indices than the configured maximum! Remove as many as needed.
-        int removeCount = indexCount-maxIndices;
-        String msg = "Number of indices (" + indexCount + ") higher than limit (" + maxIndices + "). " +
-                "Running retention for " + removeCount + " indices.";
-        LOG.info(msg);
-        server.getActivityWriter().write(new Activity(msg, IndexRetentionThread.class));
+        // TODO 2.2: Retention strategy config is per write target, not global.
+        final IndexManagementConfig config = clusterConfigService.get(IndexManagementConfig.class);
 
-
-        try {
-            runRetention(
-                    RetentionStrategyFactory.fromString(server, server.getConfiguration().getRetentionStrategy()),
-                    indices,
-                    removeCount
-            );
-        } catch (RetentionStrategyFactory.NoSuchStrategyException e) {
-            LOG.error("Could not run index retention. No such strategy.", e);
-        } catch (NoTargetIndexException e) {
-            LOG.error("Could not run index retention. No target index.", e);
+        if (config == null) {
+            LOG.warn("No index management configuration found, not running index retention!");
+            retentionProblemNotification("Index Retention Problem!",
+                    "No index management configuration found, not running index retention! Please fix your index retention configuration!");
+            return;
         }
+
+        final Provider<RetentionStrategy> retentionStrategyProvider = retentionStrategyMap.get(config.retentionStrategy());
+
+        if (retentionStrategyProvider == null) {
+            LOG.warn("Retention strategy \"{}\" not found, not running index retention!", config.retentionStrategy());
+            retentionProblemNotification("Index Retention Problem!",
+                    "Index retention strategy " + config.retentionStrategy() + " not found! Please fix your index retention configuration!");
+            return;
+        }
+
+        final RetentionStrategy retentionStrategy = retentionStrategyProvider.get();
+
+        indexSetRegistry.forEach(retentionStrategy::retain);
     }
 
-    public void runRetention(RetentionStrategy strategy, Map<String, IndexStats> indices, int removeCount) throws NoTargetIndexException {
-        for (String indexName : IndexHelper.getOldestIndices(indices.keySet(), removeCount)) {
-            // Never delete the current deflector target.
-            if (server.getDeflector().getNewestTargetName().equals(indexName)) {
-                LOG.info("Not deleting current deflector target <{}>.", indexName);
-                continue;
-            }
-
-            String msg = "Running retention strategy [" + strategy.getClass().getCanonicalName() + "] " +
-                    "for index <" + indexName + ">";
-            LOG.info(msg);
-            server.getActivityWriter().write(new Activity(msg, IndexRetentionThread.class));
-
-            // Sorry if this should ever go mad. Run retention strategy!
-            strategy.runStrategy(indexName);
-
-            // Remove index from ranges.
-            IndexRange.destroy(server, indexName);
-        }
+    private void retentionProblemNotification(String title, String description) {
+        final Notification notification = notificationService.buildNow()
+                .addNode(nodeId.toString())
+                .addType(Notification.Type.GENERIC)
+                .addSeverity(Notification.Severity.URGENT)
+                .addDetail("title", title)
+                .addDetail("description", description);
+        notificationService.publishIfFirst(notification);
     }
 
+    @Override
+    protected Logger getLogger() {
+        return LOG;
+    }
+
+    @Override
+    public boolean runsForever() {
+        return false;
+    }
+
+    @Override
+    public boolean stopOnGracefulShutdown() {
+        return true;
+    }
+
+    @Override
+    public boolean masterOnly() {
+        return true;
+    }
+
+    @Override
+    public boolean startOnThisNode() {
+        return configuration.performRetention();
+    }
+
+    @Override
+    public boolean isDaemon() {
+        return false;
+    }
+
+    @Override
+    public int getInitialDelaySeconds() {
+        return 0;
+    }
+
+    @Override
+    public int getPeriodSeconds() {
+        return (int) MINUTES.toSeconds(5);
+    }
 }
