@@ -121,11 +121,15 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
 
     CcToolchainProvider ccToolchain = common.getToolchain();
 
+    if (CppHelper.shouldUseToolchainForMakeVariables(ruleContext)) {
       ImmutableMap.Builder<String, String> toolchainMakeVariables = ImmutableMap.builder();
       ccToolchain.addGlobalMakeVariables(toolchainMakeVariables);
       ruleContext.initConfigurationMakeVariableContext(
           new MapBackedMakeVariableSupplier(toolchainMakeVariables.build()),
           new CcFlagsSupplier(ruleContext));
+    } else {
+      ruleContext.initConfigurationMakeVariableContext(new CcFlagsSupplier(ruleContext));
+    }
 
     FdoProvider fdoProvider = common.getFdoProvider();
     FeatureConfiguration featureConfiguration =
