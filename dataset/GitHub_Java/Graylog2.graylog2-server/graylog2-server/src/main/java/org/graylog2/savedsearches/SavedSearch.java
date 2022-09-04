@@ -21,6 +21,7 @@ package org.graylog2.savedsearches;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
@@ -58,20 +59,17 @@ public class SavedSearch extends Persisted {
         return COLLECTION;
     }
 
-    @SuppressWarnings("unchecked")
     public static List<SavedSearch> all(Core core) {
         List<SavedSearch> searches = Lists.newArrayList();
 
         List<DBObject> results = query(new BasicDBObject(), core, COLLECTION);
         for (DBObject o : results) {
-
             searches.add(new SavedSearch((ObjectId) o.get("_id"), o.toMap(), core));
         }
 
         return searches;
     }
 
-    @SuppressWarnings("unchecked")
     public static SavedSearch load(ObjectId id, Core core) throws NotFoundException {
         BasicDBObject o = (BasicDBObject) get(id, core, COLLECTION);
 
@@ -98,7 +96,7 @@ public class SavedSearch extends Persisted {
     }
 
     public Map<String, Object> asMap() {
-        return new HashMap<String, Object>() {{
+        return new HashMap() {{
             put("id", ((ObjectId) fields.get("_id")).toStringMongod());
             put("title", fields.get("title"));
             put("query", fields.get("query"));
