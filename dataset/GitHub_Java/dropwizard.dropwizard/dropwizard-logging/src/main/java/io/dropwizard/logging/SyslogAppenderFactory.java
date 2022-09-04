@@ -96,14 +96,14 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
     private static final String LOG_TOKEN_PID = "%pid";
 
     private static final Pattern PID_PATTERN = Pattern.compile("(\\d+)@");
-    private static String pid = "";
+    private static String PID = "";
 
     // make an attempt to get the PID of the process
     // this will only work on UNIX platforms; for others, the PID will be "unknown"
     static {
         final Matcher matcher = PID_PATTERN.matcher(ManagementFactory.getRuntimeMXBean().getName());
         if (matcher.find()) {
-            pid = "[" + matcher.group(1) + "]";
+            PID = "[" + matcher.group(1) + "]";
         }
     }
 
@@ -116,11 +116,6 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
 
     @NotNull
     private Facility facility = Facility.LOCAL0;
-
-    // PrefixedThrowableProxyConverter does not apply to syslog appenders, as stack traces are sent separately from
-    // the main message. This means that the standard prefix of `!` is not used for syslog
-    @NotNull
-    private String stackTracePrefix = SyslogAppender.DEFAULT_STACKTRACE_PATTERN;
 
     // prefix the logFormat with the application name and PID (if available)
     private String logFormat = LOG_TOKEN_NAME + LOG_TOKEN_PID + ": " +
@@ -189,27 +184,16 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
         this.includeStackTrace = includeStackTrace;
     }
 
-    @JsonProperty
-    public String getStackTracePrefix() {
-        return stackTracePrefix;
-    }
-
-    @JsonProperty
-    public void setStackTracePrefix(String stackTracePrefix) {
-        this.stackTracePrefix = stackTracePrefix;
-    }
-
     @Override
     public Appender<ILoggingEvent> build(LoggerContext context, String applicationName, Layout<ILoggingEvent> layout) {
         final SyslogAppender appender = new SyslogAppender();
         appender.setName("syslog-appender");
         appender.setContext(context);
-        appender.setSuffixPattern(logFormat.replaceAll(LOG_TOKEN_PID, pid).replaceAll(LOG_TOKEN_NAME, Matcher.quoteReplacement(applicationName)));
+        appender.setSuffixPattern(logFormat.replaceAll(LOG_TOKEN_PID, PID).replaceAll(LOG_TOKEN_NAME, Matcher.quoteReplacement(applicationName)));
         appender.setSyslogHost(host);
         appender.setPort(port);
         appender.setFacility(facility.toString().toLowerCase(Locale.ENGLISH));
         appender.setThrowableExcluded(!includeStackTrace);
-        appender.setStackTracePattern(stackTracePrefix);
         addThresholdFilter(appender, threshold);
         appender.start();
         return wrapAsync(appender);
