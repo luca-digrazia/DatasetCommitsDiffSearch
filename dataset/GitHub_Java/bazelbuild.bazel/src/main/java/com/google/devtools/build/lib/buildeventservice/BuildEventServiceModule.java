@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.buildeventservice;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
@@ -24,14 +23,12 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.common.util.concurrent.Uninterruptibles;
-import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceOptions.BesUploadMode;
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceClient;
@@ -90,18 +87,10 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   private static final Logger logger = Logger.getLogger(BuildEventServiceModule.class.getName());
   private static final GoogleLogger googleLogger = GoogleLogger.forEnclosingClass();
 
-  /**
-   * TargetComplete BEP events scale with the value of --runs_per_tests, thus setting a very large
-   * value for can result in BEP events that are too big for BES to handle.
-   */
-  private static final int RUNS_PER_TEST_LIMIT = 100000;
-
   private BuildEventProtocolOptions bepOptions;
   private AuthAndTLSOptions authTlsOptions;
   private BuildEventStreamOptions besStreamOptions;
   private boolean useExperimentalUi;
-  private boolean isRunsPerTestOverTheLimit;
-
   /**
    * Holds the close futures for the upload of each transport with timeouts attached to them using
    * {@link #constructCloseFuturesMapWithTimeouts(ImmutableMap)} obtained from {@link
@@ -127,7 +116,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   @Nullable private ImmutableSet<BuildEventTransport> bepTransports;
   @Nullable private String buildRequestId;
   @Nullable private String invocationId;
-  @Nullable private Reporter reporter;
+  @Nullable private Reporter cmdLineReporter;
   @Nullable private BuildEventStreamer streamer;
 
   protected BESOptionsT besOptions;
@@ -185,10 +174,9 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       return;
     }
 
-    Stopwatch stopwatch = Stopwatch.createStarted();
     try {
-      // TODO(b/234994611): It would be better to report before we wait, but the current
-      //  infrastructure does not support that. At least we can report it afterwards.
+      // TODO(b/234994611): Find a way to print a meaningful message when waiting. The current
+      // infrastructure doesn't allow printing messages in the terminal in beforeCommand.
       ImmutableMap<BuildEventTransport, ListenableFuture<Void>> futureMap =
           besOptions.besUploadMode == BesUploadMode.FULLY_ASYNC
               ? halfCloseFuturesWithTimeoutsMap
@@ -197,43 +185,26 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
           Futures.allAsList(futureMap.values()),
           getMaxWaitForPreviousInvocation().getSeconds(),
           TimeUnit.SECONDS);
-      long waitedMillis = stopwatch.elapsed().toMillis();
-      if (waitedMillis > 100) {
-        reporter.handle(
-            Event.info(
-                String.format(
-                    "Waited for the background upload of the Build Event Protocol for "
-                        + "%d.%03d seconds.",
-                    waitedMillis / 1000, waitedMillis % 1000)));
-      }
     } catch (TimeoutException exception) {
-      long waitedMillis = stopwatch.elapsed().toMillis();
       String msg =
           String.format(
-              "The background upload of the Build Event Protocol for the previous invocation "
-                  + "failed to complete in %d.%03d seconds. "
+              "Pending Build Event Protocol upload took more than %ds to finish. "
                   + "Cancelling and starting a new invocation...",
-              waitedMillis / 1000, waitedMillis % 1000);
-      reporter.handle(Event.warn(msg));
+              getMaxWaitForPreviousInvocation().getSeconds());
+      cmdLineReporter.handle(Event.warn(msg));
       googleLogger.atWarning().withCause(exception).log(msg);
     } catch (ExecutionException e) {
-      String msg;
       // Futures.withTimeout wraps the TimeoutException in an ExecutionException when the future
       // times out.
-      if (isTimeoutException(e)) {
-        msg =
-            "The background upload of the Build Event Protocol for the previous invocation "
-                + "failed due to a network timeout. Ignoring the failure and starting a new "
-                + "invocation...";
-      } else {
-        msg =
-            String.format(
-                "The background upload of the Build Event Protocol for the previous invocation "
-                    + "failed with the following exception: '%s'. "
-                    + "Ignoring the failure and starting a new invocation...",
-                e.getMessage());
-      }
-      reporter.handle(Event.warn(msg));
+      String previousExceptionMsg =
+          isTimeoutException(e) ? "The Build Event Protocol upload timed out" : e.getMessage();
+      String msg =
+          String.format(
+              "Previous invocation failed to finish Build Event Protocol upload "
+                  + "with the following exception: '%s'. "
+                  + "Ignoring the failure and starting a new invocation...",
+              previousExceptionMsg);
+      cmdLineReporter.handle(Event.warn(msg));
       googleLogger.atWarning().withCause(e).log(msg);
     } finally {
       cancelPendingUploads();
@@ -244,7 +215,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   public void beforeCommand(CommandEnvironment cmdEnv) {
     this.invocationId = cmdEnv.getCommandId().toString();
     this.buildRequestId = cmdEnv.getBuildRequestId();
-    this.reporter = cmdEnv.getReporter();
+    this.cmdLineReporter = cmdEnv.getReporter();
 
     OptionsParsingResult parsingResult = cmdEnv.getOptions();
     this.besOptions = Preconditions.checkNotNull(parsingResult.getOptions(optionsClass()));
@@ -257,13 +228,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     this.useExperimentalUi =
         Preconditions.checkNotNull(parsingResult.getOptions(BlazeCommandEventHandler.Options.class))
             .experimentalUi;
-    this.isRunsPerTestOverTheLimit =
-        parsingResult.getOptions(TestOptions.class) != null
-            && parsingResult.getOptions(TestOptions.class).runsPerTest.stream()
-                .anyMatch(
-                    (perLabelOptions) ->
-                        Integer.parseInt(Iterables.getOnlyElement(perLabelOptions.getOptions()))
-                            > RUNS_PER_TEST_LIMIT);
 
     CountingArtifactGroupNamer artifactGroupNamer = new CountingArtifactGroupNamer();
     Supplier<BuildEventArtifactUploader> uploaderSupplier =
@@ -278,7 +242,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     // We need to wait for the previous invocation before we check the whitelist of commands to
     // allow completing previous runs using BES, for example:
     //   bazel build (..run with async BES..)
-    //   bazel info <-- Doesn't run with BES unless we wait before checking the whitelist.
+    //   bazel info <-- Doesn't run with BES unless we wait before cheking the whitelist.
     waitForPreviousInvocation();
 
     if (!whitelistedCommands(besOptions).contains(cmdEnv.getCommandName())) {
@@ -305,7 +269,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     // This event should probably be posted in a more general place (e.g. {@link BuildTool};
     // however, so far the BES module is the only module that requires extra work after the build
     // so we post it here until it's needed for other modules.
-    reporter.post(new AnnounceBuildEventTransportsEvent(bepTransports));
+    cmdLineReporter.post(new AnnounceBuildEventTransportsEvent(bepTransports));
   }
 
   private void registerOutAndErrOutputStreams() {
@@ -379,7 +343,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   }
 
   private void reportWaitingForBesMessage(Instant startTime) {
-    reporter.handle(
+    cmdLineReporter.handle(
         Event.progress(
             "Waiting for Build Event Protocol upload. Waited "
                 + Duration.between(startTime, Instant.now()).getSeconds()
@@ -401,11 +365,11 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
             (bepTransport, closeFuture) ->
                 closeFuture.addListener(
                     () -> {
-                      reporter.post(new BuildEventTransportClosedEvent(bepTransport));
+                      cmdLineReporter.post(new BuildEventTransportClosedEvent(bepTransport));
                     },
                     executor));
       } else {
-        reporter.handle(Event.progress("Waiting for Build Event Protocol upload..."));
+        cmdLineReporter.handle(Event.progress("Waiting for Build Event Protocol upload..."));
         Instant startTime = Instant.now();
         waitMessageFuture =
             executor.scheduleAtFixedRate(
@@ -498,7 +462,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         // When running asynchronously notify the UI immediately since we won't wait for the
         // uploads to close.
         for (BuildEventTransport bepTransport : bepTransports) {
-          reporter.post(new BuildEventTransportClosedEvent(bepTransport));
+          cmdLineReporter.post(new BuildEventTransportClosedEvent(bepTransport));
         }
         return;
     }
@@ -522,7 +486,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       if (!Strings.isNullOrEmpty(besOptions.besBackend)) {
         constructAndMaybeReportInvocationIdUrl();
       } else if (!bepTransports.isEmpty()) {
-        reporter.handle(Event.info("Build Event Protocol files produced successfully."));
+        cmdLineReporter.handle(Event.info("Build Event Protocol files produced successfully."));
       }
     }
 
@@ -537,20 +501,20 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     this.bepTransports = null;
     this.invocationId = null;
     this.buildRequestId = null;
-    this.reporter = null;
+    this.cmdLineReporter = null;
     this.streamer = null;
   }
 
   private void constructAndMaybeReportInvocationIdUrl() {
     if (!getInvocationIdPrefix().isEmpty()) {
-      reporter.handle(
+      cmdLineReporter.handle(
           Event.info("Streaming build results to: " + getInvocationIdPrefix() + invocationId));
     }
   }
 
   private void constructAndMaybeReportBuildRequestIdUrl() {
     if (!getBuildRequestIdPrefix().isEmpty()) {
-      reporter.handle(
+      cmdLineReporter.handle(
           Event.info(
               "See "
                   + getBuildRequestIdPrefix()
@@ -560,7 +524,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   }
 
   private void constructAndReportIds() {
-    reporter.handle(
+    cmdLineReporter.handle(
         Event.info(
             String.format(
                 "Streaming Build Event Protocol to '%s' with build_request_id: '%s'"
@@ -578,21 +542,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       return null;
     }
 
-    if (isRunsPerTestOverTheLimit) {
-      String msg =
-          String.format(
-              "The value of --runs_per_test is bigger than %d and it will produce build events "
-                  + "that are too big for the Build Event Service to handle.",
-              RUNS_PER_TEST_LIMIT);
-      reportError(
-          reporter,
-          cmdEnv.getBlazeModuleEnvironment(),
-          msg,
-          new OptionsParsingException(msg),
-          ExitCode.COMMAND_LINE_ERROR);
-      return null;
-    }
-
     constructAndReportIds();
 
     final BuildEventServiceClient besClient;
@@ -600,7 +549,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       besClient = getBesClient(besOptions, authTlsOptions);
     } catch (IOException | OptionsParsingException e) {
       reportError(
-          reporter,
+          cmdLineReporter,
           cmdEnv.getBlazeModuleEnvironment(),
           e.getMessage(),
           e,
@@ -655,7 +604,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         // TODO(b/125216340): Consider making this a warning instead of an error once the
         //  associated bug has been resolved.
         reportError(
-            reporter,
+            cmdLineReporter,
             cmdEnv.getBlazeModuleEnvironment(),
             "Unable to write to '"
                 + besStreamOptions.buildEventTextFile
@@ -685,7 +634,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         // TODO(b/125216340): Consider making this a warning instead of an error once the
         //  associated bug has been resolved.
         reportError(
-            reporter,
+            cmdLineReporter,
             cmdEnv.getBlazeModuleEnvironment(),
             "Unable to write to '"
                 + besStreamOptions.buildEventBinaryFile
@@ -714,7 +663,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         // TODO(b/125216340): Consider making this a warning instead of an error once the
         //  associated bug has been resolved.
         reportError(
-            reporter,
+            cmdLineReporter,
             cmdEnv.getBlazeModuleEnvironment(),
             "Unable to write to '"
                 + besStreamOptions.buildEventJsonFile
