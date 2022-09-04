@@ -26,23 +26,12 @@ import javax.annotation.Nullable;
 /** A class for doing static checks on files, before evaluating them. */
 public final class ValidationEnvironment extends SyntaxTreeVisitor {
 
-  private enum Scope {
-    /** Symbols defined inside a function or a comprehension. */
-    Local,
-    /** Symbols defined at a module top-level, e.g. functions, loaded symbols. */
-    Module,
-    /** Predefined symbols (builtins) */
-    Universe,
-  }
-
   private static class Block {
     private final Set<String> variables = new HashSet<>();
     private final Set<String> readOnlyVariables = new HashSet<>();
-    private final Scope scope;
     @Nullable private final Block parent;
 
-    Block(Scope scope, @Nullable Block parent) {
-      this.scope = scope;
+    Block(@Nullable Block parent) {
       this.parent = parent;
     }
   }
@@ -71,14 +60,20 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   private Block block;
   private int loopCount;
 
-  /** Create a ValidationEnvironment for a given global Environment (containing builtins). */
+  /** Create a ValidationEnvironment for a given global Environment. */
   ValidationEnvironment(Environment env) {
     Preconditions.checkArgument(env.isGlobal());
-    block = new Block(Scope.Universe, null);
+    block = new Block(null);
     Set<String> builtinVariables = env.getVariableNames();
     block.variables.addAll(builtinVariables);
     block.readOnlyVariables.addAll(builtinVariables);
     semantics = env.getSemantics();
+
+    // If the flag is set to false, it should be allowed to have `set`
+    // in non-executable parts of the code.
+    if (!env.getSemantics().incompatibleDisallowUncalledSetConstructor()) {
+      block.variables.add("set");
+    }
   }
 
   @Override
@@ -116,7 +111,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
 
   @Override
   public void visit(ReturnStatement node) {
-    if (block.scope != Scope.Local) {
+    if (isTopLevel()) {
       throw new ValidationException(
           node.getLocation(), "return statements must be inside a function");
     }
@@ -148,9 +143,13 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
 
   @Override
   public void visit(AbstractComprehension node) {
-    openBlock(Scope.Local);
-    super.visit(node);
-    closeBlock();
+    if (semantics.incompatibleComprehensionVariablesDoNotLeak()) {
+      openBlock();
+      super.visit(node);
+      closeBlock();
+    } else {
+      super.visit(node);
+    }
   }
 
   @Override
@@ -160,7 +159,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
         visit(param.getDefaultValue());
       }
     }
-    openBlock(Scope.Local);
+    openBlock();
     for (Parameter<Expression, Expression> param : node.getParameters()) {
       if (param.hasName()) {
         declare(param.getName(), param.getLocation());
@@ -172,11 +171,13 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
 
   @Override
   public void visit(IfStatement node) {
-    if (block.scope != Scope.Local) {
+    if (semantics.incompatibleDisallowToplevelIfStatement() && isTopLevel()) {
       throw new ValidationException(
           node.getLocation(),
           "if statements are not allowed at the top level. You may move it inside a function "
-          + "or use an if expression (x if condition else y).");
+          + "or use an if expression (x if condition else y). "
+          + "Use --incompatible_disallow_toplevel_if_statement=false to temporarily disable "
+          + "this check.");
     }
     super.visit(node);
   }
@@ -191,25 +192,20 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     super.visit(node);
   }
 
+  /** Returns true if the current block is the top level i.e. has no parent. */
+  private boolean isTopLevel() {
+    return block.parent == null;
+  }
+
   /** Declare a variable and add it to the environment. */
   private void declare(String varname, Location location) {
-    boolean readOnlyViolation = false;
     if (block.readOnlyVariables.contains(varname)) {
-      readOnlyViolation = true;
-    }
-    if (block.scope == Scope.Module && block.parent.readOnlyVariables.contains(varname)) {
-      // TODO(laurentlb): This behavior is buggy. Symbols in the module scope should shadow symbols
-      // from the universe. https://github.com/bazelbuild/bazel/issues/5637
-      readOnlyViolation = true;
-    }
-    if (readOnlyViolation) {
       throw new ValidationException(
           location,
           String.format("Variable %s is read only", varname),
           "https://bazel.build/versions/master/docs/skylark/errors/read-only-variable.html");
     }
-    if (block.scope == Scope.Module) {
-      // Symbols defined in the module scope cannot be reassigned.
+    if (isTopLevel()) {  // top-level values are immutable
       block.readOnlyVariables.add(varname);
     }
     block.variables.add(varname);
@@ -271,8 +267,6 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
       checkLoadAfterStatement(statements);
     }
 
-    openBlock(Scope.Module);
-
     // Add every function in the environment before validating. This is
     // necessary because functions may call other functions defined
     // later in the file.
@@ -284,7 +278,6 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     }
 
     this.visitAll(statements);
-    closeBlock();
   }
 
   public static void validateAst(Environment env, List<Statement> statements) throws EvalException {
@@ -312,8 +305,8 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   }
 
   /** Open a new lexical block that will contain the future declarations. */
-  private void openBlock(Scope scope) {
-    block = new Block(scope, block);
+  private void openBlock() {
+    block = new Block(block);
   }
 
   /** Close a lexical block (and lose all declarations it contained). */
