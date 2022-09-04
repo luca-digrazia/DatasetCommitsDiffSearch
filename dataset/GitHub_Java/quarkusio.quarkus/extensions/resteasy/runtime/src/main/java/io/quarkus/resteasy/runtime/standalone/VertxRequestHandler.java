@@ -47,7 +47,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
         this.vertx = vertx;
         this.beanContainer = beanContainer;
         this.dispatcher = new RequestDispatcher((SynchronousDispatcher) deployment.getDispatcher(),
-                deployment.getProviderFactory(), null, Thread.currentThread().getContextClassLoader());
+                deployment.getProviderFactory(), null);
         this.rootPath = rootPath;
         this.allocator = allocator;
         Instance<CurrentIdentityAssociation> association = CDI.current().select(CurrentIdentityAssociation.class);
@@ -96,7 +96,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
             VertxHttpResponse vertxResponse = new VertxHttpResponse(request, dispatcher.getProviderFactory(),
                     request.method(), allocator, output);
             VertxHttpRequest vertxRequest = new VertxHttpRequest(ctx, headers, uriInfo, request.rawMethod(),
-                    request.remoteAddress().host(), dispatcher.getDispatcher(), vertxResponse, false);
+                    dispatcher.getDispatcher(), vertxResponse, false);
             vertxRequest.setInputStream(is);
             try {
                 ResteasyContext.pushContext(SecurityContext.class, new QuarkusResteasySecurityContext(request));

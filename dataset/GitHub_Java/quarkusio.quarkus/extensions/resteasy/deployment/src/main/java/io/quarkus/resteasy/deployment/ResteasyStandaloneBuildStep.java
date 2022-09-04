@@ -14,7 +14,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.jar.JarEntry;
-import java.util.stream.Stream;
 
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.builder.item.SimpleBuildItem;
@@ -79,7 +78,7 @@ public class ResteasyStandaloneBuildStep {
             deploymentRootPath = deployment.getRootPath();
             if (rootPath.endsWith("/")) {
                 if (deploymentRootPath.startsWith("/")) {
-                    rootPath += deploymentRootPath.substring(1);
+                    rootPath += deploymentRootPath.substring(1, deploymentRootPath.length());
                 } else {
                     rootPath += deploymentRootPath;
                 }
@@ -112,30 +111,28 @@ public class ResteasyStandaloneBuildStep {
         for (ApplicationArchive i : applicationArchivesBuildItem.getAllApplicationArchives()) {
             Path resource = i.getChildPath(META_INF_RESOURCES);
             if (resource != null && Files.exists(resource)) {
-                try (Stream<Path> fileTreeElements = Files.walk(resource)) {
-                    fileTreeElements.forEach(new Consumer<Path>() {
-                        @Override
-                        public void accept(Path path) {
-                            // Skip META-INF/resources entry
-                            if (resource.equals(path)) {
-                                return;
-                            }
-                            Path rel = resource.relativize(path);
-                            if (!Files.isDirectory(path)) {
-                                String file = rel.toString();
-                                if (file.equals("index.html") || file.equals("index.htm")) {
-                                    knownPaths.add("/");
-                                }
-                                if (!file.startsWith("/")) {
-                                    file = "/" + file;
-                                }
-                                // Windows has a backslash
-                                file = file.replace('\\', '/');
-                                knownPaths.add(file);
-                            }
+                Files.walk(resource).forEach(new Consumer<Path>() {
+                    @Override
+                    public void accept(Path path) {
+                        // Skip META-INF/resources entry
+                        if (resource.equals(path)) {
+                            return;
                         }
-                    });
-                }
+                        Path rel = resource.relativize(path);
+                        if (!Files.isDirectory(path)) {
+                            String file = rel.toString();
+                            if (file.equals("index.html") || file.equals("index.htm")) {
+                                knownPaths.add("/");
+                            }
+                            if (!file.startsWith("/")) {
+                                file = "/" + file;
+                            }
+                            // Windows has a backslash
+                            file = file.replace('\\', '/');
+                            knownPaths.add(file);
+                        }
+                    }
+                });
             }
         }
         Enumeration<URL> resources = getClass().getClassLoader().getResources(META_INF_RESOURCES);
@@ -163,30 +160,28 @@ public class ResteasyStandaloneBuildStep {
             if (url.getProtocol().equals("file")) {
                 Path resource = Paths.get(url.toURI());
                 if (resource != null && Files.exists(resource)) {
-                    try (Stream<Path> fileTreeElements = Files.walk(resource)) {
-                        fileTreeElements.forEach(new Consumer<Path>() {
-                            @Override
-                            public void accept(Path path) {
-                                // Skip META-INF/resources entry
-                                if (resource.equals(path)) {
-                                    return;
-                                }
-                                Path rel = resource.relativize(path);
-                                if (!Files.isDirectory(path)) {
-                                    String file = rel.toString();
-                                    if (file.equals("index.html") || file.equals("index.htm")) {
-                                        knownPaths.add("/");
-                                    }
-                                    if (!file.startsWith("/")) {
-                                        file = "/" + file;
-                                    }
-                                    // Windows has a backslash
-                                    file = file.replace('\\', '/');
-                                    knownPaths.add(file);
-                                }
+                    Files.walk(resource).forEach(new Consumer<Path>() {
+                        @Override
+                        public void accept(Path path) {
+                            // Skip META-INF/resources entry
+                            if (resource.equals(path)) {
+                                return;
                             }
-                        });
-                    }
+                            Path rel = resource.relativize(path);
+                            if (!Files.isDirectory(path)) {
+                                String file = rel.toString();
+                                if (file.equals("index.html") || file.equals("index.htm")) {
+                                    knownPaths.add("/");
+                                }
+                                if (!file.startsWith("/")) {
+                                    file = "/" + file;
+                                }
+                                // Windows has a backslash
+                                file = file.replace('\\', '/');
+                                knownPaths.add(file);
+                            }
+                        }
+                    });
                 }
             }
         }
