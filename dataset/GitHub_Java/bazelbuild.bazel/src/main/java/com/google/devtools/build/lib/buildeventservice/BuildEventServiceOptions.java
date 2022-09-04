@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.buildeventservice;
 
-import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
@@ -82,7 +81,6 @@ public class BuildEventServiceOptions extends OptionsBase {
   @Option(
     name = "bes_keywords",
     defaultValue = "",
-    converter = Converters.CommaSeparatedOptionListConverter.class,
     documentationCategory = OptionDocumentationCategory.LOGGING,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     allowMultiple = true,
