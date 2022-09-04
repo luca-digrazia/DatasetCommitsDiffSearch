@@ -136,7 +136,9 @@ public final class LinkCommandLine extends CommandLine {
     return paramFile;
   }
 
-  /** See {@link CppLinkAction#getBuildInfoHeaderArtifacts()} */
+  /**
+   * Returns the (ordered, immutable) list of header files that contain build info.
+   */
   public ImmutableList<Artifact> getBuildInfoHeaderArtifacts() {
     return buildInfoHeaderArtifacts;
   }
@@ -176,8 +178,14 @@ public final class LinkCommandLine extends CommandLine {
     return linkopts;
   }
 
-  /** See {@link CppLinkAction#getLinkstamps()} */
-  protected ImmutableMap<Artifact, Artifact> getLinkstamps() {
+  /**
+   * Returns a (possibly empty) mapping of (C++ source file, .o output file) pairs for source files
+   * that need to be compiled at link time.
+   *
+   * <p>This is used to embed various values from the build system into binaries to identify their
+   * provenance.
+   */
+  public ImmutableMap<Artifact, Artifact> getLinkstamps() {
     return linkstamps;
   }
 
