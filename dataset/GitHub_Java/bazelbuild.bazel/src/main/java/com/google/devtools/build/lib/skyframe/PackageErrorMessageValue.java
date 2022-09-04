@@ -30,7 +30,7 @@ import com.google.devtools.build.skyframe.SkyValue;
  */
 public abstract class PackageErrorMessageValue implements SkyValue {
   /** Tri-state result of loading the package. */
-  public enum Result {
+  enum Result {
     /**
      * There was no error loading the package and {@link
      * com.google.devtools.build.lib.packages.Package#containsErrors} returned {@code false}.
@@ -51,7 +51,7 @@ public abstract class PackageErrorMessageValue implements SkyValue {
   }
 
   /** Returns the {@link Result} from loading the package. */
-  public abstract Result getResult();
+  abstract Result getResult();
 
   /**
    * If {@code getResult().equals(NO_SUCH_PACKAGE_EXCEPTION)}, returns the error message from the
@@ -100,7 +100,7 @@ public abstract class PackageErrorMessageValue implements SkyValue {
   static final PackageErrorMessageValue NO_ERROR_VALUE =
       new PackageErrorMessageValue() {
         @Override
-        public Result getResult() {
+        Result getResult() {
           return Result.NO_ERROR;
         }
 
@@ -114,7 +114,7 @@ public abstract class PackageErrorMessageValue implements SkyValue {
   static final PackageErrorMessageValue ERROR_VALUE =
       new PackageErrorMessageValue() {
         @Override
-        public Result getResult() {
+        Result getResult() {
           return Result.ERROR;
         }
 
@@ -133,7 +133,7 @@ public abstract class PackageErrorMessageValue implements SkyValue {
     }
 
     @Override
-    public Result getResult() {
+    Result getResult() {
       return Result.NO_SUCH_PACKAGE_EXCEPTION;
     }
 
