@@ -105,7 +105,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.function.Consumer;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -138,7 +137,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   private Set<String> previousClientEnvironment = ImmutableSet.of();
 
   private SequencedSkyframeExecutor(
-      Consumer<SkyframeExecutor> skyframeExecutorConsumerOnInit,
       EvaluatorSupplier evaluatorSupplier,
       PackageFactory pkgFactory,
       FileSystem fileSystem,
@@ -157,7 +155,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       BuildOptions defaultBuildOptions,
       MutableArtifactFactorySupplier mutableArtifactFactorySupplier) {
     super(
-        skyframeExecutorConsumerOnInit,
         evaluatorSupplier,
         pkgFactory,
         fileSystem,
@@ -200,6 +197,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
       BuildOptions defaultBuildOptions) {
     return create(
+        InMemoryMemoizingEvaluator.SUPPLIER,
         pkgFactory,
         fileSystem,
         directories,
@@ -215,11 +213,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         buildFilesByPriority,
         actionOnIOExceptionReadingBuildFile,
         defaultBuildOptions,
-        new MutableArtifactFactorySupplier(),
-        skyframeExecutor -> {});
+        new MutableArtifactFactorySupplier());
   }
 
   public static SequencedSkyframeExecutor create(
+      EvaluatorSupplier evaluatorSupplier,
       PackageFactory pkgFactory,
       FileSystem fileSystem,
       BlazeDirectories directories,
@@ -235,12 +233,10 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       List<BuildFileName> buildFilesByPriority,
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
       BuildOptions defaultBuildOptions,
-      MutableArtifactFactorySupplier mutableArtifactFactorySupplier,
-      Consumer<SkyframeExecutor> skyframeExecutorConsumerOnInit) {
+      MutableArtifactFactorySupplier mutableArtifactFactorySupplier) {
     SequencedSkyframeExecutor skyframeExecutor =
         new SequencedSkyframeExecutor(
-            skyframeExecutorConsumerOnInit,
-            InMemoryMemoizingEvaluator.SUPPLIER,
+            evaluatorSupplier,
             pkgFactory,
             fileSystem,
             directories,
