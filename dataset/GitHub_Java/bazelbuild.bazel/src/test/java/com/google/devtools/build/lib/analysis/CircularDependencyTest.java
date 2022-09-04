@@ -25,7 +25,6 @@ import static org.junit.Assert.fail;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -33,9 +32,9 @@ import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
-import com.google.devtools.build.lib.packages.AttributeTransitionData;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.RuleTransitionData;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -214,10 +213,9 @@ public class CircularDependencyTest extends BuildViewTestCase {
         "plain(name = 'c')",
         "plain(name = 'aspectdep', aspect_deps = ['a'])");
 
-    scratch.file(
-        "x/x.bzl",
+    scratch.file("x/x.bzl",
         "def _impl(ctx):",
-        "    return []",
+        "    return struct()",
         "",
         "rule_aspect = aspect(",
         "    implementation = _impl,",
@@ -271,13 +269,14 @@ public class CircularDependencyTest extends BuildViewTestCase {
                   .mandatory()
                   .allowedFileTypes()
                   .cfg(
-                      new TransitionFactory<AttributeTransitionData>() {
+                      new TransitionFactory<RuleTransitionData>() {
                         @Override
-                        public SplitTransition create(AttributeTransitionData data) {
+                        public SplitTransition create(RuleTransitionData data) {
                           return (BuildOptions options) -> {
                             String define = data.attributes().get("define", STRING);
                             BuildOptions newOptions = options.clone();
-                            CoreOptions optionsFragment = newOptions.get(CoreOptions.class);
+                            BuildConfiguration.Options optionsFragment =
+                                newOptions.get(BuildConfiguration.Options.class);
                             optionsFragment.commandLineBuildVariables =
                                 optionsFragment.commandLineBuildVariables.stream()
                                     .filter((pair) -> !pair.getKey().equals(define))

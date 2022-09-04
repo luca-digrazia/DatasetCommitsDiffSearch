@@ -260,7 +260,7 @@ public final class SkylarkAttr implements SkylarkAttrApi {
             "late-bound attributes must not have a split configuration transition");
       }
       if (trans.equals("host")) {
-        builder.cfg(HostTransition.createFactory());
+        builder.cfg(HostTransition.INSTANCE);
       } else if (trans instanceof SplitTransition) {
         builder.cfg((SplitTransition) trans);
       } else if (trans instanceof TransitionFactory) {

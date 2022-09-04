@@ -22,12 +22,12 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
-import com.google.devtools.build.lib.packages.AttributeTransitionData;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleTransitionData;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
@@ -48,9 +48,7 @@ import java.util.stream.Collectors;
  */
 // TODO(https://github.com/bazelbuild/bazel/pull/7825): Rename to MultiArchSplitTransitionFactory.
 public class MultiArchSplitTransitionProvider
-    implements TransitionFactory<AttributeTransitionData>,
-        SplitTransitionProviderApi,
-        SkylarkValue {
+    implements TransitionFactory<RuleTransitionData>, SplitTransitionProviderApi, SkylarkValue {
 
   @VisibleForTesting
   static final String UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT =
@@ -131,7 +129,7 @@ public class MultiArchSplitTransitionProvider
   }
 
   @Override
-  public SplitTransition create(AttributeTransitionData data) {
+  public SplitTransition create(RuleTransitionData data) {
     String platformTypeString = data.attributes().get(PlatformRule.PLATFORM_TYPE_ATTR_NAME, STRING);
     String minimumOsVersionString = data.attributes().get(PlatformRule.MINIMUM_OS_VERSION, STRING);
     PlatformType platformType;
@@ -205,7 +203,7 @@ public class MultiArchSplitTransitionProvider
           if (cpus.isEmpty()) {
             cpus =
                 ImmutableList.of(
-                    AppleConfiguration.iosCpuFromCpu(buildOptions.get(CoreOptions.class).cpu));
+                    AppleConfiguration.iosCpuFromCpu(buildOptions.get(Options.class).cpu));
           }
           if (actualMinimumOsVersion != null
               && actualMinimumOsVersion.compareTo(DottedVersion.fromString("11.0")) >= 0) {
