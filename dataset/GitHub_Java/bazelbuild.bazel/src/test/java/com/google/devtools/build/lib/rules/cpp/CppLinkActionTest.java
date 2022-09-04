@@ -57,7 +57,6 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -93,27 +92,17 @@ public class CppLinkActionTest extends BuildViewTestCase {
   }
 
   private final FeatureConfiguration getMockFeatureConfiguration() throws Exception {
-    ImmutableList<CToolchain.Feature> features =
-        new ImmutableList.Builder<CToolchain.Feature>()
-            .addAll(
-                CppActionConfigs.getLegacyFeatures(
-                    CppPlatform.LINUX,
-                    ImmutableSet.of(),
-                    "dynamic_library_linker_tool",
-                    /* supportsEmbeddedRuntimes= */ true,
-                    /* supportsInterfaceSharedLibraries= */ false))
-            .addAll(CppActionConfigs.getFeaturesToAppearLastInFeaturesList(ImmutableSet.of()))
-            .build();
-
-    ImmutableList<CToolchain.ActionConfig> actionConfigs =
-        CppActionConfigs.getLegacyActionConfigs(
-            CppPlatform.LINUX,
-            "gcc_tool",
-            "ar_tool",
-            "strip_tool",
-            /* supportsInterfaceSharedLibraries= */ false);
-
-    return CcToolchainFeaturesTest.buildFeatures(features, actionConfigs)
+    return CcToolchainFeaturesTest.buildFeatures(
+            CppActionConfigs.getCppActionConfigs(
+                CppPlatform.LINUX,
+                ImmutableSet.of(),
+                "gcc_tool",
+                "dynamic_library_linker_tool",
+                "ar_tool",
+                "strip_tool",
+                /* supportsEmbeddedRuntimes= */ true,
+                /* supportsInterfaceSharedLibraries= */ false),
+            CppActionConfigs.getFeaturesToAppearLastInToolchain(ImmutableSet.of()))
         .getFeatureConfiguration(
             ImmutableSet.of(
                 Link.LinkTargetType.EXECUTABLE.getActionName(),
@@ -477,11 +466,14 @@ public class CppLinkActionTest extends BuildViewTestCase {
         .isAtLeast(CppLinkAction.MIN_STATIC_LINK_RESOURCES.getMemoryMb());
     assertThat(resources.getCpuUsage())
         .isAtLeast(CppLinkAction.MIN_STATIC_LINK_RESOURCES.getCpuUsage());
+    assertThat(resources.getIoUsage())
+        .isAtLeast(CppLinkAction.MIN_STATIC_LINK_RESOURCES.getIoUsage());
 
     final int linkSize = Iterables.size(linkAction.getLinkCommandLine().getLinkerInputArtifacts());
-    ResourceSet scaledSet = ResourceSet.createWithRamCpu(
+    ResourceSet scaledSet = ResourceSet.createWithRamCpuIo(
         CppLinkAction.LINK_RESOURCES_PER_INPUT.getMemoryMb() * linkSize,
-        CppLinkAction.LINK_RESOURCES_PER_INPUT.getCpuUsage() * linkSize
+        CppLinkAction.LINK_RESOURCES_PER_INPUT.getCpuUsage() * linkSize,
+        CppLinkAction.LINK_RESOURCES_PER_INPUT.getIoUsage() * linkSize
     );
 
     // Ensure that anything above the minimum is properly scaled.
@@ -489,6 +481,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
         || resources.getMemoryMb() == scaledSet.getMemoryMb()).isTrue();
     assertThat(resources.getCpuUsage() == CppLinkAction.MIN_STATIC_LINK_RESOURCES.getCpuUsage()
         || resources.getCpuUsage() == scaledSet.getCpuUsage()).isTrue();
+    assertThat(resources.getIoUsage() == CppLinkAction.MIN_STATIC_LINK_RESOURCES.getIoUsage()
+        || resources.getIoUsage() == scaledSet.getIoUsage()).isTrue();
   }
 
   private CppLinkActionBuilder createLinkBuilder(

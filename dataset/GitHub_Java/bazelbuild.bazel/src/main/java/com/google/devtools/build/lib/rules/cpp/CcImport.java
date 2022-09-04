@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
@@ -26,12 +25,12 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper.LinkingInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.syntax.Type;
-import java.util.List;
-import javax.annotation.Nullable;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
  * A ConfiguredTarget for <code>cc_import</code> rule.
@@ -43,81 +42,15 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
     this.semantics = semantics;
   }
 
-  /** Autovalue for output of private methods in this class. */
-  @AutoValue
-  public abstract static class LibrariesToLinkAndRuntimeArtifact {
-    private static LibrariesToLinkAndRuntimeArtifact create(
-        @Nullable LibraryToLink staticLibrary,
-        @Nullable LibraryToLink dynamicLibraryForLinking,
-        @Nullable Artifact runtimeArtifact) {
-      return new AutoValue_CcImport_LibrariesToLinkAndRuntimeArtifact(
-          staticLibrary, dynamicLibraryForLinking, runtimeArtifact);
-    }
-
-    @Nullable
-    abstract LibraryToLink staticLibrary();
-
-    @Nullable
-    abstract LibraryToLink dynamicLibraryForLinking();
-
-    @Nullable
-    abstract Artifact runtimeArtifact();
-  }
-
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-
-    boolean systemProvided = ruleContext.attributes().get("system_provided", Type.BOOLEAN);
-    CcToolchainProvider ccToolchain =
-        CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
-    FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeaturesOrReportRuleError(ruleContext, ccToolchain);
-    boolean targetWindows = featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS);
-
     Artifact staticLibrary = ruleContext.getPrerequisiteArtifact("static_library", Mode.TARGET);
     Artifact sharedLibrary = ruleContext.getPrerequisiteArtifact("shared_library", Mode.TARGET);
     Artifact interfaceLibrary =
         ruleContext.getPrerequisiteArtifact("interface_library", Mode.TARGET);
-    performErrorChecks(ruleContext, systemProvided, sharedLibrary, interfaceLibrary, targetWindows);
 
-    final CcCommon common = new CcCommon(ruleContext);
-    CompilationInfo compilationInfo =
-        new CcCompilationHelper(
-                ruleContext,
-                semantics,
-                featureConfiguration,
-                ccToolchain,
-                ccToolchain.getFdoProvider())
-            .addPublicHeaders(common.getHeaders())
-            .setHeadersCheckingMode(HeadersCheckingMode.STRICT)
-            .compile();
-
-    CcLinkingInfo ccLinkingInfo =
-        buildCcLinkingInfo(
-            buildLibrariesToLinkAndRuntimeArtifact(
-                ruleContext,
-                staticLibrary,
-                sharedLibrary,
-                interfaceLibrary,
-                ccToolchain,
-                targetWindows));
-
-    return new RuleConfiguredTargetBuilder(ruleContext)
-        .addProviders(compilationInfo.getProviders())
-        .addNativeDeclaredProvider(ccLinkingInfo)
-        .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
-        .addOutputGroups(compilationInfo.getOutputGroups())
-        .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY))
-        .build();
-  }
-
-  private void performErrorChecks(
-      RuleContext ruleContext,
-      boolean systemProvided,
-      Artifact sharedLibrary,
-      Artifact interfaceLibrary,
-      boolean targetsWindows) {
+    boolean systemProvided = ruleContext.attributes().get("system_provided", Type.BOOLEAN);
     // If the shared library will be provided by system during runtime, users are not supposed to
     // specify shared_library.
     if (systemProvided && sharedLibrary != null) {
@@ -131,161 +64,121 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
           "'shared_library' should be specified when 'system_provided' is false");
     }
 
-    if (targetsWindows && sharedLibrary != null && interfaceLibrary == null) {
-      ruleContext.ruleError(
-          "'interface library' must be specified when using cc_import for shared library on"
-              + " Windows");
-    }
-  }
+    // Create CcCompilationHelper
+    CcToolchainProvider ccToolchain =
+        CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
+    FeatureConfiguration featureConfiguration =
+        CcCommon.configureFeaturesOrReportRuleError(ruleContext, ccToolchain);
+    FdoProvider fdoProvider = ccToolchain.getFdoProvider();
 
-  private LibraryToLink buildStaticLibraryToLink(
-      RuleContext ruleContext, Artifact staticLibraryArtifact) {
+    // Add headers to compilation step.
+    final CcCommon common = new CcCommon(ruleContext);
+    CompilationInfo compilationInfo =
+        new CcCompilationHelper(
+                ruleContext, semantics, featureConfiguration, ccToolchain, fdoProvider)
+            .addPublicHeaders(common.getHeaders())
+            .setHeadersCheckingMode(HeadersCheckingMode.STRICT)
+            .compile();
+
+    // Get alwayslink attribute
     boolean alwayslink = ruleContext.attributes().get("alwayslink", Type.BOOLEAN);
     ArtifactCategory staticLibraryCategory =
         alwayslink ? ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY : ArtifactCategory.STATIC_LIBRARY;
-    return LinkerInputs.opaqueLibraryToLink(
-        staticLibraryArtifact,
-        staticLibraryCategory,
-        CcLinkingOutputs.libraryIdentifierOf(staticLibraryArtifact));
-  }
 
-  private LibraryToLink buildSharedLibraryToLink(
-      RuleContext ruleContext,
-      Artifact sharedLibraryArtifact,
-      CcToolchainProvider ccToolchain,
-      boolean targetsWindow) {
-    if (targetsWindow) {
-      return LinkerInputs.opaqueLibraryToLink(
-          sharedLibraryArtifact,
-          ArtifactCategory.DYNAMIC_LIBRARY,
-          CcLinkingOutputs.libraryIdentifierOf(sharedLibraryArtifact));
-    } else {
-      Artifact dynamicLibrarySymlink =
-          SolibSymlinkAction.getDynamicLibrarySymlink(
-              ruleContext,
-              ccToolchain.getSolibDirectory(),
-              sharedLibraryArtifact,
-              /* preserveName= */ true,
-              /* prefixConsumer= */ true,
-              ruleContext.getConfiguration());
-      return LinkerInputs.solibLibraryToLink(
-          dynamicLibrarySymlink,
-          sharedLibraryArtifact,
-          CcLinkingOutputs.libraryIdentifierOf(sharedLibraryArtifact));
-    }
-  }
+    PathFragment labelName = PathFragment.create(ruleContext.getLabel().getName());
+    String libraryIdentifier =
+        ruleContext
+            .getPackageDirectory()
+            .getRelative(labelName.replaceName("lib" + labelName.getBaseName()))
+            .getPathString();
 
-  private LibraryToLink buildInterfaceLibraryToLInk(
-      RuleContext ruleContext,
-      Artifact interfaceLibraryArtifact,
-      CcToolchainProvider ccToolchain,
-      boolean targetsWindows) {
-    if (targetsWindows) {
-      return LinkerInputs.opaqueLibraryToLink(
-          interfaceLibraryArtifact,
-          ArtifactCategory.INTERFACE_LIBRARY,
-          CcLinkingOutputs.libraryIdentifierOf(interfaceLibraryArtifact));
-    } else {
-      Artifact dynamicLibrarySymlink =
-          SolibSymlinkAction.getDynamicLibrarySymlink(
-              ruleContext,
-              ccToolchain.getSolibDirectory(),
-              interfaceLibraryArtifact,
-              /* preserveName= */ true,
-              /* prefixConsumer= */ true,
-              ruleContext.getConfiguration());
-      return LinkerInputs.solibLibraryToLink(
-          dynamicLibrarySymlink,
-          interfaceLibraryArtifact,
-          CcLinkingOutputs.libraryIdentifierOf(interfaceLibraryArtifact));
-    }
-  }
+    CcLinkingHelper linkingHelper =
+        new CcLinkingHelper(
+            ruleContext,
+            semantics,
+            featureConfiguration,
+            ccToolchain,
+            fdoProvider,
+            ruleContext.getConfiguration());
 
-  private LibrariesToLinkAndRuntimeArtifact buildLibrariesToLinkAndRuntimeArtifact(
-      RuleContext ruleContext,
-      Artifact staticLibraryArtifact,
-      Artifact sharedLibraryArtifact,
-      Artifact interfaceLibraryArtifact,
-      CcToolchainProvider ccToolchain,
-      boolean targetsWindows) {
-    LibraryToLink staticLibrary = null;
-    if (staticLibraryArtifact != null) {
-      staticLibrary = buildStaticLibraryToLink(ruleContext, staticLibraryArtifact);
-    }
-
-    LibraryToLink sharedLibrary = null;
-    Artifact runtimeArtifact = null;
-    if (sharedLibraryArtifact != null) {
-      sharedLibrary =
-          buildSharedLibraryToLink(ruleContext, sharedLibraryArtifact, ccToolchain, targetsWindows);
-      runtimeArtifact = sharedLibrary.getArtifact();
-    }
-
-    LibraryToLink interfaceLibrary = null;
-    if (interfaceLibraryArtifact != null) {
-      interfaceLibrary =
-          buildInterfaceLibraryToLInk(
-              ruleContext, interfaceLibraryArtifact, ccToolchain, targetsWindows);
-    }
-
-    LibraryToLink dynamicLibraryForLinking;
-    if (interfaceLibrary != null) {
-      dynamicLibraryForLinking = interfaceLibrary;
-    } else {
-      dynamicLibraryForLinking = sharedLibrary;
-    }
-
-    return LibrariesToLinkAndRuntimeArtifact.create(
-        staticLibrary, dynamicLibraryForLinking, runtimeArtifact);
-  }
-
-  private <T extends Object> List<T> asList(Object object, Class<T> type) {
-    if (object == null) {
-      return ImmutableList.of();
-    }
-    return ImmutableList.of(type.cast(object));
-  }
-
-  private CcLinkingInfo buildCcLinkingInfo(
-      LibrariesToLinkAndRuntimeArtifact librariesToLinkAndRuntimeArtifact) {
-    LibraryToLink staticLibrary = librariesToLinkAndRuntimeArtifact.staticLibrary();
-    LibraryToLink dynamicLibraryForLinking =
-        librariesToLinkAndRuntimeArtifact.dynamicLibraryForLinking();
-    Artifact runtimeArtifact = librariesToLinkAndRuntimeArtifact.runtimeArtifact();
-
-    CcLinkParams.Builder staticModeParamsForExecutable = CcLinkParams.builder();
-    CcLinkParams.Builder staticModeParamsForDynamicLibrary = CcLinkParams.builder();
     if (staticLibrary != null) {
-      staticModeParamsForExecutable.addLibraries(asList(staticLibrary, LibraryToLink.class));
-      staticModeParamsForDynamicLibrary.addLibraries(asList(staticLibrary, LibraryToLink.class));
+      if (CppFileTypes.PIC_ARCHIVE.matches(staticLibrary.getPath())) {
+        linkingHelper.addPicStaticLibraries(
+            ImmutableList.of(
+                LinkerInputs.opaqueLibraryToLink(
+                    staticLibrary, staticLibraryCategory, libraryIdentifier)));
+      } else {
+        linkingHelper.addStaticLibraries(
+            ImmutableList.of(
+                LinkerInputs.opaqueLibraryToLink(
+                    staticLibrary, staticLibraryCategory, libraryIdentifier)));
+      }
+    }
+
+    // Now we are going to have some platform dependent behaviors
+    boolean targetWindows = featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS);
+
+    Iterable<LibraryToLink> dynamicLibraryForLinkingList = null;
+    Iterable<LibraryToLink> dynamicLibrariesForRuntimeList = null;
+    if (sharedLibrary != null) {
+      if (targetWindows) {
+        dynamicLibrariesForRuntimeList =
+            ImmutableList.of(
+                LinkerInputs.opaqueLibraryToLink(
+                    sharedLibrary, ArtifactCategory.DYNAMIC_LIBRARY, libraryIdentifier));
+      } else {
+        dynamicLibrariesForRuntimeList =
+            ImmutableList.of(
+                LinkerInputs.solibLibraryToLink(
+                    common.getDynamicLibrarySymlink(sharedLibrary, true),
+                    sharedLibrary,
+                    libraryIdentifier));
+      }
+      linkingHelper.addDynamicLibrariesForRuntime(dynamicLibrariesForRuntimeList);
+    }
+
+    if (interfaceLibrary != null) {
+      if (targetWindows) {
+        dynamicLibraryForLinkingList =
+            ImmutableList.of(
+                LinkerInputs.opaqueLibraryToLink(
+                    interfaceLibrary, ArtifactCategory.INTERFACE_LIBRARY, libraryIdentifier));
+      } else {
+        dynamicLibraryForLinkingList =
+            ImmutableList.of(
+                LinkerInputs.solibLibraryToLink(
+                    common.getDynamicLibrarySymlink(interfaceLibrary, true),
+                    interfaceLibrary,
+                    libraryIdentifier));
+      }
     } else {
-      staticModeParamsForExecutable
-          .addLibraries(asList(dynamicLibraryForLinking, LibraryToLink.class))
-          .addDynamicLibrariesForRuntime(asList(runtimeArtifact, Artifact.class));
-      staticModeParamsForDynamicLibrary
-          .addLibraries(asList(dynamicLibraryForLinking, LibraryToLink.class))
-          .addDynamicLibrariesForRuntime(asList(runtimeArtifact, Artifact.class));
+      // If interface_library is not specified and we are not building for Windows, then the dynamic
+      // library required at linking time is the same as the one required at execution time.
+      if (!targetWindows) {
+        dynamicLibraryForLinkingList = dynamicLibrariesForRuntimeList;
+      } else if (sharedLibrary != null) {
+        ruleContext.ruleError(
+          "'interface library' must be specified when using cc_import for shared library on"
+        + " Windows");
+      }
     }
 
-    CcLinkParams.Builder dynamicModeParamsForExecutable = CcLinkParams.builder();
-    CcLinkParams.Builder dynamicModeParamsForDynamicLibrary = CcLinkParams.builder();
-    if (dynamicLibraryForLinking != null) {
-      dynamicModeParamsForExecutable
-          .addLibraries(asList(dynamicLibraryForLinking, LibraryToLink.class))
-          .addDynamicLibrariesForRuntime(asList(runtimeArtifact, Artifact.class));
-      dynamicModeParamsForDynamicLibrary
-          .addLibraries(asList(dynamicLibraryForLinking, LibraryToLink.class))
-          .addDynamicLibrariesForRuntime(asList(runtimeArtifact, Artifact.class));
-    } else if (staticLibrary != null) {
-      dynamicModeParamsForExecutable.addLibraries(asList(staticLibrary, LibraryToLink.class));
-      dynamicModeParamsForDynamicLibrary.addLibraries(asList(staticLibrary, LibraryToLink.class));
+    if (dynamicLibraryForLinkingList != null) {
+      linkingHelper.addDynamicLibrariesForLinking(dynamicLibraryForLinkingList);
     }
 
-    return CcLinkingInfo.Builder.create()
-        .setStaticModeParamsForExecutable(staticModeParamsForExecutable.build())
-        .setStaticModeParamsForDynamicLibrary(staticModeParamsForDynamicLibrary.build())
-        .setDynamicModeParamsForExecutable(dynamicModeParamsForExecutable.build())
-        .setDynamicModeParamsForDynamicLibrary(dynamicModeParamsForDynamicLibrary.build())
+    LinkingInfo linkingInfo =
+        linkingHelper.link(
+            compilationInfo.getCcCompilationOutputs(), compilationInfo.getCcCompilationContext());
+
+    return new RuleConfiguredTargetBuilder(ruleContext)
+        .addProviders(compilationInfo.getProviders())
+        .addProviders(linkingInfo.getProviders())
+        .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
+        .addOutputGroups(
+            CcCommon.mergeOutputGroups(
+                ImmutableList.of(compilationInfo.getOutputGroups(), linkingInfo.getOutputGroups())))
+        .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY))
         .build();
   }
 }

@@ -195,17 +195,21 @@ public final class CcCommon {
   }
 
   public static void checkRuleWhitelisted(SkylarkRuleContext skylarkRuleContext)
-      throws EvalException, InterruptedException {
+      throws EvalException {
     RuleContext context = skylarkRuleContext.getRuleContext();
     Rule rule = context.getRule();
 
     RuleClass ruleClass = rule.getRuleClassObject();
     Label label = ruleClass.getRuleDefinitionEnvironmentLabel();
-    if (label != null) {
-      checkLocationWhitelisted(
-          context.getAnalysisEnvironment().getSkylarkSemantics(),
-          rule.getLocation(),
-          label.getPackageFragment().toString());
+    try {
+      if (label != null) {
+        checkLocationWhitelisted(
+            context.getAnalysisEnvironment().getSkylarkSemantics(),
+            rule.getLocation(),
+            label.getPackageFragment().toString());
+      }
+    } catch (InterruptedException e) {
+      throw new EvalException(rule.getLocation(), e);
     }
   }
 

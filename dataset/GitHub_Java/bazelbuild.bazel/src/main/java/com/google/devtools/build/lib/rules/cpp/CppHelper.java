@@ -397,22 +397,26 @@ public class CppHelper {
     final Function<TransitiveInfoCollection, Runfiles> runfilesForLinkingDynamically =
         input -> {
           CcLinkingInfo provider = input.get(CcLinkingInfo.PROVIDER);
-          return provider == null
+          CcLinkParamsStore ccLinkParamsStore =
+              provider == null ? null : provider.getCcLinkParamsStore();
+          return ccLinkParamsStore == null
               ? Runfiles.EMPTY
               : new Runfiles.Builder(ruleContext.getWorkspaceName())
                   .addTransitiveArtifacts(
-                      provider.getDynamicModeParamsForExecutable().getDynamicLibrariesForRuntime())
+                      ccLinkParamsStore.get(false, false).getDynamicLibrariesForRuntime())
                   .build();
         };
 
     final Function<TransitiveInfoCollection, Runfiles> runfilesForLinkingStatically =
         input -> {
           CcLinkingInfo provider = input.get(CcLinkingInfo.PROVIDER);
-          return provider == null
+          CcLinkParamsStore ccLinkParamsStore =
+              provider == null ? null : provider.getCcLinkParamsStore();
+          return ccLinkParamsStore == null
               ? Runfiles.EMPTY
               : new Runfiles.Builder(ruleContext.getWorkspaceName())
                   .addTransitiveArtifacts(
-                      provider.getStaticModeParamsForExecutable().getDynamicLibrariesForRuntime())
+                      ccLinkParamsStore.get(true, false).getDynamicLibrariesForRuntime())
                   .build();
         };
     return linkingStatically ? runfilesForLinkingStatically : runfilesForLinkingDynamically;
