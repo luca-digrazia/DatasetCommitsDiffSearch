@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.analysis.WrappingProvider;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -280,7 +281,8 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
     if (isProtoLibrary(ruleContext)) {
       if (!ruleContext.getPrerequisites("srcs", Mode.TARGET).isEmpty()) {
         JavaRuleOutputJarsProvider outputJarsProvider =
-            base.getProvider(JavaRuleOutputJarsProvider.class);
+            WrappingProvider.Helper.getWrappedProvider(
+                base, JavaProtoLibraryAspectProvider.class, JavaRuleOutputJarsProvider.class);
         if (outputJarsProvider != null) {
           return outputJarsProvider
               .getOutputJars()
@@ -305,7 +307,10 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
     if (provider != null) {
       return provider;
     }
-    return isProtoLibrary(ruleContext) ? base.getProvider(JavaCompilationArgsProvider.class) : null;
+    return isProtoLibrary(ruleContext)
+        ? WrappingProvider.Helper.getWrappedProvider(
+            base, JavaProtoLibraryAspectProvider.class, JavaCompilationArgsProvider.class)
+        : null;
   }
 
   private static boolean isProtoLibrary(RuleContext ruleContext) {
@@ -511,20 +516,6 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
         Iterables.filter(
             tokenizedDexopts,
             new FlagMatcher(getAndroidConfig(ruleContext).getDexoptsSupportedInDexMerger())));
-  }
-
-  /**
-   * Derives options to use in DexFileSharder actions from the given context and dx flags, where the
-   * latter typically come from a {@code dexopts} attribute on a top-level target.
-   */
-  static ImmutableSet<String> sharderDexopts(
-      RuleContext ruleContext, Iterable<String> tokenizedDexopts) {
-    // We don't need an ordered set but might as well.  Note we don't need to worry about coverage
-    // builds since the merger doesn't use --no-locals.
-    return normalizeDexopts(
-        Iterables.filter(
-            tokenizedDexopts,
-            new FlagMatcher(getAndroidConfig(ruleContext).getDexoptsSupportedInDexSharder())));
   }
 
   private static ImmutableSet<String> normalizeDexopts(Iterable<String> tokenizedDexopts) {
