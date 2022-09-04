@@ -55,7 +55,7 @@ public class EBeanHolder {
 	public JSwitch onOptionsItemSelectedSwitch;
 	public JVar onOptionsItemSelectedItem;
 
-	public JBlock restoreInstanceStateBlock;
+	public JMethod restoreSavedInstanceStateMethod;
 	public JBlock saveInstanceStateBlock;
 
 	public JExpression contextRef;
@@ -84,7 +84,7 @@ public class EBeanHolder {
 			JCodeModel codeModel = eBean.owner();
 			try {
 				refClass = codeModel.ref(fullyQualifiedClassName);
-			} catch (Throwable t) {
+			} catch (Exception e) {
 				refClass = codeModel.directClass(fullyQualifiedClassName);
 			}
 			loadedClasses.put(fullyQualifiedClassName, refClass);
