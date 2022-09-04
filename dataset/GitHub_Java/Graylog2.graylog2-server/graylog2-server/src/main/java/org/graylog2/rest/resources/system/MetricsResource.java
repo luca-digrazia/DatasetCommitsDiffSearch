@@ -22,7 +22,6 @@ package org.graylog2.rest.resources.system;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,43 +33,38 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Api(value = "System/Metrics", description = "Internal Graylog2 metrics")
 @Path("/system/metrics")
 public class MetricsResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(MetricsResource.class);
 
-    @GET @Timed
-    @ApiOperation(value = "Get all metrics",
-                  notes = "Note that this might return a huge result set.")
+    @GET
+    @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public String metrics() {
+    public String metrics(@QueryParam("pretty") boolean prettyPrint) {
         Map<String, Object> result = Maps.newHashMap();
 
         result.put("metrics", core.metrics().getMetrics());
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
-    @GET @Timed
+    @GET
+    @Timed
     @Path("/names")
-    @ApiOperation(value = "Get all metrics keys/names")
     @Produces(MediaType.APPLICATION_JSON)
-    public String metricNames() {
+    public String metricNames(@QueryParam("pretty") boolean prettyPrint) {
         Map<String, Object> result = Maps.newHashMap();
         result.put("names", core.metrics().getNames());
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
-    @GET @Timed
+    @GET
+    @Timed
     @Path("/{metricName}")
-    @ApiOperation(value = "Get a single metric")
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "No such metric")
-    })
     @Produces(MediaType.APPLICATION_JSON)
-    public String singleMetric(@ApiParam(title = "metricName", required = true) @PathParam("metricName") String metricName) {
+    public String singleMetric(@PathParam("metricName") String metricName, @QueryParam("pretty") boolean prettyPrint) {
         Metric metric = core.metrics().getMetrics().get(metricName);
 
         if (metric == null) {
@@ -78,7 +72,7 @@ public class MetricsResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        return json(metric);
+        return json(metric, prettyPrint);
     }
 
 }
