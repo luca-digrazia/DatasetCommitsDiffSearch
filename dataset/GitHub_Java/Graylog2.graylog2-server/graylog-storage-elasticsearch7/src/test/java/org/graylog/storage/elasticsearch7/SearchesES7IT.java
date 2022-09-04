@@ -24,12 +24,15 @@ public class SearchesES7IT extends SearchesIT {
         final boolean allowHighlighting = true;
         final boolean allowLeadingWildcardSearches = true;
 
-        final SearchRequestFactory searchRequestFactory = new SearchRequestFactory(sortOrderMapper, allowHighlighting, allowLeadingWildcardSearches);
         return new SearchesAdapterES7(elasticsearch.elasticsearchClient(),
                 new Scroll(elasticsearch.elasticsearchClient(),
                         scrollResultFactory,
-                        searchRequestFactory),
-                searchRequestFactory);
+                        sortOrderMapper,
+                        allowLeadingWildcardSearches,
+                        allowHighlighting),
+                new SearchRequestFactory(sortOrderMapper,
+                        allowHighlighting,
+                        allowLeadingWildcardSearches));
     }
 
     @Override
