@@ -102,8 +102,6 @@ public class QuarkusTestExtension
                     .newInstance(context.getRequiredTestClass());
             testResourceManager.getClass().getMethod("start").invoke(testResourceManager);
 
-            handleDynamicTests(startupAction.getClassLoader());
-
             runningQuarkusApplication = startupAction.run();
 
             ConfigProviderResolver.setInstance(new RunningAppConfigResolver(runningQuarkusApplication));
@@ -153,14 +151,6 @@ public class QuarkusTestExtension
             }
             throw e;
         }
-    }
-
-    private void handleDynamicTests(ClassLoader startupActionClassLoader)
-            throws ClassNotFoundException, NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        Class<?> quarkusDynamicTestClass = startupActionClassLoader.loadClass(QuarkusDynamicTest.class.getName());
-        Method setClassLoaderMethod = quarkusDynamicTestClass.getDeclaredMethod("setClassLoader", ClassLoader.class);
-        setClassLoaderMethod.setAccessible(true);
-        setClassLoaderMethod.invoke(null, originalCl);
     }
 
     @Override
@@ -331,17 +321,6 @@ public class QuarkusTestExtension
     }
 
     @Override
-    public <T> T interceptTestFactoryMethod(Invocation<T> invocation,
-            ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext) throws Throwable {
-        if (isNativeTest(extensionContext)) {
-            return invocation.proceed();
-        }
-        T result = (T) runExtensionMethod(invocationContext, extensionContext);
-        invocation.skip();
-        return result;
-    }
-
-    @Override
     public void interceptAfterEachMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
             ExtensionContext extensionContext) throws Throwable {
         if (isNativeTest(extensionContext)) {
@@ -363,7 +342,7 @@ public class QuarkusTestExtension
         invocation.skip();
     }
 
-    private Object runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext)
+    private void runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext, ExtensionContext extensionContext)
             throws Throwable {
         Method newMethod = null;
 
@@ -410,7 +389,7 @@ public class QuarkusTestExtension
                 }
             }
 
-            return newMethod.invoke(actualTestInstance, argumentsFromTccl.toArray(new Object[0]));
+            newMethod.invoke(actualTestInstance, argumentsFromTccl.toArray(new Object[0]));
         } catch (InvocationTargetException e) {
             throw e.getCause();
         } catch (IllegalAccessException | ClassNotFoundException e) {
