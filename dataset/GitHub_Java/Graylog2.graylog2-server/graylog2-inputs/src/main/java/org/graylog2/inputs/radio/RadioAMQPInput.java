@@ -17,55 +17,111 @@
 package org.graylog2.inputs.radio;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
+import com.google.common.eventbus.EventBus;
+import com.google.inject.Inject;
 import org.graylog2.inputs.amqp.AMQPInput;
-import org.graylog2.inputs.codecs.RadioMessageCodec;
-import org.graylog2.inputs.transports.RadioAmqpTransport;
-import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
+import org.graylog2.plugin.configuration.fields.ConfigurationField;
+import org.graylog2.plugin.configuration.fields.NumberField;
+import org.graylog2.plugin.configuration.fields.TextField;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class RadioAMQPInput extends AMQPInput {
 
-    private static final String NAME = "Graylog2 Radio Input (AMQP)";
+    public static final String NAME = "Graylog2 Radio Input (AMQP)";
 
-    @AssistedInject
-    public RadioAMQPInput(@Assisted Configuration configuration,
-                          MetricRegistry metricRegistry,
-                          RadioAmqpTransport.Factory transport,
-                          RadioMessageCodec.Factory codec,
-                          LocalMetricRegistry localRegistry, Config config, Descriptor descriptor) {
-        super(metricRegistry,
-              transport.create(configuration),
-              codec.create(configuration),
-              localRegistry,
-              config,
-              descriptor);
+    @Inject
+    public RadioAMQPInput(MetricRegistry metricRegistry, EventBus eventBus) {
+        super(metricRegistry, eventBus);
     }
 
-    public interface Factory extends MessageInput.Factory<RadioAMQPInput> {
-        @Override
-        RadioAMQPInput create(Configuration configuration);
+    @Override
+    public void checkConfiguration(Configuration configuration) throws ConfigurationException {
+        configuration.setString(CK_EXCHANGE, "graylog2");
+        configuration.setString(CK_QUEUE, "graylog2-radio-messages");
+        configuration.setString(CK_ROUTING_KEY, "graylog2-radio-message");
 
-        @Override
-        Config getConfig();
-
-        @Override
-        Descriptor getDescriptor();
-    }
-
-    public static class Descriptor extends MessageInput.Descriptor {
-        public Descriptor() {
-            super(NAME, false, "");
+        if (!checkConfig(configuration)) {
+            throw new ConfigurationException(configuration.getSource().toString());
         }
     }
 
-    public static class Config extends MessageInput.Config {
-        public Config() { /* required by guice */ }
-        @AssistedInject
-        public Config(RadioAmqpTransport.Factory transport, RadioMessageCodec.Factory codec) {
-            super(transport.getConfig(), codec.getConfig());
-        }
+    @Override
+    public ConfigurationRequest getRequestedConfiguration() {
+        ConfigurationRequest cr = new ConfigurationRequest();
+
+        cr.addField(
+                new TextField(
+                        CK_HOSTNAME,
+                        "Broker hostname",
+                        "",
+                        "Hostname of the AMQP broker to use",
+                        ConfigurationField.Optional.NOT_OPTIONAL
+                )
+        );
+
+        cr.addField(
+                new NumberField(
+                        CK_PORT,
+                        "Broker port",
+                        5672,
+                        "Port of the AMQP broker to use",
+                        ConfigurationField.Optional.OPTIONAL,
+                        NumberField.Attribute.IS_PORT_NUMBER
+                )
+        );
+
+        cr.addField(
+                new TextField(
+                        CK_VHOST,
+                        "Broker virtual host",
+                        "/",
+                        "Virtual host of the AMQP broker to use",
+                        ConfigurationField.Optional.NOT_OPTIONAL
+                )
+        );
+
+        cr.addField(
+                new TextField(
+                        CK_USERNAME,
+                        "Username",
+                        "",
+                        "Username to connect to AMQP broker",
+                        ConfigurationField.Optional.OPTIONAL
+                )
+        );
+
+        cr.addField(
+                new TextField(
+                        CK_PASSWORD,
+                        "Password",
+                        "",
+                        "Password to connect to AMQP broker",
+                        ConfigurationField.Optional.OPTIONAL,
+                        TextField.Attribute.IS_PASSWORD
+                )
+        );
+
+        cr.addField(
+                new NumberField(
+                        CK_PREFETCH,
+                        "Prefetch count",
+                        100,
+                        "For advanced usage: AMQP prefetch count. Default is 100.",
+                        ConfigurationField.Optional.NOT_OPTIONAL
+                )
+        );
+
+        return cr;
     }
+
+    @Override
+    public String getName() {
+        return NAME;
+    }
+
 }

@@ -31,15 +31,18 @@ import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class GELFChunkManager extends Thread {
-    private static final Logger LOG = LoggerFactory.getLogger(GELFChunkManager.class);
 
-    // The number of milliseconds a chunk is valid. Every message with chunks older than this will be dropped.
-    public static final long MILLIS_VALID = 5000l;
+    private static final Logger LOG = LoggerFactory.getLogger(GELFChunkManager.class);
 
     private Map<String, Map<Integer, GELFMessageChunk>> chunks = Maps.newConcurrentMap();
     private GELFProcessor processor;
-
+    
+    // The number of seconds a chunk is valid. Every message with chunks older than this will be dropped.
+    public static final int SECONDS_VALID = 5;
     private final Meter outdatedMessagesDropped;
 
     public GELFChunkManager(MetricRegistry metricRegistry, Buffer processBuffer) {
@@ -55,7 +58,7 @@ public class GELFChunkManager extends Thread {
                 if (!chunks.isEmpty() && LOG.isDebugEnabled()) {
                     LOG.debug("Dumping GELF chunk map [{}]:\n{}", chunks.size(), humanReadableChunkMap());
                 }
-
+                
                 // Check for complete or outdated messages.
                 for (Map.Entry<String, Map<Integer, GELFMessageChunk>> message : chunks.entrySet()) {
                     String messageId = message.getKey();
@@ -63,8 +66,8 @@ public class GELFChunkManager extends Thread {
                     // Outdated?
                     if (isOutdated(messageId)) {
                         outdatedMessagesDropped.mark();
-
-                        LOG.debug("Not all chunks of <{}> arrived in time. Dropping. [{}ms]", messageId, MILLIS_VALID);
+                        
+                        LOG.debug("Not all chunks of <{}> arrived in time. Dropping. [{}s]", messageId, SECONDS_VALID);
                         dropMessage(messageId);
                         continue;
                     }
@@ -114,8 +117,8 @@ public class GELFChunkManager extends Thread {
             return false;
         }
 
-        long limit = System.currentTimeMillis() - MILLIS_VALID;
-
+        int limit = (int) (System.currentTimeMillis() / 1000) - SECONDS_VALID;
+        
         // Checks for oldest chunk arrival date.
         for (Map.Entry<Integer, GELFMessageChunk> chunk : chunks.get(messageId).entrySet()) {
             if (chunk.getValue().getArrival() < limit) {
@@ -150,12 +153,12 @@ public class GELFChunkManager extends Thread {
     private MessageInput getSourceInput(String messageId) {
         try {
             return chunks.get(messageId).get(0).getSourceInput();
-        } catch (Exception e) {
+        } catch(Exception e) {
             LOG.error("Could not get source input ID from chunked GELF message.", e);
             return null;
         }
     }
-
+    
     public boolean hasMessage(String messageId) {
         return chunks.containsKey(messageId);
     }
@@ -166,7 +169,7 @@ public class GELFChunkManager extends Thread {
 
     public void insert(GELFMessageChunk chunk) {
         LOG.debug("Handling GELF chunk: {}", chunk);
-
+        
         if (chunks.containsKey(chunk.getId())) {
             // Add chunk to partial message.
             chunks.get(chunk.getId()).put(chunk.getSequenceNumber(), chunk);
@@ -185,7 +188,7 @@ public class GELFChunkManager extends Thread {
         for (Map.Entry<String, Map<Integer, GELFMessageChunk>> entry : chunks.entrySet()) {
             sb.append("Message <").append(entry.getKey()).append("> ");
             sb.append("\tChunks:\n");
-            for (Map.Entry<Integer, GELFMessageChunk> chunk : entry.getValue().entrySet()) {
+            for(Map.Entry<Integer, GELFMessageChunk> chunk : entry.getValue().entrySet()) {
                 sb.append("\t\t").append(chunk.getValue()).append(("\n"));
             }
         }

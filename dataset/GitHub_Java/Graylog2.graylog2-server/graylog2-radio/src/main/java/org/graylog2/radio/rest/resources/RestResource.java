@@ -19,22 +19,15 @@ package org.graylog2.radio.rest.resources;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.jaxrs.cfg.EndpointConfigBase;
-import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterInjector;
-import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterModifier;
 import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -46,25 +39,26 @@ public class RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestResource.class);
 
-    @Inject
-    protected ObjectMapper objectMapper;
+    protected final ObjectMapper objectMapper = new ObjectMapper();
 
     @QueryParam("pretty")
-    public void setPrettyPrint(boolean prettyPrint) {
-        if (prettyPrint) {
-            /* sigh jersey, hooray @cowtowncoder : https://twitter.com/cowtowncoder/status/402226988603035648 */
-            ObjectWriterInjector.set(new ObjectWriterModifier() {
-                @Override
-                public ObjectWriter modify(EndpointConfigBase<?> endpoint, MultivaluedMap<String, Object> responseHeaders, Object valueToWrite, ObjectWriter w, JsonGenerator g) {
-                    return w.withDefaultPrettyPrinter();
-                }
-            });
-        }
+    boolean prettyPrint;
+
+    protected RestResource() {
+        /*
+          * Jackson is serializing java.util.Date (coming out of MongoDB for example) as UNIX epoch by default.
+          * Make it write ISO8601 instead.
+          */
+        objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
     }
 
     protected String json(Object x) {
         try {
-            return objectMapper.writeValueAsString(x);
+            if (this.prettyPrint) {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(x);
+            } else {
+                return objectMapper.writeValueAsString(x);
+            }
         } catch (JsonProcessingException e) {
             LOG.error("Error while generating JSON", e);
             throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);

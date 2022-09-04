@@ -16,52 +16,143 @@
  */
 package org.graylog2.inputs.random;
 
-import com.codahale.metrics.MetricRegistry;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.inputs.codecs.RandomHttpMessageCodec;
-import org.graylog2.inputs.transports.RandomMessageTransport;
-import org.graylog2.plugin.LocalMetricRegistry;
+import org.graylog2.inputs.random.generators.FakeHttpMessageGenerator;
+import org.graylog2.inputs.random.generators.Tools;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
+import org.graylog2.plugin.configuration.fields.ConfigurationField;
+import org.graylog2.plugin.configuration.fields.NumberField;
+import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MisfireException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
+import java.util.Map;
+import java.util.Random;
+
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class FakeHttpMessageInput extends MessageInput {
 
-    private static final String NAME = "Random HTTP message generator";
+    private static final Logger LOG = LoggerFactory.getLogger(FakeHttpMessageInput.class);
 
-    @AssistedInject
-    public FakeHttpMessageInput(@Assisted Configuration configuration,
-                                RandomMessageTransport.Factory transportFactory,
-                                RandomHttpMessageCodec.Factory codecFactory,
-                                MetricRegistry metricRegistry, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor) {
-        super(metricRegistry,
-              transportFactory.create(configuration),
-              localRegistry, codecFactory.create(configuration),
-              config, descriptor);
+    public static final String NAME = "Random HTTP message generator";
+
+    public static final String CK_SOURCE = "source";
+    public static final String CK_SLEEP = "sleep";
+    public static final String CK_SLEEP_DEVIATION_PERCENT = "sleep_deviation";
+
+    private final Random rand = new Random();
+
+    private boolean stopRequested = false;
+
+    private String source;
+    private int sleepMs;
+    private int maxSleepDeviation;
+
+    @Inject
+    public FakeHttpMessageInput() {
     }
 
-    public interface Factory extends MessageInput.Factory<FakeHttpMessageInput> {
-        @Override
-        FakeHttpMessageInput create(Configuration configuration);
-
-        @Override
-        Config getConfig();
-
-        @Override
-        Descriptor getDescriptor();
-    }
-
-    public static class Descriptor extends MessageInput.Descriptor {
-        public Descriptor() {
-            super(NAME, false, "");
+    @Override
+    public void checkConfiguration(Configuration configuration) throws ConfigurationException {
+        if (!checkConfig(configuration)) {
+            throw new ConfigurationException(configuration.getSource().toString());
         }
+
+        source = configuration.getString(CK_SOURCE);
+        sleepMs = (int) configuration.getInt(CK_SLEEP);
+        maxSleepDeviation = (int) configuration.getInt(CK_SLEEP_DEVIATION_PERCENT);
     }
 
-    public static class Config extends MessageInput.Config {
-        public Config() { /* required by guice */ }
-        @AssistedInject
-        public Config(RandomMessageTransport.Factory transport, RandomHttpMessageCodec.Factory codec) {
-            super(transport.getConfig(), codec.getConfig());
-        }
+    @Override
+    public void launch(final Buffer processBuffer) throws MisfireException {
+        final MessageInput thisInput = this;
+        final FakeHttpMessageGenerator generator = new FakeHttpMessageGenerator(source);
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                while(!stopRequested) {
+                    processBuffer.insertCached(generator.generate(), thisInput);
+
+                    try {
+                        Thread.sleep(Tools.deviation(sleepMs, maxSleepDeviation, rand));
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                }
+                stopRequested = false;
+            }
+        });
+        t.start();
     }
+
+    @Override
+    public void stop() {
+        this.stopRequested = true;
+    }
+
+    @Override
+    public ConfigurationRequest getRequestedConfiguration() {
+        ConfigurationRequest c = new ConfigurationRequest();
+
+        c.addField(new NumberField(
+                CK_SLEEP,
+                "Sleep time",
+                25,
+                "How many milliseconds to sleep between generating messages.",
+                ConfigurationField.Optional.NOT_OPTIONAL,
+                NumberField.Attribute.ONLY_POSITIVE
+        ));
+
+        c.addField(new NumberField(
+                CK_SLEEP_DEVIATION_PERCENT,
+                "Maximum random sleep time deviation",
+                30,
+                "The deviation is used to generate a more realistic and non-steady message flow.",
+                ConfigurationField.Optional.NOT_OPTIONAL,
+                NumberField.Attribute.ONLY_POSITIVE
+        ));
+
+        c.addField(new TextField(
+                CK_SOURCE,
+                "Source name",
+                "example.org",
+                "What to use as source of the generate messages.",
+                ConfigurationField.Optional.NOT_OPTIONAL
+        ));
+
+        return c;
+    }
+
+    @Override
+    public boolean isExclusive() {
+        return false;
+    }
+
+    @Override
+    public String getName() {
+        return NAME;
+    }
+
+    @Override
+    public String linkToDocs() {
+        return "";
+    }
+
+    @Override
+    public Map<String, Object> getAttributes() {
+        return configuration.getSource();
+    }
+
+    private boolean checkConfig(Configuration config) {
+        return config.stringIsSet(CK_SOURCE)
+                && config.intIsSet(CK_SLEEP)
+                && config.intIsSet(CK_SLEEP_DEVIATION_PERCENT);
+    }
+
 }

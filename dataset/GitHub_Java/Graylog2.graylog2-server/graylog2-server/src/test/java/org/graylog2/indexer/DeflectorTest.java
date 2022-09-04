@@ -26,32 +26,22 @@ import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJobManager;
-import org.testng.annotations.BeforeMethod;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.util.Map;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 import static org.testng.AssertJUnit.assertEquals;
 
+/**
+ *
+ * @author lennart.koopmann
+ */
 public class DeflectorTest {
-
-    private Deflector deflector;
-
-    @BeforeMethod
-    public void setUp() {
-        deflector = new Deflector(
-                mock(SystemJobManager.class),
-                new Configuration(),
-                mock(ActivityWriter.class),
-                mock(RebuildIndexRangesJob.Factory.class),
-                mock(OptimizeIndexJob.Factory.class));
-    }
 
     @Test
     public void testExtractIndexNumber() {
@@ -59,24 +49,30 @@ public class DeflectorTest {
         assertEquals(4, Deflector.extractIndexNumber("graylog2_4"));
         assertEquals(52, Deflector.extractIndexNumber("graylog2_52"));
     }
-
+    
     @Test
     public void testExtractIndexNumberWithCustomIndexPrefix() {
         assertEquals(0, Deflector.extractIndexNumber("foo_0_bar_0"));
         assertEquals(4, Deflector.extractIndexNumber("foo_0_bar_4"));
         assertEquals(52, Deflector.extractIndexNumber("foo_0_bar_52"));
     }
-
-    @Test(expectedExceptions = NumberFormatException.class)
+    
+    @Test(expectedExceptions=NumberFormatException.class)
     public void testExtractIndexNumberWithMalformedFormatThrowsException() {
-        Deflector.extractIndexNumber("graylog2_hunderttausend");
+        assertEquals(0, Deflector.extractIndexNumber("graylog2_hunderttausend"));
     }
-
+    
     @Test
     public void testBuildIndexName() {
-        assertEquals("graylog2_0", Deflector.buildIndexName("graylog2", 0));
-        assertEquals("graylog2_1", Deflector.buildIndexName("graylog2", 1));
-        assertEquals("graylog2_9001", Deflector.buildIndexName("graylog2", 9001));
+        Deflector d = new Deflector(mock(SystemJobManager.class),
+                mock(Configuration.class),
+                mock(ActivityWriter.class),
+                mock(RebuildIndexRangesJob.Factory.class),
+                mock(OptimizeIndexJob.Factory.class));
+
+        assertEquals("graylog2_0", d.buildIndexName("graylog2", 0));
+        assertEquals("graylog2_1", d.buildIndexName("graylog2", 1));
+        assertEquals("graylog2_9001", d.buildIndexName("graylog2", 9001));
     }
 
     @Test
@@ -86,13 +82,17 @@ public class DeflectorTest {
 
     @Test
     public void nullIndexerDoesNotThrow() {
+        Deflector d = new Deflector(mock(SystemJobManager.class),
+                                    mock(Configuration.class),
+                                    mock(ActivityWriter.class),
+                                    mock(RebuildIndexRangesJob.Factory.class),
+                                    mock(OptimizeIndexJob.Factory.class));
         final Indexer indexer = mock(Indexer.class);
         when(indexer.indices()).thenReturn(null);
-
         try {
-            final Map<String, IndexStats> deflectorIndices = deflector.getAllDeflectorIndices(indexer);
+            final Map<String, IndexStats> deflectorIndices = d.getAllDeflectorIndices(indexer);
             assertNotNull(deflectorIndices);
-            assertEquals(0, deflectorIndices.size());
+            Assert.assertEquals(deflectorIndices.size(), 0);
         } catch (Exception e) {
             fail("Should not throw an exception", e);
         }
@@ -100,33 +100,21 @@ public class DeflectorTest {
 
     @Test
     public void nullIndexerDoesNotThrowOnIndexName() {
+        Deflector d = new Deflector(mock(SystemJobManager.class),
+                                    mock(Configuration.class),
+                                    mock(ActivityWriter.class),
+                                    mock(RebuildIndexRangesJob.Factory.class),
+                                    mock(OptimizeIndexJob.Factory.class));
         final Indexer indexer = mock(Indexer.class);
         when(indexer.indices()).thenReturn(null);
-
         try {
-            final String[] deflectorIndices = deflector.getAllDeflectorIndexNames(indexer);
+            final String[] deflectorIndices = d.getAllDeflectorIndexNames(indexer);
             assertNotNull(deflectorIndices);
-            assertEquals(0, deflectorIndices.length);
+            Assert.assertEquals(deflectorIndices.length, 0);
         } catch (Exception e) {
             fail("Should not throw an exception", e);
         }
     }
 
-    @Test
-    public void testIsDeflectorAlias() {
-        assertTrue(deflector.isDeflectorAlias("graylog2_deflector"));
-        assertFalse(deflector.isDeflectorAlias("graylog2_foobar"));
-        assertFalse(deflector.isDeflectorAlias("graylog2_123"));
-        assertFalse(deflector.isDeflectorAlias("HAHA"));
-    }
 
-    @Test
-    public void testIsGraylog2Index() {
-        assertTrue(deflector.isGraylog2Index("graylog2_1"));
-        assertTrue(deflector.isGraylog2Index("graylog2_42"));
-        assertTrue(deflector.isGraylog2Index("graylog2_100000000"));
-        assertFalse(deflector.isGraylog2Index("graylog2_deflector"));
-        assertFalse(deflector.isGraylog2Index("graylog2beta_1"));
-        assertFalse(deflector.isGraylog2Index("HAHA"));
-    }
 }

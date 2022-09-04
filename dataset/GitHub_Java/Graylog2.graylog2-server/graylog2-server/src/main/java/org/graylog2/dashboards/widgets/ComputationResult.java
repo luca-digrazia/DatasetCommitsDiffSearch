@@ -23,6 +23,9 @@ import org.joda.time.DateTime;
 
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class ComputationResult {
 
     private final Object result;

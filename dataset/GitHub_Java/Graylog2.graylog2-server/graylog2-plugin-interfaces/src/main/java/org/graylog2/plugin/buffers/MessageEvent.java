@@ -24,14 +24,12 @@ package org.graylog2.plugin.buffers;
 
 import com.lmax.disruptor.EventFactory;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.journal.RawMessage;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class MessageEvent {
 
-    private RawMessage raw;
     private Message msg;
     
     public Message getMessage()
@@ -53,11 +51,4 @@ public class MessageEvent {
         }
     };
 
-    public void setRaw(RawMessage raw) {
-        this.raw = raw;
-    }
-
-    public RawMessage getRaw() {
-        return raw;
-    }
 }

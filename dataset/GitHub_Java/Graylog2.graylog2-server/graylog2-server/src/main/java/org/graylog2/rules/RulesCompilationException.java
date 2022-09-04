@@ -20,7 +20,7 @@ import org.kie.api.builder.Message;
 
 import java.util.List;
 
-public class RulesCompilationException extends Exception {
+public class RulesCompilationException extends Throwable {
     private final List<Message> messages;
 
     public RulesCompilationException(List<Message> messages) {

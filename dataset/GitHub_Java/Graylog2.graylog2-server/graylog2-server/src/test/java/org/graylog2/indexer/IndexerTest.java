@@ -1,6 +1,4 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -72,7 +70,7 @@ public class IndexerTest {
         Configuration config = setupConfig(settings);
 
         Indexer indexer = new Indexer(config, mock(Searches.Factory.class),
-                mock(Counts.Factory.class), mock(Cluster.Factory.class), mock(Indices.Factory.class));
+                mock(Counts.Factory.class), mock(Cluster.Factory.class), mock(Indices.Factory.class), null);
         Map<String, String> nodeSettings = indexer.readNodeSettings(config);
 
         assertEquals(defaultConfig.getEsClusterName(), nodeSettings.get("cluster.name"));
@@ -84,6 +82,7 @@ public class IndexerTest {
         assertEquals(defaultConfig.getEsInitialStateTimeout(), nodeSettings.get("discovery.initial_state_timeout"));
         assertEquals(Boolean.toString(defaultConfig.isEsMulticastDiscovery()),
                      nodeSettings.get("discovery.zen.ping.multicast.enabled"));
+        assertEquals(Boolean.toString(false), nodeSettings.get("action.auto_create_index"));
 
     }
 
@@ -115,11 +114,12 @@ public class IndexerTest {
                     "discovery.initial_state_timeout",
                     "elasticsearch_discovery_initial_state_timeout",
                     "5s");
+        esPropNames.put("action.auto_create_index", "false");
 
         Configuration config = setupConfig(settings);
 
         Indexer indexer = new Indexer(config, mock(Searches.Factory.class),
-                mock(Counts.Factory.class), mock(Cluster.Factory.class), mock(Indices.Factory.class));
+                mock(Counts.Factory.class), mock(Cluster.Factory.class), mock(Indices.Factory.class), null);
         Map<String, String> nodeSettings = indexer.readNodeSettings(config);
 
         for (Map.Entry<String, String> property : esPropNames.entrySet()) {
@@ -154,7 +154,7 @@ public class IndexerTest {
         Configuration config = setupConfig(settings);
 
         Indexer indexer = new Indexer(config, mock(Searches.Factory.class),
-                mock(Counts.Factory.class), mock(Cluster.Factory.class), mock(Indices.Factory.class));
+                mock(Counts.Factory.class), mock(Cluster.Factory.class), mock(Indices.Factory.class), null);
         Map<String, String> nodeSettings = indexer.readNodeSettings(config);
 
         assertNotEquals("cluster.name", config.getEsClusterName(), nodeSettings.get("cluster.name"));

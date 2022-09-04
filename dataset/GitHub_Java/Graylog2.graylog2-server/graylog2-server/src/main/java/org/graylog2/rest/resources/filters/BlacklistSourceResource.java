@@ -17,13 +17,14 @@
 package org.graylog2.rest.resources.filters;
 
 import com.codahale.metrics.annotation.Timed;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
+import com.google.common.collect.Sets;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.database.ValidationException;
+import org.graylog2.database.*;
 import org.graylog2.filters.FilterService;
 import org.graylog2.filters.blacklist.FilterDescription;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
+import org.graylog2.rest.documentation.annotations.ApiParam;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.users.User;
@@ -31,26 +32,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
+import javax.ws.rs.*;
 import javax.ws.rs.NotFoundException;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Collections;
 import java.util.Set;
 
-import static javax.ws.rs.core.Response.Status;
-import static javax.ws.rs.core.Response.accepted;
-import static javax.ws.rs.core.Response.ok;
-import static javax.ws.rs.core.Response.serverError;
-import static javax.ws.rs.core.Response.status;
+import static javax.ws.rs.core.Response.*;
 
 @RequiresAuthentication
 @Api(value = "Filters", description = "Message blacklist filters")
@@ -70,7 +58,7 @@ public class BlacklistSourceResource extends RestResource {
     @ApiOperation(value = "Create a blacklist filter", notes = "It can take up to a second until the change is applied")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(name = "filterEntry", required = true) FilterDescription filterDescription) {
+    public Response create(@ApiParam(title = "filterEntry", required = true) FilterDescription filterDescription) {
         checkPermission(RestPermissions.BLACKLISTENTRY_CREATE);
 
         // force the user name to be consistent with the requesting user
@@ -96,7 +84,7 @@ public class BlacklistSourceResource extends RestResource {
         try {
             return filterService.loadAll();
         } catch (org.graylog2.database.NotFoundException e) {
-            return Collections.emptySet();
+            return Sets.newHashSet();
         }
     }
 
@@ -105,7 +93,7 @@ public class BlacklistSourceResource extends RestResource {
     @Path("/{filterId}")
     @ApiOperation("Get the existing blacklist filter")
     @Produces(MediaType.APPLICATION_JSON)
-    public FilterDescription get(@ApiParam(name = "filterId", required = true) @PathParam("filterId") String filterId) {
+    public FilterDescription get(@ApiParam(title = "filterId", required = true) @PathParam("filterId") String filterId) {
         try {
             return filterService.load(filterId);
         } catch (org.graylog2.database.NotFoundException e) {
@@ -118,8 +106,8 @@ public class BlacklistSourceResource extends RestResource {
     @Path("/{filterId}")
     @ApiOperation(value = "Update an existing blacklist filter", notes = "It can take up to a second until the change is applied")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response update(@ApiParam(name = "filterId", required = true) @PathParam("filterId") String filterId,
-                           @ApiParam(name = "filterEntry", required = true) FilterDescription filterEntry) {
+    public Response update(@ApiParam(title = "filterId", required = true) @PathParam("filterId") String filterId,
+                           @ApiParam(title = "filterEntry", required = true) FilterDescription filterEntry) {
         FilterDescription filter;
         try {
             filter = filterService.load(filterId);
@@ -152,7 +140,7 @@ public class BlacklistSourceResource extends RestResource {
     @Timed
     @ApiOperation(value = "Remove the existing blacklist filter", notes = "It can take up to a second until the change is applied")
     @Path("/{filterId}")
-    public Response delete(@ApiParam(name = "filterId", required = true) @PathParam("filterId") String filterId) {
+    public Response delete(@ApiParam(title = "filterId", required = true) @PathParam("filterId") String filterId) {
         final int deleted = filterService.delete(filterId);
         if (deleted == 0) {
             return status(Status.NOT_FOUND).build();

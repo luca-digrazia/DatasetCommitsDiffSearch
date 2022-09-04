@@ -21,19 +21,32 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.apache.commons.mail.EmailException;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.graylog2.alarmcallbacks.AlarmCallbackConfiguration;
+import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
+import org.graylog2.alarmcallbacks.AlarmCallbackFactory;
+import org.graylog2.alarmcallbacks.EmailAlarmCallback;
+import org.graylog2.alerts.AbstractAlertCondition;
 import org.graylog2.alerts.Alert;
 import org.graylog2.alerts.AlertImpl;
 import org.graylog2.alerts.AlertService;
+import org.graylog2.alerts.types.DummyAlertCondition;
+import org.graylog2.database.ValidationException;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
+import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
+import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
+import org.graylog2.plugin.alarms.callbacks.AlarmCallbackException;
+import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.streams.Stream;
-import com.wordnik.swagger.annotations.*;
+import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
+import org.graylog2.rest.resources.streams.alerts.requests.CreateConditionRequest;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.StreamService;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +54,7 @@ import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -59,6 +73,7 @@ public class StreamAlertResource extends RestResource {
 
     private final StreamService streamService;
     private final AlertService alertService;
+    private final Indexer indexer;
 
     private static final String CACHE_KEY_BASE = "alerts";
 
@@ -68,9 +83,11 @@ public class StreamAlertResource extends RestResource {
 
     @Inject
     public StreamAlertResource(StreamService streamService,
-                               AlertService alertService) {
+                               AlertService alertService,
+                               Indexer indexer) {
         this.streamService = streamService;
         this.alertService = alertService;
+        this.indexer = indexer;
     }
 
     @GET @Timed
@@ -80,8 +97,8 @@ public class StreamAlertResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Response list(@ApiParam(name = "streamId", value = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid,
-                         @ApiParam(name = "since", value = "Optional parameter to define a lower date boundary. (UNIX timestamp)", required = false) @QueryParam("since") int sinceTs) {
+    public Response list(@ApiParam(title = "streamId", description = "The stream id this new alert condition belongs to.", required = true) @PathParam("streamId") String streamid,
+                         @ApiParam(title = "since", description = "Optional parameter to define a lower date boundary. (UNIX timestamp)", required = false) @QueryParam("since") int sinceTs) {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 
         Stream stream;
@@ -91,9 +108,9 @@ public class StreamAlertResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        final DateTime since;
+        DateTime since;
         if (sinceTs > 0) {
-            since = new DateTime(sinceTs*1000L, DateTimeZone.UTC);
+            since = new DateTime(sinceTs*1000L);
         } else {
             since = null;
         }
@@ -120,7 +137,7 @@ public class StreamAlertResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Response checkConditions(@ApiParam(name = "streamId", value = "The ID of the stream to check.", required = true) @PathParam("streamId") String streamid) {
+    public Response checkConditions(@ApiParam(title = "streamId", description = "The ID of the stream to check.", required = true) @PathParam("streamId") String streamid) {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 
         final Stream stream;
@@ -141,7 +158,7 @@ public class StreamAlertResource extends RestResource {
                         Map<String, Object> conditionResult = Maps.newHashMap();
                         conditionResult.put("condition", alertService.asMap(alertCondition));
 
-                        AlertCondition.CheckResult checkResult = alertService.triggeredNoGrace(alertCondition);
+                        AlertCondition.CheckResult checkResult = alertService.triggeredNoGrace(alertCondition, indexer);
                         conditionResult.put("triggered", checkResult.isTriggered());
 
                         if (checkResult.isTriggered()) {

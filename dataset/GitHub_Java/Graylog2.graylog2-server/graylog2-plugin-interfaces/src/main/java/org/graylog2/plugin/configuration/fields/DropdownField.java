@@ -30,11 +30,11 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class DropdownField extends AbstractConfigurationField {
+public class DropdownField extends AbstractConfigurationField implements ConfigurationField {
 
     public static final String FIELD_TYPE = "dropdown";
 
-    private String defaultValue;
+    private final String defaultValue;
     private final Map<String, String> values;
 
     public DropdownField(String name, String humanName, String defaultValue, Map<String, String> values, Optional isOptional) {
@@ -50,13 +50,6 @@ public class DropdownField extends AbstractConfigurationField {
     @Override
     public Object getDefaultValue() {
         return defaultValue;
-    }
-
-    @Override
-    public void setDefaultValue(Object defaultValue) {
-        if (defaultValue instanceof String) {
-            this.defaultValue = (String) defaultValue;
-        }
     }
 
     @Override

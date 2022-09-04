@@ -1,6 +1,4 @@
 /**
- * Copyright 2013 Kay Roepke <kay@torch.sh>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,11 +13,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.security;
 
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.apache.shiro.authz.annotation.RequiresGuest;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.apache.shiro.util.ThreadContext;
 import org.slf4j.Logger;
@@ -33,7 +31,7 @@ import java.lang.reflect.Method;
  * @author Kay Roepke <kay@torch.sh>
  */
 public class ShiroSecurityBinding implements DynamicFeature {
-    private static final Logger log = LoggerFactory.getLogger(ShiroSecurityBinding.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ShiroSecurityBinding.class);
 
     @Override
     public void configure(ResourceInfo resourceInfo, FeatureContext context) {
@@ -42,8 +40,12 @@ public class ShiroSecurityBinding implements DynamicFeature {
 
         if (resourceMethod.isAnnotationPresent(RequiresAuthentication.class) ||
                 resourceClass.isAnnotationPresent(RequiresAuthentication.class)) {
-            log.info("Resource method {}#{} requires an authenticated user.", resourceClass.getCanonicalName(), resourceMethod.getName());
-            context.register(new ShiroAuthenticationFilter());
+            if (resourceMethod.isAnnotationPresent(RequiresGuest.class)) {
+                LOG.debug("Resource method {}#{} is marked as unauthenticated, skipping setting filter.");
+            } else {
+                LOG.debug("Resource method {}#{} requires an authenticated user.", resourceClass.getCanonicalName(), resourceMethod.getName());
+                context.register(new ShiroAuthenticationFilter());
+            }
         }
         if (resourceMethod.isAnnotationPresent(RequiresPermissions.class) ||
                 resourceClass.isAnnotationPresent(RequiresPermissions.class)) {
@@ -51,7 +53,7 @@ public class ShiroSecurityBinding implements DynamicFeature {
             if (a == null) {
                 a = resourceMethod.getAnnotation(RequiresPermissions.class);
             }
-            log.info("Resource method {}#{} requires an authorization checks.", resourceClass.getCanonicalName(), resourceMethod.getName());
+            LOG.debug("Resource method {}#{} requires an authorization checks.", resourceClass.getCanonicalName(), resourceMethod.getName());
             context.register(new ShiroAuthorizationFilter(a));
         }
         // TODO this is the wrong approach, we should have an Environment and proper request wrapping

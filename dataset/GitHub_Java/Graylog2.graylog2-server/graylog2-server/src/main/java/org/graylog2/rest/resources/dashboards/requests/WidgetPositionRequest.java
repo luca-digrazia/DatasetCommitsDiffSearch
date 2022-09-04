@@ -16,18 +16,13 @@
  */
 package org.graylog2.rest.resources.dashboards.requests;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class WidgetPositionRequest {
 
     public String id;
     public int col;
     public int row;
 
-    public WidgetPositionRequest(String id, int col, int row) {
-        this.id = id;
-        this.col = col;
-        this.row = row;
-    }
-
-    public WidgetPositionRequest() {
-    }
 }

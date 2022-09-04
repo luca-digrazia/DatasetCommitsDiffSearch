@@ -17,24 +17,27 @@
 package org.graylog2.dashboards.widgets;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.ImmutableMap;
 import org.graylog2.indexer.IndexHelper;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.CountResult;
-import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 
+import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class StreamSearchResultCountWidget extends DashboardWidget {
 
+    private final Indexer indexer;
     private final String query;
     private final TimeRange timeRange;
     private final String streamId;
-    private final Searches searches;
 
-    public StreamSearchResultCountWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
+    public StreamSearchResultCountWidget(MetricRegistry metricRegistry, Indexer indexer, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
         super(metricRegistry, DashboardWidget.Type.STREAM_SEARCH_RESULT_COUNT, id, description, cacheTime, config, creatorUserId);
-        this.searches = searches;
+        this.indexer = indexer;
 
         this.query = query;
         this.timeRange = timeRange;
@@ -51,17 +54,17 @@ public class StreamSearchResultCountWidget extends DashboardWidget {
 
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return ImmutableMap.<String, Object>builder()
-                .put("query", query)
-                .put("timerange", timeRange.getPersistedConfig())
-                .put("stream_id", streamId)
-                .build();
+        return new HashMap<String, Object>() {{
+            put("query", query);
+            put("timerange", timeRange.getPersistedConfig());
+            put("stream_id", streamId);
+        }};
     }
 
     @Override
     protected ComputationResult compute() {
         try {
-            CountResult cr = searches.count(query, timeRange, "streams:" + streamId);
+            CountResult cr = indexer.searches().count(query, timeRange, "streams:" + streamId);
             return new ComputationResult(cr.getCount(), cr.getTookMs());
         } catch (IndexHelper.InvalidRangeFormatException e) {
             throw new RuntimeException("Invalid timerange format.", e);

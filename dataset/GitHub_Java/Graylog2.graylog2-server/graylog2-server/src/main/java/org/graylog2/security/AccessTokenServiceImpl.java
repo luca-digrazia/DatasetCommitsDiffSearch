@@ -21,12 +21,14 @@ import com.google.common.collect.Maps;
 import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
-import com.mongodb.DuplicateKeyException;
+import com.mongodb.MongoException;
 import org.bson.types.ObjectId;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.Tools;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,7 +99,7 @@ public class AccessTokenServiceImpl extends PersistedServiceImpl implements Acce
             accessToken = new AccessTokenImpl(fields);
             try {
                 id = saveWithoutValidation(accessToken);
-            } catch (DuplicateKeyException ignore) {
+            } catch (MongoException.DuplicateKey ignore) {
             }
         } while (iterations++ < 10 && id == null);
         if (id == null) {
@@ -108,14 +110,14 @@ public class AccessTokenServiceImpl extends PersistedServiceImpl implements Acce
 
     @Override
     public void touch(AccessToken accessToken) throws ValidationException {
-        accessToken.getFields().put(AccessTokenImpl.LAST_ACCESS, Tools.iso8601());
+        accessToken.getFields().put(AccessTokenImpl.LAST_ACCESS, DateTime.now(DateTimeZone.UTC));
         save(accessToken);
     }
 
     @Override
     public String save(AccessToken accessToken) throws ValidationException {
         // make sure we cannot overwrite an existing access token
-        collection(AccessTokenImpl.class).createIndex(new BasicDBObject(AccessTokenImpl.TOKEN, 1), new BasicDBObject("unique", true));
+        collection(AccessTokenImpl.class).ensureIndex(new BasicDBObject(AccessTokenImpl.TOKEN, 1), null, true);
         return super.save(accessToken);
     }
 }

@@ -114,7 +114,7 @@ public class DashboardImpl extends PersistedImpl implements Dashboard {
         }
 
         if (!result.containsKey("positions")) {
-            result.put("positions", Maps.newHashMap());
+            result.put("positions", Lists.newArrayList());
         }
 
         return result;

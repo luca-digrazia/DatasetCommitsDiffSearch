@@ -29,6 +29,7 @@ import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.plugin.streams.Stream;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.shared.utilities.ExceptionStringFormatter;
 import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
@@ -47,7 +48,8 @@ public class AlertScannerThread extends Periodical {
     private final EmailAlarmCallback emailAlarmCallback;
     private final IndexerSetupService indexerSetupService;
     private final Indexer indexer;
-    private final AlertService alertService;
+    private final ServerStatus serverStatus;
+    private AlertService alertService;
 
     @Inject
     public AlertScannerThread(AlertService alertService,
@@ -56,7 +58,8 @@ public class AlertScannerThread extends Periodical {
                               AlarmCallbackFactory alarmCallbackFactory,
                               EmailAlarmCallback emailAlarmCallback,
                               IndexerSetupService indexerSetupService,
-                              Indexer indexer) {
+                              Indexer indexer,
+                              ServerStatus serverStatus) {
         this.alertService = alertService;
         this.streamService = streamService;
         this.alarmCallbackConfigurationService = alarmCallbackConfigurationService;
@@ -64,10 +67,15 @@ public class AlertScannerThread extends Periodical {
         this.emailAlarmCallback = emailAlarmCallback;
         this.indexerSetupService = indexerSetupService;
         this.indexer = indexer;
+        this.serverStatus = serverStatus;
     }
 
     @Override
     public void doRun() {
+        if (!serverStatus.isProcessing())
+            return;
+
+
         if (!indexerSetupService.isRunning()) {
             LOG.error("Indexer is not running, not checking streams for alerts.");
             return;

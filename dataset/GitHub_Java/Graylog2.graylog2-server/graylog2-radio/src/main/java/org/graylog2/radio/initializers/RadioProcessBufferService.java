@@ -37,6 +37,7 @@ public class RadioProcessBufferService extends AbstractIdleService {
     private final RadioProcessBufferProcessor.Factory processBufferProcessorFactory;
     private final Configuration configuration;
     private final ProcessBuffer processBuffer;
+    private final RadioTransport transport;
     private final ProcessBufferWatermark processBufferWatermark;
 
     @Inject
@@ -44,11 +45,13 @@ public class RadioProcessBufferService extends AbstractIdleService {
                                      RadioProcessBufferProcessor.Factory processBufferProcessorFactory,
                                      Configuration configuration,
                                      ProcessBuffer processBuffer,
+                                     RadioTransport transport,
                                      ProcessBufferWatermark processBufferWatermark) {
         this.inputCache = inputCache;
         this.processBufferProcessorFactory = processBufferProcessorFactory;
         this.configuration = configuration;
         this.processBuffer = processBuffer;
+        this.transport = transport;
         this.processBufferWatermark = processBufferWatermark;
     }
 
@@ -61,7 +64,8 @@ public class RadioProcessBufferService extends AbstractIdleService {
         for (int i = 0; i < processBufferProcessorCount; i++) {
             processors[i] = processBufferProcessorFactory.create(this.processBufferWatermark,
                     i,
-                    processBufferProcessorCount);
+                    processBufferProcessorCount,
+                    transport);
         }
 
         processBuffer.initialize(processors, configuration.getRingSize(),

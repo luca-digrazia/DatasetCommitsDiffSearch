@@ -16,8 +16,6 @@
  */
 package org.graylog2.buffers;
 
-import com.codahale.metrics.InstrumentedExecutorService;
-import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -37,18 +35,23 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+*/
 @Singleton
 public class OutputBuffer extends Buffer {
     private static final Logger LOG = LoggerFactory.getLogger(OutputBuffer.class);
 
-    private final ExecutorService executor;
+    protected ExecutorService executor = Executors.newCachedThreadPool(
+            new ThreadFactoryBuilder()
+                .setNameFormat("outputbufferprocessor-%d")
+                .build()
+    );
 
     private final OutputBufferWatermark outputBufferWatermark;
 
@@ -71,22 +74,10 @@ public class OutputBuffer extends Buffer {
         this.outputBufferWatermark = outputBufferWatermark;
         this.configuration = configuration;
         this.overflowCache = overflowCache;
-        this.executor = executorService(metricRegistry);
 
         incomingMessages = metricRegistry.meter(name(OutputBuffer.class, "incomingMessages"));
         rejectedMessages = metricRegistry.meter(name(OutputBuffer.class, "rejectedMessages"));
         cachedMessages = metricRegistry.meter(name(OutputBuffer.class, "cachedMessages"));
-    }
-
-    private ExecutorService executorService(final MetricRegistry metricRegistry) {
-        return new InstrumentedExecutorService(Executors.newCachedThreadPool(
-                threadFactory(metricRegistry)), metricRegistry);
-    }
-
-    private ThreadFactory threadFactory(MetricRegistry metricRegistry) {
-        return new InstrumentedThreadFactory(
-                new ThreadFactoryBuilder().setNameFormat("outputbufferprocessor-%d").build(),
-                metricRegistry);
     }
 
     public Cache getOverflowCache() {
@@ -101,21 +92,21 @@ public class OutputBuffer extends Buffer {
                 ProducerType.MULTI,
                 configuration.getProcessorWaitStrategy()
         );
-
+        
         LOG.info("Initialized OutputBuffer with ring size <{}> "
-                        + "and wait strategy <{}>.", configuration.getRingSize(),
+                + "and wait strategy <{}>.", configuration.getRingSize(),
                 configuration.getProcessorWaitStrategy().getClass().getSimpleName());
 
         int outputBufferProcessorCount = configuration.getOutputBufferProcessors();
 
         OutputBufferProcessor[] processors = new OutputBufferProcessor[outputBufferProcessorCount];
-
+        
         for (int i = 0; i < outputBufferProcessorCount; i++) {
             processors[i] = outputBufferProcessorFactory.create(i, outputBufferProcessorCount);
         }
-
+        
         disruptor.handleEventsWith(processors);
-
+        
         ringBuffer = disruptor.start();
     }
 
@@ -127,9 +118,8 @@ public class OutputBuffer extends Buffer {
             overflowCache.add(message);
             return;
         }
-
+        
         insert(message);
-        afterInsert(1);
     }
 
     @Override
@@ -139,41 +129,18 @@ public class OutputBuffer extends Buffer {
             rejectedMessages.mark();
             throw new BufferOutOfCapacityException();
         }
-
+        
         insert(message);
-        afterInsert(1);
+    }
+    
+    private void insert(Message message) {
+        long sequence = ringBuffer.next();
+        MessageEvent event = ringBuffer.get(sequence);
+        event.setMessage(message);
+        ringBuffer.publish(sequence);
+
+        outputBufferWatermark.incrementAndGet();
+        incomingMessages.mark();
     }
 
-    @Override
-    public void insertCached(List<Message> messages) {
-        int length = messages.size();
-        if (!hasCapacity(length)) {
-            LOG.debug("Out of capacity. Writing to cache.");
-            cachedMessages.mark(length);
-            overflowCache.add(messages);
-            return;
-        }
-
-        insert(messages.toArray(new Message[length]));
-        afterInsert(length);
-    }
-
-    @Override
-    public void insertFailFast(List<Message> messages) throws BufferOutOfCapacityException {
-        int length = messages.size();
-        if (!hasCapacity(length)) {
-            LOG.debug("Rejecting message, because I am full and caching was disabled by input. Raise my size or add more processors.");
-            rejectedMessages.mark(length);
-            throw new BufferOutOfCapacityException();
-        }
-
-        insert(messages.toArray(new Message[length]));
-        afterInsert(length);
-    }
-
-    @Override
-    protected void afterInsert(int n) {
-        outputBufferWatermark.addAndGet(n);
-        incomingMessages.mark(n);
-    }
 }

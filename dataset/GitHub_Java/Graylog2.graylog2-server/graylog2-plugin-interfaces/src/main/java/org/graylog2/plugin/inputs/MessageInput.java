@@ -33,31 +33,17 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import static com.google.common.base.Objects.firstNonNull;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public abstract class MessageInput {
+
     private static final Logger LOG = LoggerFactory.getLogger(MessageInput.class);
 
     public static final String CK_RECV_BUFFER_SIZE = "recv_buffer_size";
-
-    public static final String FIELD_TYPE = "type";
-    public static final String FIELD_INPUT_ID = "input_id";
-    public static final String FIELD_PERSIST_ID = "persist_id";
-    public static final String FIELD_NODE_ID = "node_id";
-    public static final String FIELD_RADIO_ID = "radio_id";
-    public static final String FIELD_NAME = "name";
-    public static final String FIELD_TITLE = "title";
-    public static final String FIELD_CONFIGURATION = "configuration";
-    public static final String FIELD_CREATOR_USER_ID = "creator_user_id";
-    public static final String FIELD_CREATED_AT = "created_at";
-    public static final String FIELD_STARTED_AT = "started_at";
-    public static final String FIELD_ATTRIBUTES = "attributes";
-    public static final String FIELD_STATIC_FIELDS = "static_fields";
-    public static final String FIELD_GLOBAL = "global";
 
     private static long defaultRecvBufferSize = 1024 * 1024;
 
@@ -83,12 +69,11 @@ public abstract class MessageInput {
     }
 
     public abstract void launch(Buffer processBuffer) throws MisfireException;
-
     public abstract void stop();
 
     /**
      * Description of the config settings this input needs.
-     * <p/>
+     *
      * Must not be null.
      *
      * @return a possibly empty ConfigurationRequest object
@@ -96,11 +81,8 @@ public abstract class MessageInput {
     public abstract ConfigurationRequest getRequestedConfiguration();
 
     public abstract boolean isExclusive();
-
     public abstract String getName();
-
     public abstract String linkToDocs();
-
     public abstract Map<String, Object> getAttributes();
 
     public void setPersistId(String id) {
@@ -151,20 +133,20 @@ public abstract class MessageInput {
         this.global = global;
     }
 
-    @SuppressWarnings("unchecked")
     public Object getAttributesWithMaskedPasswords() {
+        Map<String, Object> result = Maps.newHashMap();
+
         final ConfigurationRequest config = getRequestedConfiguration();
         if (config == null) {
-            return Collections.emptyMap();
+            return result;
         }
 
-        final Map<String, Object> result = Maps.newHashMapWithExpectedSize(getAttributes().size());
-        for (Map.Entry<String, Object> attribute : getAttributes().entrySet()) {
+        for(Map.Entry<String, Object> attribute : getAttributes().entrySet()) {
             Object value = attribute.getValue();
 
             final Map<String, Map<String, Object>> configAsList = config.asList();
-            final Map<String, Object> attributesForConfigSetting = configAsList.get(attribute.getKey());
-
+            final String attributeKey = attribute.getKey();
+            final Map<String, Object> attributesForConfigSetting = configAsList.get(attributeKey);
             if (attributesForConfigSetting != null) {
                 // we know the config setting, check its attributes
                 final List<String> attributes = (List<String>) attributesForConfigSetting.get("attributes");
@@ -174,38 +156,34 @@ public abstract class MessageInput {
             } else {
                 // safety measure, although this is bad.
                 LOG.warn("Unknown input configuration setting {}={} found. Not trying to mask its value," +
-                        " though this is likely a bug.", attribute, value);
+                                 " though this is likely a bug.", attribute, value);
             }
 
-            result.put(attribute.getKey(), value);
+            result.put(attributeKey, value);
         }
 
         return result;
     }
 
     public Map<String, Object> asMap() {
-        final Map<String, Object> inputMap = Maps.newHashMap();
+        Map<String, Object> inputMap = Maps.newHashMap();
 
-        inputMap.put(FIELD_TYPE, this.getClass().getCanonicalName());
-        inputMap.put(FIELD_INPUT_ID, this.getId());
-        inputMap.put(FIELD_PERSIST_ID, this.getPersistId());
-        inputMap.put(FIELD_NAME, this.getName());
-        inputMap.put(FIELD_TITLE, this.getTitle());
-        inputMap.put(FIELD_CREATOR_USER_ID, this.getCreatorUserId());
-        inputMap.put(FIELD_STARTED_AT, Tools.getISO8601String(this.getCreatedAt()));
-        inputMap.put(FIELD_ATTRIBUTES, this.getAttributesWithMaskedPasswords());
-        inputMap.put(FIELD_STATIC_FIELDS, this.getStaticFields());
-        inputMap.put(FIELD_GLOBAL, this.getGlobal());
+        inputMap.put("type", this.getClass().getCanonicalName());
+        inputMap.put("input_id", this.getId());
+        inputMap.put("persist_id", this.getPersistId());
+        inputMap.put("name", this.getName());
+        inputMap.put("title", this.getTitle());
+        inputMap.put("creator_user_id", this.getCreatorUserId());
+        inputMap.put("started_at", Tools.getISO8601String(this.getCreatedAt()));
+        inputMap.put("attributes", this.getAttributesWithMaskedPasswords());
+        inputMap.put("static_fields", this.getStaticFields());
+        inputMap.put("global", this.getGlobal());
 
         return inputMap;
     }
 
     public synchronized void addExtractor(String id, Extractor extractor) {
         this.extractors.put(id, extractor);
-    }
-
-    public synchronized void addExtractors(Map<String, Extractor> extractors) {
-        this.extractors.putAll(extractors);
     }
 
     public Map<String, Extractor> getExtractors() {
@@ -216,16 +194,13 @@ public abstract class MessageInput {
         this.staticFields.put(key, value);
     }
 
-    public void addStaticFields(Map<String, String> staticFields) {
-        this.staticFields.putAll(staticFields);
-    }
-
     public Map<String, String> getStaticFields() {
         return this.staticFields;
     }
 
     public String getUniqueReadableId() {
-        return getClass().getName() + "." + getId();
+        String readableId = getClass().getName() + "." + getId();
+        return readableId;
     }
 
     @Override
@@ -234,9 +209,9 @@ public abstract class MessageInput {
     }
 
     @Override
-    public boolean equals(final Object obj) {
+    public boolean equals(Object obj) {
         if (obj instanceof MessageInput) {
-            final MessageInput input = (MessageInput) obj;
+            MessageInput input = (MessageInput) obj;
             return this.getPersistId().equals(input.getPersistId());
         } else {
             return false;
@@ -248,6 +223,9 @@ public abstract class MessageInput {
     }
 
     public long getRecvBufferSize() {
-        return firstNonNull(configuration.getInt(CK_RECV_BUFFER_SIZE), defaultRecvBufferSize);
+        if (configuration.intIsSet(CK_RECV_BUFFER_SIZE)) {
+            return configuration.getInt(CK_RECV_BUFFER_SIZE);
+        }
+        return defaultRecvBufferSize;
     }
 }

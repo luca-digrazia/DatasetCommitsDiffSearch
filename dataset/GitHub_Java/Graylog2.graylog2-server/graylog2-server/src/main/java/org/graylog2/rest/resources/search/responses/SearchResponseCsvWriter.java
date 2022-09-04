@@ -35,7 +35,6 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
 
 @Provider
 @Produces("text/csv")
@@ -59,7 +58,7 @@ public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse
     public void writeTo(SearchResponse searchResponse, Class<?> type, Type genericType, Annotation[] annotations,
             MediaType mediaType, MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream)
             throws IOException, WebApplicationException {
-        final CSVWriter csvWriter = new CSVWriter(new OutputStreamWriter(entityStream, StandardCharsets.UTF_8));
+        final CSVWriter csvWriter = new CSVWriter(new OutputStreamWriter(entityStream));
         final ImmutableSortedSet<String> sortedFields = ImmutableSortedSet.copyOf(
                 Iterables.concat(searchResponse.fields, Lists.newArrayList("source", "timestamp")));
 

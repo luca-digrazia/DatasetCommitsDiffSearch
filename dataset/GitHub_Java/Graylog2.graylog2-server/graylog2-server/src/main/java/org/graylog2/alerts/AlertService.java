@@ -17,6 +17,7 @@
 package org.graylog2.alerts;
 
 import org.graylog2.database.PersistedService;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.resources.streams.alerts.requests.CreateConditionRequest;
@@ -39,15 +40,15 @@ public interface AlertService extends PersistedService {
     long totalCountForStream(String streamId);
 
     AlertCondition fromPersisted(Map<String, Object> conditionFields, Stream stream) throws AbstractAlertCondition.NoSuchAlertConditionTypeException;
-    AlertCondition fromRequest(CreateConditionRequest ccr, Stream stream, String userId) throws AbstractAlertCondition.NoSuchAlertConditionTypeException;
+    AlertCondition fromRequest(CreateConditionRequest ccr, Stream stream) throws AbstractAlertCondition.NoSuchAlertConditionTypeException;
 
     AlertCondition updateFromRequest(AlertCondition alertCondition, CreateConditionRequest ccr) throws AbstractAlertCondition.NoSuchAlertConditionTypeException;
 
     boolean inGracePeriod(AlertCondition alertCondition);
 
-    AlertCondition.CheckResult triggeredNoGrace(AlertCondition alertCondition);
+    AlertCondition.CheckResult triggeredNoGrace(AlertCondition alertCondition, Indexer indexer);
 
-    AlertCondition.CheckResult triggered(AlertCondition alertCondition);
+    AlertCondition.CheckResult triggered(AlertCondition alertCondition, Indexer indexer);
 
     Map<String, Object> asMap(final AlertCondition alertCondition);
 }

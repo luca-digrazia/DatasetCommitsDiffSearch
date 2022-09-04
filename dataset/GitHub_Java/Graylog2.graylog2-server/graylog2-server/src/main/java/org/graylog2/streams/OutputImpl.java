@@ -20,8 +20,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonValue;
 import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
+import org.graylog2.database.validators.ClassNameStringValidator;
 import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.plugin.database.validators.Validator;
+import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.streams.Output;
 
 import java.util.Date;
@@ -79,7 +81,7 @@ public class OutputImpl implements Output {
     public Map<String, Validator> getValidations() {
         return new HashMap<String, Validator>() {{
             put("title", new FilledStringValidator());
-            put("type", new FilledStringValidator());
+            put("type", new ClassNameStringValidator(MessageOutput.class));
             put("creator_user_id", new FilledStringValidator());
         }};
     }
@@ -90,7 +92,7 @@ public class OutputImpl implements Output {
 
     @Override
     public String getId() {
-        return _id.toHexString();
+        return _id.toStringMongod();
     }
 
     public void setId(String id) {
@@ -120,8 +122,6 @@ public class OutputImpl implements Output {
     @Override
     @JsonValue
     public Map<String, Object> asMap() {
-        final Map<String, Object> fields = getFields();
-        fields.put("id", ((ObjectId)fields.remove("_id")).toHexString());
-        return fields;
+        return getFields();
     }
 }

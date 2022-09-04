@@ -19,12 +19,12 @@ package org.graylog2.streams.matchers;
 import org.graylog2.plugin.database.validators.Validator;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
-import org.graylog2.streams.StreamRuleImpl;
 
 import java.util.Map;
 
-import static com.google.common.base.Objects.firstNonNull;
-
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class StreamRuleMock implements StreamRule {
     private String id;
     private String streamId;
@@ -32,17 +32,14 @@ public class StreamRuleMock implements StreamRule {
     private String value;
     private String field;
     private Boolean inverted;
-    private String contentPack;
 
     public StreamRuleMock(Map<String, Object> rule) {
         this.id = rule.get("_id").toString();
-        if (rule.get(StreamRuleImpl.FIELD_TYPE) != null) {
-            this.type = StreamRuleType.fromInteger((Integer) rule.get(StreamRuleImpl.FIELD_TYPE));
-        }
-        this.value = (String) rule.get(StreamRuleImpl.FIELD_VALUE);
-        this.field = (String) rule.get(StreamRuleImpl.FIELD_FIELD);
-        this.inverted = (Boolean) rule.get(StreamRuleImpl.FIELD_INVERTED);
-        this.contentPack = (String) rule.get(StreamRuleImpl.FIELD_CONTENT_PACK);
+        if (rule.get("type") != null)
+            this.type = StreamRuleType.fromInteger((Integer) rule.get("type"));
+        this.value = (String) rule.get("value");
+        this.field = (String) rule.get("field");
+        this.inverted = (Boolean) rule.get("inverted");
     }
 
     public String getId() {
@@ -66,7 +63,9 @@ public class StreamRuleMock implements StreamRule {
     }
 
     public Boolean getInverted() {
-        return firstNonNull(inverted, false);
+        if (inverted == null)
+            return false;
+        return inverted;
     }
 
     public void setType(StreamRuleType type) {
@@ -87,16 +86,6 @@ public class StreamRuleMock implements StreamRule {
 
     public void setStreamId(String streamId) {
         this.streamId = streamId;
-    }
-
-    @Override
-    public String getContentPack() {
-        return contentPack;
-    }
-
-    @Override
-    public void setContentPack(String contentPack) {
-        this.contentPack = contentPack;
     }
 
     @Override

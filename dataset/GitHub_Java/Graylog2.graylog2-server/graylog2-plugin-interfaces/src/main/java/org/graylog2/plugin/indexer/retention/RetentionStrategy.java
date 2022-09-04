@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 Graylog, Inc.
+ * Copyright (c) 2012 TORCH GmbH
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,7 @@ public abstract class RetentionStrategy {
     private static final Logger LOG = LoggerFactory.getLogger(RetentionStrategy.class);
     private final IndexManagement indexManagement;
 
-    public enum Type {
+    public enum Art {
         DELETE,
         CLOSE
     }
@@ -48,7 +48,7 @@ public abstract class RetentionStrategy {
 
     protected abstract void onMessage(Map<String, String> message);
     protected abstract boolean iterates();
-    protected abstract Type getType();
+    protected abstract Art getArt();
 
     public void runStrategy(String indexName) {
         Stopwatch sw = Stopwatch.createStarted();
@@ -58,7 +58,7 @@ public abstract class RetentionStrategy {
         }
 
         // Delete or close index.
-        switch (getType()) {
+        switch (getArt()) {
             case DELETE:
                 LOG.info("Strategy is deleting.");
                 indexManagement.delete(indexName);

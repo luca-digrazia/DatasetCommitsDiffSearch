@@ -16,7 +16,6 @@
  */
 package org.graylog2.indexer.ranges;
 
-import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedService;
 
 import java.util.List;
@@ -26,7 +25,7 @@ import java.util.Map;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public interface IndexRangeService extends PersistedService {
-    IndexRange get(String index) throws NotFoundException;
+    IndexRange get(String index);
 
     List<IndexRange> getFrom(int timestamp);
 

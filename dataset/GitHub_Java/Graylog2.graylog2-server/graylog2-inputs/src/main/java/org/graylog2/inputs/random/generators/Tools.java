@@ -18,24 +18,29 @@ package org.graylog2.inputs.random.generators;
 
 import java.util.Random;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class Tools {
-    public static long deviation(int val, int maxDeviation, Random rand) {
+
+    public static int deviation(int val, int maxDeviation, Random rand) {
         int deviationPercent = rand.nextInt(maxDeviation);
 
-        double x = val / 100.0d * deviationPercent;
+        double x = val/100.0*deviationPercent;
 
         // Add or substract?
-        final double result;
+        double result = 0;
         if (rand.nextBoolean()) {
-            result = val - x;
+            result = val-x;
         } else {
-            result = val + x;
+            result = val+x;
         }
 
-        if (result < 0.0d) {
-            return 1l;
+        if (result < 0) {
+            return 1;
         } else {
-            return Math.round(result);
+            return Math.round((int) result);
         }
     }
+
 }

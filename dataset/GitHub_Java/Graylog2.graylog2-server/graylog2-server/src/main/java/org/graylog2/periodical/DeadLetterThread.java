@@ -19,14 +19,13 @@ package org.graylog2.periodical;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Maps;
-import javax.inject.Inject;
+import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.graylog2.Configuration;
 import org.graylog2.database.CollectionName;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.indexer.*;
-import org.graylog2.indexer.messages.Messages;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.Persisted;
@@ -46,7 +45,7 @@ public class DeadLetterThread extends Periodical {
 
     private final PersistedDeadLetterService persistedDeadLetterService;
     private final IndexFailureService indexFailureService;
-    private final Messages messages;
+    private final Indexer indexer;
     private final Configuration configuration;
     private final MongoConnection mongoConnection;
     private final MetricRegistry metricRegistry;
@@ -54,13 +53,13 @@ public class DeadLetterThread extends Periodical {
     @Inject
     public DeadLetterThread(PersistedDeadLetterService persistedDeadLetterService,
                             IndexFailureService indexFailureService,
-                            Messages messages,
+                            Indexer indexer,
                             Configuration configuration,
                             MongoConnection mongoConnection,
                             MetricRegistry metricRegistry) {
         this.persistedDeadLetterService = persistedDeadLetterService;
         this.indexFailureService = indexFailureService;
-        this.messages = messages;
+        this.indexer = indexer;
         this.configuration = configuration;
         this.mongoConnection = mongoConnection;
         this.metricRegistry = metricRegistry;
@@ -74,7 +73,7 @@ public class DeadLetterThread extends Periodical {
         while(true) {
             List<DeadLetter> items;
             try {
-                items = messages.getDeadLetterQueue().take();
+                items = indexer.getDeadLetterQueue().take();
             } catch (InterruptedException ignored) { continue; /* daemon thread */ }
 
             for (DeadLetter item : items) {
@@ -126,11 +125,11 @@ public class DeadLetterThread extends Periodical {
 
     // TODO: Move this to the related persisted service classes
     private void verifyIndices() {
-        mongoConnection.getDatabase().getCollection(getCollectionName(IndexFailureImpl.class)).createIndex(new BasicDBObject("timestamp", 1));
-        mongoConnection.getDatabase().getCollection(getCollectionName(IndexFailureImpl.class)).createIndex(new BasicDBObject("letter_id", 1));
+        mongoConnection.getDatabase().getCollection(getCollectionName(IndexFailureImpl.class)).ensureIndex(new BasicDBObject("timestamp", 1));
+        mongoConnection.getDatabase().getCollection(getCollectionName(IndexFailureImpl.class)).ensureIndex(new BasicDBObject("letter_id", 1));
 
-        mongoConnection.getDatabase().getCollection(getCollectionName(PersistedDeadLetterImpl.class)).createIndex(new BasicDBObject("timestamp", 1));
-        mongoConnection.getDatabase().getCollection(getCollectionName(PersistedDeadLetterImpl.class)).createIndex(new BasicDBObject("letter_id", 1));
+        mongoConnection.getDatabase().getCollection(getCollectionName(PersistedDeadLetterImpl.class)).ensureIndex(new BasicDBObject("timestamp", 1));
+        mongoConnection.getDatabase().getCollection(getCollectionName(PersistedDeadLetterImpl.class)).ensureIndex(new BasicDBObject("letter_id", 1));
     }
 
     private String getCollectionName(Class<? extends Persisted> modelClass) {
@@ -177,7 +176,7 @@ public class DeadLetterThread extends Periodical {
         metricRegistry.register(MetricRegistry.name(DeadLetterThread.class, "queueSize"), new Gauge<Integer>() {
             @Override
             public Integer getValue() {
-                return messages.getDeadLetterQueue().size();
+                return indexer.getDeadLetterQueue().size();
             }
         });
     }

@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.results;
 
@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.unit.TimeValue;
-import org.graylog2.indexer.searches.Searches;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.Tools;
 
@@ -38,7 +38,7 @@ public abstract class HistogramResult extends IndexQueryResult {
         super(originalQuery, builtQuery, took);
     }
 
-    public abstract Searches.DateHistogramInterval getInterval();
+    public abstract Indexer.DateHistogramInterval getInterval();
     public abstract Map getResults();
 
     /*

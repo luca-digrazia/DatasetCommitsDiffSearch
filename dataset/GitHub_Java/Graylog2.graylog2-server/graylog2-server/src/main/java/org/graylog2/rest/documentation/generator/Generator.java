@@ -21,61 +21,47 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.factories.SchemaFactoryWrapper;
 import com.google.common.collect.ComparisonChain;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.Primitives;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
 import org.graylog2.ServerVersion;
+import org.graylog2.rest.documentation.annotations.*;
 import org.reflections.Reflections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.DELETE;
-import javax.ws.rs.FormParam;
-import javax.ws.rs.GET;
-import javax.ws.rs.HEAD;
-import javax.ws.rs.HeaderParam;
-import javax.ws.rs.OPTIONS;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
+import javax.ws.rs.*;
 import javax.ws.rs.core.Response;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * This is generating API information in Swagger format.
- * <p/>
+ *
  * http://swagger.wordnik.com/
- * <p/>
+ *
  * We decided to write this ourselves and not to use the Swagger JAXRS/Jersey integration
  * because it was not compatible to Jersey2 at that point and just way too complicated
  * and too big for what we want to do with it.
+ *
+ * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class Generator {
 
     private static final Logger LOG = LoggerFactory.getLogger(Generator.class);
 
     public static final String EMULATED_SWAGGER_VERSION = "1.2";
+
+    private Object lock = new Object();
 
     private static Map<String, Object> overviewResult = Maps.newHashMap();
     private static Reflections reflections;
@@ -85,47 +71,51 @@ public class Generator {
     public Generator(String packageName, ObjectMapper mapper) {
         this.mapper = mapper;
 
-        if (reflections == null) {
-            reflections = new Reflections(packageName);
+        synchronized (lock) {
+            if (reflections == null) {
+                reflections = new Reflections(packageName);
+            }
         }
     }
 
-    public synchronized Map<String, Object> generateOverview() {
-        if (!overviewResult.isEmpty()) {
+    public Map<String, Object> generateOverview() {
+        synchronized (overviewResult) {
+            if (!overviewResult.isEmpty()) {
+                return overviewResult;
+            }
+
+            List<Map<String, Object>> apis = Lists.newArrayList();
+            for (Class<?> clazz : getAnnotatedClasses()) {
+                Api info = clazz.getAnnotation(Api.class);
+                Path path = clazz.getAnnotation(Path.class);
+
+                if (info == null || path == null) {
+                    LOG.debug("Skipping REST resource with no Api or Path annotation: <{}>", clazz.getCanonicalName());
+                    continue;
+                }
+
+                Map<String, Object> apiDescription = Maps.newHashMap();
+                apiDescription.put("name", info.value());
+                apiDescription.put("path", path.value());
+                apiDescription.put("description", info.description());
+
+                apis.add(apiDescription);
+            }
+            Collections.sort(apis, new Comparator<Map<String, Object>>() {
+                @Override
+                public int compare(Map<String, Object> o1, Map<String, Object> o2) {
+                    return ComparisonChain.start().compare(o1.get("name").toString(), o2.get("name").toString()).result();
+                }
+            });
+            Map<String, String> info = Maps.newHashMap();
+            info.put("title", "Graylog2 REST API");
+
+            overviewResult.put("apiVersion", ServerVersion.VERSION.toString());
+            overviewResult.put("swaggerVersion", EMULATED_SWAGGER_VERSION);
+            overviewResult.put("apis", apis);
+
             return overviewResult;
         }
-
-        final List<Map<String, Object>> apis = Lists.newArrayList();
-        for (Class<?> clazz : getAnnotatedClasses()) {
-            Api info = clazz.getAnnotation(Api.class);
-            Path path = clazz.getAnnotation(Path.class);
-
-            if (info == null || path == null) {
-                LOG.debug("Skipping REST resource with no Api or Path annotation: <{}>", clazz.getCanonicalName());
-                continue;
-            }
-
-            final Map<String, Object> apiDescription = Maps.newHashMap();
-            apiDescription.put("name", info.value());
-            apiDescription.put("path", path.value());
-            apiDescription.put("description", info.description());
-
-            apis.add(apiDescription);
-        }
-        Collections.sort(apis, new Comparator<Map<String, Object>>() {
-            @Override
-            public int compare(Map<String, Object> o1, Map<String, Object> o2) {
-                return ComparisonChain.start().compare(o1.get("name").toString(), o2.get("name").toString()).result();
-            }
-        });
-        Map<String, String> info = Maps.newHashMap();
-        info.put("title", "Graylog2 REST API");
-
-        overviewResult.put("apiVersion", ServerVersion.VERSION.toString());
-        overviewResult.put("swaggerVersion", EMULATED_SWAGGER_VERSION);
-        overviewResult.put("apis", apis);
-
-        return overviewResult;
     }
 
     public Set<Class<?>> getAnnotatedClasses() {
@@ -144,7 +134,7 @@ public class Generator {
                 continue;
             }
 
-            if (cleanRoute(route).equals(cleanRoute(path.value()))) {
+            if(cleanRoute(route).equals(cleanRoute(path.value()))) {
                 // This is the class representing the given route. Get all methods.
                 LOG.debug("Found corresponding REST resource class: <{}>", clazz.getCanonicalName());
 
@@ -203,7 +193,7 @@ public class Generator {
                         operation.put("produces", produces.value());
                     }
                     // skip Response.class because we can't reliably infer any schema information from its payload anyway.
-                    if (!method.getReturnType().isAssignableFrom(Response.class)) {
+                    if (! method.getReturnType().isAssignableFrom(Response.class)) {
                         operation.put("type", method.getReturnType().getSimpleName());
                         modelTypes.add(method.getReturnType());
                     }
@@ -272,39 +262,61 @@ public class Generator {
     }
 
     private List<Parameter> determineParameters(Method method) {
-        final List<Parameter> params = Lists.newArrayList();
+        List<Map<String, Object>> parameters = Lists.newArrayList();
+        List<Parameter> params = Lists.newArrayList();
 
         int i = 0;
         for (Annotation[] annotations : method.getParameterAnnotations()) {
+            Map<String, Object> parameter = Maps.newHashMap();
             final Parameter param = new Parameter();
 
-            Parameter.Kind paramKind = Parameter.Kind.BODY;
             for (Annotation annotation : annotations) {
                 if (annotation instanceof ApiParam) {
-                    final ApiParam apiParam = (ApiParam) annotation;
-                    param.setName(apiParam.name());
-                    param.setDescription(apiParam.value());
+                    ApiParam apiParam = (ApiParam) annotation;
+                    parameter.put("name", apiParam.title());
+                    parameter.put("description", apiParam.description());
+                    parameter.put("required", apiParam.required());
+                    param.setName(apiParam.title());
+                    param.setDescription(apiParam.description());
                     param.setIsRequired(apiParam.required());
-                    param.setType(method.getGenericParameterTypes()[i]);
+
+                    Type parameterClass = method.getGenericParameterTypes()[i];
+                    if (parameterClass.equals(String.class)) {
+                        parameter.put("type", "string");
+                    } else if (parameterClass.equals(int.class) || parameterClass.equals(Integer.class)) {
+                        parameter.put("type", "integer");
+                    } else {
+                        parameter.put("type", method.getParameterTypes()[i].getSimpleName());
+                    }
+                    param.setType(parameterClass);
                 }
 
+                String paramType;
+                Parameter.Kind paramKind;
                 if (annotation instanceof QueryParam) {
+                    paramType = "query";
                     paramKind = Parameter.Kind.QUERY;
                 } else if (annotation instanceof PathParam) {
+                    paramType = "path";
                     paramKind = Parameter.Kind.PATH;
                 } else if (annotation instanceof HeaderParam) {
-                    paramKind = Parameter.Kind.HEADER;
-                } else if (annotation instanceof FormParam) {
-                    paramKind = Parameter.Kind.FORM;
+                    // TODO skip header params for now, we use them for Accept headers until we return proper objects
+                    continue;
+                } else {
+                    paramType = "body";
+                    paramKind = Parameter.Kind.BODY;
                 }
+                param.setKind(paramKind);
+
+                parameter.put("paramType", paramType);
             }
 
-            param.setKind(paramKind);
-
-            if (param.getType() != null) {
+            // There might be un-annotated parameters.
+            if (!parameter.isEmpty()) {
+                parameters.add(parameter);
+            }
+            if (param.getType() != null)
                 params.add(param);
-            }
-
             i++;
         }
 
@@ -312,14 +324,15 @@ public class Generator {
     }
 
     private List<Map<String, Object>> determineResponses(Method method) {
-        final List<Map<String, Object>> result = Lists.newArrayList();
+        List<Map<String, Object>> result = Lists.newArrayList();
 
-        final ApiResponses annotation = method.getAnnotation(ApiResponses.class);
-        if (null != annotation) {
-            for (ApiResponse response : annotation.value()) {
-                final Map<String, Object> responseDescription = ImmutableMap.<String, Object>of(
-                        "code", response.code(),
-                        "message", response.message());
+        if (method.isAnnotationPresent(ApiResponses.class)) {
+            ApiResponses responses = method.getAnnotation(ApiResponses.class);
+            for(ApiResponse response : responses.value()) {
+                Map<String, Object> responseDescription = Maps.newHashMap();
+
+                responseDescription.put("code", response.code());
+                responseDescription.put("message", response.message());
 
                 result.add(responseDescription);
             }
@@ -330,7 +343,7 @@ public class Generator {
 
     // Leading slash but no trailing.
     private String cleanRoute(String route) {
-        if (!route.startsWith("/")) {
+        if(!route.startsWith("/")) {
             route = "/" + route;
         }
 
@@ -358,17 +371,18 @@ public class Generator {
             return "DELETE";
         }
 
-        if (m.isAnnotationPresent(HEAD.class)) {
-            return "HEAD";
-        }
-
-        if (m.isAnnotationPresent(OPTIONS.class)) {
-            return "OPTIONS";
-        }
-
         return null;
     }
 
+    // sigh, is this really not built-in?
+    public static class DefaultNamingStrategy extends PropertyNamingStrategy.PropertyNamingStrategyBase {
+        @Override
+        public String translate(String propertyName) {
+            return propertyName;
+        }
+    }
+
+    @JsonNaming(DefaultNamingStrategy.class)
     private static class Parameter {
         private String name;
         private String description;
@@ -443,8 +457,7 @@ public class Generator {
             BODY,
             HEADER,
             PATH,
-            QUERY,
-            FORM
+            QUERY
         }
     }
 }

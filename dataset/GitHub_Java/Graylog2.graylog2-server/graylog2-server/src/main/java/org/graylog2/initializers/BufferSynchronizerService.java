@@ -19,30 +19,28 @@ package org.graylog2.initializers;
 import com.google.common.util.concurrent.AbstractIdleService;
 import org.graylog2.buffers.Buffers;
 import org.graylog2.caches.Caches;
-import org.graylog2.indexer.Indexer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 @Singleton
 public class BufferSynchronizerService extends AbstractIdleService {
     private static final Logger LOG = LoggerFactory.getLogger(BufferSynchronizerService.class);
 
     private final Buffers bufferSynchronizer;
     private final Caches cacheSynchronizer;
-    private final Indexer indexer;
 
     private volatile boolean indexerAvailable = true;
 
     @Inject
-    public BufferSynchronizerService(final Buffers bufferSynchronizer,
-                                     final Caches cacheSynchronizer,
-                                     final Indexer indexer) {
+    public BufferSynchronizerService(Buffers bufferSynchronizer, Caches cacheSynchronizer) {
         this.bufferSynchronizer = bufferSynchronizer;
         this.cacheSynchronizer = cacheSynchronizer;
-        this.indexer = indexer;
     }
 
     @Override
@@ -52,11 +50,11 @@ public class BufferSynchronizerService extends AbstractIdleService {
     @Override
     protected void shutDown() throws Exception {
         LOG.debug("Stopping BufferSynchronizerService");
-        if (indexerAvailable && indexer.isConnectedAndHealthy()) {
+        if (indexerAvailable) {
             bufferSynchronizer.waitForEmptyBuffers();
             cacheSynchronizer.waitForEmptyCaches();
         } else {
-            LOG.warn("Elasticsearch is unavailable. Not waiting to clear buffers and caches, as we have no healthy cluster.");
+            LOG.warn("Indexer is unavailable, not waiting to clear buffers and caches, as we have no connection to Elasticsearch");
         }
         LOG.debug("Stopped BufferSynchronizerService");
     }

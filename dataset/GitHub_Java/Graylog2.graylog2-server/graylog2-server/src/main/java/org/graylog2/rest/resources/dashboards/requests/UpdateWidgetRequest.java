@@ -16,13 +16,16 @@
  */
 package org.graylog2.rest.resources.dashboards.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-@JsonAutoDetect
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class UpdateWidgetRequest {
+
     public String description;
 
     @JsonProperty("cache_time")
     public int cacheTime;
+
 }

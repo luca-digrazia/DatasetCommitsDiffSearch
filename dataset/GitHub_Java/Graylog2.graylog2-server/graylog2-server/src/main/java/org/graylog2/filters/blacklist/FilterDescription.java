@@ -17,7 +17,6 @@
 package org.graylog2.filters.blacklist;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.bson.types.ObjectId;
@@ -36,7 +35,6 @@ public abstract class FilterDescription {
 
     @Id
     @org.mongojack.ObjectId
-    @JsonProperty("id")
     public ObjectId _id;
 
     public String creatorUserId;

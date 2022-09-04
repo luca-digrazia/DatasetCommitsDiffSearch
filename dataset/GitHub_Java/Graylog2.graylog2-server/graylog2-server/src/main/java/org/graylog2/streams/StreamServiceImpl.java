@@ -21,6 +21,7 @@ import com.google.common.collect.Maps;
 import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
+import com.mongodb.QueryBuilder;
 import org.bson.types.ObjectId;
 import org.graylog2.alerts.AbstractAlertCondition;
 import org.graylog2.alerts.AlertService;
@@ -41,12 +42,7 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class StreamServiceImpl extends PersistedServiceImpl implements StreamService {
     private static final Logger LOG = LoggerFactory.getLogger(StreamServiceImpl.class);
@@ -76,7 +72,7 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
             throw new NotFoundException("Stream <" + id + "> not found!");
         }
 
-        List<StreamRule> streamRules = streamRuleService.loadForStreamId(id.toHexString());
+        List<StreamRule> streamRules = streamRuleService.loadForStreamId(id.toStringMongod());
 
         Set<Output> outputs = loadOutputsForRawStream(o);
 
@@ -89,11 +85,11 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
     }
 
     @Override
-    public Stream create(CreateRequest cr, String userId) {
+    public Stream create(CreateRequest cr) {
         Map<String, Object> streamData = Maps.newHashMap();
         streamData.put("title", cr.title);
         streamData.put("description", cr.description);
-        streamData.put("creator_user_id", userId);
+        streamData.put("creator_user_id", cr.creatorUserId);
         streamData.put("created_at", new DateTime(DateTimeZone.UTC));
 
         return create(streamData);
@@ -167,9 +163,9 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         if (outputIds != null)
             for (ObjectId outputId : outputIds)
                 try {
-                    result.add(outputService.load(outputId.toHexString()));
+                    result.add(outputService.load(outputId.toStringMongod()));
                 } catch (NotFoundException e) {
-                    LOG.warn("Nonexisting output <{}> referenced from stream <{}>!", outputId.toHexString(), stream.get("_id"));
+                    LOG.warn("Nonexisting output <{}> referenced from stream <{}>!", outputId.toStringMongod(), stream.get("_id"));
                 }
 
         return result;

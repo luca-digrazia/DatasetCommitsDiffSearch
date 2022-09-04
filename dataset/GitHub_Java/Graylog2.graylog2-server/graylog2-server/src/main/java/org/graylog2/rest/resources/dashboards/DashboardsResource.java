@@ -29,7 +29,7 @@ import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.ValidationException;
-import org.graylog2.indexer.searches.Searches;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
@@ -64,19 +64,19 @@ public class DashboardsResource extends RestResource {
     private DashboardRegistry dashboardRegistry;
     private ActivityWriter activityWriter;
     private MetricRegistry metricRegistry;
-    private final Searches searches;
+    private Indexer indexer;
 
     @Inject
     public DashboardsResource(DashboardService dashboardService,
                               DashboardRegistry dashboardRegistry,
                               ActivityWriter activityWriter,
                               MetricRegistry metricRegistry,
-                              Searches searches) {
+                              Indexer indexer) {
         this.dashboardService = dashboardService;
         this.dashboardRegistry = dashboardRegistry;
         this.activityWriter = activityWriter;
         this.metricRegistry = metricRegistry;
-        this.searches = searches;
+        this.indexer = indexer;
     }
 
     @POST
@@ -103,7 +103,7 @@ public class DashboardsResource extends RestResource {
         Map<String, Object> dashboardData = Maps.newHashMap();
         dashboardData.put("title", cr.title);
         dashboardData.put("description", cr.description);
-        dashboardData.put("creator_user_id", getCurrentUser().getName());
+        dashboardData.put("creator_user_id", cr.creatorUserId);
         dashboardData.put("created_at", new DateTime(DateTimeZone.UTC));
 
         Dashboard dashboard = new DashboardImpl(dashboardData);
@@ -300,7 +300,7 @@ public class DashboardsResource extends RestResource {
 
         DashboardWidget widget;
         try {
-            widget = DashboardWidget.fromRequest(metricRegistry, searches, awr, getCurrentUser().getName());
+            widget = DashboardWidget.fromRequest(metricRegistry, indexer, awr);
 
             Dashboard dashboard = dashboardRegistry.get(dashboardId);
 

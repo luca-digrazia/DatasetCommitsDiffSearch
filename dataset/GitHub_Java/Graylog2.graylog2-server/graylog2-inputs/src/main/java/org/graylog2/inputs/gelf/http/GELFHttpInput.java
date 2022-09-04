@@ -16,51 +16,98 @@
  */
 package org.graylog2.inputs.gelf.http;
 
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.inputs.codecs.GelfCodec;
-import org.graylog2.inputs.transports.HttpTransport;
-import org.graylog2.plugin.LocalMetricRegistry;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.graylog2.inputs.gelf.GELFInputBase;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
+import org.graylog2.plugin.configuration.fields.BooleanField;
+import org.graylog2.plugin.inputs.MisfireException;
+import org.jboss.netty.bootstrap.ServerBootstrap;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class GELFHttpInput extends MessageInput {
+import javax.inject.Inject;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-    private static final String NAME = "GELF HTTP";
+public class GELFHttpInput extends GELFInputBase {
 
-    @AssistedInject
-    public GELFHttpInput(MetricRegistry metricRegistry,
-                         @Assisted Configuration configuration,
-                         HttpTransport.Factory httpTransportFactory,
-                         GelfCodec.Factory gelfCodecFactory, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor) {
-        super(metricRegistry, httpTransportFactory.create(configuration),
-              localRegistry,
-              gelfCodecFactory.create(configuration), config, descriptor);
+    private static final Logger LOG = LoggerFactory.getLogger(GELFHttpInput.class);
+
+    public static final String NAME = "GELF HTTP";
+    private final MetricRegistry metricRegistry;
+
+    @Inject
+    public GELFHttpInput(MetricRegistry metricRegistry) {
+        this.metricRegistry = metricRegistry;
     }
 
-    public interface Factory extends MessageInput.Factory<GELFHttpInput> {
-        @Override
-        GELFHttpInput create(Configuration configuration);
+    @Override
+    public void initialize(Configuration configuration) {
+        super.initialize(configuration);
 
-        @Override
-        Config getConfig();
+        // Register throughput counter gauges.
+        for(Map.Entry<String,Gauge<Long>> gauge : throughputCounter.gauges().entrySet()) {
+            metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), gauge.getKey()), gauge.getValue());
+        }
 
-        @Override
-        Descriptor getDescriptor();
+        // Register connection counter gauges.
+        metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), "open_connections"), connectionCounter.gaugeCurrent());
+        metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), "total_connections"), connectionCounter.gaugeTotal());
     }
 
-    public static class Descriptor extends MessageInput.Descriptor {
-        public Descriptor() {
-            super(NAME, false, "");
+    @Override
+    public void launch(Buffer processBuffer) throws MisfireException {
+        final ExecutorService bossExecutor = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                        .setNameFormat("input-" + getId() + "-gelfhttp-boss-%d")
+                        .build());
+
+        final ExecutorService workerExecutor = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                        .setNameFormat("input-" + getId() + "-gelfhttp-worker-%d")
+                        .build());
+
+        bootstrap = new ServerBootstrap(
+                new NioServerSocketChannelFactory(bossExecutor, workerExecutor)
+        );
+        bootstrap.setPipelineFactory(new GELFHttpPipelineFactory(metricRegistry, processBuffer, this, throughputCounter, connectionCounter));
+
+        try {
+            channel = ((ServerBootstrap) bootstrap).bind(socketAddress);
+            LOG.debug("Started GELF HTTP input on {}", socketAddress);
+        } catch (Exception e) {
+            String msg = "Could not bind GELF HTTP input to address " + socketAddress;
+            LOG.error(msg, e);
+            throw new MisfireException(msg);
         }
     }
 
-    public static class Config extends MessageInput.Config {
-        public Config() { /* required by guice */ }
-        @AssistedInject
-        public Config(HttpTransport.Factory transport, GelfCodec.Factory codec) {
-            super(transport.getConfig(), codec.getConfig());
-        }
+    @Override
+    public boolean isExclusive() {
+        return false;
+    }
+
+    @Override
+    public String getName() {
+        return NAME;
+    }
+
+    @Override
+    public String linkToDocs() {
+        return "http://support.torch.sh/help/kb/graylog2-server/using-the-gelf-http-input";
+    }
+
+    @Override
+    public ConfigurationRequest getRequestedConfiguration() {
+        ConfigurationRequest r = super.getRequestedConfiguration();
+        r.addField(new BooleanField("enable_cors", "Enable CORS", true, "Input sends CORS headers to satisfy browser security policies"));
+
+        return r;
     }
 }

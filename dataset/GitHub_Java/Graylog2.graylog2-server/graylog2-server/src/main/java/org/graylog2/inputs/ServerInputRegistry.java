@@ -16,14 +16,13 @@
  */
 package org.graylog2.inputs;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Lists;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.inputs.InputState;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
@@ -47,9 +46,8 @@ public class ServerInputRegistry extends InputRegistry {
                                ServerStatus serverStatus,
                                ActivityWriter activityWriter,
                                InputService inputService,
-                               NotificationService notificationService,
-                               MetricRegistry metricRegistry) {
-        super(messageInputFactory, processBuffer, metricRegistry);
+                               NotificationService notificationService) {
+        super(messageInputFactory, processBuffer);
         this.serverStatus = serverStatus;
         this.activityWriter = activityWriter;
         this.inputService = inputService;

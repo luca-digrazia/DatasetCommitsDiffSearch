@@ -18,17 +18,20 @@ package org.graylog2.inputs.random.generators;
 
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
+import org.joda.time.DateTime;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class FakeHttpMessageGenerator {
 
     private static final int MAX_WEIGHT = 50;
 
     private final String source;
-    private final Random rand = new Random();
+
+    private final Random rand = new Random(System.currentTimeMillis());
 
     private final List<Weighted> GET_RESOURCES = new ArrayList<Weighted>() {{
         add(new Resource("/login", "LoginController", "login", 10));
@@ -59,10 +62,10 @@ public class FakeHttpMessageGenerator {
         if (x <= 95) {
             // GET
             return buildGETMessage(isSuccessful);
-        } else if (x > 95 && x <= 98) {
+        } else if(x > 95 && x <= 98) {
             // POST
             return buildPOSTMessage(isSuccessful);
-        } else if (x == 99) {
+        } else if(x == 99) {
             // DELETE
             return buildDELETEMessage(isSuccessful);
         } else {
@@ -71,8 +74,14 @@ public class FakeHttpMessageGenerator {
         }
     }
 
-    private String shortMessage(String method, String resource, int code, long tookMs) {
-        return method + " " + resource + " [" + code + "] " + tookMs + "ms";
+    private String shortMessage(String method, String resource, int code, int tookMs) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append(method).append(" ").append(resource)
+                .append(" [").append(code).append("]")
+                .append(" ").append(tookMs).append("ms");
+
+        return sb.toString();
     }
 
     private <T extends Weighted> T getWeighted(List<Weighted> list) {
@@ -109,7 +118,7 @@ public class FakeHttpMessageGenerator {
             msBase = 400;
         }
 
-        long tookMs = org.graylog2.inputs.random.generators.Tools.deviation(msBase, deviation, rand);
+        int tookMs = org.graylog2.inputs.random.generators.Tools.deviation(msBase, deviation, rand);
         UserId userId = getWeighted(USER_IDS);
 
         Message msg = new Message(shortMessage("GET", resource.getResource(), code, tookMs), source, Tools.iso8601());

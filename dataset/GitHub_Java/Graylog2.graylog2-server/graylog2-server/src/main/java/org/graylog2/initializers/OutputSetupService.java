@@ -16,8 +16,6 @@
  */
 package org.graylog2.initializers;
 
-import com.codahale.metrics.InstrumentedExecutorService;
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.AbstractIdleService;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.plugin.outputs.MessageOutput;
@@ -28,6 +26,9 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.concurrent.Executors;
 
+/**
+ * @author Bernd Ahlers <bernd@torch.sh>
+ */
 @Singleton
 public class OutputSetupService extends AbstractIdleService {
     private static final Logger LOG = LoggerFactory.getLogger(OutputSetupService.class);
@@ -35,9 +36,7 @@ public class OutputSetupService extends AbstractIdleService {
     private final OutputRegistry outputRegistry;
 
     @Inject
-    public OutputSetupService(final OutputRegistry outputRegistry,
-                              final BufferSynchronizerService bufferSynchronizerService,
-                              final MetricRegistry metricRegistry) {
+    public OutputSetupService(OutputRegistry outputRegistry, BufferSynchronizerService bufferSynchronizerService) {
         this.outputRegistry = outputRegistry;
 
         // Shutdown after the BufferSynchronizerService has stopped to avoid shutting down outputs too early.
@@ -46,7 +45,7 @@ public class OutputSetupService extends AbstractIdleService {
             public void terminated(State from) {
                 OutputSetupService.this.shutDownRunningOutputs();
             }
-        }, new InstrumentedExecutorService(Executors.newSingleThreadExecutor(), metricRegistry));
+        }, Executors.newSingleThreadExecutor());
     }
 
     private void shutDownRunningOutputs() {

@@ -29,7 +29,7 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.database.ValidationException;
-import org.graylog2.indexer.searches.Searches;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.rest.resources.dashboards.requests.WidgetPositionRequest;
 import org.slf4j.Logger;
@@ -41,15 +41,15 @@ import java.util.Map;
 public class DashboardServiceImpl extends PersistedServiceImpl implements DashboardService {
     private static final Logger LOG = LoggerFactory.getLogger(DashboardServiceImpl.class);
     private final MetricRegistry metricRegistry;
-    private final Searches searches;
+    private final Indexer indexer;
 
     @Inject
     public DashboardServiceImpl(MongoConnection mongoConnection,
                                 MetricRegistry metricRegistry,
-                                Searches searches) {
+                                Indexer indexer) {
         super(mongoConnection);
         this.metricRegistry = metricRegistry;
-        this.searches = searches;
+        this.indexer = indexer;
     }
 
     @Override
@@ -77,7 +77,7 @@ public class DashboardServiceImpl extends PersistedServiceImpl implements Dashbo
                 for (BasicDBObject widgetFields : (List<BasicDBObject>) fields.get(DashboardImpl.EMBEDDED_WIDGETS)) {
                     DashboardWidget widget = null;
                     try {
-                        widget = DashboardWidget.fromPersisted(metricRegistry, searches, widgetFields);
+                        widget = DashboardWidget.fromPersisted(metricRegistry, indexer, widgetFields);
                     } catch (DashboardWidget.NoSuchWidgetTypeException e) {
                         LOG.error("No such widget type: [" + widgetFields.get("type") + "] - Dashboard: [" + dashboard.getId() + "]", e);
                         continue;
@@ -111,7 +111,7 @@ public class DashboardServiceImpl extends PersistedServiceImpl implements Dashbo
             map.put(position.id, x);
         }
 
-        dashboard.getFields().put(DashboardImpl.EMBEDDED_POSITIONS, map);
+        dashboard.getFields().put("positions", map);
 
         save(dashboard);
     }

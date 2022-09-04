@@ -16,11 +16,13 @@
  */
 package org.graylog2.rest.resources.system.inputs.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-
 import java.util.Map;
 
-@JsonAutoDetect
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class OrderExtractorsRequest {
+
     public Map<Integer, String> order;
+
 }

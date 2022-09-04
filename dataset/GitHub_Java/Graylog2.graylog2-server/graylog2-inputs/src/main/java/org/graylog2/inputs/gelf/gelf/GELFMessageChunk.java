@@ -18,8 +18,11 @@ package org.graylog2.inputs.gelf.gelf;
 
 import org.graylog2.plugin.inputs.MessageInput;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public final class GELFMessageChunk {
-
+    
     /**
      * The start byte of the sequence number
      */
@@ -59,7 +62,7 @@ public final class GELFMessageChunk {
     private byte[] data = new byte[1];
     private int sequenceNumber = -1;
     private int sequenceCount = -1;
-    private long arrival = -1l;
+    private int arrival = -1;
 
     private final byte[] payload;
     private final MessageInput sourceInput;
@@ -77,13 +80,7 @@ public final class GELFMessageChunk {
         this(msg.getPayload(), sourceInput);
     }
 
-    /**
-     * The UNIX timestamp when the message chunk arrived in milliseconds.
-     *
-     * @return the UNIX timestamp when the message chunk arrived in milliseconds.
-     * @see System#currentTimeMillis()
-     */
-    public long getArrival() {
+    public int getArrival() {
         return this.arrival;
     }
 
@@ -112,7 +109,7 @@ public final class GELFMessageChunk {
         extractSequenceCount();
         extractSequenceNumber();
         extractData();
-        this.arrival = System.currentTimeMillis();
+        this.arrival = (int) (System.currentTimeMillis()/1000);
     }
 
     private String extractId() {
@@ -120,7 +117,7 @@ public final class GELFMessageChunk {
             String tmp = "";
             for (int i = 0; i < HEADER_PART_HASH_LENGTH; i++) {
                 // Make a hex value out of it.
-                tmp = tmp.concat(Integer.toString((payload[i + HEADER_PART_HASH_START] & 0xff) + 0x100, 16).substring(1));
+                tmp = tmp.concat(Integer.toString((payload[i+HEADER_PART_HASH_START] & 0xff) + 0x100, 16).substring(1));
             }
             this.id = tmp;
         }
@@ -159,13 +156,13 @@ public final class GELFMessageChunk {
     private int sliceInteger(final int start, final int length) {
         String tmp = "";
         for (int i = 0; i < length; i++) {
-            tmp = tmp.concat(Integer.toString(payload[i + start]));
+            tmp = tmp.concat(Integer.toString(payload[i+start]));
         }
         return Integer.parseInt(tmp);
     }
 
     private byte[] slice(final int cutOffAt) {
-        final byte[] tmp = new byte[payload.length - cutOffAt];
+        final byte[] tmp = new byte[payload.length-cutOffAt];
 
         int j = 0;
         for (int i = cutOffAt; i < payload.length; i++) {
@@ -183,7 +180,7 @@ public final class GELFMessageChunk {
         sb.append("ID: ");
         sb.append(this.id);
         sb.append("\tSequence: ");
-        sb.append(this.sequenceNumber + 1); // +1 for readability: 1/2 not 0/2
+        sb.append(this.sequenceNumber+1); // +1 for readability: 1/2 not 0/2
         sb.append("/");
         sb.append(this.sequenceCount);
         sb.append("\tArrival: ");

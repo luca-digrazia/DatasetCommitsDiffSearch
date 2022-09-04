@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 Graylog, Inc.
+ * Copyright (c) 2012 TORCH GmbH
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@
 package org.graylog2.plugin.buffers;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -31,14 +30,14 @@ import java.util.concurrent.atomic.AtomicLong;
 public class BufferWatermark {
     
     private final int bufferSize;
-    private final AtomicLong watermark;
+    private final AtomicInteger watermark;
     
-    public BufferWatermark(int bufferSize, AtomicLong watermark) {
+    public BufferWatermark(int bufferSize, AtomicInteger watermark) {
         this.bufferSize = bufferSize;
         this.watermark = watermark;
     }
     
-    public long getUtilization() {
+    public int getUtilization() {
         return watermark.get();
     }
     

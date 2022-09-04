@@ -24,15 +24,18 @@ import com.mongodb.DBCollection;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientOptions;
 import com.mongodb.MongoClientOptions.Builder;
+import com.mongodb.MongoException;
 import com.mongodb.ServerAddress;
 import com.mongodb.WriteConcern;
-import org.graylog2.configuration.MongoDbConfiguration;
+import org.graylog2.Configuration;
 
 import java.net.UnknownHostException;
 import java.util.List;
 
 /**
  * MongoDB connection singleton
+ *
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 @Singleton
 public class MongoConnection {
@@ -50,17 +53,17 @@ public class MongoConnection {
     private int port;
 
     @Inject
-    public MongoConnection(final MongoDbConfiguration configuration) {
+    public MongoConnection(final Configuration configuration) {
         this(
-                configuration.getDatabase(),
-                configuration.getHost(),
-                configuration.getPort(),
-                configuration.getReplicaSet(),
-                configuration.isUseAuth(),
-                configuration.getUser(),
-                configuration.getPassword(),
-                configuration.getMaxConnections(),
-                configuration.getThreadsAllowedToBlockMultiplier());
+                configuration.getMongoDatabase(),
+                configuration.getMongoHost(),
+                configuration.getMongoPort(),
+                configuration.getMongoReplicaSet(),
+                configuration.isMongoUseAuth(),
+                configuration.getMongoUser(),
+                configuration.getMongoPassword(),
+                configuration.getMongoMaxConnections(),
+                configuration.getMongoThreadsAllowedToBlockMultiplier());
     }
 
     public MongoConnection(final String database,
@@ -110,6 +113,8 @@ public class MongoConnection {
                         throw new RuntimeException("Could not authenticate to database '" + database + "' with user '" + username + "'.");
                     }
                 }
+            } catch (MongoException.Network e) {
+                throw e;
             } catch (UnknownHostException e) {
                 throw new RuntimeException("Cannot resolve host name for MongoDB", e);
             }
@@ -140,7 +145,7 @@ public class MongoConnection {
         // Collection has not been cached yet. Do it now.
         DBCollection coll = getDatabase().getCollection("message_counts");
 
-        coll.createIndex(new BasicDBObject("timestamp", 1));
+        coll.ensureIndex(new BasicDBObject("timestamp", 1));
 
         this.messageCountsCollection = coll;
         return coll;

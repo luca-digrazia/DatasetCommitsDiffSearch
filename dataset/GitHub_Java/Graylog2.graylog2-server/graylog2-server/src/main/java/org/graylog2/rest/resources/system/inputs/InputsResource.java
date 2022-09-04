@@ -20,7 +20,7 @@ import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.database.*;
+import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputImpl;
 import org.graylog2.inputs.InputService;
@@ -44,7 +44,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.ws.rs.*;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -52,6 +51,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "System/Inputs", description = "Message inputs of this node")
 @Path("/system/inputs")
@@ -160,17 +162,16 @@ public class InputsResource extends RestResource {
 
         // Build MongoDB data
         Map<String, Object> inputData = Maps.newHashMap();
-        inputData.put(MessageInput.FIELD_INPUT_ID, inputId);
-        inputData.put(MessageInput.FIELD_TITLE, lr.title);
-        inputData.put(MessageInput.FIELD_TYPE, lr.type);
-        inputData.put(MessageInput.FIELD_CREATOR_USER_ID, lr.creatorUserId);
-        inputData.put(MessageInput.FIELD_CONFIGURATION, lr.configuration);
-        inputData.put(MessageInput.FIELD_CREATED_AT, createdAt);
-        if (lr.global) {
-            inputData.put(MessageInput.FIELD_GLOBAL, true);
-        } else {
-            inputData.put(MessageInput.FIELD_NODE_ID, serverStatus.getNodeId().toString());
-        }
+        inputData.put("input_id", inputId);
+        inputData.put("title", lr.title);
+        inputData.put("type", lr.type);
+        inputData.put("creator_user_id", lr.creatorUserId);
+        inputData.put("configuration", lr.configuration);
+        inputData.put("created_at", createdAt);
+        if (lr.global)
+            inputData.put("global", true);
+        else
+            inputData.put("node_id", serverStatus.getNodeId().toString());
 
         // ... and check if it would pass validation. We don't need to go on if it doesn't.
         Input mongoInput = new InputImpl(inputData);
@@ -246,37 +247,29 @@ public class InputsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     public Response launchExisting(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
-        InputState inputState = inputRegistry.getInputState(inputId);
-        final MessageInput messageInput;
+        final InputState inputState = inputRegistry.getInputState(inputId);
 
         if (inputState == null) {
-            try {
-                final Input input = inputService.find(inputId);
-                messageInput = inputService.getMessageInput(input);
-            } catch (NoSuchInputTypeException | org.graylog2.database.NotFoundException e) {
-                final String error = "Cannot launch input <" + inputId + ">. Input not found.";
-                LOG.info(error);
-                throw new NotFoundException(error);
-            }
-        } else
-            messageInput = inputState.getMessageInput();
-
-        if (messageInput == null) {
             final String error = "Cannot launch input <" + inputId + ">. Input not found.";
             LOG.info(error);
             throw new NotFoundException(error);
         }
 
-        String msg = "Launching existing input [" + messageInput.getName()+ "]. Reason: REST request.";
+        final MessageInput input = inputState.getMessageInput();
+
+        if (input == null) {
+            final String error = "Cannot launch input <" + inputId + ">. Input not found.";
+            LOG.info(error);
+            throw new NotFoundException(error);
+        }
+
+        String msg = "Launching existing input [" + input.getName()+ "]. Reason: REST request.";
         LOG.info(msg);
         activityWriter.write(new Activity(msg, InputsResource.class));
 
-        if (inputState == null)
-            inputRegistry.launchPersisted(messageInput);
-        else
-            inputRegistry.launch(inputState);
+        inputRegistry.launch(inputState);
 
-        String msg2 = "Launched existing input [" + messageInput.getName()+ "]. Reason: REST request.";
+        String msg2 = "Launched existing input [" + input.getName()+ "]. Reason: REST request.";
         LOG.info(msg2);
         activityWriter.write(new Activity(msg2, InputsResource.class));
 

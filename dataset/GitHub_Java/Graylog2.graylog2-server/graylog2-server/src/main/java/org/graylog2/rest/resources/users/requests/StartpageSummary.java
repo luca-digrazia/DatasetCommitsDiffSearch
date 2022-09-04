@@ -16,13 +16,12 @@
  */
 package org.graylog2.rest.resources.users.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import org.hibernate.validator.constraints.NotEmpty;
-
-@JsonAutoDetect
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class StartpageSummary {
-    @NotEmpty
+
     public String type;
-    @NotEmpty
     public String id;
+
 }

@@ -29,7 +29,6 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +50,6 @@ public class UserImpl extends PersistedImpl implements User {
     public static final String EMAIL = "email";
     public static final String FULL_NAME = "full_name";
     public static final String PERMISSIONS = "permissions";
-    public static final String PREFERENCES = "preferences";
     public static final String TIMEZONE = "timezone";
     public static final String EXTERNAL_USER = "external_user";
     public static final String SESSION_TIMEOUT = "session_timeout_ms";
@@ -116,12 +114,6 @@ public class UserImpl extends PersistedImpl implements User {
     }
 
     @Override
-    public Map<String, Object> getPreferences() {
-        final Object o = fields.get(PREFERENCES);
-        return (Map<String, Object>) o;
-    }
-
-    @Override
     public Map<String, String> getStartpage() {
         Map<String, String> startpage = Maps.newHashMap();
 
@@ -151,11 +143,6 @@ public class UserImpl extends PersistedImpl implements User {
     @Override
     public void setPermissions(List<String> permissions) {
         fields.put(PERMISSIONS, permissions);
-    }
-
-    @Override
-    public void setPreferences(Map<String, Object> preferences) {
-        fields.put(PREFERENCES, preferences);
     }
 
     @Override
@@ -283,11 +270,6 @@ public class UserImpl extends PersistedImpl implements User {
         @Override
         public List<String> getPermissions() {
             return Lists.newArrayList("*");
-        }
-
-        @Override
-        public Map<String, Object> getPreferences() {
-            return Collections.emptyMap();
         }
 
         @Override

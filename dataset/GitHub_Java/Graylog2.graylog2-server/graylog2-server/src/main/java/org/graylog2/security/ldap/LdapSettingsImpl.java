@@ -17,8 +17,7 @@
 package org.graylog2.security.ldap;
 
 import com.google.common.collect.Maps;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
+import com.google.inject.Inject;
 import org.apache.shiro.codec.Hex;
 import org.bson.types.ObjectId;
 import org.graylog2.Configuration;
@@ -35,12 +34,6 @@ import java.util.Map;
 
 @CollectionName("ldap_settings")
 public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
-
-    public interface Factory {
-        LdapSettingsImpl createEmpty();
-        LdapSettingsImpl create(ObjectId objectId, Map<String, Object> fields);
-    }
-
     private static final Logger LOG = LoggerFactory.getLogger(LdapSettingsImpl.class);
 
     public static final String ENABLED = "enabled";
@@ -58,15 +51,16 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
 
     protected Configuration configuration;
 
-    @AssistedInject
-    public LdapSettingsImpl(Configuration configuration) {
+    public LdapSettingsImpl() {
         super(Maps.<String, Object>newHashMap());
-        this.configuration = configuration;
     }
 
-    @AssistedInject
-    public LdapSettingsImpl(Configuration configuration, @Assisted ObjectId id, @Assisted Map<String, Object> fields) {
+    protected LdapSettingsImpl(ObjectId id, Map<String, Object> fields) {
         super(id, fields);
+    }
+
+    @Inject
+    public void setConfiguration(Configuration configuration) {
         this.configuration = configuration;
     }
 

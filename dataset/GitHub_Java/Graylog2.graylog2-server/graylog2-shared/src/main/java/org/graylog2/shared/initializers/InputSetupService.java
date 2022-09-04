@@ -1,18 +1,24 @@
 /**
- * This file is part of Graylog2.
+ * The MIT License
+ * Copyright (c) 2012 TORCH GmbH
  *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
 package org.graylog2.shared.initializers;
 
@@ -21,10 +27,9 @@ import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
 import com.google.common.util.concurrent.Uninterruptibles;
-import org.graylog2.plugin.IOState;
+import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.lifecycles.Lifecycle;
-import org.graylog2.shared.inputs.InputLauncher;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,17 +48,15 @@ public class InputSetupService extends AbstractExecutionThreadService {
     private static final Logger LOG = LoggerFactory.getLogger(InputSetupService.class);
     private final InputRegistry inputRegistry;
     private final EventBus eventBus;
-    private final InputLauncher inputLauncher;
 
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
     private AtomicReference<Lifecycle> previousLifecycle = new AtomicReference<>(Lifecycle.UNINITIALIZED);
 
     @Inject
-    public InputSetupService(InputRegistry inputRegistry, EventBus eventBus, InputLauncher inputLauncher) {
+    public InputSetupService(InputRegistry inputRegistry, EventBus eventBus) {
         this.inputRegistry = inputRegistry;
         this.eventBus = eventBus;
-        this.inputLauncher = inputLauncher;
     }
 
     @Override
@@ -89,7 +92,7 @@ public class InputSetupService extends AbstractExecutionThreadService {
 
         if (previousLifecycle.get() == Lifecycle.RUNNING) {
             LOG.debug("Launching persisted inputs now.");
-            inputLauncher.launchAllPersisted();
+            inputRegistry.launchAllPersisted();
         } else {
             LOG.error("Not starting any inputs because lifecycle is: {}", previousLifecycle.get());
         }
@@ -108,8 +111,8 @@ public class InputSetupService extends AbstractExecutionThreadService {
         LOG.debug("Stopping InputSetupService");
         eventBus.unregister(this);
 
-        for (IOState<MessageInput> state : inputRegistry.getRunningInputs()) {
-            MessageInput input = state.getStoppable();
+        for (InputState state : inputRegistry.getRunningInputs()) {
+            MessageInput input = state.getMessageInput();
 
             LOG.info("Attempting to close input <{}> [{}].", input.getUniqueReadableId(), input.getName());
 

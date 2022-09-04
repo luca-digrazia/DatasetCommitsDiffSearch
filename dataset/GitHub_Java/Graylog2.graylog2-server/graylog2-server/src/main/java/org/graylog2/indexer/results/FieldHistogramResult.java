@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.results;
 
@@ -20,7 +20,7 @@ import com.google.common.collect.Maps;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.search.facet.datehistogram.DateHistogramFacet;
-import org.graylog2.indexer.searches.Searches;
+import org.graylog2.indexer.Indexer;
 
 import java.util.Map;
 
@@ -30,16 +30,16 @@ import java.util.Map;
 public class FieldHistogramResult extends HistogramResult {
 
     private final DateHistogramFacet result;
-    private final Searches.DateHistogramInterval interval;
+    private final Indexer.DateHistogramInterval interval;
 
-    public FieldHistogramResult(DateHistogramFacet result, String originalQuery, BytesReference builtQuery, Searches.DateHistogramInterval interval, TimeValue took) {
+    public FieldHistogramResult(DateHistogramFacet result, String originalQuery, BytesReference builtQuery, Indexer.DateHistogramInterval interval, TimeValue took) {
         super(originalQuery, builtQuery, took);
 
         this.result = result;
         this.interval = interval;
     }
 
-    public Searches.DateHistogramInterval getInterval() {
+    public Indexer.DateHistogramInterval getInterval() {
         return interval;
     }
 

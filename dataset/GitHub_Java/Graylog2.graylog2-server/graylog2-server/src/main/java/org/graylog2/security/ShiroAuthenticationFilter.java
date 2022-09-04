@@ -1,6 +1,4 @@
 /**
- * Copyright 2013 Kay Roepke <kay@torch.sh>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,11 +13,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.security;
 
 import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.LockedAccountException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +31,7 @@ import java.io.IOException;
  * @author Kay Roepke <kay@torch.sh>
  */
 public class ShiroAuthenticationFilter implements ContainerRequestFilter {
-    private static final Logger log = LoggerFactory.getLogger(ShiroAuthenticationFilter.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ShiroAuthenticationFilter.class);
 
     public ShiroAuthenticationFilter() {
 
@@ -45,14 +43,18 @@ public class ShiroAuthenticationFilter implements ContainerRequestFilter {
             return;
         }
         final ShiroSecurityContext context = (ShiroSecurityContext) securityContext;
-        log.trace("Authenticating... {}", context.getSubject());
+        LOG.trace("Authenticating... {}", context.getSubject());
         if (!context.getSubject().isAuthenticated()) {
             try {
-                log.trace("Logging in {}", context.getSubject());
+                LOG.trace("Logging in {}", context.getSubject());
                 context.loginSubject();
+
+            } catch (LockedAccountException e) {
+                LOG.debug("Unable to authenticate user, account is locked.", e);
+                throw new NotAuthorizedException(e, "Basic realm=\"Graylog2 Server\"");
             } catch (AuthenticationException e) {
-                log.debug("Unable to authenticate user.", e);
-                throw new NotAuthorizedException(e, "Basic", "Graylog2 Server");
+                LOG.debug("Unable to authenticate user.", e);
+                throw new NotAuthorizedException(e, "Basic realm=\"Graylog2 Server\"");
             }
         }
     }

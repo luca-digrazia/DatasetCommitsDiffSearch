@@ -16,6 +16,7 @@
  */
 package org.graylog2.streams;
 
+import org.bson.types.ObjectId;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedService;
 import org.graylog2.plugin.streams.Stream;
@@ -29,7 +30,7 @@ import java.util.Map;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public interface StreamRuleService extends PersistedService {
-    StreamRule load(String id) throws NotFoundException;
+    StreamRule load(ObjectId id) throws NotFoundException;
 
     List<StreamRule> loadForStream(Stream stream) throws NotFoundException;
 

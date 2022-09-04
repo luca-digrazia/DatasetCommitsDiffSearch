@@ -16,13 +16,16 @@
  */
 package org.graylog2.indexer.searches.timeranges;
 
-import com.google.common.collect.ImmutableMap;
 import org.graylog2.utilities.date.NaturalDateParser;
 import org.joda.time.DateTime;
 
+import java.util.HashMap;
 import java.util.Map;
 
-public class KeywordRange implements TimeRange {
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+public class KeywordRange implements TimeRange, FromToRange {
 
     private final String keyword;
     private final DateTime from;
@@ -50,10 +53,10 @@ public class KeywordRange implements TimeRange {
 
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return ImmutableMap.<String, Object>builder()
-                .put("type", getType().toString().toLowerCase())
-                .put("keyword", getKeyword())
-                .build();
+        return new HashMap<String, Object>() {{
+            put("type", getType().toString().toLowerCase());
+            put("keyword", getKeyword());
+        }};
     }
 
     public String getKeyword() {

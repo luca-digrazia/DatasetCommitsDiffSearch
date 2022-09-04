@@ -16,49 +16,41 @@
  */
 package org.graylog2.outputs;
 
-import org.graylog2.gelfclient.GelfMessage;
-import org.graylog2.gelfclient.transport.GelfTransport;
+import org.graylog2.GelfMessage;
+import org.graylog2.GelfSender;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.mockito.Mockito;
 import org.testng.annotations.Test;
 
-import java.util.HashMap;
+import static org.mockito.Matchers.*;
+import static org.mockito.Mockito.*;
+import static org.testng.Assert.*;
 
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.testng.Assert.assertNotNull;
-
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 @Test
 public class GelfOutputTest {
     public void testWrite() throws Exception {
-        final GelfTransport transport = mock(GelfTransport.class);
+        final GelfSender gelfSender = mock(GelfSender.class);
         final Message message = mock(Message.class);
-        final GelfMessage gelfMessage = new GelfMessage("Test");
+        final GelfMessage gelfMessage = mock(GelfMessage.class);
 
-        Configuration configuration = new Configuration(new HashMap<String, Object>() {{
-            put("hostname", "localhost");
-            put("protocol", "tcp");
-            put("port", 12201);
-        }});
-
-        final GelfOutput gelfOutput = Mockito.spy(new GelfOutput(configuration, transport));
-        doReturn(transport).when(gelfOutput).buildTransport(any(Configuration.class));
+        final GelfOutput gelfOutput = Mockito.spy(new GelfOutput());
+        doReturn(gelfSender).when(gelfOutput).getGelfSender(any(Configuration.class));
         doReturn(gelfMessage).when(gelfOutput).toGELFMessage(message);
 
         gelfOutput.write(message);
 
-        verify(transport).send(eq(gelfMessage));
+        verify(gelfSender).sendMessage(eq(gelfMessage));
     }
 
     public void testGetRequestedConfiguration() throws Exception {
-        final GelfOutput.Config gelfOutputConfig = new GelfOutput.Config();
+        final GelfOutput gelfOutput = new GelfOutput();
 
-        final ConfigurationRequest request = gelfOutputConfig.getRequestedConfiguration();
+        final ConfigurationRequest request = gelfOutput.getRequestedConfiguration();
 
         assertNotNull(request);
         assertNotNull(request.asList());

@@ -64,7 +64,8 @@ public class ProcessBufferService extends AbstractIdleService {
         }
 
         processBuffer.initialize(processors, configuration.getRingSize(),
-                configuration.getProcessorWaitStrategy()
+                configuration.getProcessorWaitStrategy(),
+                configuration.getProcessBufferProcessors()
         );
 
     }

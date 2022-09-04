@@ -43,9 +43,10 @@ public class JacksonPropertyExceptionMapper implements ExtendedExceptionMapper<P
     @Override
     public Response toResponse(PropertyBindingException exception) {
         final Collection<Object> knownPropertyIds = exception.getKnownPropertyIds();
-        final String message =
-                "Unable to map property " + exception.getPropertyName() + ". \nKnown properties include: "
-                        + (knownPropertyIds == null ? "<>" : Joiner.on(", ").join(knownPropertyIds));
+        StringBuilder b = new StringBuilder();
+        b.append("Unable to map property ").append(exception.getPropertyName()).append(". \n");
+        b.append("Known properties include: ").append(Joiner.on(", ").join(knownPropertyIds));
+        final String message = b.toString();
         return status(Response.Status.BAD_REQUEST).entity(message).build();
     }
 }

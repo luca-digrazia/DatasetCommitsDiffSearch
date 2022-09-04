@@ -26,7 +26,6 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -66,12 +65,12 @@ public class AlertImpl extends PersistedImpl implements Alert {
 
     @Override
     public Map<String, Validator> getValidations() {
-        return Collections.emptyMap();
+        return Maps.newHashMap();
     }
 
     @Override
     public Map<String, Validator> getEmbeddedValidations(String key) {
-        return Collections.emptyMap();
+        return Maps.newHashMap();
     }
 
 }

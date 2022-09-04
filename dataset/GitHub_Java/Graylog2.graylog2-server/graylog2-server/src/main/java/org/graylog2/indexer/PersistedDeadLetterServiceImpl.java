@@ -16,7 +16,7 @@
  */
 package org.graylog2.indexer;
 
-import javax.inject.Inject;
+import com.google.inject.Inject;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
 

@@ -22,10 +22,12 @@
  */
 package org.graylog2.shared.inputs;
 
-public class NoSuchInputTypeException extends Exception {
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+public class NoSuchInputTypeException extends Throwable {
 
     public NoSuchInputTypeException() {
-        super();
     }
 
     public NoSuchInputTypeException(String s) {

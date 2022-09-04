@@ -16,7 +16,7 @@
  */
 package org.graylog2.system.activities;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
 import org.graylog2.database.PersistedImpl;
@@ -25,9 +25,12 @@ import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.plugin.database.validators.Validator;
 import org.joda.time.DateTime;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @CollectionName("system_messages")
 public class SystemMessageImpl extends PersistedImpl implements SystemMessage {
 
@@ -76,16 +79,17 @@ public class SystemMessageImpl extends PersistedImpl implements SystemMessage {
 
     @Override
     public Map<String, Validator> getValidations() {
-        return ImmutableMap.of(
-                "caller", new FilledStringValidator(),
-                "content", new FilledStringValidator(),
-                "node_id", new FilledStringValidator(),
-                "timestamp", new DateValidator());
+        return new HashMap<String, Validator>() {{
+            put("caller", new FilledStringValidator());
+            put("content", new FilledStringValidator());
+            put("node_id", new FilledStringValidator());
+            put("timestamp", new DateValidator());
+        }};
     }
 
     @Override
     public Map<String, Validator> getEmbeddedValidations(String key) {
-        return Collections.emptyMap();
+        return Maps.newHashMap();
     }
 
 }

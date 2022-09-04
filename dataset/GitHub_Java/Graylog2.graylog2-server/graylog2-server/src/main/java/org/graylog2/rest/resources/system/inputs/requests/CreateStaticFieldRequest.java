@@ -16,10 +16,12 @@
  */
 package org.graylog2.rest.resources.system.inputs.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-
-@JsonAutoDetect
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class CreateStaticFieldRequest {
+
     public String key;
     public String value;
+
 }

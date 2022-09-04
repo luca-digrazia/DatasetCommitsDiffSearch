@@ -68,7 +68,7 @@ public class CachedStreamRouter extends StreamRouter {
                         new CacheLoader<String, List<Stream>>() {
                             @Override
                             public List<Stream> load(final String s) throws Exception {
-                                return CachedStreamRouter.super.getStreams();
+                                return superGetStreams();
                             }
                         }
                 );
@@ -81,7 +81,7 @@ public class CachedStreamRouter extends StreamRouter {
                         new CacheLoader<Stream, List<StreamRule>>() {
                             @Override
                             public List<StreamRule> load(final Stream s) throws Exception {
-                                return CachedStreamRouter.super.getStreamRules(s);
+                                return superGetStreamRules(s);
                             }
                         }
                 );
@@ -98,6 +98,10 @@ public class CachedStreamRouter extends StreamRouter {
         return result;
     }
 
+    private List<Stream> superGetStreams() {
+        return super.getStreams();
+    }
+
     @Override
     protected List<StreamRule> getStreamRules(Stream stream) {
         List<StreamRule> result = null;
@@ -110,4 +114,7 @@ public class CachedStreamRouter extends StreamRouter {
         return result;
     }
 
+    private List<StreamRule> superGetStreamRules(Stream stream) {
+        return super.getStreamRules(stream);
+    }
 }

@@ -16,9 +16,6 @@
  */
 package org.graylog2.radio.transports.amqp;
 
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
 import org.graylog2.plugin.Message;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.transports.RadioTransport;
@@ -27,67 +24,37 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class AMQPProducer implements RadioTransport {
-    private class AMQPSenderPool {
-        private final int count;
-        private final AMQPSender[] senders;
-        private final AtomicInteger pointer;
-
-        private AMQPSenderPool(int count, Configuration configuration) {
-            this.count = count;
-            this.senders = new AMQPSender[count];
-            for (int i = 0; i < count; i++) {
-                this.senders[i] = new AMQPSender(configuration.getAmqpHostname(),
-                        configuration.getAmqpPort(),
-                        configuration.getAmqpVirtualHost(),
-                        configuration.getAmqpUsername(),
-                        configuration.getAmqpPassword(),
-                        String.format(configuration.getAmqpQueueName(), i),
-                        configuration.getAmqpQueueType(),
-                        String.format(configuration.getAmqpExchangeName(), i),
-                        configuration.getAmqpRoutingKey()
-                );
-            }
-
-            this.pointer = new AtomicInteger(0);
-        }
-        public void send(Message msg) throws IOException {
-            final int currentIndex = pointer.getAndIncrement();
-            senders[currentIndex % count].send(msg);
-        }
-
-    }
 
     private static final Logger LOG = LoggerFactory.getLogger(AMQPProducer.class);
 
-    private final AMQPSenderPool senderPool;
-    private final Meter incomingMessages;
-    private final Meter rejectedMessages;
-    private final Timer processTime;
+    public final static String EXCHANGE = "graylog2";
+    public final static String QUEUE = "graylog2-radio-messages";
+    public final static String ROUTING_KEY = "graylog2-radio-message";
+
+    private final AMQPSender sender;
 
     @Inject
-    public AMQPProducer(Configuration configuration, MetricRegistry metricRegistry) {
-        senderPool = new AMQPSenderPool(configuration.getAmqpParallelQueues(), configuration);
-        incomingMessages = metricRegistry.meter(name(AMQPProducer.class, "incomingMessages"));
-        rejectedMessages = metricRegistry.meter(name(AMQPProducer.class, "rejectedMessages"));
-        processTime = metricRegistry.timer(name(AMQPProducer.class, "processTime"));
+    public AMQPProducer(Configuration configuration) {
+        sender = new AMQPSender(
+                configuration.getAmqpHostname(),
+                configuration.getAmqpPort(),
+                configuration.getAmqpVirtualHost(),
+                configuration.getAmqpUsername(),
+                configuration.getAmqpPassword()
+        );
     }
 
     @Override
     public void send(Message msg) {
-        try (Timer.Context context = processTime.time()) {
-            incomingMessages.mark();
-            senderPool.send(msg);
+        try {
+            sender.send(msg);
         } catch (IOException e) {
             LOG.error("Could not write to AMQP.", e);
-            rejectedMessages.mark();
         }
     }
 

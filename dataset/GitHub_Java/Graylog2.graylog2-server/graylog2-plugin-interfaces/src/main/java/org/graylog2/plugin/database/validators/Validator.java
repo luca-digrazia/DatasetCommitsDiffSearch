@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 Graylog, Inc.
+ * Copyright (c) 2012 TORCH GmbH
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,4 +28,5 @@ package org.graylog2.plugin.database.validators;
 public interface Validator {
 
     public ValidationResult validate(Object value);
+
 }

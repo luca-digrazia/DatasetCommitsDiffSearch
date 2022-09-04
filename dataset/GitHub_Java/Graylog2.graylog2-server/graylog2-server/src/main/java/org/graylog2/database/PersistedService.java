@@ -1,6 +1,4 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,13 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.database;
 
-import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.database.Persisted;
+import org.graylog2.plugin.database.validators.ValidationResult;
 import org.graylog2.plugin.database.validators.Validator;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,9 +35,9 @@ public interface PersistedService {
 
     <T extends Persisted> String saveWithoutValidation(T model);
 
-    <T extends Persisted> boolean validate(T model, Map<String, Object> fields);
+    <T extends Persisted> Map<String, List<ValidationResult>> validate(T model, Map<String, Object> fields);
 
-    <T extends Persisted> boolean validate(T model);
+    <T extends Persisted> Map<String, List<ValidationResult>> validate(T model);
 
-    boolean validate(Map<String, Validator> validators, Map<String, Object> fields);
+    Map<String, List<ValidationResult>> validate(Map<String, Validator> validators, Map<String, Object> fields);
 }

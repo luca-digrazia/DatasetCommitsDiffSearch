@@ -35,9 +35,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class Consumer {
+
     private static final Logger LOG = LoggerFactory.getLogger(Consumer.class);
 
     // Not threadsafe!
@@ -126,21 +128,15 @@ public class Consumer {
                         channel.basicAck(deliveryTag, false);
                     } catch (BufferOutOfCapacityException e) {
                         LOG.debug("Input buffer full, requeuing message. Delaying 10 ms until trying next message.");
-                        if (channel.isOpen()) {
-                            channel.basicNack(deliveryTag, false, true);
-                            Uninterruptibles.sleepUninterruptibly(10, TimeUnit.MILLISECONDS); // TODO magic number
-                        }
+                        channel.basicNack(deliveryTag, false, true);
+                        Uninterruptibles.sleepUninterruptibly(10, TimeUnit.MILLISECONDS); // TODO magic number
                     } catch (ProcessingDisabledException e) {
                         LOG.debug("Message processing is disabled, requeuing message. Delaying 100 ms until trying next message.");
-                        if (channel.isOpen()) {
-                            channel.basicNack(deliveryTag, false, true);
-                            Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS); // TODO magic number
-                        }
+                        channel.basicNack(deliveryTag, false, true);
+                        Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS); // TODO magic number
                     } catch (Exception e) {
                         LOG.error("Error while trying to process AMQP message, requeuing message", e);
-                        if (channel.isOpen()) {
-                            channel.basicNack(deliveryTag, false, true);
-                        }
+                        channel.basicNack(deliveryTag, false, true);
                     }
                 }
             }
@@ -148,13 +144,14 @@ public class Consumer {
     }
 
     public void connect() throws IOException {
-        final ConnectionFactory factory = new ConnectionFactory();
+        ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(hostname);
         factory.setPort(port);
+
         factory.setVirtualHost(virtualHost);
 
         // Authenticate?
-        if(!isNullOrEmpty(username) && !isNullOrEmpty(password)) {
+        if(username != null && !username.isEmpty() && password != null && !password.isEmpty()) {
             factory.setUsername(username);
             factory.setPassword(password);
         }
@@ -162,11 +159,7 @@ public class Consumer {
         connection = factory.newConnection();
         channel = connection.createChannel();
 
-        if(null == channel) {
-            LOG.error("No channel descriptor available!");
-        }
-
-        if (null != channel && prefetchCount > 0) {
+        if (prefetchCount > 0) {
             channel.basicQos(prefetchCount);
 
             LOG.info("AMQP prefetch count overriden to <{}>.", prefetchCount);
@@ -176,7 +169,7 @@ public class Consumer {
             @Override
             public void shutdownCompleted(ShutdownSignalException cause) {
                 if (cause.isInitiatedByApplication()) {
-                    LOG.info("Not reconnecting connection, we disconnected explicitly.");
+                    LOG.info("Not reconnecting connection, we disconnected explicitely.");
                     return;
                 }
                 while (true) {

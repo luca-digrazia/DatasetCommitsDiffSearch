@@ -18,14 +18,12 @@ package org.graylog2.rest.resources.system.ldap.requests;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 
-import javax.validation.constraints.NotNull;
 import java.net.URI;
 
 @JsonAutoDetect
 public class LdapTestConfigRequest {
 
     public boolean activeDirectory;
-    @NotNull
     public URI ldapUri;
     public String systemUsername;
     public String systemPassword;

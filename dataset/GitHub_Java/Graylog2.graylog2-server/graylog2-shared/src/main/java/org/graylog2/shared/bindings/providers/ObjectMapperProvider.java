@@ -31,47 +31,30 @@ import com.fasterxml.jackson.datatype.joda.JodaModule;
 import org.graylog2.shared.rest.RangeJsonSerializer;
 
 import javax.inject.Provider;
-import javax.ws.rs.ext.ContextResolver;
 
-@javax.ws.rs.ext.Provider
-public class ObjectMapperProvider implements Provider<ObjectMapper>, ContextResolver<ObjectMapper> {
-    private final ObjectMapper objectMapper;
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
+public class ObjectMapperProvider implements Provider<ObjectMapper> {
+    private final SimpleModule simpleModule;
 
     public ObjectMapperProvider() {
-        objectMapper = new ObjectMapper()
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-                .setPropertyNamingStrategy(new PreserveLeadingUnderscoreStrategy())
-                .registerModule(new JodaModule())
-                .registerModule(new GuavaModule())
-                .registerModule(new SimpleModule().addSerializer(new RangeJsonSerializer()));
-    }
-
-    @Override
-    public ObjectMapper getContext(Class<?> type) {
-        return get();
+        simpleModule = new SimpleModule() {
+            {
+                addSerializer(new RangeJsonSerializer());
+            }
+        };
     }
 
     @Override
     public ObjectMapper get() {
-        return objectMapper;
-    }
+        final ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        objectMapper.setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES);
+        objectMapper.registerModule(new JodaModule());
+        objectMapper.registerModule(new GuavaModule());
+        objectMapper.registerModule(simpleModule);
 
-    /**
-     * This abomination is necessary because when using MongoJack to read "_id" object ids back from the database
-     * the property name isn't correctly mapped to the POJO using the LowerCaseWithUnderscoresStrategy.
-     * <p>
-     * Apparently no one in the world tried to use a different naming strategy with MongoJack.
-     * (one of my many useless talents is finding corner cases).
-     * </p>
-     */
-    public class PreserveLeadingUnderscoreStrategy extends PropertyNamingStrategy.LowerCaseWithUnderscoresStrategy {
-        @Override
-        public String translate(String input) {
-            String translated = super.translate(input);
-            if (input.startsWith("_") && !translated.startsWith("_")) {
-                translated = "_" + translated; // lol underscore
-            }
-            return translated;
-        }
+        return objectMapper;
     }
 }

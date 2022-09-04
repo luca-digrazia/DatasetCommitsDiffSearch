@@ -23,9 +23,7 @@
 package org.graylog2.plugin.rest;
 
 /**
- * Marker interface for JAX-RS resources in plugins.
- *
- * @see org.graylog2.plugin.PluginModule#addRestResource(Class)
+ * @author Dennis Oelkers <dennis@torch.sh>
  */
-public interface PluginRestResource {
+public class PluginRestResource {
 }

@@ -16,13 +16,9 @@
  */
 package org.graylog2.inputs;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.inject.Inject;
-import com.mongodb.BasicDBList;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBObject;
-import com.mongodb.QueryBuilder;
+import com.mongodb.*;
 import org.bson.types.ObjectId;
 import org.graylog2.cluster.Node;
 import org.graylog2.database.MongoConnection;
@@ -41,10 +37,7 @@ import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class InputServiceImpl extends PersistedServiceImpl implements InputService {
     private static final Logger LOG = LoggerFactory.getLogger(InputServiceImpl.class);
@@ -62,111 +55,113 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     }
 
     @Override
-    public List<Input> allOfThisNode(final String nodeId) {
-        final List<BasicDBObject> query = ImmutableList.of(
-                new BasicDBObject(MessageInput.FIELD_NODE_ID, nodeId),
-                new BasicDBObject(MessageInput.FIELD_GLOBAL, true));
-        final List<DBObject> ownInputs = query(InputImpl.class, new BasicDBObject("$or", query));
-
-        final ImmutableList.Builder<Input> inputs = ImmutableList.builder();
-        for (final DBObject o : ownInputs) {
-            inputs.add(new InputImpl((ObjectId) o.get("_id"), o.toMap()));
+    public List<Input> allOfThisNode(String nodeId) {
+        List<Input> inputs = Lists.newArrayList();
+        List<BasicDBObject> query = new ArrayList<BasicDBObject>();
+        query.add(new BasicDBObject("node_id", nodeId));
+        query.add(new BasicDBObject("global", true));
+        List<DBObject> ownInputs = query(org.graylog2.inputs.InputImpl.class, new BasicDBObject("$or", query));
+        for (DBObject o : ownInputs) {
+            inputs.add(new org.graylog2.inputs.InputImpl((ObjectId) o.get("_id"), o.toMap()));
         }
 
-        return inputs.build();
+        return inputs;
     }
 
     @Override
     public List<Input> allOfRadio(Node radio) {
-        final List<BasicDBObject> query = ImmutableList.of(
-                new BasicDBObject(MessageInput.FIELD_RADIO_ID, radio.getNodeId()),
-                new BasicDBObject(MessageInput.FIELD_GLOBAL, true));
+        List<Input> inputs = Lists.newArrayList();
+        List<BasicDBObject> query = Lists.newArrayList();
+        query.add(new BasicDBObject("radio_id", radio.getNodeId()));
+        query.add(new BasicDBObject("global", true));
 
-        final ImmutableList.Builder<Input> inputs = ImmutableList.builder();
         for (DBObject o : query(InputImpl.class, new BasicDBObject("$or", query))) {
-            inputs.add(new InputImpl((ObjectId) o.get("_id"), o.toMap()));
+            inputs.add(new org.graylog2.inputs.InputImpl((ObjectId) o.get("_id"), o.toMap()));
         }
 
-        return inputs.build();
+        return inputs;
     }
 
     @Override
     public Input find(String id) throws NotFoundException {
-        final DBObject o = get(org.graylog2.inputs.InputImpl.class, id);
-        if (o == null) {
+        DBObject o = get(org.graylog2.inputs.InputImpl.class, id);
+        if (o == null)
             throw new NotFoundException("Input <" + id + "> not found!");
-        }
         return new org.graylog2.inputs.InputImpl((ObjectId) o.get("_id"), o.toMap());
     }
 
     @Override
     public Input findForThisNodeOrGlobal(String nodeId, String id) throws NotFoundException {
-        final List<BasicDBObject> forThisNodeOrGlobal = ImmutableList.of(
-                new BasicDBObject(MessageInput.FIELD_NODE_ID, nodeId),
-                new BasicDBObject(MessageInput.FIELD_GLOBAL, true));
+        List<BasicDBObject> query = new ArrayList<BasicDBObject>();
+        query.add(new BasicDBObject("_id", new ObjectId(id)));
 
-        final List<BasicDBObject> query = ImmutableList.of(
-                new BasicDBObject("_id", new ObjectId(id)),
-                new BasicDBObject("$or", forThisNodeOrGlobal));
+        List<BasicDBObject> forThisNodeOrGlobal = new ArrayList<BasicDBObject>();
+        forThisNodeOrGlobal.add(new BasicDBObject("node_id", nodeId));
+        forThisNodeOrGlobal.add(new BasicDBObject("global", true));
 
-        final DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
+        query.add(new BasicDBObject("$or", forThisNodeOrGlobal));
+
+        DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
+
         return new InputImpl((ObjectId) o.get("_id"), o.toMap());
     }
 
     @Override
     public Input findForThisRadioOrGlobal(final String radioId, String id) throws NotFoundException {
-        final List<DBObject> radioIdOrGlobal = ImmutableList.<DBObject>of(
-                new BasicDBObject(MessageInput.FIELD_RADIO_ID, radioId),
-                new BasicDBObject(MessageInput.FIELD_GLOBAL, true));
+        List<DBObject> query = new ArrayList<>();
+        query.add(new BasicDBObject("_id", new ObjectId(id)));
+        List<DBObject> radioIdOrGlobal = new ArrayList<DBObject>() {{
+            add(new BasicDBObject("radio_id", radioId));
+            add(new BasicDBObject("global", true));
+        }};
 
-        final List<DBObject> query = ImmutableList.<DBObject>of(
-                new BasicDBObject("_id", new ObjectId(id)),
-                new BasicDBObject("$or", radioIdOrGlobal));
+        query.add(new BasicDBObject("$or", radioIdOrGlobal));
 
-        final DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
-        if (o == null) {
+        DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
+
+        if (o == null)
             throw new NotFoundException();
-        } else {
+        else
             return new InputImpl((ObjectId) o.get("_id"), o.toMap());
-        }
     }
 
     @Override
     public Input findForThisNode(String nodeId, String id) throws NotFoundException, IllegalArgumentException {
-        final List<BasicDBObject> forThisNode = ImmutableList.of(
-                new BasicDBObject(MessageInput.FIELD_NODE_ID, nodeId),
-                new BasicDBObject(MessageInput.FIELD_GLOBAL, false));
+        List<BasicDBObject> query = new ArrayList<BasicDBObject>();
+        query.add(new BasicDBObject("_id", new ObjectId(id)));
 
-        final List<BasicDBObject> query = ImmutableList.of(
-                new BasicDBObject("_id", new ObjectId(id)),
-                new BasicDBObject("$and", forThisNode));
+        List<BasicDBObject> forThisNode = new ArrayList<BasicDBObject>();
+        forThisNode.add(new BasicDBObject("node_id", nodeId));
+        forThisNode.add(new BasicDBObject("global", false));
 
-        final DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
-        if (o == null) {
+        query.add(new BasicDBObject("$and", forThisNode));
+
+        DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
+
+        if (o == null)
             throw new NotFoundException();
-        } else {
+        else
             return new InputImpl((ObjectId) o.get("_id"), o.toMap());
-        }
     }
 
     @Override
     public Input findForThisRadio(String radioId, String id) throws NotFoundException {
-        final List<Object> list = new ArrayList<Object>() {{
+        List<DBObject> query = new ArrayList<>();
+        query.add(new BasicDBObject("_id", new ObjectId(id)));
+        query.add(new BasicDBObject("radio_id", radioId));
+        List<Object> list = new ArrayList<Object>()
+        {{
             add(false);
             add(null);
         }};
+        query.add(QueryBuilder.start("global").in(list).get());
 
-        final List<DBObject> query = ImmutableList.of(
-                new BasicDBObject("_id", new ObjectId(id)),
-                new BasicDBObject(MessageInput.FIELD_RADIO_ID, radioId),
-                QueryBuilder.start(MessageInput.FIELD_GLOBAL).in(list).get());
+        DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
 
-        final DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
-        if (o == null) {
+        if (o == null)
             throw new NotFoundException();
-        } else {
+        else
             return new InputImpl((ObjectId) o.get("_id"), o.toMap());
-        }
     }
 
     @Override
@@ -176,12 +171,13 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
 
     @Override
     public void addStaticField(Input input, final String key, final String value) throws ValidationException {
-        final EmbeddedPersistable obj = new EmbeddedPersistable() {
+        EmbeddedPersistable obj = new EmbeddedPersistable() {
             @Override
             public Map<String, Object> getPersistedFields() {
-                return ImmutableMap.<String, Object>of(
-                        InputImpl.FIELD_STATIC_FIELD_KEY, key,
-                        InputImpl.FIELD_STATIC_FIELD_VALUE, value);
+                return new HashMap<String, Object>() {{
+                    put("key", key);
+                    put("value", value);
+                }};
             }
         };
 
@@ -189,69 +185,73 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public List<Extractor> getExtractors(Input input) {
+        List<Extractor> extractors = Lists.newArrayList();
+
         if (input.getFields().get(InputImpl.EMBEDDED_EXTRACTORS) == null) {
-            return Collections.emptyList();
+            return extractors;
         }
 
-        final ImmutableList.Builder<Extractor> listBuilder = ImmutableList.builder();
-        final BasicDBList mEx = (BasicDBList) input.getFields().get(InputImpl.EMBEDDED_EXTRACTORS);
-        for (final Object element : mEx) {
-            final DBObject ex = (BasicDBObject) element;
+        BasicDBList mEx = (BasicDBList) input.getFields().get(InputImpl.EMBEDDED_EXTRACTORS);
+        Iterator<Object> iterator = mEx.iterator();
+        while (iterator.hasNext()) {
+            DBObject ex = (BasicDBObject) iterator.next();
 
             // SOFT MIGRATION: does this extractor have an order set? Implemented for issue: #726
-            Long order = 0l;
-            if (ex.containsField(Extractor.FIELD_ORDER)) {
-                order = (Long) ex.get(Extractor.FIELD_ORDER); // mongodb driver gives us a java.lang.Long
+            Long order = new Long(0);
+            if (ex.containsField("order")) {
+                order = (Long) ex.get("order"); // mongodb driver gives us a java.lang.Long
             }
 
             try {
-                final Extractor extractor = extractorFactory.factory(
-                        (String) ex.get(Extractor.FIELD_ID),
-                        (String) ex.get(Extractor.FIELD_TITLE),
+                Extractor extractor = extractorFactory.factory(
+                        (String) ex.get("id"),
+                        (String) ex.get("title"),
                         order.intValue(),
-                        Extractor.CursorStrategy.valueOf(((String) ex.get(Extractor.FIELD_CURSOR_STRATEGY)).toUpperCase()),
-                        Extractor.Type.valueOf(((String) ex.get(Extractor.FIELD_TYPE)).toUpperCase()),
-                        (String) ex.get(Extractor.FIELD_SOURCE_FIELD),
-                        (String) ex.get(Extractor.FIELD_TARGET_FIELD),
-                        (Map<String, Object>) ex.get(Extractor.FIELD_EXTRACTOR_CONFIG),
-                        (String) ex.get(Extractor.FIELD_CREATOR_USER_ID),
+                        Extractor.CursorStrategy.valueOf(((String) ex.get("cursor_strategy")).toUpperCase()),
+                        Extractor.Type.valueOf(((String) ex.get("type")).toUpperCase()),
+                        (String) ex.get("source_field"),
+                        (String) ex.get("target_field"),
+                        (Map<String, Object>) ex.get("extractor_config"),
+                        (String) ex.get("creator_user_id"),
                         getConvertersOfExtractor(ex),
-                        Extractor.ConditionType.valueOf(((String) ex.get(Extractor.FIELD_CONDITION_TYPE)).toUpperCase()),
-                        (String) ex.get(Extractor.FIELD_CONDITION_VALUE)
+                        Extractor.ConditionType.valueOf(((String) ex.get("condition_type")).toUpperCase()),
+                        (String) ex.get("condition_value")
                 );
 
-                listBuilder.add(extractor);
+                extractors.add(extractor);
             } catch (Exception e) {
                 LOG.error("Cannot build extractor from persisted data. Skipping.", e);
+                continue;
             }
         }
 
-        return listBuilder.build();
+        return extractors;
     }
 
-    @SuppressWarnings("unchecked")
     private List<Converter> getConvertersOfExtractor(DBObject extractor) {
-        final ImmutableList.Builder<Converter> listBuilder = ImmutableList.builder();
+        List<Converter> cl = Lists.newArrayList();
 
-        final BasicDBList converters = (BasicDBList) extractor.get(Extractor.FIELD_CONVERTERS);
-        for (final Object element : converters) {
-            final DBObject c = (BasicDBObject) element;
+        BasicDBList m = (BasicDBList) extractor.get("converters");
+        Iterator<Object> iterator = m.iterator();
+        while (iterator.hasNext()) {
+            DBObject c = (BasicDBObject) iterator.next();
 
             try {
-                listBuilder.add(ConverterFactory.factory(
-                        Converter.Type.valueOf(((String) c.get(Extractor.FIELD_CONVERTER_TYPE)).toUpperCase()),
-                        (Map<String, Object>) c.get(Extractor.FIELD_CONVERTER_CONFIG)
+                cl.add(ConverterFactory.factory(
+                        Converter.Type.valueOf(((String) c.get("type")).toUpperCase()),
+                        (Map<String, Object>) c.get("config")
                 ));
             } catch (ConverterFactory.NoSuchConverterException e1) {
                 LOG.error("Cannot build converter from persisted data. No such converter.", e1);
+                continue;
             } catch (Exception e) {
                 LOG.error("Cannot build converter from persisted data.", e);
+                continue;
             }
         }
 
-        return listBuilder.build();
+        return cl;
     }
 
     @Override
@@ -261,21 +261,20 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
 
     @Override
     public void removeStaticField(Input input, String key) {
-        removeEmbedded(input, InputImpl.FIELD_STATIC_FIELD_KEY, InputImpl.EMBEDDED_STATIC_FIELDS, key);
+        removeEmbedded(input, InputImpl.EMBEDDED_STATIC_FIELDS_KEY, InputImpl.EMBEDDED_STATIC_FIELDS, key);
     }
 
     @Override
     public MessageInput buildMessageInput(Input io) throws NoSuchInputTypeException {
-        final MessageInput input = messageInputFactory.create(io.getType());
+        MessageInput input = messageInputFactory.create(io.getType());
 
         // Add all standard fields.
         input.setTitle(io.getTitle());
         input.setCreatorUserId(io.getCreatorUserId());
         input.setPersistId(io.getId());
         input.setCreatedAt(io.getCreatedAt());
-        if (io.isGlobal()) {
+        if (io.isGlobal())
             input.setGlobal(true);
-        }
 
         // Add extractors.
         for (Extractor extractor : this.getExtractors(io)) {
@@ -283,14 +282,16 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         }
 
         // Add static fields.
-        input.addStaticFields(io.getStaticFields());
+        for (Map.Entry<String, String> field : io.getStaticFields().entrySet()) {
+            input.addStaticField(field.getKey(), field.getValue());
+        }
 
         return input;
     }
 
     @Override
     public MessageInput getMessageInput(Input io) throws NoSuchInputTypeException {
-        final MessageInput input = buildMessageInput(io);
+        MessageInput input = buildMessageInput(io);
         input.initialize(new Configuration(io.getConfiguration()));
 
         return input;

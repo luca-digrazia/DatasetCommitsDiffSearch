@@ -24,23 +24,32 @@ package org.graylog2.shared;
 
 import com.google.common.collect.Lists;
 import com.google.inject.AbstractModule;
+import com.google.inject.Injector;
 import com.google.inject.Module;
+import org.apache.commons.io.IOUtils;
+import org.glassfish.hk2.extension.ServiceLocatorGenerator;
+import org.glassfish.jersey.internal.inject.Injections;
 import org.graylog2.plugin.Tools;
 import org.graylog2.shared.bindings.GenericBindings;
 import org.graylog2.shared.bindings.InstantiationService;
+import org.graylog2.shared.bindings.OwnServiceLocatorGenerator;
 import org.reflections.Reflections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.Writer;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class NodeRunner {
     private static final Logger LOG = LoggerFactory.getLogger(NodeRunner.class);
 
@@ -68,20 +77,45 @@ public class NodeRunner {
         return result;
     }
 
-    protected static void savePidFile(final String pidFile) {
-        final String pid = Tools.getPID();
-        final Path pidFilePath = Paths.get(pidFile);
-        pidFilePath.toFile().deleteOnExit();
+    protected static void monkeyPatchHK2(Injector injector) {
+        ServiceLocatorGenerator ownGenerator = new OwnServiceLocatorGenerator(injector);
+        try {
+            Field field = Injections.class.getDeclaredField("generator");
+            field.setAccessible(true);
+            Field modifiers = Field.class.getDeclaredField("modifiers");
+            modifiers.setAccessible(true);
+            modifiers.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+
+            field.set(null, ownGenerator);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            LOG.error("Monkey patching Jersey's HK2 failed: ", e);
+            System.exit(-1);
+        }
+
+        /*ServiceLocatorFactory factory = ServiceLocatorFactory.getInstance();
+        factory.addListener(new HK2ServiceLocatorListener(injector));*/
+
+    }
+
+    protected static void savePidFile(String pidFile) {
+
+        String pid = Tools.getPID();
+        Writer pidFileWriter = null;
 
         try {
             if (pid == null || pid.isEmpty() || pid.equals("unknown")) {
                 throw new Exception("Could not determine PID.");
             }
 
-            Files.write(pidFilePath, pid.getBytes(StandardCharsets.UTF_8));
+            pidFileWriter = new FileWriter(pidFile);
+            IOUtils.write(pid, pidFileWriter);
         } catch (Exception e) {
             LOG.error("Could not write PID file: " + e.getMessage(), e);
             System.exit(1);
+        } finally {
+            IOUtils.closeQuietly(pidFileWriter);
+            // make sure to remove our pid when we exit
+            new File(pidFile).deleteOnExit();
         }
     }
 }

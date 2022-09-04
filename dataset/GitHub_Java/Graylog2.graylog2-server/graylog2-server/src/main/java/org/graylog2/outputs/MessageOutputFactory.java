@@ -16,14 +16,8 @@
  */
 package org.graylog2.outputs;
 
-import com.google.inject.Binder;
-import com.google.inject.Module;
-import com.google.inject.util.Providers;
-import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.outputs.MessageOutput;
-import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugin.streams.Output;
-import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.resources.streams.outputs.AvailableOutputSummary;
 import org.graylog2.shared.bindings.InstantiationService;
 
@@ -36,39 +30,45 @@ import java.util.Set;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class MessageOutputFactory {
+    private final Set<Class<? extends MessageOutput>> availableMessageOutputClasses;
     private final InstantiationService instantiationService;
-    private final Map<String, MessageOutput.Factory<? extends MessageOutput>> availableOutputs;
 
     @Inject
-    public MessageOutputFactory(InstantiationService instantiationService,
-                                Map<String, MessageOutput.Factory<? extends MessageOutput>> availableOutputs) {
+    public MessageOutputFactory(Set<Class<? extends MessageOutput>> availableMessageOutputClasses,
+                                InstantiationService instantiationService) {
+        this.availableMessageOutputClasses = availableMessageOutputClasses;
         this.instantiationService = instantiationService;
-        this.availableOutputs = availableOutputs;
     }
 
-    public MessageOutput fromStreamOutput(Output output, final Stream stream, Configuration configuration) throws MessageOutputConfigurationException{
-        return this.availableOutputs.get(output.getType()).create(stream, configuration);
+    public MessageOutput fromStreamOutput(Output output) {
+        final Class<? extends MessageOutput> messageOutputClass = findMessageOutputClassForStreamOutput(output.getType());
+        final MessageOutput messageOutput = instantiationService.getInstance(messageOutputClass);
+
+        return messageOutput;
+    }
+
+    private Class<? extends MessageOutput> findMessageOutputClassForStreamOutput(String type) {
+        for (Class<? extends MessageOutput> messageOutputClass : availableMessageOutputClasses)
+            if (messageOutputClass.getName().equals(type))
+                return messageOutputClass;
+
+        throw new IllegalArgumentException("No class found for type " + type);
     }
 
     public Map<String, AvailableOutputSummary> getAvailableOutputs() {
         Map<String, AvailableOutputSummary> result = new HashMap<>();
 
-        for (Map.Entry<String, MessageOutput.Factory<? extends MessageOutput>> messageOutputEntry : this.availableOutputs.entrySet()) {
-            final MessageOutput.Factory messageOutputFactoryClass = messageOutputEntry.getValue();
+        for (Class<? extends MessageOutput> messageOutputClass : availableMessageOutputClasses) {
+            MessageOutput messageOutput = instantiationService.getInstance(messageOutputClass);
             AvailableOutputSummary availableOutputSummary = new AvailableOutputSummary();
-            availableOutputSummary.requestedConfiguration = messageOutputFactoryClass.getConfig().getRequestedConfiguration();
-            final MessageOutput.Descriptor descriptor = messageOutputFactoryClass.getDescriptor();
-            availableOutputSummary.name = descriptor.getName();
-            availableOutputSummary.type = messageOutputEntry.getKey();
-            availableOutputSummary.humanName = descriptor.getHumanName();
-            availableOutputSummary.linkToDocs = descriptor.getLinkToDocs();
-            result.put(messageOutputEntry.getKey(), availableOutputSummary);
+            availableOutputSummary.requestedConfiguration = messageOutput.getRequestedConfiguration();
+            availableOutputSummary.name = messageOutput.getName();
+            availableOutputSummary.type = messageOutput.getClass().getCanonicalName();
+            availableOutputSummary.humanName = messageOutput.getHumanName();
+            availableOutputSummary.linkToDocs = messageOutput.getLinkToDocs();
+            result.put(messageOutputClass.getCanonicalName(), availableOutputSummary);
         }
 
         return result;
-    }
-
-    public MessageOutput.Factory<? extends MessageOutput> get(String type) {
-        return this.availableOutputs.get(type);
     }
 }

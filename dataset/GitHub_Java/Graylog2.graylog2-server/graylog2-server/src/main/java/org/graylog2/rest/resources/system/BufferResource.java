@@ -22,14 +22,16 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.Configuration;
 import org.graylog2.buffers.OutputBuffer;
+import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.inputs.InputCache;
 import org.graylog2.inputs.OutputCache;
 import org.graylog2.plugin.buffers.BufferWatermark;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.buffers.ProcessBuffer;
+import org.graylog2.shared.buffers.ProcessBufferWatermark;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
@@ -37,7 +39,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -49,6 +50,8 @@ public class BufferResource extends RestResource {
 
     private final InputCache inputCache;
     private final OutputCache outputCache;
+    private final ProcessBufferWatermark processBufferWatermark;
+    private final OutputBufferWatermark outputBufferWatermark;
     private final Configuration configuration;
     private final ProcessBuffer processBuffer;
     private final OutputBuffer outputBuffer;
@@ -56,11 +59,15 @@ public class BufferResource extends RestResource {
     @Inject
     public BufferResource(InputCache inputCache,
                           OutputCache outputCache,
+                          ProcessBufferWatermark processBufferWatermark,
+                          OutputBufferWatermark outputBufferWatermark,
                           Configuration configuration,
                           ProcessBuffer processBuffer,
                           OutputBuffer outputBuffer) {
         this.inputCache = inputCache;
         this.outputCache = outputCache;
+        this.processBufferWatermark = processBufferWatermark;
+        this.outputBufferWatermark = outputBufferWatermark;
         this.configuration = configuration;
         this.processBuffer = processBuffer;
         this.outputBuffer = outputBuffer;
@@ -112,15 +119,13 @@ public class BufferResource extends RestResource {
 
         int ringSize = configuration.getRingSize();
 
-        final long inputSize = processBuffer.size();
-        final float inputUtil = inputSize/ringSize*100;
-        input.put("utilization_percent", inputUtil);
-        input.put("utilization", inputSize);
+        BufferWatermark pWm = new BufferWatermark(ringSize, processBufferWatermark);
+        input.put("utilization_percent", pWm.getUtilizationPercentage());
+        input.put("utilization", pWm.getUtilization());
 
-        final long outputSize = outputBuffer.size();
-        final float outputUtil = outputSize/ringSize*100;
-        output.put("utilization_percent", outputUtil);
-        output.put("utilization", outputSize);
+        BufferWatermark oWm = new BufferWatermark(ringSize, outputBufferWatermark);
+        output.put("utilization_percent", oWm.getUtilizationPercentage());
+        output.put("utilization", oWm.getUtilization());
 
         buffers.put("input", input);
         buffers.put("output", output);

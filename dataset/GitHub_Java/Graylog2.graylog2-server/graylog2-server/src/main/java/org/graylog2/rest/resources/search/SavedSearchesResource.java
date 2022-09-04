@@ -22,7 +22,7 @@ import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.ValidationException;
-import org.graylog2.indexer.searches.Searches;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.search.requests.CreateSavedSearchRequest;
 import org.graylog2.savedsearches.SavedSearch;
@@ -55,9 +55,9 @@ public class SavedSearchesResource extends SearchResource {
     private final SavedSearchService savedSearchService;
 
     @Inject
-    public SavedSearchesResource(Searches searches,
+    public SavedSearchesResource(Indexer indexer,
                                  SavedSearchService savedSearchService) {
-        super(searches);
+        super(indexer);
         this.savedSearchService = savedSearchService;
     }
 
@@ -81,7 +81,7 @@ public class SavedSearchesResource extends SearchResource {
         Map<String, Object> searchData = Maps.newHashMap();
         searchData.put("title", cr.title);
         searchData.put("query", cr.query);
-        searchData.put("creator_user_id", getCurrentUser().getName());
+        searchData.put("creator_user_id", cr.creatorUserId);
         searchData.put("created_at", new DateTime(DateTimeZone.UTC));
 
         SavedSearch search = new SavedSearchImpl(searchData);

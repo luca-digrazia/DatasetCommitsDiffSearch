@@ -1,6 +1,4 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,16 +13,17 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
-
 package org.graylog2.inputs.gelf.udp;
 
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.InputHost;
-import org.graylog2.plugin.inputs.util.ThroughputCounter;
+
+import com.codahale.metrics.MetricRegistry;
 import org.graylog2.inputs.gelf.GELFDispatcher;
+import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
+import org.graylog2.inputs.network.PacketInformationDumper;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.util.ThroughputCounter;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
@@ -34,12 +33,20 @@ import org.jboss.netty.channel.Channels;
  */
 public class GELFUDPPipelineFactory implements ChannelPipelineFactory {
 
-    private final InputHost server;
+    private final MetricRegistry metricRegistry;
+    private final GELFChunkManager gelfChunkManager;
+    private final Buffer processBuffer;
     private final MessageInput sourceInput;
     private final ThroughputCounter throughputCounter;
 
-    public GELFUDPPipelineFactory(InputHost server, MessageInput sourceInput, ThroughputCounter throughputCounter) {
-        this.server = server;
+    public GELFUDPPipelineFactory(MetricRegistry metricRegistry,
+                                  GELFChunkManager gelfChunkManager,
+                                  Buffer processBuffer,
+                                  MessageInput sourceInput,
+                                  ThroughputCounter throughputCounter) {
+        this.metricRegistry = metricRegistry;
+        this.gelfChunkManager = gelfChunkManager;
+        this.processBuffer = processBuffer;
         this.sourceInput = sourceInput;
         this.throughputCounter = throughputCounter;
     }
@@ -47,10 +54,10 @@ public class GELFUDPPipelineFactory implements ChannelPipelineFactory {
     @Override
     public ChannelPipeline getPipeline() throws Exception {
         ChannelPipeline p = Channels.pipeline();
+        p.addLast("packet-meta-dumper", new PacketInformationDumper(sourceInput));
         p.addLast("traffic-counter", throughputCounter);
-        p.addLast("handler", new GELFDispatcher(server, sourceInput));
+        p.addLast("handler", new GELFDispatcher(metricRegistry, gelfChunkManager, processBuffer, sourceInput));
 
         return p;
     }
-    
 }

@@ -32,23 +32,26 @@ import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class ElasticSearchOutput implements MessageOutput {
+
     private static final String NAME = "ElasticSearch Output";
     private static final Logger LOG = LoggerFactory.getLogger(ElasticSearchOutput.class);
-
-    protected final Indexer indexer;
+    private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final Meter writes;
     private final Timer processTime;
-    private final AtomicBoolean isRunning = new AtomicBoolean(false);
+    private final Indexer indexer;
 
     @Inject
-    public ElasticSearchOutput(MetricRegistry metricRegistry, Indexer indexer) {
+    public ElasticSearchOutput(MetricRegistry metricRegistry,
+                               Indexer indexer) {
         this.indexer = indexer;
         // Only constructing metrics here. write() get's another Core reference. (because this technically is a plugin)
         this.writes = metricRegistry.meter(name(ElasticSearchOutput.class, "writes"));
@@ -63,20 +66,21 @@ public class ElasticSearchOutput implements MessageOutput {
         if (LOG.isTraceEnabled()) {
             LOG.trace("Writing message id to [{}]: <{}>", getName(), message.getId());
         }
-        write(Collections.singletonList(message));
+        write(Lists.newArrayList(message));
     }
 
     @Override
     public void write(List<Message> messages) throws Exception {
         if (LOG.isTraceEnabled()) {
-            final List<String> sortedIds = Ordering.natural().sortedCopy(Lists.transform(messages, Message.ID_FUNCTION));
+            final List<String> sortedIds = Ordering.natural().sortedCopy(Lists.transform(messages,
+                                                                                         Message.ID_FUNCTION));
             LOG.trace("Writing message ids to [{}]: <{}>", getName(), Joiner.on(", ").join(sortedIds));
         }
 
         writes.mark(messages.size());
-        try (final Timer.Context context = processTime.time()) {
-            indexer.bulkIndex(messages);
-        }
+        Timer.Context tcx = processTime.time();
+        indexer.bulkIndex(messages);
+        tcx.stop();
     }
 
     @Override

@@ -19,6 +19,7 @@ package org.graylog2.rest.resources.system;
 import com.codahale.metrics.annotation.Timed;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugin.lifecycles.LoadBalancerStatus;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
@@ -26,15 +27,13 @@ import org.graylog2.rest.documentation.annotations.ApiParam;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @Api(value = "System/LoadBalancers", description = "Status propagation for load balancers")
 @Path("/system/lbstatus")
 public class LoadBalancerStatusResource extends RestResource{
@@ -46,17 +45,17 @@ public class LoadBalancerStatusResource extends RestResource{
      */
 
     @GET @Timed
-    @Produces(MediaType.TEXT_PLAIN)
     @ApiOperation(value = "Get status of this graylog2-server node for load balancers. " +
             "Returns either ALIVE with HTTP 200 or DEAD with HTTP 503.")
     public Response status() {
-        final LoadBalancerStatus lbStatus = serverStatus.getLifecycle().getLoadbalancerStatus();
+        LoadBalancerStatus lbStatus = serverStatus.getLifecycle().getLoadbalancerStatus();
 
-        Response.Status status = lbStatus == LoadBalancerStatus.ALIVE
+        Response.Status status = lbStatus.equals(LoadBalancerStatus.ALIVE)
                 ? Response.Status.OK : Response.Status.SERVICE_UNAVAILABLE;
 
         return Response.status(status)
                 .entity(lbStatus.toString().toUpperCase())
+                .type(MediaType.TEXT_PLAIN)
                 .build();
     }
 
@@ -68,22 +67,23 @@ public class LoadBalancerStatusResource extends RestResource{
             "change will override it again to its default. Set to ALIVE or DEAD.")
     @Path("/override/{status}")
     public Response override(@ApiParam(title = "status") @PathParam("status") String status) {
-        final LoadBalancerStatus lbStatus;
+        LoadBalancerStatus lbStatus;
         try {
             lbStatus = LoadBalancerStatus.valueOf(status.toUpperCase());
         } catch(IllegalArgumentException e) {
-            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+            throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
         switch (lbStatus) {
             case DEAD:
-                serverStatus.overrideLoadBalancerDead();
+                serverStatus.setLifecycle(Lifecycle.OVERRIDE_LB_DEAD);
                 break;
             case ALIVE:
-                serverStatus.overrideLoadBalancerAlive();
+                serverStatus.setLifecycle(Lifecycle.OVERRIDE_LB_ALIVE);
                 break;
         }
 
-        return Response.ok().build();
+        return Response.status(Response.Status.OK).build();
     }
+
 }

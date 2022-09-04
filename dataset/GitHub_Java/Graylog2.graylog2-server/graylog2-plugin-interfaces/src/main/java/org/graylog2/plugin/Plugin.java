@@ -25,6 +25,5 @@ package org.graylog2.plugin;
 import java.util.Collection;
 
 public interface Plugin {
-    PluginMetaData metadata();
     Collection<PluginModule> modules();
 }

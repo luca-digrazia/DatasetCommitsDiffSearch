@@ -26,7 +26,10 @@ import com.google.common.collect.Lists;
 
 import java.util.List;
 
-public class TextField extends AbstractConfigurationField {
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+public class TextField extends AbstractConfigurationField implements ConfigurationField {
     public static final String FIELD_TYPE = "text";
 
     public enum Attribute {
@@ -34,12 +37,12 @@ public class TextField extends AbstractConfigurationField {
         TEXTAREA
     }
 
-    private String defaultValue;
+    private final String defaultValue;
 
     private final List<String> attributes;
 
     public TextField(String name, String humanName, String defaultValue, String description, Optional isOptional) {
-        this(name, humanName, defaultValue, description, isOptional, new Attribute[0]);
+        this(name, humanName, defaultValue, description, isOptional, null);
     }
 
     public TextField(String name, String humanName, String defaultValue, String description, Attribute... attributes) {
@@ -61,13 +64,6 @@ public class TextField extends AbstractConfigurationField {
     @Override
     public Object getDefaultValue() {
         return defaultValue;
-    }
-
-    @Override
-    public void setDefaultValue(Object defaultValue) {
-        if (defaultValue instanceof String) {
-            this.defaultValue = (String) defaultValue;
-        }
     }
 
     @Override

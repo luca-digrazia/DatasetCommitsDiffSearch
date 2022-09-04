@@ -133,7 +133,7 @@ public class AlarmCallbackResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        final AlarmCallbackConfiguration alarmCallbackConfiguration = alarmCallbackConfigurationService.create(streamid, cr, getCurrentUser().getName());
+        final AlarmCallbackConfiguration alarmCallbackConfiguration = alarmCallbackConfigurationService.create(streamid, cr);
         alarmCallbackConfiguration.setStream(stream);
 
         String id;

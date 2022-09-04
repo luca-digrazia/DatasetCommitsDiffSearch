@@ -27,15 +27,12 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MisfireException;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -103,7 +100,7 @@ public abstract class InputRegistry {
                     inputState.setState(InputState.InputStateType.RUNNING);
                     String msg = "Completed starting [" + input.getClass().getCanonicalName() + "] input with ID <" + input.getId() + ">";
                     LOG.info(msg);
-                } catch (Exception e) {
+                } catch (MisfireException | Exception e) {
                     handleLaunchException(e, input, inputState);
                 } finally {
                     finishedLaunch(inputState);

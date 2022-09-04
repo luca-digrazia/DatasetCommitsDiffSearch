@@ -17,6 +17,8 @@
 package org.graylog2.rest.resources.streams;
 
 import com.codahale.metrics.annotation.Timed;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
@@ -29,11 +31,7 @@ import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
-import org.graylog2.rest.documentation.annotations.Api;
-import org.graylog2.rest.documentation.annotations.ApiOperation;
-import org.graylog2.rest.documentation.annotations.ApiParam;
-import org.graylog2.rest.documentation.annotations.ApiResponse;
-import org.graylog2.rest.documentation.annotations.ApiResponses;
+import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.requests.CreateRequest;
 import org.graylog2.rest.resources.streams.responses.StreamListResponse;
@@ -49,17 +47,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -100,7 +91,7 @@ public class StreamResource extends RestResource {
 
         // Create stream.
 
-        final Stream stream = streamService.create(cr, getCurrentUser().getName());
+        final Stream stream = streamService.create(cr);
         stream.setDisabled(true);
 
         final String id = streamService.save(stream);
@@ -289,7 +280,7 @@ public class StreamResource extends RestResource {
         final Map<String, Object> streamData = Maps.newHashMap();
         streamData.put("title", cr.title);
         streamData.put("description", cr.description);
-        streamData.put("creator_user_id", getCurrentUser().getName());
+        streamData.put("creator_user_id", cr.creatorUserId);
         streamData.put("created_at", new DateTime(DateTimeZone.UTC));
 
         final Stream stream = streamService.create(streamData);

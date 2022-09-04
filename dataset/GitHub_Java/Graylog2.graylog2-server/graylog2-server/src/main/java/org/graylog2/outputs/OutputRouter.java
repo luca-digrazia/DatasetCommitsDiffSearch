@@ -46,7 +46,7 @@ public class OutputRouter {
     protected Set<MessageOutput> getMessageOutputsForStream(Stream stream) {
         Set<MessageOutput> result = new HashSet<>();
         for (Output output : stream.getOutputs()) {
-            final MessageOutput messageOutput = outputRegistry.getOutputForIdAndStream(output.getId(), stream);
+            final MessageOutput messageOutput = outputRegistry.getOutputForId(output.getId());
             if (messageOutput != null)
                 result.add(messageOutput);
         }

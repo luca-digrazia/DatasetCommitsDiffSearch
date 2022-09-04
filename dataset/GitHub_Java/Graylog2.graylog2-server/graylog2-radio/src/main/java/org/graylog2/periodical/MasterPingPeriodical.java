@@ -16,12 +16,17 @@
  */
 package org.graylog2.periodical;
 
+import com.ning.http.client.AsyncHttpClient;
 import org.graylog2.plugin.periodical.Periodical;
+import org.graylog2.radio.Configuration;
 import org.graylog2.radio.cluster.Ping;
+import org.graylog2.plugin.ServerStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -29,11 +34,17 @@ import javax.inject.Inject;
 public class MasterPingPeriodical extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(MasterPingPeriodical.class);
 
-    private final Ping ping;
+    private final ServerStatus serverStatus;
+    private final Configuration configuration;
+    private final AsyncHttpClient httpClient;
 
     @Inject
-    public MasterPingPeriodical(Ping ping) {
-        this.ping = ping;
+    public MasterPingPeriodical(ServerStatus serverStatus,
+                                Configuration configuration,
+                                AsyncHttpClient httpClient) {
+        this.serverStatus = serverStatus;
+        this.configuration = configuration;
+        this.httpClient = httpClient;
     }
 
     @Override
@@ -73,7 +84,14 @@ public class MasterPingPeriodical extends Periodical {
 
     @Override
     public void doRun() {
-        ping.run();
+        try {
+            Ping.ping(httpClient,
+                    configuration.getGraylog2ServerUri(),
+                    configuration.getRestTransportUri(),
+                    serverStatus.getNodeId().toString());
+        } catch (IOException | ExecutionException | InterruptedException e) {
+            LOG.error("Master ping failed.", e);
+        }
     }
 
     @Override

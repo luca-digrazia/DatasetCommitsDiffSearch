@@ -19,9 +19,10 @@ package org.graylog2.radio.rest.resources.system;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
 import org.graylog2.inputs.InputCache;
+import org.graylog2.plugin.buffers.BufferWatermark;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.rest.resources.RestResource;
-import org.graylog2.shared.buffers.ProcessBuffer;
+import org.graylog2.shared.buffers.ProcessBufferWatermark;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
@@ -35,16 +36,12 @@ import java.util.Map;
  */
 @Path("/system/buffers")
 public class BuffersResource extends RestResource {
-    private final Configuration configuration;
-    private final InputCache inputCache;
-    private final ProcessBuffer processBuffer;
-
     @Inject
-    public BuffersResource(Configuration configuration, InputCache inputCache, ProcessBuffer processBuffer) {
-        this.configuration = configuration;
-        this.inputCache = inputCache;
-        this.processBuffer = processBuffer;
-    }
+    private Configuration configuration;
+    @Inject
+    private ProcessBufferWatermark processBufferWatermark;
+    @Inject
+    private InputCache inputCache;
 
     @GET @Timed
     @Produces(MediaType.APPLICATION_JSON)
@@ -71,12 +68,13 @@ public class BuffersResource extends RestResource {
         Map<String, Object> buffers = Maps.newHashMap();
         Map<String, Object> input = Maps.newHashMap();
 
-        final int ringSize = configuration.getRingSize();
-        final long inputSize = processBuffer.size();
-        final long inputUtil = inputSize/ringSize*100;
+        BufferWatermark pWm = new BufferWatermark(
+                configuration.getRingSize(),
+                processBufferWatermark
+        );
 
-        input.put("utilization_percent", inputUtil);
-        input.put("utilization", inputSize);
+        input.put("utilization_percent", pWm.getUtilizationPercentage());
+        input.put("utilization", pWm.getUtilization());
 
         buffers.put("input", input);
 

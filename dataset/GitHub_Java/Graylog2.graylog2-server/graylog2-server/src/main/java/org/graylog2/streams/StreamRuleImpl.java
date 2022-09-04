@@ -17,7 +17,6 @@
 package org.graylog2.streams;
 
 import com.fasterxml.jackson.annotation.JsonValue;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
@@ -25,27 +24,20 @@ import org.graylog2.database.PersistedImpl;
 import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.database.validators.IntegerValidator;
 import org.graylog2.database.validators.ObjectIdValidator;
-import org.graylog2.database.validators.OptionalStringValidator;
 import org.graylog2.plugin.database.validators.Validator;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
-
-import static com.google.common.base.Objects.firstNonNull;
 
 /**
  * Representing the rules of a single stream.
+ *
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 @CollectionName("streamrules")
 public class StreamRuleImpl extends PersistedImpl implements StreamRule {
-    public static final String FIELD_TYPE = "type";
-    public static final String FIELD_VALUE = "value";
-    public static final String FIELD_FIELD = "field";
-    public static final String FIELD_INVERTED = "inverted";
-    public static final String FIELD_STREAM_ID = "stream_id";
-    public static final String FIELD_CONTENT_PACK = "content_pack";
 
     public StreamRuleImpl(Map<String, Object> fields) {
         super(fields);
@@ -55,72 +47,82 @@ public class StreamRuleImpl extends PersistedImpl implements StreamRule {
         super(id, fields);
     }
 
+    /**
+     * @return the objectId
+     */
+/*    public ObjectId getObjectId() {
+        return (ObjectId) fields.get("_id");
+    }*/
+
+    /**
+     * @return the ruleType
+     */
     @Override
     public StreamRuleType getType() {
-        return StreamRuleType.fromInteger((Integer) fields.get(FIELD_TYPE));
+        //return (Integer) fields.get("type");
+        return StreamRuleType.fromInteger((Integer) fields.get("type"));
     }
 
     public void setType(StreamRuleType type) {
-        fields.put(FIELD_TYPE, type.toInteger());
+        fields.put("type", type.toInteger());
     }
 
+    /**
+     * @return the value
+     */
     @Override
     public String getValue() {
-        return (String) fields.get(FIELD_VALUE);
+        return (String) fields.get("value");
     }
 
     public void setValue(String value) {
-        fields.put(FIELD_VALUE, value);
+        fields.put("value", value);
     }
 
-    @Override
-    public String getField() {
-        return (String) fields.get(FIELD_FIELD);
-    }
+	@Override
+	public String getField() {
+		return (String) fields.get("field");
+	}
 
     public void setField(String field) {
-        fields.put(FIELD_FIELD, field);
+        fields.put("field", field);
     }
 
     public Boolean getInverted() {
-        return (Boolean) firstNonNull(fields.get(FIELD_INVERTED), false);
+        if (fields.get("inverted") == null) {
+            return false;
+        }
+        return (Boolean) fields.get("inverted");
     }
 
     public void setInverted(Boolean inverted) {
-        fields.put(FIELD_INVERTED, inverted);
+        fields.put("inverted", inverted);
     }
 
     public String getStreamId() {
-        return ((ObjectId) fields.get(FIELD_STREAM_ID)).toHexString();
+        return ((ObjectId) fields.get("stream_id")).toStringMongod();
     }
 
-    @Override
-    public String getContentPack() {
-        return (String) fields.get(FIELD_CONTENT_PACK);
-    }
-
-    @Override
-    public void setContentPack(String contentPack) {
-        fields.put(FIELD_CONTENT_PACK, contentPack);
-    }
+    /*public StreamImpl getStream() throws NotFoundException {
+        return StreamImpl.load(getStreamId(), core);
+    }*/
 
     public Map<String, Validator> getValidations() {
-        final ImmutableMap.Builder<String, Validator> validators = ImmutableMap.builder();
-        validators.put(FIELD_TYPE, new IntegerValidator());
-        validators.put(FIELD_FIELD, new FilledStringValidator());
-        validators.put(FIELD_STREAM_ID, new ObjectIdValidator());
-        validators.put(FIELD_CONTENT_PACK, new OptionalStringValidator());
+        HashMap<String, Validator> validators = new HashMap<String, Validator>() {{
+            put("type", new IntegerValidator());
+            put("field", new FilledStringValidator());
+            put("stream_id", new ObjectIdValidator());
+        }};
 
-        if (!this.getType().equals(StreamRuleType.PRESENCE)) {
-            validators.put(FIELD_VALUE, new FilledStringValidator());
-        }
+        if (!this.getType().equals(StreamRuleType.PRESENCE))
+            validators.put("value", new FilledStringValidator());
 
-        return validators.build();
+        return validators;
     }
 
     @Override
     public Map<String, Validator> getEmbeddedValidations(String key) {
-        return Collections.emptyMap();
+        return Maps.newHashMap();
     }
 
     @JsonValue
@@ -129,7 +131,7 @@ public class StreamRuleImpl extends PersistedImpl implements StreamRule {
         Map<String, Object> result = Maps.newHashMap(fields);
         result.remove("_id");
         result.put("id", getId());
-        result.put(FIELD_STREAM_ID, getStreamId());
+        result.put("stream_id", getStreamId());
 
         return result;
     }

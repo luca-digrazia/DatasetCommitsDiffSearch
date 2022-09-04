@@ -1,6 +1,4 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@socketfeed.com>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,29 +13,29 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.inputs.syslog;
 
-import org.graylog2.plugin.inputs.util.ConnectionCounter;
-import org.graylog2.plugin.inputs.util.ThroughputCounter;
-import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.BooleanField;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
+import org.graylog2.plugin.inputs.util.ConnectionCounter;
+import org.graylog2.plugin.inputs.util.ThroughputCounter;
 import org.jboss.netty.bootstrap.Bootstrap;
 import org.jboss.netty.channel.Channel;
 
+import javax.inject.Inject;
 import java.net.InetSocketAddress;
 import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class SyslogInputBase extends MessageInput {
+public abstract class SyslogInputBase extends MessageInput {
 
     public static final String CK_BIND_ADDRESS = "bind_address";
     public static final String CK_PORT = "port";
@@ -48,16 +46,14 @@ public class SyslogInputBase extends MessageInput {
     protected Bootstrap bootstrap;
     protected Channel channel;
 
-    protected final ThroughputCounter throughputCounter;
-    protected final ConnectionCounter connectionCounter;
+    @Inject
+    protected ThroughputCounter throughputCounter;
+    @Inject
+    protected ConnectionCounter connectionCounter;
 
-    protected GraylogServer graylogServer;
-    protected Configuration config;
     protected InetSocketAddress socketAddress;
 
     public SyslogInputBase() {
-        this.throughputCounter = new ThroughputCounter();
-        this.connectionCounter = new ConnectionCounter();
     }
 
     @Override
@@ -70,17 +66,15 @@ public class SyslogInputBase extends MessageInput {
         }
     }
 
-    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
-        this.graylogServer = graylogServer;
-        this.config = config;
-
-        if (!checkConfig(config)) {
-            throw new ConfigurationException(config.getSource().toString());
+    @Override
+    public void checkConfiguration(Configuration configuration) throws ConfigurationException {
+        if (!checkConfig(configuration)) {
+            throw new ConfigurationException(configuration.getSource().toString());
         }
 
         this.socketAddress = new InetSocketAddress(
-                config.getString(CK_BIND_ADDRESS),
-                (int) config.getInt(CK_PORT)
+                configuration.getString(CK_BIND_ADDRESS),
+                (int) configuration.getInt(CK_PORT)
         );
     }
 
@@ -93,7 +87,7 @@ public class SyslogInputBase extends MessageInput {
         ConfigurationRequest r = new ConfigurationRequest();
 
         r.addField(ConfigurationRequest.Templates.bindAddress(CK_BIND_ADDRESS));
-        r.addField(ConfigurationRequest.Templates.portNumber(CK_PORT));
+        r.addField(ConfigurationRequest.Templates.portNumber(CK_PORT, 514));
 
         r.addField(
                 new BooleanField(
@@ -122,12 +116,14 @@ public class SyslogInputBase extends MessageInput {
                 )
         );
 
+        r.addField(ConfigurationRequest.Templates.recvBufferSize(CK_RECV_BUFFER_SIZE, 1024 * 1024));
+
         return r;
     }
 
     @Override
     public Map<String, Object> getAttributes() {
-        return config.getSource();
+        return configuration.getSource();
     }
 
     @Override
@@ -141,7 +137,7 @@ public class SyslogInputBase extends MessageInput {
     }
 
     @Override
-    public void launch() throws MisfireException {
+    public void launch(Buffer processBuffer) throws MisfireException {
         throw new RuntimeException("Must be overridden in syslog input classes.");
     }
 

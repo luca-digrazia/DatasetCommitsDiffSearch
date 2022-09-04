@@ -18,20 +18,13 @@ package org.graylog2.bindings.providers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.Provider;
+import org.graylog2.shared.rest.ObjectMapperProvider;
 import org.mongojack.internal.MongoJackModule;
 
-import javax.inject.Inject;
-
 public class MongoJackObjectMapperProvider implements Provider<ObjectMapper> {
-    private final ObjectMapper objectMapper;
-
-    @Inject
-    public MongoJackObjectMapperProvider(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
 
     @Override
     public ObjectMapper get() {
-        return MongoJackModule.configure(objectMapper);
+        return MongoJackModule.configure(new ObjectMapperProvider().getContext(null));
     }
 }

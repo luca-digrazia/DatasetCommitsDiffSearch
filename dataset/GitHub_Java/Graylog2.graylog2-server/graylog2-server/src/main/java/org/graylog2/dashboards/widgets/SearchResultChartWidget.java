@@ -17,27 +17,28 @@
 package org.graylog2.dashboards.widgets;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.ImmutableMap;
 import org.graylog2.indexer.IndexHelper;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.HistogramResult;
-import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 
+import java.util.HashMap;
 import java.util.Map;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class SearchResultChartWidget extends DashboardWidget {
 
+    private final Indexer indexer;
     private final String query;
     private final TimeRange timeRange;
-    private final Searches.DateHistogramInterval interval;
+    private final Indexer.DateHistogramInterval interval;
     private final String streamId;
-    private final Searches searches;
 
-    public SearchResultChartWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
+    public SearchResultChartWidget(MetricRegistry metricRegistry, Indexer indexer, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
         super(metricRegistry, Type.SEARCH_RESULT_CHART, id, description, cacheTime, config, creatorUserId);
-        this.searches = searches;
+        this.indexer = indexer;
 
         this.query = getNonEmptyQuery(query);
         this.timeRange = timeRange;
@@ -49,15 +50,15 @@ public class SearchResultChartWidget extends DashboardWidget {
         }
 
         if (config.containsKey("interval")) {
-            this.interval = Searches.DateHistogramInterval.valueOf(((String) config.get("interval")).toUpperCase());
+            this.interval = Indexer.DateHistogramInterval.valueOf(((String) config.get("interval")).toUpperCase());
         } else {
-            this.interval = Searches.DateHistogramInterval.MINUTE;
+            this.interval = Indexer.DateHistogramInterval.MINUTE;
         }
     }
 
     // We need to ensure query is not empty, or the histogram calculation will fail
     private String getNonEmptyQuery(String query) {
-        if (isNullOrEmpty(query)) {
+        if (query == null || query.isEmpty()) {
             return "*";
         }
         return query;
@@ -73,26 +74,27 @@ public class SearchResultChartWidget extends DashboardWidget {
 
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return ImmutableMap.<String, Object>builder()
-                .put("query", query)
-                .put("stream_id", streamId)
-                .put("interval", interval.toString().toLowerCase())
-                .put("timerange", timeRange.getPersistedConfig())
-                .build();
+        return new HashMap<String, Object>() {{
+            put("query", query);
+            put("stream_id", streamId);
+            put("interval", interval.toString().toLowerCase());
+            put("timerange", timeRange.getPersistedConfig());
+        }};
     }
 
     @Override
     protected ComputationResult compute() {
         String filter = null;
-        if (!isNullOrEmpty(streamId)) {
+        if (streamId != null && !streamId.isEmpty()) {
             filter = "streams:" + streamId;
         }
 
         try {
-            HistogramResult histogram = searches.histogram(query, interval, filter, timeRange);
+            HistogramResult histogram = indexer.searches().histogram(query, interval, filter, timeRange);
             return new ComputationResult(histogram.getResults(), histogram.took().millis(), histogram.getHistogramBoundaries());
         } catch (IndexHelper.InvalidRangeFormatException e) {
             throw new RuntimeException("Invalid timerange format.", e);
         }
     }
+
 }

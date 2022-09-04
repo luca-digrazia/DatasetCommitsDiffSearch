@@ -19,15 +19,16 @@ package org.graylog2.rest.resources.documentation;
 import com.google.common.io.Resources;
 import org.graylog2.rest.resources.RestResource;
 
-import javax.ws.rs.BadRequestException;
 import javax.ws.rs.GET;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
-import java.net.URL;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @Path("/api-browser")
 public class DocumentationBrowserResource extends RestResource {
 
@@ -43,26 +44,25 @@ public class DocumentationBrowserResource extends RestResource {
     public Response asset(@PathParam("route") String route) {
         // Directory traversal should not be possible but just to make sure..
         if (route.contains("..")) {
-            throw new BadRequestException();
+            throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
         if (route.trim().equals("")) {
             route = "index.html";
         }
 
-        final URL resource = classLoader.getResource("swagger/" + route);
-        if (null != resource) {
-            try {
-                final byte[] resourceBytes = Resources.toByteArray(resource);
-
-                return Response.ok(resourceBytes, guessContentType(route))
-                        .header("Content-Length", resourceBytes.length)
-                        .build();
-            } catch (IOException e) {
-                throw new NotFoundException(e);
-            }
-        } else {
-            throw new NotFoundException();
+        byte[] read;
+        try {
+            read = Resources.toByteArray(classLoader.getResource("swagger/" + route));
+        } catch (IOException e) {
+            throw new WebApplicationException(404);
         }
+
+        return Response.ok()
+                .entity(read)
+                .header("Content-Type", guessContentType(route))
+                .header("Content-Length", read.length)
+                .build();
     }
+
 }

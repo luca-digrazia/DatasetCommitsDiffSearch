@@ -1,6 +1,4 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,9 +14,9 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.bindings.providers;
 
+import com.ning.http.client.AsyncHttpClient;
 import org.graylog2.Configuration;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.cluster.Cluster;
@@ -40,13 +38,15 @@ public class IndexerProvider implements Provider<Indexer> {
                            Searches.Factory searchesFactory,
                            Counts.Factory countsFactory,
                            Cluster.Factory clusterFactory,
-                           Indices.Factory indicesFactory) {
+                           Indices.Factory indicesFactory,
+                           AsyncHttpClient httpClient) {
         if (indexer == null) {
             indexer = new Indexer(configuration,
                     searchesFactory,
                     countsFactory,
                     clusterFactory,
-                    indicesFactory);
+                    indicesFactory,
+                    httpClient);
         }
     }
 

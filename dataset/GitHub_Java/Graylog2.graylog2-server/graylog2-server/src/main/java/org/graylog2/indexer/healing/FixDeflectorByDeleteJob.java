@@ -19,12 +19,12 @@ package org.graylog2.indexer.healing;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.buffers.Buffers;
 import org.graylog2.indexer.Deflector;
-import org.graylog2.indexer.indices.Indices;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.ServerStatus;
-import org.graylog2.shared.system.activities.Activity;
-import org.graylog2.shared.system.activities.ActivityWriter;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,17 +33,15 @@ import org.slf4j.LoggerFactory;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class FixDeflectorByDeleteJob extends SystemJob {
-
     public interface Factory {
-
         FixDeflectorByDeleteJob create();
     }
+
     private static final Logger LOG = LoggerFactory.getLogger(FixDeflectorByDeleteJob.class);
 
     public static final int MAX_CONCURRENCY = 1;
-
     private final Deflector deflector;
-    private final Indices indices;
+    private final Indexer indexer;
     private final ServerStatus serverStatus;
     private final ActivityWriter activityWriter;
     private final Buffers bufferSynchronizer;
@@ -53,14 +51,14 @@ public class FixDeflectorByDeleteJob extends SystemJob {
 
     @AssistedInject
     public FixDeflectorByDeleteJob(Deflector deflector,
-                                   Indices indices,
+                                   Indexer indexer,
                                    ServerStatus serverStatus,
                                    ActivityWriter activityWriter,
                                    Buffers bufferSynchronizer,
                                    NotificationService notificationService) {
         super(serverStatus);
         this.deflector = deflector;
-        this.indices = indices;
+        this.indexer = indexer;
         this.serverStatus = serverStatus;
         this.activityWriter = activityWriter;
         this.bufferSynchronizer = bufferSynchronizer;
@@ -69,7 +67,7 @@ public class FixDeflectorByDeleteJob extends SystemJob {
 
     @Override
     public void execute() {
-        if (deflector.isUp() || !indices.exists(deflector.getName())) {
+        if (deflector.isUp(indexer) || !indexer.indices().exists(deflector.getName())) {
             LOG.error("There is no index <{}>. No need to run this job. Aborting.", deflector.getName());
             return;
         }
@@ -86,11 +84,11 @@ public class FixDeflectorByDeleteJob extends SystemJob {
 
         // Delete deflector index.
         LOG.info("Deleting <{}> index.", deflector.getName());
-        indices.delete(deflector.getName());
+        indexer.indices().delete(deflector.getName());
         progress = 70;
 
         // Set up deflector.
-        deflector.setUp();
+        deflector.setUp(indexer);
         progress = 80;
 
         // Start message processing again.

@@ -33,14 +33,10 @@ public class ValidationException extends Exception {
         this.errors = errors;
     }
 
-    public ValidationException(final String message) {
-        this("_", message);
-    }
-
-    public ValidationException(final String field, final String message) {
+    public ValidationException(final String s) {
         this.errors = new HashMap<>();
-        this.errors.put(field, new ArrayList<ValidationResult>() {{
-            add(new ValidationResult.ValidationFailed(message));
+        this.errors.put("_", new ArrayList<ValidationResult>() {{
+            add(new ValidationResult.ValidationFailed(s));
         }});
     }
 

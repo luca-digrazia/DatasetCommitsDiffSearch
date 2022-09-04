@@ -25,17 +25,7 @@ import org.joda.time.DateTime;
 public interface Node extends Persisted {
     public enum Type {
         SERVER,
-        RADIO;
-
-        public static Type fromString(String from) {
-            if (from.toLowerCase().equals("server"))
-                return SERVER;
-
-            if (from.toLowerCase().equals("radio"))
-                return RADIO;
-
-            return null;
-        }
+        RADIO
     }
 
     String getNodeId();
@@ -48,5 +38,5 @@ public interface Node extends Persisted {
 
     String getShortNodeId();
 
-    Node.Type getType();
+    NodeImpl.Type getType();
 }

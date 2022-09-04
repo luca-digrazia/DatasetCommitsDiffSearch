@@ -20,5 +20,6 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 
 @JsonAutoDetect
 public class MetricsReadRequest {
+
     public String[] metrics;
 }

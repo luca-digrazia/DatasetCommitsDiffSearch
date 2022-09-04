@@ -17,14 +17,15 @@
 package org.graylog2.indexer.healing;
 
 import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.Configuration;
 import org.graylog2.buffers.Buffers;
 import org.graylog2.indexer.Deflector;
-import org.graylog2.indexer.indices.Indices;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.ServerStatus;
-import org.graylog2.shared.system.activities.Activity;
-import org.graylog2.shared.system.activities.ActivityWriter;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +42,9 @@ public class FixDeflectorByMoveJob extends SystemJob {
 
     public static final int MAX_CONCURRENCY = 1;
     private final Deflector deflector;
+    private final Indexer indexer;
     private final ServerStatus serverStatus;
-    private final Indices indices;
+    private final Configuration configuration;
     private final ActivityWriter activityWriter;
     private final Buffers bufferSynchronizer;
     private final NotificationService notificationService;
@@ -52,15 +54,17 @@ public class FixDeflectorByMoveJob extends SystemJob {
 
     @AssistedInject
     public FixDeflectorByMoveJob(Deflector deflector,
-                                 Indices indices,
+                                 Indexer indexer,
                                  ServerStatus serverStatus,
+                                 Configuration configuration,
                                  ActivityWriter activityWriter,
                                  Buffers bufferSynchronizer,
                                  NotificationService notificationService) {
         super(serverStatus);
         this.deflector = deflector;
-        this.indices = indices;
+        this.indexer = indexer;
         this.serverStatus = serverStatus;
+        this.configuration = configuration;
         this.activityWriter = activityWriter;
         this.bufferSynchronizer = bufferSynchronizer;
         this.notificationService = notificationService;
@@ -68,7 +72,7 @@ public class FixDeflectorByMoveJob extends SystemJob {
 
     @Override
     public void execute() {
-        if (deflector.isUp() || !indices.exists(deflector.getName())) {
+        if (deflector.isUp(indexer) || !indexer.indices().exists(deflector.getName())) {
             LOG.error("There is no index <{}>. No need to run this job. Aborting.", deflector.getName());
             return;
         }
@@ -88,14 +92,14 @@ public class FixDeflectorByMoveJob extends SystemJob {
             // Copy messages to new index.
             String newTarget = null;
             try {
-                newTarget = deflector.getNewestTargetName();
+                newTarget = Deflector.buildIndexName(configuration.getElasticSearchIndexPrefix(), deflector.getNewestTargetNumber(indexer));
 
                 LOG.info("Starting to move <{}> to <{}>.", deflector.getName(), newTarget);
-                indices.move(deflector.getName(), newTarget);
+                indexer.indices().move(deflector.getName(), newTarget);
             } catch(Exception e) {
                 LOG.error("Moving index failed. Rolling back.", e);
                 if (newTarget != null) {
-                    indices.delete(newTarget);
+                    indexer.indices().delete(newTarget);
                 }
                 throw new RuntimeException(e);
             }
@@ -106,11 +110,11 @@ public class FixDeflectorByMoveJob extends SystemJob {
 
             // Delete deflector index.
             LOG.info("Deleting <{}> index.", deflector.getName());
-            indices.delete(deflector.getName());
+            indexer.indices().delete(deflector.getName());
             progress = 90;
 
             // Set up deflector.
-            deflector.setUp();
+            deflector.setUp(indexer);
             progress = 95;
         } finally {
             // Start message processing again.

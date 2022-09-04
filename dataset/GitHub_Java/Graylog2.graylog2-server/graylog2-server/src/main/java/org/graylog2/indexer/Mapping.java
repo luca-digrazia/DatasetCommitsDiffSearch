@@ -1,32 +1,32 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer;
-
-import com.google.common.collect.Maps;
-import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
-import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequestBuilder;
-import org.elasticsearch.client.Client;
-import org.graylog2.indexer.messages.Messages;
-import org.graylog2.plugin.Tools;
 
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+
+import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
+import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequestBuilder;
+import org.elasticsearch.client.Client;
+
+import com.google.common.collect.Maps;
+import org.graylog2.plugin.Tools;
 
 
 /**
@@ -40,7 +40,7 @@ public class Mapping {
 
     public static PutMappingRequest getPutMappingRequest(final Client client, final String index, final String analyzer) {
         final PutMappingRequestBuilder builder = client.admin().indices().preparePutMapping(new String[] {index});
-        builder.setType(Messages.TYPE);
+        builder.setType(Indexer.TYPE);
 
         final Map<String, Object> mapping = new HashMap<String, Object>();
         mapping.put("properties", partFieldProperties(analyzer));
@@ -50,7 +50,7 @@ public class Mapping {
 
         // TODO: use multimap?
         final Map<String, Map<String, Object>> completeMapping = Maps.newHashMap();
-        completeMapping.put(Messages.TYPE, mapping);
+        completeMapping.put(Indexer.TYPE, mapping);
 
         builder.setSource(completeMapping);
         return builder.request();

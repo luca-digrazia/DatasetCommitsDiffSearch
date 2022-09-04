@@ -224,14 +224,10 @@ public class KafkaInput extends MessageInput {
                     stopLatch.countDown();
                 }
 
-                private Message decodeMessage(MessagePack msgpack, MessageAndMetadata<byte[], byte[]> message) {
+                private Message decodeMessage(MessagePack msgpack,
+                                              MessageAndMetadata<byte[], byte[]> message) {
                     try {
                         byte[] bytes = message.message();
-
-                        if(null == bytes) {
-                            LOG.error("Received message was null!");
-                            return null;
-                        }
 
                         totalBytesRead.addAndGet(bytes.length);
                         lastSecBytesReadTmp.addAndGet(bytes.length);
@@ -360,7 +356,7 @@ public class KafkaInput extends MessageInput {
 
     @Override
     public String linkToDocs() {
-        return "http://graylog2.org/resources/documentation/sending/heroku";
+        return "http://support.torch.sh/help/kb/getting-your-logs-into-graylog2/using-the-kafka-message-input";
     }
 
     @Override

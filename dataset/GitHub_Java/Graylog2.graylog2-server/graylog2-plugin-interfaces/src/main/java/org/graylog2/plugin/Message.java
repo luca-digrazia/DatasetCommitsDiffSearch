@@ -22,9 +22,7 @@
  */
 package org.graylog2.plugin;
 
-import com.eaio.uuid.UUID;
 import com.google.common.base.Function;
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
@@ -36,50 +34,56 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import static org.graylog2.plugin.Tools.buildElasticSearchTimeFormat;
 import static org.joda.time.DateTimeZone.UTC;
 
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class Message {
+
     private static final Logger LOG = LoggerFactory.getLogger(Message.class);
 
-    private static final String FIELD_ID = "_id".intern();
-    private static final String FIELD_MESSAGE = "message".intern();
-    private static final String FIELD_SOURCE = "source".intern();
-    private static final String FIELD_TIMESTAMP = "timestamp".intern();
-    private static final String FIELD_STREAMS = "streams".intern();
+    private Map<String, Object> fields = Maps.newHashMap();
+    private List<Stream> streams = Lists.newArrayList();
+
+    private MessageInput sourceInput;
 
     private static final Pattern VALID_KEY_CHARS = Pattern.compile("^[\\w\\.\\-]*$");
 
-    public static final ImmutableSet<String> RESERVED_FIELDS = ImmutableSet.of(
-            // ElasticSearch fields.
-            FIELD_ID,
-            "_ttl",
-            "_source",
-            "_all",
-            "_index",
-            "_type",
-            "_score",
+    // Used for drools to filter out messages.
+    private boolean filterOut = false;
 
-            // Our reserved fields.
-            FIELD_MESSAGE,
-            FIELD_SOURCE,
-            FIELD_TIMESTAMP,
-            "gl2_source_node",
-            "gl2_source_input",
-            "gl2_source_radio",
-            "gl2_source_radio_input"
+    public static final ImmutableSet<String> RESERVED_FIELDS = ImmutableSet.of(
+        // ElasticSearch fields.
+        "_id",
+        "_ttl",
+        "_source",
+        "_all",
+        "_index",
+        "_type",
+        "_score",
+        
+        // Our reserved fields.
+        "message",
+        "source",
+        "timestamp",
+        "gl2_source_node",
+        "gl2_source_input",
+        "gl2_source_radio",
+        "gl2_source_radio_input"
     );
 
     public static final ImmutableSet<String> RESERVED_SETTABLE_FIELDS = ImmutableSet.of(
-            FIELD_MESSAGE,
-            FIELD_SOURCE,
-            FIELD_TIMESTAMP,
+            "message",
+            "source",
+            "timestamp",
             "gl2_source_node",
             "gl2_source_input",
             "gl2_source_radio",
@@ -87,35 +91,30 @@ public class Message {
     );
 
     private static final ImmutableSet<String> REQUIRED_FIELDS = ImmutableSet.of(
-            FIELD_MESSAGE, FIELD_SOURCE, FIELD_ID
+            "message", "source", "_id"
     );
 
     public static final Function<Message, String> ID_FUNCTION = new MessageIdFunction();
 
-    private final Map<String, Object> fields = Maps.newHashMap();
-    private List<Stream> streams = Lists.newArrayList();
-    private MessageInput sourceInput;
-
-    // Used for drools to filter out messages.
-    private boolean filterOut = false;
     private InetAddress inetAddress;
 
-    public Message(final String message, final String source, final DateTime timestamp) {
+    public Message(String message, String source, DateTime timestamp) {
         // Adding the fields directly because they would not be accepted as a reserved fields.
-        fields.put(FIELD_ID, new UUID().toString());
-        fields.put(FIELD_MESSAGE, message);
-        fields.put(FIELD_SOURCE, source);
-        fields.put(FIELD_TIMESTAMP, timestamp);
+        fields.put("_id", new com.eaio.uuid.UUID().toString());
+        fields.put("message", message);
+        fields.put("source", source);
+        fields.put("timestamp", timestamp);
+
+        streams = Lists.newArrayList();
     }
 
-    public Message(final Map<String, Object> fields) {
-        addFields(fields);
+    public Message(Map<String, Object> fields) {
+        this.fields.putAll(fields);
     }
 
     public boolean isComplete() {
-        for (final String key : REQUIRED_FIELDS) {
-            final Object field = getField(key);
-            if (field == null || (field instanceof String && ((String) field).isEmpty())) {
+        for (String key : REQUIRED_FIELDS) {
+            if (getField(key) == null || ((String) getField(key)).isEmpty()) {
                 return false;
             }
         }
@@ -124,13 +123,12 @@ public class Message {
     }
 
     public String getValidationErrors() {
-        final StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
 
         for (String key : REQUIRED_FIELDS) {
-            final Object field = getField(key);
-            if (field == null) {
+            if (getField(key) == null) {
                 sb.append(key).append(" is missing, ");
-            } else if (field instanceof String && ((String) field).isEmpty()) {
+            } else if (((String)getField(key)).isEmpty()) {
                 sb.append(key).append(" is empty, ");
             }
         }
@@ -138,29 +136,34 @@ public class Message {
     }
 
     public String getId() {
-        return getFieldAs(String.class, FIELD_ID);
+        return (String) getField("_id");
     }
 
     public Map<String, Object> toElasticSearchObject() {
-        final Map<String, Object> obj = Maps.newHashMapWithExpectedSize(REQUIRED_FIELDS.size() + fields.size());
+        Map<String, Object> obj = Maps.newHashMap();
 
-        obj.put(FIELD_MESSAGE, getMessage());
-        obj.put(FIELD_SOURCE, getSource());
+        // Standard fields.
+        obj.put("message", getMessage());
+        obj.put("source", this.getSource());
+
+        // Add fields.
         obj.putAll(getFields());
 
-        if (getField(FIELD_TIMESTAMP) instanceof DateTime) {
-            obj.put(FIELD_TIMESTAMP, buildElasticSearchTimeFormat(((DateTime) getField(FIELD_TIMESTAMP)).withZone(UTC)));
+        if (getField("timestamp") instanceof DateTime) {
+            // Timestamp
+            obj.put("timestamp", Tools.buildElasticSearchTimeFormat(
+                    ((DateTime) getField("timestamp")).withZone(UTC)));
         }
 
         // Manually converting stream ID to string - caused strange problems without it.
-        if (getStreams().isEmpty()) {
-            obj.put(FIELD_STREAMS, Collections.emptyList());
-        } else {
-            final List<String> streamIds = Lists.newArrayListWithCapacity(streams.size());
-            for (Stream stream : streams) {
+        if (getStreams().size() > 0) {
+            List<String> streamIds = Lists.newArrayList();
+            for (Stream stream : this.getStreams()) {
                 streamIds.add(stream.getId());
             }
-            obj.put(FIELD_STREAMS, streamIds);
+            obj.put("streams", streamIds);
+        } else {
+            obj.put("streams", Collections.EMPTY_LIST);
         }
 
         return obj;
@@ -168,61 +171,71 @@ public class Message {
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder();
-        sb.append("source: ").append(getField(FIELD_SOURCE)).append(" | ");
+        StringBuilder sb = new StringBuilder();
+        sb.append("source: ").append(getField("source")).append(" | ");
 
-        final String message = getField(FIELD_MESSAGE).toString().replaceAll("\\n", "").replaceAll("\\t", "");
+        String message = getField("message").toString().replaceAll("\\n", "").replaceAll("\\t", "");
         sb.append("message: ");
 
         if (message.length() > 225) {
-            sb.append(message.substring(0, 225)).append(" (...)");
+            message = message.substring(0, 225);
+            sb.append(message).append(" (...)");
         } else {
             sb.append(message);
         }
 
-        final Map<String, Object> filteredFields = Maps.newHashMap(fields);
-        filteredFields.remove(FIELD_SOURCE);
-        filteredFields.remove(FIELD_MESSAGE);
+        Map<String, Object> filteredFields = Maps.newHashMap(fields);
+        filteredFields.remove("source");
+        filteredFields.remove("message");
 
-        Joiner.on(" | ").withKeyValueSeparator(": ").appendTo(sb, filteredFields);
+        for (Map.Entry<String, Object> entry : filteredFields.entrySet())
+            sb.append(" | ").append(entry.getKey()).append(": ").append(entry.getValue());
 
         return sb.toString();
     }
 
     public String getMessage() {
-        return getFieldAs(String.class, FIELD_MESSAGE);
+        return (String) getField("message");
     }
 
     public String getSource() {
-        return getFieldAs(String.class, FIELD_SOURCE);
+        return (String) getField("source");
     }
 
-    public void addField(final String key, final Object value) {
+    public void addField(String key, Object value) {
+        if (value == null) {
+            return;
+        }
+
+        if (String.class.equals(value.getClass())) {
+            value = ((String) value).trim();
+
+            if (((String) value).isEmpty()) {
+                return;
+            }
+        }
+
         // Don't accept protected keys. (some are allowed though lol)
-        if (RESERVED_FIELDS.contains(key) && !RESERVED_SETTABLE_FIELDS.contains(key) || !validKey(key)) {
+        if (RESERVED_FIELDS.contains(key) && !RESERVED_SETTABLE_FIELDS.contains(key)) {
+            return;
+        }
+
+        if(!validKey(key)) {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Ignoring invalid or reserved key {} for message {}", key, getId());
+                LOG.debug("Ignoring invalid key {} for message {}", key, getId());
             }
             return;
         }
 
-        if(value instanceof String) {
-            final String str = ((String) value).trim();
-
-            if(!str.isEmpty()) {
-                fields.put(key.trim(), str);
-            }
-        } else if(value != null) {
-            fields.put(key.trim(), value);
-        }
+        this.fields.put(key.trim(), value);
     }
 
-    public static boolean validKey(final String key) {
+    public static boolean validKey(String key) {
         return VALID_KEY_CHARS.matcher(key).matches();
     }
 
-    public void addFields(final Map<String, Object> fields) {
-        if (fields == null) {
+    public void addFields(Map<String, Object> fields) {
+        if(fields == null) {
             return;
         }
 
@@ -231,8 +244,8 @@ public class Message {
         }
     }
 
-    public void addStringFields(final Map<String, String> fields) {
-        if (fields == null) {
+    public void addStringFields(Map<String, String> fields) {
+        if(fields == null) {
             return;
         }
 
@@ -241,8 +254,8 @@ public class Message {
         }
     }
 
-    public void addLongFields(final Map<String, Long> fields) {
-        if (fields == null) {
+    public void addLongFields(Map<String, Long> fields) {
+        if(fields == null) {
             return;
         }
 
@@ -251,8 +264,8 @@ public class Message {
         }
     }
 
-    public void addDoubleFields(final Map<String, Double> fields) {
-        if (fields == null) {
+    public void addDoubleFields(Map<String, Double> fields) {
+        if(fields == null) {
             return;
         }
 
@@ -261,17 +274,19 @@ public class Message {
         }
     }
 
-    public void removeField(final String key) {
+    public void removeField(String key) {
         if (!RESERVED_FIELDS.contains(key)) {
-            fields.remove(key);
+            this.fields.remove(key);
         }
     }
 
-    public <T> T getFieldAs(final Class<T> T, final String key) throws ClassCastException {
-        return T.cast(getField(key));
+    public <T> T getFieldAs(Class<T> T, String key) throws ClassCastException{
+        Object rawField = getField(key);
+
+        return T.cast(rawField);
     }
 
-    public Object getField(final String key) {
+    public Object getField(String key) {
         return fields.get(key);
     }
 
@@ -279,25 +294,26 @@ public class Message {
         return ImmutableMap.copyOf(fields);
     }
 
-    public void setStreams(final Iterable<Stream> streams) {
-        this.streams = Lists.newArrayList(streams);
+    public void setStreams(List<Stream> streams) {
+        this.streams = streams;
     }
 
     public List<Stream> getStreams() {
         return this.streams;
     }
 
-    @SuppressWarnings("unchecked")
     public List<String> getStreamIds() {
+        List<String> result = new ArrayList<String>();
         try {
-            return Lists.<String>newArrayList(getFieldAs(List.class, FIELD_STREAMS));
+            result.addAll(getFieldAs(result.getClass(), "streams"));
         } catch (ClassCastException e) {
-            return Collections.emptyList();
         }
+
+        return result;
     }
 
-    public void setFilterOut(final boolean filterOut) {
-        this.filterOut = filterOut;
+    public void setFilterOut(boolean set) {
+        this.filterOut = set;
     }
 
     public boolean getFilterOut() {
@@ -308,7 +324,7 @@ public class Message {
         return sourceInput;
     }
 
-    public void setSourceInput(final MessageInput input) {
+    public void setSourceInput(MessageInput input) {
         this.sourceInput = input;
     }
 
@@ -323,7 +339,7 @@ public class Message {
 
     public static class MessageIdFunction implements Function<Message, String> {
         @Override
-        public String apply(final Message input) {
+        public String apply(Message input) {
             return input.getId();
         }
     }

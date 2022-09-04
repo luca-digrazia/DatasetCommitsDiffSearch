@@ -16,50 +16,79 @@
  */
 package org.graylog2.inputs.gelf.udp;
 
+
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.inputs.codecs.GelfCodec;
-import org.graylog2.inputs.transports.UdpTransport;
-import org.graylog2.plugin.LocalMetricRegistry;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.graylog2.inputs.gelf.GELFInputBase;
+import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MisfireException;
+import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
+import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
+import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class GELFUDPInput extends MessageInput {
+import javax.inject.Inject;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-    private static final String NAME = "GELF UDP";
+/**
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
+public class GELFUDPInput extends GELFInputBase {
 
-    @AssistedInject
+    private static final Logger LOG = LoggerFactory.getLogger(GELFUDPInput.class);
+
+    public static final String NAME = "GELF UDP";
+    private final MetricRegistry metricRegistry;
+    private final GELFChunkManager gelfChunkManager;
+
+    @Inject
     public GELFUDPInput(MetricRegistry metricRegistry,
-                        @Assisted Configuration configuration,
-                        UdpTransport.Factory udpFactory,
-                        GelfCodec.Factory gelfCodecFactory, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor) {
-        super(metricRegistry, udpFactory.create(configuration), localRegistry, gelfCodecFactory.create(configuration),
-              config, descriptor);
+                        GELFChunkManager gelfChunkManager) {
+        this.metricRegistry = metricRegistry;
+        this.gelfChunkManager = gelfChunkManager;
     }
 
-    public interface Factory extends MessageInput.Factory<GELFUDPInput> {
-        @Override
-        GELFUDPInput create(Configuration configuration);
+    @Override
+    public void initialize(Configuration configuration) {
+        super.initialize(configuration);
 
-        @Override
-        Config getConfig();
-
-        @Override
-        Descriptor getDescriptor();
-    }
-
-    public static class Descriptor extends MessageInput.Descriptor {
-        public Descriptor() {
-            super(NAME, false, "");
+        // Register throughput counter gauges.
+        for(Map.Entry<String,Gauge<Long>> gauge : throughputCounter.gauges().entrySet()) {
+            metricRegistry.register(MetricRegistry.name(getUniqueReadableId(), gauge.getKey()), gauge.getValue());
         }
     }
 
-    public static class Config extends MessageInput.Config {
-        public Config() { /* required by guice */ }
-        @AssistedInject
-        public Config(UdpTransport.Factory transport, GelfCodec.Factory codec) {
-            super(transport.getConfig(), codec.getConfig());
+    @Override
+    public void launch(Buffer processBuffer) throws MisfireException {
+        final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                        .setNameFormat("input-" + getId() + "-gelfudp-worker-%d")
+                        .build());
+
+        bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
+        bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(8192));
+        bootstrap.setPipelineFactory(new GELFUDPPipelineFactory(metricRegistry, gelfChunkManager, processBuffer, this, throughputCounter));
+        bootstrap.setOption("receiveBufferSize", getRecvBufferSize());
+
+        try {
+            channel = ((ConnectionlessBootstrap) bootstrap).bind(socketAddress);
+            LOG.info("Started GELF UDP input on {}", socketAddress);
+        } catch (Exception e) {
+            String msg = "Could not bind UDP GELF input to address " + socketAddress;
+            LOG.error(msg, e);
+            throw new MisfireException(msg);
         }
     }
+
+    @Override
+    public String getName() {
+        return NAME;
+    }
+
 }

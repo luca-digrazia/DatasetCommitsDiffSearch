@@ -1,26 +1,24 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.alerts;
 
 import com.google.common.collect.Maps;
-import com.google.inject.assistedinject.Assisted;
-import org.graylog2.alerts.types.FieldValueAlertCondition;
-import org.graylog2.alerts.types.MessageCountAlertCondition;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
@@ -39,6 +37,7 @@ import static org.testng.AssertJUnit.*;
  */
 public class AlertConditionTest {
     protected Stream stream;
+    protected Indexer indexer;
     protected Searches searches;
     protected AlertService alertService;
     protected MongoConnection mongoConnection;
@@ -50,32 +49,13 @@ public class AlertConditionTest {
     @BeforeClass
     public void setUp() throws Exception {
         stream = mock(Stream.class);
+        indexer = mock(Indexer.class);
         searches = mock(Searches.class);
         mongoConnection = mock(MongoConnection.class);
-        // TODO use injection please. this sucks so bad
-        alertService = new AlertServiceImpl(mongoConnection,
-                                            new FieldValueAlertCondition.Factory() {
-                                                @Override
-                                                public FieldValueAlertCondition createAlertCondition(Stream stream,
-                                                                                                     String id,
-                                                                                                     DateTime createdAt,
-                                                                                                     @Assisted("userid") String creatorUserId,
-                                                                                                     Map<String, Object> parameters) {
-                                                    return new FieldValueAlertCondition(searches, stream, id, createdAt, creatorUserId, parameters);
-                                                }
-                                            },
-                                            new MessageCountAlertCondition.Factory() {
-                                                @Override
-                                                public MessageCountAlertCondition createAlertCondition(Stream stream,
-                                                                                                       String id,
-                                                                                                       DateTime createdAt,
-                                                                                                       @Assisted("userid") String creatorUserId,
-                                                                                                       Map<String, Object> parameters) {
-                                                    return new MessageCountAlertCondition(searches, stream, id, createdAt, creatorUserId, parameters);
-                                                }
-                                            });
+        alertService = new AlertServiceImpl(mongoConnection);
 
         when(stream.getId()).thenReturn(STREAM_ID);
+        when(indexer.searches()).thenReturn(searches);
     }
 
     protected void assertTriggered(AlertCondition alertCondition, AlertCondition.CheckResult result) {

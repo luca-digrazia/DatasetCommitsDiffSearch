@@ -115,13 +115,8 @@ public class StreamRuleResource extends RestResource {
             throw new javax.ws.rs.NotFoundException(e);
         }
 
-        final StreamRuleType streamRuleType = StreamRuleType.fromInteger(cr.type);
-        if(null == streamRuleType) {
-            throw new BadRequestException("Unknown stream rule type " + cr.type);
-        }
-
         streamRule.setField(cr.field);
-        streamRule.setType(streamRuleType);
+        streamRule.setType(StreamRuleType.fromInteger(cr.type));
         streamRule.setInverted(cr.inverted);
         streamRule.setValue(cr.value);
 

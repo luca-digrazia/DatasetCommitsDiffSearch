@@ -18,6 +18,7 @@ package org.graylog2.inputs;
 
 import com.google.common.collect.Maps;
 import com.mongodb.BasicDBList;
+import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
@@ -26,43 +27,42 @@ import org.graylog2.database.validators.DateValidator;
 import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.database.validators.MapValidator;
 import org.graylog2.plugin.database.validators.Validator;
-import org.graylog2.plugin.inputs.Extractor;
-import org.graylog2.plugin.inputs.MessageInput;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @CollectionName("inputs")
 public class InputImpl extends PersistedImpl implements Input {
-    private static final Logger LOG = LoggerFactory.getLogger(InputImpl.class);
-
-    public static final String FIELD_STATIC_FIELD_KEY = "key";
-    public static final String FIELD_STATIC_FIELD_VALUE = "value";
 
     public static final String EMBEDDED_EXTRACTORS = "extractors";
     public static final String EMBEDDED_STATIC_FIELDS = "static_fields";
+    public static final String EMBEDDED_STATIC_FIELDS_KEY = "key";
+    private static final Logger LOG = LoggerFactory.getLogger(InputImpl.class);
 
-    public InputImpl(final Map<String, Object> fields) {
+    public InputImpl(Map<String, Object> fields) {
         super(fields);
     }
 
-    public InputImpl(final ObjectId id, final Map<String, Object> fields) {
+    public InputImpl(ObjectId id, Map<String, Object> fields) {
         super(id, fields);
     }
 
     @Override
     public Map<String, Validator> getValidations() {
         return new HashMap<String, Validator>() {{
-            put(MessageInput.FIELD_INPUT_ID, new FilledStringValidator());
-            put(MessageInput.FIELD_TITLE, new FilledStringValidator());
-            put(MessageInput.FIELD_TYPE, new FilledStringValidator());
-            put(MessageInput.FIELD_CONFIGURATION, new MapValidator());
-            put(MessageInput.FIELD_CREATOR_USER_ID, new FilledStringValidator());
-            put(MessageInput.FIELD_CREATED_AT, new DateValidator());
+            put("input_id", new FilledStringValidator());
+            put("title", new FilledStringValidator());
+            put("type", new FilledStringValidator());
+            put("configuration", new MapValidator());
+            put("creator_user_id", new FilledStringValidator());
+            put("created_at", new DateValidator());
         }};
     }
 
@@ -70,57 +70,59 @@ public class InputImpl extends PersistedImpl implements Input {
     public Map<String, Validator> getEmbeddedValidations(String key) {
         if (key.equals(EMBEDDED_EXTRACTORS)) {
             return new HashMap<String, Validator>() {{
-                put(Extractor.FIELD_ID, new FilledStringValidator());
-                put(Extractor.FIELD_TITLE, new FilledStringValidator());
-                put(Extractor.FIELD_TYPE, new FilledStringValidator());
-                put(Extractor.FIELD_CURSOR_STRATEGY, new FilledStringValidator());
-                put(Extractor.FIELD_TARGET_FIELD, new FilledStringValidator());
-                put(Extractor.FIELD_SOURCE_FIELD, new FilledStringValidator());
-                put(Extractor.FIELD_CREATOR_USER_ID, new FilledStringValidator());
-                put(Extractor.FIELD_EXTRACTOR_CONFIG, new MapValidator());
+                put("id", new FilledStringValidator());
+                put("title", new FilledStringValidator());
+                put("type", new FilledStringValidator());
+                put("cursor_strategy", new FilledStringValidator());
+                put("target_field", new FilledStringValidator());
+                put("source_field", new FilledStringValidator());
+                put("creator_user_id", new FilledStringValidator());
+                put("extractor_config", new MapValidator());
             }};
         }
 
         if (key.equals(EMBEDDED_STATIC_FIELDS)) {
             return new HashMap<String, Validator>() {{
-                put(FIELD_STATIC_FIELD_KEY, new FilledStringValidator());
-                put(FIELD_STATIC_FIELD_VALUE, new FilledStringValidator());
+                put("key", new FilledStringValidator());
+                put("value", new FilledStringValidator());
             }};
         }
 
-        return Collections.emptyMap();
+        return Maps.newHashMap();
     }
 
     @Override
     public String getTitle() {
-        return (String) fields.get(MessageInput.FIELD_TITLE);
+        return (String) fields.get("title");
     }
 
     @Override
     public DateTime getCreatedAt() {
-        return new DateTime(fields.get(MessageInput.FIELD_CREATED_AT));
+        return new DateTime(fields.get("created_at"));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public Map<String, Object> getConfiguration() {
-        return (Map<String, Object>) fields.get(MessageInput.FIELD_CONFIGURATION);
+        return (Map<String, Object>) fields.get("configuration");
     }
 
     @Override
     public Map<String, String> getStaticFields() {
+        Map<String, String> staticFields = Maps.newHashMap();
+
         if (fields.get(EMBEDDED_STATIC_FIELDS) == null) {
-            return Collections.emptyMap();
+            return staticFields;
         }
 
-        final BasicDBList list = (BasicDBList) fields.get(EMBEDDED_STATIC_FIELDS);
-        final Map<String, String> staticFields = Maps.newHashMapWithExpectedSize(list.size());
-        for (final Object element : list) {
+        BasicDBList list = (BasicDBList) fields.get(EMBEDDED_STATIC_FIELDS);
+        Iterator<Object> iterator = list.iterator();
+        while (iterator.hasNext()) {
             try {
-                final DBObject field = (DBObject) element;
-                staticFields.put((String) field.get(FIELD_STATIC_FIELD_KEY), (String) field.get(FIELD_STATIC_FIELD_VALUE));
+                DBObject field = (BasicDBObject) iterator.next();
+                staticFields.put((String) field.get("key"), (String) field.get("value"));
             } catch (Exception e) {
                 LOG.error("Cannot build static field from persisted data. Skipping.", e);
+                continue;
             }
         }
 
@@ -129,27 +131,26 @@ public class InputImpl extends PersistedImpl implements Input {
 
     @Override
     public String getType() {
-        return (String) fields.get(MessageInput.FIELD_TYPE);
+        return (String) fields.get("type");
     }
 
     @Override
     public String getCreatorUserId() {
-        return (String) fields.get(MessageInput.FIELD_CREATOR_USER_ID);
+        return (String) fields.get("creator_user_id");
     }
 
     @Override
     public String getInputId() {
-        return (String) fields.get(MessageInput.FIELD_INPUT_ID);
+        return (String) fields.get("input_id");
     }
 
     @Override
     public Boolean isGlobal() {
-        final Object global = fields.get(MessageInput.FIELD_GLOBAL);
-        if (global instanceof Boolean) {
+        Object global = fields.get("global");
+        if (global != null && global instanceof Boolean)
             return (Boolean) global;
-        } else {
+        else
             return false;
-        }
     }
 
 }

@@ -71,27 +71,28 @@ public class ServerStatusTest {
 
     @Test
     public void testSetLifecycleRunning() throws Exception {
-        status.start();
+        status.setLifecycle(Lifecycle.RUNNING);
         assertTrue(status.isProcessing());
         verify(eventBus).post(Lifecycle.RUNNING);
     }
 
     @Test
     public void testSetLifecycleUninitialized() throws Exception {
+        status.setLifecycle(Lifecycle.UNINITIALIZED);
         assertFalse(status.isProcessing());
-        verify(eventBus, never()).post(Lifecycle.UNINITIALIZED);
+        verify(eventBus, times(2)).post(Lifecycle.UNINITIALIZED);
     }
 
     @Test
     public void testSetLifecycleStarting() throws Exception {
-        status.initialize();
+        status.setLifecycle(Lifecycle.STARTING);
         assertFalse(status.isProcessing());
         verify(eventBus).post(Lifecycle.STARTING);
     }
 
     @Test
     public void testSetLifecyclePaused() throws Exception {
-        status.pauseMessageProcessing(false);
+        status.setLifecycle(Lifecycle.PAUSED);
         assertFalse(status.isProcessing());
         verify(eventBus).post(Lifecycle.PAUSED);
     }
@@ -117,7 +118,7 @@ public class ServerStatusTest {
         startLatch.await(5, TimeUnit.SECONDS);
         verify(runnable, never()).run();
 
-        status.start();
+        status.setLifecycle(Lifecycle.RUNNING);
 
         stopLatch.await(5, TimeUnit.SECONDS);
         verify(runnable).run();
@@ -146,7 +147,7 @@ public class ServerStatusTest {
         }).start();
 
         startLatch.await(5, TimeUnit.SECONDS);
-        status.start();
+        status.setLifecycle(Lifecycle.RUNNING);
         stopLatch.await(5, TimeUnit.SECONDS);
 
         assertTrue(exceptionCaught.get());

@@ -26,7 +26,10 @@ import com.google.common.collect.Lists;
 
 import java.util.List;
 
-public class NumberField extends AbstractConfigurationField {
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
+public class NumberField extends AbstractConfigurationField implements ConfigurationField {
 
     public static final String FIELD_TYPE = "number";
 
@@ -36,12 +39,12 @@ public class NumberField extends AbstractConfigurationField {
         IS_PORT_NUMBER
     }
 
-    private int defaultValue;
+    private final int defaultValue;
 
     private final List<String> attributes;
 
     public NumberField(String name, String humanName, int defaultValue, String description, Optional isOptional) {
-        this(name, humanName, defaultValue, description, isOptional, new Attribute[0]);
+        this(name, humanName, defaultValue, description, isOptional, null);
     }
 
     public NumberField(String name, String humanName, int defaultValue, String description, Attribute... attributes) {
@@ -63,13 +66,6 @@ public class NumberField extends AbstractConfigurationField {
     @Override
     public Object getDefaultValue() {
         return defaultValue;
-    }
-
-    @Override
-    public void setDefaultValue(Object defaultValue) {
-        if (defaultValue instanceof Integer) {
-            this.defaultValue = (int) defaultValue;
-        }
     }
 
     @Override

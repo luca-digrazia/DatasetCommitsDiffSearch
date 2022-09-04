@@ -22,30 +22,57 @@
  */
 package org.graylog2.plugin.streams;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public enum StreamRuleType {
-    EXACT(1),
-    GREATER(3),
-    SMALLER(4),
-    REGEX(2),
-    PRESENCE(5);
-
-    private final int value;
-
-    StreamRuleType(final int value) {
-        this.value = value;
-    }
-
-    public int toInteger() {
-        return value;
-    }
-
-    public static StreamRuleType fromInteger(final int numeric) {
-        for (final StreamRuleType streamRuleType : StreamRuleType.values()) {
-            if (streamRuleType.value == numeric) {
-                return streamRuleType;
-            }
+    EXACT {
+        @Override
+        public Integer toInteger() {
+            return 1;
         }
+    },
+    GREATER {
+        @Override
+        public Integer toInteger() {
+            return 3;
+        }
+    },
+    SMALLER {
+        @Override
+        public Integer toInteger() {
+            return 4;
+        }
+    },
+    REGEX {
+        @Override
+        public Integer toInteger() {
+            return 2;
+        }
+    },
+    PRESENCE {
+        @Override
+        public Integer toInteger() {
+            return 5;
+        }
+    };
 
-        return null;
+    public abstract Integer toInteger();
+
+    public static StreamRuleType fromInteger(int numberic) {
+        switch (numberic) {
+            case 1:
+                return EXACT;
+            case 2:
+                return REGEX;
+            case 3:
+                return GREATER;
+            case 4:
+                return SMALLER;
+            case 5:
+                return PRESENCE;
+            default:
+                return null;
+        }
     }
 }

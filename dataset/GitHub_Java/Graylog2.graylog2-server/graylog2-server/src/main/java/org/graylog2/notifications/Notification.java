@@ -60,8 +60,7 @@ public interface Notification extends Persisted {
         OUTDATED_VERSION,
         EMAIL_TRANSPORT_CONFIGURATION_INVALID,
         EMAIL_TRANSPORT_FAILED,
-        STREAM_PROCESSING_DISABLED,
-        GC_TOO_LONG
+        STREAM_PROCESSING_DISABLED
     }
 
     public enum Severity {

@@ -16,8 +16,8 @@
  */
 package org.graylog2.indexer.searches;
 
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
@@ -26,7 +26,6 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.index.query.*;
-import org.elasticsearch.node.Node;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.facet.FacetBuilders;
 import org.elasticsearch.search.facet.datehistogram.DateHistogramFacet;
@@ -41,10 +40,10 @@ import org.elasticsearch.search.sort.SortOrder;
 import org.graylog2.Configuration;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.IndexHelper;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.results.*;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
-import org.joda.time.Period;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,47 +58,16 @@ import static org.elasticsearch.index.query.QueryBuilders.queryString;
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-@Singleton
 public class Searches {
     private static final Logger LOG = LoggerFactory.getLogger(Searches.class);
 
-    public static enum TermsStatsOrder {
-        TERM,
-        REVERSE_TERM,
-        COUNT,
-        REVERSE_COUNT,
-        TOTAL,
-        REVERSE_TOTAL,
-        MIN,
-        REVERSE_MIN,
-        MAX,
-        REVERSE_MAX,
-        MEAN,
-        REVERSE_MEAN
-    }
-
-    public static enum DateHistogramInterval {
-        YEAR(Period.years(1)),
-        QUARTER(Period.months(3)),
-        MONTH(Period.months(1)),
-        WEEK(Period.weeks(1)),
-        DAY(Period.days(1)),
-        HOUR(Period.hours(1)),
-        MINUTE(Period.minutes(1));
-
-        private final Period period;
-
-        DateHistogramInterval(Period period) {
-            this.period = period;
-        }
-
-        public Period getPeriod() {
-            return period;
-        }
+    public interface Factory {
+        Searches create(Client client);
     }
 
 
     private final Configuration configuration;
+    private final Indexer indexer;
     private final Deflector deflector;
     private final IndexRangeService indexRangeService;
 	private final Client c;
@@ -108,15 +76,17 @@ public class Searches {
     private final static String STATS_FACET_NAME = "gl2_stats";
     private final static String TERMS_STATS_FACET_NAME = "gl2_termsstats";
 
-    @Inject
+    @AssistedInject
     public Searches(Configuration configuration,
+                    Indexer indexer,
                     Deflector deflector,
                     IndexRangeService indexRangeService,
-                    Node node) {
+                    @Assisted Client client) {
         this.configuration = configuration;
+        this.indexer = indexer;
         this.deflector = deflector;
         this.indexRangeService = indexRangeService;
-        this.c = node.client();
+        this.c = client;
 	}
 
     public CountResult count(String query, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
@@ -124,7 +94,7 @@ public class Searches {
     }
 
     public CountResult count(String query, TimeRange range, String filter) throws IndexHelper.InvalidRangeFormatException {
-        Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
+        Set<String> indices = IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range);
 
         SearchRequest request;
         if (filter == null) {
@@ -139,7 +109,7 @@ public class Searches {
     }
 
     public ScrollResult scroll(String query, TimeRange range, int limit, int offset, List<String> fields, String filter) throws IndexHelper.InvalidRangeFormatException {
-        final Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, range);
+        final Set<String> indices = IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range);
         final SearchRequestBuilder srb = standardSearchRequest(query, indices, limit, offset, range, null, false);
         if (range != null && filter != null) {
             srb.setPostFilter(standardFilters(range, filter));
@@ -186,7 +156,7 @@ public class Searches {
     }
 
     public SearchResult search(SearchesConfig config) throws IndexHelper.InvalidRangeFormatException {
-        Set<String> indices = IndexHelper.determineAffectedIndices(indexRangeService, deflector, config.range());
+        Set<String> indices = IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, config.range());
 
         SearchRequest request = searchRequest(config, indices).request();
 
@@ -201,9 +171,9 @@ public class Searches {
 
         SearchRequestBuilder srb;
         if (filter == null) {
-            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range));
         } else {
-            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range));
         }
 
         TermsFacetBuilder terms = new TermsFacetBuilder(TERMS_FACET_NAME);
@@ -230,16 +200,16 @@ public class Searches {
         return terms(field, size, query, null, range);
     }
 
-    public TermsStatsResult termsStats(String keyField, String valueField, TermsStatsOrder order, int size, String query, String filter, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
+    public TermsStatsResult termsStats(String keyField, String valueField, Indexer.TermsStatsOrder order, int size, String query, String filter, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
         if (size == 0) {
             size = 50;
         }
 
         SearchRequestBuilder srb;
         if (filter == null) {
-            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range));
         } else {
-            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range));
         }
 
         TermsStatsFacetBuilder stats = new TermsStatsFacetBuilder(TERMS_STATS_FACET_NAME);
@@ -264,7 +234,7 @@ public class Searches {
         );
     }
 
-    public TermsStatsResult termsStats(String keyField, String valueField,TermsStatsOrder order, int size, String query, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
+    public TermsStatsResult termsStats(String keyField, String valueField,Indexer.TermsStatsOrder order, int size, String query, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
         return termsStats(keyField, valueField, order, size, query, null, range);
     }
 
@@ -276,9 +246,9 @@ public class Searches {
         SearchRequestBuilder srb;
 
         if (filter == null) {
-            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
+            srb = standardSearchRequest(query, IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range));
         } else {
-            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexRangeService, deflector, range));
+            srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range));
         }
 
         StatisticalFacetBuilder stats = new StatisticalFacetBuilder(STATS_FACET_NAME);
@@ -308,11 +278,11 @@ public class Searches {
         );
     }
 
-    public HistogramResult histogram(String query, DateHistogramInterval interval, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
+    public HistogramResult histogram(String query, Indexer.DateHistogramInterval interval, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
         return histogram(query, interval, null, range);
     }
 
-    public HistogramResult histogram(String query, DateHistogramInterval interval, String filter, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
+    public HistogramResult histogram(String query, Indexer.DateHistogramInterval interval, String filter, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
         DateHistogramFacetBuilder fb = FacetBuilders.dateHistogramFacet("histogram")
 				.field("timestamp")
 				.interval(interval.toString().toLowerCase());
@@ -323,7 +293,7 @@ public class Searches {
         qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
 
         SearchRequestBuilder srb = c.prepareSearch();
-		srb.setIndices(IndexHelper.determineAffectedIndices(indexRangeService, deflector, range).toArray(new String[]{}));
+		srb.setIndices(IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range).toArray(new String[]{}));
 		srb.setQuery(qs);
 		srb.addFacet(fb);
 
@@ -334,7 +304,7 @@ public class Searches {
                                        interval, r.getTook());
 	}
 
-    public HistogramResult fieldHistogram(String query, String field, DateHistogramInterval interval, String filter, TimeRange range) throws FieldTypeException, IndexHelper.InvalidRangeFormatException {
+    public HistogramResult fieldHistogram(String query, String field, Indexer.DateHistogramInterval interval, String filter, TimeRange range) throws FieldTypeException, IndexHelper.InvalidRangeFormatException {
         DateHistogramFacetBuilder fb = FacetBuilders.dateHistogramFacet("histogram")
                 .keyField("timestamp")
                 .valueField(field)
@@ -346,7 +316,7 @@ public class Searches {
         qs.allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
 
         SearchRequestBuilder srb = c.prepareSearch();
-        srb.setIndices(IndexHelper.determineAffectedIndices(indexRangeService, deflector, range).toArray(new String[]{}));
+        srb.setIndices(IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range).toArray(new String[]{}));
         srb.setQuery(qs);
         srb.addFacet(fb);
 

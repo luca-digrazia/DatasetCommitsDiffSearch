@@ -1,6 +1,4 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,25 +13,24 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
-
 package org.graylog2.inputs.gelf;
 
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
-import org.graylog2.inputs.gelf.gelf.GELFProcessor;
 import org.graylog2.inputs.gelf.gelf.GELFMessage;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.InputHost;
+import org.graylog2.inputs.gelf.gelf.GELFProcessor;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelHandler;
+import org.jboss.netty.channel.socket.DatagramChannel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -45,27 +42,29 @@ public class GELFDispatcher extends SimpleChannelHandler {
     private static final Logger LOG = LoggerFactory.getLogger(GELFDispatcher.class);
 
     private GELFProcessor processor;
-    private InputHost server;
     private final MessageInput sourceInput;
 
     private final Meter receivedMessages;
     private final Meter dispatchedChunkedMessages;
     private final Meter dispatchedUnchunkedMessages;
+    private GELFChunkManager gelfChunkManager;
 
-    public GELFDispatcher(InputHost server, MessageInput sourceInput) {
-        this.server = server;
-        this.processor = new GELFProcessor(server);
+    public GELFDispatcher(MetricRegistry metricRegistry,
+                          GELFChunkManager gelfChunkManager,
+                          Buffer processBuffer,
+                          MessageInput sourceInput) {
+        this.gelfChunkManager = gelfChunkManager;
+        this.processor = new GELFProcessor(metricRegistry, processBuffer);
         this.sourceInput = sourceInput;
 
-        this.receivedMessages = server.metrics().meter(name(GELFDispatcher.class, "receivedMessages"));
-        this.dispatchedChunkedMessages = server.metrics().meter(name(GELFDispatcher.class, "dispatchedChunkedMessages"));
-        this.dispatchedUnchunkedMessages = server.metrics().meter(name(GELFDispatcher.class, "dispatchedUnchunkedMessages"));
+        this.receivedMessages = metricRegistry.meter(name(GELFDispatcher.class, "receivedMessages"));
+        this.dispatchedChunkedMessages = metricRegistry.meter(name(GELFDispatcher.class, "dispatchedChunkedMessages"));
+        this.dispatchedUnchunkedMessages = metricRegistry.meter(name(GELFDispatcher.class, "dispatchedUnchunkedMessages"));
     }
 
     @Override
     public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
         receivedMessages.mark();
-        
         ChannelBuffer buffer = (ChannelBuffer) e.getMessage();
 
         byte[] readable = new byte[buffer.readableBytes()];
@@ -76,7 +75,7 @@ public class GELFDispatcher extends SimpleChannelHandler {
         switch(msg.getGELFType()) {
         case CHUNKED:
             dispatchedChunkedMessages.mark();
-            ((GELFChunkManager) server.getGELFChunkManager()).insert(msg, sourceInput);
+            gelfChunkManager.insert(msg, sourceInput);
             break;
         case ZLIB:
         case GZIP:
@@ -91,8 +90,11 @@ public class GELFDispatcher extends SimpleChannelHandler {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
-        LOG.warn("Could not handle GELF message.", e.getCause());
-        throw (Exception) e.getCause();
+        LOG.debug("Could not handle GELF message.", e.getCause());
+
+        if (ctx.getChannel() != null && !(ctx.getChannel() instanceof DatagramChannel)) {
+            ctx.getChannel().close();
+        }
     }
 
 }

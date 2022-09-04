@@ -31,6 +31,8 @@ import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.streams.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.io.IOException;
@@ -39,44 +41,59 @@ import java.net.URL;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class HTTPAlarmCallback implements AlarmCallback {
-    private static final String CK_URL = "url";
+    private static final Logger LOG = LoggerFactory.getLogger(HTTPAlarmCallback.class);
     private final AsyncHttpClient asyncHttpClient;
     private final ObjectMapper objectMapper;
     private Configuration configuration;
 
     @Inject
-    public HTTPAlarmCallback(final AsyncHttpClient asyncHttpClient, final ObjectMapper objectMapper) {
+    public HTTPAlarmCallback(AsyncHttpClient asyncHttpClient,
+                             ObjectMapper objectMapper) {
         this.asyncHttpClient = asyncHttpClient;
         this.objectMapper = objectMapper;
     }
 
     @Override
-    public void initialize(final Configuration config) throws AlarmCallbackConfigurationException {
+    public void initialize(Configuration config) throws AlarmCallbackConfigurationException {
         this.configuration = config;
     }
 
     @Override
-    public void call(final Stream stream, final AlertCondition.CheckResult result) throws AlarmCallbackException {
-        final Map<String, Object> event = Maps.newHashMap();
+    public void call(Stream stream, AlertCondition.CheckResult result) throws AlarmCallbackException {
+        Map<String, Object> event = Maps.newHashMap();
         event.put("stream", stream);
         event.put("check_result", result);
 
-        final Response r;
+        final String body;
+
         try {
-            final String body = objectMapper.writeValueAsString(event);
-            final URL url = new URL(configuration.getString(CK_URL));
+            body = objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            AlarmCallbackException exception = new AlarmCallbackException("Unable to serialize alarm");
+            exception.initCause(e);
+            throw exception;
+        }
+
+        final URL url;
+        try {
+             url = new URL(configuration.getString("url"));
+        } catch (MalformedURLException e) {
+            AlarmCallbackException exception = new AlarmCallbackException("Malformed URL");
+            exception.initCause(e);
+            throw exception;
+        }
+
+        Response r = null;
+        try {
             r = asyncHttpClient.preparePost(url.toString())
                     .setBody(body)
                     .execute().get();
-        } catch (JsonProcessingException e) {
-            throw new AlarmCallbackException("Unable to serialize alarm", e);
-        } catch (MalformedURLException e) {
-            throw new AlarmCallbackException("Malformed URL", e);
         } catch (IOException | InterruptedException | ExecutionException e) {
-            throw new AlarmCallbackException(e.getMessage(), e);
+            throw new AlarmCallbackException(e.getMessage());
         }
 
         if (r.getStatusCode() != 200) {
@@ -86,8 +103,8 @@ public class HTTPAlarmCallback implements AlarmCallback {
 
     @Override
     public ConfigurationRequest getRequestedConfiguration() {
-        final ConfigurationRequest configurationRequest = new ConfigurationRequest();
-        configurationRequest.addField(new TextField(CK_URL,
+        ConfigurationRequest configurationRequest = new ConfigurationRequest();
+        configurationRequest.addField(new TextField("url",
                 "URL",
                 "https://example.org/alerts",
                 "The URL to POST to when an alert is triggered",
@@ -108,14 +125,14 @@ public class HTTPAlarmCallback implements AlarmCallback {
 
     @Override
     public void checkConfiguration() throws ConfigurationException {
-        if (isNullOrEmpty(configuration.getString(CK_URL))) {
+        if (configuration.getString("url") == null || configuration.getString("url").isEmpty())
             throw new ConfigurationException("URL parameter is missing!");
-        }
-
         try {
-            new URL(configuration.getString(CK_URL));
+            URL url = new URL(configuration.getString("url"));
         } catch (MalformedURLException e) {
-            throw new ConfigurationException("Malformed URL", e);
+            ConfigurationException exception = new ConfigurationException("Malformed URL");
+            exception.initCause(e);
+            throw exception;
         }
     }
 }

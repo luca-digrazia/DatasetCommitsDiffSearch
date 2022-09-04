@@ -17,16 +17,20 @@
 package org.graylog2.dashboards.widgets;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.ImmutableMap;
 import org.graylog2.indexer.IndexHelper;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.HistogramResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class FieldChartWidget extends DashboardWidget {
 
     private static final Logger LOG = LoggerFactory.getLogger(FieldChartWidget.class);
@@ -35,11 +39,11 @@ public class FieldChartWidget extends DashboardWidget {
     private final TimeRange timeRange;
     private final String streamId;
     private final Map<String, Object> config;
-    private final Searches searches;
+    private final Indexer indexer;
 
-    public FieldChartWidget(MetricRegistry metricRegistry, Searches searches, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) throws InvalidWidgetConfigurationException {
+    public FieldChartWidget(MetricRegistry metricRegistry, Indexer indexer, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) throws InvalidWidgetConfigurationException {
         super(metricRegistry, Type.FIELD_CHART, id, description, cacheTime, config, creatorUserId);
-        this.searches = searches;
+        this.indexer = indexer;
 
         if (!checkConfig(config)) {
             throw new InvalidWidgetConfigurationException("Missing or invalid widget configuration. Provided config was: " + config.toString());
@@ -63,16 +67,17 @@ public class FieldChartWidget extends DashboardWidget {
 
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return ImmutableMap.<String, Object>builder()
-                .put("query", query)
-                .put("timerange", timeRange.getPersistedConfig())
-                .put("stream_id", streamId)
-                .put("field", config.get("field"))
-                .put("valuetype", config.get("valuetype"))
-                .put("renderer", config.get("renderer"))
-                .put("interpolation", config.get("interpolation"))
-                .put("interval", config.get("interval"))
-                .build();
+        return new HashMap<String, Object>() {{
+            put("query", query);
+            put("timerange", timeRange.getPersistedConfig());
+            put("stream_id", streamId);
+
+            put("field", config.get("field"));
+            put("valuetype", config.get("valuetype"));
+            put("renderer", config.get("renderer"));
+            put("interpolation", config.get("interpolation"));
+            put("interval", config.get("interval"));
+        }};
     }
 
     @Override
@@ -83,10 +88,10 @@ public class FieldChartWidget extends DashboardWidget {
         }
 
         try {
-            HistogramResult histogramResult = searches.fieldHistogram(
+            HistogramResult histogramResult = indexer.searches().fieldHistogram(
                     query,
                     (String) config.get("field"),
-                    Searches.DateHistogramInterval.valueOf(((String) config.get("interval")).toUpperCase()),
+                    Indexer.DateHistogramInterval.valueOf(((String) config.get("interval")).toUpperCase()),
                     filter,
                     timeRange
             );
@@ -110,4 +115,5 @@ public class FieldChartWidget extends DashboardWidget {
                 && config.containsKey("interval");
 
     }
+
 }

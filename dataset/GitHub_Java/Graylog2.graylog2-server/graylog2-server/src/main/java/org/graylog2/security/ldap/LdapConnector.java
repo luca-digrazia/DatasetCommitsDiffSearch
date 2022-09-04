@@ -17,7 +17,6 @@
 package org.graylog2.security.ldap;
 
 import com.google.common.util.concurrent.SimpleTimeLimiter;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.common.util.concurrent.UncheckedTimeoutException;
 import org.apache.directory.api.ldap.model.cursor.CursorException;
 import org.apache.directory.api.ldap.model.cursor.EntryCursor;
@@ -33,12 +32,10 @@ import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 public class LdapConnector {
@@ -60,8 +57,7 @@ public class LdapConnector {
         }
 
         // this will perform an anonymous bind if there were no system credentials
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("ldap-connector-%d").build();
-        final SimpleTimeLimiter timeLimiter = new SimpleTimeLimiter(Executors.newSingleThreadExecutor(threadFactory));
+        final SimpleTimeLimiter timeLimiter = new SimpleTimeLimiter(Executors.newSingleThreadExecutor());
         @SuppressWarnings("unchecked")
         final Callable<Boolean> timeLimitedConnection = timeLimiter.newProxy(
                 new Callable<Boolean>() {
@@ -93,7 +89,7 @@ public class LdapConnector {
     public LdapEntry search(LdapNetworkConnection connection, String searchBase, String searchPattern, String principal, boolean activeDirectory) throws LdapException, CursorException {
         final LdapEntry ldapEntry = new LdapEntry();
 
-        final String filter = MessageFormat.format(searchPattern, sanitizePrincipal(principal));
+        final String filter = MessageFormat.format(searchPattern, principal);
         if (LOG.isTraceEnabled()) {
             LOG.trace("Search {} for {}, starting at {}",
                       activeDirectory ? "ActiveDirectory" : "LDAP", filter, searchBase);
@@ -124,51 +120,6 @@ public class LdapConnector {
         }
         LOG.trace("LDAP search found entry for DN {} with search filter {}", ldapEntry.getDn(), filter);
         return ldapEntry;
-    }
-
-    /**
-     * Escapes any special chars (RFC 4515) from a string representing a
-     * a search filter assertion value.
-     *
-     * @param input The input string.
-     * @return A assertion value string ready for insertion into a
-     * search filter string.
-     */
-    private String sanitizePrincipal(final String input) {
-        String s = "";
-
-        for (int i = 0; i < input.length(); i++) {
-            char c = input.charAt(i);
-
-            if (c == '*') {
-                // escape asterisk
-                s += "\\2a";
-            } else if (c == '(') {
-                // escape left parenthesis
-                s += "\\28";
-            } else if (c == ')') {
-                // escape right parenthesis
-                s += "\\29";
-            } else if (c == '\\') {
-                // escape backslash
-                s += "\\5c";
-            } else if (c == '\u0000') {
-                // escape NULL char
-                s += "\\00";
-            } else if (c <= 0x7f) {
-                // regular 1-byte UTF-8 char
-                s += String.valueOf(c);
-            } else if (c >= 0x080) {
-                // higher-order 2, 3 and 4-byte UTF-8 chars
-                byte[] utf8bytes = String.valueOf(c).getBytes(StandardCharsets.UTF_8);
-
-                for (byte b : utf8bytes) {
-                    s += String.format("\\%02x", b);
-                }
-            }
-        }
-
-        return s;
     }
 
     public boolean authenticate(LdapNetworkConnection connection, String principal, String credentials) throws LdapException {

@@ -17,7 +17,7 @@
 package org.graylog2.alerts.types;
 
 import org.graylog2.alerts.AlertConditionTest;
-import org.graylog2.indexer.InvalidRangeFormatException;
+import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
@@ -63,7 +63,7 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
             fieldStatsShouldReturn(getFieldStatsResult(checkType, higherThanThreshold));
             alertLastTriggered(-1);
 
-            AlertCondition.CheckResult result = alertService.triggered(fieldValueAlertCondition);
+            AlertCondition.CheckResult result = alertService.triggered(fieldValueAlertCondition, indexer);
 
             assertTriggered(fieldValueAlertCondition, result);
         }
@@ -80,7 +80,7 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
             fieldStatsShouldReturn(getFieldStatsResult(checkType, lowerThanThreshold));
             alertLastTriggered(-1);
 
-            AlertCondition.CheckResult result = alertService.triggered(fieldValueAlertCondition);
+            AlertCondition.CheckResult result = alertService.triggered(fieldValueAlertCondition, indexer);
 
             assertNotTriggered(result);
         }
@@ -97,7 +97,7 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
             fieldStatsShouldReturn(getFieldStatsResult(checkType, lowerThanThreshold));
             alertLastTriggered(-1);
 
-            AlertCondition.CheckResult result = alertService.triggered(fieldValueAlertCondition);
+            AlertCondition.CheckResult result = alertService.triggered(fieldValueAlertCondition, indexer);
 
             assertTriggered(fieldValueAlertCondition, result);
         }
@@ -114,7 +114,7 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
             fieldStatsShouldReturn(getFieldStatsResult(checkType, higherThanThreshold));
             alertLastTriggered(-1);
 
-            AlertCondition.CheckResult result = alertService.triggered(fieldValueAlertCondition);
+            AlertCondition.CheckResult result = alertService.triggered(fieldValueAlertCondition, indexer);
 
             assertNotTriggered(result);
         }
@@ -136,7 +136,6 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
 
     protected FieldValueAlertCondition getFieldValueAlertCondition(Map<String,Object> parameters) {
         return new FieldValueAlertCondition(
-                searches,
                 stream,
                 CONDITION_ID,
                 Tools.iso8601(),
@@ -147,7 +146,7 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
     protected void fieldStatsShouldReturn(FieldStatsResult fieldStatsResult) {
         try {
             when(searches.fieldStats(anyString(), Matchers.eq("*"), anyString(), any(RelativeRange.class))).thenReturn(fieldStatsResult);
-        } catch (InvalidRangeFormatException e) {
+        } catch (IndexHelper.InvalidRangeFormatException e) {
             assertNotNull("This should not return an exception!", e);
         } catch (Searches.FieldTypeException e) {
             assertNotNull("This should not return an exception!", e);

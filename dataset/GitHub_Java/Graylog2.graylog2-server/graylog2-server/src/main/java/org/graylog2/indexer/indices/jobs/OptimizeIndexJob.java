@@ -18,10 +18,12 @@ package org.graylog2.indexer.indices.jobs;
 
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.indexer.indices.Indices;
+import org.elasticsearch.action.admin.indices.optimize.OptimizeRequest;
+import org.graylog2.indexer.Deflector;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.ServerStatus;
-import org.graylog2.shared.system.activities.Activity;
-import org.graylog2.shared.system.activities.ActivityWriter;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +33,7 @@ import org.slf4j.LoggerFactory;
  */
 public class OptimizeIndexJob extends SystemJob {
     public interface Factory {
-        OptimizeIndexJob create(String index);
+        OptimizeIndexJob create(Deflector deflector, String index);
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(OptimizeIndexJob.class);
@@ -40,15 +42,18 @@ public class OptimizeIndexJob extends SystemJob {
 
     private final ActivityWriter activityWriter;
     private final String index;
-    private final Indices indices;
+    private final Deflector deflector;
+    private final Indexer indexer;
 
     @AssistedInject
-    public OptimizeIndexJob(ServerStatus serverStatus,
-                            Indices indices,
+    public OptimizeIndexJob(@Assisted Deflector deflector,
+                            ServerStatus serverStatus,
+                            Indexer indexer,
                             ActivityWriter activityWriter,
                             @Assisted String index) {
         super(serverStatus);
-        this.indices = indices;
+        this.deflector = deflector;
+        this.indexer = indexer;
         this.activityWriter = activityWriter;
         this.index = index;
     }
@@ -59,7 +64,15 @@ public class OptimizeIndexJob extends SystemJob {
         activityWriter.write(new Activity(msg, OptimizeIndexJob.class));
         LOG.info(msg);
 
-        indices.optimizeIndex(index);
+        // http://www.elasticsearch.org/guide/reference/api/admin-indices-optimize/
+        OptimizeRequest or = new OptimizeRequest(index);
+
+        or.maxNumSegments(1);
+        or.onlyExpungeDeletes(false);
+        or.flush(true);
+        or.waitForMerge(true); // This makes us block until the operation finished.
+
+        indexer.getClient().admin().indices().optimize(or).actionGet();
     }
 
     @Override

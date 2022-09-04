@@ -17,12 +17,12 @@
 package org.graylog2.rest.resources.system.indexer;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.indexer.cluster.Cluster;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
+import org.graylog2.indexer.Indexer;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
@@ -35,41 +35,47 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "Indexer/Cluster", description = "Indexer cluster information")
 @Path("/system/indexer/cluster")
 public class IndexerClusterResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(IndexerClusterResource.class);
-
     @Inject
-    private Cluster cluster;
+    private Indexer indexer;
 
-    @GET
-    @Timed
+    @GET @Timed
     @Path("/name")
     @RequiresPermissions(RestPermissions.INDEXERCLUSTER_READ)
     @ApiOperation(value = "Get the cluster name")
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, String> clusterName() {
-        return ImmutableMap.of("name", cluster.getName());
+    public String clusterName() {
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("name", indexer.cluster().getName());
+
+        return json(result);
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @Path("/health")
     @ApiOperation(value = "Get cluster and shard health overview")
     @RequiresPermissions(RestPermissions.INDEXERCLUSTER_READ)
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Object> clusterHealth() {
-        final Map<String, Integer> shards = ImmutableMap.of(
-                "active", cluster.getActiveShards(),
-                "initializing", cluster.getInitializingShards(),
-                "relocating", cluster.getRelocatingShards(),
-                "unassigned", cluster.getUnassignedShards());
+    public String clusterHealth() {
+        Map<String, Integer> shards = Maps.newHashMap();
+        shards.put("active", indexer.cluster().getActiveShards());
+        shards.put("initializing", indexer.cluster().getInitializingShards());
+        shards.put("relocating", indexer.cluster().getRelocatingShards());
+        shards.put("unassigned", indexer.cluster().getUnassignedShards());
 
-        return ImmutableMap.of(
-                "status", cluster.getHealth().toString().toLowerCase(),
-                "shards", shards);
+        Map<String, Object> health = Maps.newHashMap();
+        health.put("status", indexer.cluster().getHealth().toString().toLowerCase());
+        health.put("shards", shards);
+
+        return json(health);
     }
+
 }

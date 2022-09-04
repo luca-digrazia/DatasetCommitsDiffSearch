@@ -17,10 +17,9 @@
 package org.graylog2.alerts.types;
 
 import com.google.common.collect.Lists;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.alerts.AbstractAlertCondition;
 import org.graylog2.indexer.IndexHelper;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.searches.Searches;
@@ -34,12 +33,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.text.DecimalFormat;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class FieldValueAlertCondition extends AbstractAlertCondition {
+
     private static final Logger LOG = LoggerFactory.getLogger(FieldValueAlertCondition.class);
+    private List<Message> searchHits = null;
 
     public enum CheckType {
         MEAN, MIN, MAX, SUM, STDDEV
@@ -49,23 +52,15 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
         LOWER, HIGHER
     }
 
-    public interface Factory {
-        FieldValueAlertCondition createAlertCondition(Stream stream, String id, DateTime createdAt, @Assisted("userid") String creatorUserId, Map<String, Object> parameters);
-    }
-
     private final int time;
     private final ThresholdType thresholdType;
     private final Number threshold;
     private final CheckType type;
     private final String field;
     private final DecimalFormat decimalFormat;
-    private final Searches searches;
-    private List<Message> searchHits = Collections.emptyList();
 
-    @AssistedInject
-    public FieldValueAlertCondition(Searches searches, @Assisted Stream stream, @Assisted String id, @Assisted DateTime createdAt, @Assisted("userid") String creatorUserId, @Assisted Map<String, Object> parameters) {
+    public FieldValueAlertCondition(Stream stream, String id, DateTime createdAt, String creatorUserId, Map<String, Object> parameters) {
         super(stream, id, Type.FIELD_VALUE, createdAt, creatorUserId, parameters);
-        this.searches = searches;
 
         this.decimalFormat = new DecimalFormat("#.###");
 
@@ -78,20 +73,22 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
 
     @Override
     public String getDescription() {
-        return "time: " + time
-                + ", field: " + field
-                + ", check type: " + type.toString().toLowerCase()
-                + ", threshold_type: " + thresholdType.toString().toLowerCase()
-                + ", threshold: " + decimalFormat.format(threshold)
-                + ", grace: " + grace;
+        return new StringBuilder()
+                .append("time: ").append(time)
+                .append(", field: ").append(field)
+                .append(", check type: ").append(type.toString().toLowerCase())
+                .append(", threshold_type: ").append(thresholdType.toString().toLowerCase())
+                .append(", threshold: ").append(decimalFormat.format(threshold))
+                .append(", grace: ").append(grace)
+                .toString();
     }
 
     @Override
-    protected CheckResult runCheck() {
-        this.searchHits = Collections.emptyList();
+    protected CheckResult runCheck(Indexer indexer) {
+        this.searchHits = null;
         try {
-            String filter = "streams:" + stream.getId();
-            FieldStatsResult fieldStatsResult = searches.fieldStats(field, "*", filter, new RelativeRange(time * 60));
+            String filter = "streams:"+stream.getId();
+            FieldStatsResult fieldStatsResult = indexer.searches().fieldStats(field, "*", filter, new RelativeRange(time * 60));
             if (getBacklog() != null && getBacklog() > 0) {
                 this.searchHits = Lists.newArrayList();
                 for (ResultMessage resultMessage : fieldStatsResult.getSearchHits()) {
@@ -128,7 +125,7 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
 
             LOG.debug("Alert check <{}> result: [{}]", id, result);
 
-            if (Double.isInfinite(result)) {
+            if(Double.isInfinite(result)) {
                 // This happens when there are no ES results/docs.
                 LOG.debug("Infinite value. Returning not triggered.");
                 return new CheckResult(false);
@@ -145,11 +142,17 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
             }
 
             if (triggered) {
-                final String resultDescription = "Field " + field + " had a " + type + " of "
-                        + decimalFormat.format(result) + " in the last " + time + " minutes with trigger condition "
-                        + thresholdType + " than " + decimalFormat.format(threshold) + ". "
-                        + "(Current grace time: " + grace + " minutes)";
-                return new CheckResult(true, this, resultDescription, Tools.iso8601());
+                StringBuilder resultDescription = new StringBuilder();
+
+                resultDescription.append("Field ").append(field).append(" had a ")
+                        .append(type.toString().toLowerCase()).append(" of ")
+                        .append(decimalFormat.format(result)).append(" in the last ")
+                        .append(time).append(" minutes with trigger condition ")
+                        .append(thresholdType.toString().toLowerCase()).append(" than ")
+                        .append(decimalFormat.format(threshold)).append(". ")
+                        .append("(Current grace time: ").append(grace).append(" minutes)");
+
+                return new CheckResult(true, this, resultDescription.toString(), Tools.iso8601());
             } else {
                 return new CheckResult(false);
             }

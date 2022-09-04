@@ -16,11 +16,9 @@
  */
 package org.graylog2.rest.resources.users.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-
 import java.util.List;
 
-@JsonAutoDetect
 public class PermissionEditRequest {
+
     public List<String> permissions;
 }

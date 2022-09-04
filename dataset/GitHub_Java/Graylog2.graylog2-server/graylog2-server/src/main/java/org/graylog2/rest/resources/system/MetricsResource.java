@@ -26,7 +26,6 @@ import com.mongodb.DBObject;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.metrics.MetricUtils;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.requests.MetricsReadRequest;
@@ -126,7 +125,7 @@ public class MetricsResource extends RestResource {
 
             final Metric metric = metrics.get(name);
             if (metric != null) {
-                metricsList.add(MetricUtils.map(name, metric));
+                metricsList.add(getMetricMap(name, metric));
             }
         }
 
@@ -151,7 +150,7 @@ public class MetricsResource extends RestResource {
             if (metricName.startsWith(namespace) && isPermitted(RestPermissions.METRICS_READ, metricName)) {
                 try {
                     final Metric metric = e.getValue();
-                    Map<String, Object> metricMap = MetricUtils.map(metricName, metric);
+                    Map<String, Object> metricMap = getMetricMap(metricName, metric);
 
                     metrics.add(metricMap);
                 } catch(Exception ex) {
@@ -171,6 +170,30 @@ public class MetricsResource extends RestResource {
         result.put("total", metrics.size());
 
         return json(result);
+    }
+
+    private Map<String, Object> getMetricMap(String metricName, Metric metric) {
+        String type = metric.getClass().getSimpleName().toLowerCase();
+
+        if (type.isEmpty()) {
+            type = "gauge";
+        }
+
+        Map<String, Object> metricMap = Maps.newHashMap();
+        metricMap.put("full_name", metricName);
+        metricMap.put("name", metricName.substring(metricName.lastIndexOf(".") + 1));
+        metricMap.put("type", type);
+
+        if (metric instanceof Timer) {
+            metricMap.put("metric", buildTimerMap((Timer) metric));
+        } else if(metric instanceof Meter) {
+            metricMap.put("metric", buildMeterMap((Meter) metric));
+        } else if(metric instanceof Histogram) {
+            metricMap.put("metric", buildHistogramMap((Histogram) metric));
+        } else {
+            metricMap.put("metric", metric);
+        }
+        return metricMap;
     }
 
     enum MetricType {

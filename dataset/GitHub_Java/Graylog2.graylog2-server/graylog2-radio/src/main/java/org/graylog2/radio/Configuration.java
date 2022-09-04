@@ -19,13 +19,19 @@ package org.graylog2.radio;
 import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
-import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.BaseConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class Configuration extends BaseConfiguration {
-    private static final int RADIO_DEFAULT_PORT = 12950;
+
+    private static final Logger LOG = LoggerFactory.getLogger(Configuration.class);
 
     public enum TRANSPORT_TYPE {
         AMQP, KAFKA
@@ -38,13 +44,13 @@ public class Configuration extends BaseConfiguration {
     private String transportType = "amqp";
 
     @Parameter(value = "rest_listen_uri", required = true)
-    private URI restListenUri = URI.create("http://127.0.0.1:" + RADIO_DEFAULT_PORT);
+    private String restListenUri = "http://127.0.0.1:12950/";
 
     @Parameter(value = "graylog2_server_uri", required = true)
-    private URI graylog2ServerUri;
+    private String graylog2ServerUri;
 
     @Parameter(value = "rest_transport_uri")
-    private URI restTransportUri;
+    private String restTransportUri;
 
     @Parameter(value = "kafka_brokers")
     private String kafkaBrokers;
@@ -92,11 +98,15 @@ public class Configuration extends BaseConfiguration {
     }
 
     public URI getRestListenUri() {
-        return Tools.getUriWithPort(restListenUri, RADIO_DEFAULT_PORT);
+        return Tools.getUriStandard(restListenUri);
     }
 
     public URI getGraylog2ServerUri() {
-        return graylog2ServerUri == null ? null : Tools.getUriWithPort(graylog2ServerUri, GRAYLOG2_DEFAULT_PORT);
+        if (graylog2ServerUri == null || graylog2ServerUri.isEmpty()) {
+            return null;
+        }
+
+        return Tools.getUriStandard(graylog2ServerUri);
     }
 
     public int getRingSize() {
@@ -142,4 +152,5 @@ public class Configuration extends BaseConfiguration {
     public String getAmqpHostname() {
         return amqpHostname;
     }
+
 }
