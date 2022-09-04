@@ -624,7 +624,6 @@ public class CcModule
             .addCcCompilationContexts(
                 ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)))
             .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext))
-            .addQuoteIncludeDirs(cppSemantics.getQuoteIncludes(ruleContext))
             .setPurpose(convertFromNoneable(purpose, null));
 
     SkylarkNestedSet additionalCompilationInputs =
@@ -1296,7 +1295,8 @@ public class CcModule
       withFeatureSetBuilder.add(withFeatureSetFromSkylark(withFeatureSetStruct));
     }
 
-    return new FlagSet(actions, withFeatureSetBuilder.build(), flagGroupsBuilder.build());
+    return new FlagSet(
+        actions, ImmutableSet.of(), withFeatureSetBuilder.build(), flagGroupsBuilder.build());
   }
 
   /**
