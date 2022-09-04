@@ -19,24 +19,26 @@
 
 package org.graylog2.radio;
 
+import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.inject.Injector;
 import com.google.inject.name.Named;
 import com.ning.http.client.AsyncHttpClient;
-import org.glassfish.hk2.extension.ServiceLocatorGenerator;
+import com.ning.http.client.AsyncHttpClientConfig;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
-import org.glassfish.jersey.internal.inject.Injections;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.internal.scanning.PackageNamesScanner;
+import org.graylog2.inputs.BasicCache;
 import org.graylog2.inputs.Cache;
-import org.graylog2.inputs.InputCache;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.Version;
+import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
 import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
@@ -44,10 +46,9 @@ import org.graylog2.radio.cluster.Ping;
 import org.graylog2.radio.inputs.RadioInputRegistry;
 import org.graylog2.radio.transports.RadioTransport;
 import org.graylog2.radio.transports.kafka.KafkaProducer;
+import org.graylog2.shared.ProcessingHost;
 import org.graylog2.shared.ServerStatus;
-import org.graylog2.shared.bindings.OwnServiceLocatorGenerator;
 import org.graylog2.shared.buffers.ProcessBuffer;
-import org.graylog2.shared.buffers.ProcessBufferWatermark;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.stats.ThroughputStats;
@@ -64,16 +65,15 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.net.InetSocketAddress;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class Radio implements GraylogServer {
+public class Radio implements InputHost, GraylogServer, ProcessingHost {
 
     private static final Logger LOG = LoggerFactory.getLogger(Radio.class);
 
@@ -86,28 +86,23 @@ public class Radio implements GraylogServer {
     @Inject
     private ServerStatus serverStatus;
 
-    @Inject
     private GELFChunkManager gelfChunkManager;
 
     @Inject
     @Named("scheduler")
     private ScheduledExecutorService scheduler;
 
-    @Inject
     private RadioInputRegistry inputs;
-
-    @Inject
-    private InputCache inputCache;
-    @Inject
+    private Cache inputCache;
     private ProcessBuffer processBuffer;
 
     @Inject
-    private ProcessBufferWatermark processBufferWatermark;
+    @Named("processBufferWatermark")
+    private AtomicInteger processBufferWatermark;
 
     private Ping.Pinger pinger;
 
-    @Inject
-    private AsyncHttpClient httpClient;
+    private final AsyncHttpClient httpClient;
 
     @Inject
     private ProcessBuffer.Factory processBufferFactory;
@@ -117,14 +112,24 @@ public class Radio implements GraylogServer {
     private ThroughputStats throughputStats;
 
     public Radio() {
+        AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
+        builder.setAllowPoolingConnection(false);
+        httpClient = new AsyncHttpClient(builder.build());
     }
 
     public void initialize() {
+        gelfChunkManager = new GELFChunkManager(this);
         gelfChunkManager.start();
+
+        inputCache = new BasicCache();
 
         RadioTransport transport = new KafkaProducer(this);
 
         int processBufferProcessorCount = configuration.getProcessBufferProcessors();
+        this.inputs = new RadioInputRegistry(this,
+                this.getHttpClient(),
+                this.getConfiguration().getGraylog2ServerUri()
+        );
 
         ProcessBufferProcessor[] processors = new ProcessBufferProcessor[processBufferProcessorCount];
 
@@ -136,6 +141,11 @@ public class Radio implements GraylogServer {
         processBuffer.initialize(processors, configuration.getRingSize(),
                 configuration.getProcessorWaitStrategy(),
                 configuration.getProcessBufferProcessors()
+        );
+
+        this.inputs = new RadioInputRegistry(this,
+                this.getHttpClient(),
+                configuration.getGraylog2ServerUri()
         );
 
         if (this.configuration.getRestTransportUri() == null) {
@@ -162,21 +172,11 @@ public class Radio implements GraylogServer {
         scheduler.scheduleAtFixedRate(masterCacheWorker, 0, 1, TimeUnit.SECONDS);*/
     }
 
-    public void startRestApi(Injector injector) throws IOException {
-        ServiceLocatorGenerator ownGenerator = new OwnServiceLocatorGenerator(injector);
-        try {
-            Field field = Injections.class.getDeclaredField("generator");
-            field.setAccessible(true);
-            Field modifiers = Field.class.getDeclaredField("modifiers");
-            modifiers.setAccessible(true);
-            modifiers.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+    public void launchPersistedInputs() throws InterruptedException, ExecutionException, IOException {
+        inputs.launchAllPersisted();
+    }
 
-            field.set(null, ownGenerator);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            LOG.error("Monkey patching Jersey's HK2 failed: ", e);
-            System.exit(-1);
-        }
-
+    public void startRestApi() throws IOException {
         final ExecutorService bossExecutor = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
                         .setNameFormat("restapi-boss-%d")
@@ -235,20 +235,30 @@ public class Radio implements GraylogServer {
         pinger.ping();
     }
 
+    public boolean isProcessing() {
+        return true;
+    }
+
     private class Graylog2Binder extends AbstractBinder {
 
         @Override
         protected void configure() {
             bind(Radio.this).to(Radio.class);
-            /*bind(metricRegistry).to(MetricRegistry.class);
+            bind(metricRegistry).to(MetricRegistry.class);
             bind(throughputStats).to(ThroughputStats.class);
             bind(configuration).to(Configuration.class);
             bind(serverStatus).to(ServerStatus.class);
-            bind(inputs).to(InputRegistry.class);
-            bind((InputCache)getInputCache()).to(InputCache.class);
-            bind(processBuffer).to(ProcessBuffer.class);*/
         }
 
+    }
+
+    @Override
+    public Buffer getProcessBuffer() {
+        return processBuffer;
+    }
+
+    public AtomicInteger processBufferWatermark() {
+        return processBufferWatermark;
     }
 
     public String getNodeId() {
@@ -256,15 +266,78 @@ public class Radio implements GraylogServer {
     }
 
     @Override
+    public GELFChunkManager getGELFChunkManager() {
+        return this.gelfChunkManager;
+    }
+
+    @Override
     public MetricRegistry metrics() {
         return metricRegistry;
+    }
+
+    public DateTime getStartedAt() {
+        return serverStatus.getStartedAt();
+    }
+
+    public InputRegistry inputs() {
+        return inputs;
     }
 
     public Configuration getConfiguration() {
         return configuration;
     }
 
+    public Cache getInputCache() {
+        return inputCache;
+    }
+
+    private AsyncHttpClient getHttpClient() {
+        return httpClient;
+    }
+
+    public List<MessageFilter> getFilters() {
+        List<MessageFilter> result = Lists.newArrayList();
+        return result;
+    }
+
+    @Override
+    public void closeIndexShortcut(String indexName) {
+    }
+
+    @Override
+    public void deleteIndexShortcut(String indexName) {
+    }
+
+    @Override
+    public boolean isMaster() {
+        return false;
+    }
+
+    @Override
+    public Buffer getOutputBuffer() {
+        return null;
+    }
+
     @Override
     public void run() {
     }
+
+    @Override
+    public boolean isServer() {
+        return serverStatus.hasCapability(ServerStatus.Capability.SERVER);
+    }
+
+    @Override
+    public boolean isRadio() {
+        return serverStatus.hasCapability(ServerStatus.Capability.RADIO);
+    }
+
+    public Lifecycle getLifecycle() {
+        return serverStatus.getLifecycle();
+    }
+
+    public void setLifecycle(Lifecycle lifecycle) {
+        serverStatus.setLifecycle(lifecycle);
+    }
+
 }

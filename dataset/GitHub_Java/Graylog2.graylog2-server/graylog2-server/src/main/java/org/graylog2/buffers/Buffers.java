@@ -18,13 +18,11 @@
  */
 package org.graylog2.buffers;
 
-import com.google.common.util.concurrent.Uninterruptibles;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.concurrent.TimeUnit;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -35,8 +33,6 @@ public class Buffers {
     private final ProcessBuffer processBuffer;
     private final OutputBuffer outputBuffer;
 
-    private final int MAXTRIES = 30;
-
     @Inject
     public Buffers(ProcessBuffer processBuffer, OutputBuffer outputBuffer) {
         this.processBuffer = processBuffer;
@@ -46,16 +42,11 @@ public class Buffers {
     public void waitForEmptyBuffers() {
         // Wait until the buffers are empty. Messages that were already started to be processed must be fully processed.
         LOG.info("Waiting until all buffers are empty.");
-        int tries = 0;
         while(!(processBuffer.isEmpty() && outputBuffer.isEmpty())) {
-            tries++;
-            if (tries >= MAXTRIES) {
-                LOG.info("Waited for {} seconds, giving up.", tries);
-                return;
-            }
-
-            LOG.info("Not all buffers are empty. Waiting another second. ({}p/{}o)", processBuffer.getUsage(), outputBuffer.getUsage());
-            Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
+            try {
+                LOG.info("Not all buffers are empty. Waiting another second. ({}p/{}o)", processBuffer.getUsage(), outputBuffer.getUsage());
+                Thread.sleep(1000);
+            } catch (InterruptedException e) { /* */ }
         }
 
         LOG.info("All buffers are empty. Continuing.");

@@ -16,14 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.Configuration;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.rest.documentation.annotations.Api;
@@ -31,7 +29,6 @@ import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.system.activities.Activity;
-import org.graylog2.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,21 +51,10 @@ public class DeflectorResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(DeflectorResource.class);
     
-    private final Deflector deflector;
-    private final Indexer indexer;
-    private final ActivityWriter activityWriter;
-    private final Configuration configuration;
-
     @Inject
-    public DeflectorResource(Deflector deflector,
-                             Indexer indexer,
-                             ActivityWriter activityWriter,
-                             Configuration configuration) {
-        this.deflector = deflector;
-        this.indexer = indexer;
-        this.activityWriter = activityWriter;
-        this.configuration = configuration;
-    }
+    private Deflector deflector;
+    @Inject
+    private Indexer indexer;
 
     @GET @Timed
     @ApiOperation(value = "Get current deflector status")
@@ -93,8 +79,8 @@ public class DeflectorResource extends RestResource {
 
         Map<String, Object> result = Maps.newHashMap();
 
-        result.put("max_docs_per_index", configuration.getElasticSearchMaxDocsPerIndex());
-        result.put("max_number_of_indices", configuration.getMaxNumberOfIndices());
+        result.put("max_docs_per_index", core.getConfiguration().getElasticSearchMaxDocsPerIndex());
+        result.put("max_number_of_indices", core.getConfiguration().getMaxNumberOfIndices());
 
         return Response.ok().entity(json(result)).build();
     }
@@ -108,7 +94,7 @@ public class DeflectorResource extends RestResource {
 
         String msg = "Cycling deflector. Reason: REST request.";
         LOG.info(msg);
-        activityWriter.write(new Activity(msg, DeflectorResource.class));
+        core.getActivityWriter().write(new Activity(msg, DeflectorResource.class));
 
         deflector.cycle(indexer);
         return Response.ok().build();

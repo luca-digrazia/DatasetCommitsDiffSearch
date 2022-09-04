@@ -22,16 +22,10 @@ package org.graylog2.periodical;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.inject.Inject;
-import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.inputs.Cache;
-import org.graylog2.inputs.InputCache;
-import org.graylog2.inputs.OutputCache;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
-import org.graylog2.plugin.periodical.Periodical;
-import org.graylog2.shared.ServerStatus;
-import org.graylog2.shared.buffers.ProcessBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,25 +42,10 @@ public class MasterCacheWorkerThread extends Periodical {
     private Meter outOfCapacity;
 
     private final MetricRegistry metricRegistry;
-    private final InputCache inputCache;
-    private final OutputCache outputCache;
-    private final ProcessBuffer processBuffer;
-    private final OutputBuffer outputBuffer;
-    private final ServerStatus serverStatus;
 
     @Inject
-    public MasterCacheWorkerThread(MetricRegistry metricRegistry,
-                                   InputCache inputCache,
-                                   OutputCache outputCache,
-                                   ProcessBuffer processBuffer,
-                                   OutputBuffer outputBuffer,
-                                   ServerStatus serverStatus) {
+    public MasterCacheWorkerThread(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
-        this.inputCache = inputCache;
-        this.outputCache = outputCache;
-        this.processBuffer = processBuffer;
-        this.outputBuffer = outputBuffer;
-        this.serverStatus = serverStatus;
     }
 
     @Override
@@ -77,16 +56,16 @@ public class MasterCacheWorkerThread extends Periodical {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                work(inputCache, processBuffer);
+                work(core.getInputCache(), core.getProcessBuffer());
             }
-        }, "master-cache-worker-input").start();
+        }).start();
 
         new Thread(new Runnable() {
             @Override
             public void run() {
-                work(outputCache, outputBuffer);
+                work(core.getOutputCache(), core.getOutputBuffer());
             }
-        }, "master-cache-worker-output").start();
+        }).start();
     }
 
     private void work(Cache cache, Buffer targetBuffer) {
@@ -94,16 +73,16 @@ public class MasterCacheWorkerThread extends Periodical {
 
         while(true) {
             try {
-                if (!cache.isEmpty() && serverStatus.isProcessing()) {
+                if (cache.size() > 0 && core.isProcessing()) {
                     LOG.debug("{} contains {} messages. Trying to process them.", cacheName, cache.size());
 
                     while (true) {
-                        if (cache.isEmpty()) {
+                        if (cache.size() <= 0) {
                             LOG.debug("Read all messages from {}.", cacheName);
                             break;
                         }
 
-                        if (targetBuffer.hasCapacity() && serverStatus.isProcessing()) {
+                        if (targetBuffer.hasCapacity() && core.isProcessing()) {
                             try {
                                 LOG.debug("Reading message from {}.", cacheName);
                                 Message msg = cache.pop();

@@ -16,80 +16,56 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.system.shutdown;
 
-import com.google.common.util.concurrent.ServiceManager;
-import com.google.inject.Inject;
-import org.graylog2.Configuration;
-import org.graylog2.initializers.BufferSynchronizerService;
-import org.graylog2.initializers.IndexerSetupService;
+import com.google.common.base.Stopwatch;
+import org.graylog2.Core;
+import org.graylog2.buffers.Buffers;
+import org.graylog2.caches.Caches;
+import org.graylog2.periodical.Periodical;
+import org.graylog2.plugin.inputs.InputState;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.shared.ProcessingPauseLockedException;
-import org.graylog2.shared.ServerStatus;
-import org.graylog2.shared.initializers.InputSetupService;
-import org.graylog2.shared.initializers.PeriodicalsService;
 import org.graylog2.system.activities.Activity;
-import org.graylog2.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Singleton;
+import java.util.Map;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Singleton
 public class GracefulShutdown implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(GracefulShutdown.class);
 
     public final int SLEEP_SECS = 1;
 
-    private final Configuration configuration;
-    private final BufferSynchronizerService bufferSynchronizerService;
-    private final IndexerSetupService indexerSetupService;
-    private final PeriodicalsService periodicalsService;
-    private final InputSetupService inputSetupService;
-    private final ServiceManager serviceManager;
-    private final ServerStatus serverStatus;
-    private final ActivityWriter activityWriter;
+    private final Core core;
+    private final Buffers bufferSynchronizer;
 
-    @Inject
-    public GracefulShutdown(ServerStatus serverStatus,
-                            ActivityWriter activityWriter,
-                            Configuration configuration,
-                            BufferSynchronizerService bufferSynchronizerService,
-                            IndexerSetupService indexerSetupService,
-                            PeriodicalsService periodicalsService,
-                            InputSetupService inputSetupService,
-                            ServiceManager serviceManager) {
-        this.serverStatus = serverStatus;
-        this.activityWriter = activityWriter;
-        this.configuration = configuration;
-        this.bufferSynchronizerService = bufferSynchronizerService;
-        this.indexerSetupService = indexerSetupService;
-        this.periodicalsService = periodicalsService;
-        this.inputSetupService = inputSetupService;
-        this.serviceManager = serviceManager;
+    public GracefulShutdown(Core core, Buffers bufferSynchronizer) {
+        this.core = core;
+        this.bufferSynchronizer = bufferSynchronizer;
     }
 
     @Override
     public void run() {
         LOG.info("Graceful shutdown initiated.");
-        serverStatus.setLifecycle(Lifecycle.HALTING);
+        core.setLifecycle(Lifecycle.HALTING);
 
         // Give possible load balancers time to recognize state change. State is DEAD because of HALTING.
         LOG.info("Node status: [{}]. Waiting <{}sec> for possible load balancers to recognize state change.",
-                serverStatus.getLifecycle().toString(),
-                configuration.getLoadBalancerRecognitionPeriodSeconds());
+                core.getLifecycle().toString(),
+                core.getConfiguration().getLoadBalancerRecognitionPeriodSeconds());
         try {
-            Thread.sleep(configuration.getLoadBalancerRecognitionPeriodSeconds()*1000);
+            Thread.sleep(core.getConfiguration().getLoadBalancerRecognitionPeriodSeconds()*1000);
         } catch (InterruptedException ignored) { /* nope */ }
 
-        activityWriter.write(
+        core.getActivityWriter().write(
                 new Activity("Graceful shutdown initiated.", GracefulShutdown.class)
         );
 
@@ -101,36 +77,67 @@ public class GracefulShutdown implements Runnable {
             Thread.sleep(SLEEP_SECS*1000);
         } catch (InterruptedException ignored) { /* nope */ }
 
-        // stop all inputs so no new messages can come in
-        inputSetupService.stopAsync().awaitTerminated();
+        // Stop all inputs.
+        stopInputs();
 
         // Make sure that message processing is enabled. We need it enabled to work on buffered/cached messages.
-        serverStatus.unlockProcessingPause();
+        core.unlockProcessingPause();
         try {
-            serverStatus.resumeMessageProcessing();
-            serverStatus.setLifecycle(Lifecycle.HALTING); // Was overwritten with RUNNING when resuming message processing,
+            core.resumeMessageProcessing();
+            core.setLifecycle(Lifecycle.HALTING); // Was overwritten with RUNNING when resuming message processing,
         } catch (ProcessingPauseLockedException e) {
             throw new RuntimeException("Seems like unlocking the processing pause did not succeed.", e);
         }
 
-        // flush all remaining messages from the system
-        bufferSynchronizerService.stopAsync().awaitTerminated();
+        // Wait for empty master caches.
+        Caches.waitForEmptyCaches(core);
 
-        // stop all maintenance tasks
-        periodicalsService.stopAsync().awaitTerminated();
+        // Wait for buffers.
+        bufferSynchronizer.waitForEmptyBuffers();
 
-        // disconnect from elasticsearch
-        indexerSetupService.stopAsync().awaitTerminated();
+        // Stop all threads that should be stopped.
+        shutdownPeriodicals();
 
-        // Waiting for the rest of the services to stop.
-        try {
-            serviceManager.stopAsync().awaitStopped(30, TimeUnit.SECONDS);
-        } catch (TimeoutException e) {
-            LOG.warn("Timeout while waiting for services to stop: {}", e);
-        }
+        // Properly close ElasticSearch node.
+        core.getIndexer().getNode().close();
 
         // Shut down hard with no shutdown hooks running.
         LOG.info("Goodbye.");
-        System.exit(0);
+        Runtime.getRuntime().halt(0);
     }
+
+    private void shutdownPeriodicals() {
+        for (Periodical periodical : core.periodicals().getAllStoppedOnGracefulShutdown()) {
+            LOG.info("Shutting down periodical [{}].", periodical.getClass().getCanonicalName());
+            Stopwatch s = new Stopwatch().start();
+
+            // Cancel future executions.
+            Map<Periodical,ScheduledFuture> futures = core.periodicals().getFutures();
+            if (futures.containsKey(periodical)) {
+                futures.get(periodical).cancel(false);
+
+                s.stop();
+                LOG.info("Shutdown of periodical [{}] complete, took <{}ms>.",
+                        periodical.getClass().getCanonicalName(), s.elapsed(TimeUnit.MILLISECONDS));
+            } else {
+                LOG.error("Could not find periodical [{}] in futures list. Not stopping execution.",
+                        periodical.getClass().getCanonicalName());
+            }
+        }
+    }
+
+    private void stopInputs() {
+        for (InputState state : core.inputs().getRunningInputs()) {
+            MessageInput input = state.getMessageInput();
+
+            LOG.info("Attempting to close input <{}> [{}].", input.getUniqueReadableId(), input.getName());
+
+            Stopwatch s = new Stopwatch().start();
+            input.stop();
+            s.stop();
+
+            LOG.info("Input [{}] closed. Took [{}ms]", input.getUniqueReadableId(), s.elapsed(TimeUnit.MILLISECONDS));
+        }
+    }
+
 }

@@ -32,26 +32,10 @@ import org.graylog2.indexer.PersistedDeadLetterService;
 import org.graylog2.indexer.PersistedDeadLetterServiceImpl;
 import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.ranges.IndexRangeServiceImpl;
-import org.graylog2.inputs.InputService;
-import org.graylog2.inputs.InputServiceImpl;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.notifications.NotificationServiceImpl;
-import org.graylog2.savedsearches.SavedSearchService;
-import org.graylog2.savedsearches.SavedSearchServiceImpl;
-import org.graylog2.security.AccessTokenService;
-import org.graylog2.security.AccessTokenServiceImpl;
-import org.graylog2.security.MongoDBSessionService;
-import org.graylog2.security.MongoDBSessionServiceImpl;
-import org.graylog2.security.ldap.LdapSettingsService;
-import org.graylog2.security.ldap.LdapSettingsServiceImpl;
-import org.graylog2.streams.StreamRuleService;
-import org.graylog2.streams.StreamRuleServiceImpl;
-import org.graylog2.streams.StreamService;
-import org.graylog2.streams.StreamServiceImpl;
 import org.graylog2.system.activities.SystemMessageService;
 import org.graylog2.system.activities.SystemMessageServiceImpl;
-import org.graylog2.users.UserService;
-import org.graylog2.users.UserServiceImpl;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -67,13 +51,5 @@ public class PersistenceServicesBindings extends AbstractModule {
         bind(IndexFailureService.class).to(IndexFailureServiceImpl.class);
         bind(NodeService.class).to(NodeServiceImpl.class);
         bind(IndexRangeService.class).to(IndexRangeServiceImpl.class);
-        bind(InputService.class).to(InputServiceImpl.class);
-        bind(StreamRuleService.class).to(StreamRuleServiceImpl.class);
-        bind(UserService.class).to(UserServiceImpl.class);
-        bind(StreamService.class).to(StreamServiceImpl.class);
-        bind(AccessTokenService.class).to(AccessTokenServiceImpl.class);
-        bind(SavedSearchService.class).to(SavedSearchServiceImpl.class);
-        bind(LdapSettingsService.class).to(LdapSettingsServiceImpl.class);
-        bind(MongoDBSessionService.class).to(MongoDBSessionServiceImpl.class);
     }
 }

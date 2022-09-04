@@ -17,12 +17,28 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.graylog2.buffers;
+package org.graylog2.bindings;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import org.graylog2.system.activities.ActivityWriter;
+import org.graylog2.system.jobs.SystemJobManager;
+
+import javax.inject.Inject;
+import javax.inject.Provider;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-public class OutputBufferWatermark extends AtomicInteger {
+public class SystemJobManagerProvider implements Provider<SystemJobManager> {
+    private static SystemJobManager systemJobManager = null;
+
+    @Inject
+    public SystemJobManagerProvider(ActivityWriter activityWriter) {
+        if (systemJobManager == null)
+            systemJobManager = new SystemJobManager(activityWriter);
+    }
+
+    @Override
+    public SystemJobManager get() {
+        return systemJobManager;
+    }
 }

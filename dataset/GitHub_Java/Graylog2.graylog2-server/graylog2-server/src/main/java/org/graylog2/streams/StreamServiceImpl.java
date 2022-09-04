@@ -24,15 +24,13 @@ import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
-import org.graylog2.alerts.AbstractAlertCondition;
+import org.graylog2.alerts.AlertCondition;
 import org.graylog2.alerts.AlertService;
 import org.graylog2.alerts.AlertServiceImpl;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.database.ValidationException;
-import org.graylog2.plugin.alarms.AlertCondition;
-import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.slf4j.Logger;
@@ -170,7 +168,7 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
             for (BasicDBObject conditionFields : (List<BasicDBObject>) stream.getFields().get(StreamImpl.EMBEDDED_ALERT_CONDITIONS)) {
                 try {
                     conditions.add(alertService.fromPersisted(conditionFields, stream));
-                } catch (AbstractAlertCondition.NoSuchAlertConditionTypeException e) {
+                } catch (AlertCondition.NoSuchAlertConditionTypeException e) {
                     LOG.error("Skipping unknown alert condition type.", e);
                     continue;
                 } catch (Exception e) {
@@ -183,35 +181,8 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         return conditions;
     }
 
-    @Override
-    public AlertCondition getAlertCondition(Stream stream, String conditionId) throws NotFoundException {
-        if (stream.getFields().containsKey(StreamImpl.EMBEDDED_ALERT_CONDITIONS)) {
-            for (BasicDBObject conditionFields : (List<BasicDBObject>) stream.getFields().get(StreamImpl.EMBEDDED_ALERT_CONDITIONS)) {
-                try {
-                    if (conditionFields.get("id").equals(conditionId)) {
-                        return alertService.fromPersisted(conditionFields, stream);
-                    }
-                } catch (AbstractAlertCondition.NoSuchAlertConditionTypeException e) {
-                    LOG.error("Skipping unknown alert condition type.", e);
-                    continue;
-                } catch (Exception e) {
-                    LOG.error("Skipping alert condition.", e);
-                    continue;
-                }
-            }
-        }
-
-        throw new org.graylog2.database.NotFoundException();
-    }
-
     public void addAlertCondition(Stream stream, AlertCondition condition) throws ValidationException {
-        embed(stream, StreamImpl.EMBEDDED_ALERT_CONDITIONS, (EmbeddedPersistable)condition);
-    }
-
-    @Override
-    public void updateAlertCondition(Stream stream, AlertCondition condition) throws ValidationException {
-        removeAlertCondition(stream, condition.getId());
-        addAlertCondition(stream, condition);
+        embed(stream, StreamImpl.EMBEDDED_ALERT_CONDITIONS, condition);
     }
 
     public void removeAlertCondition(Stream stream, String conditionId) {

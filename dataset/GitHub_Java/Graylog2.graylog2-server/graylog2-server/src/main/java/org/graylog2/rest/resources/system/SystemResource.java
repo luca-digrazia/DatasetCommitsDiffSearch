@@ -27,13 +27,8 @@ import com.google.common.collect.Sets;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresGuest;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.Configuration;
 import org.graylog2.Core;
 import org.graylog2.buffers.Buffers;
-import org.graylog2.caches.Caches;
-import org.graylog2.indexer.Indexer;
-import org.graylog2.inputs.ServerInputRegistry;
-import org.graylog2.periodical.Periodicals;
 import org.graylog2.plugin.Tools;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
@@ -42,8 +37,6 @@ import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.responses.ReaderPermissionResponse;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.ProcessingPauseLockedException;
-import org.graylog2.shared.ServerStatus;
-import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.shutdown.GracefulShutdown;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,49 +65,24 @@ public class SystemResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(SystemResource.class);
 
-    private final Buffers bufferSynchronizer;
-    private final ServerStatus serverStatus;
-    private final ActivityWriter activityWriter;
-    private final Configuration configuration;
-    private final Indexer indexer;
-    private final Caches cacheSynchronizer;
-    private final ServerInputRegistry inputs;
-    private final Periodicals periodicals;
-
     @Inject
-    public SystemResource(Buffers bufferSynchronizer,
-                          ServerStatus serverStatus,
-                          ActivityWriter activityWriter,
-                          Configuration configuration,
-                          Indexer indexer,
-                          Caches cacheSynchronizer,
-                          ServerInputRegistry inputs,
-                          Periodicals periodicals) {
-        this.bufferSynchronizer = bufferSynchronizer;
-        this.serverStatus = serverStatus;
-        this.activityWriter = activityWriter;
-        this.configuration = configuration;
-        this.indexer = indexer;
-        this.cacheSynchronizer = cacheSynchronizer;
-        this.inputs = inputs;
-        this.periodicals = periodicals;
-    }
+    private Buffers bufferSynchronizer;
 
     @GET @Timed
     @ApiOperation(value = "Get system overview")
     @Produces(APPLICATION_JSON)
     public String system() {
-        checkPermission(RestPermissions.SYSTEM_READ, serverStatus.getNodeId().toString());
+        checkPermission(RestPermissions.SYSTEM_READ, core.getNodeId());
         Map<String, Object> result = Maps.newHashMap();
         result.put("facility", "graylog2-server");
         result.put("codename", Core.GRAYLOG2_CODENAME);
-        result.put("server_id", serverStatus.getNodeId().toString());
+        result.put("server_id", core.getNodeId());
        	result.put("version", Core.GRAYLOG2_VERSION.toString());
-        result.put("started_at", Tools.getISO8601String(serverStatus.getStartedAt()));
-        result.put("is_processing", serverStatus.isProcessing());
+        result.put("started_at", Tools.getISO8601String(core.getStartedAt()));
+        result.put("is_processing", core.isProcessing());
         result.put("hostname", Tools.getLocalCanonicalHostname());
-        result.put("lifecycle", serverStatus.getLifecycle().getName().toLowerCase());
-        result.put("lb_status", serverStatus.getLifecycle().getLoadbalancerStatus().toString().toLowerCase());
+        result.put("lifecycle", core.getLifecycle().getName().toLowerCase());
+        result.put("lb_status", core.getLifecycle().getLoadbalancerStatus().toString().toLowerCase());
 
         return json(result);
     }
@@ -130,11 +98,11 @@ public class SystemResource extends RestResource {
 
         Set<String> fields;
         if (unlimited) {
-            fields = indexer.indices().getAllMessageFields();
+            fields = core.getIndexer().indices().getAllMessageFields();
         } else {
             fields = Sets.newHashSet();
             int i = 0;
-            for (String field : indexer.indices().getAllMessageFields()) {
+            for (String field : core.getIndexer().indices().getAllMessageFields()) {
                 if (i == limit) {
                     break;
                 }
@@ -157,8 +125,8 @@ public class SystemResource extends RestResource {
                           "memory. Keep an eye on the heap space utilization while message processing is paused.")
     @Path("/processing/pause")
     public Response pauseProcessing() {
-        checkPermission(RestPermissions.PROCESSING_CHANGESTATE, serverStatus.getNodeId().toString());
-        serverStatus.pauseMessageProcessing(false);
+        checkPermission(RestPermissions.PROCESSING_CHANGESTATE, core.getNodeId());
+        core.pauseMessageProcessing(false);
 
         LOG.info("Paused message processing - triggered by REST call.");
         return ok().build();
@@ -168,10 +136,10 @@ public class SystemResource extends RestResource {
     @ApiOperation(value = "Resume message processing")
     @Path("/processing/resume")
     public Response resumeProcessing() {
-        checkPermission(RestPermissions.PROCESSING_CHANGESTATE, serverStatus.getNodeId().toString());
+        checkPermission(RestPermissions.PROCESSING_CHANGESTATE, core.getNodeId());
 
         try {
-            serverStatus.resumeMessageProcessing();
+            core.resumeMessageProcessing();
         } catch (ProcessingPauseLockedException e) {
             LOG.error("Message processing pause is locked. Returning HTTP 403.");
             throw new WebApplicationException(403);
@@ -188,9 +156,9 @@ public class SystemResource extends RestResource {
          * This is meant to be only used in exceptional cases, when something that locked the processing pause
          * has crashed and never unlocked so we need to unlock manually. #donttellanybody
          */
-        checkPermission(RestPermissions.PROCESSING_CHANGESTATE, serverStatus.getNodeId().toString());
+        checkPermission(RestPermissions.PROCESSING_CHANGESTATE, core.getNodeId());
 
-        serverStatus.unlockProcessingPause();
+        core.unlockProcessingPause();
 
         LOG.info("Manually unlocked message processing pause - triggered by REST call.");
         return ok().build();
@@ -201,7 +169,7 @@ public class SystemResource extends RestResource {
     @Path("/jvm") @Timed
     @Produces(APPLICATION_JSON)
     public String jvm() {
-        checkPermission(RestPermissions.JVMSTATS_READ, serverStatus.getNodeId().toString());
+        checkPermission(RestPermissions.JVMSTATS_READ, core.getNodeId());
 
         Runtime runtime = Runtime.getRuntime();
 
@@ -211,7 +179,7 @@ public class SystemResource extends RestResource {
         result.put("total_memory", bytesToValueMap(runtime.totalMemory()));
         result.put("used_memory", bytesToValueMap(runtime.totalMemory() - runtime.freeMemory()));
 
-        result.put("node_id", serverStatus.getNodeId().toString());
+        result.put("node_id", core.getNodeId());
         result.put("pid", Tools.getPID());
         result.put("info", Tools.getSystemInformation());
 
@@ -223,7 +191,7 @@ public class SystemResource extends RestResource {
     @Path("/threaddump")
     @Produces(TEXT_PLAIN)
     public String threaddump() {
-        checkPermission(RestPermissions.THREADS_DUMP, serverStatus.getNodeId().toString());
+        checkPermission(RestPermissions.THREADS_DUMP, core.getNodeId());
 
         // The ThreadDump is built by internal codahale.metrics servlet library we are abusing.
         ThreadDump threadDump = new ThreadDump(ManagementFactory.getThreadMXBean());
@@ -266,10 +234,9 @@ public class SystemResource extends RestResource {
                           "shuts down inputs first to make sure that no new messages are accepted.")
     @Path("/shutdown")
     public Response shutdown() {
-        checkPermission(RestPermissions.NODE_SHUTDOWN, serverStatus.getNodeId().toString());
+        checkPermission(RestPermissions.NODE_SHUTDOWN, core.getNodeId());
 
-        new Thread(new GracefulShutdown(serverStatus, activityWriter, configuration, bufferSynchronizer,
-                cacheSynchronizer, indexer, periodicals, inputs)).start();
+        new Thread(new GracefulShutdown(core, bufferSynchronizer)).start();
         return accepted().build();
     }
 

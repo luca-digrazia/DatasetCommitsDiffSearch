@@ -23,9 +23,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.AbstractModule;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.name.Names;
-import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.graylog2.Configuration;
-import org.graylog2.bindings.providers.*;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
@@ -41,18 +39,9 @@ import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.initializers.Initializers;
-import org.graylog2.inputs.InputCache;
-import org.graylog2.inputs.OutputCache;
-import org.graylog2.inputs.ServerInputRegistry;
-import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.periodical.Periodicals;
-import org.graylog2.plugin.RulesEngine;
 import org.graylog2.plugin.indexer.MessageGateway;
-import org.graylog2.security.ShiroSecurityContextFactory;
-import org.graylog2.security.ldap.LdapConnector;
-import org.graylog2.security.realm.LdapUserAuthenticator;
 import org.graylog2.shared.ServerStatus;
 import org.graylog2.system.jobs.SystemJobManager;
 
@@ -121,19 +110,10 @@ public class ServerBindings extends AbstractModule {
         bind(OutputBuffer.class).toProvider(OutputBufferProvider.class);
         bind(Indexer.class).toProvider(IndexerProvider.class);
         bind(SystemJobManager.class).toProvider(SystemJobManagerProvider.class);
-        bind(InputCache.class).toProvider(InputCacheProvider.class);
-        bind(OutputCache.class).toProvider(OutputCacheProvider.class);
-        bind(ServerInputRegistry.class).toProvider(ServerInputRegistryProvider.class);
-        bind(RulesEngine.class).toProvider(RulesEngineProvider.class);
-        bind(Initializers.class).toInstance(new Initializers(serverStatus));
-        bind(LdapConnector.class).toProvider(LdapConnectorProvider.class);
-        bind(LdapUserAuthenticator.class).toProvider(LdapUserAuthenticatorProvider.class);
-        bind(DefaultSecurityManager.class).toProvider(DefaultSecurityManagerProvider.class);
     }
 
     private void bindInterfaces() {
         bind(MessageGateway.class).to(MessageGatewayImpl.class);
-        bind(SecurityContextFactory.class).to(ShiroSecurityContextFactory.class);
     }
 
     private MongoConnection getMongoConnection() {

@@ -21,11 +21,12 @@ package org.graylog2.initializers;
 
 import com.google.common.collect.Maps;
 import com.google.inject.Inject;
+import org.graylog2.Core;
 import org.graylog2.periodical.Periodical;
 import org.graylog2.periodical.Periodicals;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.initializers.Initializer;
 import org.graylog2.plugin.initializers.InitializerConfigurationException;
-import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.bindings.InstantiationService;
 import org.reflections.Reflections;
 import org.slf4j.Logger;
@@ -43,28 +44,25 @@ public class PeriodicalsInitializer implements Initializer {
     public static final String NAME = "Periodicals initializer";
     private final InstantiationService instantiationService;
     private final Periodicals periodicals;
-    private final ServerStatus serverStatus;
 
     @Inject
-    public PeriodicalsInitializer(InstantiationService instantiationService,
-                                  Periodicals periodicals,
-                                  ServerStatus serverStatus) {
+    public PeriodicalsInitializer(InstantiationService instantiationService, Periodicals periodicals) {
         this.instantiationService = instantiationService;
         this.periodicals = periodicals;
-        this.serverStatus = serverStatus;
     }
 
     @Override
-    public void initialize(Map<String, String> config) throws InitializerConfigurationException {
+    public void initialize(GraylogServer server, Map<String, String> config) throws InitializerConfigurationException {
+        Core core = (Core) server;
         Reflections reflections = new Reflections("org.graylog2.periodical");
 
         for (Class<? extends Periodical> type : reflections.getSubTypesOf(Periodical.class)) {
             try {
                 Periodical periodical = instantiationService.getInstance(type);
 
-                periodical.initialize();
+                periodical.initialize(core);
 
-                if (periodical.masterOnly() && !serverStatus.hasCapability(ServerStatus.Capability.MASTER)) {
+                if (periodical.masterOnly() && !core.isMaster()) {
                     LOG.info("Not starting [{}] periodical. Only started on graylog2-server master nodes.", periodical.getClass().getCanonicalName());
                     continue;
                 }

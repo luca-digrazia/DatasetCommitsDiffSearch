@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -51,7 +53,7 @@ public class SystemJobManager {
     @Inject
     public SystemJobManager(ActivityWriter activityWriter) {
         this.activityWriter = activityWriter;
-        jobs = new ConcurrentHashMap<>();
+        jobs = new ConcurrentHashMap<String, SystemJob>();
     }
 
     public String submit(final SystemJob job) throws SystemJobConcurrencyException {
@@ -72,7 +74,7 @@ public class SystemJobManager {
             public void run() {
                 job.markStarted();
 
-                Stopwatch x = Stopwatch.createStarted();
+                Stopwatch x = new Stopwatch().start();
 
                 job.execute();  // ... blocks until it finishes.
                 x.stop();

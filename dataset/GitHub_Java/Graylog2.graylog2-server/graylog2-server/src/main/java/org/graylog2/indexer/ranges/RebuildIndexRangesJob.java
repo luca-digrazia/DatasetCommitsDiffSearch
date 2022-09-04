@@ -18,8 +18,8 @@
  */
 package org.graylog2.indexer.ranges;
 
+import com.beust.jcommander.internal.Lists;
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
@@ -105,7 +105,7 @@ public class RebuildIndexRangesJob extends SystemJob {
         }
         indicesToCalculate = indices.length;
 
-        Stopwatch sw = Stopwatch.createStarted();
+        Stopwatch sw = new Stopwatch().start();
         for(String index : indices) {
             if (cancelRequested) {
                 info("Stop requested. Not calculating next index range, not updating ranges.");
@@ -127,8 +127,8 @@ public class RebuildIndexRangesJob extends SystemJob {
                 } else {
                     LOG.info("Index [{}] is empty. Not calculating ranges.", index);
                 }
-            } catch (Exception e) {
-                LOG.info("Could not calculate range of index [" + index + "]. Skipping.", e);
+            } catch (Exception e1) {
+                LOG.info("Could not calculate range of index [{}]. Skipping.", index, e1);
             } finally {
                 indicesCalculated++;
             }
@@ -143,7 +143,7 @@ public class RebuildIndexRangesJob extends SystemJob {
     private Map<String, Object> calculateRange(String index) throws EmptyIndexException {
         Map<String, Object> range = Maps.newHashMap();
 
-        Stopwatch x = Stopwatch.createStarted();
+        Stopwatch x = new Stopwatch().start();
         SearchHit doc = indexer.searches().firstOfIndex(index);
         if (doc == null || doc.isSourceEmpty()) {
             x.stop();

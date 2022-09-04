@@ -61,7 +61,6 @@ import org.graylog2.Configuration;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.Mapping;
-import org.graylog2.plugin.indexer.retention.IndexManagement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +73,7 @@ import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class Indices implements IndexManagement {
+public class Indices {
     public interface Factory {
         Indices create(Client client);
     }
@@ -122,7 +121,7 @@ public class Indices implements IndexManagement {
                 BulkResponse response = c.bulk(request.request()).actionGet();
 
                 LOG.info("Moving index <{}> to <{}>: Bulk indexed {} messages, took {} ms, failures: {}",
-                        source, target, response.getItems().length, response.getTookInMillis(), response.hasFailures());
+                        new Object[] { source, target, response.getItems().length, response.getTookInMillis(), response.hasFailures() });
 
                 if (response.hasFailures()) {
                     throw new RuntimeException("Failed to move a message. Check your indexer log.");
@@ -243,7 +242,8 @@ public class Indices implements IndexManagement {
 
                 fields.addAll(mapping.keySet());
             } catch(Exception e) {
-                LOG.error("Error while trying to get fields of <" + m.index + ">", e);
+                LOG.error("Error while trying to get fields of <{}>", m.index, e);
+                continue;
             }
         }
 

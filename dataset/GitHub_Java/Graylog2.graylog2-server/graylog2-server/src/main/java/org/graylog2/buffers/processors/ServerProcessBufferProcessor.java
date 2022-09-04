@@ -22,20 +22,17 @@ package org.graylog2.buffers.processors;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.google.common.collect.ComparisonChain;
-import com.google.common.collect.Ordering;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.buffers.OutputBuffer;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
+import org.graylog2.shared.filters.FilterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -47,6 +44,7 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
     public interface Factory {
         public ServerProcessBufferProcessor create(
                 OutputBuffer outputBuffer,
+                GraylogServer graylogServer,
                 AtomicInteger processBufferWatermark,
                 @Assisted("ordinal") final long ordinal,
                 @Assisted("numberOfConsumers") final long numberOfConsumers
@@ -54,31 +52,23 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerProcessBufferProcessor.class);
+    private final GraylogServer graylogServer;
     private final OutputBuffer outputBuffer;
     private final Meter filteredOutMessages;
-    private final List<MessageFilter> filterRegistry;
+    private final FilterRegistry filterRegistry;
 
 
     @AssistedInject
     public ServerProcessBufferProcessor(MetricRegistry metricRegistry,
-                                  Set<MessageFilter> filterRegistry,
+                                  FilterRegistry filterRegistry,
+                                  @Assisted GraylogServer graylogServer,
                                   @Assisted AtomicInteger processBufferWatermark,
                                   @Assisted("ordinal") final long ordinal,
                                   @Assisted("numberOfConsumers") final long numberOfConsumers,
                                   @Assisted OutputBuffer outputBuffer) {
         super(metricRegistry, processBufferWatermark, ordinal, numberOfConsumers);
-
-        // we need to keep this sorted properly, so that the filters run in the correct order
-        this.filterRegistry = Ordering.from(new Comparator<MessageFilter>() {
-            @Override
-            public int compare(MessageFilter filter1, MessageFilter filter2) {
-                return ComparisonChain.start()
-                        .compare(filter1.getPriority(), filter2.getPriority())
-                        .compare(filter1.getName(), filter2.getName())
-                        .result();
-            }
-        }).immutableSortedCopy(filterRegistry);
-
+        this.filterRegistry = filterRegistry;
+        this.graylogServer = graylogServer;
         this.outputBuffer = outputBuffer;
         this.filteredOutMessages = metricRegistry.meter(name(ProcessBufferProcessor.class, "filteredOutMessages"));
     }
@@ -86,17 +76,14 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
     @Override
     protected void handleMessage(Message msg) {
 
-        if (filterRegistry.size() == 0)
-            throw new RuntimeException("Empty filter registry!");
-
-        for (MessageFilter filter : filterRegistry) {
+        for (MessageFilter filter : filterRegistry.all()) {
             Timer timer = metricRegistry.timer(name(filter.getClass(), "executionTime"));
             final Timer.Context timerContext = timer.time();
 
             try {
                 LOG.debug("Applying filter [{}] on message <{}>.", filter.getName(), msg.getId());
 
-                if (filter.filter(msg)) {
+                if (filter.filter(msg, graylogServer)) {
                     LOG.debug("Filter [{}] marked message <{}> to be discarded. Dropping message.", filter.getName(), msg.getId());
                     filteredOutMessages.mark();
                     return;
@@ -110,10 +97,5 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
 
         LOG.debug("Finished processing message. Writing to output buffer.");
         outputBuffer.insertCached(msg, null);
-    }
-
-    // default visibility for tests
-    List<MessageFilter> getFilterRegistry() {
-        return filterRegistry;
     }
 }

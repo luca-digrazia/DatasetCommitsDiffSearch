@@ -17,12 +17,30 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.graylog2.buffers;
+package org.graylog2.bindings;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import org.graylog2.buffers.OutputBuffer;
+import org.graylog2.inputs.BasicCache;
+
+import javax.inject.Inject;
+import javax.inject.Provider;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-public class OutputBufferWatermark extends AtomicInteger {
+public class OutputBufferProvider implements Provider<OutputBuffer> {
+    private static OutputBuffer outputBuffer = null;
+
+    @Inject
+    public OutputBufferProvider(OutputBuffer.Factory outputBufferFactory) {
+        if (outputBuffer == null) {
+            BasicCache outputCache = new BasicCache();
+            outputBuffer = outputBufferFactory.create(outputCache);
+        }
+    }
+
+    @Override
+    public OutputBuffer get() {
+        return outputBuffer;
+    }
 }

@@ -1,5 +1,5 @@
-/**
- * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2012-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -15,13 +15,12 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
+
 package org.graylog2.periodical;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.graylog2.Core;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,15 +37,16 @@ public class Periodicals {
 
     private static final Logger LOG = LoggerFactory.getLogger(Periodicals.class);
 
-    private final Core core;
-
     private final List<Periodical> periodicals;
     private final Map<Periodical, ScheduledFuture> futures;
+    private final ScheduledExecutorService scheduler;
+    private final ScheduledExecutorService daemonScheduler;
 
-    public Periodicals(Core core) {
+    public Periodicals(ScheduledExecutorService scheduler, ScheduledExecutorService daemonScheduler) {
+        this.scheduler = scheduler;
+        this.daemonScheduler = daemonScheduler;
         this.periodicals = Lists.newArrayList();
         this.futures = Maps.newHashMap();
-        this.core = core;
     }
 
     public synchronized void registerAndStart(Periodical periodical) {
@@ -65,7 +65,7 @@ public class Periodicals {
                     }
             );
 
-            ScheduledExecutorService scheduler = periodical.isDaemon() ? core.getDaemonScheduler() : core.getScheduler();
+            ScheduledExecutorService scheduler = periodical.isDaemon() ? this.daemonScheduler : this.scheduler;
             ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(
                     periodical,
                     periodical.getInitialDelaySeconds(),

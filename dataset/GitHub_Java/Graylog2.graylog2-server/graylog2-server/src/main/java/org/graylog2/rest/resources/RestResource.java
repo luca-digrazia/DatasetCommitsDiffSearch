@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.rest.resources;
 
 import com.codahale.metrics.Histogram;
@@ -23,28 +26,27 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.guava.GuavaModule;
+import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.fasterxml.jackson.jaxrs.cfg.EndpointConfigBase;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterInjector;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterModifier;
 import com.google.common.collect.Maps;
 import org.apache.shiro.subject.Subject;
 import org.bson.types.ObjectId;
+import org.graylog2.Core;
 import org.graylog2.security.ShiroSecurityContext;
-import org.graylog2.plugin.ServerStatus;
-import org.graylog2.users.User;
-import org.graylog2.users.UserService;
+import org.graylog2.shared.ServerStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.ws.rs.ForbiddenException;
-import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.SecurityContext;
+import javax.ws.rs.core.*;
 import java.security.Principal;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -56,11 +58,10 @@ public abstract class RestResource {
 	
 	private static final Logger LOG = LoggerFactory.getLogger(RestResource.class);
 
-    @Inject
-    protected ObjectMapper objectMapper;
+    protected final ObjectMapper objectMapper = new ObjectMapper();
 
     @Inject
-    protected UserService userService;
+    protected Core core;
 
     @Inject
     protected ServerStatus serverStatus;
@@ -70,17 +71,17 @@ public abstract class RestResource {
     @Context
     SecurityContext securityContext;
 
-    protected RestResource() {
+	protected RestResource() {
         /*
           * Jackson is serializing java.util.Date (coming out of MongoDB for example) as UNIX epoch by default.
           * Make it write ISO8601 instead.
           * TODO THIS IS EXTREMELY WRONG AND WILL LEAD TO BUGS. NEED TO HAVE IT INJECTED ONCE, AND THEN REUSED (see ObjectMapperProvider)
           * but everyone and their grandmother are using this directly in resource objects instead of relying on Jackson :(
           */
-        /*objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         objectMapper.setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES);
         objectMapper.registerModule(new JodaModule());
-        objectMapper.registerModule(new GuavaModule());*/
+        objectMapper.registerModule(new GuavaModule());
     }
 
     @QueryParam("pretty")
@@ -157,7 +158,7 @@ public abstract class RestResource {
             }
         } catch (JsonProcessingException e) {
             LOG.error("Error while generating JSON", e);
-            throw new InternalServerErrorException(e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -281,13 +282,4 @@ public abstract class RestResource {
         }
     }
 
-    protected User getCurrentUser() {
-        final Object principal = getSubject().getPrincipal();
-        final User user = userService.load(principal.toString());
-        if (user == null) {
-            LOG.error("Loading the current user failed, this should not happen. Did you call this method in an unauthenticated REST resource?");
-            return null;
-        }
-        return user;
-    }
 }

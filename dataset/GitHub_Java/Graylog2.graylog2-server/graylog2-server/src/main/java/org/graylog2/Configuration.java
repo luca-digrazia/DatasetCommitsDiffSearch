@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2010, 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2;
@@ -27,9 +28,9 @@ import com.github.joschi.jadconfig.validators.FileReadableValidator;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.google.common.collect.Lists;
+import com.lmax.disruptor.*;
 import com.mongodb.ServerAddress;
 import org.graylog2.plugin.Tools;
-import org.graylog2.shared.BaseConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +44,7 @@ import java.util.List;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  * @author Jochen Schalanda <jochen@schalanda.name>
  */
-public class Configuration extends BaseConfiguration {
+public class Configuration {
 
     private static final Logger LOG = LoggerFactory.getLogger(Configuration.class);
 
@@ -52,9 +53,12 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "password_secret", required = true)
     private String passwordSecret;
-
+    
     @Parameter(value = "rest_listen_uri", required = true)
     private String restListenUri = "http://127.0.0.1:12900/";
+
+    @Parameter(value = "rest_transport_uri", required = false)
+    private String restTransportUri;
 
     @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
     private int udpRecvBufferSizes = 1048576;
@@ -78,20 +82,23 @@ public class Configuration extends BaseConfiguration {
     private int maxNumberOfIndices = 20;
 
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
-    private int outputBatchSize = 25;
-
-    @Parameter(value = "output_flush_interval", required = true, validator = PositiveIntegerValidator.class)
-    private int outputFlushInterval = 1;
-
+    private int outputBatchSize = 5000;
+    
+    @Parameter(value = "processbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
+    private int processBufferProcessors = 5;
+    
     @Parameter(value = "outputbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
-    private int outputBufferProcessors = 3;
+    private int outputBufferProcessors = 5;
     
     @Parameter(value = "outputbuffer_processor_threads_max_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessorThreadsMaxPoolSize = 30;
     
     @Parameter(value = "outputbuffer_processor_threads_core_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBufferProcessorThreadsCorePoolSize = 3;
-
+    
+    @Parameter(value = "processor_wait_strategy", required = true)
+    private String processorWaitStrategy = "blocking";
+    
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
     private int ringSize = 1024;
 
@@ -142,6 +149,9 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter("rules_file")
     private String droolsRulesFile;
+
+    @Parameter(value = "plugin_dir", required = false)
+    private String pluginDir = "plugin";
 
     @Parameter(value = "node_id_file", required = false)
     private String nodeIdFile = "/etc/graylog2-server-node-id";
@@ -244,6 +254,12 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "transport_email_web_interface_url", required = false)
     private URI emailTransportWebInterfaceUrl;
 
+    @Parameter(value = "rest_enable_cors", required = false)
+    private boolean restEnableCors = false;
+
+    @Parameter(value = "rest_enable_gzip", required = false)
+    private boolean restEnableGzip = false;
+
     public boolean isMaster() {
         return isMaster;
     }
@@ -271,11 +287,11 @@ public class Configuration extends BaseConfiguration {
     public int getOutputBatchSize() {
         return outputBatchSize;
     }
-
-    public int getOutputFlushInterval() {
-        return outputFlushInterval;
+    
+    public int getProcessBufferProcessors() {
+        return processBufferProcessors;
     }
-
+    
     public int getOutputBufferProcessors() {
         return outputBufferProcessors;
     }
@@ -286,6 +302,28 @@ public class Configuration extends BaseConfiguration {
     
     public int getOutputBufferProcessorThreadsMaxPoolSize() {
         return outputBufferProcessorThreadsMaxPoolSize;
+    }
+
+    public WaitStrategy getProcessorWaitStrategy() {
+        if (processorWaitStrategy.equals("sleeping")) {
+            return new SleepingWaitStrategy();
+        }
+        
+        if (processorWaitStrategy.equals("yielding")) {
+            return new YieldingWaitStrategy();
+        }
+        
+        if (processorWaitStrategy.equals("blocking")) {
+            return new BlockingWaitStrategy();
+        }
+        
+        if (processorWaitStrategy.equals("busy_spinning")) {
+            return new BusySpinWaitStrategy();
+        }
+        
+        LOG.warn("Invalid setting for [processor_wait_strategy]:"
+                + " Falling back to default: BlockingWaitStrategy.");
+        return new BlockingWaitStrategy();
     }
 
     public int getRingSize() {
@@ -385,6 +423,10 @@ public class Configuration extends BaseConfiguration {
         return replicaServers;
     }
 
+    public String getPluginDir() {
+        return pluginDir;
+    }
+
     public String getNodeIdFile() {
         return nodeIdFile;
     }
@@ -401,26 +443,12 @@ public class Configuration extends BaseConfiguration {
         return Tools.getUriStandard(restListenUri);
     }
 
-    public URI getDefaultRestTransportUri() {
-        URI transportUri;
-        URI listenUri = getRestListenUri();
-
-        if (listenUri.getHost().equals("0.0.0.0")) {
-            String guessedIf;
-            try {
-                guessedIf = Tools.guessPrimaryNetworkAddress().getHostAddress();
-            } catch (Exception e) {
-                LOG.error("Could not guess primary network address for rest_transport_uri. Please configure it in your graylog2.conf.", e);
-                throw new RuntimeException("No rest_transport_uri.");
-            }
-
-            String transportStr = "http://" + guessedIf + ":" + listenUri.getPort();
-            transportUri = Tools.getUriStandard(transportStr);
-        } else {
-            transportUri = listenUri;
+    public URI getRestTransportUri() {
+        if (restTransportUri == null || restTransportUri.isEmpty()) {
+            return null;
         }
 
-        return transportUri;
+        return Tools.getUriStandard(restTransportUri);
     }
 
     public String getRootUsername() {
@@ -429,6 +457,10 @@ public class Configuration extends BaseConfiguration {
 
     public String getRootPasswordSha2() {
         return rootPasswordSha2;
+    }
+
+    public void setRestTransportUri(String restTransportUri) {
+        this.restTransportUri = restTransportUri;
     }
 
     public int getUdpRecvBufferSizes() {
@@ -540,6 +572,14 @@ public class Configuration extends BaseConfiguration {
 
     public URI getEmailTransportWebInterfaceUrl() {
         return emailTransportWebInterfaceUrl;
+    }
+
+    public boolean isRestEnableCors() {
+        return restEnableCors;
+    }
+
+    public boolean isRestEnableGzip() {
+        return restEnableGzip;
     }
 
     public boolean isVersionchecks() {

@@ -52,7 +52,7 @@ public class Deflector { // extends Ablenkblech
     
     private static final Logger LOG = LoggerFactory.getLogger(Deflector.class);
     
-    public static final String DEFLECTOR_SUFFIX = "deflector";
+    public static final String DEFLECTOR_NAME = "graylog2_deflector";
     private final SystemJobManager systemJobManager;
     private final Configuration configuration;
     private final ActivityWriter activityWriter;
@@ -73,13 +73,13 @@ public class Deflector { // extends Ablenkblech
     }
     
     public boolean isUp(Indexer indexer) {
-        return indexer.indices().aliasExists(getName());
+        return indexer.indices().aliasExists(DEFLECTOR_NAME);
     }
     
     public void setUp(Indexer indexer) {
         // Check if there already is an deflector index pointing somewhere.
         if (isUp(indexer)) {
-            LOG.info("Found deflector alias <{}>. Using it.", getName());
+            LOG.info("Found deflector alias <{}>. Using it.", DEFLECTOR_NAME);
         } else {
             LOG.info("Did not find an deflector alias. Setting one up now.");
 
@@ -98,7 +98,7 @@ public class Deflector { // extends Ablenkblech
                 cycle(indexer); // No index, so automatically cycling to a new one.
             }
             } catch (InvalidAliasNameException e) {
-                LOG.error("Seems like there already is an index called [{}]", getName());
+                LOG.error("Seems like there already is an index called [{}]", DEFLECTOR_NAME);
             }
         }
     }
@@ -225,7 +225,6 @@ public class Deflector { // extends Ablenkblech
     public static String buildIndexName(String prefix, int number) {
         return prefix + "_" + number;
     }
-    public static String buildName(String prefix) { return prefix + "_" + DEFLECTOR_SUFFIX; }
     
     public static int extractIndexNumber(String indexName) throws NumberFormatException {
         String[] parts = indexName.split("_");
@@ -239,15 +238,15 @@ public class Deflector { // extends Ablenkblech
     }
     
     private boolean ourIndex(String indexName) {
-        return indexName != getName() && indexName.startsWith(configuration.getElasticSearchIndexPrefix() + "_");
+        return indexName != DEFLECTOR_NAME && indexName.startsWith(configuration.getElasticSearchIndexPrefix() + "_");
     }
     
     public void pointTo(Indexer indexer, String newIndex, String oldIndex) {
-        indexer.cycleAlias(getName(), newIndex, oldIndex);
+        indexer.cycleAlias(DEFLECTOR_NAME, newIndex, oldIndex);
     }
     
     public void pointTo(Indexer indexer, String newIndex) {
-        indexer.cycleAlias(getName(), newIndex);
+        indexer.cycleAlias(DEFLECTOR_NAME, newIndex);
     }
 
     private void updateIndexRanges(String index) {
@@ -262,10 +261,6 @@ public class Deflector { // extends Ablenkblech
     }
 
     public String getCurrentActualTargetIndex(Indexer indexer) {
-        return indexer.indices().aliasTarget(getName());
-    }
-
-    public String getName() {
-        return buildName(configuration.getElasticSearchIndexPrefix());
+        return indexer.indices().aliasTarget(Deflector.DEFLECTOR_NAME);
     }
 }

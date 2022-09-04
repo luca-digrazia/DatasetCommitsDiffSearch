@@ -20,16 +20,12 @@
 package org.graylog2.periodical;
 
 import com.google.inject.Inject;
-import org.graylog2.Configuration;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.NoTargetIndexException;
-import org.graylog2.initializers.IndexerSetupService;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
-import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.system.activities.Activity;
-import org.graylog2.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,31 +38,18 @@ public class DeflectorManagerThread extends Periodical { // public class Klimper
 
     private NotificationService notificationService;
     private final Indexer indexer;
-    private final Deflector deflector;
-    private final Configuration configuration;
-    private final ActivityWriter activityWriter;
-    private final IndexerSetupService indexerSetupService;
 
     @Inject
     public DeflectorManagerThread(NotificationService notificationService,
-                                  Indexer indexer,
-                                  Deflector deflector,
-                                  Configuration configuration,
-                                  ActivityWriter activityWriter,
-                                  IndexerSetupService indexerSetupService) {
+                                  Indexer indexer) {
         this.notificationService = notificationService;
         this.indexer = indexer;
-        this.deflector = deflector;
-        this.configuration = configuration;
-        this.activityWriter = activityWriter;
-        this.indexerSetupService = indexerSetupService;
     }
 
     @Override
     public void run() {
         // Point deflector to a new index if required.
         try {
-            indexerSetupService.startAndWait();
             checkAndRepair();
             point();
         } catch (Exception e) {
@@ -80,54 +63,54 @@ public class DeflectorManagerThread extends Periodical { // public class Klimper
         long messageCountInTarget = 0;
         
         try {
-            currentTarget = deflector.getNewestTargetName(indexer);
-            messageCountInTarget = indexer.indices().numberOfMessages(currentTarget);
+            currentTarget = core.getDeflector().getNewestTargetName(indexer);
+            messageCountInTarget = core.getIndexer().indices().numberOfMessages(currentTarget);
         } catch(Exception e) {
             LOG.error("Tried to check for number of messages in current deflector target but did not find index. Aborting.", e);
             return;
         }
         
-        if (messageCountInTarget > configuration.getElasticSearchMaxDocsPerIndex()) {
+        if (messageCountInTarget > core.getConfiguration().getElasticSearchMaxDocsPerIndex()) {
             LOG.info("Number of messages in <{}> ({}) is higher than the limit ({}). Pointing deflector to new index now!",
                     new Object[] {
                             currentTarget, messageCountInTarget,
-                            configuration.getElasticSearchMaxDocsPerIndex()
+                            core.getConfiguration().getElasticSearchMaxDocsPerIndex()
                     });
-            deflector.cycle(indexer);
+            core.getDeflector().cycle(indexer);
         } else {
             LOG.debug("Number of messages in <{}> ({}) is lower than the limit ({}). Not doing anything.",
                     new Object[] {
                             currentTarget,messageCountInTarget,
-                            configuration.getElasticSearchMaxDocsPerIndex()
+                            core.getConfiguration().getElasticSearchMaxDocsPerIndex()
                     });
         }
     }
 
     private void checkAndRepair() {
-        if (!deflector.isUp(indexer)) {
-            if (indexer.indices().exists(deflector.getName())) {
+        if (!core.getDeflector().isUp(indexer)) {
+            if (core.getIndexer().indices().exists(Deflector.DEFLECTOR_NAME)) {
                 // Publish a notification if there is an *index* called graylog2_deflector
                 Notification notification = notificationService.buildNow()
                         .addType(Notification.Type.DEFLECTOR_EXISTS_AS_INDEX)
                         .addSeverity(Notification.Severity.URGENT);
                 final boolean published = notificationService.publishIfFirst(notification);
                 if (published) {
-                    LOG.warn("There is an index called [" + deflector.getName() + "]. Cannot fix this automatically and published a notification.");
+                    LOG.warn("There is an index called [" + Deflector.DEFLECTOR_NAME + "]. Cannot fix this automatically and published a notification.");
                 }
             } else {
-                deflector.setUp(indexer);
+                core.getDeflector().setUp(indexer);
             }
         } else {
             try {
-                String currentTarget = deflector.getCurrentActualTargetIndex(indexer);
-                String shouldBeTarget = deflector.getNewestTargetName(indexer);
+                String currentTarget = core.getDeflector().getCurrentActualTargetIndex(indexer);
+                String shouldBeTarget = core.getDeflector().getNewestTargetName(indexer);
 
                 if (!currentTarget.equals(shouldBeTarget)) {
                     String msg = "Deflector is pointing to [" + currentTarget + "], not the newest one: [" + shouldBeTarget + "]. Re-pointing.";
                     LOG.warn(msg);
-                    activityWriter.write(new Activity(msg, DeflectorManagerThread.class));
+                    core.getActivityWriter().write(new Activity(msg, DeflectorManagerThread.class));
 
-                    deflector.pointTo(indexer, shouldBeTarget, currentTarget);
+                    core.getDeflector().pointTo(indexer, shouldBeTarget, currentTarget);
                 }
             } catch (NoTargetIndexException e) {
                 LOG.warn("Deflector is not up. Not trying to point to another index.");
