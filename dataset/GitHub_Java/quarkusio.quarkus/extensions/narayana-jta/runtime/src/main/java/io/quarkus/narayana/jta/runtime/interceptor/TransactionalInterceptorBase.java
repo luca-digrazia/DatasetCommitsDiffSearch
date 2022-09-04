@@ -125,9 +125,9 @@ public abstract class TransactionalInterceptorBase implements Serializable {
 
         try {
             ret = ic.proceed();
-        } catch (Throwable t) {
+        } catch (Exception e) {
             throwing = true;
-            handleException(ic, t, tx);
+            handleException(ic, e, tx);
         } finally {
             // handle asynchronously if not throwing
             if (!throwing && ret != null) {
@@ -250,8 +250,8 @@ public abstract class TransactionalInterceptorBase implements Serializable {
         try {
             checkConfiguration(ic);
             return ic.proceed();
-        } catch (Throwable t) {
-            handleException(ic, t, tx);
+        } catch (Exception e) {
+            handleException(ic, e, tx);
         }
         throw new RuntimeException("UNREACHABLE");
     }
@@ -269,35 +269,34 @@ public abstract class TransactionalInterceptorBase implements Serializable {
         }
     }
 
-    protected void handleExceptionNoThrow(InvocationContext ic, Throwable t, Transaction tx)
+    protected void handleExceptionNoThrow(InvocationContext ic, Throwable e, Transaction tx)
             throws IllegalStateException, SystemException {
 
         Transactional transactional = getTransactional(ic);
 
         for (Class<?> dontRollbackOnClass : transactional.dontRollbackOn()) {
-            if (dontRollbackOnClass.isAssignableFrom(t.getClass())) {
+            if (dontRollbackOnClass.isAssignableFrom(e.getClass())) {
                 return;
             }
         }
 
         for (Class<?> rollbackOnClass : transactional.rollbackOn()) {
-            if (rollbackOnClass.isAssignableFrom(t.getClass())) {
+            if (rollbackOnClass.isAssignableFrom(e.getClass())) {
                 tx.setRollbackOnly();
                 return;
             }
         }
 
-        // RuntimeException and Error are un-checked exceptions and rollback is expected
-        if (t instanceof RuntimeException || t instanceof Error) {
+        if (e instanceof RuntimeException) {
             tx.setRollbackOnly();
             return;
         }
     }
 
-    protected void handleException(InvocationContext ic, Throwable t, Transaction tx) throws Exception {
+    protected void handleException(InvocationContext ic, Exception e, Transaction tx) throws Exception {
 
-        handleExceptionNoThrow(ic, t, tx);
-        sneakyThrow(t);
+        handleExceptionNoThrow(ic, e, tx);
+        throw e;
     }
 
     protected void endTransaction(TransactionManager tm, Transaction tx, RunnableWithException afterEndTransaction)
@@ -327,17 +326,5 @@ public abstract class TransactionalInterceptorBase implements Serializable {
 
     protected void resetUserTransactionAvailability(boolean previousUserTransactionAvailability) {
         ServerVMClientUserTransaction.setAvailability(previousUserTransactionAvailability);
-    }
-
-    /**
-     * An utility method to throw any exception as a {@link RuntimeException}.
-     * We may throw a checked exception (subtype of {@code Throwable} or {@code Exception}) as un-checked exception.
-     * This considers the Java 8 inference rule that states that a {@code throws E} is inferred as {@code RuntimeException}.
-     *
-     * This method can be used in {@code throw} statement such as: {@code throw sneakyThrow(exception);}.
-     */
-    @SuppressWarnings("unchecked")
-    private static <E extends Throwable> void sneakyThrow(Throwable e) throws E {
-        throw (E) e;
     }
 }
