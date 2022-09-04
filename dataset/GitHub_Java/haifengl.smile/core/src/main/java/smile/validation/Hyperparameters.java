@@ -278,10 +278,7 @@ public class Hyperparameters {
         return this;
     }
 
-    /**
-     * Generates a stream of hyperparameters for random search.
-     * @return the stream of hyperparameters for random search.
-     */
+    /** Generates a stream of hyperparameters for random search. */
     public Stream<Properties> random() {
         return Stream.generate(() -> {
             Properties prop = new Properties();
@@ -312,10 +309,7 @@ public class Hyperparameters {
         });
     }
 
-    /**
-     * Generates a stream of hyperparameters for grid search.
-     * @return the stream of hyperparameters for grid search.
-     */
+    /** Generates a stream of hyperparameters for grid search. */
     public Stream<Properties> grid() {
         ArrayList<Map.Entry<String, Object>> lists = new ArrayList<>(parameters.entrySet());
 

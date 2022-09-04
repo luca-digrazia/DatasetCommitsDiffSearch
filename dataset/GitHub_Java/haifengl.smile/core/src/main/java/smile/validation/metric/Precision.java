@@ -36,12 +36,7 @@ public class Precision implements ClassificationMetric {
         return of(truth, prediction);
     }
 
-    /**
-     * Calculates the precision.
-     * @param truth the ground truth.
-     * @param prediction the prediction.
-     * @return the metric.
-     */
+    /** Calculates the precision. */
     public static double of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));

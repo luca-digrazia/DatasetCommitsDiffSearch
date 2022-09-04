@@ -1,18 +1,19 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.swing;
 
@@ -60,9 +61,6 @@ import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.Position;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * The <code>FontChooser</code> class is a swing component 
  * for font selection with <code>JFileChooser</code>-like APIs.
@@ -72,16 +70,17 @@ import org.slf4j.LoggerFactory;
  *   FontChooser fontChooser = FontChooser.getInstance();
  *   int result = fontChooser.showDialog(parent);
  *   if (result == FontChooser.OK_OPTION) {
- *   	Font font = fontChooser.getSelectedFont(); 
+ *       Font font = fontChooser.getSelectedFont();
  *   }
  * }
  * </pre>
+ *
+ * @author Haifeng Li
  */
 @SuppressWarnings("serial")
 public class FontChooser extends JComponent {
-    private static final Logger logger = LoggerFactory.getLogger(FontChooser.class);
-
-	/**
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FontChooser.class);
+    /**
      * Return value from <code>showDialog()</code>.
      * @see #showDialog
      */
@@ -227,7 +226,7 @@ public class FontChooser extends JComponent {
 
     private JList<String> getFontFamilyList() {
         if (fontNameList == null) {
-            fontNameList = new JList<String>(getFontFamilies());
+            fontNameList = new JList<>(getFontFamilies());
             fontNameList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             fontNameList.addListSelectionListener(
                     new ListSelectionHandler(getFontFamilyTextField()));
@@ -240,7 +239,7 @@ public class FontChooser extends JComponent {
 
     private JList<String> getFontStyleList() {
         if (fontStyleList == null) {
-            fontStyleList = new JList<String>(getFontStyleNames());
+            fontStyleList = new JList<>(getFontStyleNames());
             fontStyleList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             fontStyleList.addListSelectionListener(
                     new ListSelectionHandler(getFontStyleTextField()));
@@ -253,7 +252,7 @@ public class FontChooser extends JComponent {
 
     private JList<String> getFontSizeList() {
         if (fontSizeList == null) {
-            fontSizeList = new JList<String>(this.fontSizeStrings);
+            fontSizeList = new JList<>(this.fontSizeStrings);
             fontSizeList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             fontSizeList.addListSelectionListener(
                     new ListSelectionHandler(getFontSizeTextField()));
@@ -484,22 +483,21 @@ public class FontChooser extends JComponent {
 
         @Override
         public void keyPressed(KeyEvent e) {
-            int i = targetList.getSelectedIndex();
             switch (e.getKeyCode()) {
                 case KeyEvent.VK_UP:
-                    i = targetList.getSelectedIndex() - 1;
-                    if (i < 0) {
-                        i = 0;
+                    int up = targetList.getSelectedIndex() - 1;
+                    if (up < 0) {
+                        up = 0;
                     }
-                    targetList.setSelectedIndex(i);
+                    targetList.setSelectedIndex(up);
                     break;
                 case KeyEvent.VK_DOWN:
                     int listSize = targetList.getModel().getSize();
-                    i = targetList.getSelectedIndex() + 1;
-                    if (i >= listSize) {
-                        i = listSize - 1;
+                    int down = targetList.getSelectedIndex() + 1;
+                    if (down >= listSize) {
+                        down = listSize - 1;
                     }
-                    targetList.setSelectedIndex(i);
+                    targetList.setSelectedIndex(down);
                     break;
                 default:
                     break;
@@ -539,7 +537,7 @@ public class FontChooser extends JComponent {
                 logger.error("update(DocumentEvent) exception", ex);
             }
 
-            if (newValue.length() > 0) {
+            if (!newValue.isEmpty()) {
                 int index = targetList.getNextMatch(newValue, 0, Position.Bias.Forward);
                 if (index < 0) {
                     index = 0;
