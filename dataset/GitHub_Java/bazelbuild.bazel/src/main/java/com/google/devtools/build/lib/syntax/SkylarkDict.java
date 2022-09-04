@@ -377,7 +377,7 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
       useLocation = true,
       useEnvironment = true
   )
-  public Runtime.NoneType clearDict(
+  public Runtime.NoneType clear(
       Location loc, Environment env)
       throws EvalException {
     clear(loc, env.mutability());
