@@ -214,7 +214,9 @@ class ControllerAdviceAbstractExceptionMapperGenerator extends AbstractException
     }
 
     private ResultHandle controllerAdviceInstance(MethodCreator toResponse) {
-        ResultHandle controllerAdviceClass = toResponse.loadClass(declaringClassName);
+        ResultHandle controllerAdviceClass = toResponse.invokeStaticMethod(
+                MethodDescriptor.ofMethod(Class.class, "forName", Class.class, String.class),
+                toResponse.load(declaringClassName));
 
         ResultHandle container = toResponse
                 .invokeStaticMethod(MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class));

@@ -1,8 +1,7 @@
 package io.quarkus.it.spring.web;
 
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.emptyString;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.isEmptyString;
 
 import java.util.Optional;
 
@@ -24,34 +23,6 @@ public class SpringControllerTest {
         assertStatusAndContent(RestAssured.given().auth().preemptive().basic("stuart", "test"), path, 403, Optional.empty());
         assertStatusAndContent(RestAssured.given().auth().preemptive().basic("scott", "jb0ss"), path, 200,
                 Optional.of("accessibleForAdminOnly"));
-    }
-
-    @Test
-    public void testAllowedForAdminOrViewer() {
-        String path = "/api/allowedForUserOrViewer";
-        assertForAnonymous(path, 401, Optional.empty());
-        assertStatusAndContent(RestAssured.given().auth().preemptive().basic("aurea", "auri"), path, 403, Optional.empty());
-        assertStatusAndContent(RestAssured.given().auth().preemptive().basic("stuart", "test"), path, 200,
-                Optional.of("allowedForUserOrViewer"));
-        assertStatusAndContent(RestAssured.given().auth().preemptive().basic("george", "geo"), path, 200,
-                Optional.of("allowedForUserOrViewer"));
-    }
-
-    @Test
-    public void testWithAlwaysFalseChecker() {
-        String path = "/api/withAlwaysFalseChecker";
-        assertForAnonymous(path, 401, Optional.empty());
-        assertStatusAndContent(RestAssured.given().auth().preemptive().basic("george", "geo"), path, 403, Optional.empty());
-    }
-
-    @Test
-    public void testPreAuthorizeOnController() {
-        String path = "/api/preAuthorizeOnController";
-        assertForAnonymous(path, 401, Optional.empty());
-        assertStatusAndContent(RestAssured.given().auth().preemptive().basic("stuart", "test"), path, 200,
-                Optional.of("preAuthorizeOnController"));
-        assertStatusAndContent(RestAssured.given().auth().preemptive().basic("aurea", "auri"), path, 200,
-                Optional.of("preAuthorizeOnController"));
     }
 
     @Test
@@ -137,7 +108,7 @@ public class SpringControllerTest {
     public void testSecondResponseStatusHoldingException() {
         RestAssured.when().get("/exception/second").then()
                 .contentType("text/plain")
-                .body(is(emptyString()))
+                .body(isEmptyString())
                 .statusCode(503);
     }
 
@@ -145,7 +116,7 @@ public class SpringControllerTest {
     public void testExceptionHandlerVoidReturnType() {
         RestAssured.when().get("/exception/void").then()
                 .contentType("text/plain")
-                .body(is(emptyString()))
+                .body(isEmptyString())
                 .statusCode(400);
     }
 
@@ -153,7 +124,7 @@ public class SpringControllerTest {
     public void testExceptionHandlerWithoutResponseStatusOnExceptionOrMethod() {
         RestAssured.when().get("/exception/unannotated").then()
                 .contentType("text/plain")
-                .body(is(emptyString()))
+                .body(isEmptyString())
                 .statusCode(204);
     }
 

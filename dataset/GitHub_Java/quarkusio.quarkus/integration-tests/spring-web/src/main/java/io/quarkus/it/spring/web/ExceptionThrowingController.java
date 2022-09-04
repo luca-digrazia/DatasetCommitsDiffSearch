@@ -1,6 +1,5 @@
 package io.quarkus.it.spring.web;
 
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,63 +10,49 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/exception")
 public class ExceptionThrowingController {
 
-    @RequestMapping(method = RequestMethod.GET, path = "/unhandled/exception")
-    public void voidWithUnhandledAnnotatedException() throws UnhandledAnnotatedException {
-        throw new UnhandledAnnotatedException("unhandled");
+    @RequestMapping(method = RequestMethod.GET, path = "/first")
+    public void first() throws FirstException {
+        throw new FirstException("first");
     }
 
-    @GetMapping(path = "/unhandled/runtime")
-    public String stringWithUnhandledAnnotatedRuntimeException() {
-        throw new UnhandledAnnotatedRuntimeException();
+    @GetMapping(path = "/second")
+    public String second() {
+        throw new SecondException();
     }
 
-    @GetMapping("/runtime")
-    public void voidWithRuntimeException() {
+    @GetMapping("/void")
+    public void runtimeException() {
         throw new RuntimeException();
     }
 
     @GetMapping("/unannotated")
-    public void voidWithUnannotatedException() {
-        throw new HandledUnannotatedException();
+    public void unannotated() {
+        throw new UnannotatedException();
     }
 
-    @GetMapping("/re/re")
-    public ResponseEntity<Greeting> responseEntityWithResponseEntityException() {
-        throw new HandledResponseEntityException("bad state");
+    @GetMapping("/responseEntity")
+    public Greeting handledByResponseEntity() {
+        throw new IllegalStateException("bad state");
     }
 
-    @GetMapping("/re/pojo")
-    public Greeting pojoWithResponseEntityException() {
-        throw new HandledResponseEntityException("bad state");
+    @GetMapping("/responseEntityFromVoidReturningMethod")
+    public void handledByResponseEntityFromVoidReturningMethod() {
+        throw new IllegalStateException("bad state");
     }
 
-    @GetMapping("/re/void")
-    public void voidWithResponseEntityException() {
-        throw new HandledResponseEntityException("bad state");
+    @GetMapping("/pojo")
+    public Greeting greetingWithIllegalArgumentException() {
+        throw new IllegalArgumentException("hello from error");
     }
 
-    @GetMapping("/re/void/xml")
-    public void voidWithResponseEntityExceptionAsXml() {
-        throw new HandledResponseEntityException("bad state", MediaType.APPLICATION_XML);
+    @GetMapping("/pojoWithVoidReturnType")
+    public void greetingWithIllegalArgumentExceptionAndVoidReturnType() {
+        throw new IllegalArgumentException("hello from error");
     }
 
-    @GetMapping("/pojo/re")
-    public ResponseEntity responseEntityWithPojoException() {
-        throw new HandledPojoException("bad state");
+    @GetMapping("/re")
+    public ResponseEntity<Greeting> responseEntityWithIllegalArgumentException() {
+        throw new IllegalStateException("hello from error");
     }
 
-    @GetMapping("/pojo/pojo")
-    public Greeting pojoWithPojoException() {
-        throw new HandledPojoException("bad state");
-    }
-
-    @GetMapping("/pojo/void")
-    public void voidWithPojoException() {
-        throw new HandledPojoException("bad state");
-    }
-
-    @GetMapping("/string")
-    public String stringWithStringException() {
-        throw new HandledStringException("bad state");
-    }
 }
