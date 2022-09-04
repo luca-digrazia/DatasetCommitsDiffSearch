@@ -1,6 +1,6 @@
 package io.quarkus.grpc.deployment;
 
-import static io.quarkus.deployment.Feature.GRPC_SERVER;
+import static io.quarkus.deployment.builditem.FeatureBuildItem.GRPC_SERVER;
 
 import java.lang.reflect.Modifier;
 import java.util.Collection;
@@ -42,6 +42,11 @@ public class GrpcServerProcessor {
     private static final Logger logger = Logger.getLogger(GrpcServerProcessor.class);
 
     @BuildStep
+    public FeatureBuildItem registerFeature() {
+        return new FeatureBuildItem(GRPC_SERVER);
+    }
+
+    @BuildStep
     void discoverBindableServices(BuildProducer<BindableServiceBuildItem> bindables,
             CombinedIndexBuildItem combinedIndexBuildItem) {
         Collection<ClassInfo> bindableServices = combinedIndexBuildItem.getIndex()
@@ -65,12 +70,11 @@ public class GrpcServerProcessor {
 
     @BuildStep
     void buildContainerBean(BuildProducer<AdditionalBeanBuildItem> beans,
-            List<BindableServiceBuildItem> bindables, BuildProducer<FeatureBuildItem> features) {
+            List<BindableServiceBuildItem> bindables) {
         if (!bindables.isEmpty()) {
             beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcContainer.class));
-            features.produce(new FeatureBuildItem(GRPC_SERVER));
         } else {
-            logger.debug("Unable to find beans exposing the `BindableService` interface - not starting the gRPC server");
+            logger.warn("Unable to find beans exposing the `BindableService` interface - not starting the gRPC server");
         }
     }
 
@@ -138,7 +142,7 @@ public class GrpcServerProcessor {
                 beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcHealthStorage.class));
             }
             return new HealthBuildItem("io.quarkus.grpc.runtime.health.GrpcHealthCheck",
-                    config.mpHealthEnabled);
+                    config.mpHealthEnabled, GRPC_SERVER);
         } else {
             return null;
         }
