@@ -130,9 +130,4 @@ public class JarResource implements ClassLoadingResource {
             this.zipFile = null;
         }
     }
-
-    @Override
-    public synchronized void resetInternalCaches() {
-        close();
-    }
 }
