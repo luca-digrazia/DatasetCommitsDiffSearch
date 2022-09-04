@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,66 +14,64 @@
 
 package com.google.devtools.build.lib.query2;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.MapMaker;
-import com.google.common.collect.Multimaps;
-import com.google.common.collect.SetMultimap;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
+import com.google.devtools.build.lib.concurrent.BlockingStack;
+import com.google.devtools.build.lib.concurrent.ErrorClassifier;
+import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
+import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
+import com.google.devtools.build.lib.packages.Aspect;
+import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.AttributeMap;
+import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.OutputFile;
-import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.PackageProvider;
 import com.google.devtools.build.lib.pkgcache.TargetEdgeObserver;
-import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.util.BinaryPredicate;
-
+import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import java.util.Collection;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * <p>Visit the transitive closure of a label. Primarily used to "fault in"
- * packages to the packageProvider and ensure the necessary targets exists, in
- * advance of the configuration step, which is intolerant of missing
- * packages/targets.
+ * Visit the transitive closure of a label. Primarily used to "fault in" packages to the
+ * packageProvider and ensure the necessary targets exists, in advance of the configuration step,
+ * which is intolerant of missing packages/targets.
  *
- * <p>LabelVisitor loads packages concurrently where possible, to increase I/O
- * parallelism.  However, the public interface is not thread-safe: calls to
- * public methods should not be made concurrently.
+ * <p>LabelVisitor loads packages concurrently where possible, to increase I/O parallelism. However,
+ * the public interface is not thread-safe: calls to public methods should not be made concurrently.
  *
- * <p>LabelVisitor is stateful: It remembers the previous visitation and can
- * check its validity on subsequent calls to sync() instead of doing the normal
- * visitation.
+ * <p>LabelVisitor is stateful: It remembers the previous visitation and can check its validity on
+ * subsequent calls to sync() instead of doing the normal visitation.
  *
- * <p>TODO(bazel-team): (2009) a small further optimization could be achieved if we
- * create tasks at the package (not individual label) level, since package
- * loading is the expensive step.  This would require additional bookkeeping to
- * maintain the list of labels that we need to visit once a package becomes
- * available.  Profiling suggests that there is still a potential benefit to be
- * gained: when the set of packages is known a-priori, loading a set of packages
- * that took 20 seconds can be done under 5 in the sequential case or 7 in the
- * current (parallel) case.
+ * <p>TODO(bazel-team): (2009) a small further optimization could be achieved if we create tasks at
+ * the package (not individual label) level, since package loading is the expensive step. This would
+ * require additional bookkeeping to maintain the list of labels that we need to visit once a
+ * package becomes available. Profiling suggests that there is still a potential benefit to be
+ * gained: when the set of packages is known a-priori, loading a set of packages that took 20
+ * seconds can be done under 5 in the sequential case or 7 in the current (parallel) case.
  *
  * <h4>Concurrency</h4>
  *
- * <p>The sync() methods of this class is thread-compatible. The accessor
- * ({@link #hasVisited} and similar must not be called until the concurrent phase
- * is over, i.e. all external calls to visit() methods have completed.
+ * <p>The sync() methods of this class is thread-compatible. The accessor ({@link #hasVisited} and
+ * similar must not be called until the concurrent phase is over, i.e. all external calls to visit()
+ * methods have completed.
  */
-final class LabelVisitor {
+public final class LabelVisitor {
 
   /**
    * Attributes of a visitation which determine whether it is up-to-date or not.
@@ -81,7 +79,6 @@ final class LabelVisitor {
   private class VisitationAttributes {
     private Collection<Target> targetsToVisit;
     private boolean success = false;
-    private boolean visitSubincludes = true;
     private int maxDepth = 0;
 
     /**
@@ -89,8 +86,7 @@ final class LabelVisitor {
      */
     boolean current() {
       return targetsToVisit.equals(lastVisitation.targetsToVisit)
-          && maxDepth <= lastVisitation.maxDepth
-          && visitSubincludes == lastVisitation.visitSubincludes;
+          && maxDepth <= lastVisitation.maxDepth;
     }
   }
 
@@ -134,11 +130,7 @@ final class LabelVisitor {
    * 9. This exception causes the execution of the currently running command to
    * terminate prematurely.
    *
-   * The interruption of the loading of an individual package can happen in two
-   * different ways depending on whether Python preprocessing is in effect or
-   * not.
-   *
-   * If there is no Python preprocessing:
+   * The interruption of the loading of an individual package happens as follow:
    *
    * 1. We periodically check the interruption state of the thread in
    * UnixGlob.reallyGlob(). If it is interrupted, an InterruptedException is
@@ -148,42 +140,11 @@ final class LabelVisitor {
    * responsible for package loading. This either means that the worker thread
    * terminates or that the label parsing terminates if the package that is
    * being loaded was specified on the command line.
-   *
-   * If there is Python preprocessing, events are a bit more complicated. In
-   * this case, the real work happens on the thread the Python preprocessor is
-   * called from, but in a bit more convoluted way: a new thread is spawned by
-   * to handle the input from the Python process and
-   * the output to the Python process is handled on the main thread. The reading
-   * thread parses requests from the preprocessor, and passes them using a queue
-   * to the writing thread (that is, the main thread), so that we can do the
-   * work there. This is important because this way, we don't have any work that
-   * we need to interrupt in a thread that is not spawned by us. So:
-   *
-   * 1. The interrupted state of the main thread is set.
-   *
-   * 2. This results in an InterruptedException during the execution of the task
-   * in PythonStdinInputStream.getNextMessage().
-   *
-   * 3. We exit from RequestParser.Request.run() prematurely, set a flag to
-   * signal that we were interrupted, and throw an InterruptedIOException.
-   *
-   * 4. The Python child process and reading thread are terminated.
-   *
-   * 5. Based on the flag we set in step 3, we realize that the termination was
-   * due to an interruption, and an InterruptedException is thrown. This can
-   * either raise an AbnormalTerminationException, or make Command.execute()
-   * return normally, so we check for both cases.
-   *
-   * 6. This InterruptedException causes the loading of the package to terminate
-   * prematurely.
-   *
-   * Life is not simple.
    */
-  private final PackageProvider packageProvider;
-  private final BinaryPredicate<Rule, Attribute> edgeFilter;
-  private final SetMultimap<Package, Target> visitedMap =
-      Multimaps.synchronizedSetMultimap(HashMultimap.<Package, Target>create());
-  private final ConcurrentMap<Label, Integer> visitedTargets = new MapMaker().makeMap();
+  private final TargetProvider targetProvider;
+  private final DependencyFilter edgeFilter;
+  private final ConcurrentMap<Label, Integer> visitedTargets = new ConcurrentHashMap<>();
+  private final boolean useForkJoinPool;
 
   private VisitationAttributes lastVisitation;
 
@@ -195,19 +156,25 @@ final class LabelVisitor {
   /**
    * Construct a LabelVisitor.
    *
-   * @param packageProvider how to resolve labels to targets.
-   * @param edgeFilter which edges may be traversed.
+   * @param targetProvider how to resolve labels to targets
+   * @param edgeFilter which edges may be traversed
    */
-  public LabelVisitor(PackageProvider packageProvider,
-                      BinaryPredicate<Rule, Attribute> edgeFilter) {
-    this.packageProvider = packageProvider;
+  public LabelVisitor(
+      TargetProvider targetProvider, DependencyFilter edgeFilter, boolean useForkJoinPool) {
+    this.targetProvider = targetProvider;
     this.lastVisitation = new VisitationAttributes();
     this.edgeFilter = edgeFilter;
+    this.useForkJoinPool = useForkJoinPool;
   }
 
-  boolean syncWithVisitor(EventHandler eventHandler, Collection<Target> targetsToVisit,
-      boolean keepGoing, int parallelThreads, int maxDepth, TargetEdgeObserver... observers)
-          throws InterruptedException {
+  public boolean syncWithVisitor(
+      ExtendedEventHandler eventHandler,
+      Collection<Target> targetsToVisit,
+      boolean keepGoing,
+      int parallelThreads,
+      int maxDepth,
+      TargetEdgeObserver... observers)
+      throws InterruptedException {
     VisitationAttributes nextVisitation = new VisitationAttributes();
     nextVisitation.targetsToVisit = targetsToVisit;
     nextVisitation.maxDepth = maxDepth;
@@ -226,14 +193,14 @@ final class LabelVisitor {
   }
 
   // Does a bounded transitive visitation starting at the given top-level targets.
-  private boolean redoVisitation(EventHandler eventHandler,
-                                 VisitationAttributes visitation,
-                                 boolean keepGoing,
-                                 int parallelThreads,
-                                 int maxDepth,
-                                 TargetEdgeObserver... observers)
+  private boolean redoVisitation(
+      ExtendedEventHandler eventHandler,
+      VisitationAttributes visitation,
+      boolean keepGoing,
+      int parallelThreads,
+      int maxDepth,
+      TargetEdgeObserver... observers)
       throws InterruptedException {
-    visitedMap.clear();
     visitedTargets.clear();
 
     Visitor visitor = new Visitor(eventHandler, keepGoing, parallelThreads, maxDepth, observers);
@@ -253,50 +220,55 @@ final class LabelVisitor {
     return result;
   }
 
-  boolean hasVisited(Label target) {
+  public boolean hasVisited(Label target) {
     return visitedTargets.containsKey(target);
   }
 
-  @VisibleForTesting class Visitor extends AbstractQueueVisitor {
-
+  private class Visitor {
     private final static String THREAD_NAME = "LabelVisitor";
 
-    private final EventHandler eventHandler;
-    private final boolean keepGoing;
+    private final ExecutorService executorService;
+    private final QuiescingExecutor executor;
+    private final ExtendedEventHandler eventHandler;
     private final int maxDepth;
     private final Iterable<TargetEdgeObserver> observers;
     private final TargetEdgeErrorObserver errorObserver;
-    private final AtomicBoolean stopNewActions = new AtomicBoolean(false);
-    private static final boolean CONCURRENT = true;
 
-
-    public Visitor(EventHandler eventHandler, boolean keepGoing, int parallelThreads,
-                   int maxDepth, TargetEdgeObserver... observers) {
-      // Observing the loading phase of a typical large package (with all subpackages) shows
-      // maximum thread-level concurrency of ~20. Limiting the total number of threads to 200 is
-      // therefore conservative and should help us avoid hitting native limits.
-      super(CONCURRENT, parallelThreads, parallelThreads, 1L, TimeUnit.SECONDS, !keepGoing,
-          THREAD_NAME);
+    Visitor(
+        ExtendedEventHandler eventHandler,
+        boolean keepGoing,
+        int parallelThreads,
+        int maxDepth,
+        TargetEdgeObserver... observers) {
+      this.executorService =
+          useForkJoinPool
+              ? NamedForkJoinPool.newNamedPool(THREAD_NAME, parallelThreads)
+              : new ThreadPoolExecutor(
+                  /*corePoolSize=*/ parallelThreads,
+                  /*maximumPoolSize=*/ parallelThreads,
+                  1L,
+                  TimeUnit.SECONDS,
+                  new BlockingStack<>(),
+                  new ThreadFactoryBuilder().setNameFormat(THREAD_NAME + " %d").build());
+      this.executor =
+          AbstractQueueVisitor.createWithExecutorService(
+              executorService, /*failFastOnException=*/ !keepGoing, ErrorClassifier.DEFAULT);
       this.eventHandler = eventHandler;
       this.maxDepth = maxDepth;
       this.errorObserver = new TargetEdgeErrorObserver();
       ImmutableList.Builder<TargetEdgeObserver> builder = ImmutableList.builder();
-      for (TargetEdgeObserver observer : observers) {
-        builder.add(observer);
-      }
+      builder.add(observers);
       builder.add(errorObserver);
       this.observers = builder.build();
-      this.keepGoing = keepGoing;
     }
 
     /**
-     * Visit the specified labels and follow the transitive closure of their
-     * outbound dependencies.
+     * Visit the specified labels and follow the transitive closure of their outbound dependencies.
      *
      * @param targets the targets to visit
      */
     @ThreadSafe
-    public void visitTargets(Iterable<Target> targets) {
+    public void visitTargets(Iterable<Target> targets) throws InterruptedException {
       for (Target target : targets) {
         visit(null, null, target, 0, 0);
       }
@@ -304,18 +276,12 @@ final class LabelVisitor {
 
     @ThreadSafe
     public boolean finish() throws InterruptedException {
-      work(true);
+      executor.awaitQuiescence(/*interruptWorkers=*/ true);
       return !errorObserver.hasErrors();
     }
 
-    @Override
-    protected boolean blockNewActions() {
-      return (!keepGoing && errorObserver.hasErrors()) || super.blockNewActions() ||
-          stopNewActions.get();
-    }
-
     public void stopNewActions() {
-      stopNewActions.set(true);
+      executorService.shutdownNow();
     }
 
     private void enqueueTarget(
@@ -324,39 +290,30 @@ final class LabelVisitor {
       // Don't perform the targetProvider lookup if at the maximum depth already.
       if (depth >= maxDepth) {
         return;
-      } else if (attr != null && from instanceof Rule) {
-        if (!edgeFilter.apply((Rule) from, attr)) {
-          return;
-        }
       }
 
       // Avoid thread-related overhead when not crossing packages.
       // Can start a new thread when count reaches 100, to prevent infinite recursion.
-      if (from != null && from.getLabel().getPackageFragment() == label.getPackageFragment() &&
-          !blockNewActions() && count < RECURSION_LIMIT) {
+      if (from != null
+          && from.getLabel().getPackageFragment().equals(label.getPackageFragment())
+          && count < RECURSION_LIMIT) {
         newVisitRunnable(from, attr, label, depth, count + 1).run();
       } else {
-        enqueue(newVisitRunnable(from, attr, label, depth, 0));
+        executor.execute(newVisitRunnable(from, attr, label, depth, 0));
       }
     }
 
     private Runnable newVisitRunnable(final Target from, final Attribute attr, final Label label,
         final int depth, final int count) {
-      return new Runnable () {
-        @Override
-        public void run() {
+      return () -> {
+        try {
           try {
-            Target target = packageProvider.getTarget(eventHandler, label);
-            if (target == null) {
-              // Let target visitation continue so we can discover additional unknown inputs.
-              return;
-            }
-            visit(from, attr, packageProvider.getTarget(eventHandler, label), depth + 1, count);
+            visit(from, attr, targetProvider.getTarget(eventHandler, label), depth + 1, count);
           } catch (NoSuchThingException e) {
             observeError(from, label, e);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
           }
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
         }
       };
     }
@@ -364,7 +321,15 @@ final class LabelVisitor {
     private void visitTargetVisibility(Target target, int depth, int count) {
       Attribute attribute = null;
       if (target instanceof Rule) {
-        attribute = ((Rule) target).getRuleClassObject().getAttributeByName("visibility");
+        Rule rule = (Rule) target;
+        RuleClass ruleClass = rule.getRuleClassObject();
+        if (!ruleClass.hasAttr("visibility", BuildType.NODEP_LABEL_LIST)) {
+          return;
+        }
+        attribute = ruleClass.getAttributeByName("visibility");
+        if (!edgeFilter.apply(rule, attribute)) {
+          return;
+        }
       }
 
       for (Label label : target.getVisibility().getDependencyLabels()) {
@@ -380,14 +345,16 @@ final class LabelVisitor {
      * @param rule the rule to visit
      */
     @ThreadSafe
-    private void visitRule(final Rule rule, final int depth, final int count) {
+    private void visitRule(final Rule rule, final int depth, final int count)
+        throws InterruptedException {
       // Follow all labels defined by this rule:
-      AggregatingAttributeMapper.of(rule).visitLabels(new AttributeMap.AcceptsLabelAttribute() {
-        @Override
-        public void acceptLabelAttribute(Label label, Attribute attribute) {
-          enqueueTarget(rule, attribute, label, depth, count);
-        }
-      });
+      AggregatingAttributeMapper.of(rule)
+          .visitLabels()
+          .stream()
+          .filter(depEdge -> edgeFilter.apply(rule, depEdge.getAttribute()))
+          .forEach(
+              depEdge ->
+                  enqueueTarget(rule, depEdge.getAttribute(), depEdge.getLabel(), depth, count));
     }
 
     @ThreadSafe
@@ -400,30 +367,60 @@ final class LabelVisitor {
     /**
      * Visits the target and its package.
      *
-     * <p>Potentially blocking invocations into the package cache are
-     * enqueued in the worker pool if CONCURRENT.
+     * <p>Potentially blocking invocations into the package cache are enqueued in the worker pool if
+     * CONCURRENT.
      */
-    private void visit(
-        Target from, Attribute attribute, final Target target, int depth, int count) {
+    private void visit(Target from, Attribute attribute, final Target target, int depth, int count)
+        throws InterruptedException {
+      if (target == null) {
+        throw new NullPointerException(
+            String.format("'%s' attribute '%s'",
+              from == null ? "(null)" : from.getLabel().toString(),
+              attribute == null ? "(null)" : attribute.getName()));
+      }
       if (depth > maxDepth) {
         return;
       }
 
       if (from != null) {
         observeEdge(from, attribute, target);
+        visitAspectsIfRequired(from, attribute, target, depth, count);
       }
-
-      visitedMap.put(target.getPackage(), target);
       visitTargetNode(target, depth, count);
     }
 
+    private void visitAspectsIfRequired(
+        Target from, Attribute attribute, final Target to, int depth, int count) {
+      // TODO(bazel-team): The getAspects call below is duplicate work for each direct dep entailed
+      // by an attribute's value. Additionally, we might end up enqueueing the same exact visitation
+      // multiple times: consider the case where the same direct dependency is entailed by aspects
+      // of *different* attributes. These visitations get culled later, but we still have to pay the
+      // overhead for all that.
+
+      if (!(from instanceof Rule) || !(to instanceof Rule)) {
+        return;
+      }
+      Rule fromRule = (Rule) from;
+      Rule toRule = (Rule) to;
+      for (Aspect aspect : attribute.getAspects(fromRule)) {
+        if (AspectDefinition.satisfies(
+            aspect, toRule.getRuleClassObject().getAdvertisedProviders())) {
+          AspectDefinition.forEachLabelDepFromAllAttributesOfAspect(
+              fromRule,
+              aspect,
+              edgeFilter,
+              (aspectAttribute, aspectLabel) ->
+                  enqueueTarget(from, aspectAttribute, aspectLabel, depth, count));
+        }
+      }
+    }
+
     /**
-     * Visit the specified target.
-     * Called in a worker thread if CONCURRENT.
+     * Visit the specified target. Called in a worker thread if CONCURRENT.
      *
      * @param target the target to visit
      */
-    private void visitTargetNode(Target target, int depth, int count) {
+    private void visitTargetNode(Target target, int depth, int count) throws InterruptedException {
       Integer minTargetDepth = visitedTargets.putIfAbsent(target.getLabel(), depth);
       if (minTargetDepth != null) {
         // The target was already visited at a greater depth.
@@ -472,7 +469,8 @@ final class LabelVisitor {
       }
     }
 
-    private void observeError(Target from, Label label, NoSuchThingException e) {
+    private void observeError(Target from, Label label, NoSuchThingException e)
+        throws InterruptedException {
       for (TargetEdgeObserver observer : observers) {
         observer.missingEdge(from, label, e);
       }

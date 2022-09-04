@@ -17,12 +17,12 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
-import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
@@ -41,7 +41,9 @@ import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
+import com.google.devtools.build.lib.query2.ErrorPrintingTargetEdgeErrorObserver;
 import com.google.devtools.build.lib.query2.FakeLoadTarget;
+import com.google.devtools.build.lib.query2.LabelVisitor;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.MinDepthUniquifier;
@@ -75,7 +77,7 @@ import java.util.Set;
  */
 public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   private static final int MAX_DEPTH_FULL_SCAN_LIMIT = 20;
-  private final Map<String, Collection<Target>> resolvedTargetPatterns = new HashMap<>();
+  private final Map<String, Set<Target>> resolvedTargetPatterns = new HashMap<>();
   private final TargetPatternPreloader targetPatternPreloader;
   private final PathFragment relativeWorkingDirectory;
   private final TransitivePackageLoader transitivePackageLoader;
@@ -169,30 +171,25 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     // We can safely ignore the boolean error flag. The evaluateQuery() method above wraps the
     // entire query computation in an error sensor.
 
-    // This must be a collections class with a fast contains() implementation, or the code below
-    // becomes quadratic in runtime.
     Set<Target> targets = new LinkedHashSet<>(resolvedTargetPatterns.get(pattern));
 
     // Sets.filter would be more convenient here, but can't deal with exceptions.
-    if (labelFilter != Predicates.<Label>alwaysTrue()) {
-      // The labelFilter is always true for bazel query; it's only used for genquery rules.
-      Iterator<Target> targetIterator = targets.iterator();
-      while (targetIterator.hasNext()) {
-        Target target = targetIterator.next();
-        if (!validateScope(target.getLabel(), strictScope)) {
-          targetIterator.remove();
-        }
+    Iterator<Target> targetIterator = targets.iterator();
+    while (targetIterator.hasNext()) {
+      Target target = targetIterator.next();
+      if (!validateScope(target.getLabel(), strictScope)) {
+        targetIterator.remove();
       }
     }
 
-    Set<PathFragment> packages = CompactHashSet.create();
+    Set<PathFragment> packages = new HashSet<>();
     for (Target target : targets) {
       packages.add(target.getLabel().getPackageFragment());
     }
 
+    Set<Target> result = new LinkedHashSet<>();
     for (Target target : targets) {
-      // This triggers node creation in the Digraph; getOrCreate(X) returns X.
-      getOrCreate(target);
+      result.add(getOrCreate(target));
 
       // Preservation of graph order: it is important that targets obtained via
       // a wildcard such as p:* are correctly ordered w.r.t. each other, so to
@@ -223,7 +220,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         }
       }
     }
-    callback.process(targets);
+    callback.process(result);
   }
 
   @Override
@@ -470,8 +467,10 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       // Note that this may throw a RuntimeException if deps are missing in Skyframe and this is
       // being called from within a SkyFunction.
       resolvedTargetPatterns.putAll(
-          targetPatternPreloader.preloadTargetPatterns(
-              eventHandler, relativeWorkingDirectory, patterns, keepGoing, useForkJoinPool));
+          Maps.transformValues(
+              targetPatternPreloader.preloadTargetPatterns(
+                  eventHandler, relativeWorkingDirectory, patterns, keepGoing, useForkJoinPool),
+              ResolvedTargets::getTargets));
     }
   }
 
