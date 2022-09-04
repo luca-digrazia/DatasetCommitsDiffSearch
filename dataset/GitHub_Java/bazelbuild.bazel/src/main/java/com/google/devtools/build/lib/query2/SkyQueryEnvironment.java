@@ -237,7 +237,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     return ImmutableSet.of(universeKey);
   }
 
-  protected void beforeEvaluateQuery(QueryExpression expr)
+  private void beforeEvaluateQuery(QueryExpression expr)
       throws QueryException, InterruptedException {
     Set<SkyKey> roots = getGraphRootsFromExpression(expr);
 
