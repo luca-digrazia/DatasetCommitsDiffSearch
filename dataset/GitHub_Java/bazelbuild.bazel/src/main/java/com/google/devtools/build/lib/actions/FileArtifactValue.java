@@ -36,26 +36,45 @@ import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * A value that represents a file for the purposes of up-to-dateness checks of actions.
+ * State of a file system object for the execution phase.
  *
- * <p>It always stands for an actual file. In particular, tree artifacts and middlemen do not have a
- * corresponding {@link FileArtifactValue}. However, the file is not necessarily present in the file
- * system; this happens when intermediate build outputs are not downloaded (and maybe when an input
- * artifact of an action is missing?)
+ * <p>This is not used by Skyframe for invalidation, it is primarily used by the action cache and
+ * the various {@link com.google.devtools.build.lib.exec.SpawnRunner} implementations.
  *
- * <p>It makes its main appearance in {@code ActionExecutionValue.artifactData}. It has two main
- * uses:
+ * <p>We have the following cases:
  *
  * <ul>
- *   <li>This is how dependent actions get hold of the output metadata of their generated inputs.
- *   <li>This is how {@code FileSystemValueChecker} figures out which actions need to be invalidated
- *       (just propagating the invalidation up from leaf nodes is not enough, because the output
- *       tree may have been changed while Blaze was not looking)
+ *   <li>an ordinary file, in which case we would expect to see a digest and size;
+ *   <li>a directory, in which case we would expect to see an mtime;
+ *   <li>an intentionally omitted file which the build system is aware of but doesn't actually
+ *       exist, where all access methods are unsupported;
+ *   <li>a "middleman marker" object, which has a null digest, 0 size, and mtime of 0.
+ *   <li>The "self data" of a TreeArtifact, where we would expect to see a digest representing the
+ *       artifact's contents, and a size of 0.
+ *   <li>a file that's only stored by a remote caching/execution system, in which case we would
+ *       expect to see a digest and size.
  * </ul>
  */
 @Immutable
 @ThreadSafe
 public abstract class FileArtifactValue implements SkyValue, HasDigest {
+  @AutoCodec public static final FileArtifactValue DEFAULT_MIDDLEMAN = new SingletonMarkerValue();
+  /** Data that marks that a file is not present on the filesystem. */
+  @AutoCodec public static final FileArtifactValue MISSING_FILE_MARKER = new SingletonMarkerValue();
+
+  /**
+   * Represents an omitted file -- we are aware of it but it doesn't exist. All access methods are
+   * unsupported.
+   */
+  @AutoCodec public static final FileArtifactValue OMITTED_FILE_MARKER = new OmittedFileValue();
+
+  /**
+   * Marker interface for singleton implementations of this class.
+   *
+   * <p>Needed for a correct implementation of {@code equals}.
+   */
+  public interface Singleton {}
+
   /**
    * The type of the underlying file system object. If it is a regular file, then it is guaranteed
    * to have a digest. Otherwise it does not have a digest.
@@ -64,8 +83,8 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
 
   /**
    * Returns a digest of the content of the underlying file system object; must always return a
-   * non-null value for instances of type {@link FileStateType#REGULAR_FILE} that are owned by an
-   * {@code ActionExecutionValue}.
+   * non-null value for instances of type {@link FileStateType#REGULAR_FILE}. Otherwise may return
+   * null.
    *
    * <p>All instances of this interface must either have a digest or return a last-modified time.
    * Clients should prefer using the digest for content identification (e.g., for caching), and only
@@ -73,7 +92,7 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
    *
    * <p>The return value is owned by this object and must not be modified.
    */
-  @Override
+  @Nullable
   public abstract byte[] getDigest();
 
   /** Returns the file's size, or 0 if the underlying file system object is not a file. */
@@ -86,9 +105,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
    */
   public abstract long getModifiedTime();
 
-  // TODO(lberki): This is only used by FileArtifactValue itself. It seems possible to remove this.
-  public abstract FileContentsProxy getContentsProxy();
-
   @Nullable
   @Override
   public BigInteger getValueFingerprint() {
@@ -99,7 +115,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     // TODO(janakr): return fingerprint in other cases: symlink, directory.
     return null;
   }
-
 
   /**
    * Index used to resolve remote files.
@@ -112,13 +127,8 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
   }
 
   /** Returns {@code true} if this is a special marker as opposed to a representing a real file. */
-  public boolean isMarkerValue() {
+  public final boolean isMarkerValue() {
     return this instanceof Singleton;
-  }
-
-  /** Returns {@code true} if the file only exists remotely. */
-  public boolean isRemote() {
-    return false;
   }
 
   /**
@@ -128,28 +138,11 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
    * that the file was modified since the digest was computed. Better not upload if we are not sure
    * that the cache entry is reliable.
    */
-  // TODO(lberki): This is very similar to couldBeModifiedSince(). Check if we can unify these.
   public abstract boolean wasModifiedSinceDigest(Path path) throws IOException;
 
-  /**
-   * Returns whether the two {@link FileArtifactValue} instances could be considered the same for
-   * purposes of action invalidation.
-   */
-  // TODO(lberki): This is very similar to wasModifiedSinceDigest(). Check if we can unify these.
-  public boolean couldBeModifiedSince(FileArtifactValue lastKnown) {
-    if (this instanceof Singleton || lastKnown instanceof Singleton) {
-      return true;
-    }
-
-    if (getType() != lastKnown.getType()) {
-      return true;
-    }
-
-    if (getDigest() != null && lastKnown.getDigest() != null) {
-      return !Arrays.equals(getDigest(), lastKnown.getDigest()) || getSize() != lastKnown.getSize();
-    } else {
-      return getModifiedTime() != lastKnown.getModifiedTime();
-    }
+  /** Returns {@code true} if the file only exists remotely. */
+  public boolean isRemote() {
+    return false;
   }
 
   @Override
@@ -187,22 +180,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     }
   }
 
-  /**
-   * Marker interface for singleton implementations of this class.
-   *
-   * <p>Needed for a correct implementation of {@code equals}.
-   */
-  interface Singleton {}
-
-  @AutoCodec public static final FileArtifactValue DEFAULT_MIDDLEMAN = new SingletonMarkerValue();
-  /** Data that marks that a file is not present on the filesystem. */
-  @AutoCodec public static final FileArtifactValue MISSING_FILE_MARKER = new SingletonMarkerValue();
-  /**
-   * Represents an omitted file -- we are aware of it but it doesn't exist. All access methods are
-   * unsupported.
-   */
-  @AutoCodec public static final FileArtifactValue OMITTED_FILE_MARKER = new OmittedFileValue();
-
   public static FileArtifactValue createForSourceArtifact(Artifact artifact, FileValue fileValue)
       throws IOException {
     Preconditions.checkState(artifact.isSourceArtifact());
@@ -218,21 +195,20 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
   }
 
   @VisibleForTesting
-  public static FileArtifactValue injectDigestForTesting(
-      Artifact artifact, FileArtifactValue source) throws IOException {
-    boolean isFile = source.getType() == FileStateType.REGULAR_FILE;
-    FileContentsProxy proxy = source.getContentsProxy();
+  public static FileArtifactValue createForTesting(Artifact artifact, ArtifactFileMetadata metadata)
+      throws IOException {
+    boolean isFile = metadata.isFile();
     return create(
         artifact.getPath(),
         isFile,
-        isFile ? source.getSize() : 0,
-        proxy,
-        isFile ? source.getDigest() : null,
+        isFile ? metadata.getSize() : 0,
+        isFile ? metadata.getContentsProxy() : null,
+        isFile ? metadata.getDigest() : null,
         !artifact.isConstantMetadata());
   }
 
   public static FileArtifactValue createFromInjectedDigest(
-      FileArtifactValue metadata, @Nullable byte[] digest, boolean isShareable) {
+      ArtifactFileMetadata metadata, @Nullable byte[] digest, boolean isShareable) {
     return createForNormalFile(
         digest, metadata.getContentsProxy(), metadata.getSize(), isShareable);
   }
@@ -293,6 +269,15 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
         : new UnshareableRegularFileArtifactValue(digest, proxy, size);
   }
 
+  public static FileArtifactValue createFromMetadata(
+      ArtifactFileMetadata artifactMetadata, boolean isShareable) {
+    return createForNormalFile(
+        artifactMetadata.getDigest(),
+        artifactMetadata.getContentsProxy(),
+        artifactMetadata.getSize(),
+        isShareable);
+  }
+
   public static FileArtifactValue createForDirectoryWithHash(byte[] digest) {
     return new HashedDirectoryArtifactValue(digest);
   }
@@ -303,15 +288,11 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
 
   /**
    * Creates a FileArtifactValue used as a 'proxy' input for other ArtifactValues. These are used in
-   * {@link ActionCacheChecker}.
+   * {@link com.google.devtools.build.lib.actions.ActionCacheChecker}.
    */
   public static FileArtifactValue createProxy(byte[] digest) {
     Preconditions.checkNotNull(digest);
     return createForNormalFile(digest, /*proxy=*/ null, /*size=*/ 0, /*isShareable=*/ true);
-  }
-
-  private static String bytesToString(byte[] bytes) {
-    return "0x" + BaseEncoding.base16().omitPadding().encode(bytes);
   }
 
   private static final class DirectoryArtifactValue extends FileArtifactValue {
@@ -330,11 +311,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     @Override
     public byte[] getDigest() {
       return null;
-    }
-
-    @Override
-    public FileContentsProxy getContentsProxy() {
-      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -385,11 +361,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     }
 
     @Override
-    public FileContentsProxy getContentsProxy() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public long getModifiedTime() {
       return 0;
     }
@@ -400,7 +371,7 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     }
 
     @Override
-    public boolean wasModifiedSinceDigest(Path path) {
+    public boolean wasModifiedSinceDigest(Path path) throws IOException {
       // TODO(ulfjack): Ideally, we'd attempt to detect intra-build modifications here. I'm
       // consciously deferring work here as this code will most likely change again, and we're
       // already doing better than before by detecting inter-build modifications.
@@ -410,16 +381,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     @Override
     public String toString() {
       return MoreObjects.toStringHelper(this).add("digest", digest).toString();
-    }
-
-    @Override
-    public boolean couldBeModifiedSince(FileArtifactValue o) {
-      if (!(o instanceof HashedDirectoryArtifactValue)) {
-        return true;
-      }
-
-      HashedDirectoryArtifactValue lastKnown = (HashedDirectoryArtifactValue) o;
-      return !Arrays.equals(digest, lastKnown.digest);
     }
 
     @Override
@@ -445,9 +406,8 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     @Nullable private final FileContentsProxy proxy;
     private final long size;
 
-    private RegularFileArtifactValue(
-        @Nullable byte[] digest, @Nullable FileContentsProxy proxy, long size) {
-      this.digest = digest;
+    private RegularFileArtifactValue(byte[] digest, @Nullable FileContentsProxy proxy, long size) {
+      this.digest = Preconditions.checkNotNull(digest);
       this.proxy = proxy;
       this.size = size;
     }
@@ -460,11 +420,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     @Override
     public byte[] getDigest() {
       return digest;
-    }
-
-    @Override
-    public FileContentsProxy getContentsProxy() {
-      return proxy;
     }
 
     @Override
@@ -492,26 +447,7 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
       return MoreObjects.toStringHelper(this)
           .add("digest", BaseEncoding.base16().lowerCase().encode(digest))
           .add("size", size)
-          .add("proxy", proxy)
-          .toString();
-    }
-
-    @Override
-    public boolean couldBeModifiedSince(FileArtifactValue o) {
-      if (!(o instanceof RegularFileArtifactValue)) {
-        return true;
-      }
-
-      RegularFileArtifactValue lastKnown = (RegularFileArtifactValue) o;
-      if (size != lastKnown.size || dataIsShareable() != lastKnown.dataIsShareable()) {
-        return true;
-      }
-
-      if (digest != null && lastKnown.digest != null) {
-        return !Arrays.equals(digest, lastKnown.digest);
-      } else {
-        return !Objects.equals(proxy, lastKnown.proxy);
-      }
+          .add("proxy", proxy).toString();
     }
 
     @Override
@@ -532,8 +468,7 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     @Override
     public int hashCode() {
       return (proxy != null ? 127 * proxy.hashCode() : 0)
-          + 37 * Long.hashCode(getSize())
-          + Arrays.hashCode(getDigest());
+          + 37 * Long.hashCode(getSize()) + Arrays.hashCode(getDigest());
     }
   }
 
@@ -572,11 +507,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     }
 
     @Override
-    public FileContentsProxy getContentsProxy() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public long getSize() {
       return size;
     }
@@ -612,6 +542,10 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     }
   }
 
+  private static String bytesToString(byte[] bytes) {
+    return "0x" + BaseEncoding.base16().omitPadding().encode(bytes);
+  }
+
   /** File stored inline in metadata. */
   public static class InlineFileArtifactValue extends FileArtifactValue {
     private final byte[] data;
@@ -623,8 +557,7 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     }
 
     private InlineFileArtifactValue(byte[] bytes) {
-      this(
-          bytes,
+      this(bytes,
           DigestHashFunction.getDefaultUnchecked().getHashFunction().hashBytes(bytes).asBytes());
     }
 
@@ -646,11 +579,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     @Override
     public byte[] getDigest() {
       return digest;
-    }
-
-    @Override
-    public FileContentsProxy getContentsProxy() {
-      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -693,7 +621,8 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     private final byte[] digest;
     private final long size;
 
-    public SourceFileArtifactValue(PathFragment execPath, byte[] digest, long size) {
+    public SourceFileArtifactValue(
+        PathFragment execPath, byte[] digest, long size) {
       this.execPath = Preconditions.checkNotNull(execPath);
       this.digest = Preconditions.checkNotNull(digest);
       this.size = size;
@@ -711,11 +640,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     @Override
     public byte[] getDigest() {
       return digest;
-    }
-
-    @Override
-    public FileContentsProxy getContentsProxy() {
-      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -747,11 +671,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     }
 
     @Override
-    public FileContentsProxy getContentsProxy() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
     public long getSize() {
       return 0;
     }
@@ -762,7 +681,7 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     }
 
     @Override
-    public boolean wasModifiedSinceDigest(Path path) {
+    public boolean wasModifiedSinceDigest(Path path) throws IOException {
       return false;
     }
 
@@ -786,11 +705,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
 
     @Override
     public byte[] getDigest() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public FileContentsProxy getContentsProxy() {
       throw new UnsupportedOperationException();
     }
 
