@@ -24,14 +24,7 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.spi.Message;
 import com.mongodb.MongoException;
-import org.graylog.plugins.cef.CEFInputModule;
-import org.graylog.plugins.map.MapWidgetModule;
-import org.graylog.plugins.netflow.NetFlowPluginModule;
 import org.graylog.plugins.pipelineprocessor.PipelineConfig;
-import org.graylog.plugins.sidecar.SidecarModule;
-import org.graylog.plugins.views.ESBackendModule;
-import org.graylog.plugins.views.ViewsBindings;
-import org.graylog.plugins.views.ViewsConfig;
 import org.graylog2.Configuration;
 import org.graylog2.alerts.AlertConditionBindings;
 import org.graylog2.audit.AuditActor;
@@ -57,7 +50,6 @@ import org.graylog2.configuration.EmailConfiguration;
 import org.graylog2.configuration.HttpConfiguration;
 import org.graylog2.configuration.MongoDbConfiguration;
 import org.graylog2.configuration.VersionCheckConfiguration;
-import org.graylog2.contentpacks.ContentPacksModule;
 import org.graylog2.dashboards.DashboardBindings;
 import org.graylog2.decorators.DecoratorBindings;
 import org.graylog2.indexer.IndexerBindings;
@@ -106,7 +98,6 @@ public class Server extends ServerBootstrap {
     private final KafkaJournalConfiguration kafkaJournalConfiguration = new KafkaJournalConfiguration();
     private final NettyTransportConfiguration nettyTransportConfiguration = new NettyTransportConfiguration();
     private final PipelineConfig pipelineConfiguration = new PipelineConfig();
-    private final ViewsConfig viewsConfiguration = new ViewsConfig();
 
     public Server() {
         super("server", configuration);
@@ -145,14 +136,7 @@ public class Server extends ServerBootstrap {
             new AuditBindings(),
             new AlertConditionBindings(),
             new IndexerBindings(),
-            new MigrationsModule(),
-            new NetFlowPluginModule(),
-            new CEFInputModule(),
-            new MapWidgetModule(),
-            new SidecarModule(),
-            new ContentPacksModule(),
-            new ViewsBindings(),
-            new ESBackendModule()
+            new MigrationsModule()
         );
 
         return modules.build();
@@ -169,8 +153,7 @@ public class Server extends ServerBootstrap {
                 versionCheckConfiguration,
                 kafkaJournalConfiguration,
                 nettyTransportConfiguration,
-                pipelineConfiguration,
-                viewsConfiguration);
+                pipelineConfiguration);
     }
 
     @Override
