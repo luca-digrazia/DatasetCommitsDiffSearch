@@ -100,7 +100,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   @Test
   public void testAndroidSplitTransitionWithInvalidCpu() throws Exception {
     scratch.file(
-        "test/starlark/my_rule.bzl",
+        "test/skylark/my_rule.bzl",
         "def impl(ctx): ",
         "  return []",
         "my_rule = rule(",
@@ -111,8 +111,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "  })");
 
     scratch.file(
-        "test/starlark/BUILD",
-        "load('//test/starlark:my_rule.bzl', 'my_rule')",
+        "test/skylark/BUILD",
+        "load('//test/skylark:my_rule.bzl', 'my_rule')",
         "my_rule(name = 'test', deps = [':main'], dep = ':main')",
         "cc_binary(name = 'main', srcs = ['main.c'])");
     BazelMockAndroidSupport.setupNdk(mockToolsConfig);
@@ -122,7 +122,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "--fat_apk_cpu=doesnotexist", "--android_crosstool_top=//android/crosstool:everything");
 
     AssertionError noToolchainError =
-        assertThrows(AssertionError.class, () -> getConfiguredTarget("//test/starlark:test"));
+        assertThrows(AssertionError.class, () -> getConfiguredTarget("//test/skylark:test"));
     assertThat(noToolchainError)
         .hasMessageThat()
         .contains("does not contain a toolchain for cpu 'doesnotexist'");
@@ -4152,7 +4152,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testApkInfoAccessibleFromStarlark() throws Exception {
+  public void testApkInfoAccessibleFromSkylark() throws Exception {
     scratch.file(
         "java/com/google/android/BUILD",
         "load(':postprocess.bzl', 'postprocess')",
@@ -4174,7 +4174,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testInstrumentationInfoAccessibleFromStarlark() throws Exception {
+  public void testInstrumentationInfoAccessibleFromSkylark() throws Exception {
     scratch.file(
         "java/com/google/android/instr/BUILD",
         "load(':instr.bzl', 'instr')",
@@ -4200,7 +4200,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testInstrumentationInfoCreatableFromStarlark() throws Exception {
+  public void testInstrumentationInfoCreatableFromSkylark() throws Exception {
     scratch.file(
         "java/com/google/android/instr/BUILD",
         "load(':instr.bzl', 'instr')",
@@ -4370,7 +4370,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void starlarkJavaInfoToAndroidBinaryAttributes() throws Exception {
+  public void skylarkJavaInfoToAndroidBinaryAttributes() throws Exception {
     scratch.file(
         "java/r/android/extension.bzl",
         "def _impl(ctx):",
@@ -4643,7 +4643,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testAndroidStarlarkApiNativeLibs() throws Exception {
+  public void testAndroidSkylarkApiNativeLibs() throws Exception {
     scratch.file(
         "java/a/fetch_native_libs.bzl",
         "def _impl(ctx):",
