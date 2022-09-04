@@ -168,12 +168,11 @@ public abstract class FileArtifactValue implements SkyValue {
   }
 
   public static FileArtifactValue create(
-      Artifact artifact, ArtifactPathResolver resolver, FileValue fileValue,
-      @Nullable byte[] injectedDigest) throws IOException {
+      Artifact artifact, FileValue fileValue, @Nullable byte[] injectedDigest) throws IOException {
     boolean isFile = fileValue.isFile();
     FileContentsProxy proxy = getProxyFromFileStateValue(fileValue.realFileStateValue());
     return create(
-        resolver.toPath(artifact), isFile, isFile ? fileValue.getSize() : 0, proxy, injectedDigest);
+        artifact.getPath(), isFile, isFile ? fileValue.getSize() : 0, proxy, injectedDigest);
   }
 
   @VisibleForTesting
@@ -445,18 +444,24 @@ public abstract class FileArtifactValue implements SkyValue {
    */
   public static final class SourceFileArtifactValue extends FileArtifactValue {
     private final PathFragment execPath;
+    private final int sourceRootIndex;
     private final byte[] digest;
     private final long size;
 
     public SourceFileArtifactValue(
-        PathFragment execPath, byte[] digest, long size) {
+        PathFragment execPath, int sourceRootIndex, byte[] digest, long size) {
       this.execPath = Preconditions.checkNotNull(execPath);
+      this.sourceRootIndex = sourceRootIndex;
       this.digest = Preconditions.checkNotNull(digest);
       this.size = size;
     }
 
     public PathFragment getExecPath() {
       return execPath;
+    }
+
+    public int getSourceRootIndex() {
+      return sourceRootIndex;
     }
 
     @Override

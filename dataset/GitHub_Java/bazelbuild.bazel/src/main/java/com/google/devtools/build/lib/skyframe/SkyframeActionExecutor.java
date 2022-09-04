@@ -677,9 +677,8 @@ public final class SkyframeActionExecutor {
     } catch (ActionExecutionException e) {
       throw processAndThrow(
           env.getListener(),
-          actionExecutionContext,
-          action,
           e,
+          action,
           actionExecutionContext.getFileOutErr(),
           ErrorTiming.BEFORE_EXECUTION);
     }
@@ -767,7 +766,7 @@ public final class SkyframeActionExecutor {
         Preconditions.checkState(actionExecutionContext.getMetadataHandler() == metadataHandler,
             "%s %s", actionExecutionContext.getMetadataHandler(), metadataHandler);
         prepareScheduleExecuteAndCompleteAction(
-            eventHandler, actionExecutionContext, action, actionStartTime, actionLookupData);
+            eventHandler, action, actionExecutionContext, actionStartTime, actionLookupData);
         Preconditions.checkState(
             actionExecutionContext.getOutputSymlinks() == null
                 || action instanceof SkyframeAwareAction,
@@ -891,8 +890,8 @@ public final class SkyframeActionExecutor {
    */
   private void prepareScheduleExecuteAndCompleteAction(
       ExtendedEventHandler eventHandler,
-      ActionExecutionContext context,
       Action action,
+      ActionExecutionContext context,
       long actionStartTime,
       ActionLookupData actionLookupData)
       throws ActionExecutionException, InterruptedException {
@@ -925,7 +924,6 @@ public final class SkyframeActionExecutor {
       boolean outputDumped = executeActionTask(eventHandler, action, context);
       completeAction(
           eventHandler,
-          context,
           action,
           context.getMetadataHandler(),
           context.getFileOutErr(),
@@ -938,14 +936,12 @@ public final class SkyframeActionExecutor {
 
   private ActionExecutionException processAndThrow(
       ExtendedEventHandler eventHandler,
-      ActionExecutionContext actionExecutionContext,
-      Action action,
       ActionExecutionException e,
+      Action action,
       FileOutErr outErrBuffer,
       ErrorTiming errorTiming)
-      throws ActionExecutionException {
-    reportActionExecution(
-        eventHandler, actionExecutionContext, action, e, outErrBuffer, errorTiming);
+          throws ActionExecutionException {
+    reportActionExecution(eventHandler, action, e, outErrBuffer, errorTiming);
     boolean reported = reportErrorIfNotAbortingMode(e, outErrBuffer);
 
     ActionExecutionException toThrow = e;
@@ -1009,25 +1005,17 @@ public final class SkyframeActionExecutor {
       }
       // Defer reporting action success until outputs are checked
     } catch (ActionExecutionException e) {
-      throw processAndThrow(
-          eventHandler,
-          actionExecutionContext,
-          action,
-          e,
-          outErrBuffer,
-          ErrorTiming.AFTER_EXECUTION);
+      throw processAndThrow(eventHandler, e, action, outErrBuffer, ErrorTiming.AFTER_EXECUTION);
     }
     return false;
   }
 
   private void completeAction(
       ExtendedEventHandler eventHandler,
-      ActionExecutionContext actionExecutionContext,
       Action action,
       MetadataHandler metadataHandler,
       FileOutErr fileOutErr,
-      boolean outputAlreadyDumped)
-      throws ActionExecutionException {
+      boolean outputAlreadyDumped) throws ActionExecutionException {
     try {
       Preconditions.checkState(action.inputsDiscovered(),
           "Action %s successfully executed, but inputs still not known", action);
@@ -1047,23 +1035,16 @@ public final class SkyframeActionExecutor {
         }
       }
 
-      reportActionExecution(
-          eventHandler, actionExecutionContext, action, null, fileOutErr, ErrorTiming.NO_ERROR);
+      reportActionExecution(eventHandler, action, null, fileOutErr, ErrorTiming.NO_ERROR);
     } catch (ActionExecutionException actionException) {
       // Success in execution but failure in completion.
       reportActionExecution(
-          eventHandler,
-          actionExecutionContext,
-          action,
-          actionException,
-          fileOutErr,
-          ErrorTiming.AFTER_EXECUTION);
+          eventHandler, action, actionException, fileOutErr, ErrorTiming.AFTER_EXECUTION);
       throw actionException;
     } catch (IllegalStateException exception) {
       // More serious internal error, but failure still reported.
       reportActionExecution(
           eventHandler,
-          actionExecutionContext,
           action,
           new ActionExecutionException(exception, action, true),
           fileOutErr,
@@ -1239,7 +1220,6 @@ public final class SkyframeActionExecutor {
 
   private void reportActionExecution(
       ExtendedEventHandler eventHandler,
-      ActionExecutionContext actionExecutionContext,
       Action action,
       ActionExecutionException exception,
       FileOutErr outErr,
@@ -1253,14 +1233,7 @@ public final class SkyframeActionExecutor {
     if (outErr.hasRecordedStderr()) {
       stderr = outErr.getErrorPath();
     }
-    eventHandler.post(
-        new ActionExecutedEvent(
-            action,
-            exception,
-            actionExecutionContext.getInputPath(action.getPrimaryOutput()),
-            stdout,
-            stderr,
-            errorTiming));
+    eventHandler.post(new ActionExecutedEvent(action, exception, stdout, stderr, errorTiming));
   }
 
   /**

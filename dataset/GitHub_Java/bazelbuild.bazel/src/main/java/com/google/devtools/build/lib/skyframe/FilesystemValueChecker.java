@@ -25,7 +25,7 @@ import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactFileMetadata;
+import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.vfs.FileStatusWithDigest;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.Differencer;
 import com.google.devtools.build.skyframe.FunctionHermeticity;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -303,10 +302,9 @@ public class FilesystemValueChecker {
           Pair<SkyKey, ActionExecutionValue> keyAndValue = fileToKeyAndValue.get(artifact);
           ActionExecutionValue actionValue = keyAndValue.getSecond();
           SkyKey key = keyAndValue.getFirst();
-          ArtifactFileMetadata lastKnownData = actionValue.getAllFileValues().get(artifact);
+          FileValue lastKnownData = actionValue.getAllFileValues().get(artifact);
           try {
-            ArtifactFileMetadata newData =
-                ActionMetadataHandler.fileMetadataFromArtifact(artifact, stat, tsgm);
+            FileValue newData = ActionMetadataHandler.fileValueFromArtifact(artifact, stat, tsgm);
             if (!newData.equals(lastKnownData)) {
               updateIntraBuildModifiedCounter(
                   stat != null ? stat.getLastChangeTime() : -1,
@@ -409,19 +407,17 @@ public class FilesystemValueChecker {
       ImmutableSet<PathFragment> knownModifiedOutputFiles,
       Supplier<NavigableSet<PathFragment>> sortedKnownModifiedOutputFiles) {
     boolean isDirty = false;
-    for (Map.Entry<Artifact, ArtifactFileMetadata> entry :
-        actionValue.getAllFileValues().entrySet()) {
+    for (Map.Entry<Artifact, FileValue> entry : actionValue.getAllFileValues().entrySet()) {
       Artifact file = entry.getKey();
-      ArtifactFileMetadata lastKnownData = entry.getValue();
+      FileValue lastKnownData = entry.getValue();
       if (shouldCheckFile(knownModifiedOutputFiles, file)) {
         try {
-          ArtifactFileMetadata fileMetadata =
-              ActionMetadataHandler.fileMetadataFromArtifact(file, null, tsgm);
-          if (!fileMetadata.equals(lastKnownData)) {
-            updateIntraBuildModifiedCounter(
-                fileMetadata.exists() ? file.getPath().getLastModifiedTime(Symlinks.FOLLOW) : -1,
-                lastKnownData.isSymlink(),
-                fileMetadata.isSymlink());
+          FileValue fileValue = ActionMetadataHandler.fileValueFromArtifact(file, null,
+              tsgm);
+          if (!fileValue.equals(lastKnownData)) {
+            updateIntraBuildModifiedCounter(fileValue.exists()
+                ? fileValue.realRootedPath().asPath().getLastModifiedTime()
+                : -1, lastKnownData.isSymlink(), fileValue.isSymlink());
             modifiedOutputFilesCounter.getAndIncrement();
             isDirty = true;
           }
