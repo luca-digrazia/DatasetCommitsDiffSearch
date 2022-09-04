@@ -181,7 +181,7 @@ public final class AspectFunction implements SkyFunction {
                 env.getValueOrThrow(importFileKey, SkylarkImportFailedException.class);
       } else {
         skylarkImportLookupValue =
-            skylarkImportLookupFunctionForInlining.computeWithInlineCalls(importFileKey, env);
+            skylarkImportLookupFunctionForInlining.computeWithInlineCalls(importFileKey, env, 1);
       }
       if (skylarkImportLookupValue == null) {
         Preconditions.checkState(
@@ -630,8 +630,7 @@ public final class AspectFunction implements SkyFunction {
                     configConditions,
                     toolchainContext,
                     aspectConfiguration,
-                    view.getHostConfiguration(aspectConfiguration),
-                    key);
+                    view.getHostConfiguration(aspectConfiguration));
       } finally {
         CurrentRuleTracker.endConfiguredAspect();
       }

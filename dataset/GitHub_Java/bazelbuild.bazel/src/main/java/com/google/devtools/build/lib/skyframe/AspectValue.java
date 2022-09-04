@@ -480,6 +480,7 @@ public final class AspectValue extends BasicActionLookupValue {
     Preconditions.checkNotNull(location, this);
     Preconditions.checkNotNull(key, this);
     Preconditions.checkNotNull(configuredAspect, this);
+    Preconditions.checkNotNull(transitivePackagesForPackageRootResolution, this);
     if (clearEverything) {
       label = null;
       aspect = null;

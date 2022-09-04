@@ -93,6 +93,7 @@ public final class NonRuleConfiguredTargetValue extends BasicActionLookupValue
   @Override
   public void clear(boolean clearEverything) {
     Preconditions.checkNotNull(configuredTarget);
+    Preconditions.checkNotNull(transitivePackagesForPackageRootResolution);
     if (clearEverything) {
       configuredTarget = null;
     }

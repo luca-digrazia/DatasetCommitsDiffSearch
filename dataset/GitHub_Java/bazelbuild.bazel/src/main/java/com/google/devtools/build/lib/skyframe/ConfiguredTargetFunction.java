@@ -29,9 +29,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
-import com.google.devtools.build.lib.analysis.DependencyResolver;
-import com.google.devtools.build.lib.analysis.DependencyResolver.AttributeDependencyKind;
-import com.google.devtools.build.lib.analysis.DependencyResolver.DependencyKind;
 import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.PlatformSemantics;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
@@ -306,7 +303,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       }
 
       // Calculate the dependencies of this target.
-      OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> depValueMap =
+      OrderedSetMultimap<Attribute, ConfiguredTargetAndData> depValueMap =
           computeDependencies(
               env,
               resolver,
@@ -334,8 +331,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       // Load the requested toolchains into the ToolchainContext, now that we have dependencies.
       ToolchainContext toolchainContext = null;
       if (unloadedToolchainContext != null) {
-        toolchainContext =
-            unloadedToolchainContext.load(depValueMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));
+        toolchainContext = unloadedToolchainContext.load(depValueMap);
       }
 
       ConfiguredTargetValue ans =
@@ -344,7 +340,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               env,
               target,
               configuration,
-              configuredTargetKey,
               depValueMap,
               configConditions,
               toolchainContext,
@@ -463,7 +458,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
    *     BuildOptions object.
    */
   @Nullable
-  static OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> computeDependencies(
+  static OrderedSetMultimap<Attribute, ConfiguredTargetAndData> computeDependencies(
       Environment env,
       SkyframeDependencyResolver resolver,
       TargetAndConfiguration ctgValue,
@@ -478,7 +473,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       throws DependencyEvaluationException, ConfiguredTargetFunctionException,
           AspectCreationException, InterruptedException {
     // Create the map from attributes to set of (target, configuration) pairs.
-    OrderedSetMultimap<DependencyKind, Dependency> depValueNames;
+    OrderedSetMultimap<Attribute, Dependency> depValueNames;
     try {
       depValueNames =
           resolver.dependentNodeMap(
@@ -577,14 +572,12 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     Map<Label, ConfigMatchingProvider> configConditions = new LinkedHashMap<>();
 
     // Collect the labels of the configured targets we need to resolve.
-    OrderedSetMultimap<DependencyKind, Label> configLabelMap = OrderedSetMultimap.create();
+    OrderedSetMultimap<Attribute, Label> configLabelMap = OrderedSetMultimap.create();
     RawAttributeMapper attributeMap = RawAttributeMapper.of(((Rule) target));
     for (Attribute a : ((Rule) target).getAttributes()) {
       for (Label configLabel : attributeMap.getConfigurabilityKeys(a.getName(), a.getType())) {
         if (!BuildType.Selector.isReservedLabel(configLabel)) {
-          configLabelMap.put(
-              AttributeDependencyKind.forRule(a),
-              target.getLabel().resolveRepositoryRelative(configLabel));
+          configLabelMap.put(a, target.getLabel().resolveRepositoryRelative(configLabel));
         }
       }
     }
@@ -593,7 +586,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     }
 
     Map<Label, Target> configurabilityTargets =
-        resolver.getTargets(configLabelMap, target, transitiveRootCauses);
+        resolver.getTargets(configLabelMap.values(), target, transitiveRootCauses);
     if (configurabilityTargets == null) {
       return null;
     }
@@ -778,8 +771,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       Environment env,
       Target target,
       BuildConfiguration configuration,
-      ConfiguredTargetKey configuredTargetKey,
-      OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> depValueMap,
+      OrderedSetMultimap<Attribute, ConfiguredTargetAndData> depValueMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       @Nullable ToolchainContext toolchainContext,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution)
@@ -804,7 +796,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               target,
               configuration,
               analysisEnvironment,
-              configuredTargetKey,
               depValueMap,
               configConditions,
               toolchainContext);

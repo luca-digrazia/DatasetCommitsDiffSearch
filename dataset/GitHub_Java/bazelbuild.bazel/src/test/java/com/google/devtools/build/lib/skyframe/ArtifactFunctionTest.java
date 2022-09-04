@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.FileArtifactValue.create;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -133,8 +133,12 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
   @Test
   public void testMissingMandatoryArtifact() throws Throwable {
     Artifact input = createSourceArtifact("input1");
-    assertThrows(
-        MissingInputFileException.class, () -> evaluateArtifactValue(input, /*mandatory=*/ true));
+    try {
+      evaluateArtifactValue(input, /*mandatory=*/ true);
+      fail();
+    } catch (MissingInputFileException ex) {
+      // Expected.
+    }
   }
 
   @Test
@@ -182,11 +186,12 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
             return super.statIfFound(path, followSymlinks);
           }
         });
-    MissingInputFileException e =
-        assertThrows(
-            MissingInputFileException.class,
-            () -> evaluateArtifactValue(createSourceArtifact("bad")));
-    assertThat(e).hasMessageThat().contains(exception.getMessage());
+    try {
+      evaluateArtifactValue(createSourceArtifact("bad"));
+      fail();
+    } catch (MissingInputFileException e) {
+      assertThat(e).hasMessageThat().contains(exception.getMessage());
+    }
   }
 
   @Test

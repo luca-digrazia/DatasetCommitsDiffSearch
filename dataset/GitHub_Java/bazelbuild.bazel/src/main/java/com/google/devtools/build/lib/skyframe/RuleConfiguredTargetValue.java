@@ -95,6 +95,7 @@ public final class RuleConfiguredTargetValue extends ActionLookupValue
   @Override
   public void clear(boolean clearEverything) {
     Preconditions.checkNotNull(configuredTarget);
+    Preconditions.checkNotNull(transitivePackagesForPackageRootResolution);
     if (clearEverything) {
       configuredTarget = null;
     }
