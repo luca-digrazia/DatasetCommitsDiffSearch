@@ -1,23 +1,15 @@
 package io.quarkus.rest.runtime.injection;
 
-import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.RequestScoped;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import javax.json.bind.Jsonb;
-import javax.ws.rs.container.ResourceContext;
-import javax.ws.rs.container.ResourceInfo;
-import javax.ws.rs.core.Configuration;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Request;
-import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.core.UriInfo;
-import javax.ws.rs.ext.Providers;
 import javax.ws.rs.sse.Sse;
 
 import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
-import io.quarkus.rest.runtime.jaxrs.QuarkusRestResourceContext;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestSse;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.vertx.core.http.HttpServerRequest;
@@ -30,12 +22,6 @@ import io.vertx.core.http.HttpServerResponse;
  */
 @Singleton
 public class ContextProducers {
-
-    /**
-     * TODO: Remove this, stops the warning about JSONB being removed
-     */
-    @Inject
-    Jsonb jsonb;
 
     @Inject
     CurrentVertxRequest currentVertxRequest;
@@ -52,7 +38,7 @@ public class ContextProducers {
         return getContext().getHttpHeaders();
     }
 
-    @ApplicationScoped
+    @Singleton
     @Produces
     Sse sse() {
         return QuarkusRestSse.INSTANCE;
@@ -77,36 +63,6 @@ public class ContextProducers {
     @Produces
     HttpServerResponse httpServerResponse() {
         return currentVertxRequest.getCurrent().response();
-    }
-
-    @ApplicationScoped
-    @Produces
-    Providers providers() {
-        return getContext().getProviders();
-    }
-
-    @RequestScoped
-    @Produces
-    ResourceInfo resourceInfo() {
-        return getContext().getTarget().getLazyMethod();
-    }
-
-    @ApplicationScoped
-    @Produces
-    Configuration config() {
-        return getContext().getDeployment().getConfiguration();
-    }
-
-    @ApplicationScoped
-    @Produces
-    ResourceContext resourceContext() {
-        return QuarkusRestResourceContext.INSTANCE;
-    }
-
-    @ApplicationScoped
-    @Produces
-    SecurityContext securityContext() {
-        return getContext().getSecurityContext();
     }
 
     private QuarkusRestRequestContext getContext() {
