@@ -59,11 +59,7 @@ public class OrientationUtils {
                         if (mIsLand > 0) {
                             screenType = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
                             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-                            if (gsyVideoPlayer.isIfCurrentIsFullscreen()) {
-                                gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
-                            } else {
-                                gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
-                            }
+                            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
                             mIsLand = 0;
                             mClick = false;
                         }
@@ -126,11 +122,7 @@ public class OrientationUtils {
         } else {
             screenType = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            if (gsyVideoPlayer.isIfCurrentIsFullscreen()) {
-                gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
-            } else {
-                gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
-            }
+            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
             mIsLand = 0;
             mClickPort = false;
         }
@@ -144,8 +136,6 @@ public class OrientationUtils {
         if (mIsLand > 0) {
             mClick = true;
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            if (gsyVideoPlayer != null)
-                gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_enlarge);
             mIsLand = 0;
             mClickPort = false;
             return 500;
@@ -170,6 +160,7 @@ public class OrientationUtils {
     public void releaseListener() {
         if (orientationEventListener != null) {
             orientationEventListener.disable();
+            orientationEventListener = null;
         }
     }
 
