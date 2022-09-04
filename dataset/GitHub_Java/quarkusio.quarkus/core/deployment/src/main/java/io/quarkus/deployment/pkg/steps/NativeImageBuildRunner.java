@@ -12,14 +12,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.jboss.logging.Logger;
-
 import io.quarkus.deployment.pkg.steps.NativeImageBuildStep.GraalVM;
 import io.quarkus.deployment.util.ProcessUtil;
 
 public abstract class NativeImageBuildRunner {
-
-    private static final Logger log = Logger.getLogger(NativeImageBuildRunner.class);
 
     public GraalVM.Version getGraalVMVersion() {
         final GraalVM.Version graalVMVersion;
@@ -50,10 +46,8 @@ public abstract class NativeImageBuildRunner {
         preBuild(args);
         try {
             CountDownLatch errorReportLatch = new CountDownLatch(1);
-            final String[] buildCommand = getBuildCommand(args);
-            final ProcessBuilder processBuilder = new ProcessBuilder(buildCommand)
+            final ProcessBuilder processBuilder = new ProcessBuilder(getBuildCommand(args))
                     .directory(outputDir.toFile());
-            log.info(String.join(" ", buildCommand).replace("$", "\\$"));
             final Process process = ProcessUtil.launchProcessStreamStdOut(processBuilder, processInheritIODisabled);
             ExecutorService executor = Executors.newSingleThreadExecutor();
             executor.submit(new ErrorReplacingProcessReader(process.getErrorStream(), outputDir.resolve("reports").toFile(),

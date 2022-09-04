@@ -39,12 +39,6 @@ public class NativeConfig {
     public boolean enableAllSecurityServices;
 
     /**
-     * If {@code -H:+InlineBeforeAnalysis} flag will be added to the native-image run
-     */
-    @ConfigItem
-    public boolean inlineBeforeAnalysis;
-
-    /**
      * @deprecated JNI is always enabled starting from GraalVM 19.3.1.
      */
     @Deprecated
@@ -119,12 +113,8 @@ public class NativeConfig {
     public boolean publishDebugBuildProcessPort;
 
     /**
-     * If the native image server should be restarted.
-     *
-     * @deprecated Since GraalVM 20.2.0 the native image server has become an experimental feature and is disabled by
-     *             default.
+     * If the native image server should be restarted
      */
-    @Deprecated
     @ConfigItem
     public boolean cleanupServer;
 
@@ -144,12 +134,7 @@ public class NativeConfig {
     /**
      * If the native image server should be used. This can speed up compilation but can result in changes not always
      * being picked up due to cache invalidation not working 100%
-     *
-     * @deprecated This used to be the default prior to GraalVM 20.2.0 and this configuration item was used to disable
-     *             it as it was not stable. Since GraalVM 20.2.0 the native image server has become an experimental
-     *             feature.
      */
-    @Deprecated
     @ConfigItem
     public boolean enableServer;
 
@@ -166,8 +151,8 @@ public class NativeConfig {
     public boolean dumpProxies;
 
     /**
-     * If this build should be done using a container runtime. Unless container-runtime is also set, docker will be
-     * used by default. If docker is not available or is an alias to podman, podman will be used instead as the default.
+     * If this build should be done using a container runtime. If this is set docker will be used by default,
+     * unless container-runtime is also set.
      */
     @ConfigItem
     public boolean containerBuild;
