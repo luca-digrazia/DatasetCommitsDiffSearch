@@ -43,8 +43,6 @@ import org.joda.time.DateTime;
  */
 public final class Tools {
 
-    private static Calendar cal = Calendar.getInstance();
-    
     private Tools() { }
 
     /**
@@ -54,7 +52,6 @@ public final class Tools {
      */
     public static String getPID() {
         return ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
-
     }
 
     /**
@@ -243,10 +240,9 @@ public final class Tools {
         return list;
     }
     
-    // yyyy-MM-dd HH-mm-ss
-    // http://docs.oracle.com/javase/1.5.0/docs/api/java/util/Formatter.html#syntax
     public static String buildElasticSearchTimeFormat(double timestamp) {
-        cal.setTimeInMillis(System.currentTimeMillis());
+    	Calendar cal = Calendar.getInstance();
+    	cal.setTimeInMillis((long) (1000 * timestamp));
 
         return String.format("%1$tY-%1$tm-%1$td %1$tH-%1$tM-%1$tS", cal); // ramtamtam
     }
