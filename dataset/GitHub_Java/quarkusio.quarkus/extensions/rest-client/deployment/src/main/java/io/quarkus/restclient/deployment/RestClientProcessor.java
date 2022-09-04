@@ -173,6 +173,7 @@ class RestClientProcessor {
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<BeanRegistrarBuildItem> beanRegistrars,
+            BuildProducer<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport,
             BuildProducer<ServiceProviderBuildItem> serviceProvider,
             BuildProducer<RestClientBuildItem> restClient) {
 
@@ -253,11 +254,9 @@ class RestClientProcessor {
                 }
             }
         }));
-    }
 
-    @BuildStep
-    ExtensionSslNativeSupportBuildItem activateSslNativeSupport() {
-        return new ExtensionSslNativeSupportBuildItem(Feature.REST_CLIENT);
+        // Indicates that this extension would like the SSL support to be enabled
+        extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REST_CLIENT));
     }
 
     // currently default methods on a rest-client interface
