@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.rules.proto.SupportData;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.syntax.EvalException;
 import java.util.List;
 
 /**
@@ -73,7 +72,7 @@ public class JavaProtoSkylarkCommon {
       ConfiguredTarget target,
       Artifact sourceJar,
       String protoToolchainAttr,
-      String flavour) throws EvalException {
+      String flavour) {
     SupportData supportData =
         checkNotNull(target.getProvider(ProtoSupportDataProvider.class).getSupportData());
     ProtoCompileActionBuilder.registerActions(
@@ -115,7 +114,7 @@ public class JavaProtoSkylarkCommon {
     }
   )
   public static JavaProvider getRuntimeToolchainProvider(
-      SkylarkRuleContext skylarkRuleContext, String protoToolchainAttr) throws EvalException {
+      SkylarkRuleContext skylarkRuleContext, String protoToolchainAttr) {
     TransitiveInfoCollection runtime =
         getProtoToolchainProvider(skylarkRuleContext, protoToolchainAttr).runtime();
     return
@@ -138,7 +137,7 @@ public class JavaProtoSkylarkCommon {
   )
   // TODO(elenairina): Consider a nicer way of returning this, taking in a JavaToolchainProvider.
   public static List<String> getJavacOpts(
-      SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) throws EvalException {
+      SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) {
     ConfiguredTarget javaToolchainConfigTarget =
         (ConfiguredTarget) checkNotNull(skylarkRuleContext.getAttr().getValue(javaToolchainAttr));
     JavaToolchainProvider toolchain =
@@ -151,7 +150,7 @@ public class JavaProtoSkylarkCommon {
   }
 
   private static ProtoLangToolchainProvider getProtoToolchainProvider(
-      SkylarkRuleContext skylarkRuleContext, String protoToolchainAttr) throws EvalException {
+      SkylarkRuleContext skylarkRuleContext, String protoToolchainAttr) {
     ConfiguredTarget javaliteToolchain = (ConfiguredTarget) checkNotNull(
             skylarkRuleContext.getAttr().getValue(protoToolchainAttr));
     return checkNotNull(javaliteToolchain.getProvider(ProtoLangToolchainProvider.class));
