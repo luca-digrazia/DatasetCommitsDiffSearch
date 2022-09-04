@@ -567,7 +567,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       CcLinkParams linkParams,
       boolean linkCompileOutputSeparately,
       CppSemantics cppSemantics)
-      throws InterruptedException, RuleErrorException {
+      throws InterruptedException {
     CppLinkActionBuilder builder =
         new CppLinkActionBuilder(
                 context, binary, toolchain, fdoProvider, featureConfiguration, cppSemantics)
