@@ -148,8 +148,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleDepsetUnion();
 
-  public abstract boolean incompatibleDisableTargetProviderFields();
-
   public abstract boolean incompatibleDisableThirdPartyLicenseChecking();
 
   public abstract boolean incompatibleDisableDeprecatedAttrParams();
@@ -214,10 +212,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleDisallowDictLookupUnhashableKeys();
 
-  public abstract boolean incompatibleDisablePartitionDefaultParameter();
-
-  public abstract boolean incompatibleAssignmentIdentifiersHaveLocalScope();
-
   public abstract boolean incompatibleAllowTagsPropagation();
 
   @Memoized
@@ -265,7 +259,6 @@ public abstract class StarlarkSemantics {
           .incompatibleBzlDisallowLoadAfterStatement(true)
           .incompatibleDepsetIsNotIterable(true)
           .incompatibleDepsetUnion(true)
-          .incompatibleDisableTargetProviderFields(false)
           .incompatibleDisableThirdPartyLicenseChecking(true)
           .incompatibleDisableDeprecatedAttrParams(true)
           .incompatibleDisableObjcProviderResources(true)
@@ -298,9 +291,7 @@ public abstract class StarlarkSemantics {
           .incompatibleRestrictStringEscapes(false)
           .incompatibleDisallowSplitEmptySeparator(false)
           .incompatibleDisallowDictLookupUnhashableKeys(false)
-          .incompatibleDisablePartitionDefaultParameter(false)
           .incompatibleAllowTagsPropagation(false)
-          .incompatibleAssignmentIdentifiersHaveLocalScope(false)
           .build();
 
   /** Builder for {@link StarlarkSemantics}. All fields are mandatory. */
@@ -333,8 +324,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDepsetIsNotIterable(boolean value);
 
     public abstract Builder incompatibleDepsetUnion(boolean value);
-
-    public abstract Builder incompatibleDisableTargetProviderFields(boolean value);
 
     public abstract Builder incompatibleDisableThirdPartyLicenseChecking(boolean value);
 
@@ -400,10 +389,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDisallowSplitEmptySeparator(boolean value);
 
     public abstract Builder incompatibleDisallowDictLookupUnhashableKeys(boolean value);
-
-    public abstract Builder incompatibleDisablePartitionDefaultParameter(boolean value);
-
-    public abstract Builder incompatibleAssignmentIdentifiersHaveLocalScope(boolean value);
 
     public abstract StarlarkSemantics build();
   }
