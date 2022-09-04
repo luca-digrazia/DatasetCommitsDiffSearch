@@ -127,9 +127,8 @@ public class AssetsBundle implements ConfiguredBundle<Configuration> {
 
     @Override
     public void run(Configuration configuration, Environment environment) {
-        final String pathPattern = uriPath + '*';
-        LOGGER.info("Registering AssetBundle with name: {} for path {}", assetsName, pathPattern);
-        environment.servlets().addServlet(assetsName, createServlet()).addMapping(pathPattern);
+        LOGGER.info("Registering AssetBundle with name: {} for path {}", assetsName, uriPath + '*');
+        environment.servlets().addServlet(assetsName, createServlet()).addMapping(uriPath + '*');
     }
 
     public String getResourcePath() {

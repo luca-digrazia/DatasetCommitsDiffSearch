@@ -21,7 +21,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class AssetsBundleTest {
+public class AssetsBundleTest {
     private final ServletEnvironment servletEnvironment = mock(ServletEnvironment.class);
     private final Environment environment = mock(Environment.class);
 
@@ -29,12 +29,12 @@ class AssetsBundleTest {
     private String servletPath = "";
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         when(environment.servlets()).thenReturn(servletEnvironment);
     }
 
     @Test
-    void hasADefaultPath() {
+    public void hasADefaultPath() {
         runBundle(new AssetsBundle());
 
         assertThat(servletPath)
@@ -51,7 +51,7 @@ class AssetsBundleTest {
     }
 
     @Test
-    void canHaveCustomPaths() {
+    public void canHaveCustomPaths() {
         runBundle(new AssetsBundle("/json"));
 
         assertThat(servletPath)
@@ -68,7 +68,7 @@ class AssetsBundleTest {
     }
 
     @Test
-    void canHaveDifferentUriAndResourcePaths() {
+    public void canHaveDifferentUriAndResourcePaths() {
         runBundle(new AssetsBundle("/json", "/what"));
 
         assertThat(servletPath)
@@ -85,7 +85,7 @@ class AssetsBundleTest {
     }
 
     @Test
-    void canSupportDifferentAssetsBundleName() {
+    public void canSupportDifferentAssetsBundleName() {
         runBundle(new AssetsBundle("/json", "/what/new", "index.txt", "customAsset1"), "customAsset1");
 
         assertThat(servletPath)
@@ -115,7 +115,7 @@ class AssetsBundleTest {
     }
 
     @Test
-    void canHaveDifferentUriAndResourcePathsAndIndexFilename() {
+    public void canHaveDifferentUriAndResourcePathsAndIndexFilename() {
         runBundle(new AssetsBundle("/json", "/what", "index.txt"));
 
         assertThat(servletPath)
@@ -132,7 +132,7 @@ class AssetsBundleTest {
     }
 
     @Test
-    void canHaveDifferentDefaultMediaType() {
+    public void canHaveDifferentDefaultMediaType() {
         runBundle(new AssetsBundle("/assets", "/assets", "index.html", "assets", "text/plain"));
 
         assertThat(servletPath).isEqualTo("/assets/*");
