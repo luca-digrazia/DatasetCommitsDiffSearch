@@ -1,8 +1,10 @@
 package io.quarkus.infinispan.client.runtime;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Scanner;
 import java.util.Set;
@@ -25,6 +27,7 @@ import org.infinispan.client.hotrod.impl.ConfigurationProperties;
 import org.infinispan.client.hotrod.logging.Log;
 import org.infinispan.client.hotrod.logging.LogFactory;
 import org.infinispan.client.hotrod.marshall.ProtoStreamMarshaller;
+import org.infinispan.commons.CacheConfigurationException;
 import org.infinispan.commons.marshall.Marshaller;
 import org.infinispan.commons.util.Util;
 import org.infinispan.counter.api.CounterManager;
@@ -32,8 +35,8 @@ import org.infinispan.protostream.BaseMarshaller;
 import org.infinispan.protostream.FileDescriptorSource;
 import org.infinispan.protostream.SerializationContext;
 import org.infinispan.protostream.SerializationContextInitializer;
-import org.infinispan.protostream.WrappedMessage;
 import org.infinispan.query.remote.client.ProtobufMetadataManagerConstants;
+import org.infinispan.query.remote.client.impl.MarshallerRegistration;
 
 /**
  * Produces a configured remote cache manager instance
@@ -48,9 +51,9 @@ public class InfinispanClientProducer {
     @Inject
     private BeanManager beanManager;
 
-    private volatile Properties properties;
-    private volatile RemoteCacheManager cacheManager;
-    private volatile InfinispanClientRuntimeConfig infinispanClientRuntimeConfig;
+    private Properties properties;
+    private RemoteCacheManager cacheManager;
+    private InfinispanClientRuntimeConfig infinispanClientRuntimeConfig;
 
     public void setRuntimeConfig(InfinispanClientRuntimeConfig infinispanClientConfigRuntime) {
         this.infinispanClientRuntimeConfig = infinispanClientConfigRuntime;
@@ -123,14 +126,14 @@ public class InfinispanClientProducer {
      * @param properties the properties to be updated for querying
      */
     public static void handleProtoStreamRequirements(Properties properties) {
-        // We only apply this if we are in native mode in build time to apply to the properties
+        // We only apply this if we are substrate in build time to apply to the properties
         // Note that the other half is done in QuerySubstitutions.SubstituteMarshallerRegistration class
         // Note that the registration of these files are done twice in normal VM mode
         // (once during init and once at runtime)
-        properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + WrappedMessage.PROTO_FILE,
-                getContents("/" + WrappedMessage.PROTO_FILE));
-        String queryProtoFile = "org/infinispan/query/remote/client/query.proto";
-        properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + queryProtoFile, getContents("/" + queryProtoFile));
+        properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + MarshallerRegistration.QUERY_PROTO_RES,
+                getContents(MarshallerRegistration.QUERY_PROTO_RES));
+        properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + MarshallerRegistration.MESSAGE_PROTO_RES,
+                getContents(MarshallerRegistration.MESSAGE_PROTO_RES));
     }
 
     /**
@@ -164,31 +167,12 @@ public class InfinispanClientProducer {
             builder.marshaller((Marshaller) marshallerInstance);
         }
 
+        // Override serverList property value at runtime if such configuration exists
         if (infinispanClientRuntimeConfig != null) {
-
-            infinispanClientRuntimeConfig.serverList
-                    .ifPresent(v -> properties.put(ConfigurationProperties.SERVER_LIST, v));
-
-            infinispanClientRuntimeConfig.clientIntelligence
-                    .ifPresent(v -> properties.put(ConfigurationProperties.CLIENT_INTELLIGENCE, v));
-
-            infinispanClientRuntimeConfig.useAuth
-                    .ifPresent(v -> properties.put(ConfigurationProperties.USE_AUTH, v));
-            infinispanClientRuntimeConfig.authUsername
-                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_USERNAME, v));
-            infinispanClientRuntimeConfig.authPassword
-                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_PASSWORD, v));
-            infinispanClientRuntimeConfig.authRealm
-                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_REALM, v));
-            infinispanClientRuntimeConfig.authServerName
-                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_SERVER_NAME, v));
-            infinispanClientRuntimeConfig.authClientSubject
-                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_CLIENT_SUBJECT, v));
-            infinispanClientRuntimeConfig.authCallbackHandler
-                    .ifPresent(v -> properties.put(ConfigurationProperties.AUTH_CALLBACK_HANDLER, v));
-
-            infinispanClientRuntimeConfig.saslMechanism
-                    .ifPresent(v -> properties.put(ConfigurationProperties.SASL_MECHANISM, v));
+            Optional<String> runtimeServerList = infinispanClientRuntimeConfig.serverList;
+            if (runtimeServerList.isPresent()) {
+                properties.put(ConfigurationProperties.SERVER_LIST, runtimeServerList.get());
+            }
         }
 
         builder.withProperties(properties);
@@ -204,7 +188,11 @@ public class InfinispanClientProducer {
                 .get(InfinispanClientProducer.PROTOBUF_INITIALIZERS);
         if (initializers != null) {
             initializers.forEach(sci -> {
-                sci.registerSchema(serializationContext);
+                try {
+                    sci.registerSchema(serializationContext);
+                } catch (IOException e) {
+                    throw new CacheConfigurationException(e);
+                }
                 sci.registerMarshallers(serializationContext);
             });
         }
@@ -288,17 +276,11 @@ public class InfinispanClientProducer {
 
     @Produces
     public synchronized RemoteCacheManager remoteCacheManager() {
-        //TODO: should this just be application scoped?
         if (cacheManager != null) {
             return cacheManager;
         }
-        synchronized (this) {
-            if (cacheManager != null) {
-                return cacheManager;
-            }
-            initialize();
-            return cacheManager;
-        }
+        initialize();
+        return cacheManager;
     }
 
     void configure(Properties properties) {
