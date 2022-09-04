@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.periodical;
 
 import com.google.inject.Inject;
@@ -29,7 +32,7 @@ import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.utilities.ExceptionStringFormatter;
 import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
@@ -41,7 +44,9 @@ import java.util.List;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class AlertScannerThread extends Periodical {
-    private static final Logger LOG = LoggerFactory.getLogger(AlertScannerThread.class);
+
+    private final Logger LOG = LoggerFactory.getLogger(AlertScannerThread.class);
+    private AlertService alertService;
     private final StreamService streamService;
     private final AlarmCallbackConfigurationService alarmCallbackConfigurationService;
     private final AlarmCallbackFactory alarmCallbackFactory;
@@ -49,7 +54,6 @@ public class AlertScannerThread extends Periodical {
     private final IndexerSetupService indexerSetupService;
     private final Indexer indexer;
     private final ServerStatus serverStatus;
-    private AlertService alertService;
 
     @Inject
     public AlertScannerThread(AlertService alertService,
