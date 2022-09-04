@@ -20,14 +20,14 @@
 package controllers;
 
 import com.google.inject.Inject;
-import org.graylog2.restclient.lib.APIException;
-import org.graylog2.restclient.lib.ApiClient;
+import lib.APIException;
+import lib.ApiClient;
 import lib.BreadcrumbList;
-import org.graylog2.restclient.lib.metrics.Metric;
-import org.graylog2.restclient.models.ClusterEntity;
-import org.graylog2.restclient.models.Node;
-import org.graylog2.restclient.models.NodeService;
-import org.graylog2.restclient.models.Radio;
+import lib.metrics.Metric;
+import models.ClusterEntity;
+import models.Node;
+import models.NodeService;
+import models.Radio;
 import play.mvc.Result;
 
 import java.io.IOException;
@@ -52,6 +52,7 @@ public class MetricsController extends AuthenticatedController {
             bc.addCrumb("Metrics", routes.MetricsController.ofNode(node.getNodeId(), ""));
 
             Map<String, Metric> metrics = node.getMetrics("org.graylog2");
+            metrics.putAll(node.getMetrics("com.graylog2"));
 
             return ok(views.html.system.metrics.of_node.render(currentUser(), bc, node, metrics, preFilter));
         } catch (IOException e) {
