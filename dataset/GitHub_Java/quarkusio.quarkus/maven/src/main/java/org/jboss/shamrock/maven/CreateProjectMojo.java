@@ -17,8 +17,6 @@
 
 package org.jboss.shamrock.maven;
 
-import org.apache.maven.artifact.repository.ArtifactRepository;
-import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.*;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
@@ -31,7 +29,6 @@ import org.apache.maven.project.MavenProject;
 import org.fusesource.jansi.Ansi;
 import org.jboss.shamrock.maven.components.Prompter;
 import org.jboss.shamrock.maven.components.SetupTemplates;
-import org.jboss.shamrock.maven.components.dependencies.Extensions;
 import org.jboss.shamrock.maven.utilities.MojoUtils;
 
 import java.io.File;
@@ -41,6 +38,7 @@ import java.io.IOException;
 import java.util.*;
 
 import static org.fusesource.jansi.Ansi.ansi;
+import static org.jboss.shamrock.maven.components.dependencies.Extensions.addExtensions;
 import static org.jboss.shamrock.maven.utilities.MojoUtils.configuration;
 import static org.jboss.shamrock.maven.utilities.MojoUtils.plugin;
 
@@ -94,21 +92,6 @@ public class CreateProjectMojo extends AbstractMojo {
     @Component
     private SetupTemplates templates;
 
-    @Component
-    private Extensions ext;
-
-    /**
-     * Remote repositories used for the project.
-     */
-    @Parameter(defaultValue = "${project.remoteArtifactRepositories}", required = true, readonly = true)
-    private List<ArtifactRepository> repositories;
-
-    /**
-     * The current build session instance. This is used for plugin manager API calls.
-     */
-    @Parameter(defaultValue = "${session}", readonly = true, required = true)
-    private MavenSession session;
-
     @Override
     public void execute() throws MojoExecutionException {
         File pomFile = project.getFile();
@@ -123,8 +106,9 @@ public class CreateProjectMojo extends AbstractMojo {
         model = project.getOriginalModel().clone();
 
         createDirectories();
-        templates.generate(project, root, path, className, getLog());
+        templates.generate(project, model, root, path, className, getLog());
         Optional<Plugin> maybe = MojoUtils.hasPlugin(project, PLUGIN_KEY);
+
         if (maybe.isPresent()) {
             printUserInstructions(pomFile);
             return;
@@ -132,27 +116,10 @@ public class CreateProjectMojo extends AbstractMojo {
 
         // The plugin is not configured, add it.
         addVersionProperty(model);
-        addBom(model);
         addMainPluginConfig(model);
-        ext.addExtensions(model, extensions, session, repositories, getLog());
+        addExtensions(model, extensions, getLog());
         addNativeProfile(model);
         save(pomFile, model);
-    }
-
-    private void addBom(Model model) {
-        Dependency bom = new Dependency();
-        bom.setArtifactId(MojoUtils.get("bom-artifactId"));
-        bom.setGroupId(PLUGIN_GROUPID);
-        bom.setVersion("${shamrock.version}");
-        bom.setType("pom");
-        bom.setScope("import");
-
-        DependencyManagement dm = model.getDependencyManagement();
-        if (dm == null) {
-            dm = new DependencyManagement();
-        }
-        dm.addDependency(bom);
-        model.setDependencyManagement(dm);
     }
 
     private void printUserInstructions(File pomFile) {
@@ -302,7 +269,6 @@ public class CreateProjectMojo extends AbstractMojo {
 
             templates.createNewProjectPomFile(context, pomFile);
             templates.createIndexPage(context, project.getBasedir(), getLog());
-            templates.createDockerFile(context, project.getBasedir(), getLog());
             templates.createConfiguration(project.getBasedir(), getLog());
 
             //The project should be recreated and set with right model
@@ -318,11 +284,10 @@ public class CreateProjectMojo extends AbstractMojo {
         project.setPomFile(pomFile);
         project.setOriginalModel(model); // the current model is the original model as well
 
-        ext.addExtensions(model, extensions, session, repositories, getLog());
+        addExtensions(model, extensions, getLog());
         save(pomFile, model);
         return pomFile;
     }
-
 
     private void save(File pomFile, Model model) throws MojoExecutionException {
         MavenXpp3Writer xpp3Writer = new MavenXpp3Writer();
@@ -358,6 +323,5 @@ public class CreateProjectMojo extends AbstractMojo {
     private boolean isParentPom(Model model) {
         return "pom".equals(model.getPackaging());
     }
-
 
 }
