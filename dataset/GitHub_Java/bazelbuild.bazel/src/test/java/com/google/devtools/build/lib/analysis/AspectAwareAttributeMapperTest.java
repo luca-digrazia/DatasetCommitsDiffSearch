@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
@@ -80,27 +80,36 @@ public class AspectAwareAttributeMapperTest extends BuildViewTestCase {
 
   @Test
   public void getAspectAttributeValue() throws Exception {
-    assertThrows(
-        UnsupportedOperationException.class, () -> mapper.get("fromaspect", BuildType.LABEL));
+    try {
+      mapper.get("fromaspect", BuildType.LABEL);
+      fail("Expected failure because value queries aren't supported for aspect attributes");
+    } catch (UnsupportedOperationException e) {
+      // Expected.
+    }
   }
 
   @Test
   public void getAspectValueWrongType() throws Exception {
-    IllegalArgumentException e =
-        assertThrows(
-            IllegalArgumentException.class, () -> mapper.get("fromaspect", BuildType.LABEL_LIST));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo("attribute fromaspect has type label, not expected type list(label)");
+    try {
+      mapper.get("fromaspect", BuildType.LABEL_LIST);
+      fail("Expected failure on wrong-typed attribute");
+    } catch (IllegalArgumentException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo("attribute fromaspect has type label, not expected type list(label)");
+    }
   }
 
   @Test
   public void getMissingAttributeValue() throws Exception {
-    IllegalArgumentException e =
-        assertThrows(IllegalArgumentException.class, () -> mapper.get("noexist", BuildType.LABEL));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo("no attribute 'noexist' in either //foo:myrule or its aspects");
+    try {
+      mapper.get("noexist", BuildType.LABEL);
+      fail("Expected failure on non-existent attribute");
+    } catch (IllegalArgumentException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo("no attribute 'noexist' in either //foo:myrule or its aspects");
+    }
   }
 
   @Test

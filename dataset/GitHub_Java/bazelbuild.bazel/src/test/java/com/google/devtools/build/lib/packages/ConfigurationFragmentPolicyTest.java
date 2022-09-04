@@ -109,14 +109,16 @@ public final class ConfigurationFragmentPolicyTest {
     assertThat(
             policy.isLegalConfigurationFragment(Integer.class, NoTransition.INSTANCE))
         .isTrue();
-    // TODO(b/140641941): .isFalse() when dynamic configurations care which configuration a fragment
-    // was specified for
-    assertThat(policy.isLegalConfigurationFragment(Integer.class, TEST_HOST_TRANSITION)).isTrue();
+    // TODO(mstaib): .isFalse() when dynamic configurations care which configuration a fragment was
+    // specified for
+    assertThat(policy.isLegalConfigurationFragment(Integer.class, TEST_HOST_TRANSITION))
+        .isTrue();
 
     assertThat(policy.isLegalConfigurationFragment(Long.class)).isTrue();
-    // TODO(b/140641941): .isFalse() when dynamic configurations care which configuration a fragment
-    // was specified for
-    assertThat(policy.isLegalConfigurationFragment(Long.class, NoTransition.INSTANCE)).isTrue();
+    // TODO(mstaib): .isFalse() when dynamic configurations care which configuration a fragment was
+    // specified for
+    assertThat(policy.isLegalConfigurationFragment(Long.class, NoTransition.INSTANCE))
+        .isTrue();
     assertThat(policy.isLegalConfigurationFragment(Long.class, TEST_HOST_TRANSITION))
         .isTrue();
 

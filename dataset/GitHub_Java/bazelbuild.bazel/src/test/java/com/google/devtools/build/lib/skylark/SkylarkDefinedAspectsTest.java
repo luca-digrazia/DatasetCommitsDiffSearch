@@ -17,8 +17,8 @@ import static com.google.common.collect.Iterables.transform;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.analysis.OutputGroupInfo.INTERNAL_SUFFIX;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.util.stream.Collectors.toList;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -1537,11 +1537,13 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
   @Test
   public void aspectFragmentAccessError() throws Exception {
     reporter.removeHandler(failFastHandler);
-    assertThrows(
-        ViewCreationFailedException.class,
-        () ->
-            getConfiguredTargetForAspectFragment(
-                "ctx.fragments.java.strict_java_deps", "'cpp'", "'java'", "'java'", ""));
+    try {
+      getConfiguredTargetForAspectFragment(
+          "ctx.fragments.java.strict_java_deps", "'cpp'", "'java'", "'java'", "");
+      fail("update() should have failed");
+    } catch (ViewCreationFailedException e) {
+      // expected
+    }
     assertContainsEvent(
         "//test:aspect.bzl%MyAspect aspect on my_rule has to declare 'java' as a "
             + "required fragment in target configuration in order to access it. Please update the "
@@ -1552,11 +1554,13 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
   @Test
   public void aspectHostFragmentAccessError() throws Exception {
     reporter.removeHandler(failFastHandler);
-    assertThrows(
-        ViewCreationFailedException.class,
-        () ->
-            getConfiguredTargetForAspectFragment(
-                "ctx.host_fragments.java.java_strict_deps", "'java'", "'cpp'", "", "'java'"));
+    try {
+      getConfiguredTargetForAspectFragment(
+          "ctx.host_fragments.java.java_strict_deps", "'java'", "'cpp'", "", "'java'");
+      fail("update() should have failed");
+    } catch (ViewCreationFailedException e) {
+      // expected
+    }
     assertContainsEvent(
         "//test:aspect.bzl%MyAspect aspect on my_rule has to declare 'java' as a "
             + "required fragment in host configuration in order to access it. Please update the "
@@ -1777,13 +1781,12 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
 
     scratch.file("test/BUILD", "load(':aspect.bzl', 'r1')", "r1(name = 't1')");
     reporter.removeHandler(failFastHandler);
-    // This call succeeds if "--keep_going" was passed, which it does in the WithKeepGoing test
-    // suite. Otherwise, it fails and throws a TargetParsingException.
-    if (keepGoing()) {
+    try {
       AnalysisResult result = update("//test:r1");
+      assertThat(keepGoing()).isTrue();
       assertThat(result.hasError()).isTrue();
-    } else {
-      assertThrows(TargetParsingException.class, () -> update("//test:r1"));
+    } catch (TargetParsingException | ViewCreationFailedException expected) {
+      // expected.
     }
     assertContainsEvent("aspect //test:aspect.bzl%my_aspect added more than once");
   }

@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.java;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyArtifactNames;
 
 import com.google.common.collect.ImmutableMap;
@@ -2015,11 +2014,11 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
                 ((ConfiguredTarget) info.getValue("java_toolchain_label"))
                     .get(ToolchainInfo.PROVIDER))
             .getToolchainLabel();
-    assertWithMessage(javaToolchainLabel.toString())
-        .that(
+    assertThat(
             javaToolchainLabel.toString().endsWith("jdk:remote_toolchain")
                 || javaToolchainLabel.toString().endsWith("jdk:toolchain")
                 || javaToolchainLabel.toString().endsWith("jdk:toolchain_host"))
+        .named(javaToolchainLabel.toString())
         .isTrue();
   }
 

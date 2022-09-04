@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -98,7 +97,9 @@ public class PythonStarlarkApiTest extends BuildViewTestCase {
 
   private void doLibrarySandwichTest(boolean legacyProviderAllowed) throws Exception {
     useConfiguration(
-        "--incompatible_disallow_legacy_py_provider=" + (legacyProviderAllowed ? "false" : "true"));
+        "--incompatible_disallow_legacy_py_provider=" + (legacyProviderAllowed ? "false" : "true"),
+        // Use new version semantics so we don't validate source versions in py_library.
+        "--incompatible_allow_python_version_transitions=true");
     defineUserlibRule(legacyProviderAllowed);
     scratch.file(
         "pkg/BUILD",
@@ -127,26 +128,26 @@ public class PythonStarlarkApiTest extends BuildViewTestCase {
 
     if (legacyProviderAllowed) {
       StructImpl legacyInfo = PyProviderUtils.getLegacyProvider(target);
-      assertThat(PyStructUtils.getTransitiveSources(legacyInfo).toList())
+      assertThat(PyStructUtils.getTransitiveSources(legacyInfo))
           .containsExactly(
               getSourceArtifact("pkg/loweruserlib.py"),
               getSourceArtifact("pkg/pylib.py"),
               getSourceArtifact("pkg/upperuserlib.py"));
       assertThat(PyStructUtils.getUsesSharedLibraries(legacyInfo)).isTrue();
-      assertThat(PyStructUtils.getImports(legacyInfo).toList())
+      assertThat(PyStructUtils.getImports(legacyInfo))
           .containsExactly("loweruserlib_path", "upperuserlib_path");
       assertThat(PyStructUtils.getHasPy2OnlySources(legacyInfo)).isTrue();
       assertThat(PyStructUtils.getHasPy3OnlySources(legacyInfo)).isTrue();
     }
 
     PyInfo modernInfo = PyProviderUtils.getModernProvider(target);
-    assertThat(modernInfo.getTransitiveSources().toCollection(Artifact.class))
+    assertThat(modernInfo.getTransitiveSources().getSet(Artifact.class))
         .containsExactly(
             getSourceArtifact("pkg/loweruserlib.py"),
             getSourceArtifact("pkg/pylib.py"),
             getSourceArtifact("pkg/upperuserlib.py"));
     assertThat(modernInfo.getUsesSharedLibraries()).isTrue();
-    assertThat(modernInfo.getImports().toCollection(String.class))
+    assertThat(modernInfo.getImports().getSet(String.class))
         .containsExactly("loweruserlib_path", "upperuserlib_path");
     assertThat(modernInfo.getHasPy2OnlySources()).isTrue();
     assertThat(modernInfo.getHasPy3OnlySources()).isTrue();
@@ -173,10 +174,6 @@ public class PythonStarlarkApiTest extends BuildViewTestCase {
         ")");
     scratch.file(
         "pkg/BUILD",
-        "load('"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/python:toolchain.bzl', "
-            + "'py_runtime_pair')",
         "load(':rules.bzl', 'userruntime')",
         "py_runtime(",
         "    name = 'pyruntime',",
@@ -190,24 +187,15 @@ public class PythonStarlarkApiTest extends BuildViewTestCase {
         "    interpreter = ':userintr',",
         "    files = ['userdata.txt'],",
         ")",
-        "py_runtime_pair(",
-        "    name = 'userruntime_pair',",
-        "    py2_runtime = 'userruntime',",
-        ")",
-        "toolchain(",
-        "    name = 'usertoolchain',",
-        "    toolchain = ':userruntime_pair',",
-        "    toolchain_type = '"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/python:toolchain_type',",
-        ")",
         "py_binary(",
         "    name = 'pybin',",
         "    srcs = ['pybin.py'],",
         ")");
-    useConfiguration("--extra_toolchains=//pkg:usertoolchain");
+    String pythonTopLabel =
+        analysisMock.pySupport().createPythonTopEntryPoint(mockToolsConfig, "//pkg:userruntime");
+    useConfiguration("--python_top=" + pythonTopLabel);
     ConfiguredTarget target = getConfiguredTarget("//pkg:pybin");
-    assertThat(collectRunfiles(target).toList())
+    assertThat(collectRunfiles(target))
         .containsAtLeast(getSourceArtifact("pkg/data.txt"), getSourceArtifact("pkg/userdata.txt"));
   }
 }

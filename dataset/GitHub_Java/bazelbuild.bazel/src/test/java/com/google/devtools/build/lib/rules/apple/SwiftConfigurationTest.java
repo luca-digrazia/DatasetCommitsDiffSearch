@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.StarlarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import java.util.List;
 import org.junit.Before;
@@ -29,7 +29,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests for Starlark interface to SwiftConfiguration. */
+/** Tests for Skylark interface to SwiftConfiguration. */
 @RunWith(JUnit4.class)
 public class SwiftConfigurationTest extends BuildViewTestCase {
   @Before
@@ -41,13 +41,13 @@ public class SwiftConfigurationTest extends BuildViewTestCase {
 
   private StructImpl getMyInfoFromTarget(ConfiguredTarget configuredTarget) throws Exception {
     Provider.Key key =
-        new StarlarkProvider.Key(
+        new SkylarkProvider.SkylarkKey(
             Label.parseAbsolute("//myinfo:myinfo.bzl", ImmutableMap.of()), "MyInfo");
     return (StructImpl) configuredTarget.get(key);
   }
 
   @Test
-  public void testStarlarkApi() throws Exception {
+  public void testSkylarkApi() throws Exception {
     scratch.file("examples/rule/BUILD");
     scratch.file(
         "examples/rule/apple_rules.bzl",
@@ -62,9 +62,9 @@ public class SwiftConfigurationTest extends BuildViewTestCase {
         "   fragments = ['swift']",
         ")");
 
-    scratch.file("examples/swift_starlark/a.m");
+    scratch.file("examples/swift_skylark/a.m");
     scratch.file(
-        "examples/swift_starlark/BUILD",
+        "examples/swift_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
         "load('//examples/rule:apple_rules.bzl', 'swift_binary')",
         "swift_binary(",
@@ -72,10 +72,10 @@ public class SwiftConfigurationTest extends BuildViewTestCase {
         ")");
 
     useConfiguration("--swiftcopt=foo", "--swiftcopt=bar");
-    ConfiguredTarget starlarkTarget = getConfiguredTarget("//examples/swift_starlark:my_target");
+    ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/swift_skylark:my_target");
 
     @SuppressWarnings("unchecked")
-    List<String> copts = (List<String>) getMyInfoFromTarget(starlarkTarget).getValue("copts");
+    List<String> copts = (List<String>) getMyInfoFromTarget(skylarkTarget).getValue("copts");
 
     assertThat(copts).containsAtLeast("foo", "bar");
   }
@@ -97,7 +97,7 @@ public class SwiftConfigurationTest extends BuildViewTestCase {
         ")");
 
     scratch.file(
-        "examples/swift_starlark/BUILD",
+        "examples/swift_skylark/BUILD",
         "load('//examples/rule:apple_rules.bzl', 'swift_binary')",
         "swift_binary(",
         "   name='my_target',",
@@ -105,7 +105,7 @@ public class SwiftConfigurationTest extends BuildViewTestCase {
 
     useConfiguration("--swiftcopt=foo", "--host_swiftcopt=bar", "--host_swiftcopt=baz");
     ConfiguredTarget target =
-        getConfiguredTarget("//examples/swift_starlark:my_target", getHostConfiguration());
+        getConfiguredTarget("//examples/swift_skylark:my_target", getHostConfiguration());
 
     @SuppressWarnings("unchecked")
     List<String> copts = (List<String>) getMyInfoFromTarget(target).getValue("copts");
