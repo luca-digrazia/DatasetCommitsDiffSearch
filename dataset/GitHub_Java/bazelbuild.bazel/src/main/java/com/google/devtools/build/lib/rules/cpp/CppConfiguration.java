@@ -1059,10 +1059,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
     return cppOptions.forceIgnoreDashStatic;
   }
 
-  public boolean shortenObjFilePath() {
-    return cppOptions.shortenObjFilePath;
-  }
-
   public boolean legacyWholeArchive() {
     return cppOptions.legacyWholeArchive;
   }
@@ -1321,6 +1317,11 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
     }
 
     return toolchainPrefix + lipoSuffix;
+  }
+
+  @Override
+  public String getPlatformName() {
+    return getToolchainIdentifier();
   }
 
   /**

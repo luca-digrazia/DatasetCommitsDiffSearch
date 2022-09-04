@@ -590,20 +590,15 @@ public class FdoSupport {
   }
 
   /**
-   * Configures a compile action builder by setting up command line options and auxiliary inputs
-   * according to the FDO configuration. This method does nothing If FDO is disabled.
+   * Configures a compile action builder by setting up command line options and
+   * auxiliary inputs according to the FDO configuration. This method does
+   * nothing If FDO is disabled.
    */
   @ThreadSafe
-  public void configureCompilation(
-      CppCompileActionBuilder builder,
-      CcToolchainFeatures.Variables.Builder buildVariables,
-      RuleContext ruleContext,
-      PathFragment sourceName,
-      PathFragment sourceExecPath,
-      PathFragment outputName,
-      boolean usePic,
-      FeatureConfiguration featureConfiguration,
-      FdoSupportProvider fdoSupportProvider) {
+  public void configureCompilation(CppCompileActionBuilder builder,
+      CcToolchainFeatures.Variables.Builder buildVariables, RuleContext ruleContext,
+      PathFragment sourceName, PathFragment sourceExecPath, boolean usePic,
+      FeatureConfiguration featureConfiguration, FdoSupportProvider fdoSupportProvider) {
 
     // FDO is disabled -> do nothing.
     if ((fdoInstrument == null) && (fdoRoot == null)) {
@@ -621,9 +616,8 @@ public class FdoSupport {
       if (env.getSkyframeEnv().valuesMissing()) {
         return;
       }
-      Iterable<Artifact> auxiliaryInputs =
-          getAuxiliaryInputs(
-              ruleContext, sourceName, sourceExecPath, outputName, usePic, fdoSupportProvider);
+      Iterable<Artifact> auxiliaryInputs = getAuxiliaryInputs(
+          ruleContext, sourceName, sourceExecPath, usePic, fdoSupportProvider);
       builder.addMandatoryInputs(auxiliaryInputs);
       if (!Iterables.isEmpty(auxiliaryInputs)) {
         if (featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)) {
@@ -642,13 +636,11 @@ public class FdoSupport {
     }
   }
 
-  /** Returns the auxiliary files that need to be added to the {@link CppCompileAction}. */
+  /**
+   * Returns the auxiliary files that need to be added to the {@link CppCompileAction}.
+   */
   private Iterable<Artifact> getAuxiliaryInputs(
-      RuleContext ruleContext,
-      PathFragment sourceName,
-      PathFragment sourceExecPath,
-      PathFragment outputName,
-      boolean usePic,
+      RuleContext ruleContext, PathFragment sourceName, PathFragment sourceExecPath, boolean usePic,
       FdoSupportProvider fdoSupportProvider) {
     CcToolchainProvider toolchain =
         CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
@@ -669,7 +661,7 @@ public class FdoSupport {
       ImmutableSet.Builder<Artifact> auxiliaryInputs = ImmutableSet.builder();
 
       PathFragment objectName =
-          FileSystemUtils.appendExtension(outputName, usePic ? ".pic.o" : ".o");
+          FileSystemUtils.replaceExtension(sourceName, usePic ? ".pic.o" : ".o");
 
       Label lipoLabel = ruleContext.getLabel();
       auxiliaryInputs.addAll(
