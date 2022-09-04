@@ -3,8 +3,6 @@ package io.quarkus.bootstrap.resolver.maven.workspace;
 import io.quarkus.bootstrap.model.AppArtifactCoords;
 import io.quarkus.bootstrap.model.AppArtifactKey;
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -31,8 +29,8 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
     private long lastModified;
     private int id = 1;
 
-    // value of the resolved version in case the raw version contains a property like ${revision} (see "Maven CI Friendly Versions")
-    private String resolvedVersion;
+    // value of ${revision} property
+    private String revision;
 
     protected void addProject(LocalProject project, long lastModified) {
         projects.put(project.getKey(), project);
@@ -88,35 +86,30 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
         final LocalProject lp = getProject(artifact.getGroupId(), artifact.getArtifactId());
         if (lp == null
                 || !lp.getVersion().equals(artifact.getVersion())
-                        && !(LocalProject.isUnresolvedVersion(artifact.getVersion())
-                                && lp.getVersion().equals(resolvedVersion))) {
+                        && !(LocalProject.REVISION_EXPR.equals(artifact.getVersion())
+                                && lp.getVersion().equals(revision))) {
             return null;
         }
         if (!Objects.equals(artifact.getClassifier(), lp.getAppArtifact().getClassifier())) {
             if ("tests".equals(artifact.getClassifier())) {
                 //special classifier used for test jars
-                final Path path = lp.getTestClassesDir();
-                if (Files.exists(path)) {
-                    return path.toFile();
+                final File file = lp.getTestClassesDir().toFile();
+                if (file.exists()) {
+                    return file;
                 }
             }
             return null;
         }
         final String type = artifact.getExtension();
         if (type.equals(AppArtifactCoords.TYPE_JAR)) {
-            Path path = lp.getClassesDir();
-            if (Files.exists(path)) {
-                return path.toFile();
-            }
-            // in some cases the project might not have the classes dir but only the test classes, for example
-            path = lp.getOutputDir().resolve(lp.getArtifactId() + "-" + lp.getVersion() + ".jar");
-            if (Files.exists(path)) {
-                return path.toFile();
+            final File file = lp.getClassesDir().toFile();
+            if (file.exists()) {
+                return file;
             }
         } else if (type.equals(AppArtifactCoords.TYPE_POM)) {
-            final Path path = lp.getDir().resolve("pom.xml");
-            if (Files.exists(path)) {
-                return path.toFile();
+            final File file = lp.getDir().resolve("pom.xml").toFile();
+            if (file.exists()) {
+                return file;
             }
         }
         return null;
@@ -138,11 +131,11 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
         return lastFindVersions = Collections.singletonList(artifact.getVersion());
     }
 
-    public String getResolvedVersion() {
-        return resolvedVersion;
+    public String getRevision() {
+        return revision;
     }
 
-    void setResolvedVersion(String resolvedVersion) {
-        this.resolvedVersion = resolvedVersion;
+    void setRevision(String revision) {
+        this.revision = revision;
     }
 }

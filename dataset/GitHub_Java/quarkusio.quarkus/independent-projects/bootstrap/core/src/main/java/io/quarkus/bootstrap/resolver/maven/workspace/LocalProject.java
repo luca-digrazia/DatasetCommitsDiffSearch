@@ -4,7 +4,6 @@ import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.BootstrapException;
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.bootstrap.resolver.maven.BootstrapMavenContext;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,8 +15,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Parent;
@@ -33,29 +30,23 @@ public class LocalProject {
 
     private static final String PROJECT_BASEDIR = "${project.basedir}";
     private static final String POM_XML = "pom.xml";
-
-    /**
-     * Matches specific properties that are allowed to be used in a version as per Maven spec.
-     *
-     * @see <a href="https://maven.apache.org/maven-ci-friendly.html">Maven CI Friendly Versions (maven.apache.org)</a>
-     */
-    private static final Pattern UNRESOLVED_VERSION_PATTERN = Pattern
-            .compile(Pattern.quote("${") + "(revision|sha1|changelist)" + Pattern.quote("}"));
+    private static final String REVISION = "revision";
+    static final String REVISION_EXPR = "${revision}";
 
     public static LocalProject load(Path path) throws BootstrapException {
         return load(path, true);
     }
 
     public static LocalProject load(Path path, boolean required) throws BootstrapException {
-        final Path pom = locateCurrentProjectPom(path, required);
-        if (pom == null) {
+        final Path cpd = locateCurrentProjectDir(path, required);
+        if (cpd == null) {
             return null;
         }
         try {
-            return new LocalProject(readModel(pom), null);
-        } catch (UnresolvedVersionException e) {
-            // if a property in the version couldn't be resolved, we are trying to resolve it from the workspace
-            return loadWorkspace(pom);
+            return new LocalProject(readModel(cpd.resolve(POM_XML)), null);
+        } catch (UnresolvedRevisionException e) {
+            // if the revision couldn't be resolved, we are trying to resolve it from the workspace
+            return loadWorkspace(cpd);
         }
     }
 
@@ -64,54 +55,14 @@ public class LocalProject {
     }
 
     public static LocalProject loadWorkspace(Path path, boolean required) throws BootstrapException {
-        path = path.normalize().toAbsolutePath();
-        Path currentProjectPom = null;
-        Model rootModel = null;
-        if (!Files.isDirectory(path)) {
-            // see if that's an actual pom
-            try {
-                rootModel = loadRootModel(path);
-                if (rootModel != null) {
-                    currentProjectPom = path;
-                }
-            } catch (BootstrapException e) {
-                // ignore, it's not a POM file, we'll be looking for the POM later
-            }
-        }
-        if (currentProjectPom == null) {
-            currentProjectPom = locateCurrentProjectPom(path, required);
-            if (currentProjectPom == null) {
-                return null;
-            }
-            rootModel = loadRootModel(currentProjectPom);
-        }
-        return loadWorkspace(currentProjectPom, rootModel);
-    }
-
-    /**
-     * Loads the workspace the current project belongs to.
-     * If current project does not exist then the method will return null.
-     *
-     * @param ctx bootstrap maven context
-     * @return current workspace or null in case the current project could not be resolved
-     * @throws BootstrapException in case of an error
-     */
-    public static LocalWorkspace loadWorkspace(BootstrapMavenContext ctx) throws BootstrapException {
-        final Path currentProjectPom = ctx.getCurrentProjectPomOrNull();
-        if (currentProjectPom == null) {
+        path = path.toAbsolutePath().normalize();
+        final Path currentProjectDir = locateCurrentProjectDir(path, required);
+        if (currentProjectDir == null) {
             return null;
         }
-        final Path rootProjectBaseDir = ctx.getRootProjectBaseDir();
-        final Model rootModel = rootProjectBaseDir == null || rootProjectBaseDir.equals(currentProjectPom.getParent())
-                ? loadRootModel(currentProjectPom)
-                : readModel(rootProjectBaseDir.resolve(POM_XML));
-        return loadWorkspace(currentProjectPom, rootModel).getWorkspace();
-    }
-
-    private static LocalProject loadWorkspace(Path currentProjectPom, Model rootModel) throws BootstrapException {
         final LocalWorkspace ws = new LocalWorkspace();
-        final LocalProject project = load(ws, null, rootModel, currentProjectPom.getParent());
-        return project == null ? load(ws, null, readModel(currentProjectPom), currentProjectPom.getParent()) : project;
+        final LocalProject project = load(ws, null, loadRootModel(currentProjectDir), currentProjectDir);
+        return project == null ? load(ws, null, readModel(currentProjectDir.resolve(POM_XML)), currentProjectDir) : project;
     }
 
     private static LocalProject load(LocalWorkspace workspace, LocalProject parent, Model model, Path currentProjectDir)
@@ -136,7 +87,8 @@ public class LocalProject {
         return result;
     }
 
-    private static Model loadRootModel(Path pomXml) throws BootstrapException {
+    private static Model loadRootModel(Path currentProjectDir) throws BootstrapException {
+        Path pomXml = currentProjectDir.resolve(POM_XML);
         Model model = null;
         while (Files.exists(pomXml)) {
             model = readModel(pomXml);
@@ -165,12 +117,11 @@ public class LocalProject {
         }
     }
 
-    private static Path locateCurrentProjectPom(Path path, boolean required) throws BootstrapException {
+    private static Path locateCurrentProjectDir(Path path, boolean required) throws BootstrapException {
         Path p = path;
         while (p != null) {
-            final Path pom = p.resolve(POM_XML);
-            if (Files.exists(pom)) {
-                return pom;
+            if (Files.exists(p.resolve(POM_XML))) {
+                return p;
             }
             p = p.getParent();
         }
@@ -187,7 +138,6 @@ public class LocalProject {
     private final Path dir;
     private final LocalWorkspace workspace;
     private final List<LocalProject> modules = new ArrayList<>(0);
-    private AppArtifactKey key;
 
     private LocalProject(Model rawModel, LocalWorkspace workspace) throws BootstrapException {
         this.rawModel = rawModel;
@@ -196,49 +146,36 @@ public class LocalProject {
         this.groupId = ModelUtils.getGroupId(rawModel);
         this.artifactId = rawModel.getArtifactId();
 
-        final String rawVersion = ModelUtils.getVersion(rawModel);
-        final boolean rawVersionIsUnresolved = isUnresolvedVersion(rawVersion);
-        String resolvedVersion = rawVersionIsUnresolved ? resolveVersion(rawVersion, rawModel) : rawVersion;
+        String version = ModelUtils.getVersion(rawModel);
+        final boolean revisionVersion;
+        if (revisionVersion = REVISION_EXPR.equals(version)) {
+            version = resolveRevision(rawModel);
+        }
 
         if (workspace != null) {
             workspace.addProject(this, rawModel.getPomFile().lastModified());
-            if (rawVersionIsUnresolved) {
-                if (resolvedVersion == null) {
-                    resolvedVersion = workspace.getResolvedVersion();
-                    if (resolvedVersion == null) {
-                        throw UnresolvedVersionException.forGa(groupId, artifactId, rawVersion);
+            if (revisionVersion) {
+                if (version == null) {
+                    version = workspace.getRevision();
+                    if (version == null) {
+                        throw UnresolvedRevisionException.forGa(groupId, artifactId);
                     }
                 } else {
-                    workspace.setResolvedVersion(resolvedVersion);
+                    workspace.setRevision(version);
                 }
             }
-        } else if (resolvedVersion == null) {
-            throw UnresolvedVersionException.forGa(groupId, artifactId, rawVersion);
+        } else if (version == null) {
+            throw UnresolvedRevisionException.forGa(groupId, artifactId);
         }
 
-        this.version = resolvedVersion;
+        this.version = version;
     }
 
-    static boolean isUnresolvedVersion(String version) {
-        return UNRESOLVED_VERSION_PATTERN.matcher(version).find();
-    }
-
-    private static String resolveVersion(String rawVersion, Model rawModel) {
+    private static String resolveRevision(Model rawModel) {
         final Map<String, String> props = new HashMap<>();
         rawModel.getProperties().entrySet().forEach(e -> props.put(e.getKey().toString(), e.getValue().toString()));
         System.getProperties().entrySet().forEach(e -> props.put(e.getKey().toString(), e.getValue().toString()));
-
-        Matcher matcher = UNRESOLVED_VERSION_PATTERN.matcher(rawVersion);
-        StringBuffer sb = new StringBuffer();
-        while (matcher.find()) {
-            final String resolved = props.get(matcher.group(1));
-            if (resolved == null) {
-                return null;
-            }
-            matcher.appendReplacement(sb, resolved);
-        }
-        matcher.appendTail(sb);
-        return sb.toString();
+        return props.get(REVISION);
     }
 
     public String getGroupId() {
@@ -298,7 +235,7 @@ public class LocalProject {
     }
 
     public AppArtifactKey getKey() {
-        return key == null ? key = new AppArtifactKey(groupId, artifactId) : key;
+        return new AppArtifactKey(groupId, artifactId);
     }
 
     public AppArtifact getAppArtifact() {
