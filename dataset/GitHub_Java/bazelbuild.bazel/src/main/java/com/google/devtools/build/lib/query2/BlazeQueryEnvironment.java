@@ -37,16 +37,14 @@ import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
-import com.google.devtools.build.lib.query2.engine.MinDepthUniquifier;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryExpressionEvalListener;
 import com.google.devtools.build.lib.query2.engine.QueryUtil;
+import com.google.devtools.build.lib.query2.engine.QueryUtil.AbstractUniquifier;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
-import com.google.devtools.build.lib.query2.engine.QueryUtil.ThreadSafeMinDepthUniquifierImpl;
-import com.google.devtools.build.lib.query2.engine.QueryUtil.UniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeCallback;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
@@ -304,13 +302,12 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
 
   @Override
   public Uniquifier<Target> createUniquifier() {
-    return new UniquifierImpl<>(TargetKeyExtractor.INSTANCE);
-  }
-
-  @Override
-  public MinDepthUniquifier<Target> createMinDepthUniquifier() {
-    return new ThreadSafeMinDepthUniquifierImpl<>(
-        TargetKeyExtractor.INSTANCE, /*concurrencyLevel=*/ 1);
+    return new AbstractUniquifier<Target, Label>() {
+      @Override
+      protected Label extractKey(Target target) {
+        return target.getLabel();
+      }
+    };
   }
 
   private void preloadTransitiveClosure(Set<Target> targets, int maxDepth)
