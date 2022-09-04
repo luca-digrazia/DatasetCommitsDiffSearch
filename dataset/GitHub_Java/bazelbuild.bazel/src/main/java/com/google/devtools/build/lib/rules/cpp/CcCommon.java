@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.SourceCategory;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProvidesException;
@@ -61,6 +60,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -975,7 +975,7 @@ public final class CcCommon {
     //   will be gone.
     String sysrootCcFlags =
         computeCcFlagForSysroot(
-            toolchainProvider.getCppConfigurationEvenThoughItCanBeDifferentThanWhatTargetHas(),
+            toolchainProvider.getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas(),
             toolchainProvider);
 
     // Fetch additional flags from the FeatureConfiguration.
@@ -1022,7 +1022,7 @@ public final class CcCommon {
       cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     } else {
       cppConfiguration =
-          toolchainProvider.getCppConfigurationEvenThoughItCanBeDifferentThanWhatTargetHas();
+          toolchainProvider.getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas();
     }
     try {
       featureConfiguration =

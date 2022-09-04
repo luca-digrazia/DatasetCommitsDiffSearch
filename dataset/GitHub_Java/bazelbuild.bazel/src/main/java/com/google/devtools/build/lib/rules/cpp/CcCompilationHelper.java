@@ -222,7 +222,6 @@ public final class CcCompilationHelper {
 
   private final CppSemantics semantics;
   private final BuildConfiguration configuration;
-  private final ImmutableMap<String, String> executionInfo;
   private final CppConfiguration cppConfiguration;
 
   private final List<Artifact> publicHeaders = new ArrayList<>();
@@ -286,8 +285,7 @@ public final class CcCompilationHelper {
       SourceCategory sourceCategory,
       CcToolchainProvider ccToolchain,
       FdoContext fdoContext,
-      BuildConfiguration buildConfiguration,
-      ImmutableMap<String, String> executionInfo) {
+      BuildConfiguration buildConfiguration) {
     this.semantics = Preconditions.checkNotNull(semantics);
     this.featureConfiguration = Preconditions.checkNotNull(featureConfiguration);
     this.sourceCategory = Preconditions.checkNotNull(sourceCategory);
@@ -306,7 +304,6 @@ public final class CcCompilationHelper {
     this.actionRegistry = Preconditions.checkNotNull(actionRegistry);
     this.label = Preconditions.checkNotNull(label);
     this.grepIncludes = grepIncludes;
-    this.executionInfo = Preconditions.checkNotNull(executionInfo);
   }
 
   /** Creates a CcCompilationHelper for cpp source files. */
@@ -318,8 +315,7 @@ public final class CcCompilationHelper {
       CppSemantics semantics,
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider ccToolchain,
-      FdoContext fdoContext,
-      ImmutableMap<String, String> executionInfo) {
+      FdoContext fdoContext) {
     this(
         actionRegistry,
         actionConstructionContext,
@@ -330,8 +326,7 @@ public final class CcCompilationHelper {
         SourceCategory.CC,
         ccToolchain,
         fdoContext,
-        actionConstructionContext.getConfiguration(),
-        executionInfo);
+        actionConstructionContext.getConfiguration());
   }
 
   /** Sets fields that overlap for cc_library and cc_binary rules. */
@@ -430,17 +425,6 @@ public final class CcCompilationHelper {
     }
     
     this.privateHeaders.add(privateHeader);
-    return this;
-  }
-
-  /**
-   * Add directly to privateHeaders, which are added to the compilation prerequisites and can be
-   * removed by include scanning. This is only used to work around cases where we are not
-   * propagating transitive dependencies properly via scheduling dependency middleman (i.e. objc
-   * compiles).
-   */
-  public CcCompilationHelper addPrivateHeadersUnchecked(Collection<Artifact> privateHeaders) {
-    this.privateHeaders.addAll(privateHeaders);
     return this;
   }
 
@@ -1564,7 +1548,6 @@ public final class CcCompilationHelper {
     builder.setCcCompilationContext(ccCompilationContext);
     builder.setCoptsFilter(coptsFilter);
     builder.setFeatureConfiguration(featureConfiguration);
-    builder.addExecutionInfo(executionInfo);
     return builder;
   }
 

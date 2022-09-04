@@ -32,11 +32,12 @@ import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.FeatureConfigurationApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkApi;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeProviderApi;
 
 /** Fake implementation of {@link CcModuleApi}. */
@@ -64,8 +65,8 @@ public class FakeCcModule
   public FeatureConfigurationApi configureFeatures(
       Object ruleContextOrNone,
       CcToolchainProviderApi<FeatureConfigurationApi> toolchain,
-      SkylarkList<?> requestedFeatures,
-      SkylarkList<?> unsupportedFeatures)
+      SkylarkList<String> requestedFeatures,
+      SkylarkList<String> unsupportedFeatures)
       throws EvalException {
     return null;
   }
@@ -148,7 +149,7 @@ public class FakeCcModule
       Object interfaceLibrary,
       boolean alwayslink,
       Location location,
-      StarlarkThread thread) {
+      Environment environment) {
     return null;
   }
 
@@ -156,14 +157,14 @@ public class FakeCcModule
   public CcLinkingContextApi createCcLinkingInfo(
       Object librariesToLinkObject,
       Object userLinkFlagsObject,
-      SkylarkList<?> nonCodeInputs,
+      SkylarkList<FileApi> nonCodeInputs,
       Location location,
-      StarlarkThread thread) {
+      StarlarkContext context) {
     return null;
   }
 
   @Override
-  public CcInfoApi mergeCcInfos(SkylarkList<?> ccInfos) {
+  public CcInfoApi mergeCcInfos(SkylarkList<CcInfoApi> ccInfos) {
     return null;
   }
 
@@ -195,23 +196,22 @@ public class FakeCcModule
       SkylarkActionFactoryApi skylarkActionFactoryApi,
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
-      SkylarkList<?> sources,
-      SkylarkList<?> publicHeaders,
-      SkylarkList<?> privateHeaders,
-      SkylarkList<?> includes,
-      SkylarkList<?> quoteIncludes,
-      SkylarkList<?> defines,
-      SkylarkList<?> localDefines,
-      SkylarkList<?> systemIncludes,
-      SkylarkList<?> frameworkIncludes,
-      SkylarkList<?> userCompileFlags,
-      SkylarkList<?> ccCompilationContexts,
+      SkylarkList<FileApi> sources,
+      SkylarkList<FileApi> publicHeaders,
+      SkylarkList<FileApi> privateHeaders,
+      SkylarkList<String> includes,
+      SkylarkList<String> quoteIncludes,
+      SkylarkList<String> defines,
+      SkylarkList<String> localDefines,
+      SkylarkList<String> systemIncludes,
+      SkylarkList<String> frameworkIncludes,
+      SkylarkList<String> userCompileFlags,
+      SkylarkList<CcCompilationContextApi> ccCompilationContexts,
       String name,
       boolean disallowPicOutputs,
       boolean disallowNopicOutputs,
-      SkylarkList<?> additionalInputs,
       Location location,
-      StarlarkThread thread)
+      Environment environment)
       throws EvalException, InterruptedException {
     return null;
   }
@@ -222,17 +222,17 @@ public class FakeCcModule
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
       CcCompilationOutputsApi<FileApi> compilationOutputs,
-      SkylarkList<?> userLinkFlags,
-      SkylarkList<?> ccLinkingContextApis,
+      SkylarkList<String> userLinkFlags,
+      SkylarkList<CcLinkingContextApi<FileApi>> ccLinkingContextApis,
       String name,
       String language,
       boolean alwayslink,
-      SkylarkList<?> nonCodeInputs,
+      SkylarkList<FileApi> nonCodeInputs,
       boolean disallowStaticLibraries,
       boolean disallowDynamicLibraries,
       Object grepIncludes,
       Location location,
-      StarlarkThread thread)
+      StarlarkContext starlarkContext)
       throws InterruptedException, EvalException {
     return null;
   }
@@ -243,15 +243,16 @@ public class FakeCcModule
       FeatureConfigurationApi skylarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> skylarkCcToolchainProvider,
       Object compilationOutputs,
-      SkylarkList<?> userLinkFlags,
-      SkylarkList<?> linkingContexts,
+      SkylarkList<String> userLinkFlags,
+      SkylarkList<CcLinkingContextApi<FileApi>> linkingContexts,
       String name,
       String language,
       String outputType,
       boolean linkDepsStatically,
-      SkylarkList<?> additionalInputs,
+      SkylarkList<FileApi> additionalInputs,
       Location location,
-      StarlarkThread thread)
+      Environment environment,
+      StarlarkContext starlarkContext)
       throws InterruptedException, EvalException {
     return null;
   }
@@ -259,10 +260,10 @@ public class FakeCcModule
   @Override
   public CcToolchainConfigInfoApi ccToolchainConfigInfoFromSkylark(
       SkylarkRuleContextApi skylarkRuleContext,
-      SkylarkList<?> features,
-      SkylarkList<?> actionConfigs,
-      SkylarkList<?> artifactNamePatterns,
-      SkylarkList<?> cxxBuiltInIncludeDirectories,
+      SkylarkList<Object> features,
+      SkylarkList<Object> actionConfigs,
+      SkylarkList<Object> artifactNamePatterns,
+      SkylarkList<String> cxxBuiltInIncludeDirectories,
       String toolchainIdentifier,
       String hostSystemName,
       String targetSystemName,
@@ -271,8 +272,8 @@ public class FakeCcModule
       String compiler,
       String abiVersion,
       String abiLibcVersion,
-      SkylarkList<?> toolPaths,
-      SkylarkList<?> makeVariables,
+      SkylarkList<Object> toolPaths,
+      SkylarkList<Object> makeVariables,
       Object builtinSysroot,
       Object ccTargetOs)
       throws EvalException {
@@ -287,7 +288,7 @@ public class FakeCcModule
 
   @Override
   public CcCompilationOutputsApi<FileApi> mergeCcCompilationOutputsFromSkylark(
-      SkylarkList<?> compilationOutputs) {
+      SkylarkList<CcCompilationOutputsApi<FileApi>> compilationOutputs) {
     return null;
   }
 }

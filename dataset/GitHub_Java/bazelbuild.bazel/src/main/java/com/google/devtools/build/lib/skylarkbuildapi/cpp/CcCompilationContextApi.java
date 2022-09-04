@@ -14,13 +14,10 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.StarlarkList;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /**
  * Interface for a store of information needed for C++ compilation aggregated across dependencies.
@@ -31,14 +28,14 @@ import com.google.devtools.build.lib.syntax.StarlarkValue;
     doc =
         "Immutable store of information needed for C++ compilation that is aggregated across "
             + "dependencies.")
-public interface CcCompilationContextApi<FileT extends FileApi> extends StarlarkValue {
+public interface CcCompilationContextApi {
   @SkylarkCallable(
       name = "defines",
       doc =
           "Returns the set of defines needed to compile this target. Each define is a string."
               + " These values are propagated to the target's transitive dependencies.",
       structField = true)
-  Depset getSkylarkDefines();
+  SkylarkNestedSet getSkylarkDefines();
 
   @SkylarkCallable(
       name = "local_defines",
@@ -46,22 +43,22 @@ public interface CcCompilationContextApi<FileT extends FileApi> extends Starlark
           "Returns the set of defines needed to compile this target. Each define is a string."
               + " These values are not propagated to the target's transitive dependencies.",
       structField = true)
-  Depset getSkylarkNonTransitiveDefines();
+  SkylarkNestedSet getSkylarkNonTransitiveDefines();
 
   @SkylarkCallable(
       name = "headers",
       doc = "Returns the set of headers needed to compile this target.",
       structField = true)
-  Depset getSkylarkHeaders();
+  SkylarkNestedSet getSkylarkHeaders();
 
   @SkylarkCallable(
       name = "system_includes",
       doc =
           "Returns the set of search paths (as strings) for header files referenced by angle"
-              + " brackets, e.g. #include &lt;foo/bar/header.h&gt;. They can be either relative to"
-              + " the exec root or absolute. Usually passed with -isystem.",
+              + " brackets, e.g. #include <foo/bar/header.h>. They can be either relative to the"
+              + " exec root or absolute. Usually passed with -isystem.",
       structField = true)
-  Depset getSkylarkSystemIncludeDirs();
+  SkylarkNestedSet getSkylarkSystemIncludeDirs();
 
   @SkylarkCallable(
       name = "framework_includes",
@@ -69,7 +66,7 @@ public interface CcCompilationContextApi<FileT extends FileApi> extends Starlark
           "Returns the set of search paths (as strings) for framework header files. Usually passed"
               + " with -F.",
       structField = true)
-  Depset getSkylarkFrameworkIncludeDirs();
+  SkylarkNestedSet getSkylarkFrameworkIncludeDirs();
 
   @SkylarkCallable(
       name = "includes",
@@ -77,7 +74,7 @@ public interface CcCompilationContextApi<FileT extends FileApi> extends Starlark
           "Returns the set of search paths (as strings) for header files referenced both by angle"
               + " bracket and quotes. Usually passed with -I.",
       structField = true)
-  Depset getSkylarkIncludeDirs();
+  SkylarkNestedSet getSkylarkIncludeDirs();
 
   @SkylarkCallable(
       name = "quote_includes",
@@ -86,21 +83,5 @@ public interface CcCompilationContextApi<FileT extends FileApi> extends Starlark
               + " e.g. #include \"foo/bar/header.h\". They can be either relative to the exec root"
               + " or absolute. Usually passed with -iquote.",
       structField = true)
-  Depset getSkylarkQuoteIncludeDirs();
-
-  @SkylarkCallable(
-      name = "direct_headers",
-      doc =
-          "Returns the list of header files that are declared by the \"hdrs\" attribute of this"
-              + " target.",
-      structField = true)
-  StarlarkList<FileT> getSkylarkDirectModularHeaders();
-
-  @SkylarkCallable(
-      name = "direct_textual_headers",
-      doc =
-          "Returns the list of header files that are declared by the \"textual_hdrs\" attribute of"
-              + " this target.",
-      structField = true)
-  StarlarkList<FileT> getSkylarkDirectTextualHeaders();
+  SkylarkNestedSet getSkylarkQuoteIncludeDirs();
 }

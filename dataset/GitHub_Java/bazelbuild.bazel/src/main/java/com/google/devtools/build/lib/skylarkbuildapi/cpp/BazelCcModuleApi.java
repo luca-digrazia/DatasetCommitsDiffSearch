@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime.NoneType;
@@ -236,6 +237,7 @@ public interface BazelCcModuleApi<
       doc = "Should be used for C++ transitive linking.",
       useEnvironment = true,
       useLocation = true,
+      useContext = true,
       parameters = {
         @Param(
             name = "actions",
@@ -337,7 +339,8 @@ public interface BazelCcModuleApi<
       boolean linkDepsStatically,
       SkylarkList<FileT> additionalInputs,
       Location location,
-      Environment env)
+      Environment environment,
+      StarlarkContext starlarkContext)
       throws InterruptedException, EvalException;
 
   @SkylarkCallable(

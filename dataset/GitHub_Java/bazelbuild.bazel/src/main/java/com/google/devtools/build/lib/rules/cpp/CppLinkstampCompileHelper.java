@@ -17,14 +17,10 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -46,9 +42,9 @@ public class CppLinkstampCompileHelper {
       BuildConfiguration configuration,
       Artifact sourceFile,
       Artifact outputFile,
-      NestedSet<Artifact> compilationInputs,
-      NestedSet<Artifact> nonCodeInputs,
-      NestedSet<Artifact> inputsForInvalidation,
+      Iterable<Artifact> compilationInputs,
+      Iterable<Artifact> nonCodeInputs,
+      Iterable<Artifact> inputsForInvalidation,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       Iterable<String> additionalLinkstampDefines,
       CcToolchainProvider ccToolchainProvider,
@@ -94,7 +90,7 @@ public class CppLinkstampCompileHelper {
     return builder.buildOrThrowIllegalStateException();
   }
 
-  private static NestedSet<String> computeAllLinkstampDefines(
+  private static ImmutableList<String> computeAllLinkstampDefines(
       String labelReplacement,
       String outputReplacement,
       Iterable<String> additionalLinkstampDefines,
@@ -125,14 +121,15 @@ public class CppLinkstampCompileHelper {
       defines.add(CppConfiguration.FDO_STAMP_MACRO + "=\"" + fdoBuildStamp + "\"");
     }
 
-    return NestedSetBuilder.wrap(
-        Order.STABLE_ORDER,
-        Iterables.transform(
-            defines.build(),
+    return defines
+        .build()
+        .stream()
+        .map(
             define ->
                 define
                     .replaceAll(labelPattern, labelReplacement)
-                    .replaceAll(outputPathPattern, outputReplacement)));
+                    .replaceAll(outputPathPattern, outputReplacement))
+        .collect(ImmutableList.toImmutableList());
   }
 
   private static CcToolchainVariables getVariables(
@@ -178,10 +175,10 @@ public class CppLinkstampCompileHelper {
         /* variablesExtensions= */ ImmutableList.of(),
         /* additionalBuildVariables= */ ImmutableMap.of(),
         /* directModuleMaps= */ ImmutableList.of(),
-        /* includeDirs= */ NestedSetBuilder.create(Order.STABLE_ORDER, PathFragment.create(".")),
-        /* quoteIncludeDirs= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-        /* systemIncludeDirs= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-        /* frameworkIncludeDirs= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        /* includeDirs= */ ImmutableList.of(PathFragment.create(".")),
+        /* quoteIncludeDirs= */ ImmutableList.of(),
+        /* systemIncludeDirs= */ ImmutableList.of(),
+        /* frameworkIncludeDirs= */ ImmutableList.of(),
         computeAllLinkstampDefines(
             labelReplacement,
             outputReplacement,
