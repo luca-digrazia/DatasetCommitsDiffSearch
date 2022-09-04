@@ -37,44 +37,61 @@ import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.filter.EncodingFilter;
 import org.glassfish.jersey.server.internal.scanning.PackageNamesScanner;
 import org.graylog2.alerts.AlertSender;
+import org.graylog2.alerts.AlertService;
+import org.graylog2.alerts.AlertServiceImpl;
 import org.graylog2.blacklists.BlacklistCache;
 import org.graylog2.buffers.Buffers;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
 import org.graylog2.caches.Caches;
+import org.graylog2.cluster.NodeService;
+import org.graylog2.cluster.NodeServiceImpl;
 import org.graylog2.dashboards.DashboardRegistry;
+import org.graylog2.dashboards.DashboardService;
+import org.graylog2.dashboards.DashboardServiceImpl;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.indexer.Deflector;
+import org.graylog2.indexer.IndexFailureService;
+import org.graylog2.indexer.IndexFailureServiceImpl;
 import org.graylog2.indexer.Indexer;
+import org.graylog2.indexer.ranges.IndexRangeService;
+import org.graylog2.indexer.ranges.IndexRangeServiceImpl;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.initializers.Initializers;
-import org.graylog2.inputs.ServerInputRegistry;
+import org.graylog2.inputs.*;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
-import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.metrics.MongoDbMetricsReporter;
 import org.graylog2.metrics.jersey2.MetricsDynamicBinding;
+import org.graylog2.notifications.NotificationService;
+import org.graylog2.notifications.NotificationServiceImpl;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.periodical.Periodicals;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.RulesEngine;
-import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.Version;
+import org.graylog2.plugin.*;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.transports.Transport;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.initializers.Initializer;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
 import org.graylog2.plugin.rest.JacksonPropertyExceptionMapper;
-import org.graylog2.plugins.PluginLoader;
+import org.graylog2.plugin.system.NodeId;
+import org.graylog2.plugins.LegacyPluginLoader;
 import org.graylog2.rest.CORSFilter;
 import org.graylog2.rest.ObjectMapperProvider;
 import org.graylog2.rest.RestAccessLogFilter;
+import org.graylog2.savedsearches.SavedSearchService;
+import org.graylog2.savedsearches.SavedSearchServiceImpl;
+import org.graylog2.security.AccessTokenService;
+import org.graylog2.security.AccessTokenServiceImpl;
 import org.graylog2.security.ShiroSecurityBinding;
+import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.ldap.LdapConnector;
+import org.graylog2.security.ldap.LdapSettingsService;
+import org.graylog2.security.ldap.LdapSettingsServiceImpl;
 import org.graylog2.security.realm.LdapUserAuthenticator;
 import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.bindings.OwnServiceLocatorGenerator;
@@ -82,12 +99,21 @@ import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.buffers.ProcessBufferWatermark;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.filters.FilterRegistry;
+import org.graylog2.shared.plugins.PluginLoader;
 import org.graylog2.shared.stats.ThroughputStats;
+import org.graylog2.streams.StreamRuleService;
+import org.graylog2.streams.StreamRuleServiceImpl;
+import org.graylog2.streams.StreamService;
+import org.graylog2.streams.StreamServiceImpl;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
+import org.graylog2.system.activities.SystemMessageService;
+import org.graylog2.system.activities.SystemMessageServiceImpl;
 import org.graylog2.system.jobs.SystemJobFactory;
 import org.graylog2.system.jobs.SystemJobManager;
 import org.graylog2.system.shutdown.GracefulShutdown;
+import org.graylog2.users.UserService;
+import org.graylog2.users.UserServiceImpl;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -100,15 +126,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.net.InetSocketAddress;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Server core, handling and holding basically everything.
@@ -220,14 +250,11 @@ public class Core implements GraylogServer {
     private RebuildIndexRangesJob.Factory rebuildIndexRangesJobFactory;
 
     @Inject
-    private AlertSender alertSender;
-
-    @Inject
-    private SecurityContextFactory shiroSecurityContextFactory;
+    AlertSender alertSender;
 
     public void initialize() {
         if (configuration.isMetricsCollectionEnabled()) {
-            metricsReporter = MongoDbMetricsReporter.forRegistry(metricRegistry, mongoConnection, serverStatus).build();
+            metricsReporter = MongoDbMetricsReporter.forRegistry(this, metricRegistry).build();
             metricsReporter.start(1, TimeUnit.SECONDS);
         }
 
@@ -259,9 +286,9 @@ public class Core implements GraylogServer {
             processors[i] = processBufferProcessorFactory.create(outputBuffer, this, processBufferWatermark, i, processBufferProcessorCount);
         }
 
-        processBuffer.initialize(processors, configuration.getRingSize(),
-                configuration.getProcessorWaitStrategy(),
-                configuration.getProcessBufferProcessors()
+        processBuffer.initialize(processors, this.getConfiguration().getRingSize(),
+                this.getConfiguration().getProcessorWaitStrategy(),
+                this.getConfiguration().getProcessBufferProcessors()
         );
 
         indexer.start();
@@ -309,15 +336,43 @@ public class Core implements GraylogServer {
         inputs.launchAllPersisted();
     }
 
+    public void setLdapConnector(LdapConnector ldapConnector) {
+        this.ldapConnector = ldapConnector;
+    }
+
+    public LdapConnector getLdapConnector() {
+        return ldapConnector;
+    }
+
+    public DefaultSecurityManager getSecurityManager() {
+        return securityManager;
+    }
+
+    public void setSecurityManager(DefaultSecurityManager securityManager) {
+        this.securityManager = securityManager;
+    }
+
     public void incrementStreamThroughput(String streamId) {
         throughputStats.incrementStreamThroughput(streamId);
+    }
+
+    public Map<String, Counter> cycleStreamThroughput() {
+        return throughputStats.cycleStreamThroughput();
+    }
+
+    public void setCurrentStreamThroughput(HashMap<String, Counter> throughput) {
+        throughputStats.setCurrentStreamThroughput(throughput);
+    }
+
+    public HashMap<String, Counter> getCurrentStreamThroughput() {
+        return throughputStats.getCurrentStreamThroughput();
     }
 
     private class Graylog2Binder extends AbstractBinder {
         @Override
         protected void configure() {
             bind(Core.this).to(Core.class);
-            /*bind(metricRegistry).to(MetricRegistry.class);
+            bind(metricRegistry).to(MetricRegistry.class);
             bind(throughputStats).to(ThroughputStats.class);
             bind(new StreamServiceImpl(mongoConnection)).to(StreamService.class);
             bind(new StreamRuleServiceImpl(mongoConnection)).to(StreamRuleService.class);
@@ -354,10 +409,9 @@ public class Core implements GraylogServer {
             bind((InputCache)getInputCache()).to(InputCache.class);
             bind((OutputCache)getOutputCache()).to(OutputCache.class);
             bind(processBuffer).to(ProcessBuffer.class);
-            bind(outputBuffer).to(OutputBuffer.class);*/
+            bind(outputBuffer).to(OutputBuffer.class);
         }
     }
-
 
     public void startRestApi(Injector injector) throws IOException {
         ServiceLocatorGenerator ownGenerator = new OwnServiceLocatorGenerator(injector);
@@ -415,7 +469,7 @@ public class Core implements GraylogServer {
         /*rc = rc.registerFinder(new PackageNamesScanner(new String[]{"org.graylog2.rest.resources"}, true));*/
 
         final NettyContainer jerseyHandler = ContainerFactory.createContainer(NettyContainer.class, rc);
-        jerseyHandler.setSecurityContextFactory(shiroSecurityContextFactory);
+        jerseyHandler.setSecurityContextFactory(new ShiroSecurityContextFactory(this));
 
         bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
             @Override
@@ -441,7 +495,7 @@ public class Core implements GraylogServer {
 
 
     private <A> void registerPlugins(Class<A> type, String subDirectory) {
-        PluginLoader<A> pl = new PluginLoader<A>(configuration.getPluginDir(), subDirectory, type);
+        LegacyPluginLoader<A> pl = new LegacyPluginLoader<A>(configuration.getPluginDir(), subDirectory, type);
         for (A plugin : pl.getPlugins()) {
             LOG.info("Loaded <{}> plugin [{}].", type.getSimpleName(), plugin.getClass().getCanonicalName());
 
@@ -461,10 +515,51 @@ public class Core implements GraylogServer {
                 LOG.error("Could not load plugin [{}] - Not supported type.", plugin.getClass().getCanonicalName());
             }
         }
+
+        PluginLoader pluginLoader = new PluginLoader(new File(configuration.getPluginDir()));
+        for (Plugin plugin : pluginLoader.loadPlugins()) {
+            for (Class<? extends MessageInput> inputClass : plugin.inputs()) {
+                final MessageInput messageInput;
+                try {
+                    messageInput = inputClass.newInstance();
+                    inputs.register(inputClass, messageInput.getName());
+                } catch (Exception e) {
+                    LOG.error("Unable to register message input " + inputClass.getCanonicalName(), e);
+                }
+            }
+        }
     }
 
     public MongoConnection getMongoConnection() {
         return mongoConnection;
+    }
+
+    public void setConfiguration(Configuration configuration) {
+        this.configuration = configuration;
+    }
+
+    public Configuration getConfiguration() {
+        return configuration;
+    }
+
+    public RulesEngine getRulesEngine() {
+        return rulesEngine;
+    }
+
+    public Indexer getIndexer() {
+        return indexer;
+    }
+
+    public AtomicInteger processBufferWatermark() {
+        return processBufferWatermark;
+    }
+    
+    public void setLdapAuthenticator(LdapUserAuthenticator authenticator) {
+        this.ldapUserAuthenticator = authenticator;
+    }
+
+    public LdapUserAuthenticator getLdapAuthenticator() {
+        return ldapUserAuthenticator;
     }
 
     @Override
@@ -475,6 +570,22 @@ public class Core implements GraylogServer {
     @Override
     public String getNodeId() {
         return serverStatus.getNodeId().toString();
+    }
+    
+    public void setLocalMode(boolean mode) {
+        this.localMode = mode;
+    }
+   
+    public void setStatsMode(boolean mode) {
+        this.statsMode = mode;
+    }
+   
+    public Cache getInputCache() {
+        return processBuffer.getMasterCache();
+    }
+    
+    public Cache getOutputCache() {
+        return outputBuffer.getOverflowCache();
     }
     
     public boolean isProcessing() {
@@ -497,6 +608,10 @@ public class Core implements GraylogServer {
     @Override
     public boolean isRadio() {
         return serverStatus.hasCapability(ServerStatus.Capability.RADIO);
+    }
+
+    public void setLifecycle(Lifecycle lifecycle) {
+        serverStatus.setLifecycle(lifecycle);
     }
 
 }
