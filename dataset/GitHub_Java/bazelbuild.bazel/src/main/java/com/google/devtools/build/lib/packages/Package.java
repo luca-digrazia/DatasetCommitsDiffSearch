@@ -770,13 +770,12 @@ public class Package {
        *
        * @param pkg the loaded {@link Package}
        * @param starlarkSemantics are the semantics used to load the package
-       * @param loadTimeNanos the wall time, in ns, that it took to load the package. More
-       *     precisely, this is the wall time of the call to {@link
-       *     PackageFactory#createPackageFromAst}. Notably, this does not include the time to read
-       *     and parse the package's BUILD file, nor the time to read, parse, or evaluate any of the
-       *     transitively loaded .bzl files.
+       * @param loadTimeMs the wall time, in ms, that it took to load the package. More precisely,
+       *     this is the wall time of the call to {@link PackageFactory#createPackageFromAst}.
+       *     Notably, this does not include the time to read and parse the package's BUILD file, nor
+       *     the time to read, parse, or evaluate any of the transitively loaded .bzl files.
        */
-      void onLoadingComplete(Package pkg, StarlarkSemantics starlarkSemantics, long loadTimeNanos);
+      void onLoadingComplete(Package pkg, StarlarkSemantics starlarkSemantics, long loadTimeMs);
     }
 
     /** {@link Helper} that simply calls the {@link Package} constructor. */
