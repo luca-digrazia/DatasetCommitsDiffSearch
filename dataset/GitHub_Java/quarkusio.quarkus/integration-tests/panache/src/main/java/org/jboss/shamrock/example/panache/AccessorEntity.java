@@ -44,7 +44,6 @@ public class AccessorEntity extends GenericEntity<Integer> {
     
     public void method() {
         // touch some fields
-        @SuppressWarnings("unused")
         byte b2 = b;
         i = 2;
         t = 1;
