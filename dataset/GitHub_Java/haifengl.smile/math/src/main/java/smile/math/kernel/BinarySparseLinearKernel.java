@@ -17,8 +17,6 @@
 
 package smile.math.kernel;
 
-import smile.math.MathEx;
-
 /**
  * The linear dot product kernel on sparse binary arrays in int[],
  * which are the indices of nonzero elements.
@@ -33,12 +31,11 @@ public class BinarySparseLinearKernel implements MercerKernel<int[]>, DotProduct
      * Constructor.
      */
     public BinarySparseLinearKernel() {
-
     }
 
     @Override
     public String toString() {
-        return "LinearKernel";
+        return "Sparse Binary Linear Kernel";
     }
 
     @Override
@@ -48,6 +45,20 @@ public class BinarySparseLinearKernel implements MercerKernel<int[]>, DotProduct
 
     @Override
     public double k(int[] x, int[] y) {
-        return MathEx.dot(x, y);
+        int s = 0;
+        for (int p1 = 0, p2 = 0; p1 < x.length && p2 < y.length; ) {
+            int i1 = x[p1];
+            int i2 = y[p2];
+            if (i1 == i2) {
+                s++;
+                p1++;
+                p2++;
+            } else if (i1 > i2) {
+                p2++;
+            } else {
+                p1++;
+            }
+        }
+        return s;
     }
 }

@@ -18,7 +18,7 @@
 package smile.math.kernel;
 
 /**
- * The Hellinger Kernel.
+ * The Hellinger Mercer Kernel.
 
  * @author Diego Catalano
  */
@@ -32,7 +32,7 @@ public class HellingerKernel implements MercerKernel<double[]> {
 
     @Override
     public String toString() {
-        return "HellingerKernel";
+        return "Hellinger Kernel";
     }
 
     @Override

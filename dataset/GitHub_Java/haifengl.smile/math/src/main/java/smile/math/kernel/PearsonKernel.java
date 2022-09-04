@@ -18,7 +18,7 @@
 package smile.math.kernel;
 
 /**
- * The Pearson Kernel.
+ * The Pearson Mercer Kernel.
  *
  * @author Diego Catalano
  */

@@ -33,12 +33,11 @@ public class SparseLinearKernel implements MercerKernel<SparseArray>, DotProduct
      * Constructor.
      */
     public SparseLinearKernel() {
-
     }
 
     @Override
     public String toString() {
-        return "LinearKernel";
+        return "Sparse Linear Kernel";
     }
 
     @Override

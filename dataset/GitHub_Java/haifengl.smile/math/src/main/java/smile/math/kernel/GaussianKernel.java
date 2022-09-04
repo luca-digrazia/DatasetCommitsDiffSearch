@@ -32,17 +32,38 @@ import smile.math.MathEx;
 
  * @author Haifeng Li
  */
-public class GaussianKernel extends Gaussian implements MercerKernel<double[]> {
+public class GaussianKernel implements MercerKernel<double[]>, IsotropicKernel {
+    private static final long serialVersionUID = 2L;
+
+    /**
+     * The width of the kernel.
+     */
+    private double gamma;
+    
     /**
      * Constructor.
      * @param sigma the smooth/width parameter of Gaussian kernel.
      */
     public GaussianKernel(double sigma) {
-        super(sigma);
+        if (sigma <= 0) {
+            throw new IllegalArgumentException("sigma is not positive: " + sigma);
+        }
+
+        this.gamma = 0.5 / (sigma * sigma);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Gaussian Kernel (sigma = %.4f)", Math.sqrt(0.5/gamma));
+    }
+
+    @Override
+    public double k(double dist) {
+        return Math.exp(-gamma * dist);
     }
 
     @Override
     public double k(double[] x, double[] y) {
-        return k(MathEx.squaredDistance(x, y));
+        return Math.exp(-gamma * MathEx.squaredDistance(x, y));
     }
 }

@@ -21,7 +21,7 @@ import smile.math.MathEx;
 import smile.util.SparseArray;
 
 /**
- * Gaussian Kernel, also referred as RBF kernel or squared exponential kernel.
+ * The Gaussian Kernel on sparse data.
  * <p>
  * <pre>
  *     k(u, v) = e<sup>-||u-v||<sup>2</sup> / (2 * &sigma;<sup>2</sup>)</sup>
@@ -33,17 +33,38 @@ import smile.util.SparseArray;
 
  * @author Haifeng Li
  */
-public class SparseGaussianKernel extends Gaussian implements MercerKernel<SparseArray> {
+public class SparseGaussianKernel implements MercerKernel<SparseArray>, IsotropicKernel {
+    private static final long serialVersionUID = 2L;
+
+    /**
+     * The width of the kernel.
+     */
+    private double gamma;
+    
     /**
      * Constructor.
-     * @param sigma The length scale of kernel.
+     * @param sigma the smooth/width parameter of Gaussian kernel.
      */
     public SparseGaussianKernel(double sigma) {
-        super(sigma);
+        if (sigma <= 0) {
+            throw new IllegalArgumentException("sigma is not positive: " + sigma);
+        }
+
+        this.gamma = 0.5 / (sigma * sigma);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Sparse Gaussian Kernel (sigma = %.4f)", Math.sqrt(0.5/gamma));
+    }
+
+    @Override
+    public double k(double dist) {
+        return Math.exp(-gamma * dist);
     }
 
     @Override
     public double k(SparseArray x, SparseArray y) {
-        return k(MathEx.distance(x, y));
+        return Math.exp(-gamma * MathEx.squaredDistance(x, y));
     }
 }
