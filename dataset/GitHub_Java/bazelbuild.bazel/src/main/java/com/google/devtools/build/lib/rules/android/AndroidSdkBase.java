@@ -73,8 +73,6 @@ public class AndroidSdkBase implements RuleConfiguredTargetFactory {
     Artifact shrinkedAndroidJar = ruleContext.getPrerequisiteArtifact("shrinked_android_jar");
     Artifact mainDexClasses = ruleContext.getPrerequisiteArtifact("main_dex_classes");
     BootClassPathInfo system = ruleContext.getPrerequisite("system", BootClassPathInfo.PROVIDER);
-    FilesToRunProvider legacyMainDexListGenerator =
-        ruleContext.getExecutablePrerequisite("legacy_main_dex_list_generator");
 
     if (ruleContext.hasErrors()) {
       return null;
@@ -99,8 +97,7 @@ public class AndroidSdkBase implements RuleConfiguredTargetFactory {
             apkSigner,
             proguard,
             zipalign,
-            system,
-            legacyMainDexListGenerator);
+            system);
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addNativeDeclaredProvider(sdk)

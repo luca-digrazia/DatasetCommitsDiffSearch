@@ -61,7 +61,6 @@ public class JavaStarlarkCommon
       Object outputSourceJar,
       Sequence<?> javacOpts, // <String> expected
       Sequence<?> deps, // <JavaInfo> expected
-      Sequence<?> runtimeDeps, // <JavaInfo> expected
       Sequence<?> experimentalLocalCompileTimeDeps, // <JavaInfo> expected
       Sequence<?> exports, // <JavaInfo> expected
       Sequence<?> plugins, // <JavaInfo> expected
@@ -86,7 +85,6 @@ public class JavaStarlarkCommon
             outputSourceJar == Starlark.NONE ? null : (Artifact) outputSourceJar,
             Sequence.cast(javacOpts, String.class, "javac_opts"),
             Sequence.cast(deps, JavaInfo.class, "deps"),
-            Sequence.cast(runtimeDeps, JavaInfo.class, "runtime_deps"),
             Sequence.cast(
                 experimentalLocalCompileTimeDeps,
                 JavaInfo.class,
