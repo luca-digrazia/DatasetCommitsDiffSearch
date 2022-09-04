@@ -45,6 +45,9 @@ import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.ext.ExceptionMapper;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class RadioBindings extends AbstractModule {
     private final Configuration configuration;
 
@@ -95,7 +98,7 @@ public class RadioBindings extends AbstractModule {
 
     private void bindProviders() {
         bind(AsyncHttpClient.class).toProvider(AsyncHttpClientProvider.class);
-        bind(ObjectMapper.class).toProvider(ObjectMapperProvider.class).asEagerSingleton();
+        bind(ObjectMapper.class).toProvider(ObjectMapperProvider.class);
     }
 
     private void bindTransport() {

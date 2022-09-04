@@ -55,10 +55,10 @@ public abstract class BaseConfiguration {
     private String processorWaitStrategy = "blocking";
 
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
-    private int ringSize = 65536;
+    private int ringSize = 1024;
 
     @Parameter(value = "inputbuffer_ring_size", required = true, validator = PositiveIntegerValidator.class)
-    private int inputBufferRingSize = 65536;
+    private int inputBufferRingSize = 8192;
 
     @Parameter(value = "inputbuffer_wait_strategy", required = true)
     private String inputBufferWaitStrategy = "blocking";
@@ -112,19 +112,13 @@ public abstract class BaseConfiguration {
     private int udpRecvBufferSizes = 1048576;
 
     @Parameter("message_journal_enabled")
-    private boolean messageJournalEnabled = true;
+    private boolean messageJournalEnabled = false;
 
     @Parameter("inputbuffer_processors")
     private int inputbufferProcessors = 2;
 
     @Parameter("message_recordings_enable")
     private boolean messageRecordingsEnable = false;
-
-    @Parameter("disable_sigar")
-    private boolean disableSigar = false;
-
-    @Parameter(value = "http_proxy_uri")
-    private URI httpProxyUri;
 
     public String getRestUriScheme() {
         return isRestEnableTls() ? "https" : "http";
@@ -285,11 +279,4 @@ public abstract class BaseConfiguration {
         return messageRecordingsEnable;
     }
 
-    public boolean isDisableSigar() {
-        return disableSigar;
-    }
-
-    public URI getHttpProxyUri() {
-        return httpProxyUri;
-    }
 }

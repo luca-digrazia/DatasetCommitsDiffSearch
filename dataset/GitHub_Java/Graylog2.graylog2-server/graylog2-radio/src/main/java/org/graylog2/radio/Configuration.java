@@ -92,9 +92,6 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "amqp_broker_parallel_queues")
     private int amqpParallelQueues = 1;
 
-    @Parameter(value = "amqp_persistent_messages_enabled")
-    private boolean amqpPersistentMessagesEnabled = false;
-
     @Parameter(value = "ring_size", required = true, validator = PositiveIntegerValidator.class)
     private int ringSize = 1024;
 
@@ -180,10 +177,6 @@ public class Configuration extends BaseConfiguration {
 
     public int getAmqpParallelQueues() {
         return amqpParallelQueues;
-    }
-
-    public boolean isAmqpPersistentMessagesEnabled() {
-        return amqpPersistentMessagesEnabled;
     }
 
     public int getRadioTransportMaxErrors() {
