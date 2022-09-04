@@ -17,22 +17,22 @@
 package org.graylog2.commands.journal;
 
 import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
 import com.google.inject.Key;
 import com.google.inject.Module;
 import com.google.inject.TypeLiteral;
 import io.airlift.airline.Arguments;
 import io.airlift.airline.Command;
-import org.graylog2.bindings.ServerObjectMapperModule;
 import org.graylog2.inputs.codecs.CodecsModule;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.journal.RawMessage;
+import org.graylog2.shared.bindings.ObjectMapperModule;
 import org.graylog2.shared.journal.Journal;
 import org.slf4j.helpers.MessageFormatter;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -48,10 +48,11 @@ public class JournalDecode extends AbstractJournalCommand {
 
     @Override
     protected List<Module> getCommandBindings() {
-        final ArrayList<Module> modules = Lists.newArrayList(super.getCommandBindings());
-        modules.add(new CodecsModule());
-        modules.add(new ServerObjectMapperModule());
-        return modules;
+        return ImmutableList.<Module>builder()
+                .addAll(super.getCommandBindings())
+                .add(new CodecsModule())
+                .add(new ObjectMapperModule(getClass().getClassLoader()))
+                .build();
     }
 
     @Override
@@ -87,12 +88,12 @@ public class JournalDecode extends AbstractJournalCommand {
         final Long readOffset = range.lowerEndpoint();
         final long count = range.upperEndpoint() - range.lowerEndpoint() + 1;
         final List<Journal.JournalReadEntry> entries = journal.read(readOffset,
-                                                                    count);
+                count);
         for (final Journal.JournalReadEntry entry : entries) {
             final RawMessage raw = RawMessage.decode(entry.getPayload(), entry.getOffset());
             if (raw == null) {
                 System.err.println(MessageFormatter.format("Journal entry at offset {} failed to decode",
-                                                           entry.getOffset()));
+                        entry.getOffset()));
                 continue;
             }
 
@@ -102,14 +103,25 @@ public class JournalDecode extends AbstractJournalCommand {
                 System.err.println(MessageFormatter.format(
                         "Could not use codec {} to decode raw message id {} at offset {}",
                         new Object[]{raw.getCodecName(), raw.getId(), entry.getOffset()}));
-                continue;
+            } else {
+                message.setJournalOffset(raw.getJournalOffset());
             }
-            message.setJournalOffset(raw.getJournalOffset());
+
+            final ResolvableInetSocketAddress remoteAddress = raw.getRemoteAddress();
+            final String remote = remoteAddress == null ? "unknown address" : remoteAddress.getInetSocketAddress().toString();
 
             final StringBuffer sb = new StringBuffer();
-            sb.append("Message ").append(message.getId()).append(" in format ").append(raw.getCodecName())
-                    .append(" received from ").append(message.getSource())
-                    .append(" contains ").append(message.getFieldNames().size()).append(" fields.");
+            sb.append("Message ").append(raw.getId()).append('\n')
+                    .append(" at ").append(raw.getTimestamp()).append('\n')
+                    .append(" in format ").append(raw.getCodecName()).append('\n')
+                    .append(" at offset ").append(raw.getJournalOffset()).append('\n')
+                    .append(" received from remote address ").append(remote).append('\n')
+                    .append(" (source field: ").append(message == null ? "unparsed" : message.getSource()).append(')').append('\n');
+            if (message != null) {
+                sb.append(" contains ").append(message.getFieldNames().size()).append(" fields.");
+            } else {
+                sb.append("The message could not be parse by the given codec.");
+            }
             System.out.println(sb);
         }
 
