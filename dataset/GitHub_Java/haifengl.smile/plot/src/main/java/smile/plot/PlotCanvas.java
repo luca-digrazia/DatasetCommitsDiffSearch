@@ -1,18 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2019 Haifeng Li
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  *******************************************************************************/
+
 package smile.plot;
 
 import java.awt.BorderLayout;
@@ -24,6 +26,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Frame;
 import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentEvent;
@@ -67,7 +70,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
 
-import smile.math.Math;
+import smile.math.MathEx;
 import smile.projection.PCA;
 import smile.swing.Button;
 import smile.swing.FileChooser;
@@ -134,7 +137,7 @@ public class PlotCanvas extends JPanel {
     /**
      * The shapes in the canvas, e.g. label, plots, etc.
      */
-    private List<Shape> shapes = new ArrayList<Shape>();
+    private List<Shape> shapes = new ArrayList<>();
     /**
      * The real canvas for plots.
      */
@@ -210,7 +213,10 @@ public class PlotCanvas extends JPanel {
             // draw plot
             graphics.clip();
             int k = 0;
-            for (Shape s : shapes) {
+            // with for-each loop, we will get a ConcurrentModificationException.
+            // Use for loop instead.
+            for (int i = 0; i < shapes.size(); i++) {
+                Shape s = shapes.get(i);
                 s.paint(graphics);
                 if (s instanceof Plot) {
                     Plot p = (Plot) s;
@@ -228,7 +234,8 @@ public class PlotCanvas extends JPanel {
                 int width = font.getSize();
                 int height = font.getSize();
 
-                for (Shape s : shapes) {
+                for (int i = 0; i < shapes.size(); i++) {
+                    Shape s = shapes.get(i);
                     if (s instanceof Plot) {
                         Plot p = (Plot) s;
                         if (p.getID() != null) {
@@ -558,6 +565,12 @@ public class PlotCanvas extends JPanel {
      * Initialize the canvas.
      */
     private void initCanvas() {
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        if (ge.isHeadless()) {
+            setPreferredSize(new Dimension(1600,1200));
+
+        }
+
         setLayout(new BorderLayout());
         
         canvas = new MathCanvas();
@@ -572,18 +585,18 @@ public class PlotCanvas extends JPanel {
     /**
      * Toolbar button actions.
      */
-    private Action saveAction = new SaveAction();
-    private Action printAction = new PrintAction();
-    private Action zoomInAction = new ZoomInAction();
-    private Action zoomOutAction = new ZoomOutAction();
-    private Action resetAction = new ResetAction();
-    private Action enlargePlotAreaAction = new EnlargePlotAreaAction();
-    private Action shrinkPlotAreaAction = new ShrinkPlotAreaAction();
-    private Action propertyAction = new PropertyAction();
-    private Action increaseHeightAction = new IncreaseHeightAction();
-    private Action increaseWidthAction = new IncreaseWidthAction();
-    private Action decreaseHeightAction = new DecreaseHeightAction();
-    private Action decreaseWidthAction = new DecreaseWidthAction();
+    private transient Action saveAction = new SaveAction();
+    private transient Action printAction = new PrintAction();
+    private transient Action zoomInAction = new ZoomInAction();
+    private transient Action zoomOutAction = new ZoomOutAction();
+    private transient Action resetAction = new ResetAction();
+    private transient Action enlargePlotAreaAction = new EnlargePlotAreaAction();
+    private transient Action shrinkPlotAreaAction = new ShrinkPlotAreaAction();
+    private transient Action propertyAction = new PropertyAction();
+    private transient Action increaseHeightAction = new IncreaseHeightAction();
+    private transient Action increaseWidthAction = new IncreaseWidthAction();
+    private transient Action decreaseHeightAction = new DecreaseHeightAction();
+    private transient Action decreaseWidthAction = new DecreaseWidthAction();
     private JScrollPane scrollPane;
 
     /**
@@ -1038,7 +1051,7 @@ public class PlotCanvas extends JPanel {
         chooser.setFileFilter(filter);
         chooser.setAcceptAllFileFilterUsed(false);
         chooser.setSelectedFiles(new File[0]);
-        int returnVal = chooser.showOpenDialog(null);
+        int returnVal = chooser.showSaveDialog(null);
 
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
@@ -1175,7 +1188,7 @@ public class PlotCanvas extends JPanel {
         }
         
         this.margin = margin;
-        repaint();
+        //repaint();
         return this;
     }
 
@@ -1199,6 +1212,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setTitle(String title) {
         this.title = title;
+        //repaint();
         return this;
     }
 
@@ -1221,6 +1235,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setTitleFont(Font font) {
         this.titleFont = font;
+        //repaint();
         return this;
     }
 
@@ -1229,6 +1244,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setTitleColor(Color color) {
         this.titleColor = color;
+        //repaint();
         return this;
     }
 
@@ -1262,7 +1278,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setAxisLabels(String... labels) {
         baseGrid.setAxisLabel(labels);
-        repaint();
+        //repaint();
         return this;
     }
 
@@ -1271,7 +1287,7 @@ public class PlotCanvas extends JPanel {
      */
     public PlotCanvas setAxisLabel(int axis, String label) {
         baseGrid.setAxisLabel(axis, label);
-        repaint();
+        //repaint();
         return this;
     }
 
@@ -1288,7 +1304,7 @@ public class PlotCanvas extends JPanel {
      */
     public void add(Shape p) {
         shapes.add(p);
-        repaint();
+        //repaint();
     }
 
     /**
@@ -1296,7 +1312,7 @@ public class PlotCanvas extends JPanel {
      */
     public void remove(Shape p) {
         shapes.remove(p);
-        repaint();
+        //repaint();
     }
 
     /**
@@ -1313,7 +1329,7 @@ public class PlotCanvas extends JPanel {
             }
         }
 
-        repaint();
+        //repaint();
     }
 
     /**
@@ -1329,7 +1345,7 @@ public class PlotCanvas extends JPanel {
             }
         }
 
-        repaint();
+        //repaint();
     }
 
     /**
@@ -1337,7 +1353,7 @@ public class PlotCanvas extends JPanel {
      */
     public void clear() {
         shapes.clear();
-        repaint();
+        //repaint();
     }
 
     /**
@@ -1360,7 +1376,7 @@ public class PlotCanvas extends JPanel {
     public void extendLowerBound(double[] bound) {
         base.extendLowerBound(bound);
         baseGrid.setBase(base);
-        repaint();
+        //repaint();
     }
 
     /**
@@ -1369,7 +1385,7 @@ public class PlotCanvas extends JPanel {
     public void extendUpperBound(double[] bound) {
         base.extendUpperBound(bound);
         baseGrid.setBase(base);
-        repaint();
+        //repaint();
     }
 
     /**
@@ -1378,7 +1394,7 @@ public class PlotCanvas extends JPanel {
     public void extendBound(double[] lowerBound, double[] upperBound) {
         base.extendBound(lowerBound, upperBound);
         baseGrid.setBase(base);
-        repaint();
+        //repaint();
     }
 
     /**
@@ -1464,8 +1480,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("Invalid data dimension: " + data[0].length);
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         ScatterPlot plot = new ScatterPlot(data);
@@ -1501,8 +1517,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("The number of points and that of labels are not same.");
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         ScatterPlot plot = new ScatterPlot(data, labels);
@@ -1568,8 +1584,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("Invalid data dimension: " + data[0].length);
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         ScatterPlot plot = new ScatterPlot(data, legend);
@@ -1601,8 +1617,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("Invalid data dimension: " + data[0].length);
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         ScatterPlot plot = new ScatterPlot(data);
@@ -1671,8 +1687,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("Invalid data dimension: " + data[0].length);
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         ScatterPlot plot = new ScatterPlot(data, legend);
@@ -1699,8 +1715,8 @@ public class PlotCanvas extends JPanel {
      * coordinates will be [0, n), where n is the length of y.
      */
     public LinePlot line(String id, double[] y) {
-        double[] lowerBound = {0, Math.min(y)};
-        double[] upperBound = {y.length, Math.max(y)};
+        double[] lowerBound = {0, MathEx.min(y)};
+        double[] upperBound = {y.length, MathEx.max(y)};
         extendBound(lowerBound, upperBound);
 
         double[][] data = new double[y.length][2];
@@ -1735,8 +1751,8 @@ public class PlotCanvas extends JPanel {
      * @param color the color of line.
      */
     public LinePlot line(String id, double[] y, Color color) {
-        double[] lowerBound = {0, Math.min(y)};
-        double[] upperBound = {y.length, Math.max(y)};
+        double[] lowerBound = {0, MathEx.min(y)};
+        double[] upperBound = {y.length, MathEx.max(y)};
         extendBound(lowerBound, upperBound);
 
         double[][] data = new double[y.length][2];
@@ -1771,8 +1787,8 @@ public class PlotCanvas extends JPanel {
      * @param style the stroke style of line.
      */
     public LinePlot line(String id, double[] y, Line.Style style) {
-        double[] lowerBound = {0, Math.min(y)};
-        double[] upperBound = {y.length, Math.max(y)};
+        double[] lowerBound = {0, MathEx.min(y)};
+        double[] upperBound = {y.length, MathEx.max(y)};
         extendBound(lowerBound, upperBound);
 
         double[][] data = new double[y.length][2];
@@ -1808,8 +1824,8 @@ public class PlotCanvas extends JPanel {
      * @param color the color of line.
      */
     public LinePlot line(String id, double[] y, Line.Style style, Color color) {
-        double[] lowerBound = {0, Math.min(y)};
-        double[] upperBound = {y.length, Math.max(y)};
+        double[] lowerBound = {0, MathEx.min(y)};
+        double[] upperBound = {y.length, MathEx.max(y)};
         extendBound(lowerBound, upperBound);
 
         double[][] data = new double[y.length][2];
@@ -1844,8 +1860,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("Invalid data dimension: " + data[0].length);
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         LinePlot plot = new LinePlot(data);
@@ -1876,8 +1892,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("Invalid data dimension: " + data[0].length);
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         LinePlot plot = new LinePlot(data);
@@ -1908,8 +1924,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("Invalid data dimension: " + data[0].length);
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         LinePlot plot = new LinePlot(data, style);
@@ -1941,8 +1957,8 @@ public class PlotCanvas extends JPanel {
             throw new IllegalArgumentException("Invalid data dimension: " + data[0].length);
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         extendBound(lowerBound, upperBound);
 
         LinePlot plot = new LinePlot(data, style);
@@ -2002,8 +2018,8 @@ public class PlotCanvas extends JPanel {
         histogram.setID(id);
         histogram.setColor(color);
 
-        double[] lowerBound = {Math.min(data), 0};
-        double[] upperBound = {Math.max(data), 0};
+        double[] lowerBound = {MathEx.min(data), 0};
+        double[] upperBound = {MathEx.max(data), 0};
         double[][] freq = histogram.getHistogram();
         for (int i = 0; i < freq.length; i++) {
             if (freq[i][1] > upperBound[1]) {
@@ -2041,8 +2057,8 @@ public class PlotCanvas extends JPanel {
         histogram.setID(id);
         histogram.setColor(color);
 
-        double[] lowerBound = {Math.min(data), 0};
-        double[] upperBound = {Math.max(data), 0};
+        double[] lowerBound = {MathEx.min(data), 0};
+        double[] upperBound = {MathEx.max(data), 0};
         double[][] freq = histogram.getHistogram();
         for (int i = 0; i < freq.length; i++) {
             if (freq[i][1] > upperBound[1]) {
@@ -2082,8 +2098,8 @@ public class PlotCanvas extends JPanel {
         histogram.setID(id);
         histogram.setColor(color);
 
-        double[] lowerBound = {Math.min(data), 0};
-        double[] upperBound = {Math.max(data), 0};
+        double[] lowerBound = {MathEx.min(data), 0};
+        double[] upperBound = {MathEx.max(data), 0};
         double[][] freq = histogram.getHistogram();
         for (int i = 0; i < freq.length; i++) {
             if (freq[i][1] > upperBound[1]) {
@@ -2119,8 +2135,8 @@ public class PlotCanvas extends JPanel {
         histogram.setID(id);
         histogram.setColor(color);
 
-        double[] lowerBound = {Math.min(data) - 0.5, 0};
-        double[] upperBound = {Math.max(data) + 0.5, 0};
+        double[] lowerBound = {MathEx.min(data) - 0.5, 0};
+        double[] upperBound = {MathEx.max(data) + 0.5, 0};
         double[][] freq = histogram.getHistogram();
         for (int i = 0; i < freq.length; i++) {
             if (freq[i][1] > upperBound[1]) {
@@ -2158,8 +2174,8 @@ public class PlotCanvas extends JPanel {
         histogram.setID(id);
         histogram.setColor(color);
 
-        double[] lowerBound = {Math.min(data) - 0.5, 0};
-        double[] upperBound = {Math.max(data) + 0.5, 0};
+        double[] lowerBound = {MathEx.min(data) - 0.5, 0};
+        double[] upperBound = {MathEx.max(data) + 0.5, 0};
         double[][] freq = histogram.getHistogram();
         for (int i = 0; i < freq.length; i++) {
             if (freq[i][1] > upperBound[1]) {
@@ -2199,8 +2215,8 @@ public class PlotCanvas extends JPanel {
         histogram.setID(id);
         histogram.setColor(color);
 
-        double[] lowerBound = {Math.min(data) - 0.5, 0};
-        double[] upperBound = {Math.max(data) + 0.5, 0};
+        double[] lowerBound = {MathEx.min(data) - 0.5, 0};
+        double[] upperBound = {MathEx.max(data) + 0.5, 0};
         double[][] freq = histogram.getHistogram();
         for (int i = 0; i < freq.length; i++) {
             if (freq[i][1] > upperBound[1]) {
