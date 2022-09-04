@@ -140,9 +140,7 @@ public class CreateProjectMojo extends AbstractMojo {
 
     private void askTheUserForMissingValues() throws MojoExecutionException {
 
-        // If the user has disabled the interactive mode or if the user has specified the artifactId, disable the
-        // user interactions.
-        if (! session.getRequest().isInteractiveMode()  || shouldUseDefaults()) {
+        if (! session.getRequest().isInteractiveMode()) {
             // Inject default values in all non-set parameters
             if (StringUtils.isBlank(projectGroupId)) {
                 projectGroupId = DEFAULT_GROUP_ID;
@@ -174,7 +172,7 @@ public class CreateProjectMojo extends AbstractMojo {
 
             if (StringUtils.isBlank(className)) {
                 // Ask the user if he want to create a resource
-                String answer = prompter.promptWithDefaultValue("Do you want to create a REST resource? (y/n)", "no");
+                String answer = prompter.promptWithDefaultValue("Do you want to create a REST resource?", "yes");
                 if (isTrueOrYes(answer)) {
                     String defaultResourceName = projectGroupId.replace("-", ".")
                             .replace("_", ".") + ".HelloResource";
@@ -194,17 +192,11 @@ public class CreateProjectMojo extends AbstractMojo {
         }
     }
 
-    private boolean shouldUseDefaults() {
-        // Must be called before user input
-        return projectArtifactId != null;
-
-    }
-
     private boolean isTrueOrYes(String answer) {
         if (answer == null) {
             return false;
         }
-        String content = answer.trim().toLowerCase();
+        String content = answer.trim();
         return "true".equalsIgnoreCase(content) || "yes".equalsIgnoreCase(content) || "y".equalsIgnoreCase(content);
     }
 
