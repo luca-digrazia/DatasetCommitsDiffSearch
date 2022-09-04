@@ -19,11 +19,10 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Parameters of a filesystem traversal requested by a Fileset rule.
@@ -72,18 +71,11 @@ public interface FilesetTraversalParams {
   abstract class DirectTraversalRoot {
 
     /**
-     * Returns the output Artifact corresponding to this traversal, if present. Only present when
-     * traversing a generated output.
-     */
-    @Nullable
-    public abstract Artifact getOutputArtifact();
-
-    /**
      * Returns the root part of the full path.
      *
      * <p>This is typically the workspace root or some output tree's root (e.g. genfiles, binfiles).
      */
-    public abstract Root getRootPart();
+    public abstract Path getRootPart();
 
     /**
      * Returns the {@link #getRootPart() root}-relative part of the path.
@@ -102,21 +94,14 @@ public interface FilesetTraversalParams {
     @Override
     public abstract int hashCode();
 
-    public static DirectTraversalRoot forPackage(Artifact buildFile) {
+    static DirectTraversalRoot forPackage(Artifact buildFile) {
       return new AutoValue_FilesetTraversalParams_DirectTraversalRoot(
-          null,
-          buildFile.getRoot().getRoot(), buildFile.getRootRelativePath().getParentDirectory());
+          buildFile.getRoot().getPath(), buildFile.getRootRelativePath().getParentDirectory());
     }
 
-    public static DirectTraversalRoot forFileOrDirectory(Artifact fileOrDirectory) {
+    static DirectTraversalRoot forFileOrDirectory(Artifact fileOrDirectory) {
       return new AutoValue_FilesetTraversalParams_DirectTraversalRoot(
-          fileOrDirectory.isSourceArtifact() ? null : fileOrDirectory,
-          fileOrDirectory.getRoot().getRoot(), fileOrDirectory.getRootRelativePath());
-    }
-
-    public static DirectTraversalRoot forRootedPath(RootedPath newPath) {
-      return new AutoValue_FilesetTraversalParams_DirectTraversalRoot(null,
-          newPath.getRoot(), newPath.getRootRelativePath());
+          fileOrDirectory.getRoot().getPath(), fileOrDirectory.getRootRelativePath());
     }
   }
 

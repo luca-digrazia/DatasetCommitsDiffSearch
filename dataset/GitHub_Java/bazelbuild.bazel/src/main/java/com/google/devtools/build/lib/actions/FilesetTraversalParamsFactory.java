@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.auto.value.AutoValue;
 import com.google.auto.value.extension.memoized.Memoized;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -26,6 +25,7 @@ import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBound
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.FilesetEntry.SymlinkBehavior;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -123,7 +123,9 @@ public final class FilesetTraversalParamsFactory {
       ImmutableList<FilesetTraversalParams> nested,
       PathFragment destDir,
       @Nullable Set<String> excludes) {
-    if (nested.size() == 1 && destDir.isEmpty() && (excludes == null || excludes.isEmpty())) {
+    if (nested.size() == 1
+        && destDir.segmentCount() == 0
+        && (excludes == null || excludes.isEmpty())) {
       // Wrapping the traversal here would not lead to a different result: the output location is
       // the same and there are no additional excludes.
       return Iterables.getOnlyElement(nested);
