@@ -16,7 +16,9 @@
 
 package org.jboss.shamrock.jpa;
 
+import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import org.hibernate.bytecode.enhance.spi.DefaultEnhancementContext;
 import org.hibernate.bytecode.enhance.spi.Enhancer;
