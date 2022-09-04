@@ -148,6 +148,8 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_processed_manifest/AndroidManifest.xml");
   public static final SafeImplicitOutputsFunction MOBILE_INSTALL_STUB_APPLICATION_MANIFEST =
       fromTemplates("%{name}_files/mobile_install/AndroidManifest.xml");
+  public static final SafeImplicitOutputsFunction INSTANT_RUN_STUB_APPLICATION_MANIFEST =
+      fromTemplates("%{name}_files/instant_run/AndroidManifest.xml");
   public static final SafeImplicitOutputsFunction FULL_DEPLOY_MARKER =
       fromTemplates("%{name}_files/full_deploy_marker");
   public static final SafeImplicitOutputsFunction INCREMENTAL_DEPLOY_MARKER =
@@ -634,11 +636,6 @@ public final class AndroidRuleClasses {
                   .cfg(HostTransition.INSTANCE)
                   .exec()
                   .value(env.getToolsLabel(DEFAULT_RESOURCES_BUSYBOX)))
-          .add(
-              attr("$import_deps_checker", LABEL)
-                  .cfg(HostTransition.INSTANCE)
-                  .exec()
-                  .value(env.getToolsLabel("//tools/android:aar_import_deps_checker")))
           .build();
     }
 

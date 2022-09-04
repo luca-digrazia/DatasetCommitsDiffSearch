@@ -204,11 +204,7 @@ public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
                     getName(), rule.getTargetKind(), param));
           }
           if (ruleAttr != null && ruleAttr.getType() == aspectAttr.getType()) {
-            // If the attribute has a select() (which aspect attributes don't yet support), the
-            // error gets reported in RuleClass.checkAspectAllowedValues.
-            if (!ruleAttrs.isConfigurable(param)) {
-              builder.addAttribute(param, (String) ruleAttrs.get(param, ruleAttr.getType()));
-            }
+            builder.addAttribute(param, (String) ruleAttrs.get(param, ruleAttr.getType()));
           }
         }
       }

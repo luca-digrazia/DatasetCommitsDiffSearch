@@ -36,7 +36,7 @@ import javax.annotation.Nullable;
  *       see any other aspect applied to a target.
  *   <li>accept a dependency that provides all providers from one of several sets of providers. It
  *       just so happens that in all current usages these sets are either all native providers or
- *       all Starlark providers, so this is the only use case this class currently supports.
+ *       all Skylark providers, so this is the only use case this class currently supports.
  * </ul>
  */
 @Immutable
@@ -50,9 +50,10 @@ public final class RequiredProviders {
    */
   private final ImmutableList<ImmutableSet<Class<?>>> nativeProviders;
   /**
-   * Sets of native providers. If non-empty, {@link #constraint} is {@link Constraint#RESTRICTED}
+   * Sets of native providers.
+   * If non-empty, {@link #constraint} is {@link Constraint#RESTRICTED}
    */
-  private final ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> skylarkProviders;
+  private final ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> skylarkProviders;
 
   public String getDescription() {
     return constraint.getDescription(this);
@@ -79,7 +80,7 @@ public final class RequiredProviders {
       @Override
       public boolean satisfies(
           Predicate<Class<?>> hasNativeProvider,
-          Predicate<StarlarkProviderIdentifier> hasSkylarkProvider,
+          Predicate<SkylarkProviderIdentifier> hasSkylarkProvider,
           RequiredProviders requiredProviders,
           Builder missingProviders) {
         return true;
@@ -108,7 +109,7 @@ public final class RequiredProviders {
       @Override
       public boolean satisfies(
           Predicate<Class<?>> hasNativeProvider,
-          Predicate<StarlarkProviderIdentifier> hasSkylarkProvider,
+          Predicate<SkylarkProviderIdentifier> hasSkylarkProvider,
           RequiredProviders requiredProviders,
           Builder missingProviders) {
         return false;
@@ -145,7 +146,7 @@ public final class RequiredProviders {
       @Override
       public boolean satisfies(
           Predicate<Class<?>> hasNativeProvider,
-          Predicate<StarlarkProviderIdentifier> hasSkylarkProvider,
+          Predicate<SkylarkProviderIdentifier> hasSkylarkProvider,
           RequiredProviders requiredProviders,
           Builder missingProviders) {
         for (ImmutableSet<Class<?>> nativeProviderSet : requiredProviders.nativeProviders) {
@@ -163,8 +164,8 @@ public final class RequiredProviders {
           }
         }
 
-        for (ImmutableSet<StarlarkProviderIdentifier> skylarkProviderSet :
-            requiredProviders.skylarkProviders) {
+        for (ImmutableSet<SkylarkProviderIdentifier> skylarkProviderSet
+            : requiredProviders.skylarkProviders) {
           if (skylarkProviderSet.stream().allMatch(hasSkylarkProvider)) {
             return true;
           }
@@ -186,7 +187,7 @@ public final class RequiredProviders {
         for (ImmutableSet<Class<?>> nativeProviderSet : providers.nativeProviders) {
           result.addNativeSet(nativeProviderSet);
         }
-        for (ImmutableSet<StarlarkProviderIdentifier> skylarkProviderSet :
+        for (ImmutableSet<SkylarkProviderIdentifier> skylarkProviderSet :
             providers.skylarkProviders) {
           result.addSkylarkSet(skylarkProviderSet);
         }
@@ -214,7 +215,7 @@ public final class RequiredProviders {
      */
     abstract boolean satisfies(
         Predicate<Class<?>> hasNativeProvider,
-        Predicate<StarlarkProviderIdentifier> hasSkylarkProvider,
+        Predicate<SkylarkProviderIdentifier> hasSkylarkProvider,
         RequiredProviders requiredProviders,
         @Nullable Builder missingProviders);
 
@@ -230,12 +231,12 @@ public final class RequiredProviders {
   }
 
   /**
-   * Checks if a set of providers encoded by predicates {@code hasNativeProviders} and {@code
-   * hasSkylarkProvider} satisfies this {@code RequiredProviders} instance.
+   * Checks if a set of providers encoded by predicates {@code hasNativeProviders}
+   * and {@code hasSkylarkProvider} satisfies this {@code RequiredProviders} instance.
    */
   public boolean isSatisfiedBy(
       Predicate<Class<?>> hasNativeProvider,
-      Predicate<StarlarkProviderIdentifier> hasSkylarkProvider) {
+      Predicate<SkylarkProviderIdentifier> hasSkylarkProvider) {
     return constraint.satisfies(hasNativeProvider, hasSkylarkProvider, this, null);
   }
 
@@ -245,7 +246,7 @@ public final class RequiredProviders {
    */
   public RequiredProviders getMissing(
       Predicate<Class<?>> hasNativeProvider,
-      Predicate<StarlarkProviderIdentifier> hasSkylarkProvider) {
+      Predicate<SkylarkProviderIdentifier> hasSkylarkProvider) {
     Builder builder = acceptAnyBuilder();
     if (constraint.satisfies(hasNativeProvider, hasSkylarkProvider, this, builder)) {
       // Ignore all collected missing providers.
@@ -276,7 +277,7 @@ public final class RequiredProviders {
   RequiredProviders(
       Constraint constraint,
       ImmutableList<ImmutableSet<Class<?>>> nativeProviders,
-      ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> skylarkProviders) {
+      ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> skylarkProviders) {
     this.constraint = constraint;
 
     Preconditions.checkState(constraint.equals(Constraint.RESTRICTED)
@@ -346,7 +347,7 @@ public final class RequiredProviders {
   /** A builder for {@link RequiredProviders} */
   public static class Builder {
     private final ImmutableList.Builder<ImmutableSet<Class<?>>> nativeProviders;
-    private final ImmutableList.Builder<ImmutableSet<StarlarkProviderIdentifier>> skylarkProviders;
+    private final ImmutableList.Builder<ImmutableSet<SkylarkProviderIdentifier>> skylarkProviders;
     private Constraint constraint;
 
     private Builder(boolean acceptNone) {
@@ -356,12 +357,12 @@ public final class RequiredProviders {
     }
 
     /**
-     * Add an alternative set of Starlark providers.
+     * Add an alternative set of Skylark providers.
      *
-     * <p>If all of these providers are present in the dependency, the dependency satisfies {@link
-     * RequiredProviders}.
+     * If all of these providers are present in the dependency, the dependency satisfies
+     * {@link RequiredProviders}.
      */
-    public Builder addSkylarkSet(ImmutableSet<StarlarkProviderIdentifier> skylarkProviderSet) {
+    public Builder addSkylarkSet(ImmutableSet<SkylarkProviderIdentifier> skylarkProviderSet) {
       constraint = Constraint.RESTRICTED;
       Preconditions.checkState(!skylarkProviderSet.isEmpty());
       this.skylarkProviders.add(skylarkProviderSet);

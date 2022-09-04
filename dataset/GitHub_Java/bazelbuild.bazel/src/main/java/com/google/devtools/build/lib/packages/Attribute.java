@@ -1836,8 +1836,6 @@ public final class Attribute implements Comparable<Attribute> {
 
   private final ImmutableList<RuleAspect<?>> aspects;
 
-  private final int hashCode;
-
   /**
    * Constructs a rule attribute with the specified name, type and default value.
    *
@@ -1897,21 +1895,6 @@ public final class Attribute implements Comparable<Attribute> {
     this.allowedValues = allowedValues;
     this.requiredProviders = requiredProviders;
     this.aspects = aspects;
-    this.hashCode = Objects.hash(
-        name,
-        type,
-        propertyFlags,
-        defaultValue,
-        configTransition,
-        splitTransitionProvider,
-        allowedRuleClassesForLabels,
-        allowedRuleClassesForLabelsWarning,
-        allowedFileTypesForLabels,
-        validityPredicate,
-        condition,
-        allowedValues,
-        requiredProviders,
-        aspects);
   }
 
   /**
@@ -2278,8 +2261,7 @@ public final class Attribute implements Comparable<Attribute> {
       return false;
     }
     Attribute attribute = (Attribute) o;
-    return Objects.equals(hashCode, attribute.hashCode)
-        && Objects.equals(name, attribute.name)
+    return Objects.equals(name, attribute.name)
         && Objects.equals(type, attribute.type)
         && Objects.equals(propertyFlags, attribute.propertyFlags)
         && Objects.equals(defaultValue, attribute.defaultValue)
@@ -2298,7 +2280,21 @@ public final class Attribute implements Comparable<Attribute> {
 
   @Override
   public int hashCode() {
-    return hashCode;
+    return Objects.hash(
+        name,
+        type,
+        propertyFlags,
+        defaultValue,
+        configTransition,
+        splitTransitionProvider,
+        allowedRuleClassesForLabels,
+        allowedRuleClassesForLabelsWarning,
+        allowedFileTypesForLabels,
+        validityPredicate,
+        condition,
+        allowedValues,
+        requiredProviders,
+        aspects);
   }
 
   /**
