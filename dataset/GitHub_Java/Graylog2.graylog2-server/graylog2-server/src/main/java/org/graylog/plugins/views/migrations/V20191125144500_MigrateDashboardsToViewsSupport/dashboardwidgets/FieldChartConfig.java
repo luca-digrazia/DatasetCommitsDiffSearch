@@ -21,7 +21,7 @@ import java.util.Set;
 @AutoValue
 @JsonAutoDetect
 @JsonIgnoreProperties({"rangeType", "relative", "from", "to", "keyword"})
-public abstract class FieldChartConfig extends WidgetConfigBase implements WidgetConfigWithQueryAndStreams {
+public abstract class FieldChartConfig extends WidgetConfigBase implements WidgetConfig {
     public abstract String valuetype();
 
     public abstract String renderer();
@@ -33,7 +33,16 @@ public abstract class FieldChartConfig extends WidgetConfigBase implements Widge
     public abstract String interval();
 
     private String visualization() {
-        return mapRendererToVisualization(renderer());
+        switch (renderer()) {
+            case "bar":
+            case "line":
+                return renderer();
+            case "area":
+                // TODO: Do something about
+                throw new RuntimeException("Area chart is unsupported");
+            case "scatterplot": return "scatter";
+        }
+        throw new RuntimeException("Unable to map renderer to visualization: " + renderer());
     }
 
     private Series series() {
@@ -73,8 +82,8 @@ public abstract class FieldChartConfig extends WidgetConfigBase implements Widge
             @JsonProperty("stream_id") @Nullable String streamId
     ) {
         return new AutoValue_FieldChartConfig(
-                timerange,
                 query,
+                timerange,
                 Optional.ofNullable(streamId),
                 valuetype,
                 renderer,

@@ -17,7 +17,7 @@ import java.util.Set;
 
 @AutoValue
 @JsonAutoDetect
-public abstract class WorldMapConfig extends WidgetConfigBase implements WidgetConfigWithQueryAndStreams {
+public abstract class WorldMapConfig extends WidgetConfigBase implements WidgetConfig {
     private static final String MAP_VISUALIZATION = "map";
 
     public abstract String field();
@@ -50,8 +50,8 @@ public abstract class WorldMapConfig extends WidgetConfigBase implements WidgetC
             @JsonProperty("timerange") TimeRange timerange
     ) {
         return new AutoValue_WorldMapConfig(
-                timerange,
                 query,
+                timerange,
                 field,
                 Optional.ofNullable(streamId)
         );

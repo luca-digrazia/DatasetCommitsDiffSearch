@@ -17,7 +17,7 @@ import java.util.Set;
 
 @AutoValue
 @JsonAutoDetect
-public abstract class SearchResultCountConfig extends WidgetConfigBase implements WidgetConfigWithQueryAndStreams {
+public abstract class SearchResultCountConfig extends WidgetConfigBase implements WidgetConfig {
     private static final String NUMERIC_VISUALIZATION = "numeric";
 
     public abstract Boolean lowerIsBetter();
@@ -63,8 +63,8 @@ public abstract class SearchResultCountConfig extends WidgetConfigBase implement
             @JsonProperty("stream_id") @Nullable String streamId
     ) {
         return new AutoValue_SearchResultCountConfig(
-                timerange,
                 query,
+                timerange,
                 lowerIsBetter,
                 trend,
                 Optional.ofNullable(streamId)
