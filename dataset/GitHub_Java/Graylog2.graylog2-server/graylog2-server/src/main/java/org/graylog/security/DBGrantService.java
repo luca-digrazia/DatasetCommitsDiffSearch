@@ -158,12 +158,4 @@ public class DBGrantService extends PaginatedDbService<GrantDTO> {
                         Collectors.mapping(GrantDTO::grantee, Collectors.toSet())
                 ));
     }
-
-    public boolean hasGrantFor(GRN grantee, Capability capability, GRN target) {
-        return db.findOne(DBQuery.and(
-                DBQuery.is(GrantDTO.FIELD_GRANTEE, grantee),
-                DBQuery.is(GrantDTO.FIELD_CAPABILITY, capability),
-                DBQuery.is(GrantDTO.FIELD_TARGET, target)
-        )) != null;
-    }
 }
