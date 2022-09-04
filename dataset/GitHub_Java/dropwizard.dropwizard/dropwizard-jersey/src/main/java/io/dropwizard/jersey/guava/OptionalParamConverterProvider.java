@@ -47,7 +47,8 @@ public class OptionalParamConverterProvider implements ParamConverterProvider {
                 };
             }
 
-            for (ParamConverterProvider provider : Providers.getProviders(locator, ParamConverterProvider.class)) {
+            final Set<ParamConverterProvider> converterProviders = Providers.getProviders(locator, ParamConverterProvider.class);
+            for (ParamConverterProvider provider : converterProviders) {
                 final ParamConverter<?> converter = provider.getConverter(ctp.rawClass(), ctp.type(), annotations);
                 if (converter != null) {
                     return new ParamConverter<T>() {
