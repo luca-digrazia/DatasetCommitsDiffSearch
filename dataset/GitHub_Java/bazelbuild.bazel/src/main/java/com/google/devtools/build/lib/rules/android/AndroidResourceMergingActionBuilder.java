@@ -65,7 +65,6 @@ public class AndroidResourceMergingActionBuilder {
 
   // Flags
   private String customJavaPackage;
-  private boolean throwOnResourceConflict;
 
   /** @param ruleContext The RuleContext that was used to create the SpawnAction.Builder. */
   public AndroidResourceMergingActionBuilder(RuleContext ruleContext) {
@@ -114,12 +113,6 @@ public class AndroidResourceMergingActionBuilder {
 
   public AndroidResourceMergingActionBuilder setJavaPackage(String customJavaPackage) {
     this.customJavaPackage = customJavaPackage;
-    return this;
-  }
-
-  public AndroidResourceMergingActionBuilder setThrowOnResourceConflict(
-      boolean throwOnResourceConflict) {
-    this.throwOnResourceConflict = throwOnResourceConflict;
     return this;
   }
 
@@ -175,10 +168,6 @@ public class AndroidResourceMergingActionBuilder {
     if (dataBindingInfoZip != null) {
       builder.addExecPath("--dataBindingInfoOut", dataBindingInfoZip);
       outs.add(dataBindingInfoZip);
-    }
-
-    if (throwOnResourceConflict) {
-      builder.add("--throwOnResourceConflict");
     }
 
     SpawnAction.Builder spawnActionBuilder = new SpawnAction.Builder();

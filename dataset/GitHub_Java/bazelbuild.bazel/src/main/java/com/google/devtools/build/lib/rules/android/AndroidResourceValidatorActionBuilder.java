@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -27,6 +28,7 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nullable;
 
 /**
  * Builder for creating $android_resource_validator action. This action validates merged resources
@@ -55,6 +57,13 @@ class AndroidResourceValidatorActionBuilder {
   private ResourceDependencies resourceDeps;
   private Artifact aapt2SourceJarOut;
   private Artifact aapt2RTxtOut;
+  private static final Function<ResourceContainer, Artifact> TO_STATIC_LIBRARY_ARTIFACT =
+      new Function<ResourceContainer, Artifact>() {
+        @Override
+        public Artifact apply(@Nullable ResourceContainer resourceContainer) {
+          return resourceContainer.getStaticLibrary();
+        }
+      };
   private Artifact compiledSymbols;
 
   /** @param ruleContext The RuleContext that was used to create the SpawnAction.Builder. */
@@ -152,8 +161,7 @@ class AndroidResourceValidatorActionBuilder {
     builder.addExecPath("--aapt2", sdk.getAapt2().getExecutable());
 
     FluentIterable<Artifact> libraries =
-        FluentIterable.from(resourceDeps.getResources())
-            .transform(ResourceContainer::getStaticLibrary);
+        FluentIterable.from(resourceDeps.getResources()).transform(TO_STATIC_LIBRARY_ARTIFACT);
 
     builder
         .add("--libraries")
