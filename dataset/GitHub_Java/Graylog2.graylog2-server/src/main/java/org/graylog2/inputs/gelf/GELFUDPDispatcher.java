@@ -21,19 +21,19 @@
 package org.graylog2.inputs.gelf;
 
 import org.apache.log4j.Logger;
-import org.elasticsearch.common.netty.channel.MessageEvent;
 import org.graylog2.GraylogServer;
 import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ExceptionEvent;
-import org.jboss.netty.channel.SimpleChannelHandler;
+import org.jboss.netty.handler.codec.frame.FrameDecoder;
 
 /**
  * GELFUDPDispatcher.java: 12.04.2012 10:40:21
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class GELFUDPDispatcher extends SimpleChannelHandler {
+public class GELFUDPDispatcher extends FrameDecoder {
 
     private static final Logger LOG = Logger.getLogger(GELFUDPDispatcher.class);
 
@@ -45,11 +45,11 @@ public class GELFUDPDispatcher extends SimpleChannelHandler {
         this.processor = new GELFProcessor(server);
     }
 
-    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
-        ChannelBuffer buffer = (ChannelBuffer) e.getMessage();
+    @Override
+    protected Object decode(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer) {
 
         byte[] readable = new byte[buffer.readableBytes()];
-        buffer.toByteBuffer().get(readable, buffer.readerIndex(), buffer.readableBytes());
+        buffer.toByteBuffer().get(readable, buffer.readerIndex(), buffer.readableBytes()); // I'm 12 years old and what is this? There must be a better way.
 
         GELFMessage msg = new GELFMessage(readable);
 
@@ -60,6 +60,8 @@ public class GELFUDPDispatcher extends SimpleChannelHandler {
             // This is a non-chunked/complete GELF message. Process it.
             processor.messageReceived(msg);
         }
+
+        return buffer.readBytes(buffer.readableBytes());
     }
 
 

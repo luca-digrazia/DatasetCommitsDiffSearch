@@ -70,9 +70,9 @@ public final class GELFMessageChunk {
     private int sequenceCount = -1;
     private int arrival = -1;
 
-    final byte[] payload;
+    byte[] payload;
 
-    public GELFMessageChunk(final byte[] payload) {
+    public GELFMessageChunk(byte[] payload) {
         if (payload.length < HEADER_TOTAL_LENGTH) {
             throw new IllegalArgumentException("This GELF message chunk is too short. Cannot even contain the required header.");
         }
@@ -81,7 +81,7 @@ public final class GELFMessageChunk {
         read();
     }
 
-    public GELFMessageChunk(final GELFMessage msg) {
+    public GELFMessageChunk(GELFMessage msg) {
         this(msg.getPayload());
     }
 
@@ -129,7 +129,7 @@ public final class GELFMessageChunk {
     // lol duplication
     private void extractSequenceNumber() {
         if (this.sequenceNumber == -1) {
-            final int seqNum = this.sliceInteger(HEADER_PART_SEQNUM_START, HEADER_PART_SEQNUM_LENGTH);
+            int seqNum = this.sliceInteger(HEADER_PART_SEQNUM_START, HEADER_PART_SEQNUM_LENGTH);
             if (seqNum >= 0) {
                 this.sequenceNumber = seqNum;
             } else {
@@ -141,7 +141,7 @@ public final class GELFMessageChunk {
     // lol duplication
     private void extractSequenceCount() {
         if (this.sequenceCount == -1) {
-            final int seqCnt = this.sliceInteger(HEADER_PART_SEQCNT_START, HEADER_PART_SEQCNT_LENGTH);
+            int seqCnt = this.sliceInteger(HEADER_PART_SEQCNT_START, HEADER_PART_SEQCNT_LENGTH);
             if (seqCnt >= 0) {
                 this.sequenceCount = seqCnt;
             } else {
@@ -154,7 +154,7 @@ public final class GELFMessageChunk {
         this.data = slice(HEADER_TOTAL_LENGTH); // Slice everything starting at the total header length.
     }
 
-    private int sliceInteger(final int start, final int length) {
+    private int sliceInteger(int start, int length) {
         String tmp = "";
         for (int i = 0; i < length; i++) {
             tmp = tmp.concat(Integer.toString(payload[i+start]));
@@ -162,8 +162,8 @@ public final class GELFMessageChunk {
         return Integer.parseInt(tmp);
     }
 
-    private byte[] slice(final int cutOffAt) {
-        final byte[] tmp = new byte[payload.length-cutOffAt];
+    private byte[] slice(int cutOffAt) {
+        byte[] tmp = new byte[payload.length-cutOffAt];
 
         int j = 0;
         for (int i = cutOffAt; i < payload.length; i++) {
@@ -176,18 +176,22 @@ public final class GELFMessageChunk {
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder();
 
-        sb.append("ID: ");
-        sb.append(this.id);
-        sb.append("\tSequence: ");
-        sb.append(this.sequenceNumber+1); // +1 for readability: 1/2 not 0/2
-        sb.append("/");
-        sb.append(this.sequenceCount);
-        sb.append("\tArrival: ");
-        sb.append(this.arrival);
-        sb.append("\tData size: ");
-        sb.append(this.payload.length);
+        try {
+            sb.append("ID: ");
+            sb.append(this.id);
+            sb.append("\tSequence: ");
+            sb.append(this.sequenceNumber+1); // +1 for readability: 1/2 not 0/2
+            sb.append("/");
+            sb.append(this.sequenceCount);
+            sb.append("\tArrival: ");
+            sb.append(this.arrival);
+            sb.append("\tData size: ");
+            sb.append(this.payload.length);
+        } catch(Exception e) {
+            sb.append("UNKNOWN/EMPTY/INVALID");
+        }
 
         return sb.toString();
     }
