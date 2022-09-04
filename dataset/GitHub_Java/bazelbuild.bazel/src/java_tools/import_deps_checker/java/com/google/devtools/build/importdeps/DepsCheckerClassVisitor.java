@@ -43,7 +43,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   private final DepsCheckerMethodVisitor defaultMethodChecker = new DepsCheckerMethodVisitor();
 
   public DepsCheckerClassVisitor(ClassCache classCache, ResultCollector resultCollector) {
-    super(Opcodes.ASM7);
+    super(Opcodes.ASM6);
     this.classCache = classCache;
     this.resultCollector = resultCollector;
   }
@@ -107,7 +107,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
       }
       MemberInfo member = MemberInfo.create(name, desc);
       if (!classInfo.get().containsMember(member)) {
-        resultCollector.addMissingMember(classInfo.get(), member);
+        resultCollector.addMissingMember(owner, member);
       }
     } catch (RuntimeException e) {
       System.err.printf(
@@ -172,26 +172,13 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
     AbstractClassEntryState state = classCache.getClassState(internalName);
     if (state.isMissingState()) {
       resultCollector.addMissingOrIncompleteClass(internalName, state);
-    } else {
-      if (state.isIncompleteState()) {
-        state
-            .asIncompleteState()
-            .missingAncestors()
-            .forEach(
-                missingAncestor -> {
-                  AbstractClassEntryState ancestorState = classCache.getClassState(missingAncestor);
-                  checkState(
-                      ancestorState.isMissingState(),
-                      "The ancestor should be missing. %s",
-                      ancestorState);
-                  resultCollector.addMissingOrIncompleteClass(missingAncestor, ancestorState);
-                  resultCollector.addMissingOrIncompleteClass(internalName, state);
-                });
-      }
-      ClassInfo info = state.classInfo().get();
-      if (!info.directDep()) {
-        resultCollector.addIndirectDep(info.jarPath());
-      }
+    } else if (state.isIncompleteState()) {
+      String missingAncestor = state.asIncompleteState().getMissingAncestor();
+      AbstractClassEntryState ancestorState = classCache.getClassState(missingAncestor);
+      checkState(
+          ancestorState.isMissingState(), "The ancestor should be missing. %s", ancestorState);
+      resultCollector.addMissingOrIncompleteClass(missingAncestor, ancestorState);
+      resultCollector.addMissingOrIncompleteClass(internalName, state);
     }
     return state;
   }
@@ -221,7 +208,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   private class DepsCheckerAnnotationVisitor extends AnnotationVisitor {
 
     DepsCheckerAnnotationVisitor() {
-      super(Opcodes.ASM7);
+      super(Opcodes.ASM6);
     }
 
     @Override
@@ -238,13 +225,13 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
       }
       Class<?> clazz = value.getClass();
       if (PRIMITIVE_TYPES.contains(clazz)) {
+        checkType(Type.getType(clazz));
         return;
       }
-      checkState(
-          clazz.isArray() && clazz.getComponentType().isPrimitive(),
-          "Unexpected value %s of type %s",
-          value,
-          clazz);
+      if (clazz.isArray() && clazz.getComponentType().isPrimitive()) {
+        return;  // nothing to check for primitive arrays
+      }
+      throw new UnsupportedOperationException("Unhandled value " + value + " of type " + clazz);
     }
 
     @Override
@@ -262,7 +249,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   private class DepsCheckerFieldVisitor extends FieldVisitor {
 
     DepsCheckerFieldVisitor() {
-      super(Opcodes.ASM7);
+      super(Opcodes.ASM6);
     }
 
     @Override
@@ -283,7 +270,7 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
   private class DepsCheckerMethodVisitor extends MethodVisitor {
 
     DepsCheckerMethodVisitor() {
-      super(Opcodes.ASM7);
+      super(Opcodes.ASM6);
     }
 
     @Override
@@ -301,9 +288,6 @@ public class DepsCheckerClassVisitor extends ClassVisitor {
 
     @Override
     public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
-      if ("Ljava/lang/Synthetic;".equals(desc)) {
-        return null; // ASM sometimes makes up this annotation, so we can ignore it (b/78024300)
-      }
       checkDescriptor(desc);
       return defaultAnnotationChecker;
     }

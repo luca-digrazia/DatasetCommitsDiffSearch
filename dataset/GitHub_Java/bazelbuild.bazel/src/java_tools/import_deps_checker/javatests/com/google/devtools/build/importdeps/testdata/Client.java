@@ -14,6 +14,7 @@
 package com.google.devtools.build.importdeps.testdata;
 
 import com.google.devtools.build.importdeps.testdata.LibraryAnnotations.AnnotationAnnotation;
+import com.google.devtools.build.importdeps.testdata.LibraryAnnotations.AnnotationFlag;
 import com.google.devtools.build.importdeps.testdata.LibraryAnnotations.ClassAnnotation;
 import com.google.devtools.build.importdeps.testdata.LibraryAnnotations.ConstructorAnnotation;
 import com.google.devtools.build.importdeps.testdata.LibraryAnnotations.FieldAnnotation;
@@ -27,7 +28,10 @@ import java.lang.annotation.Target;
 import java.util.Objects;
 
 /** Client class that uses several libraries. */
-@ClassAnnotation
+@ClassAnnotation(
+    friends = { Library.class, LibraryException.class },
+    nested = @SuppressWarnings({"unused", "unchecked"})
+)
 public class Client<@TypeAnnotation T> extends Library implements LibraryInterface {
 
   @SuppressWarnings("unused")
@@ -35,7 +39,7 @@ public class Client<@TypeAnnotation T> extends Library implements LibraryInterfa
   private Library.Class1 field;
 
   @SuppressWarnings("unused")
-  @FieldAnnotation
+  @FieldAnnotation({ 1, 2, 3 })
   private LibraryAnnotations annotations;
 
   public static final Class1 I = Class1.I;
@@ -43,8 +47,9 @@ public class Client<@TypeAnnotation T> extends Library implements LibraryInterfa
   @ConstructorAnnotation
   public Client() {}
 
-  @MethodAnnotation
-  public void method(@ParameterAnnotation int p, Library.Class2 p2) throws LibraryException {
+  @MethodAnnotation(name = "method")
+  public void method(@ParameterAnnotation(position = 0) int p, Library.Class2 p2)
+      throws LibraryException {
     Objects.nonNull(p2); // javac9 silently uses Objects.
     Class3 c3 = new Class3();
     Class4 c4 = c3.field;
@@ -57,11 +62,26 @@ public class Client<@TypeAnnotation T> extends Library implements LibraryInterfa
     Class8[][] array = new Class8[10][10];
     Class9[] array2 = new Class9[10];
     array2[0] = new Class10();
+    Object[] copy = array.clone();
+    array = (Class8[][]) copy;
+    System.out.println(array.clone().length);
+  }
+
+  public void testEnums() {
+    EnumTest a = EnumTest.A;
+    System.out.println(a.ordinal());
+    System.out.println(a.name());
   }
 
   /** An inner annotation. */
   @Retention(RetentionPolicy.RUNTIME)
   @Target(ElementType.TYPE)
-  @AnnotationAnnotation
+  @AnnotationAnnotation(AnnotationFlag.Y)
   public @interface NestedAnnotation {}
+
+  public enum EnumTest {
+    A,
+    B,
+    C
+  }
 }
