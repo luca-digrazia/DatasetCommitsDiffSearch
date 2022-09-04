@@ -233,9 +233,9 @@ public class NinjaParserStep {
   }
 
   private enum NinjaTargetParsingPart {
-    OUTPUTS(OutputKind.EXPLICIT, true),
+    OUTPUTS(OutputKind.USUAL, true),
     IMPLICIT_OUTPUTS(OutputKind.IMPLICIT, true),
-    INPUTS(InputKind.EXPLICIT, false),
+    INPUTS(InputKind.USUAL, false),
     IMPLICIT_INPUTS(InputKind.IMPLICIT, false),
     ORDER_ONLY_INPUTS(InputKind.ORDER_ONLY, false),
     RULE_NAME(null, false),

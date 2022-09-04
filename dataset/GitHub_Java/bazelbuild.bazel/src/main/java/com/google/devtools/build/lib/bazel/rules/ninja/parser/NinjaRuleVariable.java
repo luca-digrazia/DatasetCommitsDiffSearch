@@ -28,7 +28,6 @@ public enum NinjaRuleVariable {
   RESTAT,
   RSPFILE,
   RSPFILE_CONTENT,
-  SYMLINK_OUTPUTS,
   POOL;
 
   public String lowerCaseName() {
