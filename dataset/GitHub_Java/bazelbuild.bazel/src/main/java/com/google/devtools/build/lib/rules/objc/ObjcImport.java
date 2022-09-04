@@ -24,7 +24,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import com.google.devtools.build.lib.rules.cpp.CppSemantics;
+import com.google.devtools.build.lib.rules.cpp.ObjcCppSemantics;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -32,12 +32,6 @@ import java.util.TreeMap;
  * Implementation for {@code objc_import}.
  */
 public class ObjcImport implements RuleConfiguredTargetFactory {
-  private final CppSemantics cppSemantics;
-
-  protected ObjcImport(CppSemantics cppSemantics) {
-    this.cppSemantics = cppSemantics;
-  }
-
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
@@ -65,7 +59,7 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
     ImmutableList.Builder<Artifact> objectFilesCollector = ImmutableList.builder();
 
     CompilationSupport compilationSupport =
-        new CompilationSupport.Builder(ruleContext, cppSemantics)
+        new CompilationSupport.Builder(ruleContext, ObjcCppSemantics.INSTANCE)
             .setOutputGroupCollector(outputGroupCollector)
             .setObjectFilesCollector(objectFilesCollector)
             .build();

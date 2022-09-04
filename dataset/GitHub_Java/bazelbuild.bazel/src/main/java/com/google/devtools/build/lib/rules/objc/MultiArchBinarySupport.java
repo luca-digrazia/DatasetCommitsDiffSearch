@@ -29,6 +29,7 @@ import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -40,6 +41,7 @@ import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
+import com.google.devtools.build.lib.rules.cpp.ObjcCppSemantics;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import java.util.List;
@@ -155,10 +157,10 @@ public class MultiArchBinarySupport {
       Iterable<TransitiveInfoCollection> infoCollections = cpuToDepsCollectionMap.get(configCpu);
       J2ObjcMappingFileProvider j2ObjcMappingFileProvider =
           J2ObjcMappingFileProvider.union(
-              getTypedProviders(infoCollections, J2ObjcMappingFileProvider.PROVIDER));
+              getTypedProviders(infoCollections, J2ObjcMappingFileProvider.class));
       J2ObjcEntryClassProvider j2ObjcEntryClassProvider =
           new J2ObjcEntryClassProvider.Builder()
-              .addTransitive(getTypedProviders(infoCollections, J2ObjcEntryClassProvider.PROVIDER))
+              .addTransitive(getTypedProviders(infoCollections, J2ObjcEntryClassProvider.class))
               .build();
       ImmutableList<CcLinkingContext> ccLinkingContexts =
           getTypedProviders(infoCollections, CcInfo.PROVIDER).stream()
@@ -236,7 +238,7 @@ public class MultiArchBinarySupport {
         ProtobufSupport protoSupport =
             new ProtobufSupport(
                     ruleContext,
-                    cppSemantics,
+                    ObjcCppSemantics.INSTANCE,
                     childToolchainConfig,
                     protosToAvoid,
                     depProtoProviders,
@@ -340,4 +342,11 @@ public class MultiArchBinarySupport {
         .collect(ImmutableList.toImmutableList());
   }
 
+  private static <T extends TransitiveInfoProvider> ImmutableList<T> getTypedProviders(
+      Iterable<TransitiveInfoCollection> infoCollections, Class<T> providerClass) {
+    return Streams.stream(infoCollections)
+        .filter(infoCollection -> infoCollection.getProvider(providerClass) != null)
+        .map(infoCollection -> infoCollection.getProvider(providerClass))
+        .collect(ImmutableList.toImmutableList());
+  }
 }

@@ -32,8 +32,8 @@ import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.LinkOptions;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.LinkerInput;
-import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
+import com.google.devtools.build.lib.rules.cpp.ObjcCppSemantics;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,12 +43,6 @@ import java.util.TreeMap;
  * Implementation for {@code objc_library}.
  */
 public class ObjcLibrary implements RuleConfiguredTargetFactory {
-  private final CppSemantics cppSemantics;
-
-  protected ObjcLibrary(CppSemantics cppSemantics) {
-    this.cppSemantics = cppSemantics;
-  }
-
   /**
    * Constructs an {@link ObjcCommon} instance based on the attributes of the given rule context.
    */
@@ -78,7 +72,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
     Map<String, NestedSet<Artifact>> outputGroupCollector = new TreeMap<>();
     ImmutableList.Builder<Artifact> objectFilesCollector = ImmutableList.builder();
     CompilationSupport compilationSupport =
-        new CompilationSupport.Builder(ruleContext, cppSemantics)
+        new CompilationSupport.Builder(ruleContext, ObjcCppSemantics.INSTANCE)
             .setOutputGroupCollector(outputGroupCollector)
             .setObjectFilesCollector(objectFilesCollector)
             .build();
@@ -89,10 +83,10 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
 
     J2ObjcMappingFileProvider j2ObjcMappingFileProvider =
         J2ObjcMappingFileProvider.union(
-            ruleContext.getPrerequisites("deps", J2ObjcMappingFileProvider.PROVIDER));
+            ruleContext.getPrerequisites("deps", J2ObjcMappingFileProvider.class));
     J2ObjcEntryClassProvider j2ObjcEntryClassProvider =
         new J2ObjcEntryClassProvider.Builder()
-            .addTransitive(ruleContext.getPrerequisites("deps", J2ObjcEntryClassProvider.PROVIDER))
+            .addTransitive(ruleContext.getPrerequisites("deps", J2ObjcEntryClassProvider.class))
             .build();
     ObjcProvider objcProvider = common.getObjcProvider();
     CcCompilationContext ccCompilationContext = compilationSupport.getCcCompilationContext();
@@ -103,8 +97,8 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
         .addNativeDeclaredProvider(objcProvider)
         .addStarlarkTransitiveInfo(ObjcProvider.STARLARK_NAME, objcProvider)
-        .addNativeDeclaredProvider(j2ObjcEntryClassProvider)
-        .addNativeDeclaredProvider(j2ObjcMappingFileProvider)
+        .addProvider(J2ObjcEntryClassProvider.class, j2ObjcEntryClassProvider)
+        .addProvider(J2ObjcMappingFileProvider.class, j2ObjcMappingFileProvider)
         .addNativeDeclaredProvider(
             compilationSupport.getInstrumentedFilesProvider(objectFilesCollector.build()))
         .addNativeDeclaredProvider(
