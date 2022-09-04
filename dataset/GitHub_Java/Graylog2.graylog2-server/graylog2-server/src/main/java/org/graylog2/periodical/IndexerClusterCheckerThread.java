@@ -16,8 +16,8 @@
  */
 package org.graylog2.periodical;
 
+import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.graylog2.indexer.cluster.Cluster;
-import org.graylog2.indexer.cluster.NodeFileDescriptorStats;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.periodical.Periodical;
@@ -25,9 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Set;
-
-import static com.google.common.base.MoreObjects.firstNonNull;
 
 public class IndexerClusterCheckerThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(IndexerClusterCheckerThread.class);
@@ -49,32 +46,31 @@ public class IndexerClusterCheckerThread extends Periodical {
             return;
         }
 
-        if (!cluster.health().isPresent()) {
+        try {
+            cluster.health().getStatus();
+        } catch (Exception e) {
             LOG.info("Indexer not fully initialized yet. Skipping periodic cluster check.");
             return;
         }
 
         boolean allHigher = true;
-        final Set<NodeFileDescriptorStats> fileDescriptorStats = cluster.getFileDescriptorStats();
-        for (NodeFileDescriptorStats nodeFileDescriptorStats : fileDescriptorStats) {
-            final String name = nodeFileDescriptorStats.name();
-            final String ip = nodeFileDescriptorStats.ip();
-            final String host = nodeFileDescriptorStats.host();
-            final long maxFileDescriptors = nodeFileDescriptorStats.fileDescriptorMax().orElse(-1L);
-
-            if (maxFileDescriptors != -1L && maxFileDescriptors < MINIMUM_OPEN_FILES_LIMIT) {
+        for (NodeInfo node : cluster.getDataNodes()) {
+            // Check number of maximum open files.
+            final long maxFileDescriptors = node.getProcess().getMaxFileDescriptors();
+            final String osName = node.getJvm().getSystemProperties().get("os.name");
+            if (null != osName && osName.startsWith("Windows")) {
+                LOG.debug("Skipping open file limit check for Indexer node <{}> on Windows", node.getNode().getName());
+            } else if (maxFileDescriptors != -1 && maxFileDescriptors < MINIMUM_OPEN_FILES_LIMIT) {
                 // Write notification.
-                final String ipOrHostName = firstNonNull(host, ip);
                 final Notification notification = notificationService.buildNow()
                         .addType(Notification.Type.ES_OPEN_FILES)
                         .addSeverity(Notification.Severity.URGENT)
-                        .addDetail("hostname", ipOrHostName)
+                        .addDetail("hostname", node.getHostname())
                         .addDetail("max_file_descriptors", maxFileDescriptors);
 
                 if (notificationService.publishIfFirst(notification)) {
-                    LOG.warn("Indexer node <{}> ({}) open file limit is too low: [{}]. Set it to at least {}.",
-                            name,
-                            ipOrHostName,
+                    LOG.warn("Indexer node <{}> open file limit is too low: [{}]. Set it to at least {}.",
+                            node.getNode().getName(),
                             maxFileDescriptors,
                             MINIMUM_OPEN_FILES_LIMIT);
                 }
