@@ -18,6 +18,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -34,7 +35,6 @@ import com.google.devtools.build.lib.packages.util.MockProtoSupport;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
@@ -137,7 +137,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
         "proto_library(",
         "  name = 'protolib_well_known_types',",
         "  srcs = ['file_a.proto'],",
-        "  deps = ['" + TestConstants.TOOLS_REPOSITORY + "//objcproto:well_known_type_proto'],",
+        "  deps = ['//objcproto:well_known_type_proto'],",
         ")",
         "",
         "genrule(",
@@ -274,7 +274,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
     BuildConfiguration topLevelConfig = getAppleCrosstoolConfiguration();
     assertThat(action.getArguments())
         .containsExactly(
-            TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "tools/objc/protobuf_compiler_wrapper.sh",
+            "tools/objc/protobuf_compiler_wrapper.sh",
             "--input-file-list",
             inputFileList.getExecPathString(),
             "--output-dir",
@@ -294,9 +294,9 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
         .inOrder();
     assertThat(Artifact.toRootRelativePaths(action.getInputs()))
         .containsAllOf(
-            TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "tools/objc/protobuf_compiler_wrapper.sh",
-            TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "tools/objc/protobuf_compiler_helper.py",
-            TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "tools/objc/proto_support");
+            "tools/objc/protobuf_compiler_wrapper.sh",
+            "tools/objc/protobuf_compiler_helper.py",
+            "tools/objc/proto_support");
     assertThat(Artifact.toRootRelativePaths(action.getInputs())).containsAllIn(protoInputs);
     assertThat(action.getInputs()).contains(inputFileList);
 
@@ -316,15 +316,16 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
         ActionsTestUtil.getFirstArtifactEndingWith(
             action.getInputs(), "/_proto_input_files_BundledProtos_0");
 
-    ImmutableList<String> protoInputs = ImmutableList.of(
-        "package/file_a.proto",
-        TestConstants.TOOLS_REPOSITORY_PATH_PREFIX + "objcproto/well_known_type.proto");
+    ImmutableList<String> protoInputs = ImmutableList.of("package/file_a.proto");
 
     assertThat(Artifact.toRootRelativePaths(action.getInputs())).containsAllIn(protoInputs);
     assertThat(action.getInputs()).contains(inputFileList);
 
+    assertThat(Artifact.toRootRelativePaths(action.getInputs()))
+        .contains("objcproto/well_known_type.proto");
+
     FileWriteAction inputListAction = (FileWriteAction) getGeneratingAction(inputFileList);
-    assertThat(inputListAction.getFileContents()).contains("package/file_a.proto");
+    assertThat(inputListAction.getFileContents()).isEqualTo(sortedJoin(protoInputs));
   }
 
   @Test
@@ -412,12 +413,19 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
   }
 
   private void checkOnlyLibModuleMapsArePresentForTarget(String target) throws Exception {
+    Artifact libModuleMap =
+        getGenfilesArtifact(
+            "opl_protobuf.modulemaps/module.modulemap",
+            getConfiguredTarget("//package:opl_protobuf"));
+    Artifact protolibModuleMap =
+        getGenfilesArtifact(
+            "protobuf_lib.modulemaps/module.modulemap",
+            getConfiguredTarget("//objcproto:protobuf_lib"));
+
     ObjcProvider provider = providerForTarget(target);
     assertThat(Artifact.toRootRelativePaths(provider.get(ObjcProvider.MODULE_MAP).toSet()))
-        .containsExactly(
-            "package/opl_protobuf.modulemaps/module.modulemap",
-            TestConstants.TOOLS_REPOSITORY_PATH_PREFIX
-                + "objcproto/protobuf_lib.modulemaps/module.modulemap");
+        .containsExactlyElementsIn(
+            Artifact.toRootRelativePaths(ImmutableSet.of(libModuleMap, protolibModuleMap)));
   }
 
   @Test
@@ -429,9 +437,9 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
     assertThat(provider.get(ObjcProvider.INCLUDE).toSet())
         .contains(headerFile.getExecPath().getParentDirectory().getParentDirectory());
 
-    assertThat(Artifact.toRootRelativePaths(provider.get(ObjcProvider.LIBRARY).toSet()))
-        .containsExactly(TestConstants.TOOLS_REPOSITORY_PATH_PREFIX
-            + "objcproto/libprotobuf_lib.a");
+    ConfiguredTarget libProtoBufTarget = getConfiguredTarget("//objcproto:protobuf_lib");
+    assertThat(provider.get(ObjcProvider.LIBRARY).toSet())
+        .containsExactly(getBinArtifact("libprotobuf_lib.a", libProtoBufTarget));
 
     assertThat(provider.get(ObjcProvider.HEADER).toSet()).contains(headerFile);
 
@@ -504,8 +512,7 @@ public class ObjcProtoLibraryTest extends ObjcRuleTestCase {
             .addAll(FASTBUILD_COPTS)
             .addAll(
                 ObjcLibraryTest.iquoteArgs(
-                    providerForTarget("//package:opl_binary"),
-                    getTargetConfiguration()))
+                    binaryTarget.get(ObjcProvider.SKYLARK_CONSTRUCTOR), getTargetConfiguration()))
             .add("-I")
             .add(sourceFile.getExecPath().getParentDirectory().getParentDirectory().toString())
             .add("-fno-objc-arc")
