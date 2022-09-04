@@ -60,7 +60,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     public static final int FULL_SCREEN_NORMAL_DELAY = 2000;
 
-    protected static int mBackUpPlayingBufferState = -1;
+    protected static int BACKUP_PLAYING_BUFFERING_STATE = -1;
 
     protected static boolean IF_FULLSCREEN_FROM_NORMAL = false;
 
@@ -379,7 +379,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         addTextureView();
         mAudioManager.requestAudioFocus(onAudioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
         ((Activity) getContext()).getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        mBackUpPlayingBufferState = -1;
         GSYVideoManager.instance().prepare(mUrl, mMapHeadData, mLooping, mSpeed);
         setStateAndUi(CURRENT_STATE_PREPAREING);
     }
@@ -891,23 +890,22 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     @Override
     public void onInfo(int what, int extra) {
         if (what == MediaPlayer.MEDIA_INFO_BUFFERING_START) {
-            mBackUpPlayingBufferState = mCurrentState;
+            BACKUP_PLAYING_BUFFERING_STATE = mCurrentState;
             if (mLooping && mHadPlay) {
-                //循环在播放的不显示loading
+                //循环在播放的不显示
             } else {
                 //避免在onPrepared之前就进入了buffering，导致一只loading
-                if(mHadPlay && mCurrentState != CURRENT_STATE_PREPAREING && mCurrentState != -1)
+                if(mHadPlay)
                     setStateAndUi(CURRENT_STATE_PLAYING_BUFFERING_START);
             }
         } else if (what == MediaPlayer.MEDIA_INFO_BUFFERING_END) {
-            if (mBackUpPlayingBufferState != -1) {
+            if (BACKUP_PLAYING_BUFFERING_STATE != -1) {
                 if (mLooping && mHadPlay) {
                     //循环在播放的不显示
                 } else {
-                    if(mHadPlay && mCurrentState != CURRENT_STATE_PREPAREING)
-                        setStateAndUi(mBackUpPlayingBufferState);
+                    setStateAndUi(BACKUP_PLAYING_BUFFERING_STATE);
                 }
-                mBackUpPlayingBufferState = -1;
+                BACKUP_PLAYING_BUFFERING_STATE = -1;
             }
         } else if (what == IMediaPlayer.MEDIA_INFO_VIDEO_ROTATION_CHANGED) {
             mRotate = extra;
