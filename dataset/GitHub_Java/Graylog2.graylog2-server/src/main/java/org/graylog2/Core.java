@@ -29,31 +29,24 @@ import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.ProcessBuffer;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.forwarders.forwarders.LogglyForwarder;
 import org.graylog2.indexer.EmbeddedElasticSearchClient;
 import org.graylog2.initializers.Initializer;
 import org.graylog2.inputs.MessageInput;
-import org.graylog2.gelf.GELFChunkManager;
-import org.graylog2.plugin.outputs.MessageOutput;
+import org.graylog2.inputs.gelf.GELFChunkManager;
+import org.graylog2.outputs.MessageOutput;
 import org.graylog2.streams.StreamCache;
 
 import com.google.common.collect.Lists;
-import java.util.concurrent.atomic.AtomicInteger;
-import com.google.common.collect.Maps;
-import java.util.Map;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.graylog2.activities.Activity;
 import org.graylog2.activities.ActivityWriter;
 import org.graylog2.cluster.Cluster;
 import org.graylog2.database.HostCounterCacheImpl;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
-import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
-import org.graylog2.plugin.alarms.transports.Transport;
-import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.filters.MessageFilter;
-import org.graylog2.plugins.PluginConfiguration;
 import org.graylog2.plugins.PluginLoader;
 
 /**
@@ -77,7 +70,7 @@ public class Core implements GraylogServer {
     private static final int SCHEDULED_THREADS_POOL_SIZE = 15;
     private ScheduledExecutorService scheduler;
 
-    public static final String GRAYLOG2_VERSION = "0.10.0-preview.2";
+    public static final String GRAYLOG2_VERSION = "0.9.7-dev";
 
     public static final String MASTER_COUNTER_NAME = "master";
     
@@ -94,14 +87,12 @@ public class Core implements GraylogServer {
     private List<Initializer> initializers = Lists.newArrayList();
     private List<MessageInput> inputs = Lists.newArrayList();
     private List<MessageFilter> filters = Lists.newArrayList();
-    private List<MessageOutput> outputs = Lists.newArrayList();
-    private List<Transport> transports = Lists.newArrayList();
-    private List<AlarmCallback> alarmCallbacks = Lists.newArrayList();
+    private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
+    
+    private int loadedFilterPlugins = 0;
     
     private ProcessBuffer processBuffer;
     private OutputBuffer outputBuffer;
-    private AtomicInteger outputBufferWatermark = new AtomicInteger();
-    private AtomicInteger processBufferWatermark = new AtomicInteger();
     
     private Deflector deflector;
     
@@ -110,7 +101,6 @@ public class Core implements GraylogServer {
     private String serverId;
     
     private boolean localMode = false;
-    private boolean statsMode = false;
 
     public void initialize(Configuration configuration) {
         serverId = Tools.generateServerId();
@@ -179,16 +169,8 @@ public class Core implements GraylogServer {
         this.filters.add(filter);
     }
 
-    public void registerOutput(MessageOutput output) {
-        this.outputs.add(output);
-    }
-    
-    public void registerTransport(Transport transport) {
-        this.transports.add(transport);
-    }
-    
-    public void registerAlarmCallback(AlarmCallback alarmCallback) {
-        this.alarmCallbacks.add(alarmCallback);
+    public <T extends MessageOutput> void registerOutput(Class<T> klazz) {
+        this.outputs.add(klazz);
     }
 
     @Override
@@ -217,56 +199,25 @@ public class Core implements GraylogServer {
             }
         }
 
+        // Statically set timeout for LogglyForwarder.
+        // TODO: This is a code smell and needs to be fixed.
+        LogglyForwarder.setTimeout(configuration.getForwarderLogglyTimeout());
+
         scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
-                new ThreadFactoryBuilder().setNameFormat("scheduled-%d").build()
+                new BasicThreadFactory.Builder()
+                    .namingPattern("scheduled-%d")
+                    .build()
         );
 
-        // Load and register plugins.
-        loadPlugins(MessageFilter.class, "filters");
-        loadPlugins(MessageOutput.class, "outputs");
-        loadPlugins(AlarmCallback.class, "alarm_callbacks");
+        loadPlugins();
         
-        // Initialize all registered transports.
-        for (Transport transport : this.transports) {
-            try {
-                Map<String, String> config = Maps.newHashMap();
-                
-                // The built in transport methods get a more convenient configuration from graylog2.conf.
-                if (transport.getClass().getCanonicalName().equals("org.graylog2.alarms.transports.EmailTransport")) {
-                    config = configuration.getEmailTransportConfiguration();
-                } else if (transport.getClass().getCanonicalName().equals("org.graylog2.alarms.transports.JabberTransport")) {
-                    config = configuration.getJabberTransportConfiguration();
-                } else {
-                    // Load custom plugin config.
-                    // config = PluginConfiguration.load(transport.getClass().getCanonicalName(), "transports")
-                }
-                
-                transport.initialize(config);
-                LOG.debug("Initialized transport: " + transport.getName());
-            } catch (TransportConfigurationException e) {
-                LOG.error("Could not initialize transport <" + transport.getName() + ">"
-                        + " because of missing or invalid configuration.", e);
-            }
-        }
-        
-        // Initialize all registered alarm callbacks.
-        for (AlarmCallback callback : this.alarmCallbacks) {
-            try {
-                callback.initialize(PluginConfiguration.load(this, callback.getClass().getCanonicalName()));
-                LOG.debug("Initialized alarm callback: " + callback.getName());
-            } catch(AlarmCallbackConfigurationException e) {
-                LOG.error("Could not initialize alarm callback <" + callback.getName() + ">"
-                        + " because of missing or invalid configuration.", e);
-            }
-        }
-        
-        // Initialize all registered initializers.
+        // Call all registered initializers.
         for (Initializer initializer : this.initializers) {
             initializer.initialize();
-            LOG.debug("Initialized initializer: " + initializer.getClass().getSimpleName());
+            LOG.debug("Initialized: " + initializer.getClass().getSimpleName());
         }
 
-        // Initialize all registered inputs.
+        // Call all registered inputs.
         for (MessageInput input : this.inputs) {
             input.initialize(this.configuration, this);
             LOG.debug("Initialized input: " + input.getName());
@@ -281,20 +232,12 @@ public class Core implements GraylogServer {
 
     }
     
-    private <A> void loadPlugins(Class<A> type, String subDirectory) {
-        PluginLoader<A> pl = new PluginLoader(configuration.getPluginDir(), subDirectory, type);
-        for (A plugin : pl.getPlugins()) {
-            LOG.info("Registering <" + type.getSimpleName() + "> plugin [" + plugin.getClass().getCanonicalName() + "].");
-            
-            if (plugin instanceof MessageFilter) {
-                registerFilter((MessageFilter) plugin);
-            } else if (plugin instanceof MessageOutput) {
-                registerOutput((MessageOutput) plugin);
-            } else if (plugin instanceof AlarmCallback) {
-                registerAlarmCallback((AlarmCallback) plugin);
-            } else {
-                LOG.error("Could not load plugin [" + plugin.getClass().getCanonicalName() + "] - Not supported type.");
-            }
+    private void loadPlugins() {
+        PluginLoader pl = new PluginLoader(configuration.getPluginDir());
+        for (MessageFilter filter : pl.loadFilterPlugins()) {
+            LOG.info("Registering plugin filter [" + filter.getClass().getSimpleName() + "].");
+            registerFilter(filter);
+            this.loadedFilterPlugins += 1;
         }
     }
 
@@ -343,43 +286,21 @@ public class Core implements GraylogServer {
     public Buffer getOutputBuffer() {
         return this.outputBuffer;
     }
-    
-    public AtomicInteger outputBufferWatermark() {
-        return outputBufferWatermark;
-    }
-    
-    public AtomicInteger processBufferWatermark() {
-        return processBufferWatermark;
-    }
 
-    public List<Initializer> getInitializers() {
-        return this.initializers;
-    }
-    
-    public List<Transport> getTransports() {
-        return this.transports;
-    }
-    
-    public List<MessageInput> getInputs() {
-        return this.inputs;
-    }
-    
     public List<MessageFilter> getFilters() {
         return this.filters;
     }
 
-    public List<MessageOutput> getOutputs() {
+    public List<Class<? extends MessageOutput>> getOutputs() {
         return this.outputs;
     }
-
-    public List<AlarmCallback> getAlarmCallbacks() {
-        return this.alarmCallbacks;
-    }
     
+    @Override
     public MessageCounterManagerImpl getMessageCounterManager() {
         return this.messageCounterManager;
     }
 
+    @Override
     public HostCounterCacheImpl getHostCounterCache() {
         return this.hostCounterCache;
     }
@@ -406,6 +327,10 @@ public class Core implements GraylogServer {
         return this.serverId;
     }
     
+    public int getLoadedFilterPlugins() {
+        return this.loadedFilterPlugins;
+    }
+    
     public void setLocalMode(boolean mode) {
         this.localMode = mode;
     }
@@ -414,12 +339,4 @@ public class Core implements GraylogServer {
         return localMode;
     }
 
-    public void setStatsMode(boolean mode) {
-        this.statsMode = mode;
-    }
-   
-    public boolean isStatsMode() {
-        return statsMode;
-    }
-    
 }

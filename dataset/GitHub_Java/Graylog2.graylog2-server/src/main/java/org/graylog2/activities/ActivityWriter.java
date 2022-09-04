@@ -20,6 +20,8 @@
 package org.graylog2.activities;
 
 import org.graylog2.Core;
+import org.graylog2.Tools;
+import org.graylog2.database.MongoBridge;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
