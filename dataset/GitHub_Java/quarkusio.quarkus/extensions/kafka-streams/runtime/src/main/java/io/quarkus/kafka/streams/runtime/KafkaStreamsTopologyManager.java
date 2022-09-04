@@ -1,7 +1,8 @@
 package io.quarkus.kafka.streams.runtime;
 
 import java.net.InetSocketAddress;
-import java.util.Collection;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -44,6 +46,7 @@ import io.quarkus.runtime.StartupEvent;
 public class KafkaStreamsTopologyManager {
 
     private static final Logger LOGGER = Logger.getLogger(KafkaStreamsTopologyManager.class.getName());
+    private static final Pattern COMMA_PATTERN = Pattern.compile(",");
 
     private final ExecutorService executor;
     private KafkaStreams streams;
@@ -104,11 +107,18 @@ public class KafkaStreamsTopologyManager {
 
         Properties streamsProperties = getStreamsProperties(properties, bootstrapServersConfig, runtimeConfig);
 
+        Set<String> topicsToAwait = runtimeConfig.topics
+                .map(n -> COMMA_PATTERN.split(n))
+                .map(Arrays::asList)
+                .map(HashSet::new)
+                .map(Collections::unmodifiableSet)
+                .orElseGet(Collections::emptySet);
+
         streams = new KafkaStreams(topology.get(), streamsProperties);
 
         executor.execute(() -> {
             try {
-                waitForTopicsToBeCreated(runtimeConfig.getTrimmedTopics(), bootstrapServersConfig);
+                waitForTopicsToBeCreated(topicsToAwait, bootstrapServersConfig);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -131,7 +141,7 @@ public class KafkaStreamsTopologyManager {
         return streams;
     }
 
-    private void waitForTopicsToBeCreated(Collection<String> topicsToAwait, String bootstrapServersConfig)
+    private void waitForTopicsToBeCreated(Set<String> topicsToAwait, String bootstrapServersConfig)
             throws InterruptedException {
         final Map<String, Object> config = new HashMap<>();
         config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServersConfig);
