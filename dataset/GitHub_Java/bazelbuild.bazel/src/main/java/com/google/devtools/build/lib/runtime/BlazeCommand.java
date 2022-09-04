@@ -49,7 +49,8 @@ public interface BlazeCommand {
    * requirements. This method is called after all command-line and rc file options have been
    * parsed.
    *
+   * @param env the command environment of the currently running command
    * @param optionsParser the options parser for the current command
    */
-  void editOptions(OptionsParser optionsParser);
+  void editOptions(CommandEnvironment env, OptionsParser optionsParser);
 }
