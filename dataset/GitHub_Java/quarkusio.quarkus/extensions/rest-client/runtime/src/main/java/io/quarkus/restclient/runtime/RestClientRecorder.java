@@ -59,36 +59,25 @@ public class RestClientRecorder {
             }
         };
 
-        registerProviders(clientProviderFactory, useBuiltIn, providersToRegister, contributedProviders);
-
-        if (ResteasyProviderFactory.peekInstance() != null) {
-            ResteasyProviderFactory serverProviderFactory = ResteasyProviderFactory.getInstance();
-            registerProviders(serverProviderFactory, useBuiltIn, providersToRegister, contributedProviders);
+        if (useBuiltIn) {
+            RegisterBuiltin.register(clientProviderFactory);
+            registerProviders(clientProviderFactory, contributedProviders, false);
         } else {
-            ResteasyProviderFactory.setInstance(clientProviderFactory);
+            providersToRegister.removeAll(contributedProviders);
+            registerProviders(clientProviderFactory, providersToRegister, true);
+            registerProviders(clientProviderFactory, contributedProviders, false);
         }
 
         RestClientBuilderImpl.setProviderFactory(clientProviderFactory);
+        ResteasyProviderFactory.setInstance(clientProviderFactory);
         providerFactory = clientProviderFactory;
     }
 
-    private static void registerProviders(ResteasyProviderFactory providerFactory, boolean useBuiltIn,
-            Set<String> providersToRegister,
-            Set<String> contributedProviders) {
-        if (useBuiltIn) {
-            RegisterBuiltin.register(providerFactory);
-        } else {
-            providersToRegister.removeAll(contributedProviders);
-            registerProviders(providerFactory, providersToRegister, true);
-        }
-        registerProviders(providerFactory, contributedProviders, false);
-    }
-
-    private static void registerProviders(ResteasyProviderFactory providerFactory, Set<String> providersToRegister,
+    private static void registerProviders(ResteasyProviderFactory clientProviderFactory, Set<String> providersToRegister,
             Boolean isBuiltIn) {
         for (String providerToRegister : providersToRegister) {
             try {
-                providerFactory
+                clientProviderFactory
                         .registerProvider(Thread.currentThread().getContextClassLoader().loadClass(providerToRegister.trim()),
                                 isBuiltIn);
             } catch (ClassNotFoundException e) {
