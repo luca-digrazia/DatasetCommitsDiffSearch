@@ -82,11 +82,19 @@ class InstanceHandleImpl<T> implements InstanceHandle<T> {
         }
     }
 
-    protected void destroyInternal() {
+    void destroyInternal() {
         if (parentCreationalContext != null) {
             parentCreationalContext.release();
         } else {
             bean.destroy(instance, creationalContext);
+        }
+    }
+
+    static <T> InstanceHandleImpl<T> unwrap(InstanceHandle<T> handle) {
+        if (handle instanceof InstanceHandleImpl) {
+            return (InstanceHandleImpl<T>) handle;
+        } else {
+            throw new IllegalArgumentException("Failed to unwrap InstanceHandleImpl: " + handle);
         }
     }
 

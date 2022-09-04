@@ -16,8 +16,6 @@
 
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.processor.Methods.MethodKey;
-import io.quarkus.gizmo.MethodCreator;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,8 +29,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
 import javax.enterprise.inject.spi.DefinitionException;
 import javax.enterprise.inject.spi.InterceptionType;
+
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationTarget.Kind;
@@ -40,6 +40,8 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
+import io.quarkus.arc.processor.Methods.MethodKey;
+import io.quarkus.gizmo.MethodCreator;
 
 /**
  *
@@ -352,8 +354,7 @@ public class BeanInfo {
             if (noArgsConstructor != null && Modifier.isPrivate(noArgsConstructor.flags()) && classifier != null) {
                 errors.add(
                         new DefinitionException(
-                                String.format(
-                                        "%s bean is not proxyable because it has a private no-args constructor: %s. To fix this problem, change the constructor to be package-private",
+                                String.format("%s bean is not proxyable because it has a private no-args constructor: %s. To fix this problem, change the constructor to be package-private",
                                         classifier, this)));
             }
         }

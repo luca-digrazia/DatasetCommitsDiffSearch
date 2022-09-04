@@ -16,8 +16,8 @@
 
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.InjectableBean;
 import org.jboss.jandex.DotName;
+import io.quarkus.arc.InjectableBean;
 
 /**
  * Allows a build-time extension to register synthetic {@link InjectableBean} implementations.

@@ -25,6 +25,7 @@ import java.util.Set;
 
 import javax.el.ELResolver;
 import javax.el.ExpressionFactory;
+import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.context.spi.Context;
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
@@ -51,6 +52,7 @@ import javax.enterprise.inject.spi.ProducerFactory;
 import javax.interceptor.InterceptorBinding;
 
 /**
+ *
  * @author Martin Kouba
  */
 public class BeanManagerImpl implements BeanManager {
@@ -60,10 +62,8 @@ public class BeanManagerImpl implements BeanManager {
     @SuppressWarnings({ "unchecked", "rawtypes" })
     @Override
     public Object getReference(Bean<?> bean, Type beanType, CreationalContext<?> ctx) {
-        if (bean == null) {
-            throw new NullPointerException("Managed Bean [" + beanType + "] is null");
-        }
-        Objects.requireNonNull(ctx, "CreationalContext is null");
+        Objects.requireNonNull(bean);
+        Objects.requireNonNull(ctx);
         if (bean instanceof InjectableBean && ctx instanceof CreationalContextImpl) {
             return ArcContainerImpl.instance().beanInstanceHandle((InjectableBean) bean, (CreationalContextImpl) ctx).get();
         }
@@ -188,7 +188,11 @@ public class BeanManagerImpl implements BeanManager {
 
     @Override
     public Context getContext(Class<? extends Annotation> scopeType) {
-        return Arc.container().getContext(scopeType);
+        Context context = Arc.container().getActiveContext(scopeType);
+        if (context == null) {
+            throw new ContextNotActiveException("No active context found for: " + scopeType);
+        }
+        return context;
     }
 
     @Override

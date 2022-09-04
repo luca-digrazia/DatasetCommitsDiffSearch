@@ -16,7 +16,6 @@
 
 package io.quarkus.vertx.deployment;
 
-import java.lang.annotation.Annotation;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +26,6 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
@@ -56,30 +54,21 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.AnnotationProxyBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.util.HashUtil;
-import io.quarkus.gizmo.AssignableResultHandle;
 import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.CatchBlockCreator;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.FunctionCreator;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.gizmo.TryBlock;
-import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.vertx.ConsumeEvent;
 import io.quarkus.vertx.runtime.EventConsumerInvoker;
 import io.quarkus.vertx.runtime.VertxConfiguration;
 import io.quarkus.vertx.runtime.VertxProducer;
 import io.quarkus.vertx.runtime.VertxTemplate;
-import io.vertx.core.Future;
-import io.vertx.core.Handler;
-import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.Message;
 
 class VertxProcessor {
@@ -91,31 +80,20 @@ class VertxProcessor {
     private static final DotName COMPLETION_STAGE = DotName.createSimple(CompletionStage.class.getName());
     private static final String INVOKER_SUFFIX = "_VertxInvoker";
 
-    private static final MethodDescriptor ARC_CONTAINER = MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class);
-    private static final MethodDescriptor INSTANCE_HANDLE_GET = MethodDescriptor.ofMethod(InstanceHandle.class, "get",
-            Object.class);
-    private static final MethodDescriptor ARC_CONTAINER_BEAN = MethodDescriptor.ofMethod(ArcContainer.class, "bean",
-            InjectableBean.class, String.class);
-    private static final MethodDescriptor ARC_CONTAINER_INSTANCE_FOR_BEAN = MethodDescriptor.ofMethod(ArcContainer.class,
-            "instance", InstanceHandle.class,
-            InjectableBean.class);
-    private static final MethodDescriptor ARC_CONTAINER_INSTANCE_FOR_TYPE = MethodDescriptor.ofMethod(ArcContainer.class,
-            "instance", InstanceHandle.class,
-            Class.class, Annotation[].class);
-    private static final MethodDescriptor VERTX_EXECUTE_BLOCKING = MethodDescriptor.ofMethod(Vertx.class,
-            "executeBlocking", void.class, Handler.class, boolean.class, Handler.class);
-    private static final MethodDescriptor FUTURE_COMPLETE = MethodDescriptor.ofMethod(Future.class,
-            "complete", void.class, Object.class);
-    private static final MethodDescriptor FUTURE_FAIL = MethodDescriptor.ofMethod(Future.class,
-            "fail", void.class, Throwable.class);
-
     @Inject
     BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
 
     @BuildStep
     SubstrateConfigBuildItem build() {
-        return SubstrateConfigBuildItem.builder().addNativeImageSystemProperty("vertx.disableDnsResolver", "true").build();
+        return SubstrateConfigBuildItem.builder()
+                .addNativeImageSystemProperty("vertx.disableDnsResolver", "true")
+                .build();
     }
+
+    /**
+     * The Vert.x configuration, if set.
+     */
+    VertxConfiguration vertx;
 
     @BuildStep
     AdditionalBeanBuildItem registerBean() {
@@ -124,11 +102,10 @@ class VertxProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    VertxBuildItem build(VertxTemplate template, BeanContainerBuildItem beanContainer, BuildProducer<FeatureBuildItem> feature,
+    void build(VertxTemplate template, BeanContainerBuildItem beanContainer, BuildProducer<FeatureBuildItem> feature,
             List<EventConsumerBusinessMethodItem> messageConsumerBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
-            AnnotationProxyBuildItem annotationProxy, LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdown,
-            VertxConfiguration config) {
+            AnnotationProxyBuildItem annotationProxy) {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.VERTX));
         Map<String, ConsumeEvent> messageConsumerConfigurations = new HashMap<>();
         ClassOutput classOutput = new ClassOutput() {
@@ -138,17 +115,13 @@ class VertxProcessor {
             }
         };
         for (EventConsumerBusinessMethodItem businessMethod : messageConsumerBusinessMethods) {
-            String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(),
-                    businessMethod.getConsumeEvent(), classOutput);
+            String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(), classOutput);
             messageConsumerConfigurations.put(invokerClass,
                     annotationProxy.builder(businessMethod.getConsumeEvent(), ConsumeEvent.class)
                             .withDefaultValue("value", businessMethod.getBean().getBeanClass().toString()).build());
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, invokerClass));
         }
-        RuntimeValue<Vertx> vertx = template.configureVertx(beanContainer.getValue(), config, messageConsumerConfigurations,
-                launchMode.getLaunchMode(),
-                shutdown);
-        return new VertxBuildItem(vertx);
+        template.configureVertx(beanContainer.getValue(), vertx, messageConsumerConfigurations);
     }
 
     @BuildStep
@@ -214,7 +187,7 @@ class VertxProcessor {
         });
     }
 
-    private String generateInvoker(BeanInfo bean, MethodInfo method, AnnotationInstance consumeEvent, ClassOutput classOutput) {
+    private String generateInvoker(BeanInfo bean, MethodInfo method, ClassOutput classOutput) {
 
         String baseName;
         if (bean.getImplClazz().enclosingClass() != null) {
@@ -237,61 +210,34 @@ class VertxProcessor {
                 .interfaces(EventConsumerInvoker.class).build();
 
         MethodCreator invoke = invokerCreator.getMethodCreator("invoke", void.class, Message.class);
-        ResultHandle containerHandle = invoke.invokeStaticMethod(ARC_CONTAINER);
-
-        AnnotationValue blocking = consumeEvent.value("blocking");
-        if (blocking != null && blocking.asBoolean()) {
-            // Blocking operation must be performed on a worker thread
-            ResultHandle vertxHandle = invoke
-                    .invokeInterfaceMethod(INSTANCE_HANDLE_GET,
-                            invoke.invokeInterfaceMethod(ARC_CONTAINER_INSTANCE_FOR_TYPE, containerHandle,
-                                    invoke.loadClass(Vertx.class),
-                                    invoke.newArray(Annotation.class.getName(), invoke.load(0))));
-
-            FunctionCreator func = invoke.createFunction(Handler.class);
-            BytecodeCreator funcBytecode = func.getBytecode();
-            AssignableResultHandle messageHandle = funcBytecode.createVariable(Message.class);
-            funcBytecode.assign(messageHandle, invoke.getMethodParam(0));
-            TryBlock tryBlock = funcBytecode.tryBlock();
-            invoke(bean, method, messageHandle, tryBlock);
-            tryBlock.invokeInterfaceMethod(FUTURE_COMPLETE, funcBytecode.getMethodParam(0), tryBlock.loadNull());
-            CatchBlockCreator catchBlock = tryBlock.addCatch(Exception.class);
-            catchBlock.invokeInterfaceMethod(FUTURE_FAIL, funcBytecode.getMethodParam(0), catchBlock.getMethodParam(0));
-            funcBytecode.returnValue(null);
-
-            invoke.invokeInterfaceMethod(VERTX_EXECUTE_BLOCKING, vertxHandle, func.getInstance(), invoke.load(false),
-                    invoke.loadNull());
-        } else {
-            invoke(bean, method, invoke.getMethodParam(0), invoke);
-        }
-        invoke.returnValue(null);
-        invokerCreator.close();
-        return generatedName.replace('/', '.');
-    }
-
-    private void invoke(BeanInfo bean, MethodInfo method, ResultHandle messageHandle, BytecodeCreator invoke) {
-        ResultHandle containerHandle = invoke.invokeStaticMethod(ARC_CONTAINER);
-        ResultHandle beanHandle = invoke.invokeInterfaceMethod(ARC_CONTAINER_BEAN, containerHandle,
-                invoke.load(bean.getIdentifier()));
-        ResultHandle instanceHandle = invoke.invokeInterfaceMethod(ARC_CONTAINER_INSTANCE_FOR_BEAN, containerHandle,
-                beanHandle);
+        // InjectableBean<Foo: bean = Arc.container().bean("1");
+        // InstanceHandle<Foo> handle = Arc.container().instance(bean);
+        // handle.get().foo(message);
+        ResultHandle containerHandle = invoke
+                .invokeStaticMethod(MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class));
+        ResultHandle beanHandle = invoke.invokeInterfaceMethod(
+                MethodDescriptor.ofMethod(ArcContainer.class, "bean", InjectableBean.class, String.class),
+                containerHandle, invoke.load(bean.getIdentifier()));
+        ResultHandle instanceHandle = invoke.invokeInterfaceMethod(
+                MethodDescriptor.ofMethod(ArcContainer.class, "instance", InstanceHandle.class, InjectableBean.class),
+                containerHandle, beanHandle);
         ResultHandle beanInstanceHandle = invoke
-                .invokeInterfaceMethod(INSTANCE_HANDLE_GET, instanceHandle);
+                .invokeInterfaceMethod(MethodDescriptor.ofMethod(InstanceHandle.class, "get", Object.class), instanceHandle);
 
         Type paramType = method.parameters().get(0);
         if (paramType.name().equals(MESSAGE)) {
             // Parameter is io.vertx.core.eventbus.Message
             invoke.invokeVirtualMethod(
                     MethodDescriptor.ofMethod(bean.getImplClazz().name().toString(), method.name(), void.class, Message.class),
-                    beanInstanceHandle, messageHandle);
+                    beanInstanceHandle, invoke.getMethodParam(0));
         } else {
             // Parameter is payload
-            ResultHandle bodyHandle = invoke.invokeInterfaceMethod(
-                    MethodDescriptor.ofMethod(Message.class, "body", Object.class), messageHandle);
+            ResultHandle payloadHandle = invoke.invokeInterfaceMethod(
+                    MethodDescriptor.ofMethod(Message.class, "body", Object.class), invoke.getMethodParam(0));
             ResultHandle replyHandle = invoke.invokeVirtualMethod(
                     MethodDescriptor.ofMethod(bean.getImplClazz().name().toString(), method.name(),
                             method.returnType().name().toString(), paramType.name().toString()),
-                    beanInstanceHandle, bodyHandle);
+                    beanInstanceHandle, payloadHandle);
             if (replyHandle != null) {
                 if (method.returnType().name().equals(COMPLETION_STAGE)) {
                     // If the return type is CompletionStage use thenAccept()
@@ -299,7 +245,7 @@ class VertxProcessor {
                     BytecodeCreator funcBytecode = func.getBytecode();
                     funcBytecode.invokeInterfaceMethod(
                             MethodDescriptor.ofMethod(Message.class, "reply", void.class, Object.class),
-                            messageHandle,
+                            invoke.getMethodParam(0),
                             funcBytecode.getMethodParam(0));
                     funcBytecode.returnValue(null);
                     // returnValue.thenAccept(reply -> Message.reply(reply))
@@ -310,7 +256,7 @@ class VertxProcessor {
                 } else {
                     // Message.reply(returnValue)
                     invoke.invokeInterfaceMethod(MethodDescriptor.ofMethod(Message.class, "reply", void.class, Object.class),
-                            messageHandle,
+                            invoke.getMethodParam(0),
                             replyHandle);
                 }
             }
@@ -321,6 +267,9 @@ class VertxProcessor {
             invoke.invokeInterfaceMethod(MethodDescriptor.ofMethod(InstanceHandle.class, "destroy", void.class),
                     instanceHandle);
         }
-    }
+        invoke.returnValue(null);
 
+        invokerCreator.close();
+        return generatedName.replace('/', '.');
+    }
 }

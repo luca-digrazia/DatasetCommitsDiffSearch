@@ -16,18 +16,6 @@
 
 package io.quarkus.arc.test;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ComponentsProvider;
-import io.quarkus.arc.ResourceReferenceProvider;
-import io.quarkus.arc.processor.AnnotationsTransformer;
-import io.quarkus.arc.processor.BeanArchives;
-import io.quarkus.arc.processor.BeanDeploymentValidator;
-import io.quarkus.arc.processor.BeanInfo;
-import io.quarkus.arc.processor.BeanProcessor;
-import io.quarkus.arc.processor.BeanRegistrar;
-import io.quarkus.arc.processor.ContextRegistrar;
-import io.quarkus.arc.processor.DeploymentEnhancer;
-import io.quarkus.arc.processor.ResourceOutput;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -44,12 +32,25 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ComponentsProvider;
+import io.quarkus.arc.ResourceReferenceProvider;
+import io.quarkus.arc.processor.AnnotationsTransformer;
+import io.quarkus.arc.processor.BeanDeploymentValidator;
+import io.quarkus.arc.processor.BeanInfo;
+import io.quarkus.arc.processor.BeanProcessor;
+import io.quarkus.arc.processor.BeanRegistrar;
+import io.quarkus.arc.processor.ContextRegistrar;
+import io.quarkus.arc.processor.DeploymentEnhancer;
+import io.quarkus.arc.processor.ResourceOutput;
 
 public class ArcTestContainer implements TestRule {
 
@@ -105,7 +106,7 @@ public class ArcTestContainer implements TestRule {
             Collections.addAll(this.beanRegistrars, registrars);
             return this;
         }
-
+        
         public Builder contextRegistrars(ContextRegistrar... registrars) {
             Collections.addAll(this.contextRegistrars, registrars);
             return this;
@@ -142,8 +143,7 @@ public class ArcTestContainer implements TestRule {
         }
 
         public ArcTestContainer build() {
-            return new ArcTestContainer(resourceReferenceProviders, beanClasses, resourceAnnotations, beanRegistrars,
-                    contextRegistrars, annotationsTransformers,
+            return new ArcTestContainer(resourceReferenceProviders, beanClasses, resourceAnnotations, beanRegistrars, contextRegistrars, annotationsTransformers,
                     deploymentEnhancers, beanDeploymentValidators, shouldFail, removeUnusedBeans, exclusions);
         }
 
@@ -156,7 +156,7 @@ public class ArcTestContainer implements TestRule {
     private final List<Class<? extends Annotation>> resourceAnnotations;
 
     private final List<BeanRegistrar> beanRegistrars;
-
+    
     private final List<ContextRegistrar> contextRegistrars;
 
     private final List<AnnotationsTransformer> annotationsTransformers;
@@ -174,18 +174,13 @@ public class ArcTestContainer implements TestRule {
     private URLClassLoader testClassLoader;
 
     public ArcTestContainer(Class<?>... beanClasses) {
-        this(Collections.emptyList(), Arrays.asList(beanClasses), Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false, false,
-                Collections.emptyList());
+        this(Collections.emptyList(), Arrays.asList(beanClasses), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false, false, Collections.emptyList());
     }
 
-    public ArcTestContainer(List<Class<?>> resourceReferenceProviders, List<Class<?>> beanClasses,
-            List<Class<? extends Annotation>> resourceAnnotations,
-            List<BeanRegistrar> beanRegistrars, List<ContextRegistrar> contextRegistrars,
-            List<AnnotationsTransformer> annotationsTransformers, List<DeploymentEnhancer> deploymentEnhancers,
-            List<BeanDeploymentValidator> beanDeploymentValidators, boolean shouldFail, boolean removeUnusedBeans,
-            List<Predicate<BeanInfo>> exclusions) {
+    public ArcTestContainer(List<Class<?>> resourceReferenceProviders, List<Class<?>> beanClasses, List<Class<? extends Annotation>> resourceAnnotations,
+            List<BeanRegistrar> beanRegistrars, List<ContextRegistrar> contextRegistrars, List<AnnotationsTransformer> annotationsTransformers, List<DeploymentEnhancer> deploymentEnhancers,
+            List<BeanDeploymentValidator> beanDeploymentValidators, boolean shouldFail, boolean removeUnusedBeans, List<Predicate<BeanInfo>> exclusions) {
         this.resourceReferenceProviders = resourceReferenceProviders;
         this.beanClasses = beanClasses;
         this.resourceAnnotations = resourceAnnotations;
@@ -210,10 +205,10 @@ public class ArcTestContainer implements TestRule {
                     base.evaluate();
                 } finally {
                     Thread.currentThread().setContextClassLoader(oldTccl);
-                    if (testClassLoader != null) {
+                    if(testClassLoader != null) {
                         try {
                             testClassLoader.close();
-                        } catch (IOException e) {
+                        } catch(IOException e) {
                             e.printStackTrace();
                         }
                     }
@@ -248,8 +243,8 @@ public class ArcTestContainer implements TestRule {
                 .getContextClassLoader();
 
         try {
-            String arcContainerAbsolutePath = ArcTestContainer.class.getClassLoader()
-                    .getResource(ArcTestContainer.class.getName().replace(".", "/") + ".class").getFile();
+            String arcContainerAbsolutePath =
+                    ArcTestContainer.class.getClassLoader().getResource(ArcTestContainer.class.getName().replace(".", "/") + ".class").getFile();
             int targetClassesIndex = arcContainerAbsolutePath.indexOf(TARGET_TEST_CLASSES);
             String testClassesRootPath = arcContainerAbsolutePath.substring(0, targetClassesIndex);
             File generatedSourcesDirectory = new File("target/generated-arc-sources");
@@ -274,7 +269,7 @@ public class ArcTestContainer implements TestRule {
 
             BeanProcessor.Builder beanProcessorBuilder = BeanProcessor.builder()
                     .setName(testClass.getSimpleName())
-                    .setIndex(BeanArchives.buildBeanArchiveIndex(index));
+                    .setIndex(index);
             if (!resourceAnnotations.isEmpty()) {
                 beanProcessorBuilder.addResourceAnnotations(resourceAnnotations.stream()
                         .map(c -> DotName.createSimple(c.getName()))
@@ -284,7 +279,7 @@ public class ArcTestContainer implements TestRule {
                 beanProcessorBuilder.addBeanRegistrar(registrar);
             }
             for (ContextRegistrar registrar : contextRegistrars) {
-                beanProcessorBuilder.addContextRegistrar(registrar);
+                beanProcessorBuilder.addContextRegistrar(registrar);    
             }
             for (AnnotationsTransformer annotationsTransformer : annotationsTransformers) {
                 beanProcessorBuilder.addAnnotationTransformer(annotationsTransformer);
@@ -338,8 +333,7 @@ public class ArcTestContainer implements TestRule {
                         // return URL that points to the correct test bean provider
                         return Collections.enumeration(Collections.singleton(componentsProviderFile.toURI()
                                 .toURL()));
-                    } else if (("META-INF/services/" + ResourceReferenceProvider.class.getName()).equals(name)
-                            && !resourceReferenceProviders.isEmpty()) {
+                    } else if (("META-INF/services/" + ResourceReferenceProvider.class.getName()).equals(name) && !resourceReferenceProviders.isEmpty()) {
                         return Collections.enumeration(Collections.singleton(resourceReferenceProviderFile.toURI()
                                 .toURL()));
                     }
@@ -365,8 +359,7 @@ public class ArcTestContainer implements TestRule {
     private Index index(Iterable<Class<?>> classes) throws IOException {
         Indexer indexer = new Indexer();
         for (Class<?> clazz : classes) {
-            try (InputStream stream = ArcTestContainer.class.getClassLoader()
-                    .getResourceAsStream(clazz.getName().replace('.', '/') + ".class")) {
+            try (InputStream stream = ArcTestContainer.class.getClassLoader().getResourceAsStream(clazz.getName().replace('.', '/') + ".class")) {
                 indexer.index(stream);
             }
         }

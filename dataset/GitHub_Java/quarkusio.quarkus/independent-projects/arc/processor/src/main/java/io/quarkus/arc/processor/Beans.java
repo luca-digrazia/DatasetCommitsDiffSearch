@@ -16,7 +16,6 @@
 
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -25,8 +24,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import javax.enterprise.inject.AmbiguousResolutionException;
 import javax.enterprise.inject.UnsatisfiedResolutionException;
+
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
@@ -37,6 +38,7 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
+import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
 
 final class Beans {
 
@@ -97,12 +99,11 @@ final class Beans {
             name = initStereotypeName(stereotypes, beanClass);
         }
 
-        BeanInfo bean = new BeanInfo(beanClass, beanDeployment, scope, types, qualifiers,
-                Injection.forBean(beanClass, beanDeployment), null, null,
+        BeanInfo bean = new BeanInfo(beanClass, beanDeployment, scope, types, qualifiers, Injection.forBean(beanClass, beanDeployment), null, null,
                 isAlternative ? alternativePriority : null, stereotypes, name);
         return bean;
     }
-
+ 
     /**
      *
      * @param producerMethod
@@ -111,8 +112,7 @@ final class Beans {
      * @param disposer
      * @return a new bean info
      */
-    static BeanInfo createProducerMethod(MethodInfo producerMethod, BeanInfo declaringBean, BeanDeployment beanDeployment,
-            DisposerInfo disposer) {
+    static BeanInfo createProducerMethod(MethodInfo producerMethod, BeanInfo declaringBean, BeanDeployment beanDeployment, DisposerInfo disposer) {
         Set<AnnotationInstance> qualifiers = new HashSet<>();
         ScopeInfo scope = null;
         Set<Type> types = Types.getTypeClosure(producerMethod, beanDeployment);
@@ -162,14 +162,12 @@ final class Beans {
             alternativePriority = declaringBean.getAlternativePriority();
             if (alternativePriority == null) {
                 // Declaring bean itself does not have to be an alternative and can only have @Priority
-                alternativePriority = declaringBean.getTarget().get().asClass().classAnnotations().stream()
-                        .filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
+                alternativePriority = declaringBean.getTarget().get().asClass().classAnnotations().stream().filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
                         .map(a -> a.value().asInt()).orElse(null);
             }
         }
 
-        BeanInfo bean = new BeanInfo(producerMethod, beanDeployment, scope, types, qualifiers,
-                Injection.forBean(producerMethod, beanDeployment), declaringBean,
+        BeanInfo bean = new BeanInfo(producerMethod, beanDeployment, scope, types, qualifiers, Injection.forBean(producerMethod, beanDeployment), declaringBean,
                 disposer, alternativePriority, stereotypes, name);
         return bean;
     }
@@ -182,8 +180,7 @@ final class Beans {
      * @param disposer
      * @return a new bean info
      */
-    static BeanInfo createProducerField(FieldInfo producerField, BeanInfo declaringBean, BeanDeployment beanDeployment,
-            DisposerInfo disposer) {
+    static BeanInfo createProducerField(FieldInfo producerField, BeanInfo declaringBean, BeanDeployment beanDeployment, DisposerInfo disposer) {
         Set<AnnotationInstance> qualifiers = new HashSet<>();
         ScopeInfo scope = null;
         Set<Type> types = Types.getTypeClosure(producerField, beanDeployment);
@@ -228,14 +225,12 @@ final class Beans {
             alternativePriority = declaringBean.getAlternativePriority();
             if (alternativePriority == null) {
                 // Declaring bean itself does not have to be an alternative and can only have @Priority
-                alternativePriority = declaringBean.getTarget().get().asClass().classAnnotations().stream()
-                        .filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
+                alternativePriority = declaringBean.getTarget().get().asClass().classAnnotations().stream().filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
                         .map(a -> a.value().asInt()).orElse(null);
             }
         }
 
-        BeanInfo bean = new BeanInfo(producerField, beanDeployment, scope, types, qualifiers, Collections.emptyList(),
-                declaringBean, disposer,
+        BeanInfo bean = new BeanInfo(producerField, beanDeployment, scope, types, qualifiers, Collections.emptyList(), declaringBean, disposer,
                 alternativePriority, stereotypes, name);
         return bean;
     }
@@ -244,11 +239,17 @@ final class Beans {
         if (stereotypes.isEmpty()) {
             return null;
         }
-        final Set<ScopeInfo> stereotypeScopes = new HashSet<>();
+        ScopeInfo stereotypeScope = null;
         for (StereotypeInfo stereotype : stereotypes) {
-            stereotypeScopes.add(stereotype.getDefaultScope());
+            if (stereotype.getDefaultScope() != stereotypeScope) {
+                if (stereotypeScope == null) {
+                    stereotypeScope = stereotype.getDefaultScope();
+                } else {
+                    throw new IllegalStateException("All stereotypes must specify the same scope or the bean must declare a scope: " + target);
+                }
+            }
         }
-        return BeanDeployment.getValidScope(stereotypeScopes, target);
+        return stereotypeScope;
     }
 
     private static boolean initStereotypeAlternative(List<StereotypeInfo> stereotypes) {
@@ -262,7 +263,7 @@ final class Beans {
         }
         return false;
     }
-
+    
     private static String initStereotypeName(List<StereotypeInfo> stereotypes, AnnotationTarget target) {
         if (stereotypes.isEmpty()) {
             return null;
@@ -306,8 +307,7 @@ final class Beans {
         return false;
     }
 
-    static void resolveInjectionPoint(BeanDeployment deployment, BeanInfo bean, InjectionPointInfo injectionPoint,
-            List<Throwable> errors) {
+    static void resolveInjectionPoint(BeanDeployment deployment, BeanInfo bean, InjectionPointInfo injectionPoint, List<Throwable> errors) {
         if (BuiltinBean.resolvesTo(injectionPoint)) {
             // Skip built-in beans
             return;
@@ -347,7 +347,7 @@ final class Beans {
             injectionPoint.resolve(selected);
         }
     }
-
+    
     static BeanInfo resolveAmbiguity(List<BeanInfo> resolved) {
         BeanInfo selected = null;
         List<BeanInfo> resolvedAmbiguity = new ArrayList<>(resolved);
@@ -377,16 +377,13 @@ final class Beans {
     }
 
     private static Integer getAlternativePriority(BeanInfo bean) {
-        return bean.getDeclaringBean() != null ? bean.getDeclaringBean().getAlternativePriority()
-                : bean.getAlternativePriority();
+        return bean.getDeclaringBean() != null ? bean.getDeclaringBean().getAlternativePriority() : bean.getAlternativePriority();
     }
 
     private static int compareAlternativeBeans(BeanInfo bean1, BeanInfo bean2) {
         // The highest priority wins
-        Integer priority2 = bean2.getDeclaringBean() != null ? bean2.getDeclaringBean().getAlternativePriority()
-                : bean2.getAlternativePriority();
-        Integer priority1 = bean1.getDeclaringBean() != null ? bean1.getDeclaringBean().getAlternativePriority()
-                : bean1.getAlternativePriority();
+        Integer priority2 = bean2.getDeclaringBean() != null ? bean2.getDeclaringBean().getAlternativePriority() : bean2.getAlternativePriority();
+        Integer priority1 = bean1.getDeclaringBean() != null ? bean1.getDeclaringBean().getAlternativePriority() : bean1.getAlternativePriority();
         return priority2.compareTo(priority1);
     }
 
@@ -394,8 +391,7 @@ final class Beans {
         return hasQualifier(bean.getDeployment().getQualifier(required.name()), required, bean.getQualifiers());
     }
 
-    static boolean hasQualifier(ClassInfo requiredInfo, AnnotationInstance required,
-            Collection<AnnotationInstance> qualifiers) {
+    static boolean hasQualifier(ClassInfo requiredInfo, AnnotationInstance required, Collection<AnnotationInstance> qualifiers) {
         List<AnnotationValue> binding = new ArrayList<>();
         for (AnnotationValue val : required.values()) {
             if (!requiredInfo.method(val.name()).hasAnnotation(DotNames.NONBINDING)) {
@@ -426,6 +422,7 @@ final class Beans {
         Collections.reverse(callbacks);
         return callbacks;
     }
+
 
     static void analyzeType(Type type, BeanDeployment beanDeployment) {
         if (type.kind() == Type.Kind.PARAMETERIZED_TYPE) {
@@ -467,7 +464,8 @@ final class Beans {
             }
         }
     }
-
+    
+    
     private static String getPropertyName(String methodName) {
         final String get = "get";
         final String is = "is";
@@ -481,7 +479,7 @@ final class Beans {
         }
 
     }
-
+    
     private static String decapitalize(String name) {
         if (name == null || name.length() == 0) {
             return name;
@@ -494,7 +492,8 @@ final class Beans {
         decapitalized.setCharAt(0, Character.toLowerCase(decapitalized.charAt(0)));
         return decapitalized.toString();
     }
-
+    
+    
     private static String getDefaultName(ClassInfo beanClass) {
         StringBuilder defaultName = new StringBuilder();
         defaultName.append(DotNames.simpleName(beanClass));
@@ -512,5 +511,6 @@ final class Beans {
             return producerMethod.name();
         }
     }
+    
 
 }
