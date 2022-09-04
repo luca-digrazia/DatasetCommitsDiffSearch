@@ -24,7 +24,6 @@ import com.unboundid.ldap.sdk.LDAPException;
 import org.graylog.security.authservice.AuthServiceBackend;
 import org.graylog.security.authservice.AuthServiceBackendDTO;
 import org.graylog.security.authservice.AuthServiceCredentials;
-import org.graylog.security.authservice.AuthenticationDetails;
 import org.graylog.security.authservice.ProvisionerService;
 import org.graylog.security.authservice.UserDetails;
 import org.graylog.security.authservice.ldap.LDAPUser;
@@ -79,7 +78,7 @@ public class ADAuthServiceBackend implements AuthServiceBackend {
     }
 
     @Override
-    public Optional<AuthenticationDetails> authenticateAndProvision(AuthServiceCredentials authCredentials, ProvisionerService provisionerService) {
+    public Optional<UserDetails> authenticateAndProvision(AuthServiceCredentials authCredentials, ProvisionerService provisionerService) {
         try (final LDAPConnection connection = ldapConnector.connect(config.getLDAPConnectorConfig())) {
             if (connection == null) {
                 return Optional.empty();
@@ -115,7 +114,7 @@ public class ADAuthServiceBackend implements AuthServiceBackend {
                     .defaultRoles(backend.defaultRoles())
                     .build());
 
-            return Optional.of(AuthenticationDetails.builder().userDetails(userDetails).build());
+            return Optional.of(userDetails);
         } catch (GeneralSecurityException e) {
             LOG.error("Error setting up TLS connection", e);
             return Optional.empty();
