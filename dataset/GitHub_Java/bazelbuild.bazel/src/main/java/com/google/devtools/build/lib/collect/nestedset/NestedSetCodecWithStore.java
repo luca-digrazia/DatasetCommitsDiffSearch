@@ -64,13 +64,13 @@ public class NestedSetCodecWithStore<T> implements ObjectCodec<NestedSet<T>> {
     if (obj.isEmpty()) {
       // If the NestedSet is empty, it needs to be assigned to the EMPTY_CHILDREN constant on
       // deserialization.
-      codedOut.writeEnumNoTag(NestedSetSize.EMPTY.ordinal());
+      context.serialize(NestedSetSize.EMPTY, codedOut);
     } else if (obj.isSingleton()) {
       // If the NestedSet is a singleton, we serialize directly as an optimization.
-      codedOut.writeEnumNoTag(NestedSetSize.SINGLETON.ordinal());
+      context.serialize(NestedSetSize.SINGLETON, codedOut);
       context.serialize(obj.rawChildren(), codedOut);
     } else {
-      codedOut.writeEnumNoTag(NestedSetSize.GROUP.ordinal());
+      context.serialize(NestedSetSize.GROUP, codedOut);
       FingerprintComputationResult fingerprintComputationResult =
           nestedSetStore.computeFingerprintAndStore((Object[]) obj.rawChildren(), context);
       context.addFutureToBlockWritingOn(fingerprintComputationResult.writeStatus());
@@ -87,7 +87,7 @@ public class NestedSetCodecWithStore<T> implements ObjectCodec<NestedSet<T>> {
     }
 
     Order order = context.deserialize(codedIn);
-    NestedSetSize nestedSetSize = NestedSetSize.values()[codedIn.readEnum()];
+    NestedSetSize nestedSetSize = context.deserialize(codedIn);
     switch (nestedSetSize) {
       case EMPTY:
         return NestedSetBuilder.emptySet(order);
