@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,36 +15,36 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package models;
 
-import com.google.common.collect.Lists;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import lib.APIException;
-import lib.Api;
-import models.api.requests.SystemJobTriggerRequest;
-import models.api.responses.EmptyResponse;
-import models.api.responses.system.GetSystemJobsResponse;
+import com.google.inject.Inject;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import models.api.responses.system.SystemJobSummaryResponse;
 import org.joda.time.DateTime;
-import play.Logger;
 
-import java.io.IOException;
-import java.net.URL;
-import java.util.List;
 import java.util.UUID;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class SystemJob {
+    public interface Factory {
+        SystemJob fromSummaryResponse(SystemJobSummaryResponse r);
+    }
+
+    @Inject
+    private static Factory systemJobFactory;
 
     // Some known SystemJob types that can be triggered manually from the web interface.
     public enum Type {
         FIX_DEFLECTOR_DELETE_INDEX,
-        FIX_DEFLECTOR_MOVE_INDEX
+        FIX_DEFLECTOR_MOVE_INDEX;
+
+        public static Type fromString(String name) {
+            return valueOf(name.toUpperCase());
+        }
     }
 
     private final UUID id;
@@ -56,19 +56,21 @@ public class SystemJob {
     private final boolean isCancelable;
     private final boolean providesProgress;
 
-    public SystemJob(SystemJobSummaryResponse s) {
+    @AssistedInject
+    public SystemJob(NodeService nodeService, @Assisted SystemJobSummaryResponse s) {
         this.id = UUID.fromString(s.id);
         this.name = s.name;
         this.description = s.description;
-        this.node = Node.fromId(s.nodeId);
         this.startedAt = DateTime.parse(s.startedAt);
         this.percentComplete = s.percentComplete;
         this.isCancelable = s.isCancelable;
         this.providesProgress = s.providesProgress;
-    }
 
-    public static void trigger(Type type, User user) throws IOException, APIException {
-        Api.post(Node.random(), "system/jobs", new SystemJobTriggerRequest(type, user), 202, EmptyResponse.class);
+        try {
+            this.node = nodeService.loadNode(s.nodeId);
+        } catch (NodeService.NodeNotFoundException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public UUID getId() {
@@ -93,20 +95,6 @@ public class SystemJob {
 
     public DateTime getStartedAt() {
         return startedAt;
-    }
-
-    public static List<SystemJob> all() throws IOException, APIException {
-        List<SystemJob> jobs = Lists.newArrayList();
-
-        for(Node node : Node.all()) {
-            GetSystemJobsResponse r = Api.get(node, "system/jobs", GetSystemJobsResponse.class);
-
-            for (SystemJobSummaryResponse job : r.jobs) {
-                jobs.add(new SystemJob(job));
-            }
-        }
-
-        return jobs;
     }
 
 }

@@ -21,14 +21,10 @@ package org.graylog2.radio.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import org.graylog2.inputs.InputCache;
 import org.graylog2.plugin.buffers.BufferWatermark;
-import org.graylog2.radio.Configuration;
 import org.graylog2.radio.Radio;
 import org.graylog2.radio.rest.resources.RestResource;
-import org.graylog2.shared.buffers.ProcessBufferWatermark;
 
-import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -40,41 +36,35 @@ import java.util.Map;
  */
 @Path("/system/buffers")
 public class BuffersResource extends RestResource {
-    @Inject
-    private Configuration configuration;
-    @Inject
-    private ProcessBufferWatermark processBufferWatermark;
-    @Inject
-    private InputCache inputCache;
 
     @GET @Timed
     @Produces(MediaType.APPLICATION_JSON)
     public String utilization() {
         Map<String, Object> result = Maps.newHashMap();
-        result.put("buffers", buffers());
-        result.put("master_caches", masterCaches());
+        result.put("buffers", buffers(radio));
+        result.put("master_caches", masterCaches(radio));
 
         return json(result);
     }
 
-    private Map<String, Object> masterCaches() {
+    private Map<String, Object> masterCaches(Radio radio) {
         Map<String, Object> caches = Maps.newHashMap();
         Map<String, Object> input = Maps.newHashMap();
 
-        input.put("size", inputCache.size());
+        input.put("size", radio.getInputCache().size());
 
         caches.put("input", input);
 
         return caches;
     }
 
-    private Map<String, Object> buffers() {
+    private Map<String, Object> buffers(Radio radio) {
         Map<String, Object> buffers = Maps.newHashMap();
         Map<String, Object> input = Maps.newHashMap();
 
         BufferWatermark pWm = new BufferWatermark(
-                configuration.getRingSize(),
-                processBufferWatermark
+                radio.getConfiguration().getRingSize(),
+                radio.processBufferWatermark()
         );
 
         input.put("utilization_percent", pWm.getUtilizationPercentage());
