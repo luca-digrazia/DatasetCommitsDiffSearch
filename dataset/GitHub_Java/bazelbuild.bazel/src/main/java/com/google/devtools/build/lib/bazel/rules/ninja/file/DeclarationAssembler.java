@@ -19,7 +19,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -51,14 +50,13 @@ public class DeclarationAssembler {
    * @param fragments list of {@link ByteFragmentAtOffset} - pieces on the bounds of sub-fragments.
    * @throws GenericParsingException thrown by delegate {@link #declarationConsumer}
    */
-  public void wrapUp(List<ByteFragmentAtOffset> fragments)
-      throws GenericParsingException, IOException {
-    fragments.sort(Comparator.comparingInt(ByteFragmentAtOffset::getFragmentOffset));
+  public void wrapUp(List<ByteFragmentAtOffset> fragments) throws GenericParsingException {
+    fragments.sort(Comparator.comparingInt(ByteFragmentAtOffset::getRealStartOffset));
 
     List<ByteFragmentAtOffset> list = Lists.newArrayList();
     int previous = -1;
     for (ByteFragmentAtOffset edge : fragments) {
-      int start = edge.getFragmentOffset();
+      int start = edge.getRealStartOffset();
       ByteBufferFragment fragment = edge.getFragment();
       if (previous >= 0 && previous != start) {
         sendMerged(list);
@@ -72,8 +70,7 @@ public class DeclarationAssembler {
     }
   }
 
-  private void sendMerged(List<ByteFragmentAtOffset> list)
-      throws GenericParsingException, IOException {
+  private void sendMerged(List<ByteFragmentAtOffset> list) throws GenericParsingException {
     Preconditions.checkArgument(!list.isEmpty());
     ByteFragmentAtOffset first = list.get(0);
     if (list.size() == 1) {
@@ -91,7 +88,7 @@ public class DeclarationAssembler {
     // 4. Later we will check only interestingRanges for separators, and create corresponding
     // fragments; the underlying common ByteBuffer will be reused, so we are not performing
     // extensive copying.
-    int firstOffset = first.getBufferOffset();
+    int firstOffset = first.getOffset();
     List<ByteBufferFragment> fragments = new ArrayList<>();
     List<Range<Integer>> interestingRanges = Lists.newArrayList();
     int fragmentShift = 0;
@@ -114,20 +111,6 @@ public class DeclarationAssembler {
 
     ByteBufferFragment merged = ByteBufferFragment.merge(fragments);
 
-    int newOffset;
-    if (Iterables.getLast(list).getBufferOffset() == firstOffset) {
-      // If all fragment offsets were the same (which is the case if all their originating buffers
-      // were the same), then the merged fragment has the start index of the first originating
-      // fragment, and the end index of the last originating fragment.
-      // The old offset can be used without issue.
-      newOffset = firstOffset;
-    } else {
-      // If fragment offsets differed, then the new merged fragment has a different offset.
-      // In this case, the merged fragment has relative indices [0, len), which means that its
-      // offset should reflect the absolute "real" start offset.
-      newOffset = first.getFragmentOffset();
-    }
-
     int previousEnd = 0;
     for (Range<Integer> range : interestingRanges) {
       int idx =
@@ -137,11 +120,11 @@ public class DeclarationAssembler {
         // starting from the connection point between first and second fragments.
         Preconditions.checkState(idx > previousEnd);
         declarationConsumer.declaration(
-            new ByteFragmentAtOffset(newOffset, merged.subFragment(previousEnd, idx + 1)));
+            new ByteFragmentAtOffset(firstOffset, merged.subFragment(previousEnd, idx + 1)));
         previousEnd = idx + 1;
       }
     }
     declarationConsumer.declaration(
-        new ByteFragmentAtOffset(newOffset, merged.subFragment(previousEnd, merged.length())));
+        new ByteFragmentAtOffset(firstOffset, merged.subFragment(previousEnd, merged.length())));
   }
 }

@@ -211,7 +211,7 @@ public class BazelJavaSemantics implements JavaSemantics {
     public String getValue() {
       StringBuilder buffer = new StringBuilder();
       buffer.append("\"");
-      for (Artifact artifact : jars.toList()) {
+      for (Artifact artifact : jars) {
         if (buffer.length() > 1) {
           buffer.append(File.pathSeparatorChar);
         }
@@ -405,7 +405,7 @@ public class BazelJavaSemantics implements JavaSemantics {
             .addJoinedValues(
                 "classpath",
                 ";",
-                Iterables.transform(classpath.toList(), Artifact.ROOT_RELATIVE_PATH_STRING))
+                Iterables.transform(classpath, Artifact.ROOT_RELATIVE_PATH_STRING))
             // TODO(laszlocsomor): Change the Launcher to accept multiple jvm_flags entries. As of
             // 2019-02-13 the Launcher accepts just one jvm_flags entry, which contains all the
             // flags, joined by TAB characters. The Launcher splits up the string to get the
@@ -718,6 +718,11 @@ public class BazelJavaSemantics implements JavaSemantics {
   public Artifact getObfuscatedConstantStringMap(RuleContext ruleContext)
       throws InterruptedException {
     return null;
+  }
+
+  @Override
+  public boolean isJavaProtoLibraryStrictDeps(RuleContext ruleContext) {
+    return false;
   }
 
   @Override

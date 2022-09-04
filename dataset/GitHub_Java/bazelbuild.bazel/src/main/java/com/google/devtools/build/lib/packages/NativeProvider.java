@@ -14,10 +14,14 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.syntax.Location;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.FunctionSignature;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.Pair;
 import javax.annotation.Nullable;
 
@@ -27,17 +31,22 @@ import javax.annotation.Nullable;
  * <p>Every non-abstract derived class of {@link NativeProvider} corresponds to a single declared
  * provider. This is enforced by final {@link #equals(Object)} and {@link #hashCode()}.
  *
- * <p>Typical implementation of a non-constructable from Starlark declared provider is as follows:
+ * <p>Typical implementation of a non-constructable from Skylark declared provider is as follows:
  *
  * <pre>
- *     public static final Provider PROVIDER = new NativeProvider("link_params") {};
+ *     public static final Provider PROVIDER =
+ *       new NativeProvider("link_params") { };
  * </pre>
+ *
+ * To allow construction from Skylark and custom construction logic, override the {@link #call}
+ * method.
  *
  * @deprecated use {@link BuiltinProvider} instead.
  */
 @Immutable
 @Deprecated
-public abstract class NativeProvider<V extends Info> implements StarlarkValue, Provider {
+public abstract class NativeProvider<V extends InfoInterface> extends BaseFunction
+    implements Provider {
   private final String name;
   private final NativeKey key;
   private final String errorMessageFormatForUnknownField;
@@ -49,11 +58,11 @@ public abstract class NativeProvider<V extends Info> implements StarlarkValue, P
   }
 
   /**
-   * Implement this to mark that a native provider should be exported with certain name to Starlark.
+   * Implement this to mark that a native provider should be exported with certain name to Skylark.
    * Broken: only works for rules, not for aspects. DO NOT USE FOR NEW CODE!
    *
    * <p>Use native declared providers mechanism exclusively to expose providers to both native and
-   * Starlark code.
+   * Skylark code.
    */
   @Deprecated
   public interface WithLegacySkylarkName {
@@ -61,15 +70,16 @@ public abstract class NativeProvider<V extends Info> implements StarlarkValue, P
   }
 
   protected NativeProvider(Class<V> valueClass, String name) {
+    super(FunctionSignature.KWARGS, /*defaultValues=*/ null);
     this.name = name;
     this.key = new NativeKey(name, getClass());
     this.valueClass = valueClass;
     this.errorMessageFormatForUnknownField =
-        String.format("'%s' value has no field or method '%%s'", name);
+        String.format("'%s' object has no attribute '%%s'", name);
   }
 
-  public final StarlarkProviderIdentifier id() {
-    return StarlarkProviderIdentifier.forKey(getKey());
+  public final SkylarkProviderIdentifier id() {
+    return SkylarkProviderIdentifier.forKey(getKey());
   }
 
   /**
@@ -100,6 +110,11 @@ public abstract class NativeProvider<V extends Info> implements StarlarkValue, P
   }
 
   @Override
+  public String getName() {
+    return name; // for stack traces
+  }
+
+  @Override
   public String getErrorMessageFormatForUnknownField() {
     return errorMessageFormatForUnknownField;
   }
@@ -117,6 +132,23 @@ public abstract class NativeProvider<V extends Info> implements StarlarkValue, P
   @Override
   public NativeKey getKey() {
     return key;
+  }
+
+  /**
+   * Override this method to provide logic that is used to instantiate a declared provider from
+   * Skylark.
+   *
+   * <p>This is a method that is called when a constructor {@code c} is invoked as<br>
+   * {@code c(arg1 = val1, arg2 = val2, ...)}.
+   *
+   * @param args an array of argument values sorted as per the signature ({@see BaseFunction#call})
+   */
+  @Override
+  protected Object call(Object[] args, @Nullable FuncallExpression ast, StarlarkThread thread)
+      throws EvalException, InterruptedException {
+    Location loc = ast != null ? ast.getLocation() : Location.BUILTIN;
+    throw new EvalException(
+        loc, String.format("'%s' cannot be constructed from Starlark", getPrintableName()));
   }
 
   public static Pair<String, String> getSerializedRepresentationForNativeKey(NativeKey key) {
