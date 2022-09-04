@@ -40,28 +40,13 @@ class InterceptorInfo extends BeanInfo implements Comparable<InterceptorInfo> {
      */
     InterceptorInfo(AnnotationTarget target, BeanDeployment beanDeployment, Set<AnnotationInstance> bindings, List<Injection> injections, int priority) {
         super(target, beanDeployment, ScopeInfo.DEPENDENT, Collections.singleton(Type.create(target.asClass().name(), Kind.CLASS)), new HashSet<>(), injections,
-                null, null, null, Collections.emptyList());
+                null, null, null, null);
         this.bindings = bindings;
         this.priority = priority;
-        MethodInfo aroundInvoke = null;
-        MethodInfo aroundConstruct = null;
-        MethodInfo postConstruct = null;
-        MethodInfo preDestroy = null;
-        for (MethodInfo method : target.asClass().methods()) {
-            if (aroundInvoke == null && method.hasAnnotation(DotNames.AROUND_INVOKE)) {
-                aroundInvoke = method;
-            } else if (aroundConstruct == null && method.hasAnnotation(DotNames.AROUND_CONSTRUCT)) {
-                aroundConstruct = method;
-            } else if (postConstruct == null && method.hasAnnotation(DotNames.POST_CONSTRUCT)) {
-                postConstruct = method;
-            } else if (preDestroy == null && method.hasAnnotation(DotNames.PRE_DESTROY)) {
-                preDestroy = method;
-            }
-        }
-        this.aroundInvoke = aroundInvoke;
-        this.aroundConstruct = aroundConstruct;
-        this.postConstruct = postConstruct;
-        this.preDestroy = preDestroy;
+        this.aroundInvoke = target.asClass().methods().stream().filter(m -> m.hasAnnotation(DotNames.AROUND_INVOKE)).findAny().orElse(null);
+        this.aroundConstruct = target.asClass().methods().stream().filter(m -> m.hasAnnotation(DotNames.AROUND_CONSTRUCT)).findAny().orElse(null);
+        this.postConstruct = target.asClass().methods().stream().filter(m -> m.hasAnnotation(DotNames.POST_CONSTRUCT)).findAny().orElse(null);
+        this.preDestroy = target.asClass().methods().stream().filter(m -> m.hasAnnotation(DotNames.PRE_DESTROY)).findAny().orElse(null);
     }
 
     Set<AnnotationInstance> getBindings() {
@@ -103,7 +88,7 @@ class InterceptorInfo extends BeanInfo implements Comparable<InterceptorInfo> {
         }
     }
 
-    public boolean isInterceptor() {
+    boolean isInterceptor() {
         return true;
     }
 
