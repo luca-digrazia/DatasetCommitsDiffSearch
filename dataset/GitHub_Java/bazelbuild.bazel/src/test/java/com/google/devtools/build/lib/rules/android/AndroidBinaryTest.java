@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -52,7 +51,7 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -60,7 +59,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import org.junit.Before;
@@ -73,17 +71,6 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class AndroidBinaryTest extends AndroidBuildViewTestCase {
-
-  @Before
-  public final void turnOffPackageLoadingChecks() throws Exception {
-    // By default, PackageLoader loads every package the test harness loads, in order to verify
-    // the PackageLoader works correctly. In this test, however, PackageLoader sometimes fails to
-    // load packages and causes the test to become flaky.
-    // Since PackageLoader gets generally good coverage from the rest of Bazel's tests, and because
-    // we believe there's nothing special from the point of view of package loading in this test,
-    // we disable this verification here.
-    initializeSkyframeExecutor(/*doPackageLoadingChecks=*/ false);
-  }
 
   @Before
   public void createFiles() throws Exception {
@@ -2018,7 +2005,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "<resources><string name = 'lib_string'>Libs!</string></resources>");
     scratch.file("java/r/android/res/values/strings.xml",
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
-    Artifact jar = getResourceClassJar(getConfiguredTargetAndData("//java/r/android:r"));
+    Artifact jar = getResourceClassJar(getConfiguredTargetAndTarget("//java/r/android:r"));
     assertThat(getGeneratingAction(jar).getMnemonic()).isEqualTo("RClassGenerator");
     assertThat(getGeneratingSpawnActionArgs(jar))
         .containsAllOf("--primaryRTxt", "--primaryManifest", "--library", "--classJarOutput");
@@ -2033,7 +2020,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               )");
     scratch.file("java/r/android/res/values/strings.xml",
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
-    Artifact jar = getResourceClassJar(getConfiguredTargetAndData("//java/r/android:r"));
+    Artifact jar = getResourceClassJar(getConfiguredTargetAndTarget("//java/r/android:r"));
     assertThat(getGeneratingAction(jar).getMnemonic()).isEqualTo("RClassGenerator");
     List<String> args = getGeneratingSpawnActionArgs(jar);
     assertThat(args).containsAllOf("--primaryRTxt", "--primaryManifest", "--classJarOutput");
@@ -2058,7 +2045,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "<resources><string name = 'lib_string'>Libs!</string></resources>");
     scratch.file("java/r/android/res/values/strings.xml",
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
-    ConfiguredTargetAndData binary = getConfiguredTargetAndData("//java/r/android:r");
+    ConfiguredTargetAndTarget binary = getConfiguredTargetAndTarget("//java/r/android:r");
     Artifact jar = getResourceClassJar(binary);
     assertThat(getGeneratingAction(jar).getMnemonic()).isEqualTo("RClassGenerator");
     List<String> args = getGeneratingSpawnActionArgs(jar);
@@ -4365,47 +4352,5 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     List<String> parsedResourceMergingArgs =
         getGeneratingSpawnActionArgs(getFirstArtifactEndingWith(artifacts, "resource_files.zip"));
     assertThat(parsedResourceMergingArgs).contains("MERGE");
-  }
-
-  @Test
-  public void skylarkJavaInfoToAndroidBinaryAttributes() throws Exception {
-    scratch.file(
-        "java/r/android/extension.bzl",
-        "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[JavaInfo]",
-        "  return [dep_params]",
-        "my_rule = rule(",
-        "    _impl,",
-        "    attrs = {",
-        "        'dep': attr.label(),",
-        "    },",
-        ")");
-    scratch.file(
-        "java/r/android/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "android_library(",
-        "    name = 'al_bottom_for_deps',",
-        "    srcs = ['java/A.java'],",
-        ")",
-        "my_rule(",
-        "    name = 'mya',",
-        "    dep = ':al_bottom_for_deps',",
-        ")",
-        "android_binary(",
-        "    name = 'foo_app',",
-        "    srcs = ['java/B.java'],",
-        "    deps = [':mya'],",
-        "    manifest = 'AndroidManifest.xml',",
-        // TODO(b/75051107): Remove the following line when fixed.
-        "    incremental_dexing = 0,",
-        ")");
-    // Test that all bottom jars are on the runtime classpath of the app.
-    ConfiguredTarget target = getConfiguredTarget("//java/r/android:foo_app");
-    Collection<Artifact> transitiveSrcJars =
-        OutputGroupInfo.get(target).getOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP)
-            .toCollection();
-    assertThat(ActionsTestUtil.baseArtifactNames(transitiveSrcJars)).containsExactly(
-        "libal_bottom_for_deps-src.jar",
-        "libfoo_app-src.jar");
   }
 }

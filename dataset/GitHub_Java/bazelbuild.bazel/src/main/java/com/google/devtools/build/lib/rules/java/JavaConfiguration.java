@@ -70,16 +70,6 @@ public final class JavaConfiguration extends Fragment {
     ERROR
   }
 
-  /** Values for the --experimental_import_deps_checking option */
-  public enum ImportDepsCheckingLevel {
-    /** Turn off the import_deps checking. */
-    OFF,
-    /** Emit warnings when the dependencies of java_import/aar_import are not complete. */
-    WARNING,
-    /** Emit errors when the dependencies of java_import/aar_import are not complete. */
-    ERROR
-  }
-
   /**
    * Values for the --java_optimization_mode option, which controls how Proguard is run over binary
    * and test targets. Note that for the moment this has no effect when building library targets.
@@ -161,7 +151,6 @@ public final class JavaConfiguration extends Fragment {
   private final boolean strictDepsJavaProtos;
   private final OneVersionEnforcementLevel enforceOneVersion;
   private final boolean enforceOneVersionOnJavaTests;
-  private final ImportDepsCheckingLevel importDepsCheckingLevel;
   private final boolean allowRuntimeDepsOnNeverLink;
   private final JavaClasspathMode javaClasspath;
   private final ImmutableList<String> defaultJvmFlags;
@@ -210,7 +199,6 @@ public final class JavaConfiguration extends Fragment {
     this.strictDepsJavaProtos = javaOptions.strictDepsJavaProtos;
     this.enforceOneVersion = javaOptions.enforceOneVersion;
     this.enforceOneVersionOnJavaTests = javaOptions.enforceOneVersionOnJavaTests;
-    this.importDepsCheckingLevel = javaOptions.importDepsCheckingLevel;
     this.allowRuntimeDepsOnNeverLink = javaOptions.allowRuntimeDepsOnNeverLink;
     this.explicitJavaTestDeps = javaOptions.explicitJavaTestDeps;
     this.experimentalTestRunner = javaOptions.experimentalTestRunner;
@@ -251,7 +239,6 @@ public final class JavaConfiguration extends Fragment {
       boolean strictDepsJavaProtos,
       OneVersionEnforcementLevel enforceOneVersion,
       boolean enforceOneVersionOnJavaTests,
-      ImportDepsCheckingLevel importDepsCheckingLevel,
       boolean allowRuntimeDepsOnNeverLink,
       JavaClasspathMode javaClasspath,
       ImmutableList<String> defaultJvmFlags,
@@ -280,7 +267,6 @@ public final class JavaConfiguration extends Fragment {
     this.strictDepsJavaProtos = strictDepsJavaProtos;
     this.enforceOneVersion = enforceOneVersion;
     this.enforceOneVersionOnJavaTests = enforceOneVersionOnJavaTests;
-    this.importDepsCheckingLevel = importDepsCheckingLevel;
     this.allowRuntimeDepsOnNeverLink = allowRuntimeDepsOnNeverLink;
     this.javaClasspath = javaClasspath;
     this.defaultJvmFlags = defaultJvmFlags;
@@ -509,10 +495,6 @@ public final class JavaConfiguration extends Fragment {
 
   public boolean enforceOneVersionOnJavaTests() {
     return enforceOneVersionOnJavaTests;
-  }
-
-  public ImportDepsCheckingLevel getImportDepsCheckingLevel() {
-    return importDepsCheckingLevel;
   }
 
   public boolean getAllowRuntimeDepsOnNeverLink() {

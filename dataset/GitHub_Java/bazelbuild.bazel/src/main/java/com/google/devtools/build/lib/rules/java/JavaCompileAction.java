@@ -31,8 +31,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
-import com.google.devtools.build.lib.actions.CommandLines;
-import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
@@ -182,7 +180,6 @@ public final class JavaCompileAction extends SpawnAction {
       Collection<Artifact> outputs,
       CommandLine javaCompileCommandLine,
       CommandLine commandLine,
-      CommandLineLimits commandLineLimits,
       PathFragment classDirectory,
       Artifact outputJar,
       NestedSet<Artifact> classpathEntries,
@@ -206,10 +203,8 @@ public final class JavaCompileAction extends SpawnAction {
         tools,
         inputs,
         outputs,
-        outputJar,
         LOCAL_RESOURCES,
-        CommandLines.of(commandLine),
-        commandLineLimits,
+        commandLine,
         false,
         // TODO(#3320): This is missing the configuration's action environment!
         UTF8_ACTION_ENVIRONMENT,
@@ -606,7 +601,6 @@ public final class JavaCompileAction extends SpawnAction {
           outputs,
           paramFileContents,
           javaBuilderCommandLine.build(),
-          configuration.getCommandLineLimits(),
           classDirectory,
           outputJar,
           classpathEntries,

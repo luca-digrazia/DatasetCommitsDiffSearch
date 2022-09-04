@@ -49,10 +49,8 @@ import com.google.devtools.build.lib.rules.java.JavaExportsProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import org.junit.Test;
@@ -1432,52 +1430,29 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         ")");
 
     useConfiguration("--android_sdk=//sdk:sdk");
-    ConfiguredTargetAndData a = getConfiguredTargetAndData("//java/a:a");
-    ConfiguredTargetAndData b = getConfiguredTargetAndDataDirectPrerequisite(a, "//java/a:b");
-    ConfiguredTargetAndData sdk = getConfiguredTargetAndDataDirectPrerequisite(a, "//sdk:sdk");
+    ConfiguredTarget a = getConfiguredTarget("//java/a:a");
+    ConfiguredTarget b =  getDirectPrerequisite(a, "//java/a:b");
+    ConfiguredTarget sdk = getDirectPrerequisite(a, "//sdk:sdk");
     SpawnAction compileAction =
         getGeneratingSpawnAction(
-            getImplicitOutputArtifact(
-                a.getConfiguredTarget(),
-                a.getConfiguration(),
-                a.getConfiguration(),
-                AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS));
+            getImplicitOutputArtifact(a, AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS));
     assertThat(compileAction).isNotNull();
 
     SpawnAction linkAction =
         getGeneratingSpawnAction(
-            getImplicitOutputArtifact(
-                a.getConfiguredTarget(),
-                a.getConfiguration(),
-                a.getConfiguration(),
-                AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_LIBRARY_APK));
+            getImplicitOutputArtifact(a, AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_LIBRARY_APK));
     assertThat(linkAction).isNotNull();
 
     assertThat(linkAction.getInputs())
         .containsAllOf(
-            sdk.getConfiguredTarget().getProvider(AndroidSdkProvider.class).getAndroidJar(),
+            sdk.getProvider(AndroidSdkProvider.class).getAndroidJar(),
+            getImplicitOutputArtifact(a, AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS),
             getImplicitOutputArtifact(
-                a.getConfiguredTarget(),
-                a.getConfiguration(),
-                a.getConfiguration(),
-                AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS),
-            getImplicitOutputArtifact(
-                b.getConfiguredTarget(),
-                b.getConfiguration(),
-                a.getConfiguration(),
-                AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS));
+                b, a.getConfiguration(), AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS));
     assertThat(linkAction.getOutputs())
         .containsAllOf(
-            getImplicitOutputArtifact(
-                a.getConfiguredTarget(),
-                a.getConfiguration(),
-                a.getConfiguration(),
-                AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_R_TXT),
-            getImplicitOutputArtifact(
-                a.getConfiguredTarget(),
-                a.getConfiguration(),
-                a.getConfiguration(),
-                AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_SOURCE_JAR));
+            getImplicitOutputArtifact(a, AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_R_TXT),
+            getImplicitOutputArtifact(a, AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_SOURCE_JAR));
   }
 
   @Test
@@ -1869,54 +1844,5 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
       throws CommandLineExpansionException {
     Artifact paramFile = getFirstArtifactEndingWith(action.getInputs(), "-2.params");
     return ((ParameterFileWriteAction) getGeneratingAction(paramFile)).getContents();
-  }
-
-  @Test
-  public void skylarkJavaInfoToAndroidLibraryAttributes() throws Exception {
-    scratch.file(
-        "foo/extension.bzl",
-        "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[JavaInfo]",
-        "  return [dep_params]",
-        "my_rule = rule(",
-        "    _impl,",
-        "    attrs = {",
-        "        'dep': attr.label(),",
-        "    },",
-        ")");
-    scratch.file(
-        "foo/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "android_library(",
-        "    name = 'al_bottom_for_deps',",
-        "    srcs = ['java/A.java'],",
-        ")",
-        "java_library(",
-        "    name = 'jl_bottom_for_exports',",
-        "    srcs = ['java/A2.java'],",
-        ")",
-        "my_rule(",
-        "    name = 'mya',",
-        "    dep = ':al_bottom_for_deps',",
-        ")",
-        "my_rule(",
-        "    name = 'myb',",
-        "    dep = ':jl_bottom_for_exports',",
-        ")",
-        "android_library(",
-        "    name = 'lib_foo',",
-        "    srcs = ['java/B.java'],",
-        "    deps = [':mya'],",
-        "    exports = [':myb'],",
-        ")");
-    // Test that all bottom jars are on the runtime classpath of lib_android.
-    ConfiguredTarget target = getConfiguredTarget("//foo:lib_foo");
-    Collection<Artifact> transitiveSrcJars =
-        OutputGroupInfo.get(target).getOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP)
-            .toCollection();
-    assertThat(ActionsTestUtil.baseArtifactNames(transitiveSrcJars)).containsExactly(
-        "libjl_bottom_for_exports-src.jar",
-        "libal_bottom_for_deps-src.jar",
-        "liblib_foo-src.jar");
   }
 }
