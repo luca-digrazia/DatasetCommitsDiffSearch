@@ -59,6 +59,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FunctionSignature.Shape;
@@ -69,7 +70,6 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.StarlarkMutable;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.GeneratedMessage;
 import java.nio.charset.StandardCharsets;
@@ -205,12 +205,11 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   @Override
   public void doNothing(String mnemonic, Object inputs, Location location) throws EvalException {
     context.checkMutable("actions.do_nothing");
-    NestedSet<Artifact> inputSet =
-        inputs instanceof SkylarkNestedSet
-            ? ((SkylarkNestedSet) inputs).getSetFromParam(Artifact.class, "inputs")
-            : NestedSetBuilder.<Artifact>compileOrder()
-                .addAll(((SkylarkList<?>) inputs).getContents(Artifact.class, "inputs"))
-                .build();
+    NestedSet<Artifact> inputSet = inputs instanceof SkylarkNestedSet
+        ? ((SkylarkNestedSet) inputs).getSet(Artifact.class)
+        : NestedSetBuilder.<Artifact>compileOrder()
+            .addAll(((SkylarkList) inputs).getContents(Artifact.class, "inputs"))
+            .build();
     Action action =
         new PseudoAction<>(
             UUID.nameUUIDFromBytes(
@@ -513,8 +512,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       inputArtifacts = ((SkylarkList) inputs).getContents(Artifact.class, "inputs");
       builder.addInputs(inputArtifacts);
     } else {
-      NestedSet<Artifact> inputSet =
-          ((SkylarkNestedSet) inputs).getSetFromParam(Artifact.class, "inputs");
+      NestedSet<Artifact> inputSet = ((SkylarkNestedSet) inputs).getSet(Artifact.class);
       builder.addTransitiveInputs(inputSet);
       inputArtifacts = inputSet;
     }
@@ -547,11 +545,12 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     }
 
     if (toolsUnchecked != Runtime.UNBOUND) {
-      Iterable<?> toolsIterable;
+      @SuppressWarnings("unchecked")
+      Iterable<Object> toolsIterable;
       if (toolsUnchecked instanceof SkylarkList) {
-        toolsIterable = ((SkylarkList<?>) toolsUnchecked).getContents(Object.class, "tools");
+        toolsIterable = ((SkylarkList<Object>) toolsUnchecked).getContents(Object.class, "tools");
       } else {
-        toolsIterable = ((SkylarkNestedSet) toolsUnchecked).getSet();
+        toolsIterable = ((SkylarkNestedSet) toolsUnchecked).getSet(Object.class);
       }
       for (Object toolUnchecked : toolsIterable) {
         if (toolUnchecked instanceof Artifact) {
@@ -675,12 +674,13 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
         substitutionsUnchecked
             .getContents(String.class, String.class, "substitutions")
             .entrySet()) {
-      // ParserInput.create(Path) uses Latin1 when reading BUILD files, which might
+      // ParserInputSource.create(Path) uses Latin1 when reading BUILD files, which might
       // contain UTF-8 encoded symbols as part of template substitution.
       // As a quick fix, the substitution values are corrected before being passed on.
-      // In the long term, fixing ParserInput.create(Path) would be a better approach.
+      // In the long term, fixing ParserInputSource.create(Path) would be a better approach.
       substitutionsBuilder.add(
-          Substitution.of(substitution.getKey(), convertLatin1ToUtf8(substitution.getValue())));
+          Substitution.of(
+              substitution.getKey(), convertLatin1ToUtf8(substitution.getValue())));
     }
     TemplateExpansionAction action =
         new TemplateExpansionAction(
@@ -708,7 +708,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     private final Mutability mutability;
     private final StarlarkSemantics starlarkSemantics;
     private final SkylarkCustomCommandLine.Builder commandLine;
-    private final List<NestedSet<?>> potentialDirectoryArtifacts = new ArrayList<>();
+    private List<NestedSet<Object>> potentialDirectoryArtifacts = new ArrayList<>();
     private final Set<Artifact> directoryArtifacts = new HashSet<>();
     private ParameterFileType parameterFileType = ParameterFileType.SHELL_QUOTED;
     private String flagFormatString;
@@ -890,7 +890,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       SkylarkCustomCommandLine.VectorArg.Builder vectorArg;
       if (value instanceof SkylarkNestedSet) {
         SkylarkNestedSet skylarkNestedSet = ((SkylarkNestedSet) value);
-        NestedSet<?> nestedSet = skylarkNestedSet.getSet();
+        NestedSet<Object> nestedSet = skylarkNestedSet.getSet(Object.class);
         if (expandDirectories) {
           potentialDirectoryArtifacts.add(nestedSet);
         }
@@ -1070,7 +1070,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     }
 
     ImmutableSet<Artifact> getDirectoryArtifacts() {
-      for (Iterable<?> collection : potentialDirectoryArtifacts) {
+      for (Iterable<Object> collection : potentialDirectoryArtifacts) {
         scanForDirectories(collection);
       }
       potentialDirectoryArtifacts.clear();
@@ -1087,8 +1087,8 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   }
 
   @Override
-  public Args args(StarlarkThread thread) {
-    return new Args(thread.mutability(), starlarkSemantics);
+  public Args args(Environment env) {
+    return new Args(env.mutability(), starlarkSemantics);
   }
 
   @Override

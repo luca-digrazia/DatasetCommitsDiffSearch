@@ -206,9 +206,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testOutputGroups() throws Exception {
-    setSkylarkSemanticsOptions(
-        "--incompatible_disallow_struct_provider_syntax=false",
-        "--incompatible_no_target_output_group=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/extension.bzl",
         "load('//myinfo:myinfo.bzl', 'MyInfo')",
@@ -344,8 +342,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "load('//test/skylark:extension.bzl',  'my_rule')",
         "cc_binary(name = 'lib', data = ['a.txt'])",
         "my_rule(name='my', dep = ':lib')");
-
-    setSkylarkSemanticsOptions("--incompatible_no_target_output_group=false");
     NestedSet<Artifact> hiddenTopLevelArtifacts =
         OutputGroupInfo.get(getConfiguredTarget("//test/skylark:lib"))
             .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);

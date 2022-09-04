@@ -39,10 +39,10 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.shell.ShellUtils;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.util.ArrayList;
 import java.util.List;
@@ -149,8 +149,8 @@ final class JavaInfoBuildHelper {
       SkylarkActionFactory actions,
       Artifact outputJar,
       Artifact outputSourceJar,
-      List<Artifact> sourceFiles,
-      List<Artifact> sourceJars,
+      SkylarkList<Artifact> sourceFiles,
+      SkylarkList<Artifact> sourceJars,
       JavaToolchainProvider javaToolchain,
       JavaRuntimeInfo hostJavabase,
       Location location)
@@ -272,27 +272,27 @@ final class JavaInfoBuildHelper {
 
   public JavaInfo createJavaCompileAction(
       SkylarkRuleContext skylarkRuleContext,
-      List<Artifact> sourceJars,
-      List<Artifact> sourceFiles,
+      SkylarkList<Artifact> sourceJars,
+      SkylarkList<Artifact> sourceFiles,
       Artifact outputJar,
       Artifact outputSourceJar,
-      List<String> javacOpts,
-      List<JavaInfo> deps,
-      List<JavaInfo> exports,
-      List<JavaInfo> plugins,
-      List<JavaInfo> exportedPlugins,
-      List<Artifact> annotationProcessorAdditionalInputs,
-      List<Artifact> annotationProcessorAdditionalOutputs,
+      SkylarkList<String> javacOpts,
+      SkylarkList<JavaInfo> deps,
+      SkylarkList<JavaInfo> exports,
+      SkylarkList<JavaInfo> plugins,
+      SkylarkList<JavaInfo> exportedPlugins,
+      SkylarkList<Artifact> annotationProcessorAdditionalInputs,
+      SkylarkList<Artifact> annotationProcessorAdditionalOutputs,
       String strictDepsMode,
       JavaToolchainProvider javaToolchain,
       JavaRuntimeInfo hostJavabase,
-      List<Artifact> sourcepathEntries,
-      List<Artifact> resources,
+      SkylarkList<Artifact> sourcepathEntries,
+      SkylarkList<Artifact> resources,
       Boolean neverlink,
       JavaSemantics javaSemantics,
       Location location,
-      StarlarkThread thread)
-      throws EvalException, InterruptedException {
+      Environment environment)
+      throws EvalException {
 
     if (sourceJars.isEmpty()
         && sourceFiles.isEmpty()
@@ -352,7 +352,7 @@ final class JavaInfoBuildHelper {
             NestedSetBuilder.wrap(
                 Order.STABLE_ORDER,
                 JavaInfo.fetchProvidersFromList(concat(deps, exports), JavaGenJarsProvider.class)),
-            ImmutableList.copyOf(annotationProcessorAdditionalInputs));
+            annotationProcessorAdditionalInputs.getImmutableList());
 
     JavaCompilationArgsProvider javaCompilationArgsProvider =
         helper.buildCompilationArgsProvider(artifacts, true, neverlink);
