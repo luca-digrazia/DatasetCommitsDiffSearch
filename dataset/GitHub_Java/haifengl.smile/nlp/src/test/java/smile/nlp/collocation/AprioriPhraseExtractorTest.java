@@ -71,7 +71,7 @@ public class AprioriPhraseExtractorTest {
         
         PorterStemmer stemmer = new PorterStemmer();
         SimpleTokenizer tokenizer = new SimpleTokenizer();
-        ArrayList<String[]> sentences = new ArrayList<>();
+        ArrayList<String[]> sentences = new ArrayList<String[]>();
         for (String paragraph : SimpleParagraphSplitter.getInstance().split(text)) {
             for (String s : SimpleSentenceSplitter.getInstance().split(paragraph)) {
                 String[] sentence = tokenizer.split(s);
