@@ -90,17 +90,10 @@ public class NinjaActionsHelper {
       return;
     }
     for (String input : this.outputRootInputs) {
-      // output_root_inputs are relative to the output_root directory, and we should
-      // pass inside createOutputArtifact() paths, relative to working directory.
-      DerivedArtifact derivedArtifact =
-          artifactsHelper.createOutputArtifact(
-              artifactsHelper
-                  .getOutputRootPath()
-                  .getRelative(input)
-                  .relativeTo(artifactsHelper.getWorkingDirectory()));
-      // This method already expects the path relative to output_root.
+      PathFragment inputPathFragment = PathFragment.create(input);
+      DerivedArtifact derivedArtifact = artifactsHelper.createOutputArtifact(inputPathFragment);
       PathFragment absolutePath =
-          artifactsHelper.createAbsolutePathUnderOutputRoot(PathFragment.create(input));
+          artifactsHelper.createAbsolutePathUnderOutputRoot(inputPathFragment);
       SymlinkAction symlinkAction =
           SymlinkAction.toAbsolutePath(
               ruleContext.getActionOwner(),

@@ -109,13 +109,14 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
             outputRoot,
             workingDirectory,
             createSrcsMap(ruleContext),
-            createDepsMap(ruleContext));
+            createDepsMap(ruleContext),
+            pathsToBuild);
     if (ruleContext.hasErrors()) {
       return null;
     }
+    TargetsPreparer targetsPreparer = new TargetsPreparer();
 
     try {
-      TargetsPreparer targetsPreparer = new TargetsPreparer();
       List<Path> childNinjaFiles =
           ninjaSrcs.stream().map(Artifact::getPath).collect(Collectors.toList());
       Path workspace =
@@ -130,51 +131,46 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
                   childNinjaFiles,
                   ownerTargetName)
               .pipeline(mainArtifact.getPath());
-      targetsPreparer.process(ninjaTargets);
-      PhonyTargetArtifacts phonyTargetArtifacts =
-          new PhonyTargetArtifacts(targetsPreparer.getPhonyTargetsMap(), artifactsHelper);
+      targetsPreparer.process(ninjaTargets, artifactsHelper);
       new NinjaActionsHelper(
               ruleContext,
               artifactsHelper,
               outputRootInputs,
               targetsPreparer.getUsualTargets(),
-              targetsPreparer.getPhonyTargetsMap(),
-              phonyTargetArtifacts,
-              pathsToBuild)
+              targetsPreparer.getPhonyTargetsMap())
           .process();
-
-      if (!checkOrphanArtifacts(ruleContext)) {
-        return null;
-      }
-
-      NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
-      TreeMap<String, NestedSet<Artifact>> groups = Maps.newTreeMap();
-      for (Map.Entry<String, List<String>> entry : outputGroupsMap.entrySet()) {
-        NestedSet<Artifact> artifacts =
-            getGroupArtifacts(
-                ruleContext,
-                entry.getValue(),
-                targetsPreparer.getPhonyTargetsMap(),
-                phonyTargetArtifacts,
-                artifactsHelper);
-        groups.put(entry.getKey(), artifacts);
-        filesToBuild.addTransitive(artifacts);
-      }
-
-      if (ruleContext.hasErrors()) {
-        return null;
-      }
-
-      return new RuleConfiguredTargetBuilder(ruleContext)
-          .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
-          .setFilesToBuild(filesToBuild.build())
-          .addOutputGroups(groups)
-          .build();
     } catch (GenericParsingException | IOException e) {
       // IOException is possible with reading Ninja file, describing the action graph.
       ruleContext.ruleError(e.getMessage());
       return null;
     }
+
+    if (!checkOrphanArtifacts(ruleContext)) {
+      return null;
+    }
+
+    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
+    TreeMap<String, NestedSet<Artifact>> groups = Maps.newTreeMap();
+    for (Map.Entry<String, List<String>> entry : outputGroupsMap.entrySet()) {
+      NestedSet<Artifact> artifacts =
+          getGroupArtifacts(
+              ruleContext,
+              entry.getValue(),
+              targetsPreparer.getPhonyTargetsMap(),
+              artifactsHelper.getOutputsMap());
+      groups.put(entry.getKey(), artifacts);
+      filesToBuild.addTransitive(artifacts);
+    }
+
+    if (ruleContext.hasErrors()) {
+      return null;
+    }
+
+    return new RuleConfiguredTargetBuilder(ruleContext)
+        .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
+        .setFilesToBuild(filesToBuild.build())
+        .addOutputGroups(groups)
+        .build();
   }
 
   private static boolean checkOrphanArtifacts(RuleContext ruleContext) {
@@ -193,24 +189,27 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
 
   private static class TargetsPreparer {
     private ImmutableSortedMap<PathFragment, NinjaTarget> usualTargets;
-    private ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargetsMap;
+    private ImmutableSortedMap<PathFragment, PhonyTarget<Artifact>> phonyTargetsMap;
 
     public ImmutableSortedMap<PathFragment, NinjaTarget> getUsualTargets() {
       return usualTargets;
     }
 
-    public ImmutableSortedMap<PathFragment, PhonyTarget> getPhonyTargetsMap() {
+    public ImmutableSortedMap<PathFragment, PhonyTarget<Artifact>> getPhonyTargetsMap() {
       return phonyTargetsMap;
     }
 
-    void process(List<NinjaTarget> ninjaTargets) throws GenericParsingException {
+    void process(List<NinjaTarget> ninjaTargets, NinjaGraphArtifactsHelper artifactsHelper)
+        throws GenericParsingException {
       ImmutableSortedMap.Builder<PathFragment, NinjaTarget> usualTargetsBuilder =
           ImmutableSortedMap.naturalOrder();
       ImmutableSortedMap.Builder<PathFragment, NinjaTarget> phonyTargetsBuilder =
           ImmutableSortedMap.naturalOrder();
       separatePhonyTargets(ninjaTargets, usualTargetsBuilder, phonyTargetsBuilder);
       usualTargets = usualTargetsBuilder.build();
-      phonyTargetsMap = NinjaPhonyTargetsUtil.getPhonyPathsMap(phonyTargetsBuilder.build());
+      phonyTargetsMap =
+          NinjaPhonyTargetsUtil.getPhonyPathsMap(
+              phonyTargetsBuilder.build(), artifactsHelper::getInputArtifact);
     }
 
     private static void separatePhonyTargets(
@@ -269,18 +268,16 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
   private static NestedSet<Artifact> getGroupArtifacts(
       RuleContext ruleContext,
       List<String> targets,
-      ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargetsMap,
-      PhonyTargetArtifacts phonyTargetsArtifacts,
-      NinjaGraphArtifactsHelper artifactsHelper)
-      throws GenericParsingException {
+      ImmutableSortedMap<PathFragment, PhonyTarget<Artifact>> phonyTargetsMap,
+      ImmutableSortedMap<PathFragment, Artifact> outputsMap) {
     NestedSetBuilder<Artifact> nestedSetBuilder = NestedSetBuilder.stableOrder();
     for (String target : targets) {
       PathFragment path = PathFragment.create(target);
-      if (phonyTargetsMap.containsKey(path)) {
-        NestedSet<Artifact> artifacts = phonyTargetsArtifacts.getPhonyTargetArtifacts(path);
-        nestedSetBuilder.addTransitive(artifacts);
+      PhonyTarget<Artifact> phonyTarget = phonyTargetsMap.get(path);
+      if (phonyTarget != null) {
+        nestedSetBuilder.addTransitive(phonyTarget.getInputs());
       } else {
-        Artifact usualArtifact = artifactsHelper.createOutputArtifact(path);
+        Artifact usualArtifact = outputsMap.get(path);
         if (usualArtifact == null) {
           ruleContext.ruleError(
               String.format("Required target '%s' is not created in ninja_graph.", path));
