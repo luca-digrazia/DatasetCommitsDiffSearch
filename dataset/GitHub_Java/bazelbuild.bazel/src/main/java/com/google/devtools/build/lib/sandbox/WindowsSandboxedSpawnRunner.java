@@ -59,8 +59,9 @@ final class WindowsSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     Path commandTmpDir = tmpDir.getRelative("work");
     commandTmpDir.createDirectory();
     ImmutableMap<String, String> environment =
-        localEnvProvider.rewriteLocalEnv(
-            spawn.getEnvironment(), binTools, commandTmpDir.getPathString());
+        ImmutableMap.copyOf(
+            localEnvProvider.rewriteLocalEnv(
+                spawn.getEnvironment(), binTools, commandTmpDir.getPathString()));
 
     SandboxInputs readablePaths =
         SandboxHelpers.processInputFiles(

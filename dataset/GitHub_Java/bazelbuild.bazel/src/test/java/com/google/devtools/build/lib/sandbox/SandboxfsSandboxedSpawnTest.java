@@ -68,7 +68,6 @@ public class SandboxfsSandboxedSpawnTest {
         new SandboxfsSandboxedSpawn(
             sandboxfs,
             outerDir,
-            "workspace",
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
             new SandboxInputs(
@@ -91,30 +90,6 @@ public class SandboxfsSandboxedSpawnTest {
   }
 
   @Test
-  public void testExecRootContainsWorkspaceName() throws Exception {
-    Path helloTxt = workspaceDir.getRelative("hello.txt");
-    FileSystemUtils.createEmptyFile(helloTxt);
-
-    SandboxedSpawn spawn =
-        new SandboxfsSandboxedSpawn(
-            sandboxfs,
-            outerDir,
-            "some-workspace-name",
-            ImmutableList.of("/bin/true"),
-            ImmutableMap.of(),
-            new SandboxInputs(ImmutableMap.of(), ImmutableMap.of()),
-            SandboxOutputs.create(ImmutableSet.of(), ImmutableSet.of()),
-            ImmutableSet.of(),
-            /* mapSymlinkTargets= */ false,
-            new SynchronousTreeDeleter(),
-            /* statisticsPath= */ null);
-    spawn.createFileSystem();
-    Path execRoot = spawn.getSandboxExecRoot();
-
-    assertThat(execRoot.getPathString()).contains("/some-workspace-name");
-  }
-
-  @Test
   public void testDelete() throws Exception {
     Path helloTxt = workspaceDir.getRelative("hello.txt");
     FileSystemUtils.createEmptyFile(helloTxt);
@@ -123,7 +98,6 @@ public class SandboxfsSandboxedSpawnTest {
         new SandboxfsSandboxedSpawn(
             sandboxfs,
             outerDir,
-            "workspace",
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
             new SandboxInputs(
@@ -158,7 +132,6 @@ public class SandboxfsSandboxedSpawnTest {
         new SandboxfsSandboxedSpawn(
             sandboxfs,
             outerDir,
-            "workspace",
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
             new SandboxInputs(ImmutableMap.of(), ImmutableMap.of()),
@@ -214,7 +187,6 @@ public class SandboxfsSandboxedSpawnTest {
         new SandboxfsSandboxedSpawn(
             sandboxfs,
             outerDir,
-            "workspace",
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
             new SandboxInputs(

@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.exec.TreeDeleter;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
+import com.google.devtools.build.lib.vfs.FileSystemUtils.MoveResult;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -27,6 +28,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -34,6 +37,11 @@ import javax.annotation.Nullable;
  * execution root for a spawn.
  */
 public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedSpawn {
+
+  private static final Logger logger =
+      Logger.getLogger(AbstractContainerizingSandboxedSpawn.class.getName());
+
+  private static final AtomicBoolean warnedAboutMovesBeingCopies = new AtomicBoolean(false);
 
   private final Path sandboxPath;
   private final Path sandboxExecRoot;
@@ -91,7 +99,6 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
   public void createFileSystem() throws IOException {
     createDirectories();
     createInputs(inputs);
-    inputs.materializeVirtualInputs(sandboxExecRoot);
   }
 
   /**
@@ -116,14 +123,7 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
             outputs.files(),
             outputs.dirs())) {
       Preconditions.checkArgument(!path.isAbsolute());
-      if (path.segmentCount() > 1) {
-        // Allow a single up-level reference to allow inputs from the siblings of the main
-        // repository in the sandbox execution root.
-        Preconditions.checkArgument(
-            !path.subFragment(1).containsUplevelReferences(),
-            "%s escapes the sandbox exec root.",
-            path);
-      }
+      Preconditions.checkArgument(!path.containsUplevelReferences());
       for (int i = 0; i < path.segmentCount(); i++) {
         dirsToCreate.add(sandboxExecRoot.getRelative(path.subFragment(0, i)));
       }
@@ -163,9 +163,52 @@ public abstract class AbstractContainerizingSandboxedSpawn implements SandboxedS
 
   protected abstract void copyFile(Path source, Path target) throws IOException;
 
+  /**
+   * Moves all given outputs from a root to another.
+   *
+   * <p>This is a support function to help with the implementation of {@link #copyOutputs(Path)}.
+   *
+   * @param outputs outputs to move as relative paths to a root
+   * @param sourceRoot source directory from which to resolve outputs
+   * @param targetRoot target directory to which to move the resolved outputs from the source
+   * @throws IOException if any of the moves fails
+   */
+  static void moveOutputs(SandboxOutputs outputs, Path sourceRoot, Path targetRoot)
+      throws IOException {
+    for (PathFragment output : Iterables.concat(outputs.files(), outputs.dirs())) {
+      Path source = sourceRoot.getRelative(output);
+      Path target = targetRoot.getRelative(output);
+      if (source.isFile() || source.isSymbolicLink()) {
+        // Ensure the target directory exists in the target. The directories for the action outputs
+        // have already been created, but the spawn outputs may be different from the overall action
+        // outputs. This is the case for test actions.
+        target.getParentDirectory().createDirectoryAndParents();
+        if (FileSystemUtils.moveFile(source, target).equals(MoveResult.FILE_COPIED)) {
+          if (warnedAboutMovesBeingCopies.compareAndSet(false, true)) {
+            logger.warning(
+                "Moving files out of the sandbox (e.g. from "
+                    + source
+                    + " to "
+                    + target
+                    + ") had to be done with a file copy, which is detrimental to performance; are "
+                    + " the two trees in different file systems?");
+          }
+        }
+      } else if (source.isDirectory()) {
+        try {
+          source.renameTo(target);
+        } catch (IOException e) {
+          // Failed to move directory directly, thus move it recursively.
+          target.createDirectory();
+          FileSystemUtils.moveTreesBelow(source, target);
+        }
+      }
+    }
+  }
+
   @Override
   public void copyOutputs(Path execRoot) throws IOException {
-    SandboxHelpers.moveOutputs(outputs, sandboxExecRoot, execRoot);
+    moveOutputs(outputs, sandboxExecRoot, execRoot);
   }
 
   @Override
