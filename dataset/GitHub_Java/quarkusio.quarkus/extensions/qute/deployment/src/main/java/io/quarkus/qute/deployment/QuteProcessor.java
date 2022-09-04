@@ -377,25 +377,28 @@ public class QuteProcessor {
         }).addParserHook(new ParserHook() {
 
             @Override
-            public void beforeParsing(ParserHelper parserHelper) {
-                for (CheckedTemplateBuildItem checkedTemplate : checkedTemplates) {
-                    // FIXME: check for dot/extension?
-                    if (parserHelper.getTemplateId().startsWith(checkedTemplate.templateId)) {
-                        for (Entry<String, String> entry : checkedTemplate.bindings.entrySet()) {
-                            parserHelper.addParameter(entry.getKey(), entry.getValue());
+            public void beforeParsing(ParserHelper parserHelper, String id) {
+                if (id != null) {
+                    for (CheckedTemplateBuildItem checkedTemplate : checkedTemplates) {
+                        // FIXME: check for dot/extension?
+                        if (id.startsWith(checkedTemplate.templateId)) {
+                            for (Entry<String, String> entry : checkedTemplate.bindings.entrySet()) {
+                                parserHelper.addParameter(entry.getKey(), entry.getValue());
+                            }
                         }
                     }
-                }
-                // Add params to message bundle templates
-                for (MessageBundleMethodBuildItem messageBundleMethod : messageBundleMethods) {
-                    if (parserHelper.getTemplateId().equals(messageBundleMethod.getTemplateId())) {
-                        MethodInfo method = messageBundleMethod.getMethod();
-                        for (ListIterator<Type> it = method.parameters().listIterator(); it.hasNext();) {
-                            Type paramType = it.next();
-                            parserHelper.addParameter(method.parameterName(it.previousIndex()),
-                                    JandexUtil.getBoxedTypeName(paramType));
+
+                    // Add params to message bundle templates
+                    for (MessageBundleMethodBuildItem messageBundleMethod : messageBundleMethods) {
+                        if (id.equals(messageBundleMethod.getTemplateId())) {
+                            MethodInfo method = messageBundleMethod.getMethod();
+                            for (ListIterator<Type> it = method.parameters().listIterator(); it.hasNext();) {
+                                Type paramType = it.next();
+                                parserHelper.addParameter(method.parameterName(it.previousIndex()),
+                                        JandexUtil.getBoxedTypeName(paramType));
+                            }
+                            break;
                         }
-                        break;
                     }
                 }
             }
@@ -855,7 +858,7 @@ public class QuteProcessor {
         generatedTypes.addAll(generator.getGeneratedTypes());
 
         ExtensionMethodGenerator extensionMethodGenerator = new ExtensionMethodGenerator(index, classOutput);
-        Map<DotName, Map<String, List<TemplateExtensionMethodBuildItem>>> classToNamespaceExtensions = new HashMap<>();
+        Map<DotName, List<TemplateExtensionMethodBuildItem>> classToNamespaceExtensions = new HashMap<>();
         Map<String, DotName> namespaceToClass = new HashMap<>();
 
         for (TemplateExtensionMethodBuildItem templateExtension : templateExtensionMethods) {
@@ -864,23 +867,17 @@ public class QuteProcessor {
                 DotName declaringClassName = templateExtension.getMethod().declaringClass().name();
                 DotName namespaceClassName = namespaceToClass.get(templateExtension.getNamespace());
                 if (namespaceClassName == null) {
-                    namespaceToClass.put(templateExtension.getNamespace(), namespaceClassName);
+                    namespaceToClass.put(templateExtension.getNamespace(), declaringClassName);
                 } else if (!namespaceClassName.equals(declaringClassName)) {
                     throw new IllegalStateException("Template extension methods that share the namespace "
                             + templateExtension.getNamespace() + " must be declared on the same class; but declared on "
                             + namespaceClassName + " and " + declaringClassName);
                 }
-                Map<String, List<TemplateExtensionMethodBuildItem>> namespaceToExtensions = classToNamespaceExtensions
+                List<TemplateExtensionMethodBuildItem> namespaceMethods = classToNamespaceExtensions
                         .get(declaringClassName);
-                if (namespaceToExtensions == null) {
-                    namespaceToExtensions = new HashMap<>();
-                    classToNamespaceExtensions.put(declaringClassName, namespaceToExtensions);
-                }
-                List<TemplateExtensionMethodBuildItem> namespaceMethods = namespaceToExtensions
-                        .get(templateExtension.getNamespace());
                 if (namespaceMethods == null) {
                     namespaceMethods = new ArrayList<>();
-                    namespaceToExtensions.put(templateExtension.getNamespace(), namespaceMethods);
+                    classToNamespaceExtensions.put(declaringClassName, namespaceMethods);
                 }
                 namespaceMethods.add(templateExtension);
             } else {
@@ -891,19 +888,15 @@ public class QuteProcessor {
         }
 
         // Generate a namespace resolver for extension methods declared on the same class
-        for (Entry<DotName, Map<String, List<TemplateExtensionMethodBuildItem>>> entry1 : classToNamespaceExtensions
-                .entrySet()) {
-            Map<String, List<TemplateExtensionMethodBuildItem>> namespaceToMethods = entry1.getValue();
-            for (Entry<String, List<TemplateExtensionMethodBuildItem>> entry2 : namespaceToMethods.entrySet()) {
-                List<TemplateExtensionMethodBuildItem> methods = entry2.getValue();
-                // Methods with higher priority take precedence
-                methods.sort(Comparator.comparingInt(TemplateExtensionMethodBuildItem::getPriority).reversed());
-                try (NamespaceResolverCreator namespaceResolverCreator = extensionMethodGenerator
-                        .createNamespaceResolver(methods.get(0).getMethod().declaringClass(), entry2.getKey())) {
-                    try (ResolveCreator resolveCreator = namespaceResolverCreator.implementResolve()) {
-                        for (TemplateExtensionMethodBuildItem method : methods) {
-                            resolveCreator.addMethod(method.getMethod(), method.getMatchName(), method.getMatchRegex());
-                        }
+        for (Entry<DotName, List<TemplateExtensionMethodBuildItem>> entry : classToNamespaceExtensions.entrySet()) {
+            List<TemplateExtensionMethodBuildItem> methods = entry.getValue();
+            // Methods with higher priority take precedence
+            methods.sort(Comparator.comparingInt(TemplateExtensionMethodBuildItem::getPriority).reversed());
+            try (NamespaceResolverCreator namespaceResolverCreator = extensionMethodGenerator
+                    .createNamespaceResolver(methods.get(0).getMethod().declaringClass(), methods.get(0).getNamespace())) {
+                try (ResolveCreator resolveCreator = namespaceResolverCreator.implementResolve()) {
+                    for (TemplateExtensionMethodBuildItem method : methods) {
+                        resolveCreator.addMethod(method.getMethod(), method.getMatchName(), method.getMatchRegex());
                     }
                 }
             }
