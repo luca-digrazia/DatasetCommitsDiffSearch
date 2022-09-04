@@ -757,8 +757,8 @@ class ExperimentalStateTracker {
     Map<ActionState, Artifact> copy =
         new TreeMap<>(
             Comparator.comparing((ActionState entry) -> entry.runningStrategiesBitmap == 0)
-                .thenComparingLong(entry -> entry.nanoStartTime)
-                .thenComparingInt(ActionState::hashCode));
+                .thenComparing(entry -> entry.nanoStartTime)
+                .thenComparing(ActionState::hashCode));
     for (Map.Entry<Artifact, ActionState> action : activeActions.entrySet()) {
       copy.put(action.getValue().deepCopy(), action.getKey());
     }
