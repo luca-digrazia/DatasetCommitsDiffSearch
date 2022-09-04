@@ -72,7 +72,6 @@ public class PersonResource {
     @Path("/all")
     @Produces("application/json")
     public Iterable<Person> all() {
-        personRepository.doNothingMore();
         return personRepository.findAll();
     }
 
