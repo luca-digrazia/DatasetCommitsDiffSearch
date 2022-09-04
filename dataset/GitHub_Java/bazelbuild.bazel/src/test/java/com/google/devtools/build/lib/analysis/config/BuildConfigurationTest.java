@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis.config;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
@@ -49,16 +48,17 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
     BuildConfiguration config = create("--cpu=piii");
     String outputDirPrefix = outputBase
-        + "/" + config.getMainRepositoryName() + "/blaze-out/.*piii-fastbuild";
+        + "/" + config.getMainRepositoryName()
+        + "/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-piii-fastbuild";
 
     assertThat(config.getOutputDirectory(RepositoryName.MAIN).getPath().toString())
-        .matches(outputDirPrefix);
+        .isEqualTo(outputDirPrefix);
     assertThat(config.getBinDirectory(RepositoryName.MAIN).getPath().toString())
-        .matches(outputDirPrefix + "/bin");
+        .isEqualTo(outputDirPrefix + "/bin");
     assertThat(config.getIncludeDirectory(RepositoryName.MAIN).getPath().toString())
-        .matches(outputDirPrefix + "/include");
+        .isEqualTo(outputDirPrefix + "/include");
     assertThat(config.getTestLogsDirectory(RepositoryName.MAIN).getPath().toString())
-        .matches(outputDirPrefix + "/testlogs");
+        .isEqualTo(outputDirPrefix + "/testlogs");
   }
 
   @Test
@@ -69,11 +69,11 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
     BuildConfiguration config = create("--platform_suffix=-test");
     assertThat(config.getOutputDirectory(RepositoryName.MAIN).getPath().toString())
-        .matches(
+        .isEqualTo(
             outputBase
                 + "/"
                 + config.getMainRepositoryName()
-                + "/blaze-out/.*k8-fastbuild-test");
+                + "/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-k8-fastbuild-test");
   }
 
   @Test
@@ -139,7 +139,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     // TODO(ulfjack): It would be better to get the better error message also if the Jvm is enabled.
     // Currently: "No JVM target found under //tools/jdk:jdk that would work for bogus"
     try {
-      create("--cpu=bogus");
+      create("--cpu=bogus", "--experimental_disable_jvm");
       fail();
     } catch (InvalidConfigurationException e) {
       assertThat(e)
@@ -235,9 +235,11 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testCycleInFragments() throws Exception {
-    configurationFragmentFactories = ImmutableList.of(
-        createMockFragment(CppConfiguration.class, JavaConfiguration.class),
-        createMockFragment(JavaConfiguration.class, CppConfiguration.class));
+    configurationFactory =
+        new ConfigurationFactory(
+            analysisMock.createConfigurationCollectionFactory(),
+            createMockFragment(CppConfiguration.class, JavaConfiguration.class),
+            createMockFragment(JavaConfiguration.class, CppConfiguration.class));
     try {
       createCollection();
       fail();
@@ -248,8 +250,10 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testMissingFragment() throws Exception {
-    configurationFragmentFactories = ImmutableList.of(
-        createMockFragment(CppConfiguration.class, JavaConfiguration.class));
+    configurationFactory =
+        new ConfigurationFactory(
+            analysisMock.createConfigurationCollectionFactory(),
+            createMockFragment(CppConfiguration.class, JavaConfiguration.class));
     try {
       createCollection();
       fail();
@@ -286,6 +290,15 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
     // Legitimately null option:
     assertThat(create().getTransitiveOptionDetails().getOptionValue("test_filter")).isNull();
+  }
+
+  @Test
+  public void testNoDistinctHostConfigurationUnsupportedWithTrimmedConfigs() throws Exception {
+    checkError(
+        "--nodistinct_host_configuration does not currently work with dynamic configurations",
+        "--nodistinct_host_configuration", "--experimental_dynamic_configs=on");
+    assertThat(create("--nodistinct_host_configuration", "--experimental_dynamic_configs=notrim"))
+        .isNotNull();
   }
 
   @Test
@@ -391,7 +404,10 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void depLabelCycleOnConfigurationLoading() throws Exception {
-    configurationFragmentFactories = ImmutableList.of(createMockFragmentWithLabelDep("//foo"));
+    configurationFactory =
+        new ConfigurationFactory(
+            analysisMock.createConfigurationCollectionFactory(),
+            createMockFragmentWithLabelDep("//foo"));
     getScratch().file("foo/BUILD",
         "load('//skylark:one.bzl', 'one')",
         "cc_library(name = 'foo')");
