@@ -23,7 +23,7 @@ public abstract class ScanningHibernateBundle<T extends Configuration> extends H
     }
 
     protected ScanningHibernateBundle(String pckg, SessionFactoryFactory sessionFactoryFactory) {
-        this(new String[]{pckg}, sessionFactoryFactory);
+        this(new String[] { pckg }, sessionFactoryFactory);
     }
 
     protected ScanningHibernateBundle(String[] pckgs, SessionFactoryFactory sessionFactoryFactory) {
@@ -40,15 +40,15 @@ public abstract class ScanningHibernateBundle<T extends Configuration> extends H
     public static ImmutableList<Class<?>> findEntityClassesFromDirectory(String[] pckgs) {
         @SuppressWarnings("unchecked")
         final AnnotationAcceptingListener asl = new AnnotationAcceptingListener(Entity.class);
-        try (final PackageNamesScanner scanner = new PackageNamesScanner(pckgs, true)) {
-            while (scanner.hasNext()) {
-                final String next = scanner.next();
-                if (asl.accept(next)) {
-                    try (final InputStream in = scanner.open()) {
-                        asl.process(next, in);
-                    } catch (IOException e) {
-                        throw new RuntimeException("AnnotationAcceptingListener failed to process scanned resource: " + next);
-                    }
+        final PackageNamesScanner scanner = new PackageNamesScanner(pckgs, true);
+
+        while (scanner.hasNext()) {
+            final String next = scanner.next();
+            if (asl.accept(next)) {
+                try (final InputStream in = scanner.open()) {
+                    asl.process(next, in);
+                } catch (IOException e) {
+                    throw new RuntimeException("AnnotationAcceptingListener failed to process scanned resource: " + next);
                 }
             }
         }
