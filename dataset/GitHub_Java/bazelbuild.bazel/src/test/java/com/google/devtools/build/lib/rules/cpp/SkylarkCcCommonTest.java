@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Tool;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.VariableWithValue;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.WithFeatureSet;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringValueParser;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
@@ -1397,11 +1398,11 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//foo:skylark_lib");
     assertThat(target).isNotNull();
     @SuppressWarnings("unchecked")
-    SkylarkList<LibraryToLinkWrapper> libraries =
-        (SkylarkList<LibraryToLinkWrapper>) target.get("libraries");
+    SkylarkList<LibraryToLinkApi> libraries =
+        (SkylarkList<LibraryToLinkApi>) target.get("libraries");
     assertThat(
             libraries.stream()
-                .map(x -> x.getResolvedSymlinkDynamicLibrary().getFilename())
+                .map(x -> x.getOriginalLibraryArtifact().getFilename())
                 .collect(ImmutableList.toImmutableList()))
         .contains("libskylark_lib.so");
   }
@@ -1412,8 +1413,9 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         scratch, "tools/build_defs/foo", "linkopts=depset(['-LINKING_OPTION'])");
     ConfiguredTarget target = getConfiguredTarget("//foo:skylark_lib");
     assertThat(target).isNotNull();
-    assertThat(target.get(CcInfo.PROVIDER).getCcLinkingContext().getFlattenedUserLinkFlags())
-        .contains("-LINKING_OPTION");
+    CppLinkAction action =
+        (CppLinkAction) getGeneratingAction(artifactByPath(getFilesToBuild(target), ".so"));
+    assertThat(action.getArguments()).contains("-LINKING_OPTION");
   }
 
   @Test
@@ -1424,12 +1426,9 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "dynamic_library=ctx.actions.declare_file('dynamic_lib_artifact.so')");
     assertThat(getConfiguredTarget("//foo:skylark_lib")).isNotNull();
     ConfiguredTarget target = getConfiguredTarget("//foo:skylark_lib");
-    @SuppressWarnings("unchecked")
-    SkylarkList<LibraryToLinkWrapper> libraries =
-        (SkylarkList<LibraryToLinkWrapper>) target.get("libraries");
     assertThat(
-            libraries.stream()
-                .map(x -> x.getResolvedSymlinkDynamicLibrary().getFilename())
+            getFilesToBuild(target).toCollection().stream()
+                .map(x -> x.getFilename())
                 .collect(ImmutableList.toImmutableList()))
         .contains("dynamic_lib_artifact.so");
   }
@@ -4636,42 +4635,5 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     String ccFlags = (String) r.get("cc_flags");
 
     assertThat(ccFlags).isEqualTo("-test-cflag1 -testcflag2");
-  }
-
-  private boolean toolchainResolutionEnabled() throws Exception {
-    scratch.file(
-        "a/rule.bzl",
-        "def _impl(ctx):",
-        "  toolchain_resolution_enabled = cc_common.is_cc_toolchain_resolution_enabled_do_not_use(",
-        "      ctx = ctx)",
-        "  return struct(",
-        "    toolchain_resolution_enabled = toolchain_resolution_enabled)",
-        "toolchain_resolution_enabled = rule(",
-        "  _impl,",
-        ");");
-
-    scratch.file(
-        "a/BUILD",
-        "load(':rule.bzl', 'toolchain_resolution_enabled')",
-        "toolchain_resolution_enabled(name='r')");
-
-    ConfiguredTarget r = getConfiguredTarget("//a:r");
-    @SuppressWarnings("unchecked") // Use an extra variable in order to suppress the warning.
-    boolean toolchainResolutionEnabled = (boolean) r.get("toolchain_resolution_enabled");
-    return toolchainResolutionEnabled;
-  }
-
-  @Test
-  public void testIsToolchainResolutionEnabled_disabled() throws Exception {
-    useConfiguration("--incompatible_enable_cc_toolchain_resolution=false");
-
-    assertThat(toolchainResolutionEnabled()).isFalse();
-  }
-
-  @Test
-  public void testIsToolchainResolutionEnabled_enabled() throws Exception {
-    useConfiguration("--incompatible_enable_cc_toolchain_resolution");
-
-    assertThat(toolchainResolutionEnabled()).isTrue();
   }
 }

@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -49,8 +48,8 @@ import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.ZipFilterBuilder.CheckHashMismatchMode;
 import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext.LinkOptions;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext.LinkOptions;
 import com.google.devtools.build.lib.rules.java.ClasspathConfiguredFragment;
 import com.google.devtools.build.lib.rules.java.JavaCcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
@@ -818,23 +817,19 @@ public class AndroidCommon {
     return asNeverLink;
   }
 
-  CcInfo getCcInfo() {
+  public CcInfo getCcInfo() {
     return getCcInfo(
-        javaCommon.targetsTreatedAsDeps(ClasspathType.BOTH),
-        ImmutableList.of(),
-        ruleContext.getSymbolGenerator());
+        javaCommon.targetsTreatedAsDeps(ClasspathType.BOTH), ImmutableList.<String>of());
   }
 
-  static CcInfo getCcInfo(
-      final Iterable<? extends TransitiveInfoCollection> deps,
-      final Collection<String> linkOpts,
-      SymbolGenerator<?> symbolGenerator) {
+  public static CcInfo getCcInfo(
+      final Iterable<? extends TransitiveInfoCollection> deps, final Collection<String> linkOpts) {
 
     CcLinkingContext ccLinkingContext =
         CcLinkingContext.builder()
             .addUserLinkFlags(
                 NestedSetBuilder.<LinkOptions>linkOrder()
-                    .add(LinkOptions.of(linkOpts, symbolGenerator))
+                    .add(CcLinkingContext.LinkOptions.of(linkOpts))
                     .build())
             .build();
 
