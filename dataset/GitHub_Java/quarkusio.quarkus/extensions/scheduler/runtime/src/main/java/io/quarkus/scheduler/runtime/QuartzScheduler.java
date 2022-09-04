@@ -1,18 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package io.quarkus.scheduler.runtime;
 
 import java.time.Duration;
@@ -35,11 +20,6 @@ import javax.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
-import io.quarkus.runtime.StartupEvent;
-import io.quarkus.scheduler.api.Scheduled;
-import io.quarkus.scheduler.api.ScheduledExecution;
-import io.quarkus.scheduler.api.Scheduler;
-import io.quarkus.scheduler.api.Trigger;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.Job;
 import org.quartz.JobBuilder;
@@ -54,6 +34,12 @@ import org.quartz.TriggerBuilder;
 import org.quartz.impl.StdSchedulerFactory;
 import org.quartz.spi.JobFactory;
 import org.quartz.spi.TriggerFiredBundle;
+
+import io.quarkus.runtime.StartupEvent;
+import io.quarkus.scheduler.Scheduled;
+import io.quarkus.scheduler.ScheduledExecution;
+import io.quarkus.scheduler.Scheduler;
+import io.quarkus.scheduler.Trigger;
 
 /**
  *
@@ -109,7 +95,8 @@ public class QuartzScheduler implements Scheduler {
             // Impl note: we can only store primitives in JobDataMap
             JobDetail job = JobBuilder.newJob(TimerJob.class).withIdentity(name, Scheduler.class.getName()).build();
             org.quartz.Trigger trigger = TriggerBuilder.newTrigger().withIdentity(name + "_trigger", Scheduler.class.getName())
-                    .startAt(new Date(Instant.now().plusMillis(delay).toEpochMilli())).withSchedule(SimpleScheduleBuilder.simpleSchedule()).build();
+                    .startAt(new Date(Instant.now().plusMillis(delay).toEpochMilli()))
+                    .withSchedule(SimpleScheduleBuilder.simpleSchedule()).build();
 
             try {
                 scheduler.scheduleJob(job, trigger);
@@ -123,6 +110,10 @@ public class QuartzScheduler implements Scheduler {
     }
 
     void start(@Observes StartupEvent startupEvent) {
+        if (schedulerConfig.getSchedules().isEmpty()) {
+            LOGGER.warn("No @Scheduled methods found, scheduler will not be started.");
+            return;
+        }
         if (running.compareAndSet(false, true)) {
 
             try {
@@ -136,7 +127,6 @@ public class QuartzScheduler implements Scheduler {
                 props.put("org.quartz.threadPool.threadCount", "10");
                 props.put("org.quartz.threadPool.threadPriority", "5");
                 props.put("org.quartz.threadPool.threadsInheritContextClassLoaderOfInitializingThread", true);
-                props.put("org.quartz.threadPool.threadPriority", "5");
                 props.put("org.quartz.jobStore.misfireThreshold", "60000");
                 props.put("org.quartz.jobStore.class", "org.quartz.simpl.RAMJobStore");
 
@@ -167,8 +157,9 @@ public class QuartzScheduler implements Scheduler {
 
                         // Job name: 1_MyService_Invoker
                         String name = idx++ + "_" + entry.getKey();
-                        JobBuilder jobBuilder = JobBuilder.newJob(InvokerJob.class).withIdentity(name, Scheduler.class.getName())
-                                .usingJobData(SchedulerDeploymentTemplate.INVOKER_KEY, entry.getKey());
+                        JobBuilder jobBuilder = JobBuilder.newJob(InvokerJob.class)
+                                .withIdentity(name, Scheduler.class.getName())
+                                .usingJobData(SchedulerDeploymentRecorder.INVOKER_KEY, entry.getKey());
                         ScheduleBuilder<?> scheduleBuilder;
 
                         String cron = scheduled.cron().trim();
@@ -197,18 +188,22 @@ public class QuartzScheduler implements Scheduler {
                                 // This should only happen for config-based expressions
                                 throw new IllegalStateException("Invalid every() expression on: " + scheduled, e);
                             }
-                            scheduleBuilder = SimpleScheduleBuilder.simpleSchedule().withIntervalInMilliseconds(duration.toMillis()).repeatForever();
+                            scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
+                                    .withIntervalInMilliseconds(duration.toMillis()).repeatForever();
                         } else {
                             throw new IllegalArgumentException("Invalid schedule configuration: " + scheduled);
                         }
 
-                        TriggerBuilder<?> triggerBuilder = TriggerBuilder.newTrigger().withIdentity(name + "_trigger", Scheduler.class.getName())
+                        TriggerBuilder<?> triggerBuilder = TriggerBuilder.newTrigger()
+                                .withIdentity(name + "_trigger", Scheduler.class.getName())
                                 .withSchedule(scheduleBuilder);
                         if (scheduled.delay() > 0) {
-                            triggerBuilder.startAt(new Date(Instant.now().plusMillis(scheduled.delayUnit().toMillis(scheduled.delay())).toEpochMilli()));
+                            triggerBuilder.startAt(new Date(Instant.now()
+                                    .plusMillis(scheduled.delayUnit().toMillis(scheduled.delay())).toEpochMilli()));
                         }
                         scheduler.scheduleJob(jobBuilder.build(), triggerBuilder.build());
-                        LOGGER.debugf("Scheduled business method %s with config %s", schedulerConfig.getDescription(entry.getKey()), scheduled);
+                        LOGGER.debugf("Scheduled business method %s with config %s",
+                                schedulerConfig.getDescription(entry.getKey()), scheduled);
                     }
                 }
 
@@ -253,7 +248,7 @@ public class QuartzScheduler implements Scheduler {
                     return previousFireTime != null ? previousFireTime.toInstant() : null;
                 }
             };
-            String invokerClass = context.getJobDetail().getJobDataMap().getString(SchedulerDeploymentTemplate.INVOKER_KEY);
+            String invokerClass = context.getJobDetail().getJobDataMap().getString(SchedulerDeploymentRecorder.INVOKER_KEY);
             invokers.computeIfAbsent(invokerClass, schedulerConfig::createInvoker).invoke(new ScheduledExecution() {
 
                 @Override
