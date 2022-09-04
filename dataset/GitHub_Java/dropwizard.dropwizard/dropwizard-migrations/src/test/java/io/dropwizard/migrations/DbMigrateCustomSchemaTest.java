@@ -29,7 +29,7 @@ public class DbMigrateCustomSchemaTest extends AbstractMigrationTest {
         String schemaName = "customschema";
         DBI dbi = new DBI(databaseUrl, "sa", "");
         dbi.useHandle(h -> h.execute("create schema " + schemaName));
-        Namespace namespace = new Namespace(ImmutableMap.of("schema", schemaName, "catalog", "public"));
+        Namespace namespace = new Namespace(ImmutableMap.of("schema", schemaName));
         migrateCommand.run(null, namespace, conf);
         dbi.useHandle(handle -> {
             assertThat(handle
