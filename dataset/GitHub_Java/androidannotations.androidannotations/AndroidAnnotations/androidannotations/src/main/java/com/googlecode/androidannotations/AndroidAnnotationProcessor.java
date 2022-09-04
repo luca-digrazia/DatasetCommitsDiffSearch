@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -37,7 +37,7 @@ import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.annotations.BeforeCreate;
 import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.EActivity;
-import com.googlecode.androidannotations.annotations.EViewGroup;
+import com.googlecode.androidannotations.annotations.EComponent;
 import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.FromHtml;
 import com.googlecode.androidannotations.annotations.ItemClick;
@@ -59,7 +59,6 @@ import com.googlecode.androidannotations.annotations.res.DimensionPixelOffsetRes
 import com.googlecode.androidannotations.annotations.res.DimensionPixelSizeRes;
 import com.googlecode.androidannotations.annotations.res.DimensionRes;
 import com.googlecode.androidannotations.annotations.res.DrawableRes;
-import com.googlecode.androidannotations.annotations.res.HtmlRes;
 import com.googlecode.androidannotations.annotations.res.IntArrayRes;
 import com.googlecode.androidannotations.annotations.res.IntegerRes;
 import com.googlecode.androidannotations.annotations.res.LayoutRes;
@@ -92,7 +91,7 @@ import com.googlecode.androidannotations.processing.BackgroundProcessor;
 import com.googlecode.androidannotations.processing.BeforeCreateProcessor;
 import com.googlecode.androidannotations.processing.ClickProcessor;
 import com.googlecode.androidannotations.processing.EActivityProcessor;
-import com.googlecode.androidannotations.processing.EViewGroupProcessor;
+import com.googlecode.androidannotations.processing.EComponentProcessor;
 import com.googlecode.androidannotations.processing.ExtraProcessor;
 import com.googlecode.androidannotations.processing.FromHtmlProcessor;
 import com.googlecode.androidannotations.processing.ItemClickProcessor;
@@ -122,7 +121,7 @@ import com.googlecode.androidannotations.validation.AppValidator;
 import com.googlecode.androidannotations.validation.BeforeCreateValidator;
 import com.googlecode.androidannotations.validation.ClickValidator;
 import com.googlecode.androidannotations.validation.EActivityValidator;
-import com.googlecode.androidannotations.validation.EViewGroupValidator;
+import com.googlecode.androidannotations.validation.EComponentValidator;
 import com.googlecode.androidannotations.validation.ExtraValidator;
 import com.googlecode.androidannotations.validation.FromHtmlValidator;
 import com.googlecode.androidannotations.validation.ItemClickValidator;
@@ -151,7 +150,7 @@ import com.sun.codemodel.JCodeModel;
 @SupportedAnnotationClasses({ EActivity.class, //
         App.class, //
         BeforeCreate.class, //
-		EViewGroup.class, //
+		EComponent.class, //
         AfterViews.class, //
         RoboGuice.class, //
         ViewById.class, //
@@ -191,8 +190,7 @@ import com.sun.codemodel.JCodeModel;
         Options.class, //
         Post.class, //
         Put.class,
-        FromHtml.class,
-        HtmlRes.class})
+        FromHtml.class})
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 
@@ -318,7 +316,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
     private ModelValidator buildModelValidator(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
         ModelValidator modelValidator = new ModelValidator();
         modelValidator.register(new EActivityValidator(processingEnv, rClass, androidManifest));
-		modelValidator.register(new EViewGroupValidator(processingEnv, rClass));
+		modelValidator.register(new EComponentValidator(processingEnv, rClass));
         modelValidator.register(new RoboGuiceValidator(processingEnv));
         modelValidator.register(new ViewByIdValidator(processingEnv, rClass));
         modelValidator.register(new FromHtmlValidator(processingEnv, rClass));
@@ -363,7 +361,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
     private ModelProcessor buildModelProcessor(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
         ModelProcessor modelProcessor = new ModelProcessor();
         modelProcessor.register(new EActivityProcessor(processingEnv, rClass));
-		modelProcessor.register(new EViewGroupProcessor(processingEnv, rClass));
+		modelProcessor.register(new EComponentProcessor(processingEnv, rClass));
         modelProcessor.register(new SharedPrefProcessor(processingEnv));
         modelProcessor.register(new PrefProcessor());
         modelProcessor.register(new RoboGuiceProcessor());

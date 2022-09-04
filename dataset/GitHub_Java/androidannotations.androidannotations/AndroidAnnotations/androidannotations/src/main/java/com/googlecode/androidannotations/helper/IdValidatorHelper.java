@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,6 +20,7 @@ import java.util.Set;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.TypeElement;
 
 import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.model.AnnotationElements;
@@ -39,46 +40,33 @@ public class IdValidatorHelper extends ValidatorHelper {
 		idExists(element, res, true, valid);
 	}
 
-	public void idExists(Element element, Res res, boolean defaultUseName, IsValid valid) {
-		idExists(element, res, defaultUseName, true, valid);
-	}
-
-	public void idExists(Element element, Res res, boolean defaultUseName, boolean allowDefault, IsValid valid) {
+	public void idExists(Element element, Res res, boolean defaultUseName,
+			IsValid valid) {
 
 		Integer idValue = annotationHelper.extractAnnotationValue(element);
 
-		idExists(element, res, defaultUseName, allowDefault, valid, idValue);
-	}
-
-	public void idsExists(Element element, Res res, IsValid valid) {
-
-		int[] idsValues = annotationHelper.extractAnnotationValue(element);
-		if (idsValues[0] == Id.DEFAULT_VALUE) {
-			idExists(element, res, true, true, valid, idsValues[0]);
-		} else {
-			for (int idValue : idsValues) {
-				idExists(element, res, false, true, valid, idValue);
-			}
-		}
-	}
-
-	private void idExists(Element element, Res res, boolean defaultUseName, boolean allowDefault, IsValid valid, Integer idValue) {
-		if (allowDefault && idValue.equals(Id.DEFAULT_VALUE)) {
+		if (idValue.equals(Id.DEFAULT_VALUE)) {
 			if (defaultUseName) {
 				String elementName = element.getSimpleName().toString();
-				int lastIndex = elementName.lastIndexOf(annotationHelper.actionName());
+				int lastIndex = elementName.lastIndexOf(annotationHelper
+						.actionName());
 				if (lastIndex != -1) {
 					elementName = elementName.substring(0, lastIndex);
 				}
 				if (!idAnnotationHelper.containsField(elementName, res)) {
 					valid.invalidate();
 					String message;
-					String snakeCaseName = CaseHelper.camelCaseToSnakeCase(elementName);
-					String rQualifiedPrefix = String.format("R.%s.", res.rName());
+					String snakeCaseName = CaseHelper
+							.camelCaseToSnakeCase(elementName);
+					String rQualifiedPrefix = String.format("R.%s.",
+							res.rName());
 					if (snakeCaseName.equals(elementName)) {
-						message = "Id not found: " + rQualifiedPrefix + elementName;
+						message = "Id not found: " + rQualifiedPrefix
+								+ elementName;
 					} else {
-						message = "Id not found: " + rQualifiedPrefix + elementName + " or " + rQualifiedPrefix + snakeCaseName;
+						message = "Id not found: " + rQualifiedPrefix
+								+ elementName + " or " + rQualifiedPrefix
+								+ snakeCaseName;
 					}
 					annotationHelper.printAnnotationError(element, message);
 				}
@@ -86,52 +74,93 @@ public class IdValidatorHelper extends ValidatorHelper {
 		} else {
 			if (!idAnnotationHelper.containsIdValue(idValue, res)) {
 				valid.invalidate();
-				annotationHelper.printAnnotationError(element, "Id value not found in R." + res.rName() + ": " + idValue);
+				annotationHelper.printAnnotationError(element,
+						"Id value not found in R." + res.rName() + ": "
+								+ idValue);
 			}
 		}
 	}
 
-	public void uniqueId(Element element, AnnotationElements validatedElements, IsValid valid) {
-
+	public void uniqueId(Element element, AnnotationElements validatedElements,
+			IsValid valid) {
 		if (valid.isValid()) {
 			Element layoutElement = element.getEnclosingElement();
-			List<String> annotationQualifiedIds = idAnnotationHelper.extractAnnotationQualifiedIds(element);
+			String annotationQualifiedId = idAnnotationHelper
+					.extractAnnotationQualifiedId(element);
 
-			Set<? extends Element> annotatedElements = validatedElements.getAnnotatedElements(annotationHelper.getTarget());
-
+			Set<? extends Element> annotatedElements = validatedElements
+					.getAnnotatedElements(annotationHelper.getTarget());
 			for (Element uniqueCheckElement : annotatedElements) {
-				Element enclosingElement = uniqueCheckElement.getEnclosingElement();
-
+				Element enclosingElement = uniqueCheckElement
+						.getEnclosingElement();
 				if (layoutElement.equals(enclosingElement)) {
-					List<String> checkQualifiedIds = idAnnotationHelper.extractAnnotationQualifiedIds(uniqueCheckElement);
-
-					for (String checkQualifiedId : checkQualifiedIds) {
-						for (String annotationQualifiedId : annotationQualifiedIds) {
-
-							if (annotationQualifiedId.equals(checkQualifiedId)) {
-								valid.invalidate();
-								String annotationSimpleId = annotationQualifiedId.substring(annotationQualifiedId.lastIndexOf('.') + 1);
-								annotationHelper.printAnnotationError(element, "The id " + annotationSimpleId + " is already used on the following " + annotationHelper.annotationName() + " method: " + uniqueCheckElement);
-								return;
-							}
-						}
+					String checkQualifiedId = idAnnotationHelper
+							.extractAnnotationQualifiedId(uniqueCheckElement);
+					if (annotationQualifiedId.equals(checkQualifiedId)) {
+						valid.invalidate();
+						String annotationSimpleId = annotationQualifiedId
+								.substring(annotationQualifiedId
+										.lastIndexOf('.') + 1);
+						annotationHelper.printAnnotationError(element,
+								"The id " + annotationSimpleId
+										+ " is already used on the following "
+										+ annotationHelper.annotationName()
+										+ " method: " + uniqueCheckElement);
+						return;
 					}
 				}
 			}
 		}
 	}
 
-	public void idListenerMethod(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public void idListenerMethod(Element element,
+			AnnotationElements validatedElements, IsValid valid) {
 
-		enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
+		enclosingElementHasEActivity(element, validatedElements, valid);
 
-		idsExists(element, Res.ID, valid);
+		idExists(element, Res.ID, valid);
 
 		isNotPrivate(element, valid);
 
 		doesntThrowException((ExecutableElement) element, valid);
 
 		uniqueId(element, validatedElements, valid);
+	}
+
+	public void activityRegistered(Element element,
+			AndroidManifest androidManifest, IsValid valid) {
+		TypeElement typeElement = (TypeElement) element;
+
+		String activityQualifiedName = typeElement.getQualifiedName()
+				.toString();
+		String generatedActivityQualifiedName = activityQualifiedName
+				+ ModelConstants.GENERATION_SUFFIX;
+
+		List<String> activityQualifiedNames = androidManifest
+				.getActivityQualifiedNames();
+		if (!activityQualifiedNames.contains(generatedActivityQualifiedName)) {
+			String simpleName = typeElement.getSimpleName().toString();
+			String generatedSimpleName = simpleName
+					+ ModelConstants.GENERATION_SUFFIX;
+			if (activityQualifiedNames.contains(activityQualifiedName)) {
+				valid.invalidate();
+				annotationHelper
+						.printAnnotationError(
+								element,
+								"The AndroidManifest.xml file contains the original activity, and not the AndroidAnnotations generated activity. Please register "
+										+ generatedSimpleName
+										+ " instead of "
+										+ simpleName);
+			} else {
+				annotationHelper
+						.printAnnotationWarning(
+								element,
+								"The activity "
+										+ generatedSimpleName
+										+ " is not registered in the AndroidManifest.xml file.");
+			}
+		}
+
 	}
 
 }

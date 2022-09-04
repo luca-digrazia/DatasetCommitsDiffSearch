@@ -45,13 +45,11 @@ public class AfterViewsValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEActivity(element, validatedElements, valid);
+		validatorHelper.enclosingElementHasEActivityOrEComponent(element, validatedElements, valid);
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
-		validatorHelper.returnTypeIsVoid(executableElement, valid);
-		
-		validatorHelper.enclosingElementHasEActivity(element, validatedElements, valid);
+		validatorHelper.voidReturnType(executableElement, valid);
 		
 		validatorHelper.isNotPrivate(element, valid);
 
