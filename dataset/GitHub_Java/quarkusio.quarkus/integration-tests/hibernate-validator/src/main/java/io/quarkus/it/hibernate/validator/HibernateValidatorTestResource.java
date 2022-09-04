@@ -14,8 +14,6 @@ import java.util.stream.Collectors;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 import javax.interceptor.InterceptorBinding;
-import javax.persistence.EntityManager;
-import javax.transaction.Transactional;
 import javax.validation.ConstraintViolation;
 import javax.validation.ConstraintViolationException;
 import javax.validation.Valid;
@@ -24,27 +22,20 @@ import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.Digits;
 import javax.validation.constraints.Email;
 import javax.validation.constraints.Pattern;
-import javax.validation.groups.ConvertGroup;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import org.hibernate.validator.constraints.Length;
 
 import io.quarkus.it.hibernate.validator.custom.MyOtherBean;
-import io.quarkus.it.hibernate.validator.groups.MyBeanWithGroups;
-import io.quarkus.it.hibernate.validator.groups.ValidationGroups;
 import io.quarkus.it.hibernate.validator.injection.InjectedConstraintValidatorConstraint;
 import io.quarkus.it.hibernate.validator.injection.MyService;
-import io.quarkus.it.hibernate.validator.orm.TestEntity;
 import io.quarkus.runtime.StartupEvent;
 
 @Path("/hibernate-validator/test")
@@ -62,9 +53,6 @@ public class HibernateValidatorTestResource
 
     @Inject
     ZipCodeService zipCodeResource;
-
-    @Inject
-    EntityManager em;
 
     public void testValidationOutsideOfResteasyContext(@Observes StartupEvent startupEvent) {
         validator.validate(new MyOtherBean(null));
@@ -226,6 +214,7 @@ public class HibernateValidatorTestResource
     @POST
     @Path("/test-manual-validation-message-locale")
     @Produces(MediaType.TEXT_PLAIN)
+    @Consumes(MediaType.APPLICATION_JSON)
     public String testManualValidationMessageLocale(MyLocaleTestBean test) {
         Set<ConstraintViolation<MyLocaleTestBean>> violations = validator.validate(test);
 
@@ -237,65 +226,6 @@ public class HibernateValidatorTestResource
         }
 
         return result.build();
-    }
-
-    @GET
-    @Path("/test-hibernate-orm-integration")
-    @Produces(MediaType.TEXT_PLAIN)
-    @Transactional
-    public String testHibernateOrmIntegration() {
-        em.persist(new TestEntity());
-        return "FAILED";
-    }
-
-    @PUT
-    @Path("/rest-end-point-validation-groups/")
-    @Produces(MediaType.TEXT_PLAIN)
-    @Consumes(MediaType.APPLICATION_JSON)
-    public String testRestEndPointValidationGroups_Put(
-            @Valid @ConvertGroup(to = ValidationGroups.Put.class) MyBeanWithGroups bean) {
-        return "passed";
-    }
-
-    @POST
-    @Path("/rest-end-point-validation-groups/")
-    @Produces(MediaType.TEXT_PLAIN)
-    @Consumes(MediaType.APPLICATION_JSON)
-    public String testRestEndPointValidationGroups_Post(
-            @Valid @ConvertGroup(to = ValidationGroups.Post.class) MyBeanWithGroups bean) {
-        return "passed";
-    }
-
-    @GET
-    @Path("/rest-end-point-validation-groups/{id}/")
-    @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Valid
-    @ConvertGroup(to = ValidationGroups.Get.class)
-    public MyBeanWithGroups testRestEndPointValidationGroups_Get(@PathParam("id") long id,
-            @QueryParam("simulateDeleted") boolean simulateDeleted,
-            @QueryParam("simulateNullName") boolean simulateNullName) {
-        MyBeanWithGroups result = new MyBeanWithGroups();
-        result.setId(id);
-        result.setName(simulateNullName ? null : "someName");
-        result.setDeleted(simulateDeleted);
-        return result;
-    }
-
-    @DELETE
-    @Path("/rest-end-point-validation-groups/{id}/")
-    @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Valid
-    @ConvertGroup(to = ValidationGroups.Delete.class)
-    public MyBeanWithGroups testRestEndPointValidationGroups_Delete(@PathParam("id") long id,
-            @QueryParam("simulateDeleted") boolean simulateDeleted,
-            @QueryParam("simulateNullName") boolean simulateNullName) {
-        MyBeanWithGroups result = new MyBeanWithGroups();
-        result.setId(id);
-        result.setName(simulateNullName ? null : "someName");
-        result.setDeleted(simulateDeleted);
-        return result;
     }
 
     private String formatViolations(Set<? extends ConstraintViolation<?>> violations) {
