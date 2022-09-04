@@ -282,19 +282,13 @@ public class APTCodeModelHelper {
 		return false;
 	}
 
-	public JInvocation getSuperCall(GeneratedClassHolder holder, JMethod superMethod) {
+	public void callSuperMethod(JMethod superMethod, GeneratedClassHolder holder, JBlock callBlock) {
 		JExpression activitySuper = holder.getGeneratedClass().staticRef("super");
 		JInvocation superCall = JExpr.invoke(activitySuper, superMethod);
 
 		for (JVar param : superMethod.params()) {
 			superCall.arg(param);
 		}
-
-		return superCall;
-	}
-
-	public void callSuperMethod(JMethod superMethod, GeneratedClassHolder holder, JBlock callBlock) {
-		JInvocation superCall = getSuperCall(holder, superMethod);
 
 		JType returnType = superMethod.type();
 		if (returnType.fullName().equals("void")) {

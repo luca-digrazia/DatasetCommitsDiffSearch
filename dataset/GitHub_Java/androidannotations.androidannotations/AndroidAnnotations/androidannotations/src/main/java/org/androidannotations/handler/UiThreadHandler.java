@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,48 +15,28 @@
  */
 package org.androidannotations.handler;
 
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr.lit;
+import com.sun.codemodel.*;
+import org.androidannotations.annotations.UiThread;
+import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.holder.EComponentHolder;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 
-import org.androidannotations.annotations.UiThread;
-import org.androidannotations.api.UiThreadExecutor;
-import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.holder.EComponentHolder;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.IsValid;
-
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
-import com.sun.codemodel.JConditional;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JOp;
-import com.sun.codemodel.JVar;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr.lit;
 
 public class UiThreadHandler extends AbstractRunnableHandler {
 
 	private static final String METHOD_CUR_THREAD = "currentThread";
 	private static final String METHOD_MAIN_LOOPER = "getMainLooper";
 	private static final String METHOD_GET_THREAD = "getThread";
-	private static final String METHOD_ADD_TASK = "addTask";
 
 	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public UiThreadHandler(ProcessingEnvironment processingEnvironment) {
 		super(UiThread.class, processingEnvironment);
-	}
-
-	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		super.validate(element, validatedElements, valid);
-
-		validatorHelper.usesEnqueueIfHasId(element, valid);
 	}
 
 	@Override
@@ -70,17 +50,15 @@ public class UiThreadHandler extends AbstractRunnableHandler {
 		long delay = annotation.delay();
 		UiThread.Propagation propagation = annotation.propagation();
 
-		JExpression runnable = createAndStoreRunnable(delegatingMethod.body(), annotation.id(), anonymousRunnableClass, holder);
-
 		if (delay == 0) {
 			if (propagation == UiThread.Propagation.REUSE) {
 				// Put in the check for the UI thread.
 				addUIThreadCheck(delegatingMethod, previousBody, holder);
 			}
 
-			delegatingMethod.body().invoke(holder.getHandler(), "post").arg(runnable);
+			delegatingMethod.body().invoke(holder.getHandler(), "post").arg(_new(anonymousRunnableClass));
 		} else {
-			delegatingMethod.body().invoke(holder.getHandler(), "postDelayed").arg(runnable).arg(lit(delay));
+			delegatingMethod.body().invoke(holder.getHandler(), "postDelayed").arg(_new(anonymousRunnableClass)).arg(lit(delay));
 		}
 	}
 
@@ -104,16 +82,5 @@ public class UiThreadHandler extends AbstractRunnableHandler {
 		JConditional con = delegatingMethod.body()._if(JOp.eq(lhs, rhs));
 		JBlock thenBlock = con._then().add(previousBody);
 		thenBlock._return();
-	}
-
-	private JExpression createAndStoreRunnable(JBlock body, String id, JDefinedClass anonymousRunnableClass, EComponentHolder holder) {
-		if ("".equals(id)) {
-			return _new(anonymousRunnableClass);
-		}
-
-		JVar runnableVar = body.decl(refClass(Runnable.class), "runnable", _new(anonymousRunnableClass));
-		body.add(refClass(UiThreadExecutor.class).staticInvoke(METHOD_ADD_TASK).arg(id).arg(runnableVar).arg(holder.getHandler()));
-
-		return runnableVar;
 	}
 }
