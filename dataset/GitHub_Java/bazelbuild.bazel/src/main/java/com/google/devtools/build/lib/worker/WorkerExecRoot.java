@@ -30,41 +30,42 @@ import java.util.Set;
 /** Creates and manages the contents of a working directory of a persistent worker. */
 final class WorkerExecRoot {
   private final Path workDir;
+  private final SandboxInputs inputs;
+  private final SandboxOutputs outputs;
+  private final Set<PathFragment> workerFiles;
 
-  public WorkerExecRoot(Path workDir) {
+  public WorkerExecRoot(
+      Path workDir, SandboxInputs inputs, SandboxOutputs outputs, Set<PathFragment> workerFiles) {
     this.workDir = workDir;
+    this.inputs = inputs;
+    this.outputs = outputs;
+    this.workerFiles = workerFiles;
   }
 
-  public void createFileSystem(
-      Set<PathFragment> workerFiles, SandboxInputs inputs, SandboxOutputs outputs)
-      throws IOException {
+  public void createFileSystem() throws IOException {
     workDir.createDirectoryAndParents();
 
     // First compute all the inputs and directories that we need. This is based only on
     // `workerFiles`, `inputs` and `outputs` and won't do any I/O.
     Set<PathFragment> inputsToCreate = new LinkedHashSet<>();
     LinkedHashSet<PathFragment> dirsToCreate = new LinkedHashSet<>();
-    populateInputsAndDirsToCreate(inputs, workerFiles, outputs, inputsToCreate, dirsToCreate);
+    populateInputsAndDirsToCreate(inputsToCreate, dirsToCreate);
 
     // Then do a full traversal of the `workDir`. This will use what we computed above, delete
     // anything unnecessary and update `inputsToCreate`/`dirsToCreate` if something is can be left
     // without changes (e.g., a symlink that already points to the right destination).
-    cleanExisting(workDir, inputs, inputsToCreate, dirsToCreate);
+    cleanExisting(workDir, inputsToCreate, dirsToCreate);
 
     // Finally, create anything that is still missing.
     createDirectories(dirsToCreate);
-    createInputs(inputsToCreate, inputs);
+    createInputs(inputsToCreate);
 
     inputs.materializeVirtualInputs(workDir);
   }
 
   /** Populates the provided sets with the inputs and directories than need to be created. */
   private void populateInputsAndDirsToCreate(
-      SandboxInputs inputs,
-      Set<PathFragment> workerFiles,
-      SandboxOutputs outputs,
-      Set<PathFragment> inputsToCreate,
-      LinkedHashSet<PathFragment> dirsToCreate) {
+      Set<PathFragment> inputsToCreate, LinkedHashSet<PathFragment> dirsToCreate) {
     // Add all worker files and the ancestor directories.
     for (PathFragment path : workerFiles) {
       inputsToCreate.add(path);
@@ -100,16 +101,12 @@ final class WorkerExecRoot {
    * correct and doesn't need any changes.
    */
   private void cleanExisting(
-      Path root,
-      SandboxInputs inputs,
-      Set<PathFragment> inputsToCreate,
-      Set<PathFragment> dirsToCreate)
+      Path root, Set<PathFragment> inputsToCreate, Set<PathFragment> dirsToCreate)
       throws IOException {
     for (Path path : root.getDirectoryEntries()) {
       FileStatus stat = path.stat(Symlinks.NOFOLLOW);
       PathFragment pathRelativeToWorkDir = path.relativeTo(workDir);
-      Optional<PathFragment> destination =
-          getExpectedSymlinkDestination(pathRelativeToWorkDir, inputs);
+      Optional<PathFragment> destination = getExpectedSymlinkDestination(pathRelativeToWorkDir);
       if (destination.isPresent()) {
         if (stat.isSymbolicLink() && path.readSymbolicLink().equals(destination.get())) {
           inputsToCreate.remove(pathRelativeToWorkDir);
@@ -118,7 +115,7 @@ final class WorkerExecRoot {
         }
       } else if (stat.isDirectory()) {
         if (dirsToCreate.contains(pathRelativeToWorkDir)) {
-          cleanExisting(path, inputs, inputsToCreate, dirsToCreate);
+          cleanExisting(path, inputsToCreate, dirsToCreate);
           dirsToCreate.remove(pathRelativeToWorkDir);
         } else {
           path.deleteTree();
@@ -129,8 +126,7 @@ final class WorkerExecRoot {
     }
   }
 
-  private Optional<PathFragment> getExpectedSymlinkDestination(
-      PathFragment fragment, SandboxInputs inputs) {
+  private Optional<PathFragment> getExpectedSymlinkDestination(PathFragment fragment) {
     Path file = inputs.getFiles().get(fragment);
     if (file != null) {
       return Optional.of(file.asFragment());
@@ -144,8 +140,7 @@ final class WorkerExecRoot {
     }
   }
 
-  private void createInputs(Iterable<PathFragment> inputsToCreate, SandboxInputs inputs)
-      throws IOException {
+  private void createInputs(Iterable<PathFragment> inputsToCreate) throws IOException {
     for (PathFragment fragment : inputsToCreate) {
       Path key = workDir.getRelative(fragment);
       if (inputs.getFiles().containsKey(fragment)) {
@@ -164,7 +159,7 @@ final class WorkerExecRoot {
     }
   }
 
-  public void copyOutputs(Path execRoot, SandboxOutputs outputs) throws IOException {
+  public void copyOutputs(Path execRoot) throws IOException {
     SandboxHelpers.moveOutputs(outputs, workDir, execRoot);
   }
 }
