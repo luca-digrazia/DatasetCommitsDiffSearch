@@ -15,13 +15,10 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import org.junit.Test;
@@ -78,7 +75,6 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  default_grte_top: '//cc:grtetop'",
         "  tool_path { name: 'cpu-compiler', path: 'k8/compiler' }",
         "  tool_path { name: 'ar', path: 'k8/ar' }",
-        "  tool_path { name: 'as', path: 'k8/as' }",
         "  tool_path { name: 'cpp', path: 'k8/cpp' }",
         "  tool_path { name: 'gcc', path: 'k8/gcc' }",
         "  tool_path { name: 'gcov', path: 'k8/gcov' }",
@@ -101,7 +97,6 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  default_grte_top: '//cc:grtetop'",
         "  tool_path { name: 'darwin-compiler', path: 'darwin/compiler' }",
         "  tool_path { name: 'ar', path: 'darwin/ar' }",
-        "  tool_path { name: 'as', path: 'darwin/as' }",
         "  tool_path { name: 'cpp', path: 'darwin/cpp' }",
         "  tool_path { name: 'gcc', path: 'darwin/gcc' }",
         "  tool_path { name: 'gcov', path: 'darwin/gcov' }",
@@ -124,7 +119,6 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  default_grte_top: '//cc:grtetop'",
         "  tool_path { name: 'windows-compiler', path: 'windows/compiler' }",
         "  tool_path { name: 'ar', path: 'windows/ar' }",
-        "  tool_path { name: 'as', path: 'windows/as' }",
         "  tool_path { name: 'cpp', path: 'windows/cpp' }",
         "  tool_path { name: 'gcc', path: 'windows/gcc' }",
         "  tool_path { name: 'gcov', path: 'windows/gcov' }",
@@ -145,7 +139,6 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  target_system_name: 'local'",
         "  toolchain_identifier: 'local_linux'",
         "  tool_path { name: 'ar' path: '/usr/bin/ar' }",
-        "  tool_path { name: 'as' path: '/usr/bin/as' }",
         "  tool_path { name: 'compat-ld' path: '/usr/bin/ld' }",
         "  tool_path { name: 'cpp' path: '/usr/bin/cpp' }",
         "  tool_path { name: 'dwp' path: '/usr/bin/dwp' }",
@@ -162,8 +155,6 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "    name = 'k8-toolchain',",
         "    module_map = 'map',",
         "    cpu = 'cpu',",
-        "    ar_files = 'ar',",
-        "    as_files = 'as',",
         "    compiler_files = 'compile',",
         "    dwp_files = 'dwp',",
         "    coverage_files = 'gcov',",
@@ -181,8 +172,6 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "    name = 'darwin-toolchain',",
         "    module_map = 'map',",
         "    cpu = 'cpu',",
-        "    ar_files = 'ar',",
-        "    as_files = 'as',",
         "    compiler_files = 'compile',",
         "    dwp_files = 'dwp',",
         "    coverage_files = 'gcov',",
@@ -199,8 +188,6 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "    name = 'windows-toolchain',",
         "    module_map = 'map',",
         "    cpu = 'cpu',",
-        "    ar_files = 'ar',",
-        "    as_files = 'as',",
         "    compiler_files = 'compile',",
         "    dwp_files = 'dwp',",
         "    coverage_files = 'gcov',",
@@ -217,8 +204,6 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "    name = 'local_linux',",
         "    module_map = 'map',",
         "    cpu = 'cpu',",
-        "    ar_files = 'ar',",
-        "    as_files = 'as',",
         "    compiler_files = 'compile',",
         "    dwp_files = 'dwp',",
         "    coverage_files = 'gcov',",
@@ -243,141 +228,5 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
     NestedSet<Artifact> suiteFiles = getFilesToBuild(getConfiguredTarget("//cc:suite"));
     assertThat(ActionsTestUtil.baseArtifactNames(suiteFiles))
         .containsAllOf("k8-marker", "darwin-marker", "windows-marker", "linux-marker");
-  }
-
-  @Test
-  public void testCcToolchainLabelFromAttributes() throws Exception {
-    scratch.file(
-        "cc/BUILD",
-        "filegroup(name='empty')",
-        "filegroup(name='everything')",
-        "TOOLCHAIN_NAMES = [",
-        "  'darwin-from-crosstool',",
-        "  'windows-from-crosstool',",
-        "  'k8-compiler',",
-        "  'k8-default-from-cpu',",
-        "  'ppc-compiler',",
-        "  'ppc-default-from-cpu']",
-        "[cc_toolchain(",
-        "    name = NAME,",
-        "    cpu = 'banana',",
-        "    all_files = ':empty',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
-        "    compiler_files = ':empty',",
-        "    dwp_files = ':empty',",
-        "    linker_files = ':empty',",
-        "    strip_files = ':empty',",
-        "    objcopy_files = ':empty',",
-        "    dynamic_runtime_libs = [':empty'],",
-        "    static_runtime_libs = [':empty'],",
-        ") for NAME in TOOLCHAIN_NAMES]",
-        "cc_toolchain_suite(",
-        "    name = 'suite',",
-        "    toolchains = {",
-        "       'k8|compiler': ':k8-compiler',",
-        "       'ppc': ':invalid-label',",
-        "       'ppc|compiler': ':ppc-compiler',",
-        "       'k8': ':k8-default-from-cpu',",
-        "       'x64_windows' : ':windows-from-crosstool',",
-        "       'darwin' : ':darwin-from-crosstool',",
-        "       'x64_windows|compiler' : ':windows-from-crosstool',",
-        "       'darwin|compiler' : ':darwin-from-crosstool',",
-        "    },",
-        "    proto = \"\"\"",
-        "major_version: 'v1'",
-        "minor_version: '0'",
-        "default_target_cpu: 'k8'",
-        "default_toolchain {",
-        "  cpu: 'k8'",
-        "  toolchain_identifier: 'k8-from-crosstool'",
-        "}",
-        "default_toolchain {",
-        "  cpu: 'ppc'",
-        "  toolchain_identifier: 'ppc-from-crosstool'",
-        "}",
-        "default_toolchain {",
-        "  cpu: 'darwin'",
-        "  toolchain_identifier: 'darwin-from-crosstool'",
-        "}",
-        "default_toolchain {",
-        "  cpu: 'x64_windows'",
-        "  toolchain_identifier: 'windows-from-crosstool'",
-        "}",
-        "toolchain {",
-        "  compiler: 'compiler'",
-        "  target_cpu: 'k8'",
-        "  toolchain_identifier: 'k8-from-crosstool'",
-        "  host_system_name: 'linux'",
-        "  target_system_name: 'linux'",
-        "  abi_version: 'cpu-abi'",
-        "  abi_libc_version: ''",
-        "  target_libc: 'local'",
-        "  builtin_sysroot: 'sysroot'",
-        "  default_grte_top: '//cc:grtetop'",
-        "}",
-        "toolchain {",
-        "  compiler: 'compiler'",
-        "  target_cpu: 'ppc'",
-        "  toolchain_identifier: 'ppc-from-crosstool'",
-        "  host_system_name: 'linux'",
-        "  target_system_name: 'linux'",
-        "  abi_version: 'cpu-abi'",
-        "  abi_libc_version: ''",
-        "  target_libc: 'local'",
-        "  builtin_sysroot: 'sysroot'",
-        "  default_grte_top: '//cc:grtetop'",
-        "}",
-        "toolchain {",
-        "  compiler: 'compiler'",
-        "  target_cpu: 'darwin'",
-        "  toolchain_identifier: 'darwin-from-crosstool'",
-        "  host_system_name: 'linux'",
-        "  target_system_name: 'linux'",
-        "  abi_version: ''",
-        "  abi_libc_version: ''",
-        "  target_libc: ''",
-        "  builtin_sysroot: 'sysroot'",
-        "  default_grte_top: '//cc:grtetop'",
-        "}",
-        "toolchain {",
-        "  compiler: 'compiler'",
-        "  target_cpu: 'x64_windows'",
-        "  toolchain_identifier: 'windows-from-crosstool'",
-        "  host_system_name: 'windows'",
-        "  target_system_name: 'windows'",
-        "  abi_version: ''",
-        "  abi_libc_version: ''",
-        "  target_libc: ''",
-        "  builtin_sysroot: 'sysroot'",
-        "  default_grte_top: '//cc:grtetop'",
-        "}",
-        "\"\"\"",
-        ")");
-
-    scratch.file("a/BUILD", "cc_binary(name='b', srcs=['b.cc'])");
-
-    useConfiguration("--crosstool_top=//cc:suite", "--cpu=k8");
-    ConfiguredTarget c = getConfiguredTarget("//a:b");
-    CppConfiguration config = getConfiguration(c).getFragment(CppConfiguration.class);
-    assertThat(config.getCcToolchainRuleLabel().toString()).isEqualTo("//cc:k8-default-from-cpu");
-
-    useConfiguration("--crosstool_top=//cc:suite", "--compiler=compiler", "--cpu=ppc");
-    config = getConfiguration(getConfiguredTarget("//a:b")).getFragment(CppConfiguration.class);
-    assertThat(config.getCcToolchainRuleLabel().toString()).isEqualTo("//cc:ppc-compiler");
-
-    useConfiguration("--crosstool_top=//cc:suite", "--compiler=compiler", "--cpu=k8");
-    config = getConfiguration(getConfiguredTarget("//a:b")).getFragment(CppConfiguration.class);
-    assertThat(config.getCcToolchainRuleLabel().toString()).isEqualTo("//cc:k8-compiler");
-
-    try {
-      useConfiguration("--crosstool_top=//cc:suite", "--cpu=ppc");
-      getConfiguration(getConfiguredTarget("//a:b")).getFragment(CppConfiguration.class);
-      fail("expected failure because 'ppc' entry points to an invalid label");
-    } catch (InvalidConfigurationException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains("The label '//cc:invalid-label' is not a cc_toolchain rule");
-    }
   }
 }

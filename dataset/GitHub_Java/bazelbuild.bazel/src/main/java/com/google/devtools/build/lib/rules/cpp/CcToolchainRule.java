@@ -51,8 +51,9 @@ public final class CcToolchainRule implements RuleDefinition {
   private static final LateBoundLabel<BuildConfiguration> LIBC_TOP =
       new LateBoundLabel<BuildConfiguration>(CppConfiguration.class) {
         @Override
-        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-          return configuration.getFragment(CppConfiguration.class).getSysrootLabel();
+        public Label resolve(
+            Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+          return configuration.getFragment(CppConfiguration.class).getLibcLabel();
         }
       };
 
@@ -85,7 +86,8 @@ public final class CcToolchainRule implements RuleDefinition {
                 .cfg(HOST)
                 .singleArtifact()
                 .value(env.getToolsLabel("//tools/cpp:link_dynamic_library")))
-        .add(attr(":libc_top", LABEL).value(LIBC_TOP))
+        // TODO(bazel-team): Should be using the TARGET configuration.
+        .add(attr(":libc_top", LABEL).cfg(HOST).value(LIBC_TOP))
         .add(
             attr(":lipo_context_collector", LABEL)
                 .cfg(LipoTransition.LIPO_COLLECTOR)
