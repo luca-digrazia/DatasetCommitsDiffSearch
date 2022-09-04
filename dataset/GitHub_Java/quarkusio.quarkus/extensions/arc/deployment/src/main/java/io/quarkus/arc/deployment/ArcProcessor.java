@@ -72,6 +72,7 @@ import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildIt
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
+import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -111,22 +112,22 @@ public class ArcProcessor {
     static final DotName ADDITIONAL_BEAN = DotName.createSimple(AdditionalBean.class.getName());
 
     @BuildStep
+    CapabilityBuildItem capability() {
+        return new CapabilityBuildItem(Capability.CDI);
+    }
+
+    @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(Feature.CDI);
     }
 
     @BuildStep
-    AdditionalBeanBuildItem quarkusApplication(CombinedIndexBuildItem combinedIndex) {
-        List<String> quarkusApplications = new ArrayList<>();
-        for (ClassInfo quarkusApplication : combinedIndex.getIndex()
-                .getAllKnownImplementors(DotName.createSimple(QuarkusApplication.class.getName()))) {
-            if (quarkusApplication.classAnnotation(DotNames.DECORATOR) == null) {
-                quarkusApplications.add(quarkusApplication.name().toString());
-            }
-        }
+    AdditionalBeanBuildItem quarkusApplication(CombinedIndexBuildItem combinedIndexBuildItem) {
         return AdditionalBeanBuildItem.builder().setUnremovable()
                 .setDefaultScope(DotName.createSimple(ApplicationScoped.class.getName()))
-                .addBeanClasses(quarkusApplications)
+                .addBeanClasses(combinedIndexBuildItem.getIndex()
+                        .getAllKnownImplementors(DotName.createSimple(QuarkusApplication.class.getName())).stream()
+                        .map(s -> s.name().toString()).toArray(String[]::new))
                 .build();
     }
 
@@ -145,6 +146,10 @@ public class ArcProcessor {
             List<AdditionalStereotypeBuildItem> additionalStereotypeBuildItems,
             List<ApplicationClassPredicateBuildItem> applicationClassPredicates,
             List<AdditionalBeanBuildItem> additionalBeans,
+            List<BeanRegistrarBuildItem> beanRegistrars,
+            List<ObserverRegistrarBuildItem> observerRegistrars,
+            List<ContextRegistrarBuildItem> contextRegistrars,
+            List<BeanDeploymentValidatorBuildItem> beanDeploymentValidators,
             List<ResourceAnnotationBuildItem> resourceAnnotations,
             List<BeanDefiningAnnotationBuildItem> additionalBeanDefiningAnnotations,
             Optional<TestClassPredicateBuildItem> testClassPredicate,
@@ -212,7 +217,7 @@ public class ArcProcessor {
                 } else {
                     if (!beanClass.annotations().containsKey(ADDITIONAL_BEAN)) {
                         // Add special stereotype is added so that @Dependent is automatically used even if no scope is declared
-                        // Otherwise the bean class would be ignored during bean discovery
+                        // Otherwise the bean class would be ingnored during bean discovery
                         transformationContext.transform().add(ADDITIONAL_BEAN).done();
                     }
                 }
@@ -252,6 +257,18 @@ public class ArcProcessor {
         // register additional qualifiers
         for (QualifierRegistrarBuildItem registrar : qualifierRegistrars) {
             builder.addQualifierRegistrar(registrar.getQualifierRegistrar());
+        }
+        for (BeanRegistrarBuildItem item : beanRegistrars) {
+            builder.addBeanRegistrar(item.getBeanRegistrar());
+        }
+        for (ObserverRegistrarBuildItem item : observerRegistrars) {
+            builder.addObserverRegistrar(item.getObserverRegistrar());
+        }
+        for (ContextRegistrarBuildItem item : contextRegistrars) {
+            builder.addContextRegistrar(item.getContextRegistrar());
+        }
+        for (BeanDeploymentValidatorBuildItem item : beanDeploymentValidators) {
+            builder.addBeanDeploymentValidator(item.getBeanDeploymentValidator());
         }
         builder.setRemoveUnusedBeans(arcConfig.shouldEnableBeanRemoval());
         if (arcConfig.shouldOnlyKeepAppBeans()) {
@@ -359,12 +376,12 @@ public class ArcProcessor {
     // PHASE 2 - register all beans
     @BuildStep
     public BeanRegistrationPhaseBuildItem registerBeans(ContextRegistrationPhaseBuildItem contextRegistrationPhase,
-            List<ContextConfiguratorBuildItem> contextConfigurationRegistry,
+            List<ContextConfiguratorBuildItem> contextConfigurators,
             BuildProducer<InterceptorResolverBuildItem> interceptorResolver,
             BuildProducer<BeanDiscoveryFinishedBuildItem> beanDiscoveryFinished,
             BuildProducer<TransformedAnnotationsBuildItem> transformedAnnotations) {
 
-        for (ContextConfiguratorBuildItem contextConfigurator : contextConfigurationRegistry) {
+        for (ContextConfiguratorBuildItem contextConfigurator : contextConfigurators) {
             for (ContextConfigurator value : contextConfigurator.getValues()) {
                 // Just make sure the configurator is processed
                 value.done();
@@ -384,9 +401,9 @@ public class ArcProcessor {
     // PHASE 3 - register synthetic observers
     @BuildStep
     public ObserverRegistrationPhaseBuildItem registerSyntheticObservers(BeanRegistrationPhaseBuildItem beanRegistrationPhase,
-            List<BeanConfiguratorBuildItem> beanConfigurationRegistry) {
+            List<BeanConfiguratorBuildItem> beanConfigurators) {
 
-        for (BeanConfiguratorBuildItem configurator : beanConfigurationRegistry) {
+        for (BeanConfiguratorBuildItem configurator : beanConfigurators) {
             // Just make sure the configurator is processed
             configurator.getValues().forEach(BeanConfigurator::done);
         }
@@ -400,12 +417,12 @@ public class ArcProcessor {
     // PHASE 4 - initialize and validate the bean deployment
     @BuildStep
     public ValidationPhaseBuildItem validate(ObserverRegistrationPhaseBuildItem observerRegistrationPhase,
-            List<ObserverConfiguratorBuildItem> observerConfigurationRegistry,
+            List<ObserverConfiguratorBuildItem> observerConfigurators,
             List<UnremovableBeanBuildItem> unremovableBeans,
             BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformer,
             BuildProducer<SynthesisFinishedBuildItem> synthesisFinished) {
 
-        for (ObserverConfiguratorBuildItem configurator : observerConfigurationRegistry) {
+        for (ObserverConfiguratorBuildItem configurator : observerConfigurators) {
             // Just make sure the configurator is processed
             configurator.getValues().forEach(ObserverConfigurator::done);
         }
@@ -503,7 +520,7 @@ public class ArcProcessor {
     @BuildStep(onlyIf = IsTest.class)
     public AdditionalBeanBuildItem testApplicationClassPredicateBean() {
         // We need to register the bean implementation for TestApplicationClassPredicate
-        // TestApplicationClassPredicate is used programatically in the ArC recorder when StartupEvent is fired
+        // TestApplicationClassPredicate is used programatically in the ArC recorder when StartupEvent is fired  
         return AdditionalBeanBuildItem.unremovableOf(PreloadedTestApplicationClassPredicate.class);
     }
 
@@ -544,8 +561,12 @@ public class ArcProcessor {
     }
 
     @BuildStep
-    CustomScopeAnnotationsBuildItem exposeCustomScopeNames(List<CustomScopeBuildItem> customScopes) {
+    CustomScopeAnnotationsBuildItem exposeCustomScopeNames(List<ContextRegistrarBuildItem> contextBuildItems,
+            List<CustomScopeBuildItem> customScopes) {
         Set<DotName> names = new HashSet<>();
+        for (ContextRegistrarBuildItem item : contextBuildItems) {
+            names.addAll(item.getAnnotationNames());
+        }
         for (CustomScopeBuildItem customScope : customScopes) {
             names.add(customScope.getAnnotationName());
         }

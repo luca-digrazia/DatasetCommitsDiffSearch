@@ -31,11 +31,7 @@ public class JacksonMessageBodyReader extends AbstractJsonMessageBodyReader {
     @Override
     public Object readFrom(Class<Object> type, Type genericType, Annotation[] annotations, MediaType mediaType,
             MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException, WebApplicationException {
-        try {
-            return doReadFrom(type, genericType, entityStream);
-        } catch (MismatchedInputException e) {
-            throw new WebApplicationException(Response.Status.BAD_REQUEST);
-        }
+        throw new IllegalStateException("Should never be called");
     }
 
     @Override
