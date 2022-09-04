@@ -37,6 +37,15 @@ import java.util.List;
  */
 public class AndroidResourcesProcessorBuilder {
 
+  private static final ResourceContainerConverter.ToArtifacts AAPT2_RESOURCE_DEP_TO_ARTIFACTS =
+      ResourceContainerConverter.builder()
+          .includeResourceRoots()
+          .includeManifest()
+          .includeAapt2RTxt()
+          .includeSymbolsBin()
+          .includeStaticLibrary()
+          .toArtifactConverter();
+
   private static final ResourceContainerConverter.ToArg AAPT2_RESOURCE_DEP_TO_ARG =
       ResourceContainerConverter.builder()
           .includeResourceRoots()
@@ -46,6 +55,20 @@ public class AndroidResourcesProcessorBuilder {
           .includeStaticLibrary()
           .withSeparator(SeparatorType.COLON_COMMA)
           .toArgConverter();
+
+  private static final ResourceContainerConverter.ToArtifacts RESOURCE_CONTAINER_TO_ARTIFACTS =
+      ResourceContainerConverter.builder()
+          .includeResourceRoots()
+          .includeManifest()
+          .toArtifactConverter();
+
+  private static final ResourceContainerConverter.ToArtifacts RESOURCE_DEP_TO_ARTIFACTS =
+      ResourceContainerConverter.builder()
+          .includeResourceRoots()
+          .includeManifest()
+          .includeRTxt()
+          .includeSymbolsBin()
+          .toArtifactConverter();
 
   private static final ResourceContainerConverter.ToArg RESOURCE_CONTAINER_TO_ARG =
       ResourceContainerConverter.builder()
@@ -266,15 +289,8 @@ public class AndroidResourcesProcessorBuilder {
     builder.add("--tool").add("AAPT2_PACKAGE").add("--");
 
     builder.addExecPath("--aapt2", sdk.getAapt2().getExecutable());
-    if (dependencies != null) {
-      ResourceContainerConverter.addToCommandLine(dependencies, builder, AAPT2_RESOURCE_DEP_TO_ARG);
-      inputs
-          .addTransitive(dependencies.getTransitiveResourceRoots())
-          .addTransitive(dependencies.getTransitiveManifests())
-          .addTransitive(dependencies.getTransitiveAapt2RTxt())
-          .addTransitive(dependencies.getTransitiveSymbolsBin())
-          .addTransitive(dependencies.getTransitiveStaticLib());
-    }
+    ResourceContainerConverter.convertDependencies(
+        dependencies, builder, inputs, AAPT2_RESOURCE_DEP_TO_ARG, AAPT2_RESOURCE_DEP_TO_ARTIFACTS);
 
     configureCommonFlags(outs, inputs, builder);
 
@@ -333,14 +349,8 @@ public class AndroidResourcesProcessorBuilder {
     // Set the busybox tool.
     builder.add("--tool").add("PACKAGE").add("--");
 
-    if (dependencies != null) {
-      ResourceContainerConverter.addToCommandLine(dependencies, builder, RESOURCE_DEP_TO_ARG);
-      inputs
-          .addTransitive(dependencies.getTransitiveResourceRoots())
-          .addTransitive(dependencies.getTransitiveManifests())
-          .addTransitive(dependencies.getTransitiveRTxt())
-          .addTransitive(dependencies.getTransitiveSymbolsBin());
-    }
+    ResourceContainerConverter.convertDependencies(
+        dependencies, builder, inputs, RESOURCE_DEP_TO_ARG, RESOURCE_DEP_TO_ARTIFACTS);
     builder.addExecPath("--aapt", sdk.getAapt().getExecutable());
     configureCommonFlags(outs, inputs, builder);
 
@@ -394,8 +404,7 @@ public class AndroidResourcesProcessorBuilder {
 
     // Add data
     builder.add("--primaryData", RESOURCE_CONTAINER_TO_ARG.apply(primary));
-    inputs.addAll(primary.getArtifacts());
-    inputs.add(primary.getManifest());
+    inputs.addTransitive(RESOURCE_CONTAINER_TO_ARTIFACTS.apply(primary));
 
     if (!Strings.isNullOrEmpty(sdk.getBuildToolsVersion())) {
       builder.add("--buildToolsVersion", sdk.getBuildToolsVersion());

@@ -24,13 +24,13 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
@@ -89,7 +89,7 @@ public final class ApplicationManifest {
       commandLine.add("--override_package", overridePackage);
     }
 
-    builder.addCommandLine(commandLine.build());
+    builder.setCommandLine(commandLine.build());
     ruleContext.registerAction(builder.build(ruleContext));
     return new ApplicationManifest(ruleContext, result, targetAaptVersion);
   }
@@ -123,7 +123,7 @@ public final class ApplicationManifest {
       commandLine.add("--override_package", overridePackage);
     }
 
-    builder.addCommandLine(commandLine.build());
+    builder.setCommandLine(commandLine.build());
     ruleContext.registerAction(builder.build(ruleContext));
 
     return new ApplicationManifest(ruleContext, stubManifest, targetAaptVersion);
@@ -142,7 +142,7 @@ public final class ApplicationManifest {
             .setMnemonic("InjectInstantRunStubApplication")
             .addInput(manifest)
             .addOutput(stubManifest)
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .add("--mode=instant_run")
                     .addExecPath("--input_manifest", manifest)
@@ -213,7 +213,7 @@ public final class ApplicationManifest {
 
     for (String variable : manifestValues.keySet()) {
       manifestValues.put(
-          variable, context.getExpander().expand("manifest_values", manifestValues.get(variable)));
+          variable, context.expandMakeVariables("manifest_values", manifestValues.get(variable)));
     }
     return ImmutableMap.copyOf(manifestValues);
   }
@@ -805,7 +805,7 @@ public final class ApplicationManifest {
     ResourceFilter resourceFilter = ResourceFilter.fromRuleContext(ruleContext);
 
     List<String> uncompressedExtensions =
-        ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions");
+        ruleContext.getTokenizedStringListAttr("nocompress_extensions");
 
     ImmutableList.Builder<String> additionalAaptOpts = ImmutableList.builder();
 
