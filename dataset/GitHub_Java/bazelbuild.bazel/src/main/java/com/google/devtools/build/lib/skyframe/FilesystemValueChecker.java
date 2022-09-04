@@ -265,7 +265,6 @@ public class FilesystemValueChecker {
         } catch (IOException e) {
           // Batch stat did not work. Log an exception and fall back on system calls.
           LoggingUtil.logToRemote(Level.WARNING, "Unable to process batch stat", e);
-          LOG.log(Level.WARNING, "Unable to process batch stat", e);
           outputStatJob(dirtyKeys, shard, knownModifiedOutputFiles, sortedKnownModifiedOutputFiles)
               .run();
           return;
