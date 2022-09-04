@@ -520,9 +520,9 @@ public class CppCompileActionBuilder {
       }
     }
   }
-
+  
   /**
-   * Sets the feature configuration to be used for the action.
+   * Sets the feature configuration to be used for the action. 
    */
   public CppCompileActionBuilder setFeatureConfiguration(
       FeatureConfiguration featureConfiguration) {
@@ -530,9 +530,9 @@ public class CppCompileActionBuilder {
     this.featureConfiguration = featureConfiguration;
     return this;
   }
-
+  
   /**
-   * Sets the feature build variables to be used for the action.
+   * Sets the feature build variables to be used for the action. 
    */
   public CppCompileActionBuilder setVariables(CcToolchainFeatures.Variables variables) {
     this.variables = variables;
@@ -688,6 +688,11 @@ public class CppCompileActionBuilder {
     return this;
   }
 
+  public CppCompileActionBuilder addCopts(int position, Iterable<? extends String> copts) {
+    this.copts.addAll(position, ImmutableList.copyOf(copts));
+    return this;
+  }
+
   public CppCompileActionBuilder addNocopts(Pattern nocopts) {
     this.nocopts.add(nocopts);
     return this;
@@ -715,7 +720,7 @@ public class CppCompileActionBuilder {
     this.cppSemantics = semantics;
     return this;
   }
-
+  
   public void setShouldScanIncludes(boolean shouldScanIncludes) {
     this.shouldScanIncludes = shouldScanIncludes;
   }
