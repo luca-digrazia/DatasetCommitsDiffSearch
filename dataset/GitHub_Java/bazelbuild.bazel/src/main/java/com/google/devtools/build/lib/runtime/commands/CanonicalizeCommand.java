@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.runtime.BlazeCommandUtils;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.FlagPolicy;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
@@ -161,9 +162,10 @@ public final class CanonicalizeCommand implements BlazeCommand {
 
       // Print out the canonical invocation policy if requested.
       if (canonicalizeOptions.canonicalizePolicy) {
+        ImmutableList<FlagPolicy> effectiveFlagPolicies =
+            InvocationPolicyEnforcer.getEffectivePolicies(policy, parser, commandName, Level.INFO);
         InvocationPolicy effectivePolicy =
-            InvocationPolicyEnforcer.getEffectiveInvocationPolicy(
-                policy, parser, commandName, Level.INFO);
+            InvocationPolicy.newBuilder().addAllFlagPolicies(effectiveFlagPolicies).build();
         env.getReporter().getOutErr().printOutLn(effectivePolicy.toString());
 
       } else {

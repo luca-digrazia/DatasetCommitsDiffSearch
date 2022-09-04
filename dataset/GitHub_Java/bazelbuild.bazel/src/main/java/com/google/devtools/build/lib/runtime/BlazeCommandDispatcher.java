@@ -51,7 +51,7 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import com.google.devtools.common.options.OpaqueOptionsData;
 import com.google.devtools.common.options.OptionDefinition;
-import com.google.devtools.common.options.OptionPriority.PriorityCategory;
+import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
@@ -219,8 +219,8 @@ public class BlazeCommandDispatcher {
 
     // Explicit command-line options:
     List<String> cmdLineAfterCommand = args.subList(1, args.size());
-    optionsParser.parseWithSourceFunction(
-        PriorityCategory.COMMAND_LINE, commandOptionSourceFunction, cmdLineAfterCommand);
+    optionsParser.parseWithSourceFunction(OptionPriority.COMMAND_LINE,
+        commandOptionSourceFunction, cmdLineAfterCommand);
 
     // Command-specific options from .blazerc passed in via --default_override
     // and --rc_source. A no-op if none are provided.
@@ -231,14 +231,9 @@ public class BlazeCommandDispatcher {
 
     parseOptionsForCommand(rcfileNotes, commandAnnotation, optionsParser, optionsMap, null, null);
     if (commandAnnotation.builds()) {
-      // splits project files from targets in the traditional sense
       ProjectFileSupport.handleProjectFiles(
-          eventHandler,
-          runtime.getProjectFileProvider(),
-          workspaceDirectory,
-          workingDirectory,
-          optionsParser,
-          commandAnnotation.name());
+          eventHandler, runtime.getProjectFileProvider(), workspaceDirectory, workingDirectory,
+          optionsParser, commandAnnotation.name());
     }
 
     // Fix-point iteration until all configs are loaded.
@@ -281,8 +276,7 @@ public class BlazeCommandDispatcher {
       long firstContactTime,
       Optional<List<Pair<String, String>>> startupOptionsTaggedWithBazelRc)
       throws ShutdownBlazeServerException, InterruptedException {
-    OriginalUnstructuredCommandLineEvent originalCommandLine =
-        new OriginalUnstructuredCommandLineEvent(args);
+    OriginalCommandLineEvent originalCommandLine = new OriginalCommandLineEvent(args);
     Preconditions.checkNotNull(clientDescription);
     if (args.isEmpty()) { // Default to help command if no arguments specified.
       args = HELP_COMMAND;
@@ -376,7 +370,7 @@ public class BlazeCommandDispatcher {
   }
 
   private int execExclusively(
-      OriginalUnstructuredCommandLineEvent unstructuredServerCommandLineEvent,
+      OriginalCommandLineEvent originalCommandLine,
       InvocationPolicy invocationPolicy,
       List<String> args,
       OutErr outErr,
@@ -401,11 +395,6 @@ public class BlazeCommandDispatcher {
         eventHandler, workspace, command, commandAnnotation, commandName, invocationPolicy, args,
         optionsResult, rcfileNotes);
     OptionsProvider options = optionsResult.get();
-    CommandLineEvent originalCommandLineEvent =
-        new CommandLineEvent.OriginalCommandLineEvent(
-            runtime, commandName, options, startupOptionsTaggedWithBazelRc);
-    CommandLineEvent canonicalCommandLineEvent =
-        new CommandLineEvent.CanonicalCommandLineEvent(runtime, commandName, options);
 
     // The initCommand call also records the start time for the timestamp granularity monitor.
     CommandEnvironment env = workspace.initCommand(commandAnnotation, options);
@@ -602,12 +591,7 @@ public class BlazeCommandDispatcher {
         return e.getExitCode().getNumericExitCode();
       }
 
-      // Log the command line now that the modules have all had a change to register their listeners
-      // to the event bus.
-      env.getEventBus().post(unstructuredServerCommandLineEvent);
-      env.getEventBus().post(originalCommandLineEvent);
-      env.getEventBus().post(canonicalCommandLineEvent);
-      env.getEventBus().post(commonOptions.toolCommandLine);
+      env.getEventBus().post(originalCommandLine);
 
       for (BlazeModule module : runtime.getBlazeModules()) {
         env.getSkyframeExecutor().injectExtraPrecomputedValues(module.getPrecomputedValues());
@@ -776,49 +760,27 @@ public class BlazeCommandDispatcher {
    *     values in {@code configs} that none of the .rc files had entries for
    * @throws OptionsParsingException
    */
-  protected static void parseOptionsForCommand(
-      List<String> rcfileNotes,
-      Command commandAnnotation,
-      OptionsParser optionsParser,
-      List<Pair<String, ListMultimap<String, String>>> optionsMap,
-      @Nullable Collection<String> configs,
-      @Nullable Collection<String> unknownConfigs)
+  protected static void parseOptionsForCommand(List<String> rcfileNotes, Command commandAnnotation,
+      OptionsParser optionsParser, List<Pair<String, ListMultimap<String, String>>> optionsMap,
+      @Nullable Collection<String> configs, @Nullable Collection<String> unknownConfigs)
       throws OptionsParsingException {
     Set<String> knownConfigs = new HashSet<>();
     for (String commandToParse : getCommandNamesToParse(commandAnnotation)) {
       for (Pair<String, ListMultimap<String, String>> entry : optionsMap) {
-        String rcFile = entry.first;
         List<String> allOptions = new ArrayList<>();
         if (configs == null) {
-          Collection<String> values = entry.second.get(commandToParse);
-          if (!values.isEmpty()) {
-            allOptions.addAll(entry.second.get(commandToParse));
-            String inherited = commandToParse.equals(commandAnnotation.name()) ? "" : "Inherited ";
-            String source =
-                rcFile.equals("client")
-                    ? "Options provided by the client"
-                    : String.format(
-                        "Reading rc options for '%s' from %s", commandAnnotation.name(), rcFile);
-            rcfileNotes.add(
-                String.format(
-                    "%s:\n  %s'%s' options: %s",
-                    source, inherited, commandToParse, Joiner.on(' ').join(values)));
-          }
+          allOptions.addAll(entry.second.get(commandToParse));
         } else {
           for (String config : configs) {
-            String configDef = commandToParse + ":" + config;
-            Collection<String> values = entry.second.get(configDef);
+            Collection<String> values = entry.second.get(commandToParse + ":" + config);
             if (!values.isEmpty()) {
               allOptions.addAll(values);
               knownConfigs.add(config);
-              rcfileNotes.add(
-                  String.format(
-                      "Found applicable config definition %s in file %s: %s",
-                      configDef, rcFile, String.join(" ", values)));
             }
           }
         }
-        processOptionList(optionsParser, rcFile, allOptions);
+        processOptionList(optionsParser, commandToParse,
+            commandAnnotation.name(), rcfileNotes, entry.first, allOptions);
       }
     }
     if (unknownConfigs != null && configs != null && configs.size() > knownConfigs.size()) {
@@ -830,11 +792,17 @@ public class BlazeCommandDispatcher {
   }
 
   // Processes the option list for an .rc file - command pair.
-  private static void processOptionList(
-      OptionsParser optionsParser, String rcfile, List<String> rcfileOptions)
+  private static void processOptionList(OptionsParser optionsParser, String commandToParse,
+      String originalCommand, List<String> rcfileNotes, String rcfile, List<String> rcfileOptions)
       throws OptionsParsingException {
     if (!rcfileOptions.isEmpty()) {
-      optionsParser.parse(PriorityCategory.RC_FILE, rcfile, rcfileOptions);
+      String inherited = commandToParse.equals(originalCommand) ? "" : "Inherited ";
+      String source = rcfile.equals("client") ? "Options provided by the client"
+          : "Reading options for '" + originalCommand + "' from " + rcfile;
+      rcfileNotes.add(source + ":\n"
+          + "  " + inherited + "'" + commandToParse + "' options: "
+          + Joiner.on(' ').join(rcfileOptions));
+      optionsParser.parse(OptionPriority.RC_FILE, rcfile, rcfileOptions);
     }
   }
 
