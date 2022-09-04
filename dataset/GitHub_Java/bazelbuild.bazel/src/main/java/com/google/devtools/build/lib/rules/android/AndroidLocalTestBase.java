@@ -97,7 +97,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
       resourceApk =
           buildResourceApk(
               dataContext,
-              AndroidManifest.fromAttributes(ruleContext, dataContext),
+              AndroidManifest.fromAttributes(ruleContext),
               AndroidResources.from(ruleContext, "resource_files"),
               AndroidAssets.from(ruleContext),
               ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
@@ -110,7 +110,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
           ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink= */ false);
 
       ApplicationManifest applicationManifest =
-          getApplicationManifest(ruleContext, dataContext, resourceDependencies);
+          getApplicationManifest(ruleContext, resourceDependencies);
 
       // Create the final merged R class
       resourceApk =
@@ -410,21 +410,18 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
    * @throws RuleErrorException
    */
   private ApplicationManifest getApplicationManifest(
-      RuleContext ruleContext,
-      AndroidDataContext dataContext,
-      ResourceDependencies resourceDependencies)
+      RuleContext ruleContext, ResourceDependencies resourceDependencies)
       throws InterruptedException, RuleErrorException {
     ApplicationManifest applicationManifest;
 
     if (AndroidResources.definesAndroidResources(ruleContext.attributes())) {
       AndroidResources.validateRuleContext(ruleContext);
-      ApplicationManifest ruleManifest =
-          ApplicationManifest.renamedFromRule(ruleContext, dataContext);
-      applicationManifest = ruleManifest.mergeWith(ruleContext, dataContext, resourceDependencies);
+      ApplicationManifest ruleManifest = ApplicationManifest.renamedFromRule(ruleContext);
+      applicationManifest = ruleManifest.mergeWith(ruleContext, resourceDependencies);
     } else {
       // we don't have a manifest, merge like android_library with a stub manifest
       ApplicationManifest dummyManifest = ApplicationManifest.generatedManifest(ruleContext);
-      applicationManifest = dummyManifest.mergeWith(ruleContext, dataContext, resourceDependencies);
+      applicationManifest = dummyManifest.mergeWith(ruleContext, resourceDependencies);
     }
     return applicationManifest;
   }
@@ -556,7 +553,10 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
 
     StampedAndroidManifest stamped =
         manifest.mergeWithDeps(
-            dataContext, resourceDeps, manifestValues, /* useLegacyMerger = */ false);
+            dataContext.getRuleContext(),
+            resourceDeps,
+            manifestValues,
+            /* useLegacyMerger = */ false);
 
     return ProcessedAndroidData.processLocalTestDataFrom(
             dataContext,

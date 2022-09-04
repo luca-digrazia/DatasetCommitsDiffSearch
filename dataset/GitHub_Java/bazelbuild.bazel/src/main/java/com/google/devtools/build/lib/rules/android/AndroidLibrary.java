@@ -150,8 +150,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     if (definesLocalResources) {
       if (androidConfig.decoupleDataProcessing()) {
         StampedAndroidManifest manifest =
-            AndroidManifest.fromAttributes(ruleContext, dataContext, androidSemantics)
-                .stamp(dataContext);
+            AndroidManifest.fromAttributes(ruleContext, androidSemantics).stamp(ruleContext);
 
         ValidatedAndroidResources resources =
             AndroidResources.from(ruleContext, "resource_files")
@@ -165,7 +164,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         ApplicationManifest applicationManifest =
             androidSemantics
                 .getManifestForRule(ruleContext)
-                .renamePackage(dataContext, AndroidCommon.getJavaPackage(ruleContext));
+                .renamePackage(ruleContext, AndroidCommon.getJavaPackage(ruleContext));
         resourceApk =
             applicationManifest.packLibraryWithDataAndResources(
                 ruleContext,
