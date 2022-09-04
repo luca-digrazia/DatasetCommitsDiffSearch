@@ -3,7 +3,6 @@ package com.codahale.dropwizard.views.mustache;
 import com.codahale.dropwizard.views.View;
 import com.codahale.dropwizard.views.ViewRenderer;
 import com.github.mustachejava.Mustache;
-import com.github.mustachejava.MustacheException;
 import com.github.mustachejava.MustacheFactory;
 import com.google.common.base.Charsets;
 import com.google.common.cache.CacheBuilder;
@@ -16,9 +15,13 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.nio.charset.Charset;
 import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 
+/**
+ * A {@link ViewRenderer} which renders Mustache ({@code .mustache}) templates.
+ */
 public class MustacheViewRenderer implements ViewRenderer {
     private final LoadingCache<Class<? extends View>, MustacheFactory> factories;
 
@@ -27,7 +30,7 @@ public class MustacheViewRenderer implements ViewRenderer {
                                      .build(new CacheLoader<Class<? extends View>, MustacheFactory>() {
                                          @Override
                                          public MustacheFactory load(Class<? extends View> key) throws Exception {
-                                             return new CachingMustacheFactory(key);
+                                             return new PerClassMustacheFactory(key);
                                          }
                                      });
     }
@@ -39,14 +42,15 @@ public class MustacheViewRenderer implements ViewRenderer {
 
     @Override
     public void render(View view, Locale locale, OutputStream output) throws IOException, WebApplicationException {
-        try (OutputStreamWriter writer = new OutputStreamWriter(output, view.getCharset().or(Charsets.UTF_8))) {
-            try {
-                final Mustache template = factories.get(view.getClass()).compile(view.getTemplateName());
+        try {
+            final Mustache template = factories.get(view.getClass())
+                                               .compile(view.getTemplateName());
+            final Charset charset = view.getCharset().or(Charsets.UTF_8);
+            try (OutputStreamWriter writer = new OutputStreamWriter(output, charset)) {
                 template.execute(writer, view);
-            } catch (ExecutionException | MustacheException | UncheckedExecutionException ignored) {
-                // TODO: 4/26/13 <coda> -- fix exception handing
-                throw new FileNotFoundException("Can't find " + view.getTemplateName());
             }
+        } catch (ExecutionException | UncheckedExecutionException ignored) {
+            throw new FileNotFoundException("Template " + view.getTemplateName() + " not found.");
         }
     }
 }
