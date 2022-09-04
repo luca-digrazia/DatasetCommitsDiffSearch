@@ -36,7 +36,7 @@ import io.quarkus.runtime.Application;
 public class QuarkusHttpFunctionTest {
     private static final long PROCESSING_TIMEOUT = TimeUnit.SECONDS.toMillis(1);
 
-    private static final String PATH = "test/path";
+    private static final String PATH = "/test/path";
     private static final String QUERY = "testParam1=testValue1&testParam2=testValue2";
     private static final String HOST_HEADER = "Host";
     private static final String HOST = "localhost";
@@ -104,6 +104,6 @@ public class QuarkusHttpFunctionTest {
     public void verifyResponseStatusBypass(final HttpResponseStatus status) {
         mockHttpFunction(Optional.empty(), status);
         verify(connection, timeout(PROCESSING_TIMEOUT).times(2)).sendMessage(any());
-        verify(response).setStatusCode(eq(status.code()), eq(status.reasonPhrase()));
+        verify(response, timeout(PROCESSING_TIMEOUT)).setStatusCode(eq(status.code()), eq(status.reasonPhrase()));
     }
 }
