@@ -4,7 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InterruptedIOException;
 import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -32,23 +31,16 @@ public class JarClassPathElement implements ClassPathElement {
     private static final Logger log = Logger.getLogger(JarClassPathElement.class);
     private final File file;
     private final URL jarPath;
-    private final Path root;
     private JarFile jarFile;
     private boolean closed;
 
     public JarClassPathElement(Path root) {
         try {
             jarPath = root.toUri().toURL();
-            this.root = root;
             jarFile = new JarFile(file = root.toFile());
         } catch (IOException e) {
             throw new UncheckedIOException("Error while reading file as JAR: " + root, e);
         }
-    }
-
-    @Override
-    public Path getRoot() {
-        return root;
     }
 
     @Override
@@ -84,14 +76,7 @@ public class JarClassPathElement implements ClassPathElement {
                                 @Override
                                 public byte[] apply(JarFile jarFile) {
                                     try {
-                                        try {
-                                            return readStreamContents(jarFile.getInputStream(res));
-                                        } catch (InterruptedIOException e) {
-                                            //if we are interrupted reading data we finish the op, then just re-interrupt the thread state
-                                            byte[] bytes = readStreamContents(jarFile.getInputStream(res));
-                                            Thread.currentThread().interrupt();
-                                            return bytes;
-                                        }
+                                        return readStreamContents(jarFile.getInputStream(res));
                                     } catch (IOException e) {
                                         throw new RuntimeException("Unable to read " + name, e);
                                     }
