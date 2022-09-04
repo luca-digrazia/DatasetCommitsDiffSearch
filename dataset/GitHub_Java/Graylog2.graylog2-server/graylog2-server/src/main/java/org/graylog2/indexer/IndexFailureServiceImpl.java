@@ -1,28 +1,24 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.indexer;
 
-import com.google.common.collect.Lists;
-import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.BasicDBObjectBuilder;
+import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
@@ -30,8 +26,12 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
 import org.joda.time.DateTime;
 
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import java.util.ArrayList;
 import java.util.List;
 
+@Singleton
 public class IndexFailureServiceImpl extends PersistedServiceImpl implements IndexFailureService {
     @Inject
     public IndexFailureServiceImpl(MongoConnection mongoConnection) {
@@ -39,24 +39,24 @@ public class IndexFailureServiceImpl extends PersistedServiceImpl implements Ind
 
         // Make sure that the index failures collection is always created capped.
         final String collectionName = IndexFailureImpl.class.getAnnotation(CollectionName.class).value();
-        if(!mongoConnection.getDatabase().collectionExists(collectionName)) {
-            DBObject options = BasicDBObjectBuilder.start()
+        if (!mongoConnection.getDatabase().collectionExists(collectionName)) {
+            final DBObject options = BasicDBObjectBuilder.start()
                     .add("capped", true)
                     .add("size", 52428800) // 50MB max size.
                     .get();
 
-            mongoConnection.getDatabase().createCollection(collectionName, options);
+            final DBCollection collection = mongoConnection.getDatabase().createCollection(collectionName, options);
+
+            collection.createIndex(new BasicDBObject("timestamp", 1));
+            collection.createIndex(new BasicDBObject("letter_id", 1));
         }
     }
 
     @Override
     public List<IndexFailure> all(int limit, int offset) {
-        List<IndexFailure> failures = Lists.newArrayList();
-
-        DBObject sort = new BasicDBObject();
-        sort.put("$natural", -1);
-
-        List<DBObject> results = query(IndexFailureImpl.class, new BasicDBObject(), sort, limit, offset);
+        final DBObject sort = new BasicDBObject("$natural", -1);
+        final List<DBObject> results = query(IndexFailureImpl.class, new BasicDBObject(), sort, limit, offset);
+        final List<IndexFailure> failures = new ArrayList<>(results.size());
         for (DBObject o : results) {
             failures.add(new IndexFailureImpl((ObjectId) o.get("_id"), o.toMap()));
         }
@@ -66,8 +66,7 @@ public class IndexFailureServiceImpl extends PersistedServiceImpl implements Ind
 
     @Override
     public long countSince(DateTime since) {
-        BasicDBObject query = new BasicDBObject();
-        query.put("timestamp", new BasicDBObject("$gte", since.toDate()));
+        final BasicDBObject query = new BasicDBObject("timestamp", new BasicDBObject("$gte", since.toDate()));
 
         return count(IndexFailureImpl.class, query);
     }
