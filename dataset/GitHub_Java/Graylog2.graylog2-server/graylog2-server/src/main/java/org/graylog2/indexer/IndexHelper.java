@@ -97,7 +97,7 @@ public class IndexHelper {
             from = Tools.getUTCTimestamp()-range.getRange();
         }
 
-        String fromDate = Tools.buildElasticSearchTimeFormat(new DateTime(from*1000L));
+        String fromDate = Tools.buildElasticSearchTimeFormat(Tools.dateTimeFromDouble(from));
         return FilterBuilders.rangeFilter("timestamp")
                 .gte(fromDate);
     }

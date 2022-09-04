@@ -23,6 +23,7 @@ import com.google.common.collect.Lists;
 import org.graylog2.ConfigurationException;
 import org.graylog2.GraylogServerStub;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
 import org.joda.time.DateTime;
@@ -278,17 +279,6 @@ public class SplitAndIndexExtractorTest {
 
         assertNull(msg.getField("our_result"));
         assertEquals("<10> 07 Aug 2013 somesubsystem: this is my message for username9001 id:9001", msg.getField("somefield"));
-    }
-
-    @Test
-    public void testDoesNotCutFromStandardFields() throws Exception {
-        Message msg = new Message("The short message", "TestUnit", new DateTime());
-
-        SplitAndIndexExtractor x = new SplitAndIndexExtractor("foo", "foo", Extractor.CursorStrategy.CUT, "message", "our_result", config(" ", 1), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(new GraylogServerStub(), msg);
-
-        // Would be cut to "short message" if cutting from standard field was allowed.
-        assertEquals("The short message", msg.getField("message"));
     }
 
     public static Map<String, Object> config(final Object splitChar, final Object targetIndex) {

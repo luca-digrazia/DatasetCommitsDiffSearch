@@ -53,8 +53,6 @@ public class SyslogProcessor {
     private final Core server;
     private final Configuration config;
 
-    private final MessageInput sourceInput;
-
     private static final Pattern STRUCTURED_SYSLOG_PATTERN = Pattern.compile("<\\d+>\\d.*", Pattern.DOTALL);
     
     private final Meter incomingMessages;
@@ -63,21 +61,18 @@ public class SyslogProcessor {
     private final Meter processedMessages;
     private final Timer syslogParsedTime;
 
-    public SyslogProcessor(Core server, Configuration config, MessageInput sourceInput) {
+    public SyslogProcessor(Core server, Configuration config) {
         this.server = server;
         this.config = config;
 
-        this.sourceInput = sourceInput;
-
-        String metricsId = sourceInput.getUniqueReadableId();
-        this.incomingMessages = server.metrics().meter(name(metricsId, "incomingMessages"));
-        this.parsingFailures = server.metrics().meter(name(metricsId, "parsingFailures"));
-        this.processedMessages = server.metrics().meter(name(metricsId, "processedMessages"));
-        this.incompleteMessages = server.metrics().meter(name(metricsId, "incompleteMessages"));
-        this.syslogParsedTime = server.metrics().timer(name(metricsId, "syslogParsedTime"));
+        this.incomingMessages = server.metrics().meter(name(SyslogProcessor.class, "incomingMessages"));
+        this.parsingFailures = server.metrics().meter(name(SyslogProcessor.class, "parsingFailures"));
+        this.processedMessages = server.metrics().meter(name(SyslogProcessor.class, "processedMessages"));
+        this.incompleteMessages = server.metrics().meter(name(SyslogProcessor.class, "incompleteMessages"));
+        this.syslogParsedTime = server.metrics().timer(name(SyslogProcessor.class, "syslogParsedTime"));
     }
 
-    public void messageReceived(String msg, InetAddress remoteAddress) throws BufferOutOfCapacityException {
+    public void messageReceived(String msg, InetAddress remoteAddress, MessageInput sourceInput) throws BufferOutOfCapacityException {
         incomingMessages.mark();
 
         // Convert to LogMessage

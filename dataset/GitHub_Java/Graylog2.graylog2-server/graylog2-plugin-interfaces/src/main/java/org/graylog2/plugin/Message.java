@@ -168,15 +168,11 @@ public class Message {
         }
 
         // Only allow alphanumeric characters (and underscores)
-        if(!validKey(key)) {
+        if(!ALPHANUMERIC_ASCII_AND_UNDERSCORE.matcher(key).matches()) {
             return;
         }
 
         this.fields.put(key.trim(), value);
-    }
-
-    public static boolean validKey(String key) {
-        return ALPHANUMERIC_ASCII_AND_UNDERSCORE.matcher(key).matches();
     }
 
     public void addFields(Map<String, Object> fields) {

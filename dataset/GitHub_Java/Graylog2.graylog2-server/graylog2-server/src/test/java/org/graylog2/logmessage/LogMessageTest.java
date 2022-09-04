@@ -21,6 +21,7 @@
 package org.graylog2.logmessage;
 
 import org.graylog2.plugin.Message;
+import com.beust.jcommander.internal.Maps;
 import java.util.Map;
 import java.util.HashMap;
 
