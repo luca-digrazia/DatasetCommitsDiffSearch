@@ -60,15 +60,16 @@ class DexFileSplitter implements Closeable {
    */
   public static class Options extends OptionsBase {
     @Option(
-        name = "input",
-        allowMultiple = true,
-        defaultValue = "null",
-        category = "input",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        converter = ExistingPathConverter.class,
-        abbrev = 'i',
-        help = "Input dex archive.")
+      name = "input",
+      allowMultiple = true,
+      defaultValue = "",
+      category = "input",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      converter = ExistingPathConverter.class,
+      abbrev = 'i',
+      help = "Input dex archive."
+    )
     public List<Path> inputArchives;
 
     @Option(
@@ -224,7 +225,6 @@ class DexFileSplitter implements Closeable {
   /** Currently written file. */
   private AsyncZipOut curOut;
   private DexLimitTracker tracker;
-  private Boolean inCoreLib;
 
   private DexFileSplitter(Path outputDirectory, int maxNumberOfIdxPerDex) throws IOException {
     checkArgument(!Files.isRegularFile(outputDirectory), "Must be a directory: ", outputDirectory);
@@ -284,19 +284,6 @@ class DexFileSplitter implements Closeable {
     checkState(filename.endsWith(".class.dex"),
         "%s isn't a dex archive: %s", zip.getName(), filename);
     checkState(entry.getMethod() == ZipEntry.STORED, "Expect to process STORED: %s", filename);
-    if (inCoreLib == null) {
-      inCoreLib = filename.startsWith("j$/");
-    } else if (inCoreLib != filename.startsWith("j$/")) {
-      // Put j$.xxx classes in separate file.  This shouldn't normally happen (b/134705306).
-      nextShard();
-      inCoreLib = !inCoreLib;
-    }
-    if (inCoreLib) {
-      System.err.printf(
-          "WARNING: Unexpected file %s found. Please ensure this only happens in test APKs.%n",
-          filename);
-    }
-
     try (InputStream entryStream = zip.getInputStream(entry)) {
       // We don't want to use the Dex(InputStream) constructor because it closes the stream,
       // which will break the for loop, and it has its own bespoke way of reading the file into

@@ -56,6 +56,8 @@ import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.ParameterFile;
+import com.google.devtools.build.lib.actions.ResourceManager;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
@@ -309,6 +311,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
     useConfiguration();
     setUpSkyframe();
+    // Also initializes ResourceManager.
+    ResourceManager.instance().setAvailableResources(getStartingResources());
     this.actionLogBufferPathGenerator =
         new ActionLogBufferPathGenerator(
             directories.getActionConsoleOutputDirectory(getExecRoot()));
@@ -342,6 +346,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected StarlarkSemantics getSkylarkSemantics() {
     return starlarkSemanticsOptions.toSkylarkSemantics();
+  }
+
+  protected ResourceSet getStartingResources() {
+    // Effectively disable ResourceManager by default.
+    return ResourceSet.createWithRamCpu(Double.MAX_VALUE, Double.MAX_VALUE);
   }
 
   protected final BuildConfigurationCollection createConfigurations(
