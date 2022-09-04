@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
-import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
@@ -38,6 +37,7 @@ import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.In
 import com.google.devtools.build.lib.skyframe.OutputService;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -117,20 +117,15 @@ public final class CommandEnvironment {
    * Creates a new command environment which can be used for executing commands for the given
    * runtime in the given workspace, which will publish events on the given eventBus. The
    * commandThread passed is interrupted when a module requests an early exit.
-   *
-   * @param warnings will be filled with any warnings from command environment initialization.
    */
   CommandEnvironment(
-      BlazeRuntime runtime,
-      BlazeWorkspace workspace,
-      EventBus eventBus,
-      Thread commandThread,
-      Command command,
-      OptionsProvider options,
-      List<String> warnings) {
+      BlazeRuntime runtime, BlazeWorkspace workspace, EventBus eventBus, Thread commandThread,
+      Command command, OptionsProvider options) {
     this.runtime = runtime;
     this.workspace = workspace;
     this.directories = workspace.getDirectories();
+    this.commandId = null; // Will be set once we get the client environment
+    this.buildRequestId = null;  // Will be set once we get the client environment
     this.reporter = new Reporter(eventBus);
     this.eventBus = eventBus;
     this.commandThread = commandThread;
@@ -151,10 +146,7 @@ public final class CommandEnvironment {
 
     workspace.getSkyframeExecutor().setEventBus(eventBus);
 
-    CommonCommandOptions commandOptions = options.getOptions(CommonCommandOptions.class);
-    this.commandId = commandOptions.invocationId;
-    this.buildRequestId = commandOptions.buildRequestId;
-    updateClientEnv(commandOptions.clientEnv, warnings);
+    updateClientEnv(options.getOptions(CommonCommandOptions.class).clientEnv);
 
     // actionClientEnv contains the environment where values from actionEnvironment are overridden.
     actionClientEnv.putAll(clientEnv);
@@ -254,43 +246,41 @@ public final class CommandEnvironment {
     return Collections.unmodifiableMap(result);
   }
 
-  private void updateClientEnv(
-      List<Map.Entry<String, String>> clientEnvList, List<String> warnings) {
+  private UUID getUuidFromEnvOrGenerate(String varName) {
+    // Try to set the clientId from the client environment.
+    String uuidString = clientEnv.getOrDefault(varName, "");
+    if (!uuidString.isEmpty()) {
+      try {
+        return UUID.fromString(uuidString);
+      } catch (IllegalArgumentException e) {
+        // String was malformed, so we will resort to generating a random UUID
+      }
+    }
+    // We have been provided with the client environment, but it didn't contain
+    // the variable; hence generate our own id.
+    return UUID.randomUUID();
+  }
+
+  private String getFromEnvOrGenerate(String varName) {
+    String id = clientEnv.getOrDefault(varName, "");
+    if (id.isEmpty()) {
+      id = UUID.randomUUID().toString();
+    }
+    return id;
+  }
+
+  private void updateClientEnv(List<Map.Entry<String, String>> clientEnvList) {
     Preconditions.checkState(clientEnv.isEmpty());
 
     Collection<Map.Entry<String, String>> env = clientEnvList;
     for (Map.Entry<String, String> entry : env) {
       clientEnv.put(entry.getKey(), entry.getValue());
     }
-
-    // TODO(b/67895628): Stop reading ids from the environment after the compatibility window has
-    // passed.
-    if (commandId == null) { // Try to set the clientId from the client environment.
-      String uuidString = clientEnv.getOrDefault("BAZEL_INTERNAL_INVOCATION_ID", "");
-      if (!uuidString.isEmpty()) {
-        try {
-          commandId = UUID.fromString(uuidString);
-          warnings.add(
-              "BAZEL_INTERNAL_INVOCATION_ID is set. This will soon be deprecated in favor of "
-                  + "--invocation_id. Please switch to using the flag.");
-        } catch (IllegalArgumentException e) {
-          // String was malformed, so we will resort to generating a random UUID
-          commandId = UUID.randomUUID();
-        }
-      } else {
-        commandId = UUID.randomUUID();
-      }
+    if (commandId == null) {
+      commandId = getUuidFromEnvOrGenerate("BAZEL_INTERNAL_INVOCATION_ID");
     }
     if (buildRequestId == null) {
-      String uuidString = clientEnv.getOrDefault("BAZEL_INTERNAL_BUILD_REQUEST_ID", "");
-      if (!uuidString.isEmpty()) {
-        buildRequestId = uuidString;
-        warnings.add(
-            "BAZEL_INTERNAL_BUILD_REQUEST_ID is set. This will soon be deprecated in favor of "
-                + "--build_request_id. Please switch to using the flag.");
-      } else {
-        buildRequestId = UUID.randomUUID().toString();
-      }
+      buildRequestId = getFromEnvOrGenerate("BAZEL_INTERNAL_BUILD_REQUEST_ID");
     }
     setCommandIdInCrashData();
   }
@@ -331,8 +321,7 @@ public final class CommandEnvironment {
 
   /**
    * Returns the ID that Blaze uses to identify everything logged from the current build request.
-   * TODO(olaola): this should be a prefixed UUID, but some existing clients still use arbitrary
-   * strings, so we accept these when passed by environment variable for compatibility.
+   * TODO(olaola): this should be a UUID, but some existing clients still use arbitrary strings.
    */
   public String getBuildRequestId() {
     return Preconditions.checkNotNull(buildRequestId);
@@ -614,7 +603,7 @@ public final class CommandEnvironment {
     // Fail fast in the case where a Blaze command forgets to install the package path correctly.
     skyframeExecutor.setActive(false);
     // Let skyframe figure out if it needs to store graph edges for this build.
-    skyframeExecutor.decideKeepIncrementalStateAndResetEvaluatorIfNecessary(
+    skyframeExecutor.decideKeepIncrementalState(
         runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class).batch,
         options.getOptions(BuildView.Options.class));
 
