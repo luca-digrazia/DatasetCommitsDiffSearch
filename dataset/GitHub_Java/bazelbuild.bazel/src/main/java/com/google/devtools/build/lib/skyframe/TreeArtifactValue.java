@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.HasDigest;
-import com.google.devtools.build.lib.actions.cache.MetadataDigestUtils;
+import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationConstant;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -43,7 +43,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Value for TreeArtifacts, which contains a digest and the {@link FileArtifactValue}s of its child
@@ -67,22 +70,14 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
   }
 
   /** Builder for constructing multiple instances of {@link TreeArtifactValue} at once. */
-  public static final class MultiBuilder {
-
-    private final Map<SpecialArtifact, Builder> map = new HashMap<>();
-
-    private MultiBuilder() {}
-
+  public interface MultiBuilder {
     /**
      * Puts a child tree file into this builder under its {@linkplain TreeFileArtifact#getParent
      * parent}.
      *
      * @return {@code this} for convenience
      */
-    public MultiBuilder putChild(TreeFileArtifact child, FileArtifactValue metadata) {
-      map.computeIfAbsent(child.getParent(), Builder::new).putChild(child, metadata);
-      return this;
-    }
+    MultiBuilder putChild(TreeFileArtifact child, FileArtifactValue metadata);
 
     /**
      * Sets the archived representation and its metadata for the {@linkplain
@@ -91,25 +86,24 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
      * <p>Setting an archived representation is only allowed once per {@linkplain SpecialArtifact
      * tree artifact}.
      */
-    public MultiBuilder setArchivedRepresentation(
-        ArchivedTreeArtifact archivedArtifact, FileArtifactValue metadata) {
-      map.computeIfAbsent(archivedArtifact.getParent(), Builder::new)
-          .setArchivedRepresentation(ArchivedRepresentation.create(archivedArtifact, metadata));
-      return this;
-    }
+    MultiBuilder setArchivedRepresentation(
+        ArchivedTreeArtifact archivedArtifact, FileArtifactValue metadata);
 
     /**
      * For each unique parent seen by this builder, passes the aggregated metadata to {@link
      * TreeArtifactInjector#injectTree}.
      */
-    public void injectTo(TreeArtifactInjector treeInjector) {
-      map.forEach((parent, builder) -> treeInjector.injectTree(parent, builder.build()));
-    }
+    void injectTo(TreeArtifactInjector treeInjector);
   }
 
   /** Returns a new {@link MultiBuilder}. */
   public static MultiBuilder newMultiBuilder() {
-    return new MultiBuilder();
+    return new BasicMultiBuilder();
+  }
+
+  /** Returns a new thread-safe {@link MultiBuilder}. */
+  public static MultiBuilder newConcurrentMultiBuilder() {
+    return new ConcurrentMultiBuilder();
   }
 
   /**
@@ -137,14 +131,13 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
   @AutoCodec.VisibleForSerialization
   static final TreeArtifactValue EMPTY =
       new TreeArtifactValue(
-          MetadataDigestUtils.fromMetadata(ImmutableMap.of()),
+          DigestUtils.fromMetadata(ImmutableMap.of()),
           ImmutableSortedMap.of(),
           /*archivedRepresentation=*/ null,
           /*entirelyRemote=*/ false);
 
   private final byte[] digest;
   private final ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> childData;
-
   /**
    * Optional archived representation of the entire tree artifact which can be sent instead of all
    * the items in the directory.
@@ -476,6 +469,76 @@ public class TreeArtifactValue implements HasDigest, SkyValue {
 
       return new TreeArtifactValue(
           fingerprint.digestAndReset(), finalChildData, archivedRepresentation, entirelyRemote);
+    }
+  }
+
+  private static final class BasicMultiBuilder implements MultiBuilder {
+    private final Map<SpecialArtifact, Builder> map = new HashMap<>();
+
+    @Override
+    public MultiBuilder putChild(TreeFileArtifact child, FileArtifactValue metadata) {
+      map.computeIfAbsent(child.getParent(), Builder::new).putChild(child, metadata);
+      return this;
+    }
+
+    @Override
+    public MultiBuilder setArchivedRepresentation(
+        ArchivedTreeArtifact archivedArtifact, FileArtifactValue metadata) {
+      map.computeIfAbsent(archivedArtifact.getParent(), Builder::new)
+          .setArchivedRepresentation(ArchivedRepresentation.create(archivedArtifact, metadata));
+      return this;
+    }
+
+    @Override
+    public void injectTo(TreeArtifactInjector treeInjector) {
+      map.forEach((parent, builder) -> treeInjector.injectTree(parent, builder.build()));
+    }
+  }
+
+  @ThreadSafe
+  private static final class ConcurrentMultiBuilder implements MultiBuilder {
+    private final ConcurrentMap<SpecialArtifact, ConcurrentMap<TreeFileArtifact, FileArtifactValue>>
+        children = new ConcurrentHashMap<>();
+    private final ConcurrentMap<SpecialArtifact, ArchivedRepresentation> archivedRepresentations =
+        new ConcurrentHashMap<>();
+
+    @Override
+    public MultiBuilder putChild(TreeFileArtifact child, FileArtifactValue metadata) {
+      children
+          .computeIfAbsent(child.getParent(), parent -> new ConcurrentHashMap<>())
+          .put(child, metadata);
+      return this;
+    }
+
+    @Override
+    public MultiBuilder setArchivedRepresentation(
+        ArchivedTreeArtifact archivedArtifact, FileArtifactValue metadata) {
+      Object oldValue =
+          archivedRepresentations.putIfAbsent(
+              archivedArtifact.getParent(),
+              ArchivedRepresentation.create(archivedArtifact, metadata));
+      checkArgument(
+          oldValue == null,
+          "Tried to add 2 archived representations for %s",
+          archivedArtifact.getParent());
+      // We inject entries based on keys in the children map. Make sure a placeholder exists in case
+      // the tree artifact is otherwise empty.
+      children.computeIfAbsent(archivedArtifact.getParent(), ignored -> new ConcurrentHashMap<>());
+      return this;
+    }
+
+    @Override
+    public void injectTo(TreeArtifactInjector treeInjector) {
+      children.forEach(
+          (parent, children) -> {
+            Builder builder = new Builder(parent);
+            children.forEach(builder::putChild);
+            ArchivedRepresentation archivedRepresentation = archivedRepresentations.get(parent);
+            if (archivedRepresentation != null) {
+              builder.setArchivedRepresentation(archivedRepresentation);
+            }
+            treeInjector.injectTree(parent, builder.build());
+          });
     }
   }
 }

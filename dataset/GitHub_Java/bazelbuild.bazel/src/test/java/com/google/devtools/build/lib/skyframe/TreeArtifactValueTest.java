@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.skyframe.TreeArtifactValue.ArchivedRepresentation;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
@@ -46,6 +45,9 @@ import java.util.Map;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 /** Tests for {@link TreeArtifactValue}. */
 @RunWith(JUnit4.class)
@@ -340,7 +342,7 @@ public final class TreeArtifactValueTest {
   @Test
   public void visitTree_throwsOnUnknownDirentType() {
     FileSystem fs =
-        new InMemoryFileSystem(DigestHashFunction.SHA256) {
+        new InMemoryFileSystem() {
           @Override
           public ImmutableList<Dirent> readdir(Path path, boolean followSymlinks) {
             return ImmutableList.of(new Dirent("?", Dirent.Type.UNKNOWN));
@@ -440,138 +442,170 @@ public final class TreeArtifactValueTest {
     assertThat(e).hasMessageThat().contains("/tree/link pointing to ../tree/file");
   }
 
-  @Test
-  public void multiBuilder_empty_injectsNothing() {
-    Map<SpecialArtifact, TreeArtifactValue> results = new HashMap<>();
+  /** Parameterized tests for {@link TreeArtifactValue.MultiBuilder}. */
+  @RunWith(Parameterized.class)
+  public static final class MultiBuilderTest {
 
-    TreeArtifactValue.newMultiBuilder().injectTo(results::put);
+    private static final ArtifactRoot ROOT =
+        ArtifactRoot.asDerivedRoot(new InMemoryFileSystem().getPath("/root"), BIN_PATH);
 
-    assertThat(results).isEmpty();
-  }
+    private enum MultiBuilderType {
+      BASIC {
+        @Override
+        TreeArtifactValue.MultiBuilder newMultiBuilder() {
+          return TreeArtifactValue.newMultiBuilder();
+        }
+      },
+      CONCURRENT {
+        @Override
+        TreeArtifactValue.MultiBuilder newMultiBuilder() {
+          return TreeArtifactValue.newConcurrentMultiBuilder();
+        }
+      };
 
-  @Test
-  public void multiBuilder_injectsSingleTreeArtifact() {
-    TreeArtifactValue.MultiBuilder treeArtifacts = TreeArtifactValue.newMultiBuilder();
-    SpecialArtifact parent = createTreeArtifact("bin/tree");
-    TreeFileArtifact child1 = TreeFileArtifact.createTreeOutput(parent, "child1");
-    TreeFileArtifact child2 = TreeFileArtifact.createTreeOutput(parent, "child2");
-    Map<SpecialArtifact, TreeArtifactValue> results = new HashMap<>();
+      abstract TreeArtifactValue.MultiBuilder newMultiBuilder();
+    }
 
-    treeArtifacts
-        .putChild(child1, metadataWithId(1))
-        .putChild(child2, metadataWithId(2))
-        .injectTo(results::put);
+    @Parameter public MultiBuilderType multiBuilderType;
+    private final Map<SpecialArtifact, TreeArtifactValue> results = new HashMap<>();
 
-    assertThat(results)
-        .containsExactly(
-            parent,
-            TreeArtifactValue.newBuilder(parent)
-                .putChild(child1, metadataWithId(1))
-                .putChild(child2, metadataWithId(2))
-                .build());
-  }
+    @Parameters(name = "{0}")
+    public static MultiBuilderType[] params() {
+      return MultiBuilderType.values();
+    }
 
-  @Test
-  public void multiBuilder_injectsMultipleTreeArtifacts() {
-    TreeArtifactValue.MultiBuilder treeArtifacts = TreeArtifactValue.newMultiBuilder();
-    SpecialArtifact parent1 = createTreeArtifact("bin/tree1");
-    TreeFileArtifact parent1Child1 = TreeFileArtifact.createTreeOutput(parent1, "child1");
-    TreeFileArtifact parent1Child2 = TreeFileArtifact.createTreeOutput(parent1, "child2");
-    SpecialArtifact parent2 = createTreeArtifact("bin/tree2");
-    TreeFileArtifact parent2Child = TreeFileArtifact.createTreeOutput(parent2, "child");
-    Map<SpecialArtifact, TreeArtifactValue> results = new HashMap<>();
+    @Test
+    public void emptyBuilder_injectsNothing() {
+      TreeArtifactValue.MultiBuilder treeArtifacts = multiBuilderType.newMultiBuilder();
 
-    treeArtifacts
-        .putChild(parent1Child1, metadataWithId(1))
-        .putChild(parent2Child, metadataWithId(3))
-        .putChild(parent1Child2, metadataWithId(2))
-        .injectTo(results::put);
+      treeArtifacts.injectTo(results::put);
 
-    assertThat(results)
-        .containsExactly(
-            parent1,
-            TreeArtifactValue.newBuilder(parent1)
-                .putChild(parent1Child1, metadataWithId(1))
-                .putChild(parent1Child2, metadataWithId(2))
-                .build(),
-            parent2,
-            TreeArtifactValue.newBuilder(parent2)
-                .putChild(parent2Child, metadataWithId(3))
-                .build());
-  }
+      assertThat(results).isEmpty();
+    }
 
-  @Test
-  public void multiBuilder_injectsTreeArtifactWithArchivedRepresentation() {
-    TreeArtifactValue.MultiBuilder builder = TreeArtifactValue.newMultiBuilder();
-    SpecialArtifact parent = createTreeArtifact("bin/tree");
-    TreeFileArtifact child = TreeFileArtifact.createTreeOutput(parent, "child");
-    FileArtifactValue childMetadata = metadataWithId(1);
-    ArchivedTreeArtifact archivedTreeArtifact = createArchivedTreeArtifact(parent);
-    FileArtifactValue archivedTreeArtifactMetadata = metadataWithId(2);
-    Map<SpecialArtifact, TreeArtifactValue> results = new HashMap<>();
+    @Test
+    public void injectsSingleTreeArtifact() {
+      TreeArtifactValue.MultiBuilder treeArtifacts = multiBuilderType.newMultiBuilder();
+      SpecialArtifact parent = createTreeArtifact("bin/tree");
+      TreeFileArtifact child1 = TreeFileArtifact.createTreeOutput(parent, "child1");
+      TreeFileArtifact child2 = TreeFileArtifact.createTreeOutput(parent, "child2");
 
-    builder
-        .putChild(child, childMetadata)
-        .setArchivedRepresentation(archivedTreeArtifact, archivedTreeArtifactMetadata)
-        .injectTo(results::put);
+      treeArtifacts
+          .putChild(child1, metadataWithId(1))
+          .putChild(child2, metadataWithId(2))
+          .injectTo(results::put);
 
-    assertThat(results)
-        .containsExactly(
-            parent,
-            TreeArtifactValue.newBuilder(parent)
-                .putChild(child, childMetadata)
-                .setArchivedRepresentation(archivedTreeArtifact, archivedTreeArtifactMetadata)
-                .build());
-  }
+      assertThat(results)
+          .containsExactly(
+              parent,
+              TreeArtifactValue.newBuilder(parent)
+                  .putChild(child1, metadataWithId(1))
+                  .putChild(child2, metadataWithId(2))
+                  .build());
+    }
 
-  @Test
-  public void multiBuilder_injectsEmptyTreeArtifactWithArchivedRepresentation() {
-    TreeArtifactValue.MultiBuilder builder = TreeArtifactValue.newMultiBuilder();
-    SpecialArtifact parent = createTreeArtifact("bin/tree");
-    ArchivedTreeArtifact archivedTreeArtifact = createArchivedTreeArtifact(parent);
-    FileArtifactValue metadata = metadataWithId(1);
-    Map<SpecialArtifact, TreeArtifactValue> results = new HashMap<>();
+    @Test
+    public void injectsMultipleTreeArtifacts() {
+      TreeArtifactValue.MultiBuilder treeArtifacts = multiBuilderType.newMultiBuilder();
+      SpecialArtifact parent1 = createTreeArtifact("bin/tree1");
+      TreeFileArtifact parent1Child1 = TreeFileArtifact.createTreeOutput(parent1, "child1");
+      TreeFileArtifact parent1Child2 = TreeFileArtifact.createTreeOutput(parent1, "child2");
+      SpecialArtifact parent2 = createTreeArtifact("bin/tree2");
+      TreeFileArtifact parent2Child = TreeFileArtifact.createTreeOutput(parent2, "child");
 
-    builder.setArchivedRepresentation(archivedTreeArtifact, metadata).injectTo(results::put);
+      treeArtifacts
+          .putChild(parent1Child1, metadataWithId(1))
+          .putChild(parent2Child, metadataWithId(3))
+          .putChild(parent1Child2, metadataWithId(2))
+          .injectTo(results::put);
 
-    assertThat(results)
-        .containsExactly(
-            parent,
-            TreeArtifactValue.newBuilder(parent)
-                .setArchivedRepresentation(archivedTreeArtifact, metadata)
-                .build());
-  }
+      assertThat(results)
+          .containsExactly(
+              parent1,
+              TreeArtifactValue.newBuilder(parent1)
+                  .putChild(parent1Child1, metadataWithId(1))
+                  .putChild(parent1Child2, metadataWithId(2))
+                  .build(),
+              parent2,
+              TreeArtifactValue.newBuilder(parent2)
+                  .putChild(parent2Child, metadataWithId(3))
+                  .build());
+    }
 
-  @Test
-  public void multiBuilder_injectsTreeArtifactsWithAndWithoutArchivedRepresentation() {
-    TreeArtifactValue.MultiBuilder builder = TreeArtifactValue.newMultiBuilder();
-    SpecialArtifact parent1 = createTreeArtifact("bin/tree1");
-    ArchivedTreeArtifact archivedArtifact1 = createArchivedTreeArtifact(parent1);
-    FileArtifactValue archivedArtifact1Metadata = metadataWithId(1);
-    TreeFileArtifact parent1Child = TreeFileArtifact.createTreeOutput(parent1, "child");
-    FileArtifactValue parent1ChildMetadata = metadataWithId(2);
-    SpecialArtifact parent2 = createTreeArtifact("bin/tree2");
-    TreeFileArtifact parent2Child = TreeFileArtifact.createTreeOutput(parent2, "child");
-    FileArtifactValue parent2ChildMetadata = metadataWithId(3);
-    Map<SpecialArtifact, TreeArtifactValue> results = new HashMap<>();
+    @Test
+    public void injectsTreeArtifactWithArchivedRepresentation() {
+      TreeArtifactValue.MultiBuilder builder = multiBuilderType.newMultiBuilder();
+      SpecialArtifact parent = createTreeArtifact("bin/tree");
+      TreeFileArtifact child = TreeFileArtifact.createTreeOutput(parent, "child");
+      FileArtifactValue childMetadata = metadataWithId(1);
+      ArchivedTreeArtifact archivedTreeArtifact = createArchivedTreeArtifact(parent);
+      FileArtifactValue archivedTreeArtifactMetadata = metadataWithId(2);
 
-    builder
-        .setArchivedRepresentation(archivedArtifact1, archivedArtifact1Metadata)
-        .putChild(parent1Child, parent1ChildMetadata)
-        .putChild(parent2Child, parent2ChildMetadata)
-        .injectTo(results::put);
+      builder
+          .putChild(child, childMetadata)
+          .setArchivedRepresentation(archivedTreeArtifact, archivedTreeArtifactMetadata)
+          .injectTo(results::put);
 
-    assertThat(results)
-        .containsExactly(
-            parent1,
-            TreeArtifactValue.newBuilder(parent1)
-                .putChild(parent1Child, parent1ChildMetadata)
-                .setArchivedRepresentation(archivedArtifact1, metadataWithId(1))
-                .build(),
-            parent2,
-            TreeArtifactValue.newBuilder(parent2)
-                .putChild(parent2Child, parent2ChildMetadata)
-                .build());
+      assertThat(results)
+          .containsExactly(
+              parent,
+              TreeArtifactValue.newBuilder(parent)
+                  .putChild(child, childMetadata)
+                  .setArchivedRepresentation(archivedTreeArtifact, archivedTreeArtifactMetadata)
+                  .build());
+    }
+
+    @Test
+    public void injectsEmptyTreeArtifactWithArchivedRepresentation() {
+      TreeArtifactValue.MultiBuilder builder = multiBuilderType.newMultiBuilder();
+      SpecialArtifact parent = createTreeArtifact("bin/tree");
+      ArchivedTreeArtifact archivedTreeArtifact = createArchivedTreeArtifact(parent);
+      FileArtifactValue metadata = metadataWithId(1);
+
+      builder.setArchivedRepresentation(archivedTreeArtifact, metadata).injectTo(results::put);
+
+      assertThat(results)
+          .containsExactly(
+              parent,
+              TreeArtifactValue.newBuilder(parent)
+                  .setArchivedRepresentation(archivedTreeArtifact, metadata)
+                  .build());
+    }
+
+    @Test
+    public void injectsTreeArtifactsWithAndWithoutArchivedRepresentation() {
+      TreeArtifactValue.MultiBuilder builder = multiBuilderType.newMultiBuilder();
+      SpecialArtifact parent1 = createTreeArtifact("bin/tree1");
+      ArchivedTreeArtifact archivedArtifact1 = createArchivedTreeArtifact(parent1);
+      FileArtifactValue archivedArtifact1Metadata = metadataWithId(1);
+      TreeFileArtifact parent1Child = TreeFileArtifact.createTreeOutput(parent1, "child");
+      FileArtifactValue parent1ChildMetadata = metadataWithId(2);
+      SpecialArtifact parent2 = createTreeArtifact("bin/tree2");
+      TreeFileArtifact parent2Child = TreeFileArtifact.createTreeOutput(parent2, "child");
+      FileArtifactValue parent2ChildMetadata = metadataWithId(3);
+
+      builder
+          .setArchivedRepresentation(archivedArtifact1, archivedArtifact1Metadata)
+          .putChild(parent1Child, parent1ChildMetadata)
+          .putChild(parent2Child, parent2ChildMetadata)
+          .injectTo(results::put);
+
+      assertThat(results)
+          .containsExactly(
+              parent1,
+              TreeArtifactValue.newBuilder(parent1)
+                  .putChild(parent1Child, parent1ChildMetadata)
+                  .setArchivedRepresentation(archivedArtifact1, metadataWithId(1))
+                  .build(),
+              parent2,
+              TreeArtifactValue.newBuilder(parent2)
+                  .putChild(parent2Child, parent2ChildMetadata)
+                  .build());
+    }
+
+    private static SpecialArtifact createTreeArtifact(String execPath) {
+      return TreeArtifactValueTest.createTreeArtifact(execPath, ROOT);
+    }
   }
 
   private static ArchivedTreeArtifact createArchivedTreeArtifact(SpecialArtifact specialArtifact) {
