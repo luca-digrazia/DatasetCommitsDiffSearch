@@ -1,6 +1,5 @@
 package io.quarkus.spring.data.deployment.generate;
 
-import static io.quarkus.gizmo.FieldDescriptor.of;
 import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 
 import java.lang.reflect.Modifier;
@@ -43,9 +42,8 @@ import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
-import io.quarkus.hibernate.orm.panache.common.runtime.AbstractJpaOperations;
 import io.quarkus.hibernate.orm.panache.runtime.AdditionalJpaOperations;
-import io.quarkus.panache.common.deployment.TypeBundle;
+import io.quarkus.hibernate.orm.panache.runtime.JpaOperations;
 import io.quarkus.spring.data.deployment.DotNames;
 import io.quarkus.spring.data.runtime.FunctionalityNotImplemented;
 import io.quarkus.spring.data.runtime.RepositorySupport;
@@ -56,12 +54,9 @@ public class StockMethodsAdder {
     private static Set<MethodInfo> ALL_SPRING_DATA_REPOSITORY_METHODS = null;
 
     private final IndexView index;
-    private final FieldDescriptor operationsField;
 
-    public StockMethodsAdder(IndexView index, TypeBundle typeBundle) {
+    public StockMethodsAdder(IndexView index) {
         this.index = index;
-        String operationsName = typeBundle.operations().dotName().toString();
-        operationsField = of(operationsName, "INSTANCE", operationsName);
     }
 
     public void add(ClassCreator classCreator, FieldDescriptor entityClassFieldDescriptor,
@@ -110,8 +105,6 @@ public class StockMethodsAdder {
         generateDelete(classCreator, generatedClassName, entityTypeStr, allMethodsToBeImplementedToResult);
         generateDeleteAllWithIterable(classCreator, generatedClassName, entityTypeStr, allMethodsToBeImplementedToResult);
         generateDeleteAll(classCreator, entityClassFieldDescriptor, generatedClassName, allMethodsToBeImplementedToResult);
-        generateDeleteAllInBatch(classCreator, entityClassFieldDescriptor, generatedClassName,
-                allMethodsToBeImplementedToResult);
 
         handleUnimplementedMethods(classCreator, allMethodsToBeImplementedToResult);
     }
@@ -226,16 +219,15 @@ public class StockMethodsAdder {
     }
 
     private void generatePersistAndReturn(ResultHandle entity, BytecodeCreator bytecodeCreator) {
-        bytecodeCreator.invokeVirtualMethod(
-                MethodDescriptor.ofMethod(AbstractJpaOperations.class, "persist", void.class, Object.class),
-                bytecodeCreator.readStaticField(operationsField),
+        bytecodeCreator.invokeStaticMethod(
+                MethodDescriptor.ofMethod(JpaOperations.class, "persist", void.class, Object.class),
                 entity);
         bytecodeCreator.returnValue(entity);
     }
 
     private void generateMergeAndReturn(ResultHandle entity, BytecodeCreator bytecodeCreator) {
         ResultHandle entityManager = bytecodeCreator.invokeStaticMethod(
-                ofMethod(AbstractJpaOperations.class, "getEntityManager", EntityManager.class));
+                ofMethod(JpaOperations.class, "getEntityManager", EntityManager.class));
         entity = bytecodeCreator.invokeInterfaceMethod(
                 MethodDescriptor.ofMethod(EntityManager.class, "merge", Object.class, Object.class),
                 entityManager, entity);
@@ -252,7 +244,7 @@ public class StockMethodsAdder {
         if (annotationTarget instanceof FieldInfo) {
             FieldInfo fieldInfo = annotationTarget.asField();
             if (Modifier.isPublic(fieldInfo.flags())) {
-                return methodCreator.readInstanceField(of(fieldInfo), entity);
+                return methodCreator.readInstanceField(FieldDescriptor.of(fieldInfo), entity);
             }
 
             String getterMethodName = JavaBeanUtil.getGetterName(fieldInfo.name(), fieldInfo.type().name());
@@ -301,9 +293,8 @@ public class StockMethodsAdder {
 
                     ResultHandle entity = saveAndFlush.getMethodParam(0);
                     entity = saveAndFlush.invokeVirtualMethod(save, saveAndFlush.getThis(), entity);
-                    saveAndFlush.invokeVirtualMethod(
-                            MethodDescriptor.ofMethod(AbstractJpaOperations.class, "flush", void.class),
-                            saveAndFlush.readStaticField(operationsField));
+                    saveAndFlush.invokeStaticMethod(
+                            MethodDescriptor.ofMethod(JpaOperations.class, "flush", void.class));
                     saveAndFlush.returnValue(entity);
                 }
                 try (MethodCreator bridgeSave = classCreator.getMethodCreator(bridgeSaveAndFlushDescriptor)) {
@@ -393,9 +384,8 @@ public class StockMethodsAdder {
             if (!classCreator.getExistingMethods().contains(flushDescriptor)) {
                 try (MethodCreator flush = classCreator.getMethodCreator(flushDescriptor)) {
                     flush.addAnnotation(Transactional.class);
-                    flush.invokeVirtualMethod(
-                            MethodDescriptor.ofMethod(AbstractJpaOperations.class, "flush", void.class),
-                            flush.readStaticField(operationsField));
+                    flush.invokeStaticMethod(
+                            MethodDescriptor.ofMethod(JpaOperations.class, "flush", void.class));
                     flush.returnValue(null);
                 }
             }
@@ -421,10 +411,9 @@ public class StockMethodsAdder {
                     findById.setSignature(String.format("(L%s;)Ljava/util/Optional<L%s;>;",
                             idTypeStr.replace('.', '/'), entityTypeStr.replace('.', '/')));
                     ResultHandle id = findById.getMethodParam(0);
-                    ResultHandle entity = findById.invokeVirtualMethod(
-                            MethodDescriptor.ofMethod(AbstractJpaOperations.class, "findById", Object.class, Class.class,
+                    ResultHandle entity = findById.invokeStaticMethod(
+                            MethodDescriptor.ofMethod(JpaOperations.class, "findById", Object.class, Class.class,
                                     Object.class),
-                            findById.readStaticField(operationsField),
                             findById.readInstanceField(entityClassFieldDescriptor, findById.getThis()), id);
                     ResultHandle optional = findById.invokeStaticMethod(
                             MethodDescriptor.ofMethod(Optional.class, "ofNullable", Optional.class, Object.class),
@@ -511,13 +500,11 @@ public class StockMethodsAdder {
 
             if (!classCreator.getExistingMethods().contains(getOneDescriptor)) {
                 try (MethodCreator findById = classCreator.getMethodCreator(getOneDescriptor)) {
-
-                    ResultHandle entity = findById.invokeStaticMethod(ofMethod(RepositorySupport.class, "getOne",
-                            Object.class, AbstractJpaOperations.class, Class.class, Object.class),
-                            findById.readStaticField(operationsField),
-                            findById.readInstanceField(entityClassFieldDescriptor, findById.getThis()),
-                            findById.getMethodParam(0));
-
+                    ResultHandle id = findById.getMethodParam(0);
+                    ResultHandle entity = findById.invokeStaticMethod(
+                            MethodDescriptor.ofMethod(RepositorySupport.class, "getOne", Object.class, Class.class,
+                                    Object.class),
+                            findById.readInstanceField(entityClassFieldDescriptor, findById.getThis()), id);
                     findById.returnValue(entity);
                 }
                 try (MethodCreator bridgeGetOne = classCreator.getMethodCreator(bridgeGetOneDescriptor)) {
@@ -549,9 +536,8 @@ public class StockMethodsAdder {
                 try (MethodCreator findAll = classCreator.getMethodCreator(findAllDescriptor)) {
                     findAll.setSignature(String.format("()Ljava/util/List<L%s;>;",
                             entityTypeStr.replace('.', '/')));
-                    ResultHandle panacheQuery = findAll.invokeVirtualMethod(
-                            ofMethod(AbstractJpaOperations.class, "findAll", Object.class, Class.class),
-                            findAll.readStaticField(operationsField),
+                    ResultHandle panacheQuery = findAll.invokeStaticMethod(
+                            ofMethod(JpaOperations.class, "findAll", PanacheQuery.class, Class.class),
                             findAll.readInstanceField(entityClassFieldDescriptor, findAll.getThis()));
                     ResultHandle list = findAll.invokeInterfaceMethod(
                             ofMethod(PanacheQuery.class, "list", List.class),
@@ -591,10 +577,9 @@ public class StockMethodsAdder {
                                     org.springframework.data.domain.Sort.class),
                             findAll.getMethodParam(0));
 
-                    ResultHandle panacheQuery = findAll.invokeVirtualMethod(
-                            ofMethod(AbstractJpaOperations.class, "findAll", Object.class, Class.class,
+                    ResultHandle panacheQuery = findAll.invokeStaticMethod(
+                            ofMethod(JpaOperations.class, "findAll", PanacheQuery.class, Class.class,
                                     io.quarkus.panache.common.Sort.class),
-                            findAll.readStaticField(operationsField),
                             findAll.readInstanceField(entityClassFieldDescriptor, findAll.getThis()), sort);
                     ResultHandle list = findAll.invokeInterfaceMethod(
                             ofMethod(PanacheQuery.class, "list", List.class),
@@ -650,17 +635,15 @@ public class StockMethodsAdder {
                     BytecodeCreator sortNullFalse = sortNullBranch.falseBranch();
                     AssignableResultHandle panacheQueryVar = findAll.createVariable(PanacheQuery.class);
 
-                    ResultHandle panacheQueryWithoutSort = sortNullTrue.invokeVirtualMethod(
-                            ofMethod(AbstractJpaOperations.class, "findAll", Object.class, Class.class),
-                            sortNullTrue.readStaticField(operationsField),
+                    ResultHandle panacheQueryWithoutSort = sortNullTrue.invokeStaticMethod(
+                            ofMethod(JpaOperations.class, "findAll", PanacheQuery.class, Class.class),
                             sortNullTrue.readInstanceField(entityClassFieldDescriptor, sortNullTrue.getThis()));
                     sortNullTrue.assign(panacheQueryVar, panacheQueryWithoutSort);
                     sortNullTrue.breakScope();
 
-                    ResultHandle panacheQueryWithSort = sortNullFalse.invokeVirtualMethod(
-                            ofMethod(AbstractJpaOperations.class, "findAll", Object.class, Class.class,
+                    ResultHandle panacheQueryWithSort = sortNullFalse.invokeStaticMethod(
+                            ofMethod(JpaOperations.class, "findAll", PanacheQuery.class, Class.class,
                                     io.quarkus.panache.common.Sort.class),
-                            sortNullFalse.readStaticField(operationsField),
                             sortNullFalse.readInstanceField(entityClassFieldDescriptor, sortNullFalse.getThis()), panacheSort);
                     sortNullFalse.assign(panacheQueryVar, panacheQueryWithSort);
                     sortNullFalse.breakScope();
@@ -713,20 +696,15 @@ public class StockMethodsAdder {
                     if ((idField != null) &&
                             (DotNames.LONG.equals(idField.type().name()) || DotNames.INTEGER.equals(idField.type().name())
                                     || DotNames.STRING.equals(idField.type().name()))) {
-                        MethodDescriptor method = ofMethod(RepositorySupport.class, "findByIds",
-                                List.class, AbstractJpaOperations.class, Class.class, String.class,
-                                Iterable.class);
-                        list = findAllById.invokeStaticMethod(method,
-                                findAllById.readStaticField(operationsField),
-                                entityClass,
-                                findAllById.load(idField.name()), findAllById.getMethodParam(0));
+                        list = findAllById.invokeStaticMethod(
+                                MethodDescriptor.ofMethod(RepositorySupport.class, "findByIds", List.class,
+                                        Class.class, String.class, Iterable.class),
+                                entityClass, findAllById.load(idField.name()), findAllById.getMethodParam(0));
                     } else {
                         list = findAllById.invokeStaticMethod(
-                                MethodDescriptor.ofMethod(RepositorySupport.class, "findByIds",
-                                        List.class, AbstractJpaOperations.class, Class.class, Iterable.class),
-                                findAllById.readStaticField(operationsField),
-                                entityClass,
-                                findAllById.getMethodParam(0));
+                                MethodDescriptor.ofMethod(RepositorySupport.class, "findByIds", List.class,
+                                        Class.class, Iterable.class),
+                                entityClass, findAllById.getMethodParam(0));
                     }
 
                     findAllById.returnValue(list);
@@ -769,9 +747,8 @@ public class StockMethodsAdder {
         if (allMethodsToBeImplementedToResult.containsKey(countDescriptor)) {
             if (!classCreator.getExistingMethods().contains(countDescriptor)) {
                 try (MethodCreator count = classCreator.getMethodCreator(countDescriptor)) {
-                    ResultHandle result = count.invokeVirtualMethod(
-                            ofMethod(AbstractJpaOperations.class, "count", long.class, Class.class),
-                            count.readStaticField(operationsField),
+                    ResultHandle result = count.invokeStaticMethod(
+                            ofMethod(JpaOperations.class, "count", long.class, Class.class),
                             count.readInstanceField(entityClassFieldDescriptor, count.getThis()));
                     count.returnValue(result);
                 }
@@ -799,10 +776,10 @@ public class StockMethodsAdder {
                     ResultHandle entityClass = deleteById.readInstanceField(entityClassFieldDescriptor,
                             deleteById.getThis());
 
-                    ResultHandle deleted = deleteById.invokeVirtualMethod(
-                            MethodDescriptor.ofMethod(AbstractJpaOperations.class, "deleteById", boolean.class,
-                                    Class.class, Object.class),
-                            deleteById.readStaticField(operationsField), entityClass, id);
+                    ResultHandle deleted = deleteById.invokeStaticMethod(
+                            MethodDescriptor.ofMethod(JpaOperations.class, "deleteById", boolean.class, Class.class,
+                                    Object.class),
+                            entityClass, id);
 
                     BranchResult deletedBranch = deleteById.ifNonZero(deleted);
                     BytecodeCreator deletedFalse = deletedBranch.falseBranch();
@@ -857,9 +834,9 @@ public class StockMethodsAdder {
                 try (MethodCreator delete = classCreator.getMethodCreator(deleteDescriptor)) {
                     delete.addAnnotation(Transactional.class);
                     ResultHandle entity = delete.getMethodParam(0);
-                    delete.invokeVirtualMethod(
-                            MethodDescriptor.ofMethod(AbstractJpaOperations.class, "delete", void.class, Object.class),
-                            delete.readStaticField(operationsField), entity);
+                    delete.invokeStaticMethod(
+                            MethodDescriptor.ofMethod(JpaOperations.class, "delete", void.class, Object.class),
+                            entity);
                     delete.returnValue(null);
                 }
                 try (MethodCreator bridgeDelete = classCreator.getMethodCreator(bridgeDeleteDescriptor)) {
@@ -892,9 +869,7 @@ public class StockMethodsAdder {
                     deleteAll.addAnnotation(Transactional.class);
                     ResultHandle entities = deleteAll.getMethodParam(0);
                     deleteAll.invokeStaticMethod(
-                            MethodDescriptor.ofMethod(RepositorySupport.class, "deleteAll",
-                                    void.class, AbstractJpaOperations.class, Iterable.class),
-                            deleteAll.readStaticField(operationsField),
+                            MethodDescriptor.ofMethod(RepositorySupport.class, "deleteAll", void.class, Iterable.class),
                             entities);
                     deleteAll.returnValue(null);
                 }
@@ -914,34 +889,12 @@ public class StockMethodsAdder {
                     deleteAll.addAnnotation(Transactional.class);
                     deleteAll.invokeStaticMethod(
                             MethodDescriptor.ofMethod(AdditionalJpaOperations.class, "deleteAllWithCascade", long.class,
-                                    AbstractJpaOperations.class, Class.class.getName()),
-                            deleteAll.readStaticField(operationsField),
+                                    Class.class.getName()),
                             deleteAll.readInstanceField(entityClassFieldDescriptor, deleteAll.getThis()));
                     deleteAll.returnValue(null);
                 }
             }
             allMethodsToBeImplementedToResult.put(deleteAllDescriptor, true);
-        }
-    }
-
-    private void generateDeleteAllInBatch(ClassCreator classCreator, FieldDescriptor entityClassFieldDescriptor,
-            String generatedClassName, Map<MethodDescriptor, Boolean> allMethodsToBeImplementedToResult) {
-
-        MethodDescriptor deleteAllInBatchDescriptor = MethodDescriptor.ofMethod(generatedClassName, "deleteAllInBatch",
-                void.class);
-
-        if (allMethodsToBeImplementedToResult.containsKey(deleteAllInBatchDescriptor)) {
-            if (!classCreator.getExistingMethods().contains(deleteAllInBatchDescriptor)) {
-                try (MethodCreator deleteAll = classCreator.getMethodCreator(deleteAllInBatchDescriptor)) {
-                    deleteAll.addAnnotation(Transactional.class);
-                    ResultHandle result = deleteAll.invokeVirtualMethod(
-                            MethodDescriptor.ofMethod(AbstractJpaOperations.class, "deleteAll", long.class, Class.class),
-                            deleteAll.readStaticField(operationsField),
-                            deleteAll.readInstanceField(entityClassFieldDescriptor, deleteAll.getThis()));
-                    deleteAll.returnValue(result);
-                }
-            }
-            allMethodsToBeImplementedToResult.put(deleteAllInBatchDescriptor, true);
         }
     }
 
