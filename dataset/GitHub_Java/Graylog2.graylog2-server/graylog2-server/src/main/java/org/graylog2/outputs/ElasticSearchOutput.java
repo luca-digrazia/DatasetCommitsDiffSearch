@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -47,7 +46,6 @@ public class ElasticSearchOutput implements MessageOutput {
 
     private static final String NAME = "ElasticSearch Output";
     private static final Logger LOG = LoggerFactory.getLogger(ElasticSearchOutput.class);
-    private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final Meter writes;
     private final Timer processTime;
     private final Indexer indexer;
@@ -59,9 +57,6 @@ public class ElasticSearchOutput implements MessageOutput {
         // Only constructing metrics here. write() get's another Core reference. (because this technically is a plugin)
         this.writes = metricRegistry.meter(name(ElasticSearchOutput.class, "writes"));
         this.processTime = metricRegistry.timer(name(ElasticSearchOutput.class, "processTime"));
-
-        // Should be set in initialize once this becomes a real plugin.
-        isRunning.set(true);
     }
 
     @Override
@@ -94,18 +89,6 @@ public class ElasticSearchOutput implements MessageOutput {
     @Override
     public void initialize(Configuration config) throws MessageOutputConfigurationException {
         // Built in output. This is just for plugin compat. Nothing to initialize.
-        //isRunning.set(true);
-    }
-
-    @Override
-    public void stop() {
-        // TODO: Move ES stop code here.
-        //isRunning.set(false);
-    }
-
-    @Override
-    public boolean isRunning() {
-        return isRunning.get();
     }
 
     @Override
