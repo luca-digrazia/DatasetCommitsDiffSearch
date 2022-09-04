@@ -14,7 +14,7 @@ final class TimingReplacement {
 
     @Substitute
     public static void mainStarted() {
-        bootStartTime = System.nanoTime();
+        bootStartTime = System.currentTimeMillis();
     }
 
 }

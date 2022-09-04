@@ -1,7 +1,5 @@
 package org.jboss.shamrock.runtime;
 
-import org.jboss.logging.Logger;
-
 /**
  * Class that is responsible for printing out timing results.
  * <p>
@@ -14,7 +12,7 @@ public class Timing {
 
     public static void staticInitStarted() {
         if(bootStartTime < 0) {
-            bootStartTime = System.nanoTime();
+            bootStartTime = System.currentTimeMillis();
         }
     }
 
@@ -25,12 +23,11 @@ public class Timing {
     }
 
     public static void restart() {
-        bootStartTime = System.nanoTime();
+        bootStartTime = System.currentTimeMillis();
     }
 
     public static void printStartupTime() {
-        final long time = System.nanoTime() - bootStartTime + 500;
-        Logger.getLogger("org.jboss.shamrock").infof("Shamrock started in %d.%03dms", Long.valueOf(time / 1_000_000), Long.valueOf(time % 1_000_000 / 1_000));
+        System.out.println("Shamrock started in " + (System.currentTimeMillis() - bootStartTime) + "ms");
     }
 
 }
