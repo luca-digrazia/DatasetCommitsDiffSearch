@@ -14,11 +14,12 @@ import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 
 import javax.servlet.Servlet;
 import javax.validation.Validator;
+
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 
-import static java.util.Objects.requireNonNull;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * A Dropwizard application's environment.
@@ -41,7 +42,7 @@ public class Environment {
 
     private final MutableServletContextHandler adminContext;
     private final AdminEnvironment adminEnvironment;
-
+    
     private final ExecutorService healthCheckExecutorService;
 
     /**
@@ -146,7 +147,7 @@ public class Environment {
      * Sets the application's {@link Validator}.
      */
     public void setValidator(Validator validator) {
-        this.validator = requireNonNull(validator);
+        this.validator = checkNotNull(validator);
     }
 
     /**
