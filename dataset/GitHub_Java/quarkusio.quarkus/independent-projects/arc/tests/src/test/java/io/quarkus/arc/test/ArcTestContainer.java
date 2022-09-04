@@ -1,21 +1,21 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+package io.quarkus.arc.test;
 
-package org.jboss.quarkus.arc.test;
-
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ComponentsProvider;
+import io.quarkus.arc.ResourceReferenceProvider;
+import io.quarkus.arc.processor.AlternativePriorities;
+import io.quarkus.arc.processor.AnnotationsTransformer;
+import io.quarkus.arc.processor.BeanArchives;
+import io.quarkus.arc.processor.BeanDeploymentValidator;
+import io.quarkus.arc.processor.BeanInfo;
+import io.quarkus.arc.processor.BeanProcessor;
+import io.quarkus.arc.processor.BeanRegistrar;
+import io.quarkus.arc.processor.ContextRegistrar;
+import io.quarkus.arc.processor.InjectionPointsTransformer;
+import io.quarkus.arc.processor.InterceptorBindingRegistrar;
+import io.quarkus.arc.processor.ObserverRegistrar;
+import io.quarkus.arc.processor.ObserverTransformer;
+import io.quarkus.arc.processor.ResourceOutput;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -29,28 +29,32 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.ComponentsProvider;
-import org.jboss.quarkus.arc.ResourceReferenceProvider;
-import org.jboss.quarkus.arc.processor.AnnotationsTransformer;
-import org.jboss.quarkus.arc.processor.BeanDeploymentValidator;
-import org.jboss.quarkus.arc.processor.BeanInfo;
-import org.jboss.quarkus.arc.processor.BeanProcessor;
-import org.jboss.quarkus.arc.processor.BeanRegistrar;
-import org.jboss.quarkus.arc.processor.DeploymentEnhancer;
-import org.jboss.quarkus.arc.processor.ResourceOutput;
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
+import org.junit.jupiter.api.extension.AfterEachCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
 
-public class ArcTestContainer implements TestRule {
+/**
+ * Junit5 extension for Arc bootstrap/shutdown.
+ * Designed to be used via {code @RegisterExtension} fields in tests.
+ *
+ * It bootstraps Arc before each test method and shuts down afterwards.
+ * Leverages root {@code ExtensionContext.Store} to store and retrieve some variables.
+ */
+public class ArcTestContainer implements BeforeEachCallback, AfterEachCallback {
+
+    // our specific namespace for storing anything into ExtensionContext.Store
+    private static ExtensionContext.Namespace EXTENSION_NAMESPACE;
+
+    // Strings used as keys in ExtensionContext.Store
+    private static final String KEY_OLD_TCCL = "arcExtensionOldTccl";
+    private static final String KEY_TEST_CLASSLOADER = "arcExtensionTestClassLoader";
 
     private static final String TARGET_TEST_CLASSES = "target/test-classes";
 
@@ -62,22 +66,33 @@ public class ArcTestContainer implements TestRule {
 
         private final List<Class<?>> resourceReferenceProviders;
         private final List<Class<?>> beanClasses;
+        private final List<Class<?>> additionalClasses;
         private final List<Class<? extends Annotation>> resourceAnnotations;
         private final List<BeanRegistrar> beanRegistrars;
+        private final List<ObserverRegistrar> observerRegistrars;
+        private final List<ContextRegistrar> contextRegistrars;
+        private final List<InterceptorBindingRegistrar> interceptorBindingRegistrars;
         private final List<AnnotationsTransformer> annotationsTransformers;
-        private final List<DeploymentEnhancer> deploymentEnhancers;
+        private final List<InjectionPointsTransformer> injectionsPointsTransformers;
+        private final List<ObserverTransformer> observerTransformers;
         private final List<BeanDeploymentValidator> beanDeploymentValidators;
         private boolean shouldFail = false;
         private boolean removeUnusedBeans = false;
         private final List<Predicate<BeanInfo>> exclusions;
+        private AlternativePriorities alternativePriorities;
 
         public Builder() {
             resourceReferenceProviders = new ArrayList<>();
             beanClasses = new ArrayList<>();
+            additionalClasses = new ArrayList<>();
             resourceAnnotations = new ArrayList<>();
             beanRegistrars = new ArrayList<>();
+            observerRegistrars = new ArrayList<>();
+            contextRegistrars = new ArrayList<>();
+            interceptorBindingRegistrars = new ArrayList<>();
             annotationsTransformers = new ArrayList<>();
-            deploymentEnhancers = new ArrayList<>();
+            injectionsPointsTransformers = new ArrayList<>();
+            observerTransformers = new ArrayList<>();
             beanDeploymentValidators = new ArrayList<>();
             exclusions = new ArrayList<>();
         }
@@ -92,6 +107,11 @@ public class ArcTestContainer implements TestRule {
             return this;
         }
 
+        public Builder additionalClasses(Class<?>... additionalClasses) {
+            Collections.addAll(this.additionalClasses, additionalClasses);
+            return this;
+        }
+
         @SafeVarargs
         public final Builder resourceAnnotations(Class<? extends Annotation>... resourceAnnotations) {
             Collections.addAll(this.resourceAnnotations, resourceAnnotations);
@@ -103,13 +123,33 @@ public class ArcTestContainer implements TestRule {
             return this;
         }
 
+        public Builder observerRegistrars(ObserverRegistrar... registrars) {
+            Collections.addAll(this.observerRegistrars, registrars);
+            return this;
+        }
+
+        public Builder contextRegistrars(ContextRegistrar... registrars) {
+            Collections.addAll(this.contextRegistrars, registrars);
+            return this;
+        }
+
         public Builder annotationsTransformers(AnnotationsTransformer... transformers) {
             Collections.addAll(this.annotationsTransformers, transformers);
             return this;
         }
 
-        public Builder deploymentEnhancers(DeploymentEnhancer... enhancers) {
-            Collections.addAll(this.deploymentEnhancers, enhancers);
+        public Builder injectionPointsTransformers(InjectionPointsTransformer... transformers) {
+            Collections.addAll(this.injectionsPointsTransformers, transformers);
+            return this;
+        }
+
+        public Builder observerTransformers(ObserverTransformer... transformers) {
+            Collections.addAll(this.observerTransformers, transformers);
+            return this;
+        }
+
+        public Builder interceptorBindingRegistrars(InterceptorBindingRegistrar... registrars) {
+            Collections.addAll(this.interceptorBindingRegistrars, registrars);
             return this;
         }
 
@@ -133,9 +173,13 @@ public class ArcTestContainer implements TestRule {
             return this;
         }
 
+        public Builder alternativePriorities(AlternativePriorities priorities) {
+            this.alternativePriorities = priorities;
+            return this;
+        }
+
         public ArcTestContainer build() {
-            return new ArcTestContainer(resourceReferenceProviders, beanClasses, resourceAnnotations, beanRegistrars, annotationsTransformers,
-                    deploymentEnhancers, beanDeploymentValidators, shouldFail, removeUnusedBeans, exclusions);
+            return new ArcTestContainer(this);
         }
 
     }
@@ -143,14 +187,23 @@ public class ArcTestContainer implements TestRule {
     private final List<Class<?>> resourceReferenceProviders;
 
     private final List<Class<?>> beanClasses;
+    private final List<Class<?>> additionalClasses;
 
     private final List<Class<? extends Annotation>> resourceAnnotations;
 
     private final List<BeanRegistrar> beanRegistrars;
 
+    private final List<ObserverRegistrar> observerRegistrars;
+
+    private final List<ContextRegistrar> contextRegistrars;
+
+    List<InterceptorBindingRegistrar> bindingRegistrars;
+
     private final List<AnnotationsTransformer> annotationsTransformers;
 
-    private final List<DeploymentEnhancer> deploymentEnhancers;
+    private final List<InjectionPointsTransformer> injectionPointsTransformers;
+
+    private final List<ObserverTransformer> observerTransformers;
 
     private final List<BeanDeploymentValidator> beanDeploymentValidators;
 
@@ -160,52 +213,82 @@ public class ArcTestContainer implements TestRule {
     private final boolean removeUnusedBeans;
     private final List<Predicate<BeanInfo>> exclusions;
 
-    private URLClassLoader testClassLoader;
+    private final AlternativePriorities alternativePriorities;
 
     public ArcTestContainer(Class<?>... beanClasses) {
-        this(Collections.emptyList(), Arrays.asList(beanClasses), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-                Collections.emptyList(), Collections.emptyList(), false, false, Collections.emptyList());
-    }
-
-    public ArcTestContainer(List<Class<?>> resourceReferenceProviders, List<Class<?>> beanClasses, List<Class<? extends Annotation>> resourceAnnotations,
-            List<BeanRegistrar> beanRegistrars, List<AnnotationsTransformer> annotationsTransformers, List<DeploymentEnhancer> deploymentEnhancers,
-            List<BeanDeploymentValidator> beanDeploymentValidators, boolean shouldFail, boolean removeUnusedBeans, List<Predicate<BeanInfo>> exclusions) {
-        this.resourceReferenceProviders = resourceReferenceProviders;
-        this.beanClasses = beanClasses;
-        this.resourceAnnotations = resourceAnnotations;
-        this.beanRegistrars = beanRegistrars;
-        this.annotationsTransformers = annotationsTransformers;
-        this.deploymentEnhancers = deploymentEnhancers;
-        this.beanDeploymentValidators = beanDeploymentValidators;
+        this.resourceReferenceProviders = Collections.emptyList();
+        this.beanClasses = Arrays.asList(beanClasses);
+        this.additionalClasses = Collections.emptyList();
+        this.resourceAnnotations = Collections.emptyList();
+        this.beanRegistrars = Collections.emptyList();
+        this.observerRegistrars = Collections.emptyList();
+        this.contextRegistrars = Collections.emptyList();
+        this.bindingRegistrars = Collections.emptyList();
+        this.annotationsTransformers = Collections.emptyList();
+        this.injectionPointsTransformers = Collections.emptyList();
+        this.observerTransformers = Collections.emptyList();
+        this.beanDeploymentValidators = Collections.emptyList();
         this.buildFailure = new AtomicReference<Throwable>(null);
-        this.shouldFail = shouldFail;
-        this.removeUnusedBeans = removeUnusedBeans;
-        this.exclusions = exclusions;
+        this.shouldFail = false;
+        this.removeUnusedBeans = false;
+        this.exclusions = Collections.emptyList();
+        this.alternativePriorities = null;
     }
 
+    public ArcTestContainer(Builder builder) {
+        this.resourceReferenceProviders = builder.resourceReferenceProviders;
+        this.beanClasses = builder.beanClasses;
+        this.additionalClasses = builder.additionalClasses;
+        this.resourceAnnotations = builder.resourceAnnotations;
+        this.beanRegistrars = builder.beanRegistrars;
+        this.observerRegistrars = builder.observerRegistrars;
+        this.contextRegistrars = builder.contextRegistrars;
+        this.bindingRegistrars = builder.interceptorBindingRegistrars;
+        this.annotationsTransformers = builder.annotationsTransformers;
+        this.injectionPointsTransformers = builder.injectionsPointsTransformers;
+        this.observerTransformers = builder.observerTransformers;
+        this.beanDeploymentValidators = builder.beanDeploymentValidators;
+        this.buildFailure = new AtomicReference<Throwable>(null);
+        this.shouldFail = builder.shouldFail;
+        this.removeUnusedBeans = builder.removeUnusedBeans;
+        this.exclusions = builder.exclusions;
+        this.alternativePriorities = builder.alternativePriorities;
+    }
+
+    // this is where we start Arc, we operate on a per-method basis
     @Override
-    public Statement apply(Statement base, Description description) {
-        return new Statement() {
-            @Override
-            public void evaluate() throws Throwable {
-                ClassLoader oldTccl = init(description.getTestClass());
-                try {
-                    base.evaluate();
-                } finally {
-                    Thread.currentThread().setContextClassLoader(oldTccl);
-                    if(testClassLoader != null) {
-                        try {
-                            testClassLoader.close();
-                        } catch(IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                    shutdown();
-                }
-            }
-        };
+    public void beforeEach(ExtensionContext extensionContext) throws Exception {
+        getRootExtensionStore(extensionContext).put(KEY_OLD_TCCL, init(extensionContext));
     }
 
+    // this is where we shutdown Arc
+    @Override
+    public void afterEach(ExtensionContext extensionContext) throws Exception {
+        ClassLoader oldTccl = getRootExtensionStore(extensionContext).get(KEY_OLD_TCCL, ClassLoader.class);
+        Thread.currentThread().setContextClassLoader(oldTccl);
+
+        URLClassLoader testClassLoader = getRootExtensionStore(extensionContext).get(KEY_TEST_CLASSLOADER,
+                URLClassLoader.class);
+        if (testClassLoader != null) {
+            try {
+                testClassLoader.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        shutdown();
+    }
+
+    private static synchronized ExtensionContext.Store getRootExtensionStore(ExtensionContext context) {
+        if (EXTENSION_NAMESPACE == null) {
+            EXTENSION_NAMESPACE = ExtensionContext.Namespace.create(ArcTestContainer.class);
+        }
+        return context.getRoot().getStore(EXTENSION_NAMESPACE);
+    }
+
+    /**
+     * In case the test is expected to fail, this method will return a {@link Throwable} that caused it.
+     */
     public Throwable getFailure() {
         return buildFailure.get();
     }
@@ -214,25 +297,38 @@ public class ArcTestContainer implements TestRule {
         Arc.shutdown();
     }
 
-    private ClassLoader init(Class<?> testClass) {
+    private ClassLoader init(ExtensionContext context) {
+        // retrieve test class from extension context
+        Class<?> testClass = context.getRequiredTestClass();
 
         // Make sure Arc is down
         Arc.shutdown();
 
         // Build index
-        Index index;
+        Index beanArchiveIndex;
         try {
-            index = index(beanClasses);
+            beanArchiveIndex = index(beanClasses);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to create index", e);
+        }
+
+        Index applicationIndex;
+        if (additionalClasses.isEmpty()) {
+            applicationIndex = null;
+        } else {
+            try {
+                applicationIndex = index(additionalClasses);
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to create index", e);
+            }
         }
 
         ClassLoader old = Thread.currentThread()
                 .getContextClassLoader();
 
         try {
-            String arcContainerAbsolutePath =
-                    ArcTestContainer.class.getClassLoader().getResource(ArcTestContainer.class.getName().replace(".", "/") + ".class").getFile();
+            String arcContainerAbsolutePath = ArcTestContainer.class.getClassLoader()
+                    .getResource(ArcTestContainer.class.getName().replace(".", "/") + ".class").getFile();
             int targetClassesIndex = arcContainerAbsolutePath.indexOf(TARGET_TEST_CLASSES);
             String testClassesRootPath = arcContainerAbsolutePath.substring(0, targetClassesIndex);
             File generatedSourcesDirectory = new File("target/generated-arc-sources");
@@ -255,27 +351,25 @@ public class ArcTestContainer implements TestRule {
                 }
             }
 
-            BeanProcessor.Builder beanProcessorBuilder = BeanProcessor.builder()
+            BeanProcessor.Builder builder = BeanProcessor.builder()
                     .setName(testClass.getSimpleName())
-                    .setIndex(index);
+                    .setBeanArchiveIndex(BeanArchives.buildBeanArchiveIndex(getClass().getClassLoader(),
+                            new ConcurrentHashMap<>(), beanArchiveIndex))
+                    .setApplicationIndex(applicationIndex);
             if (!resourceAnnotations.isEmpty()) {
-                beanProcessorBuilder.addResourceAnnotations(resourceAnnotations.stream()
+                builder.addResourceAnnotations(resourceAnnotations.stream()
                         .map(c -> DotName.createSimple(c.getName()))
                         .collect(Collectors.toList()));
             }
-            for (BeanRegistrar registrar : beanRegistrars) {
-                beanProcessorBuilder.addBeanRegistrar(registrar);
-            }
-            for (AnnotationsTransformer annotationsTransformer : annotationsTransformers) {
-                beanProcessorBuilder.addAnnotationTransformer(annotationsTransformer);
-            }
-            for (DeploymentEnhancer enhancer : deploymentEnhancers) {
-                beanProcessorBuilder.addDeploymentEnhancer(enhancer);
-            }
-            for (BeanDeploymentValidator validator : beanDeploymentValidators) {
-                beanProcessorBuilder.addBeanDeploymentValidator(validator);
-            }
-            beanProcessorBuilder.setOutput(new ResourceOutput() {
+            beanRegistrars.forEach(builder::addBeanRegistrar);
+            observerRegistrars.forEach(builder::addObserverRegistrar);
+            contextRegistrars.forEach(builder::addContextRegistrar);
+            bindingRegistrars.forEach(builder::addInterceptorbindingRegistrar);
+            annotationsTransformers.forEach(builder::addAnnotationTransformer);
+            injectionPointsTransformers.forEach(builder::addInjectionPointTransformer);
+            observerTransformers.forEach(builder::addObserverTransformer);
+            beanDeploymentValidators.forEach(builder::addBeanDeploymentValidator);
+            builder.setOutput(new ResourceOutput() {
 
                 @Override
                 public void writeResource(Resource resource) throws IOException {
@@ -298,12 +392,13 @@ public class ArcTestContainer implements TestRule {
                     }
                 }
             });
-            beanProcessorBuilder.setRemoveUnusedBeans(removeUnusedBeans);
+            builder.setRemoveUnusedBeans(removeUnusedBeans);
             for (Predicate<BeanInfo> exclusion : exclusions) {
-                beanProcessorBuilder.addRemovalExclusion(exclusion);
+                builder.addRemovalExclusion(exclusion);
             }
+            builder.setAlternativePriorities(alternativePriorities);
 
-            BeanProcessor beanProcessor = beanProcessorBuilder.build();
+            BeanProcessor beanProcessor = builder.build();
 
             try {
                 beanProcessor.process();
@@ -311,14 +406,15 @@ public class ArcTestContainer implements TestRule {
                 throw new IllegalStateException("Error generating resources", e);
             }
 
-            testClassLoader = new URLClassLoader(new URL[] {}, old) {
+            URLClassLoader testClassLoader = new URLClassLoader(new URL[] {}, old) {
                 @Override
                 public Enumeration<URL> getResources(String name) throws IOException {
                     if (("META-INF/services/" + ComponentsProvider.class.getName()).equals(name)) {
                         // return URL that points to the correct test bean provider
                         return Collections.enumeration(Collections.singleton(componentsProviderFile.toURI()
                                 .toURL()));
-                    } else if (("META-INF/services/" + ResourceReferenceProvider.class.getName()).equals(name) && !resourceReferenceProviders.isEmpty()) {
+                    } else if (("META-INF/services/" + ResourceReferenceProvider.class.getName()).equals(name)
+                            && !resourceReferenceProviders.isEmpty()) {
                         return Collections.enumeration(Collections.singleton(resourceReferenceProviderFile.toURI()
                                 .toURL()));
                     }
@@ -327,6 +423,9 @@ public class ArcTestContainer implements TestRule {
             };
             Thread.currentThread()
                     .setContextClassLoader(testClassLoader);
+
+            // store the test class loader into extension store
+            getRootExtensionStore(context).put(KEY_TEST_CLASSLOADER, testClassLoader);
 
             // Now we are ready to initialize Arc
             Arc.initialize();
@@ -344,7 +443,8 @@ public class ArcTestContainer implements TestRule {
     private Index index(Iterable<Class<?>> classes) throws IOException {
         Indexer indexer = new Indexer();
         for (Class<?> clazz : classes) {
-            try (InputStream stream = ArcTestContainer.class.getClassLoader().getResourceAsStream(clazz.getName().replace('.', '/') + ".class")) {
+            try (InputStream stream = ArcTestContainer.class.getClassLoader()
+                    .getResourceAsStream(clazz.getName().replace('.', '/') + ".class")) {
                 indexer.index(stream);
             }
         }

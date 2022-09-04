@@ -1,40 +1,58 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.deployment.steps;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.jboss.jandex.CompositeIndex;
+import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
-import io.quarkus.deployment.annotations.BuildStep;
+import org.jboss.jandex.Indexer;
+
 import io.quarkus.deployment.ApplicationArchive;
+import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.LiveReloadBuildItem;
+import io.quarkus.deployment.index.IndexWrapper;
+import io.quarkus.deployment.index.IndexingUtil;
+import io.quarkus.deployment.index.PersistentClassIndex;
 
 public class CombinedIndexBuildStep {
 
     @BuildStep
-    CombinedIndexBuildItem build(ApplicationArchivesBuildItem archives) {
-        List<IndexView> allIndexes = new ArrayList<>();
+    CombinedIndexBuildItem build(ApplicationArchivesBuildItem archives,
+            List<AdditionalIndexedClassesBuildItem> additionalIndexedClassesItems,
+            LiveReloadBuildItem liveReloadBuildItem) {
+        List<IndexView> archiveIndexes = new ArrayList<>();
+
         for (ApplicationArchive i : archives.getAllApplicationArchives()) {
-            allIndexes.add(i.getIndex());
+            archiveIndexes.add(i.getIndex());
         }
-        return new CombinedIndexBuildItem(CompositeIndex.create(allIndexes));
+
+        CompositeIndex archivesIndex = CompositeIndex.create(archiveIndexes);
+
+        Indexer indexer = new Indexer();
+        Set<DotName> additionalIndex = new HashSet<>();
+
+        for (AdditionalIndexedClassesBuildItem additionalIndexedClasses : additionalIndexedClassesItems) {
+            for (String classToIndex : additionalIndexedClasses.getClassesToIndex()) {
+                IndexingUtil.indexClass(classToIndex, indexer, archivesIndex, additionalIndex,
+                        Thread.currentThread().getContextClassLoader());
+            }
+        }
+
+        PersistentClassIndex index = liveReloadBuildItem.getContextObject(PersistentClassIndex.class);
+        if (index == null) {
+            index = new PersistentClassIndex();
+            liveReloadBuildItem.setContextObject(PersistentClassIndex.class, index);
+        }
+
+        CompositeIndex compositeIndex = CompositeIndex.create(archivesIndex, indexer.complete());
+        return new CombinedIndexBuildItem(compositeIndex,
+                new IndexWrapper(compositeIndex, Thread.currentThread().getContextClassLoader(), index));
     }
 
 }

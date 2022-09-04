@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.enterprise.context.BeforeDestroyed;
 import javax.enterprise.context.Destroyed;
 import javax.enterprise.context.Initialized;
@@ -91,7 +92,17 @@ public final class BeanArchives {
 
         @Override
         public Collection<ClassInfo> getKnownClasses() {
-            return index.getKnownClasses();
+            if (additionalClasses.isEmpty()) {
+                return index.getKnownClasses();
+            }
+            Collection<ClassInfo> known = index.getKnownClasses();
+            Collection<ClassInfo> additional = additionalClasses.values().stream().filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .collect(Collectors.toList());
+            List<ClassInfo> all = new ArrayList<>(known.size() + additional.size());
+            all.addAll(known);
+            all.addAll(additional);
+            return all;
         }
 
         @Override
