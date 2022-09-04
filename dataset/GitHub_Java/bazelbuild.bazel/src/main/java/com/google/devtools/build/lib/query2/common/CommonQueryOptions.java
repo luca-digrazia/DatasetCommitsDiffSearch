@@ -28,7 +28,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
-/** Options shared between blaze query implementations. */
+/** Options shared between blaze query and blaze cquery. */
 public class CommonQueryOptions extends OptionsBase {
 
   @Option(
@@ -50,24 +50,7 @@ public class CommonQueryOptions extends OptionsBase {
   public List<String> universeScope;
 
   @Option(
-      name = "infer_universe_scope",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.QUERY,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      help =
-          "If set and --universe_scope is unset, then a value of --universe_scope will be inferred"
-              + " as the list of unique target patterns in the query expression. Note that the"
-              + " --universe_scope value inferred for a query expression that uses universe-scoped"
-              + " functions (e.g.`allrdeps`) may not be what you want, so you should use this"
-              + " option only if you know what you are doing. See"
-              + " https://docs.bazel.build/versions/master/query.html#sky-query for details and"
-              + " examples. If --universe_scope is set, then this option's value is ignored. Note:"
-              + " this option applies only to `query` (i.e. not `cquery`).")
-  public boolean inferUniverseScope;
-
-  @Option(
-      name = "tool_deps",
-      oldName = "host_deps",
+      name = "host_deps",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.QUERY,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
@@ -83,7 +66,7 @@ public class CommonQueryOptions extends OptionsBase {
               + " configured targets also in the target configuration will be returned. If the"
               + " top-level target is in the host configuration, only host configured targets will"
               + " be returned.")
-  public boolean includeToolDeps;
+  public boolean includeHostDeps;
 
   @Option(
       name = "implicit_deps",
@@ -108,20 +91,10 @@ public class CommonQueryOptions extends OptionsBase {
               + "all the \"nodep\" attributes in the build language.")
   public boolean includeNoDepDeps;
 
-  @Option(
-      name = "include_aspects",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.QUERY,
-      effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
-      help =
-          "aquery, cquery: whether to include aspect-generated actions in the output. "
-              + "query: no-op (aspects are always followed).")
-  public boolean useAspects;
-
   /** Return the current options as a set of QueryEnvironment settings. */
   public Set<Setting> toSettings() {
     Set<Setting> settings = EnumSet.noneOf(Setting.class);
-    if (!includeToolDeps) {
+    if (!includeHostDeps) {
       settings.add(Setting.ONLY_TARGET_DEPS);
     }
     if (!includeImplicitDeps) {
@@ -129,9 +102,6 @@ public class CommonQueryOptions extends OptionsBase {
     }
     if (!includeNoDepDeps) {
       settings.add(Setting.NO_NODEP_DEPS);
-    }
-    if (useAspects) {
-      settings.add(Setting.INCLUDE_ASPECTS);
     }
     return settings;
   }
@@ -200,14 +170,6 @@ public class CommonQueryOptions extends OptionsBase {
       effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
       help = "Whether or not to populate the rule_input and rule_output fields.")
   public boolean protoIncludeRuleInputsAndOutputs;
-
-  @Option(
-      name = "proto:include_synthetic_attribute_hash",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.QUERY,
-      effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
-      help = "Whether or not to calculate and populate the $internal_attr_hash attribute.")
-  public boolean protoIncludeSyntheticAttributeHash;
 
   /** An enum converter for {@code AspectResolver.Mode} . Should be used internally only. */
   public static class AspectResolutionModeConverter extends EnumConverter<Mode> {

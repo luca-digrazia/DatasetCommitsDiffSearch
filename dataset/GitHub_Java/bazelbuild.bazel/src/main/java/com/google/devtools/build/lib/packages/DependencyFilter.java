@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.packages.DependencyFilter.AttributeInfoProvider;
-import com.google.devtools.build.lib.packages.Type.LabelClass;
+import com.google.devtools.build.lib.syntax.Type.LabelClass;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 
 /**
@@ -38,7 +38,12 @@ public abstract class DependencyFilter
       new DependencyFilter() {
         @Override
         public boolean apply(AttributeInfoProvider infoProvider, Attribute attribute) {
-          return !attribute.isToolDependency();
+          // getConfigurationTransition() is only defined for labels which introduce a dependency.
+          if (attribute.getType().getLabelClass() != LabelClass.DEPENDENCY) {
+            return true;
+          }
+
+          return !attribute.getTransitionFactory().isTool();
         }
       };
   /** Dependency predicate that excludes implicit dependencies */
@@ -70,6 +75,14 @@ public abstract class DependencyFilter
         public boolean apply(AttributeInfoProvider infoProvider, Attribute attribute) {
           return NO_NODEP_ATTRIBUTES.apply(infoProvider, attribute)
               || attribute.getName().equals("visibility");
+        }
+      };
+  /** Checks to see if the attribute has the isDirectCompileTimeInput property. */
+  public static final DependencyFilter DIRECT_COMPILE_TIME_INPUT =
+      new DependencyFilter() {
+        @Override
+        public boolean apply(AttributeInfoProvider infoProvider, Attribute attribute) {
+          return attribute.isDirectCompileTimeInput();
         }
       };
 

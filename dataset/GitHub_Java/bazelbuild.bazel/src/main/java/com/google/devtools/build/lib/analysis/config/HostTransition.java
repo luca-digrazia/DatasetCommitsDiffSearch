@@ -14,10 +14,8 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
 /** Dynamic transition to the host configuration. */
@@ -33,18 +31,12 @@ public final class HostTransition implements PatchTransition {
   }
 
   @Override
-  public ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments() {
-    return ImmutableSet.of(CoreOptions.class);
-  }
-
-  @Override
-  public BuildOptions patch(BuildOptionsView options, EventHandler eventHandler) {
+  public BuildOptions patch(BuildOptions options) {
     if (options.get(CoreOptions.class).isHost) {
       // If the input already comes from the host configuration, just return the existing values.
       //
       // We don't do this just for convenience: if an
-      // {@link
-      // com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy}
+      // {@link com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy}
       // overrides option defaults, {@link FragmentOptions#getHost} won't honor that policy. That's
       // because it uses its own options parser that's not aware of the policy. This can create
       // problems for, e.g., {@link JavaOptions#getHost}, which promotes --host_foo flags to
@@ -55,14 +47,14 @@ public final class HostTransition implements PatchTransition {
       // manually set host.hostFoo = original.hostFoo). But those raise larger questions about the
       // nature of host/target relationships, so for the time being this is a straightforward
       // and practical fix.
-      return options.clone().underlying();
+      return options.clone();
     } else {
-      return options.underlying().createHostOptions();
+      return options.createHostOptions();
     }
   }
 
   /** Returns a {@link TransitionFactory} instance that generates the host transition. */
-  public static <T extends TransitionFactory.Data> TransitionFactory<T> createFactory() {
+  public static <T> TransitionFactory<T> createFactory() {
     return new AutoValue_HostTransition_Factory<>();
   }
 
@@ -70,14 +62,13 @@ public final class HostTransition implements PatchTransition {
    * Returns {@code true} if the given {@link TransitionFactory} is an instance of the host
    * transition.
    */
-  public static <T extends TransitionFactory.Data> boolean isInstance(
-      TransitionFactory<T> instance) {
+  public static <T> boolean isInstance(TransitionFactory<T> instance) {
     return instance instanceof Factory;
   }
 
   /** A {@link TransitionFactory} implementation that generates the host transition. */
   @AutoValue
-  abstract static class Factory<T extends TransitionFactory.Data> implements TransitionFactory<T> {
+  abstract static class Factory<T> implements TransitionFactory<T> {
     @Override
     public PatchTransition create(T unused) {
       return INSTANCE;

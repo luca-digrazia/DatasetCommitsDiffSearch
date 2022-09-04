@@ -29,10 +29,7 @@ package com.google.devtools.build.lib.analysis.config.transitions;
  * @param <T> the type of data object passed to the {@link #create} method, used to create the
  *     actual {@link ConfigurationTransition} instance
  */
-public interface TransitionFactory<T extends TransitionFactory.Data> {
-
-  /** A marker interface for classes that provide data to TransitionFactory instances. */
-  interface Data {}
+public interface TransitionFactory<T> {
 
   /** Returns a new {@link ConfigurationTransition}, based on the given data. */
   ConfigurationTransition create(T data);
@@ -49,11 +46,6 @@ public interface TransitionFactory<T extends TransitionFactory.Data> {
    * part of the tooling rather than a dependency of the original target.
    */
   default boolean isTool() {
-    if (isHost()) {
-      // Every host dependency is also a tool dependency.
-      return true;
-    }
-
     return false;
   }
 

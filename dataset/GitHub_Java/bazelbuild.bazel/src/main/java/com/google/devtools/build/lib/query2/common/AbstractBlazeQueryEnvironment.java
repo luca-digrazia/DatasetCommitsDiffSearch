@@ -14,11 +14,11 @@
 package com.google.devtools.build.lib.query2.common;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.ErrorSensingEventHandler;
@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryExpressionContext;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
-import com.google.devtools.build.lib.server.FailureDetails.Query;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -45,7 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Predicate;
+import java.util.logging.Logger;
 
 /**
  * {@link QueryEnvironment} that can evaluate queries to produce a result, and implements as much of
@@ -63,7 +62,8 @@ public abstract class AbstractBlazeQueryEnvironment<T> extends AbstractQueryEnvi
   protected final Set<Setting> settings;
   protected final List<QueryFunction> extraFunctions;
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger =
+      Logger.getLogger(AbstractBlazeQueryEnvironment.class.getName());
 
   protected AbstractBlazeQueryEnvironment(
       boolean keepGoing,
@@ -166,16 +166,15 @@ public abstract class AbstractBlazeQueryEnvironment<T> extends AbstractQueryEnvi
     }
     long elapsedTime = System.currentTimeMillis() - startTime;
     if (elapsedTime > 1) {
-      logger.atInfo().log("Spent %d milliseconds evaluating query", elapsedTime);
+      logger.info("Spent " + elapsedTime + " milliseconds evaluating query");
     }
 
     if (eventHandler.hasErrors()) {
       if (!keepGoing) {
         // This case represents loading-phase errors reported during evaluation
         // of target patterns that don't cause evaluation to fail per se.
-        throw new QueryException(
-            "Evaluation of query \"" + expr + "\" failed due to BUILD file errors",
-            Query.Code.BUILD_FILE_ERROR);
+        throw new QueryException("Evaluation of query \"" + expr
+            + "\" failed due to BUILD file errors");
       } else {
         eventHandler.handle(Event.warn("--keep_going specified, ignoring errors.  "
             + "Results may be inaccurate"));
@@ -227,7 +226,7 @@ public abstract class AbstractBlazeQueryEnvironment<T> extends AbstractQueryEnvi
   @Override
   public void reportBuildFileError(QueryExpression caller, String message) throws QueryException {
     if (!keepGoing) {
-      throw new QueryException(caller, message, Query.Code.BUILD_FILE_ERROR);
+      throw new QueryException(caller, message);
     } else {
       // Keep consistent with evaluateQuery() above.
       eventHandler.handle(Event.error("Evaluation of query \"" + caller + "\" failed: " + message));
@@ -255,10 +254,10 @@ public abstract class AbstractBlazeQueryEnvironment<T> extends AbstractQueryEnvi
   }
 
   protected boolean validateScope(Label label, boolean strict) throws QueryException {
-    if (!labelFilter.test(label)) {
+    if (!labelFilter.apply(label)) {
       String error = String.format("target '%s' is not within the scope of the query", label);
       if (strict) {
-        throw new QueryException(error, Query.Code.TARGET_NOT_IN_UNIVERSE_SCOPE);
+        throw new QueryException(error);
       } else {
         eventHandler.handle(Event.warn(error + ". Skipping"));
         return false;
