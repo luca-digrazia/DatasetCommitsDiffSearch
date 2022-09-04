@@ -38,13 +38,13 @@ public class Adam implements Optimizer {
      */
     private final TimeFunction learningRate;
     /**
-     * The momentum factor.
+     * The exponential decay rate for the 1st moment estimates.
      */
-    private final TimeFunction momentum;
+    private final double beta1;
     /**
-     * The discounting factor for the history/coming gradient.
+     * The exponential decay rate for the 2nd moment estimates.
      */
-    private final double rho;
+    private final double beta2;
     /**
      * A small constant for numerical stability.
      */
@@ -52,40 +52,46 @@ public class Adam implements Optimizer {
 
     /**
      * Constructor.
+     */
+    public Adam() {
+        this(TimeFunction.constant(0.001));
+    }
+
+    /**
+     * Constructor.
      * @param learningRate the learning rate.
      */
     public Adam(TimeFunction learningRate) {
-        this(learningRate, null, 0.9, 1E-7);
+        this(learningRate, 0.9, 0.999);
     }
 
     /**
      * Constructor.
      * @param learningRate the learning rate.
-     * @param rho the discounting factor for the history/coming gradient.
+     * @param beta1 the exponential decay rate for the 1st moment estimates.
+     * @param beta2 the exponential decay rate for the 2nd moment estimates.
      */
-    public Adam(TimeFunction learningRate, double rho) {
-        this(learningRate, null, rho, 1E-7);
+    public Adam(TimeFunction learningRate, double beta1, double beta2) {
+        this(learningRate, beta1, beta2, 1E-8);
     }
 
     /**
      * Constructor.
      * @param learningRate the learning rate.
-     * @param momentum the momentum.
-     * @param rho the discounting factor for the history/coming gradient.
+     * @param beta1 the exponential decay rate for the 1st moment estimates.
+     * @param beta2 the exponential decay rate for the 2nd moment estimates.
      * @param epsilon a small constant for numerical stability.
      */
-    public Adam(TimeFunction learningRate, TimeFunction momentum, double rho, double epsilon) {
+    public Adam(TimeFunction learningRate, double beta1, double beta2, double epsilon) {
         this.learningRate = learningRate;
-        this.momentum = momentum;
-        this.rho = rho;
+        this.beta1 = beta1;
+        this.beta2 = beta2;
         this.epsilon = epsilon;
     }
 
     @Override
     public String toString() {
-        return momentum == null ?
-                String.format("RMSProp(%s, %f, %f)", learningRate, rho, epsilon) :
-                String.format("RMSProp(%s, %s, %f, %f)", learningRate, momentum, rho, epsilon);
+        return String.format("Adam(%s, %s, %s, %f)", learningRate, beta1, beta2, epsilon);
     }
 
     @Override
@@ -97,24 +103,40 @@ public class Adam implements Optimizer {
         // we scale down the learning rate by the number of samples.
         double eta = learningRate.apply(t) / m;
         int n = layer.n;
+        int p = layer.p;
 
-        if (momentum != null) {
-            double alpha = momentum.apply(t);
-            Matrix weightUpdate = layer.weightUpdate.get();
-            double[] biasUpdate = layer.biasUpdate.get();
+        weightGradient.div(m);
+        for (int i = 0; i < n; i++) {
+            biasGradient[i] /= m;
+        }
 
-            weightUpdate.add(alpha, eta, weightGradient);
+        Matrix weightGradientMoment1 = layer.weightGradientMoment1.get();
+        Matrix weightGradientMoment2 = layer.weightGradientMoment2.get();
+        double[] biasGradientMoment1 = layer.biasGradientMoment1.get();
+        double[] biasGradientMoment2 = layer.biasGradientMoment2.get();
+
+        weightGradientMoment1.add(beta1, 1.0 - beta1, weightGradient);
+        weightGradientMoment2.add2(beta2, 1.0 - beta2, weightGradient);
+        for (int i = 0; i < n; i++) {
+            biasGradientMoment1[i] = beta1 * biasGradientMoment2[i] + (1.0 - beta1) * biasGradient[i];
+            biasGradientMoment2[i] = beta2 * biasGradientMoment2[i] + (1.0 - beta2) * biasGradient[i] * biasGradient[i];
+        }
+
+        Matrix weight = layer.weight;
+        double[] bias = layer.bias;
+        double beta1t = 1.0 - Math.pow(beta1, t);
+        double beta2t = 1.0 - Math.pow(beta2, t);
+        for (int j = 0; j < p; j++) {
             for (int i = 0; i < n; i++) {
-                biasUpdate[i] = alpha * biasUpdate[i] + eta * biasGradient[i];
+                double s = weightGradientMoment1.get(i, j);
+                double r = weightGradientMoment2.get(i, j);
+                weight.add(i, j, eta * (s / beta1t) / (Math.sqrt(r / beta2t) + epsilon));
             }
-
-            layer.weight.add(1.0, weightUpdate);
-            MathEx.add(layer.bias, biasUpdate);
-        } else {
-            layer.weight.add(eta, weightGradient);
-            for (int i = 0; i < n; i++) {
-                layer.bias[i] += eta * biasGradient[i];
-            }
+        }
+        for (int i = 0; i < n; i++) {
+            double s = biasGradientMoment1[i];
+            double r = biasGradientMoment2[i];
+            bias[i] += eta * (s / beta1t) / (Math.sqrt(r / beta2t) + epsilon);
         }
 
         weightGradient.fill(0.0);
