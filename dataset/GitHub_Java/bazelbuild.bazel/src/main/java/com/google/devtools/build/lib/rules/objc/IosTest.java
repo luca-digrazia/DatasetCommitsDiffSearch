@@ -24,13 +24,14 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.test.ExecutionInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -158,8 +159,13 @@ public final class IosTest implements RuleConfiguredTargetFactory {
                 ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class))
             .build();
 
+    ImmutableList.Builder<TransitiveInfoProviderMap> providerCollector = ImmutableList.builder();
     CompilationSupport compilationSupport =
-        new CompilationSupport.Builder().setRuleContext(ruleContext).setIsTestRule().build();
+        new CompilationSupport.Builder()
+            .setProviderCollector(providerCollector)
+            .setRuleContext(ruleContext)
+            .setIsTestRule()
+            .build();
 
     compilationSupport
         .registerLinkActions(
@@ -231,6 +237,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
         .addNativeDeclaredProvider(new ExecutionInfo(execInfoMapBuilder.build()))
         .addNativeDeclaredProviders(testSupport.getExtraProviders())
         .addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider)
+        .addProviderMaps(providerCollector.build())
         .setRunfilesSupport(runfilesSupport, executable)
         .build();
   }
@@ -260,7 +267,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
                 CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
             .setCompilationArtifacts(compilationArtifacts)
             .setResourceAttributes(new ResourceAttributes(ruleContext))
-            .addDefines(ruleContext.getExpander().withDataLocations().tokenized("defines"))
+            .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
             .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
             .addRuntimeDeps(ruleContext.getPrerequisites("runtime_deps", Mode.TARGET))
             .addDeps(ruleContext.getPrerequisites("bundles", Mode.TARGET))

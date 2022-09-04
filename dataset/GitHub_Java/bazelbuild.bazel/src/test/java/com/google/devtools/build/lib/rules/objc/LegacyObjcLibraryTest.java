@@ -59,24 +59,6 @@ public class LegacyObjcLibraryTest extends ObjcLibraryTest {
     useConfiguration(ObjcCrosstoolMode.OFF, args);
   }
 
-  @Override
-  @Test
-  public void testObjcSourcesFeatureCC() throws Exception {
-    // Features are not exported by legacy actions.
-  }
-
-  @Override
-  @Test
-  public void testObjcSourcesFeatureObjc() throws Exception {
-    // Features are not exported by legacy actions.
-  }
-
-  @Override
-  @Test
-  public void testObjcSourcesFeatureObjcPlusPlus() throws Exception {
-    // Features are not exported by legacy actions.
-  }
-
   @Test
   public void testLibFileIsCorrectForSlashInTargetName() throws Exception {
     ConfiguredTarget target =
@@ -706,6 +688,16 @@ public class LegacyObjcLibraryTest extends ObjcLibraryTest {
   @Test
   public void testProvidesHdrsAndIncludes() throws Exception {
     checkProvidesHdrsAndIncludes(RULE_TYPE);
+  }
+
+  @Test
+  public void testReceivesTransitivelyPropagatedDefines() throws Exception {
+    checkReceivesTransitivelyPropagatedDefines(RULE_TYPE);
+  }
+
+  @Test
+  public void testSdkIncludesUsedInCompileAction() throws Exception {
+    checkSdkIncludesUsedInCompileAction(RULE_TYPE);
   }
 
   @Test

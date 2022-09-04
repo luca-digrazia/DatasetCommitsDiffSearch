@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.objc;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEFINE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DYNAMIC_FRAMEWORK_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_LIBRARY;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_CPP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE;
@@ -27,7 +26,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MODULE_MAP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.CLANG;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.CLANG_PLUSPLUS;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.COMPILABLE_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.DSYMUTIL;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.HEADERS;
@@ -51,7 +49,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.OutputPathMapper;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -160,6 +157,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
         useDeps,
         outputGroupCollector,
         toolchain,
+        ImmutableList.builder(),
         isTestRule,
         usePch);
   }
@@ -306,15 +304,14 @@ public class LegacyCompilationSupport extends CompilationSupport {
         .addAll(
             commonLinkAndCompileFlagsForClang(objcProvider, objcConfiguration, appleConfiguration))
         .addAll(objcConfiguration.getCoptsForCompilationMode())
-        .addPaths(
-            VectorArg.addBefore("-iquote")
-                .each(ObjcCommon.userHeaderSearchPaths(objcProvider, buildConfiguration)))
-        .addExecPaths(VectorArg.addBefore("-include").each(pchFile.asSet()))
-        .addPaths(VectorArg.addBefore("-I").each(ImmutableList.copyOf(priorityHeaders)))
-        .addPaths(VectorArg.addBefore("-I").each(objcProvider.get(INCLUDE)))
-        .addPaths(VectorArg.addBefore("-isystem").each(objcProvider.get(INCLUDE_SYSTEM)))
+        .addBeforeEachPath(
+            "-iquote", ObjcCommon.userHeaderSearchPaths(objcProvider, buildConfiguration))
+        .addBeforeEachExecPath("-include", pchFile.asSet())
+        .addBeforeEachPath("-I", ImmutableList.copyOf(priorityHeaders))
+        .addBeforeEachPath("-I", objcProvider.get(INCLUDE))
+        .addBeforeEachPath("-isystem", objcProvider.get(INCLUDE_SYSTEM))
         .addAll(ImmutableList.copyOf(otherFlags))
-        .addAll(VectorArg.format("-D%s").each(objcProvider.get(DEFINE)))
+        .addFormatEach("-D%s", objcProvider.get(DEFINE))
         .addAll(coverageFlags)
         .addAll(ImmutableList.copyOf(getCompileRuleCopts()));
 
@@ -678,14 +675,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
     CustomCommandLine.Builder commandLine =
         CustomCommandLine.builder()
             .addPath(xcrunwrapper(ruleContext).getExecutable().getExecPath());
-    if (objcProvider.is(USES_CPP)) {
-      commandLine
-        .add(CLANG_PLUSPLUS)
-        .add("-stdlib=libc++")
-        .add("-std=gnu++11");
-    } else {
-      commandLine.add(CLANG);
-    }
+    commandLine.add(CLANG);
 
     // TODO(b/36562173): Replace the "!isTestRule" condition with the presence of "-bundle" in
     // the command line.
@@ -739,13 +729,11 @@ public class LegacyCompilationSupport extends CompilationSupport {
         .add("@executable_path/Frameworks")
         .add("-fobjc-link-runtime")
         .addAll(DEFAULT_LINKER_FLAGS)
-        .addAll(VectorArg.addBefore("-framework").each(frameworkNames(objcProvider)))
-        .addAll(
-            VectorArg.addBefore("-weak_framework")
-                .each(SdkFramework.names(objcProvider.get(WEAK_SDK_FRAMEWORK))))
-        .addAll(VectorArg.format("-l%s").each(libraryNames))
+        .addBeforeEach("-framework", frameworkNames(objcProvider))
+        .addBeforeEach("-weak_framework", SdkFramework.names(objcProvider.get(WEAK_SDK_FRAMEWORK)))
+        .addFormatEach("-l%s", libraryNames)
         .addExecPath("-o", linkedBinary)
-        .addExecPaths(VectorArg.addBefore("-force_load").each(forceLinkArtifacts))
+        .addBeforeEachExecPath("-force_load", forceLinkArtifacts)
         .addAll(ImmutableList.copyOf(extraLinkArgs))
         .addAll(objcProvider.get(ObjcProvider.LINKOPT));
 

@@ -29,10 +29,34 @@ public class LegacyIosExtensionBinaryTest extends IosExtensionBinaryTest {
     return ObjcCrosstoolMode.OFF;
   }
 
-  // Module maps are not made action inputs in the crosstool rules.
+  @Override
+  @Test
+  public void testLinkActionWithTransitiveCppDependency() throws Exception {
+    // Transitive source data is not known to the legacy rules.
+  }
+
   @Test
   public void testCompilesSourcesWithModuleMapsEnabled() throws Exception {
     checkCompilesSourcesWithModuleMapsEnabled(RULE_TYPE);
   }
 
+  @Test
+  public void testLinkWithFrameworkImportsIncludesFlagsAndInputArtifacts() throws Exception {
+    checkLinkWithFrameworkImportsIncludesFlagsAndInputArtifacts(RULE_TYPE);
+  }
+
+  @Test
+  public void testForceLoadsAlwayslinkTargets() throws Exception {
+    checkForceLoadsAlwayslinkTargets(RULE_TYPE, EXTRA_LINK_ARGS);
+  }
+
+  @Test
+  public void testReceivesTransitivelyPropagatedDefines() throws Exception {
+    checkReceivesTransitivelyPropagatedDefines(RULE_TYPE);
+  }
+
+  @Test
+  public void testSdkIncludesUsedInCompileAction() throws Exception {
+    checkSdkIncludesUsedInCompileAction(RULE_TYPE);
+  }
 }

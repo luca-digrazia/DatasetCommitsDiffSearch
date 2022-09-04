@@ -21,11 +21,12 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.syntax.Type;
@@ -50,8 +51,8 @@ public class J2ObjcLibrary implements RuleConfiguredTargetFactory {
     return new ObjcCommon.Builder(ruleContext)
         .setCompilationAttributes(
             CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
-        .addDeps(ruleContext.getPrerequisiteConfiguredTargetAndTargets("deps", Mode.TARGET))
-        .addDeps(ruleContext.getPrerequisiteConfiguredTargetAndTargets("jre_deps", Mode.TARGET))
+        .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
+        .addDeps(ruleContext.getPrerequisites("jre_deps", Mode.TARGET))
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .setHasModuleMap()
         .build();
@@ -94,8 +95,10 @@ public class J2ObjcLibrary implements RuleConfiguredTargetFactory {
             .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
             .build();
 
+    ImmutableList.Builder<TransitiveInfoProviderMap> providerCollector = ImmutableList.builder();
     new CompilationSupport.Builder()
         .setRuleContext(ruleContext)
+        .setProviderCollector(providerCollector)
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .doNotUsePch()
         .build()
@@ -110,6 +113,7 @@ public class J2ObjcLibrary implements RuleConfiguredTargetFactory {
         .add(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .addProvider(J2ObjcEntryClassProvider.class, j2ObjcEntryClassProvider)
         .addProvider(J2ObjcMappingFileProvider.class, j2ObjcMappingFileProvider)
+        .addProviderMaps(providerCollector.build())
         .addNativeDeclaredProvider(objcProvider)
         .build();
   }
@@ -130,7 +134,7 @@ public class J2ObjcLibrary implements RuleConfiguredTargetFactory {
     // We add another header search path with gen root if we have generated sources to translate.
     for (Artifact sourceToTranslate : sourcesToTranslate) {
       if (!sourceToTranslate.isSourceArtifact()) {
-        headerSearchPaths.add(objcFileRootExecPath.getRelative(genRoot));
+        headerSearchPaths.add(PathFragment.create(objcFileRootExecPath, genRoot));
         return headerSearchPaths.build();
       }
     }

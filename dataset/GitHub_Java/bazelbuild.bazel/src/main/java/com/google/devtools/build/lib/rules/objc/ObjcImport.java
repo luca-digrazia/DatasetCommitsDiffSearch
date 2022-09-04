@@ -14,16 +14,17 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
+import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
+import com.google.devtools.build.lib.syntax.Type;
 
 /**
  * Implementation for {@code objc_import}.
@@ -31,17 +32,20 @@ import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 public class ObjcImport implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
-    CcCommon.checkRuleLoadedThroughMacro(ruleContext);
+      throws InterruptedException, RuleErrorException {
     ObjcCommon common =
         new ObjcCommon.Builder(ruleContext)
             .setCompilationAttributes(
                 CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
+            .setResourceAttributes(new ResourceAttributes(ruleContext))
             .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
             .setAlwayslink(ruleContext.attributes().get("alwayslink", Type.BOOLEAN))
             .setHasModuleMap()
             .addExtraImportLibraries(
                 ruleContext.getPrerequisiteArtifacts("archives", Mode.TARGET).list())
+            .addDepObjcProviders(
+                ruleContext.getPrerequisites(
+                    "bundles", Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR))
             .build();
 
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
@@ -54,17 +58,19 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
     Iterable<Artifact> publicHeaders = compilationAttributes.hdrs();
     CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
 
+    ImmutableList.Builder<TransitiveInfoProviderMap> providerCollector = ImmutableList.builder();
     new CompilationSupport.Builder()
         .setRuleContext(ruleContext)
+        .setProviderCollector(providerCollector)
         .build()
         .registerGenerateModuleMapAction(moduleMap, publicHeaders)
         .validateAttributes();
 
-    ObjcProvider objcProvider = common.getObjcProvider();
+    new ResourceSupport(ruleContext).validateAttributes();
 
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
-        .addNativeDeclaredProvider(objcProvider)
-        .addSkylarkTransitiveInfo(ObjcProvider.SKYLARK_NAME, objcProvider)
+        .addNativeDeclaredProvider(common.getObjcProvider())
+        .addProviderMaps(providerCollector.build())
         .build();
   }
 }
