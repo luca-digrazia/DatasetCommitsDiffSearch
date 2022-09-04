@@ -746,13 +746,13 @@ public class AndroidCommon {
     }
     OutputJar resourceJar = null;
     if (resourceClassJar != null && resourceSourceJar != null) {
-      resourceJar = new OutputJar(resourceClassJar, null, ImmutableList.of(resourceSourceJar));
+      resourceJar = new OutputJar(resourceClassJar, null, resourceSourceJar);
       javaRuleOutputJarsProviderBuilder.addOutputJar(resourceJar);
     }
 
     JavaRuleOutputJarsProvider ruleOutputJarsProvider =
         javaRuleOutputJarsProviderBuilder
-            .addOutputJar(classJar, iJar, ImmutableList.of(srcJar))
+            .addOutputJar(classJar, iJar, srcJar)
             .setJdeps(outputDepsProto)
             .build();
     JavaSourceJarsProvider sourceJarsProvider = javaSourceJarsProviderBuilder.build();
