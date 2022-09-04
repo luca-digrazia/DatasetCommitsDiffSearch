@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.skylark.Args;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -606,12 +605,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       try {
         modules = actionExecutionContext.getNestedSetExpander().toListInterruptibly(transitive);
       } catch (TimeoutException e) {
-        if (actionExecutionContext.isRewindingEnabled()) {
-          throw lostInputsExceptionForTimedOutNestedSetExpansion(entry.getKey(), iterator, e);
-        }
-        BugReport.sendBugReport(e);
-        throw new ActionExecutionException(
-            "Timed out expanding modules", this, /*catastrophe=*/ false);
+        throw handleTimedOutNestedSetExpansion(entry.getKey(), iterator, e);
       }
 
       for (Artifact module : modules) {
@@ -654,7 +648,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    * we use the .pcm file's exec path since rewinding only uses the digest to detect multiple
    * rewinds of the same input.
    */
-  private LostInputsActionExecutionException lostInputsExceptionForTimedOutNestedSetExpansion(
+  private LostInputsActionExecutionException handleTimedOutNestedSetExpansion(
       Artifact timedOut,
       Iterator<Map.Entry<Artifact, NestedSet<? extends Artifact>>> remainingModules,
       TimeoutException e) {
