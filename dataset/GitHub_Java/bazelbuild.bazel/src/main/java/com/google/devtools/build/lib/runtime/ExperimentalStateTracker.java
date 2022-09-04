@@ -737,7 +737,7 @@ class ExperimentalStateTracker {
     if (postfix.length() > 0) {
       postfix = ";" + postfix;
     }
-    url = shortenUrl(url, Math.max(width - postfix.length(), 3 * ELLIPSIS.length()));
+    url = shortenUrl(url, width - postfix.length());
     terminalWriter.append(url + postfix);
   }
 
