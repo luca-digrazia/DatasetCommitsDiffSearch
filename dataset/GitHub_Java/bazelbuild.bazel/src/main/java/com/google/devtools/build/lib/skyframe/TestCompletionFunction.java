@@ -77,7 +77,7 @@ public final class TestCompletionFunction implements SkyFunction {
         }
       }
     } else {
-      Multimap<ActionLookupValue.ActionLookupKey, Artifact.DerivedArtifact> keyToArtifactMap =
+      Multimap<ActionLookupValue.ActionLookupKey, Artifact> keyToArtifactMap =
           Multimaps.index(
               TestProvider.getTestStatusArtifacts(ct), ArtifactFunction::getActionLookupKey);
       Map<SkyKey, SkyValue> actionLookupValues = env.getValues(keyToArtifactMap.keySet());

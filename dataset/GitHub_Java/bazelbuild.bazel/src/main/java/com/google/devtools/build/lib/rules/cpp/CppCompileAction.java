@@ -77,7 +77,6 @@ import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import com.google.devtools.build.lib.vfs.IORuntimeException;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -98,7 +97,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 
 /** Action that represents some kind of C++ compilation step. */
@@ -403,37 +401,28 @@ public class CppCompileAction extends AbstractAction
   private Iterable<Artifact> findUsedHeaders(
       ActionExecutionContext actionExecutionContext, IncludeScanningHeaderData headerData)
       throws ActionExecutionException, InterruptedException {
-    if (!shouldScanIncludes()) {
-      return NestedSetBuilder.fromNestedSet(ccCompilationContext.getDeclaredIncludeSrcs())
-          .addTransitive(additionalPrunableHeaders)
-          .build();
-    }
+    Iterable<Artifact> includeScanningResult;
     try {
-      try {
-        return actionExecutionContext
-            .getContext(CppIncludeScanningContext.class)
-            .findAdditionalInputs(this, actionExecutionContext, includeProcessing, headerData)
-            .get();
-      } catch (ExecutionException e) {
-        Throwables.throwIfInstanceOf(e.getCause(), ExecException.class);
-        Throwables.throwIfInstanceOf(e.getCause(), InterruptedException.class);
-        if (e.getCause() instanceof IORuntimeException) {
-          throw new EnvironmentalExecException(
-              ((IORuntimeException) e.getCause()).getCauseIOException().getMessage(),
-              ((IORuntimeException) e.getCause()).getCauseIOException());
-        }
-        if (e.getCause() instanceof IOException) {
-          throw new EnvironmentalExecException(e.getMessage(), e);
-        }
-        Throwables.throwIfUnchecked(e.getCause());
-        throw new IllegalStateException(e.getCause());
-      }
+      includeScanningResult =
+          actionExecutionContext
+              .getContext(CppIncludeScanningContext.class)
+              .findAdditionalInputs(
+                  this,
+                  actionExecutionContext,
+                  includeProcessing,
+                  headerData);
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           "Include scanning of rule '" + getOwner().getLabel() + "'",
           actionExecutionContext.getVerboseFailures(),
           this);
     }
+    if (includeScanningResult != null) {
+      return includeScanningResult;
+    }
+    return NestedSetBuilder.fromNestedSet(ccCompilationContext.getDeclaredIncludeSrcs())
+        .addTransitive(additionalPrunableHeaders)
+        .build();
   }
 
   /**
