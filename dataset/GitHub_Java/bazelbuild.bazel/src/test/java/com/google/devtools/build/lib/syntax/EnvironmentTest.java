@@ -201,7 +201,9 @@ public class EnvironmentTest extends EvaluationTestCase {
 
   @Test
   public void testBuiltinsCanBeShadowed() throws Exception {
-    Environment env = newEnvironmentWithSkylarkOptions().setup("special_var", 42);
+    Environment env =
+        newEnvironmentWithSkylarkOptions("--incompatible_static_name_resolution=true")
+            .setup("special_var", 42);
     BuildFileAST.eval(env, "special_var = 41");
     assertThat(env.moduleLookup("special_var")).isEqualTo(41);
   }
@@ -215,7 +217,7 @@ public class EnvironmentTest extends EvaluationTestCase {
     } catch (EvalExceptionWithStackTrace e) {
       assertThat(e)
           .hasMessageThat()
-          .contains("local variable 'global_var' is referenced before assignment.");
+          .contains("Variable 'global_var' is referenced before assignment.");
     }
   }
 
