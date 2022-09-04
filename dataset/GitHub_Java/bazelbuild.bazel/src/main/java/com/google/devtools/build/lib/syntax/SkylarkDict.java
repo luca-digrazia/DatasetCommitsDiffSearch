@@ -187,14 +187,13 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
       },
       useLocation = true,
       useStarlarkThread = true)
-  @SuppressWarnings("unchecked") // Cast of value to V
-  public Object setdefault(K key, Object defaultValue, Location loc, StarlarkThread thread)
+  public Object setdefault(K key, V defaultValue, Location loc, StarlarkThread thread)
       throws EvalException {
     Object value = get(key);
     if (value != null) {
       return value;
     }
-    put(key, (V) defaultValue, loc, thread);
+    put(key, defaultValue, loc, thread);
     return defaultValue;
   }
 
