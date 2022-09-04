@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -140,7 +139,7 @@ public class ActionCacheChecker {
    * @param checkOutput true to validate output artifacts, Otherwise, just validate inputs.
    * @return true if at least one artifact has changed, false - otherwise.
    */
-  private static boolean validateArtifacts(
+  private boolean validateArtifacts(
       ActionCache.Entry entry,
       Action action,
       Iterable<Artifact> actionInputs,
@@ -155,7 +154,7 @@ public class ActionCacheChecker {
     for (Artifact artifact : actionInputs) {
       mdMap.put(artifact.getExecPathString(), getMetadataMaybe(metadataHandler, artifact));
     }
-    return !Arrays.equals(DigestUtils.fromMetadata(mdMap), entry.getFileDigest());
+    return !DigestUtils.fromMetadata(mdMap).equals(entry.getFileDigest());
   }
 
   private void reportCommand(EventHandler handler, Action action) {
@@ -195,11 +194,6 @@ public class ActionCacheChecker {
     return !isActionExecutionProhibited(action) && action.executeUnconditionally();
   }
 
-  private static Map<String, String> computeUsedExecProperties(
-      Action action, Map<String, String> execProperties) {
-    return action.getExecProperties().isEmpty() ? execProperties : action.getExecProperties();
-  }
-
   private static Map<String, String> computeUsedClientEnv(
       Action action, Map<String, String> clientEnv) {
     Map<String, String> used = new HashMap<>();
@@ -210,22 +204,6 @@ public class ActionCacheChecker {
       }
     }
     return used;
-  }
-
-  private static Map<String, String> computeUsedEnv(
-      Action action,
-      Map<String, String> clientEnv,
-      Map<String, String> remoteDefaultPlatformProperties) {
-    Map<String, String> usedClientEnv = computeUsedClientEnv(action, clientEnv);
-    Map<String, String> usedExecProperties =
-        computeUsedExecProperties(action, remoteDefaultPlatformProperties);
-    // Combining the Client environment with the Remote Default Execution Properties, because
-    // the Miss Reason is not used currently by Bazel, therefore there is no need to distinguish
-    // between these two cases. This also saves memory used for the Action Cache.
-    Map<String, String> usedEnvironment = new HashMap<>();
-    usedEnvironment.putAll(usedClientEnv);
-    usedEnvironment.putAll(usedExecProperties);
-    return usedEnvironment;
   }
 
   /**
@@ -245,8 +223,7 @@ public class ActionCacheChecker {
       Iterable<Artifact> resolvedCacheArtifacts,
       Map<String, String> clientEnv,
       EventHandler handler,
-      MetadataHandler metadataHandler,
-      Map<String, String> remoteDefaultPlatformProperties) {
+      MetadataHandler metadataHandler) {
     // TODO(bazel-team): (2010) For RunfilesAction/SymlinkAction and similar actions that
     // produce only symlinks we should not check whether inputs are valid at all - all that matters
     // that inputs and outputs are still exist (and new inputs have not appeared). All other checks
@@ -275,14 +252,7 @@ public class ActionCacheChecker {
       actionInputs = resolvedCacheArtifacts;
     }
     ActionCache.Entry entry = getCacheEntry(action);
-    if (mustExecute(
-        action,
-        entry,
-        handler,
-        metadataHandler,
-        actionInputs,
-        clientEnv,
-        remoteDefaultPlatformProperties)) {
+    if (mustExecute(action, entry, handler, metadataHandler, actionInputs, clientEnv)) {
       if (entry != null) {
         removeCacheEntry(action);
       }
@@ -301,8 +271,7 @@ public class ActionCacheChecker {
       EventHandler handler,
       MetadataHandler metadataHandler,
       Iterable<Artifact> actionInputs,
-      Map<String, String> clientEnv,
-      Map<String, String> remoteDefaultPlatformProperties) {
+      Map<String, String> clientEnv) {
     // Unconditional execution can be applied only for actions that are allowed to be executed.
     if (unconditionalExecution(action)) {
       Preconditions.checkState(action.isVolatile());
@@ -329,10 +298,9 @@ public class ActionCacheChecker {
       actionCache.accountMiss(MissReason.DIFFERENT_ACTION_KEY);
       return true;
     }
-    Map<String, String> usedEnvironment =
-        computeUsedEnv(action, clientEnv, remoteDefaultPlatformProperties);
-    if (!Arrays.equals(entry.getUsedClientEnvDigest(), DigestUtils.fromEnv(usedEnvironment))) {
-      reportClientEnv(handler, action, usedEnvironment);
+    Map<String, String> usedClientEnv = computeUsedClientEnv(action, clientEnv);
+    if (!entry.getUsedClientEnvDigest().equals(DigestUtils.fromEnv(usedClientEnv))) {
+      reportClientEnv(handler, action, usedClientEnv);
       actionCache.accountMiss(MissReason.DIFFERENT_ENVIRONMENT);
       return true;
     }
@@ -365,11 +333,7 @@ public class ActionCacheChecker {
   }
 
   public void updateActionCache(
-      Action action,
-      Token token,
-      MetadataHandler metadataHandler,
-      Map<String, String> clientEnv,
-      Map<String, String> remoteDefaultPlatformProperties)
+      Action action, Token token, MetadataHandler metadataHandler, Map<String, String> clientEnv)
       throws IOException {
     Preconditions.checkState(
         cacheConfig.enabled(), "cache unexpectedly disabled, action: %s", action);
@@ -379,11 +343,10 @@ public class ActionCacheChecker {
       // This cache entry has already been updated by a shared action. We don't need to do it again.
       return;
     }
-    Map<String, String> usedEnvironment =
-        computeUsedEnv(action, clientEnv, remoteDefaultPlatformProperties);
+    Map<String, String> usedClientEnv = computeUsedClientEnv(action, clientEnv);
     ActionCache.Entry entry =
         new ActionCache.Entry(
-            action.getKey(actionKeyContext), usedEnvironment, action.discoversInputs());
+            action.getKey(actionKeyContext), usedClientEnv, action.discoversInputs());
     for (Artifact output : action.getOutputs()) {
       // Remove old records from the cache if they used different key.
       String execPath = output.getExecPathString();

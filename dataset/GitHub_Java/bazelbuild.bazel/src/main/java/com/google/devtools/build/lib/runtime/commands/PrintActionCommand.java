@@ -56,6 +56,7 @@ import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingResult;
 import com.google.protobuf.TextFormat;
 import java.util.ArrayList;
@@ -77,6 +78,9 @@ import java.util.Set;
          allowResidue = true,
          canRunInOutputDirectory = true)
 public final class PrintActionCommand implements BlazeCommand {
+
+  @Override
+  public void editOptions(OptionsParser optionsParser) { }
 
   /**
    * Options for print_action, used to parse command-line arguments.
@@ -249,8 +253,7 @@ public final class PrintActionCommand implements BlazeCommand {
       // We do for extra actions, but as we're past the action graph building phase,
       // we cannot call it without risking to trigger creation of OutputArtifacts post
       // graph building phase (not allowed). Right now we do not need them for our scenarios.
-      visitor.visitWhiteNodes(
-          configuredTarget.getProvider(FileProvider.class).getFilesToBuild().toList());
+      visitor.visitWhiteNodes(configuredTarget.getProvider(FileProvider.class).getFilesToBuild());
 
       Iterable<ActionAnalysisMetadata> actions = visitor.getActions();
       for (ActionAnalysisMetadata action : actions) {
@@ -280,7 +283,7 @@ public final class PrintActionCommand implements BlazeCommand {
         return;
       }
 
-      for (Artifact artifact : artifacts.toList()) {
+      for (Artifact artifact : artifacts) {
         ActionAnalysisMetadata action = actionGraph.getGeneratingAction(artifact);
         if (filter.shouldOutput(action, configuredTarget, env)) {
           if (action instanceof Action) {
@@ -332,7 +335,7 @@ public final class PrintActionCommand implements BlazeCommand {
         continue;
       }
 
-      expandRecursiveHelper(actionGraph, middlemanAction.getInputs().toList(), visited, result);
+      expandRecursiveHelper(actionGraph, middlemanAction.getInputs(), visited, result);
     }
   }
 
@@ -371,7 +374,7 @@ public final class PrintActionCommand implements BlazeCommand {
       Set<Artifact> expandedArtifacts = Sets.newHashSet();
       expandRecursive(
           env.getSkyframeExecutor().getActionGraph(env.getReporter()),
-          action.getInputs().toList(),
+          action.getInputs(),
           expandedArtifacts);
       for (Artifact input : expandedArtifacts) {
         if (filesDesired.remove(input.getRootRelativePath().getSafePathString())) {

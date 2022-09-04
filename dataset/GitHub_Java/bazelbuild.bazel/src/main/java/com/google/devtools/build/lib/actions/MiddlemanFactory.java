@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
@@ -21,6 +22,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.Iterator;
 import javax.annotation.Nullable;
 
 /**
@@ -36,6 +38,29 @@ public final class MiddlemanFactory {
       ArtifactFactory artifactFactory, ActionRegistry actionRegistry) {
     this.artifactFactory = Preconditions.checkNotNull(artifactFactory);
     this.actionRegistry = Preconditions.checkNotNull(actionRegistry);
+  }
+
+  /**
+   * Creates a {@link MiddlemanType#AGGREGATING_MIDDLEMAN aggregating} middleman.
+   *
+   * @param owner the owner of the action that will be created; must not be null
+   * @param purpose the purpose for which this middleman is created. This should be a string which
+   *     is suitable for use as a filename. A single rule may have many middlemen with distinct
+   *     purposes.
+   * @param inputs the set of artifacts for which the created artifact is to be the middleman.
+   * @param middlemanDir the directory in which to place the middleman.
+   * @return null iff {@code inputs} is empty; the single element of {@code inputs} if there's only
+   *     one; a new aggregating middleman for the {@code inputs} otherwise
+   */
+  public Artifact createAggregatingMiddleman(
+      ActionOwner owner, String purpose, Iterable<Artifact> inputs, ArtifactRoot middlemanDir) {
+    if (hasExactlyOneInput(inputs)) { // Optimization: No middleman for just one input.
+      return Iterables.getOnlyElement(inputs);
+    }
+    Pair<Artifact, Action> result = createMiddleman(
+        owner, Label.print(owner.getLabel()), purpose, inputs, middlemanDir,
+        MiddlemanType.AGGREGATING_MIDDLEMAN);
+    return result == null ? null : result.getFirst();
   }
 
   /**
@@ -56,18 +81,30 @@ public final class MiddlemanFactory {
   public Artifact createRunfilesMiddleman(
       ActionOwner owner,
       @Nullable Artifact owningArtifact,
-      NestedSet<Artifact> inputs,
+      Iterable<Artifact> inputs,
       ArtifactRoot middlemanDir,
       String tag) {
     Preconditions.checkArgument(middlemanDir.isMiddlemanRoot());
-    if (inputs.isSingleton()) { // Optimization: No middleman for just one input.
-      return inputs.getSingleton();
+    if (hasExactlyOneInput(inputs)) { // Optimization: No middleman for just one input.
+      return Iterables.getOnlyElement(inputs);
     }
     String middlemanPath = owningArtifact == null
        ? Label.print(owner.getLabel())
        : owningArtifact.getRootRelativePath().getPathString();
     return createMiddleman(owner, middlemanPath, tag, inputs, middlemanDir,
         MiddlemanType.RUNFILES_MIDDLEMAN).getFirst();
+  }
+
+  private <T> boolean hasExactlyOneInput(Iterable<T> iterable) {
+    if (iterable instanceof NestedSet) {
+      return ((NestedSet) iterable).isSingleton();
+    }
+    Iterator<T> it = iterable.iterator();
+    if (!it.hasNext()) {
+      return false;
+    }
+    it.next();
+    return !it.hasNext();
   }
 
   /**
@@ -94,7 +131,7 @@ public final class MiddlemanFactory {
       Iterable<Artifact> inputs,
       ArtifactRoot middlemanDir) {
     Preconditions.checkArgument(inputs != null);
-    Preconditions.checkArgument(!CollectionUtils.isEmpty(inputs));
+    Preconditions.checkArgument(!Iterables.isEmpty(inputs));
     // We must always create this middleman even if there is only one input.
     return createMiddleman(
             owner,
@@ -127,8 +164,8 @@ public final class MiddlemanFactory {
     }
 
     Artifact stampFile = getStampFileArtifact(middlemanName, purpose, middlemanDir);
-    Action action =
-        MiddlemanAction.create(actionRegistry, owner, inputs, stampFile, purpose, middlemanType);
+    Action action = new MiddlemanAction(owner, inputs, stampFile, purpose, middlemanType);
+    actionRegistry.registerAction(action);
     return Pair.of(stampFile, action);
   }
 
