@@ -89,6 +89,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
       throws InterruptedException, ActionConflictException {
     ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(this, parameters, ruleContext);
 
+    // Get SupportData, which is provided by the proto_library rule we attach to.
     ProtoSourcesProvider protoProvider =
         ctadBase.getConfiguredTarget().getProvider(ProtoSourcesProvider.class);
 

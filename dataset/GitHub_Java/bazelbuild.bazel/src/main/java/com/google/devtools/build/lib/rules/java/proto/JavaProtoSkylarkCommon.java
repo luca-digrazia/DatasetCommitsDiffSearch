@@ -50,7 +50,7 @@ public class JavaProtoSkylarkCommon
                 getProtoToolchainProvider(skylarkRuleContext, protoToolchainAttr),
                 sourceJar.getExecPathString())),
         protoProvider.getDirectProtoSources(),
-        protoProvider.getTransitiveProtoSources(),
+        protoProvider.getTransitiveImports(),
         protoProvider.getProtosInDirectDeps(),
         protoProvider.getTransitiveProtoSourceRoots(),
         protoProvider.getDirectProtoSourceRoots(),
