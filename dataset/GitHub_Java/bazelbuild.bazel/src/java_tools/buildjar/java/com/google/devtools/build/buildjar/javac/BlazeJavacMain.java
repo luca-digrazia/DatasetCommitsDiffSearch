@@ -108,6 +108,9 @@ public class BlazeJavacMain {
                   /* classes= */ ImmutableList.of(),
                   fileManager.getJavaFileObjectsFromPaths(arguments.sourceFiles()),
                   context);
+      if (arguments.processors() != null) {
+        task.setProcessors(arguments.processors());
+      }
       fileManager.setContext(context);
       setLocations(fileManager, arguments);
       try {
