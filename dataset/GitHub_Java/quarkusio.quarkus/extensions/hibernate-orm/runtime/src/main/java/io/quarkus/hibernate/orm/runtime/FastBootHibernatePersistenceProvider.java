@@ -172,11 +172,8 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
             RuntimeSettings.Builder runtimeSettingsBuilder = new RuntimeSettings.Builder(buildTimeSettings,
                     integrationSettings);
 
-            Optional<String> dataSourceName = recordedState.getDataSource();
-            if (dataSourceName.isPresent()) {
-                // Inject the datasource
-                injectDataSource(persistenceUnitName, dataSourceName.get(), runtimeSettingsBuilder);
-            }
+            // Inject the datasource
+            injectDataSource(persistenceUnitName, recordedState.getDataSource(), runtimeSettingsBuilder);
 
             // Inject runtime configuration if the persistence unit was defined by Quarkus configuration
             if (!recordedState.isFromPersistenceXml()) {
