@@ -2,17 +2,24 @@ package io.quarkus.test.junit.mockito.internal;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
+import javax.enterprise.inject.spi.Bean;
+import javax.enterprise.inject.spi.BeanManager;
 import javax.inject.Qualifier;
 
 import org.mockito.Mockito;
 
 import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.ClientProxy;
-import io.quarkus.arc.InstanceHandle;
+import io.quarkus.arc.InjectableBean;
+import io.quarkus.arc.impl.Mockable;
 import io.quarkus.test.junit.callback.QuarkusTestAfterConstructCallback;
 import io.quarkus.test.junit.mockito.InjectMock;
 
@@ -43,6 +50,19 @@ public class CreateMockitoMocksCallback implements QuarkusTestAfterConstructCall
             // and yet some of them appear to have Object as supertype, avoid them
             if (beanClass.getSuperclass() != Object.class)
                 beanClass = beanClass.getSuperclass();
+            else {
+                // try to find the mocked interface
+                Set<Class<?>> foundInterf = new HashSet<>();
+                for (Class<?> interf : beanClass.getInterfaces()) {
+                    if (interf == Mockable.class || interf == ClientProxy.class)
+                        continue;
+                    foundInterf.add(interf);
+                }
+                // only act if we found a single interface
+                if (foundInterf.size() == 1) {
+                    beanClass = foundInterf.iterator().next();
+                }
+            }
         }
         Object mock;
         boolean isNew;
@@ -68,15 +88,26 @@ public class CreateMockitoMocksCallback implements QuarkusTestAfterConstructCall
     }
 
     static Object getBeanInstance(Object testInstance, Field field, Class<? extends Annotation> annotationType) {
-        Class<?> fieldClass = field.getType();
-        InstanceHandle<?> instance = Arc.container().instance(fieldClass, getQualifiers(field));
-        if (!instance.isAvailable()) {
+        Type fieldType = field.getGenericType();
+        Annotation[] qualifiers = getQualifiers(field);
+        ArcContainer container = Arc.container();
+        BeanManager beanManager = container.beanManager();
+        Set<Bean<?>> beans = beanManager.getBeans(fieldType, qualifiers);
+        if (beans.isEmpty()) {
             throw new IllegalStateException(
-                    "Invalid use of " + annotationType.getTypeName() + " - could not determine bean of type: "
-                            + fieldClass + ". Offending field is " + field.getName() + " of test class "
+                    "Invalid use of " + annotationType.getTypeName() + " - could not resolve the bean of type: "
+                            + fieldType.getTypeName() + ". Offending field is " + field.getName() + " of test class "
                             + testInstance.getClass());
         }
-        return instance.get();
+        Bean<?> bean = beanManager.resolve(beans);
+        if (!beanManager.isNormalScope(bean.getScope())) {
+            throw new IllegalStateException(
+                    "Invalid use of " + annotationType.getTypeName()
+                            + " - the injected bean does not declare a CDI normal scope but: " + bean.getScope().getName()
+                            + ". Offending field is " + field.getName() + " of test class "
+                            + testInstance.getClass());
+        }
+        return container.instance((InjectableBean<?>) bean).get();
     }
 
     static Annotation[] getQualifiers(Field fieldToMock) {
