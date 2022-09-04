@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.bazel.repository.skylark;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ascii;
@@ -22,6 +23,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.bazel.debug.WorkspaceRuleEvent;
 import com.google.devtools.build.lib.bazel.repository.DecompressorDescriptor;
@@ -40,20 +42,22 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
+import com.google.devtools.build.lib.shell.BadExitStatusException;
+import com.google.devtools.build.lib.shell.Command;
+import com.google.devtools.build.lib.shell.CommandException;
+import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skylarkbuildapi.repository.SkylarkRepositoryContextApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.OS;
@@ -100,6 +104,7 @@ public class SkylarkRepositoryContext
   private final HttpDownloader httpDownloader;
   private final double timeoutScaling;
   private final Map<String, String> markerData;
+  private final boolean useNativePatch;
 
   /**
    * Create a new context (repository_ctx) object for a skylark repository rule ({@code rule}
@@ -115,7 +120,8 @@ public class SkylarkRepositoryContext
       HttpDownloader httpDownloader,
       Path embeddedBinariesRoot,
       double timeoutScaling,
-      Map<String, String> markerData)
+      Map<String, String> markerData,
+      boolean useNativePatch)
       throws EvalException {
     this.rule = rule;
     this.packageLocator = packageLocator;
@@ -127,6 +133,7 @@ public class SkylarkRepositoryContext
     this.httpDownloader = httpDownloader;
     this.timeoutScaling = timeoutScaling;
     this.markerData = markerData;
+    this.useNativePatch = useNativePatch;
     WorkspaceAttributeMapper attrs = WorkspaceAttributeMapper.of(rule);
     ImmutableMap.Builder<String, Object> attrBuilder = new ImmutableMap.Builder<>();
     for (String name : attrs.getAttributeNames()) {
@@ -135,7 +142,7 @@ public class SkylarkRepositoryContext
         attrBuilder.put(
             Attribute.getSkylarkName(name),
             val == null
-                ? Starlark.NONE
+                ? Runtime.NONE
                 // Attribute values should be type safe
                 : SkylarkType.convertToSkylark(val, (StarlarkThread) null));
       }
@@ -367,7 +374,7 @@ public class SkylarkRepositoryContext
 
   @Override
   public SkylarkExecutionResult execute(
-      Sequence<?> arguments, // <String> or <SkylarkPath> expected
+      SkylarkList<?> arguments, // <String> or <SkylarkPath> expected
       Integer timeout,
       SkylarkDict<?, ?> uncheckedEnvironment, // <String, String> expected
       boolean quiet,
@@ -444,11 +451,57 @@ public class SkylarkRepositoryContext
             skylarkPath.toString(), strip, rule.getLabel().toString(), location);
     env.getListener().post(w);
     try {
-      PatchUtil.apply(skylarkPath.getPath(), strip, outputDirectory);
+      if (useNativePatch) {
+        PatchUtil.apply(skylarkPath.getPath(), strip, outputDirectory);
+      } else {
+        Map<String, String> envBuilder = Maps.newLinkedHashMap();
+        envBuilder.putAll(osObject.getEnvironmentVariables());
+        Command command =
+            new Command(
+                new String[] {"patch", "-p" + strip, "-i", skylarkPath.getPath().getPathString()},
+                envBuilder,
+                outputDirectory.getPathFile(),
+                Duration.ofSeconds(60));
+        CommandResult result = command.execute();
+        if (!result.getTerminationStatus().success()) {
+          throw new RepositoryFunctionException(
+              new EvalException(
+                  Location.BUILTIN,
+                  "Error applying patch "
+                      + skylarkPath.toString()
+                      + ": "
+                      + new String(result.getStderr(), UTF_8)),
+              Transience.TRANSIENT);
+        }
+      }
     } catch (PatchFailedException e) {
       throw new RepositoryFunctionException(
           new EvalException(
               Location.BUILTIN, "Error applying patch " + skylarkPath + ": " + e.getMessage()),
+          Transience.TRANSIENT);
+    } catch (CommandException e) {
+      String msg = "";
+      if (e instanceof BadExitStatusException) {
+        CommandResult result = ((BadExitStatusException) e).getResult();
+        msg =
+            String.join(
+                "\n",
+                "Command:",
+                String.join(" ", e.getCommand().getCommandLineElements()) + "\n",
+                "STDOUT:",
+                result.getStdoutStream().toString(),
+                "STDERR:",
+                result.getStderrStream().toString());
+      }
+      throw new RepositoryFunctionException(
+          new EvalException(
+              Location.BUILTIN,
+              "Error applying patch "
+                  + skylarkPath.toString()
+                  + ": "
+                  + e.getMessage()
+                  + "\n"
+                  + msg),
           Transience.TRANSIENT);
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
@@ -566,8 +619,7 @@ public class SkylarkRepositoryContext
             location);
     env.getListener().post(w);
     Path downloadedPath;
-    try (SilentCloseable c =
-        Profiler.instance().profile("fetching: " + rule.getLabel().toString())) {
+    try {
       checkInOutputDirectory("write", outputPath);
       makeDirectories(outputPath.getPath());
       downloadedPath =
@@ -685,8 +737,7 @@ public class SkylarkRepositoryContext
     createDirectory(outputPath.getPath());
 
     Path downloadedPath;
-    try (SilentCloseable c =
-        Profiler.instance().profile("fetching: " + rule.getLabel().toString())) {
+    try {
       downloadedPath =
           httpDownloader.download(
               urls,
@@ -715,17 +766,14 @@ public class SkylarkRepositoryContext
       throw checksumValidation;
     }
     env.getListener().post(w);
-    try (SilentCloseable c =
-        Profiler.instance().profile("extracting: " + rule.getLabel().toString())) {
-      DecompressorValue.decompress(
-          DecompressorDescriptor.builder()
-              .setTargetKind(rule.getTargetKind())
-              .setTargetName(rule.getName())
-              .setArchivePath(downloadedPath)
-              .setRepositoryPath(outputPath.getPath())
-              .setPrefix(stripPrefix)
-              .build());
-    }
+    DecompressorValue.decompress(
+        DecompressorDescriptor.builder()
+            .setTargetKind(rule.getTargetKind())
+            .setTargetName(rule.getName())
+            .setArchivePath(downloadedPath)
+            .setRepositoryPath(outputPath.getPath())
+            .setPrefix(stripPrefix)
+            .build());
 
     StructImpl downloadResult = calculateDownloadResult(checksum, downloadedPath);
     try {
@@ -946,8 +994,8 @@ public class SkylarkRepositoryContext
       if (value instanceof Label) {
         getPathFromLabel((Label) value);
       }
-      if (value instanceof Sequence) {
-        for (Object entry : (Sequence) value) {
+      if (value instanceof SkylarkList) {
+        for (Object entry : (SkylarkList) value) {
           if (entry instanceof Label) {
             getPathFromLabel((Label) entry);
           }

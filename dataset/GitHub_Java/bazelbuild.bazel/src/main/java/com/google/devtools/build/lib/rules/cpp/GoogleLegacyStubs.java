@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.RunfilesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
@@ -37,9 +38,9 @@ import com.google.devtools.build.lib.skylarkbuildapi.go.GoContextInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.go.GoPackageInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.Tuple;
 
 /**
  * Fake stub implementations for C++-related Starlark API which are unsupported without use of
@@ -80,8 +81,8 @@ public final class GoogleLegacyStubs {
         CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain,
         FileApi ccFile,
         FileApi headerFile,
-        Sequence<?> depCcCompilationContexts, // <CcCompilationContextApi>
-        Sequence<?> targetCopts /* <String> */)
+        SkylarkList<?> depCcCompilationContexts, // <CcCompilationContextApi>
+        SkylarkList<?> targetCopts /* <String> */)
         throws EvalException, InterruptedException {
       return null;
     }
@@ -107,10 +108,10 @@ public final class GoogleLegacyStubs {
         CcCompilationContextApi wrapperCcCompilationContext,
         SkylarkNestedSet swigIncludes,
         FileApi swigSource,
-        Sequence<?> subParameters, // <String>
+        SkylarkList<?> subParameters, // <String>
         FileApi ccFile,
         FileApi headerFile,
-        Sequence<?> outputFiles, // <FileApi>
+        SkylarkList<?> outputFiles, // <FileApi>
         Object outDir,
         Object javaDir,
         SkylarkNestedSet auxiliaryInputs,
@@ -135,7 +136,7 @@ public final class GoogleLegacyStubs {
           WrapCcIncludeProviderApi> {
 
     @Override
-    public Sequence<String> getPyExtensionLinkopts(SkylarkRuleContextApi skylarkRuleContext) {
+    public SkylarkList<String> getPyExtensionLinkopts(SkylarkRuleContextApi skylarkRuleContext) {
       return null;
     }
 
@@ -214,8 +215,8 @@ public final class GoogleLegacyStubs {
     public Tuple<FileApi> createGoCompileActions(
         SkylarkRuleContextApi skylarkRuleContext,
         CcToolchainProviderApi<FeatureConfigurationApi> ccToolchainProvider,
-        Sequence<?> srcs, // <FileApi>
-        Sequence<?> deps /* <TransitiveInfoCollectionApi> */) {
+        SkylarkList<?> srcs, // <FileApi>
+        SkylarkList<?> deps /* <TransitiveInfoCollectionApi> */) {
       return null;
     }
 
@@ -223,8 +224,8 @@ public final class GoogleLegacyStubs {
     public Tuple<FileApi> createGoCompileActionsGopkg(
         SkylarkRuleContextApi skylarkRuleContext,
         CcToolchainProviderApi<FeatureConfigurationApi> ccToolchainProvider,
-        Sequence<?> srcs, // <FileApi>
-        Sequence<?> deps /* <TransitiveInfoCollectionApi> */) {
+        SkylarkList<?> srcs, // <FileApi>
+        SkylarkList<?> deps /* <TransitiveInfoCollectionApi> */) {
       return null;
     }
 
@@ -238,7 +239,7 @@ public final class GoogleLegacyStubs {
     }
 
     @Override
-    public SkylarkNestedSet /*<FileApi>*/ getGopackageFilesForStarlark(
+    public NestedSet<FileApi> getGopackageFiles(
         SkylarkRuleContextApi skylarkRuleContext, FileApi skylarkGopkg) {
       return null;
     }

@@ -16,16 +16,15 @@ package com.google.devtools.build.lib.skylarkbuildapi.repository;
 
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 
 /** Skylark API for the repository_rule's context. */
 @SkylarkModule(
@@ -35,44 +34,48 @@ import com.google.devtools.build.lib.syntax.StarlarkValue;
         "The context of the repository rule containing"
             + " helper functions and information about attributes. You get a repository_ctx object"
             + " as an argument to the <code>implementation</code> function when you create a"
-            + " repository rule.")
-public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extends Throwable>
-    extends StarlarkValue {
+            + " repository rule."
+)
+public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extends Throwable> {
 
   @SkylarkCallable(
       name = "name",
       structField = true,
-      doc = "The name of the external repository created by this rule.")
-  String getName();
+      doc = "The name of the external repository created by this rule."
+  )
+  public String getName();
 
   @SkylarkCallable(
-      name = "attr",
-      structField = true,
-      doc =
-          "A struct to access the values of the attributes. The values are provided by "
-              + "the user (if not, a default value is used).")
-  StructApi getAttr();
+    name = "attr",
+    structField = true,
+    doc =
+        "A struct to access the values of the attributes. The values are provided by "
+            + "the user (if not, a default value is used)."
+  )
+  public StructApi getAttr();
 
   @SkylarkCallable(
-      name = "path",
-      doc =
-          "Returns a path from a string, label or path. If the path is relative, it will resolve "
-              + "relative to the repository directory. If the path is a label, it will resolve to "
-              + "the path of the corresponding file. Note that remote repositories are executed "
-              + "during the analysis phase and thus cannot depends on a target result (the "
-              + "label should point to a non-generated file). If path is a path, it will return "
-              + "that path as is.",
-      parameters = {
-        @Param(
-            name = "path",
-            allowedTypes = {
-              @ParamType(type = String.class),
-              @ParamType(type = Label.class),
-              @ParamType(type = RepositoryPathApi.class)
-            },
-            doc = "string, label or path from which to create a path from")
-      })
-  RepositoryPathApi<?> path(Object path) throws EvalException, InterruptedException;
+    name = "path",
+    doc =
+        "Returns a path from a string, label or path. If the path is relative, it will resolve "
+            + "relative to the repository directory. If the path is a label, it will resolve to "
+            + "the path of the corresponding file. Note that remote repositories are executed "
+            + "during the analysis phase and thus cannot depends on a target result (the "
+            + "label should point to a non-generated file). If path is a path, it will return "
+            + "that path as is.",
+    parameters = {
+      @Param(
+        name = "path",
+        allowedTypes = {
+          @ParamType(type = String.class),
+          @ParamType(type = Label.class),
+          @ParamType(type = RepositoryPathApi.class)
+        },
+        doc = "string, label or path from which to create a path from"
+      )
+    }
+  )
+  public RepositoryPathApi<?> path(Object path) throws EvalException, InterruptedException;
 
   @SkylarkCallable(
       name = "report_progress",
@@ -83,7 +86,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
             allowedTypes = {@ParamType(type = String.class)},
             doc = "string describing the current status of the fetch progress")
       })
-  void reportProgress(String status);
+  public void reportProgress(String status);
 
   @SkylarkCallable(
       name = "symlink",
@@ -107,7 +110,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
             },
             doc = "path of the symlink to create, relative to the repository directory."),
       })
-  void symlink(Object from, Object to, Location location)
+  public void symlink(Object from, Object to, Location location)
       throws RepositoryFunctionExceptionT, EvalException, InterruptedException;
 
   @SkylarkCallable(
@@ -144,7 +147,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
                 "encode file content to UTF-8, true by default. Future versions will change"
                     + " the default and remove this parameter."),
       })
-  void createFile(
+  public void createFile(
       Object path, String content, Boolean executable, Boolean legacyUtf8, Location location)
       throws RepositoryFunctionExceptionT, EvalException, InterruptedException;
 
@@ -176,7 +179,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
             doc = "path to the template file."),
         @Param(
             name = "substitutions",
-            type = Dict.class,
+            type = SkylarkDict.class,
             defaultValue = "{}",
             named = true,
             doc = "substitutions to make when expanding the template."),
@@ -187,10 +190,10 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
             named = true,
             doc = "set the executable flag on the created file, true by default."),
       })
-  void createFileFromTemplate(
+  public void createFileFromTemplate(
       Object path,
       Object template,
-      Dict<?, ?> substitutions, // <String, String> expected
+      SkylarkDict<?, ?> substitutions, // <String, String> expected
       Boolean executable,
       Location location)
       throws RepositoryFunctionExceptionT, EvalException, InterruptedException;
@@ -209,7 +212,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
             },
             doc = "path of the file to read from."),
       })
-  String readFile(Object path, Location location)
+  public String readFile(Object path, Location location)
       throws RepositoryFunctionExceptionT, EvalException, InterruptedException;
 
   @SkylarkCallable(
@@ -217,7 +220,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
       structField = true,
       doc = "A struct to access information from the system.",
       useLocation = true)
-  SkylarkOSApi getOS(Location location);
+  public SkylarkOSApi getOS(Location location);
 
   @SkylarkCallable(
       name = "execute",
@@ -231,7 +234,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
       parameters = {
         @Param(
             name = "arguments",
-            type = Sequence.class,
+            type = SkylarkList.class,
             doc =
                 "List of arguments, the first element should be the path to the program to "
                     + "execute."),
@@ -243,7 +246,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
             doc = "maximum duration of the command in seconds (default is 600 seconds)."),
         @Param(
             name = "environment",
-            type = Dict.class,
+            type = SkylarkDict.class,
             defaultValue = "{}",
             named = true,
             doc = "force some environment variables to be set to be passed to the process."),
@@ -262,10 +265,10 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
                 "Working directory for command execution.\n"
                     + "Can be relative to the repository root or absolute."),
       })
-  SkylarkExecutionResultApi execute(
-      Sequence<?> arguments,
+  public SkylarkExecutionResultApi execute(
+      SkylarkList<?> arguments,
       Integer timeout,
-      Dict<?, ?> environment, // <String, String> expected
+      SkylarkDict<?, ?> environment, // <String, String> expected
       boolean quiet,
       String workingDirectory,
       Location location)
@@ -288,7 +291,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
                 "Path of the file to delete, relative to the repository directory, or absolute."
                     + " Can be a path or a string."),
       })
-  boolean delete(Object path, Location location)
+  public boolean delete(Object path, Location location)
       throws EvalException, RepositoryFunctionExceptionT, InterruptedException;
 
   @SkylarkCallable(
@@ -319,7 +322,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
             defaultValue = "0",
             doc = "strip the specified number of leading components from file names."),
       })
-  void patch(Object patchFile, Integer strip, Location location)
+  public void patch(Object patchFile, Integer strip, Location location)
       throws EvalException, RepositoryFunctionExceptionT, InterruptedException;
 
   @SkylarkCallable(
@@ -336,7 +339,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
             named = false,
             doc = "Program to find in the path."),
       })
-  RepositoryPathApi<?> which(String program, Location location) throws EvalException;
+  public RepositoryPathApi<?> which(String program, Location location) throws EvalException;
 
   @SkylarkCallable(
       name = "download",
@@ -399,7 +402,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
                     + " with the same canonical id"),
         @Param(
             name = "auth",
-            type = Dict.class,
+            type = SkylarkDict.class,
             defaultValue = "{}",
             named = true,
             doc = "An optional dict specifying authentication information for some of the URLs."),
@@ -416,14 +419,14 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
                     + " field will make your build non-hermetic. It is optional to make development"
                     + " easier but should be set before shipping."),
       })
-  StructApi download(
+  public StructApi download(
       Object url,
       Object output,
       String sha256,
       Boolean executable,
       Boolean allowFail,
       String canonicalId,
-      Dict<?, ?> auth, // <String, Dict<?, ?>> expected
+      SkylarkDict<?, ?> auth, // <String, SkylarkDict<?, ?>> expected
       String integrity,
       Location location)
       throws RepositoryFunctionExceptionT, EvalException, InterruptedException;
@@ -468,7 +471,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
                     + " <code>build_file</code>, this field can be used to strip it from extracted"
                     + " files."),
       })
-  void extract(Object archive, Object output, String stripPrefix, Location location)
+  public void extract(Object archive, Object output, String stripPrefix, Location location)
       throws RepositoryFunctionExceptionT, InterruptedException, EvalException;
 
   @SkylarkCallable(
@@ -554,7 +557,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
                     + " with the same canonical id"),
         @Param(
             name = "auth",
-            type = Dict.class,
+            type = SkylarkDict.class,
             defaultValue = "{}",
             named = true,
             doc = "An optional dict specifying authentication information for some of the URLs."),
@@ -571,7 +574,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
                     + " field will make your build non-hermetic. It is optional to make development"
                     + " easier but should be set before shipping."),
       })
-  StructApi downloadAndExtract(
+  public StructApi downloadAndExtract(
       Object url,
       Object output,
       String sha256,
@@ -579,7 +582,7 @@ public interface SkylarkRepositoryContextApi<RepositoryFunctionExceptionT extend
       String stripPrefix,
       Boolean allowFail,
       String canonicalId,
-      Dict<?, ?> auth, // <String, Dict<?, ?>> expected
+      SkylarkDict<?, ?> auth, // <String, SkylarkDict<?, ?>> expected
       String integrity,
       Location location)
       throws RepositoryFunctionExceptionT, InterruptedException, EvalException;
