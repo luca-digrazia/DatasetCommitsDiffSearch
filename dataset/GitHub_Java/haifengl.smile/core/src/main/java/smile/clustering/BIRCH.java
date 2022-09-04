@@ -55,7 +55,7 @@ import smile.math.Math;
  * 
  * @author Haifeng Li
  */
-public class BIRCH implements Clustering<double[]> {
+public class BIRCH implements Clustering<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
