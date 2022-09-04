@@ -957,9 +957,8 @@ public final class CppModel {
    */
   private Artifact getLinkedArtifact(LinkTargetType linkTargetType) throws RuleErrorException {
     Artifact result = null;
-    Artifact linuxDefault =
-        CppHelper.getLinuxLinkedArtifact(
-            ruleContext, configuration, linkTargetType, linkedArtifactNameSuffix);
+    Artifact linuxDefault = CppHelper.getLinuxLinkedArtifact(
+        ruleContext, linkTargetType, linkedArtifactNameSuffix);
 
     try {
       String maybePicName = ruleContext.getLabel().getName() + linkedArtifactNameSuffix;
@@ -1118,10 +1117,7 @@ public final class CppModel {
     if (cppConfiguration.useInterfaceSharedObjects() && allowInterfaceSharedObjects) {
       soInterface =
           CppHelper.getLinuxLinkedArtifact(
-              ruleContext,
-              configuration,
-              LinkTargetType.INTERFACE_DYNAMIC_LIBRARY,
-              linkedArtifactNameSuffix);
+              ruleContext, LinkTargetType.INTERFACE_DYNAMIC_LIBRARY, linkedArtifactNameSuffix);
       sonameLinkopts = ImmutableList.of("-Wl,-soname=" +
           SolibSymlinkAction.getDynamicLibrarySoname(soImpl.getRootRelativePath(), false));
     }
