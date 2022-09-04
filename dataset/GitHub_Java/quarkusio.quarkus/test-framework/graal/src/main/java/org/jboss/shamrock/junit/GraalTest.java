@@ -1,12 +1,10 @@
 package org.jboss.shamrock.junit;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
+import java.net.URLClassLoader;
 
 import org.junit.runner.Description;
 import org.junit.runner.Result;
@@ -44,61 +42,60 @@ public class GraalTest extends BlockJUnit4ClassRunner {
     private void runInternal(RunNotifier notifier) {
         if (first) {
             first = false;
-            String graal = System.getenv("GRAALVM_HOME");
-            if (graal == null) {
-                notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("GRAALVM_HOME was not set")));
-                return;
-            }
-            String nativeImage = graal + File.separator + "bin" + File.separator + "native-image";
+            String path = System.getProperty("native.image.path");
+            if (path == null) {
+                //ok, lets make a guess
+                //this is a horrible hack, but it is intended to make this work in IDE's
 
-            URL mainClassUri = getClass().getClassLoader().getResource("org/jboss/shamrock/runner/Main.class");
-            if (mainClassUri == null) {
-                notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Unable to find shamrock main class")));
-                return;
-            }
-            String externalForm = mainClassUri.getPath();
-            int jar = externalForm.lastIndexOf('!');
-            if (jar == -1) {
-                notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Cannot find jar to image " + mainClassUri + " is not in a jar archive")));
-                return;
-            }
-            String path = externalForm.substring(5, jar);
-
-            try {
-                File temp = File.createTempFile("graal", "testImage");
-                temp.delete();
-                temp.mkdir();
-
-
-                Process process = Runtime.getRuntime().exec(new String[]{nativeImage, "-jar", path}, new String[]{}, temp);
-                CompletableFuture<String> output = new CompletableFuture<>();
-                new Thread(new ProcessReader(process.getInputStream(), output)).start();
-                if (process.waitFor() != 0) {
-                    notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Image generation failed: " + output.get())));
-                    return;
+                ClassLoader cl = getClass().getClassLoader();
+                String guessedPath = null;
+                if (cl instanceof URLClassLoader) {
+                    URL[] urls = ((URLClassLoader) cl).getURLs();
+                    for (URL url : urls) {
+                        if (url.getProtocol().equals("file") && url.getPath().endsWith("test-classes/")) {
+                            //we have the test classes dir
+                            File testClasses = new File(url.getPath());
+                            for (File file : testClasses.getParentFile().listFiles()) {
+                                if (file.getName().endsWith("-runner")) {
+                                    guessedPath = file.getAbsolutePath();
+                                    break;
+                                }
+                            }
+                        }
+                        if (guessedPath != null) {
+                            break;
+                        }
+                    }
                 }
 
-                String absolutePath = temp.listFiles()[0].getAbsolutePath();
-                System.out.println("Executing " + absolutePath);
-                final Process testProcess = Runtime.getRuntime().exec(absolutePath);
-                notifier.addListener(new RunListener(){
+                if(guessedPath == null) {
+                    notifier.fireTestFailure(new Failure(Description.createSuiteDescription(GraalTest.class), new RuntimeException("Unable to find native image, make sure native.image.path is set")));
+                    return;
+                } else {
+                    String errorString = "=native.image.path was not set, making a guess that  " + guessedPath + " is the correct native image=";
+                    for(int i= 0; i < errorString.length(); ++i) {
+                        System.err.print("=");
+                    }
+                    System.err.println(errorString);
+                    for(int i= 0; i < errorString.length(); ++i) {
+                        System.err.print("=");
+                    }
+                    path = guessedPath;
+                }
+            }
+            try {
+                System.out.println("Executing " + path);
+                final Process testProcess = Runtime.getRuntime().exec(path);
+                notifier.addListener(new RunListener() {
                     @Override
                     public void testRunFinished(Result result) throws Exception {
                         super.testRunFinished(result);
                         testProcess.destroy();
                     }
                 });
-                new Thread(new ProcessReader(testProcess.getInputStream(), output)).start();
-                output.whenComplete(new BiConsumer<String, Throwable>() {
-                    @Override
-                    public void accept(String s, Throwable throwable) {
-                        if(throwable != null) {
-                            throwable.printStackTrace();
-                        } else {
-                            System.out.println(s);
-                        }
-                    }
-                });
+                new Thread(new ProcessReader(testProcess.getInputStream())).start();
+                new Thread(new ProcessReader(testProcess.getErrorStream())).start();
+
                 Thread.sleep(1000); //wait for the image to be up, should check the port
 
             } catch (Exception e) {
@@ -111,27 +108,21 @@ public class GraalTest extends BlockJUnit4ClassRunner {
     private static final class ProcessReader implements Runnable {
 
         private final InputStream inputStream;
-        private final CompletableFuture<String> result;
 
-        private ProcessReader(InputStream inputStream, CompletableFuture<String> result) {
+        private ProcessReader(InputStream inputStream) {
             this.inputStream = inputStream;
-            this.result = result;
         }
 
         @Override
         public void run() {
-
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] b = new byte[100];
             int i;
             try {
                 while ((i = inputStream.read(b)) > 0) {
-                    out.write(b, 0, i);
-                    System.out.print(new String(b, 0 , i));
+                    System.out.print(new String(b, 0, i));
                 }
-                result.complete(new String(out.toByteArray()));
             } catch (IOException e) {
-                result.completeExceptionally(e);
+                e.printStackTrace();
             }
         }
     }
