@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -866,8 +866,12 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         ")");
 
     reporter.removeHandler(failFastHandler);
-    assertThrows(NoSuchTargetException.class, () -> getTarget("//java/foo:binary"));
-    assertContainsEvent("'+' operator applied to incompatible types");
+    try {
+      getTarget("//java/foo:binary");
+      fail();
+    } catch (NoSuchTargetException e) {
+      assertContainsEvent("'+' operator applied to incompatible types");
+    }
   }
 
   @Test
@@ -905,8 +909,12 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         "    }) + glob(['globbed.java']))");
 
     reporter.removeHandler(failFastHandler);
-    assertThrows(NoSuchTargetException.class, () -> getTarget("//foo:binary"));
-    assertContainsEvent("'+' operator applied to incompatible types");
+    try {
+      getTarget("//foo:binary");
+      fail();
+    } catch (NoSuchTargetException e) {
+      assertContainsEvent("'+' operator applied to incompatible types");
+    }
   }
 
   @Test
