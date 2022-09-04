@@ -536,12 +536,6 @@ final class JavaInfoBuildHelper {
             sourceJarsP ->
                 transitiveSourceJars.addTransitive(sourceJarsP.getTransitiveSourceJars()));
 
-    // When sources are not provided, the subsequent output Jar will be empty. As such, the output
-    // Jar is omitted from the set of Runtime Jars.
-    if (!sourceJars.isEmpty() || !sourceFiles.isEmpty()) {
-      javaInfoBuilder.setRuntimeJars(ImmutableList.of(outputJar));
-    }
-
     return javaInfoBuilder
         .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)
         .addProvider(
@@ -551,6 +545,7 @@ final class JavaInfoBuildHelper {
         .addProvider(JavaRunfilesProvider.class, new JavaRunfilesProvider(runfiles))
         .addProvider(JavaPluginInfoProvider.class, transitivePluginsProvider)
         .setNeverlink(neverlink)
+        .setRuntimeJars(ImmutableList.of(outputJar))
         .build();
   }
 
