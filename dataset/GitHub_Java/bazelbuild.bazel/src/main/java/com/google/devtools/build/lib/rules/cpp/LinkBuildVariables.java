@@ -13,19 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Predicates;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.SequenceBuilder;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.ArrayList;
-import java.util.List;
 
 /** Enum covering all build variables we create for all various {@link CppLinkAction}. */
 public enum LinkBuildVariables {
@@ -67,8 +61,6 @@ public enum LinkBuildVariables {
   INTERFACE_LIBRARY_OUTPUT("interface_library_output_path"),
   /** Linker flags coming from the legacy crosstool fields. */
   LEGACY_LINK_FLAGS("legacy_link_flags"),
-  /** Linker flags coming from the --linkopt or linkopts attribute. */
-  USER_LINK_FLAGS("user_link_flags"),
   /** Path to which to write symbol counts. */
   SYMBOL_COUNTS_OUTPUT("symbol_counts_output"),
   /** A build variable giving linkstamp paths. */
@@ -103,7 +95,6 @@ public enum LinkBuildVariables {
       boolean isUsingLinkerNotArchiver,
       BuildConfiguration configuration,
       Artifact outputArtifact,
-      boolean isCreatingSharedLibrary,
       Artifact paramFile,
       Artifact thinltoParamFile,
       Artifact thinltoMergedObjectFile,
@@ -113,7 +104,6 @@ public enum LinkBuildVariables {
       FeatureConfiguration featureConfiguration,
       boolean useTestOnlyFlags,
       boolean isLtoIndexing,
-      ImmutableList<String> userLinkFlags,
       Artifact interfaceLibraryBuilder,
       Artifact interfaceLibraryOutput,
       PathFragment ltoOutputRootPrefix,
@@ -121,10 +111,7 @@ public enum LinkBuildVariables {
       FdoSupportProvider fdoSupport,
       Iterable<String> runtimeLibrarySearchDirectories,
       SequenceBuilder librariesToLink,
-      Iterable<String> librarySearchDirectories,
-      boolean isLegacyFullyStaticLinkingMode,
-      boolean isStaticLinkingMode)
-      throws EvalException {
+      Iterable<String> librarySearchDirectories) {
     CcToolchainVariables.Builder buildVariables = new CcToolchainVariables.Builder();
 
     // symbol counting
@@ -196,17 +183,11 @@ public enum LinkBuildVariables {
           configuration.getBinDirectory().getExecPathString()
               + ";"
               + configuration.getBinDirectory().getExecPath().getRelative(ltoOutputRootPrefix));
-      String objectFileExtension;
-      try {
-        objectFileExtension = ccToolchainProvider.getFeatures()
-            .getArtifactNameExtensionForCategory(ArtifactCategory.OBJECT_FILE);
-      } catch (InvalidConfigurationException e) {
-        throw new EvalException(null, "artifact name pattern for object_file must be specified", e);
-      }
       buildVariables.addStringVariable(
           THINLTO_OBJECT_SUFFIX_REPLACE.getVariableName(),
           Iterables.getOnlyElement(CppFileTypes.LTO_INDEXING_OBJECT_FILE.getExtensions())
-              + ";" + objectFileExtension);
+              + ";"
+              + Iterables.getOnlyElement(CppFileTypes.OBJECT_FILE.getExtensions()));
       if (thinltoMergedObjectFile != null) {
         buildVariables.addStringVariable(
             THINLTO_MERGED_OBJECT_FILE.getVariableName(),
@@ -243,109 +224,6 @@ public enum LinkBuildVariables {
     }
 
     fdoSupport.getFdoSupport().getLinkOptions(featureConfiguration, buildVariables);
-
-    ImmutableList<String> userLinkFlagsWithLtoIndexingIfNeeded;
-    if (!isLtoIndexing) {
-      userLinkFlagsWithLtoIndexingIfNeeded = ImmutableList.copyOf(userLinkFlags);
-
-    } else {
-      List<String> opts = new ArrayList<>(userLinkFlags);
-      opts.addAll(
-          featureConfiguration.getCommandLine(
-              "lto-indexing", buildVariables.build(), /* expander= */ null));
-      opts.addAll(ccToolchainProvider.getCppConfiguration().getLtoIndexOptions());
-      userLinkFlagsWithLtoIndexingIfNeeded = ImmutableList.copyOf(opts);
-    }
-
-    // For now, silently ignore linkopts if this is a static library
-    userLinkFlagsWithLtoIndexingIfNeeded =
-        isUsingLinkerNotArchiver ? userLinkFlagsWithLtoIndexingIfNeeded : ImmutableList.of();
-
-    buildVariables.addStringSequenceVariable(
-        LinkBuildVariables.USER_LINK_FLAGS.getVariableName(),
-        removePieIfCreatingSharedLibrary(
-            isCreatingSharedLibrary, userLinkFlagsWithLtoIndexingIfNeeded));
-    buildVariables.addStringSequenceVariable(
-        LinkBuildVariables.LEGACY_LINK_FLAGS.getVariableName(),
-        getToolchainFlags(
-            isLegacyFullyStaticLinkingMode,
-            isStaticLinkingMode,
-            isUsingLinkerNotArchiver,
-            featureConfiguration,
-            ccToolchainProvider,
-            useTestOnlyFlags,
-            isCreatingSharedLibrary,
-            userLinkFlags));
-
     return buildVariables.build();
-  }
-
-  private static ImmutableList<String> getToolchainFlags(
-      boolean isLegacyFullyStaticLinkingMode,
-      boolean isStaticLinkingMode,
-      boolean isUsingLinkerNotArchiver,
-      FeatureConfiguration featureConfiguration,
-      CcToolchainProvider ccToolchainProvider,
-      boolean useTestOnlyFlags,
-      boolean isCreatingSharedLibrary,
-      List<String> userLinkFlags) {
-    if (!isUsingLinkerNotArchiver) {
-      return ImmutableList.of();
-    }
-    CppConfiguration cppConfiguration = ccToolchainProvider.getCppConfiguration();
-    boolean sharedLinkopts =
-        isCreatingSharedLibrary
-            || userLinkFlags.contains("-shared")
-            || cppConfiguration.hasSharedLinkOption();
-
-    List<String> result = new ArrayList<>();
-
-    // Extra toolchain link options based on the output's link staticness.
-    if (isLegacyFullyStaticLinkingMode) {
-      result.addAll(
-          CppHelper.getFullyStaticLinkOptions(
-              cppConfiguration, ccToolchainProvider, sharedLinkopts));
-    } else if (isStaticLinkingMode) {
-      if (!featureConfiguration.isEnabled(CppRuleClasses.STATIC_LINKING_MODE)) {
-        result.addAll(
-            CppHelper.getMostlyStaticLinkOptions(
-                cppConfiguration,
-                ccToolchainProvider,
-                sharedLinkopts,
-                featureConfiguration.isEnabled(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES)));
-      } else {
-        result.addAll(ccToolchainProvider.getLegacyLinkOptions());
-      }
-    } else {
-      if (!featureConfiguration.isEnabled(CppRuleClasses.DYNAMIC_LINKING_MODE)) {
-        result.addAll(
-            CppHelper.getDynamicLinkOptions(cppConfiguration, ccToolchainProvider, sharedLinkopts));
-      } else {
-        result.addAll(ccToolchainProvider.getLegacyLinkOptions());
-      }
-    }
-
-    // Extra test-specific link options.
-    if (useTestOnlyFlags) {
-      result.addAll(ccToolchainProvider.getTestOnlyLinkOptions());
-    }
-
-    result.addAll(ccToolchainProvider.getLinkOptions());
-
-    // -pie is not compatible with shared and should be
-    // removed when the latter is part of the link command. Should we need to further
-    // distinguish between shared libraries and executables, we could add additional
-    // command line / CROSSTOOL flags that distinguish them. But as long as this is
-    // the only relevant use case we're just special-casing it here.
-    return ImmutableList.copyOf(removePieIfCreatingSharedLibrary(isCreatingSharedLibrary, result));
-  }
-
-  private static Iterable<String> removePieIfCreatingSharedLibrary(
-      boolean isCreatingSharedLibrary, List<String> flags) {
-    if (isCreatingSharedLibrary) {
-      return Iterables.filter(flags, Predicates.not(Predicates.equalTo("-pie")));
-    } else {
-      return flags;
-    }
   }
 }
