@@ -131,11 +131,7 @@ public class InputsResource extends RestResource {
         // Launch input. (this will run async and clean up itself in case of an error.)
         radio.inputs().launch(input, inputId, true);
 
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("input_id", inputId);
-        result.put("persist_id", inputId);
-
-        return Response.status(Response.Status.ACCEPTED).entity(json(result)).build();
+        return Response.status(Response.Status.ACCEPTED).build();
     }
 
 
