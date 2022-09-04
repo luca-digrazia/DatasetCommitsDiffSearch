@@ -18,13 +18,16 @@ package org.jboss.shamrock.example.test;
 
 import static org.hamcrest.Matchers.is;
 
-import org.jboss.shamrock.test.junit.ShamrockTest;
-import org.junit.jupiter.api.Test;
+import java.util.Collections;
+
+import org.jboss.shamrock.test.ShamrockTest;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import io.restassured.RestAssured;
 import io.restassured.parsing.Parser;
 
-@ShamrockTest
+@RunWith(ShamrockTest.class)
 public class JaxRSTestCase {
 
     @Test
@@ -114,12 +117,5 @@ public class JaxRSTestCase {
         RestAssured.when().get("/test/implementor").then()
                 .body("name", is("my name"),
                         "value", is("my value"));
-    }
-
-    @Test
-    public void testResponse() {
-        RestAssured.when().get("/test/response").then()
-                .body("name", is("my entity name"),
-                        "value", is("my entity value"));
     }
 }
