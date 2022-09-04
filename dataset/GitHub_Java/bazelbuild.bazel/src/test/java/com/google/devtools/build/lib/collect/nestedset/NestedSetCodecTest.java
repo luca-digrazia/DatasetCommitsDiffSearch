@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.Mockito.times;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.testing.GcFinalization;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -28,15 +27,17 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.NestedSetS
 import com.google.devtools.build.lib.skyframe.serialization.AutoRegistry;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecs;
+import com.google.devtools.build.lib.skyframe.serialization.SerializationConstants;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationResult;
 import com.google.protobuf.ByteString;
 import java.io.IOException;
-import java.lang.ref.WeakReference;
 import java.nio.charset.Charset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -46,6 +47,16 @@ import org.mockito.Mockito;
 /** Tests for {@link NestedSet} serialization. */
 @RunWith(JUnit4.class)
 public class NestedSetCodecTest {
+  @Before
+  public void setUp() {
+    SerializationConstants.shouldSerializeNestedSet = true;
+  }
+
+  @After
+  public void tearDown() {
+    SerializationConstants.shouldSerializeNestedSet = false;
+  }
+
   @Test
   public void testAutoCodecedCodec() throws Exception {
     ObjectCodecs objectCodecs =
@@ -61,7 +72,7 @@ public class NestedSetCodecTest {
             AutoRegistry.get()
                 .getBuilder()
                 .setAllowDefaultCodec(true)
-                .add(new NestedSetCodecWithStore(NestedSetStore.inMemory()))
+                .add(new NestedSetCodecWithStore<>(NestedSetStore.inMemory()))
                 .build(),
             ImmutableMap.of());
     NestedSetCodecTestUtils.checkCodec(objectCodecs, true, true);
@@ -89,7 +100,7 @@ public class NestedSetCodecTest {
             AutoRegistry.get()
                 .getBuilder()
                 .setAllowDefaultCodec(true)
-                .add(new NestedSetCodecWithStore(nestedSetStore))
+                .add(new NestedSetCodecWithStore<>(nestedSetStore))
                 .build(),
             ImmutableMap.of());
 
@@ -127,7 +138,7 @@ public class NestedSetCodecTest {
             AutoRegistry.get()
                 .getBuilder()
                 .setAllowDefaultCodec(true)
-                .add(new NestedSetCodecWithStore(nestedSetStore))
+                .add(new NestedSetCodecWithStore<>(nestedSetStore))
                 .build(),
             ImmutableMap.of());
 
@@ -166,28 +177,11 @@ public class NestedSetCodecTest {
             AutoRegistry.get()
                 .getBuilder()
                 .setAllowDefaultCodec(true)
-                .add(new NestedSetCodecWithStore(mockNestedSetStore))
+                .add(new NestedSetCodecWithStore<>(mockNestedSetStore))
                 .build());
     NestedSet<String> singletonNestedSet =
         new NestedSetBuilder<String>(Order.STABLE_ORDER).add("a").build();
     objectCodecs.serialize(singletonNestedSet);
-  }
-
-  @Test
-  public void cacheEntryHasLifetimeOfContents() {
-    NestedSetCache cache = new NestedSetCache();
-    Object[] contents = new Object[0];
-    ByteString fingerprint = ByteString.copyFrom(new byte[2]);
-    cache.put(
-        NestedSetStore.FingerprintComputationResult.create(
-            fingerprint, Futures.immediateFuture(null)),
-        contents);
-    GcFinalization.awaitFullGc();
-    assertThat(cache.putIfAbsent(fingerprint, Futures.immediateFuture(null))).isEqualTo(contents);
-    WeakReference<Object[]> weakRef = new WeakReference<>(contents);
-    contents = null;
-    fingerprint = null;
-    GcFinalization.awaitClear(weakRef);
   }
 
   @Test
@@ -204,7 +198,7 @@ public class NestedSetCodecTest {
             AutoRegistry.get()
                 .getBuilder()
                 .setAllowDefaultCodec(true)
-                .add(new NestedSetCodecWithStore(nestedSetStore))
+                .add(new NestedSetCodecWithStore<>(nestedSetStore))
                 .build());
 
     NestedSet<String> subset1 =
@@ -238,11 +232,9 @@ public class NestedSetCodecTest {
     Mockito.when(emptyNestedSetCache.putIfAbsent(Mockito.any(), Mockito.any()))
         .thenAnswer(invocation -> null);
 
-    @SuppressWarnings("unchecked")
     ListenableFuture<Object[]> deserializationFuture =
-        (ListenableFuture<Object[]>)
-            nestedSetStore.getContentsAndDeserialize(
-                fingerprint, objectCodecs.getDeserializationContext());
+        nestedSetStore.getContentsAndDeserialize(
+            fingerprint, objectCodecs.getDeserializationContext());
     // At this point, we expect deserializationFuture to be waiting on both of the underlying
     // fetches, which should have both been started.
     assertThat(deserializationFuture.isDone()).isFalse();
@@ -284,21 +276,15 @@ public class NestedSetCodecTest {
         new Thread(
             () -> {
               try {
-                @SuppressWarnings("unchecked")
-                ListenableFuture<Object[]> asyncContents =
-                    (ListenableFuture<Object[]>)
-                        nestedSetStore.getContentsAndDeserialize(
-                            fingerprint, deserializationContext);
-                asyncResult.set(asyncContents);
+                asyncResult.set(
+                    nestedSetStore.getContentsAndDeserialize(fingerprint, deserializationContext));
               } catch (IOException e) {
                 throw new IllegalStateException(e);
               }
             });
     asyncThread.start();
-    @SuppressWarnings("unchecked")
     ListenableFuture<Object[]> result =
-        (ListenableFuture<Object[]>)
-            nestedSetStore.getContentsAndDeserialize(fingerprint, deserializationContext);
+        nestedSetStore.getContentsAndDeserialize(fingerprint, deserializationContext);
     asyncThread.join();
     Mockito.verify(nestedSetStorageEndpoint, times(1)).get(Mockito.eq(fingerprint));
     assertThat(result).isSameAs(asyncResult.get());

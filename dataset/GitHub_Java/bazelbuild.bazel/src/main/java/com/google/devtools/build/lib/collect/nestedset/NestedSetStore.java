@@ -86,7 +86,7 @@ public class NestedSetStore {
 
   /** An in-memory {@link NestedSetStorageEndpoint} */
   @VisibleForTesting
-  public static class InMemoryNestedSetStorageEndpoint implements NestedSetStorageEndpoint {
+  static class InMemoryNestedSetStorageEndpoint implements NestedSetStorageEndpoint {
     private final ConcurrentHashMap<ByteString, byte[]> fingerprintToContents =
         new ConcurrentHashMap<>();
 
@@ -104,17 +104,8 @@ public class NestedSetStore {
 
   /** An in-memory cache for fingerprint <-> NestedSet associations. */
   @VisibleForTesting
-  public static class NestedSetCache {
-
-    /**
-     * Fingerprint to {@link NestedSet#children} cache.
-     *
-     * <p>The values in this cache are always {@code Object[]} or {@code
-     * ListenableFuture<Object[]>}, the same as the children field in NestedSet. We avoid a common
-     * wrapper object both for memory efficiency and because our cache eviction policy is based on
-     * value GC, and wrapper objects would defeat that.
-     */
-    private final Cache<ByteString, Object> fingerprintToContents =
+  static class NestedSetCache {
+    private final Cache<ByteString, ListenableFuture<Object[]>> fingerprintToContents =
         CacheBuilder.newBuilder()
             .concurrencyLevel(SerializationConstants.DESERIALIZATION_POOL_SIZE)
             .weakValues()
@@ -128,9 +119,9 @@ public class NestedSetStore {
             .build();
 
     /**
-     * Returns children (an {@code Object[]} or a {@code ListenableFuture<Object[]>}) for NestedSet
-     * contents associated with the given fingerprint if there was already one. Otherwise associates
-     * {@code future} with {@code fingerprint} and returns null.
+     * Returns a {@link ListenableFuture} for NestedSet contents associated with the given
+     * fingerprint if there was already one. Otherwise associates {@code future} with {@code
+     * fingerprint} and returns null.
      *
      * <p>Since the associated future is used as the basis for equality comparisons for deserialized
      * nested sets, it is critical that multiple calls with the same fingerprint don't override the
@@ -138,8 +129,9 @@ public class NestedSetStore {
      */
     @VisibleForTesting
     @Nullable
-    Object putIfAbsent(ByteString fingerprint, ListenableFuture<Object[]> future) {
-      Object result;
+    ListenableFuture<Object[]> putIfAbsent(
+        ByteString fingerprint, ListenableFuture<Object[]> future) {
+      ListenableFuture<Object[]> result;
       // Guava's Cache doesn't have a #putIfAbsent method, so we emulate it here.
       try {
         result = fingerprintToContents.get(fingerprint, () -> future);
@@ -195,7 +187,8 @@ public class NestedSetStore {
     // fingerprintComputationResult, leading to confusion and potential performance drag. Fix this.
     public void put(FingerprintComputationResult fingerprintComputationResult, Object[] contents) {
       contentsToFingerprint.put(contents, fingerprintComputationResult);
-      fingerprintToContents.put(fingerprintComputationResult.fingerprint(), contents);
+      fingerprintToContents.put(
+          fingerprintComputationResult.fingerprint(), Futures.immediateFuture(contents));
     }
   }
 
@@ -232,7 +225,7 @@ public class NestedSetStore {
   }
 
   @VisibleForTesting
-  public NestedSetStore(
+  NestedSetStore(
       NestedSetStorageEndpoint nestedSetStorageEndpoint,
       NestedSetCache nestedSetCache,
       Executor executor) {
@@ -320,30 +313,18 @@ public class NestedSetStore {
     return fingerprintComputationResult;
   }
 
-  @SuppressWarnings("unchecked")
-  private static ListenableFuture<Object[]> maybeWrapInFuture(Object contents) {
-    if (contents instanceof Object[]) {
-      return Futures.immediateFuture((Object[]) contents);
-    }
-    return (ListenableFuture<Object[]>) contents;
-  }
-
   /**
    * Retrieves and deserializes the NestedSet contents associated with the given fingerprint.
    *
    * <p>We wish to only do one deserialization per fingerprint. This is enforced by the {@link
-   * #nestedSetCache}, which is responsible for returning the actual contents or the canonical
-   * future that will contain the results of the deserialization. If that future is not owned by the
-   * current call of this method, it doesn't have to do anything further.
-   *
-   * <p>The return value is either an {@code Object[]} or a {@code ListenableFuture<Object[]>}.
+   * #nestedSetCache}, which is responsible for returning the canonical future that will contain the
+   * results of the deserialization. If that future is not owned by the current call of this method,
+   * it doesn't have to do anything further.
    */
-  // All callers will test on type and check return value if it's a future.
-  @SuppressWarnings("FutureReturnValueIgnored")
-  Object getContentsAndDeserialize(
+  ListenableFuture<Object[]> getContentsAndDeserialize(
       ByteString fingerprint, DeserializationContext deserializationContext) throws IOException {
     SettableFuture<Object[]> future = SettableFuture.create();
-    Object contents = nestedSetCache.putIfAbsent(fingerprint, future);
+    ListenableFuture<Object[]> contents = nestedSetCache.putIfAbsent(fingerprint, future);
     if (contents != null) {
       return contents;
     }
@@ -366,9 +347,8 @@ public class NestedSetStore {
                 Object deserializedElement = newDeserializationContext.deserialize(codedIn);
                 if (deserializedElement instanceof ByteString) {
                   deserializationFutures.add(
-                      maybeWrapInFuture(
-                          getContentsAndDeserialize(
-                              (ByteString) deserializedElement, deserializationContext)));
+                      getContentsAndDeserialize(
+                          (ByteString) deserializedElement, deserializationContext));
                 } else {
                   deserializationFutures.add(Futures.immediateFuture(deserializedElement));
                 }
