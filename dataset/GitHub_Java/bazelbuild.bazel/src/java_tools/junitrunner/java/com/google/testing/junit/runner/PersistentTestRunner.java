@@ -179,7 +179,6 @@ final class PersistentTestRunner {
             WorkResponse.newBuilder()
                 .setOutput(outputStream.toString())
                 .setExitCode(exitCode)
-                .setRequestId(request.getRequestId())
                 .build();
 
         response.writeDelimitedTo(System.out);
