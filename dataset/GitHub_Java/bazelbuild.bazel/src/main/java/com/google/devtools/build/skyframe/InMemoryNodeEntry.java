@@ -207,17 +207,12 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
-  public Iterable<SkyKey> getDirectDeps() {
+  public synchronized Iterable<SkyKey> getDirectDeps() {
     return GroupedList.compressedToIterable(getCompressedDirectDepsForDoneEntry());
   }
 
-  @Override
-  public int getNumberOfDirectDepGroups() {
-    return GroupedList.numGroups(getCompressedDirectDepsForDoneEntry());
-  }
-
   /** Returns the compressed {@link GroupedList} of direct deps. Can only be called when done. */
-  public final synchronized @GroupedList.Compressed Object getCompressedDirectDepsForDoneEntry() {
+  public synchronized @GroupedList.Compressed Object getCompressedDirectDepsForDoneEntry() {
     assertKeepDeps();
     Preconditions.checkState(isDone(), "no deps until done. NodeEntry: %s", this);
     Preconditions.checkNotNull(directDeps, "deps can't be null: %s", this);

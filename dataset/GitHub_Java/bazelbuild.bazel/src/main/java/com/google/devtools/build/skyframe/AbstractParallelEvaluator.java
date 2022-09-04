@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.supplier.InterruptibleSupplier;
 import com.google.devtools.build.lib.util.BigIntegerFingerprintUtils;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
@@ -975,21 +974,8 @@ abstract class AbstractParallelEvaluator {
     }
 
     for (SkyKey newDep : newlyAddedNewDeps) {
-      NodeEntry depEntry = newlyAddedNewDepNodes.get().get(newDep);
-      // newlyAddedNewDepNodes should generally have all of the nodes requested. If it does not, and
-      // the evaluator permits such an inconsistency, fall back to creating the node.
-      if (depEntry == null) {
-        List<SkyKey> missing = ImmutableList.of(newDep);
-        evaluatorContext
-            .getGraphInconsistencyReceiver()
-            .noteInconsistencyAndMaybeThrow(
-                skyKey, missing, Inconsistency.ALREADY_DECLARED_CHILD_MISSING);
-        depEntry =
-            Preconditions.checkNotNull(
-                graph.createIfAbsentBatch(skyKey, Reason.RDEP_ADDITION, missing).get(newDep),
-                newDep);
-      }
-
+      NodeEntry depEntry =
+          Preconditions.checkNotNull(newlyAddedNewDepNodes.get().get(newDep), newDep);
       DependencyState triState = depEntry.addReverseDepAndCheckIfDone(skyKey);
       switch (maybeHandleUndoneDepForDoneEntry(entry, depEntry, triState, skyKey, newDep)) {
         case DEP_DONE_SELF_SIGNALLED:
