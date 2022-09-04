@@ -86,13 +86,13 @@ public class DashboardWidgetCreator {
         final TimeRange timeRange;
         switch (rangeType) {
             case "relative":
-                timeRange = RelativeRange.create(Integer.parseInt(String.valueOf(timerangeConfig.get("range"))));
+                timeRange = new RelativeRange(Integer.parseInt(String.valueOf(timerangeConfig.get("range"))));
                 break;
             case "keyword":
-                timeRange = KeywordRange.create((String) timerangeConfig.get("keyword"));
+                timeRange = new KeywordRange((String) timerangeConfig.get("keyword"));
                 break;
             case "absolute":
-                timeRange = AbsoluteRange.create((String) timerangeConfig.get("from"), (String) timerangeConfig.get("to"));
+                timeRange = new AbsoluteRange((String) timerangeConfig.get("from"), (String) timerangeConfig.get("to"));
                 break;
             default:
                 throw new InvalidRangeParametersException("range_type not recognized");
@@ -126,16 +126,16 @@ public class DashboardWidgetCreator {
         try {
             switch (rangeType) {
                 case "relative":
-                    timeRange = RelativeRange.create((Integer) timerangeConfig.get("range"));
+                    timeRange = new RelativeRange((Integer) timerangeConfig.get("range"));
                     break;
                 case "keyword":
-                    timeRange = KeywordRange.create((String) timerangeConfig.get("keyword"));
+                    timeRange = new KeywordRange((String) timerangeConfig.get("keyword"));
                     break;
                 case "absolute":
                     String from = new DateTime(timerangeConfig.get("from"), DateTimeZone.UTC).toString(Tools.ES_DATE_FORMAT);
                     String to = new DateTime(timerangeConfig.get("to"), DateTimeZone.UTC).toString(Tools.ES_DATE_FORMAT);
 
-                    timeRange = AbsoluteRange.create(from, to);
+                    timeRange = new AbsoluteRange(from, to);
                     break;
                 default:
                     throw new InvalidRangeParametersException("range_type not recognized");
