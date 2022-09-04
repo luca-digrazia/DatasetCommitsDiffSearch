@@ -41,13 +41,16 @@ import io.vertx.core.Context;
  */
 public final class VertxHttpRequest extends BaseHttpRequest {
     private ResteasyHttpHeaders httpHeaders;
+    private SynchronousDispatcher dispatcher;
     private String httpMethod;
     private Supplier<String> remoteHost;
     private InputStream inputStream;
     private Map<String, Object> attributes;
     private VertxHttpResponse response;
+    private final boolean is100ContinueExpected;
     private VertxExecutionContext executionContext;
     private final Context context;
+    private volatile boolean flushed;
 
     public VertxHttpRequest(Context context,
             ResteasyHttpHeaders httpHeaders,
@@ -55,10 +58,13 @@ public final class VertxHttpRequest extends BaseHttpRequest {
             String httpMethod,
             Supplier<String> remoteHost,
             SynchronousDispatcher dispatcher,
-            VertxHttpResponse response) {
+            VertxHttpResponse response,
+            boolean is100ContinueExpected) {
         super(uri);
         this.context = context;
+        this.is100ContinueExpected = is100ContinueExpected;
         this.response = response;
+        this.dispatcher = dispatcher;
         this.httpHeaders = httpHeaders;
         this.httpMethod = httpMethod;
         this.remoteHost = remoteHost;
@@ -101,6 +107,10 @@ public final class VertxHttpRequest extends BaseHttpRequest {
     @Override
     public ResteasyAsynchronousContext getAsyncContext() {
         return executionContext;
+    }
+
+    public boolean isFlushed() {
+        return flushed;
     }
 
     @Override
@@ -155,6 +165,10 @@ public final class VertxHttpRequest extends BaseHttpRequest {
 
     public VertxHttpResponse getResponse() {
         return response;
+    }
+
+    public boolean is100ContinueExpected() {
+        return is100ContinueExpected;
     }
 
     @Override
@@ -307,6 +321,7 @@ public final class VertxHttpRequest extends BaseHttpRequest {
             }
 
             protected synchronized void vertxFlush() {
+                flushed = true;
                 try {
                     vertxResponse.finish();
                 } catch (IOException e) {

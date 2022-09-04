@@ -105,8 +105,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
                 return host;
             };
 
-            VertxHttpRequest vertxRequest = new VertxHttpRequest(ctx, headers, uriInfo, request.rawMethod(), hostNameProvider,
-                    dispatcher.getDispatcher(), vertxResponse);
+            VertxHttpRequest vertxRequest = new VertxHttpRequest(ctx, headers, uriInfo, request.rawMethod(), hostNameProvider, dispatcher.getDispatcher(), vertxResponse, false);
             vertxRequest.setInputStream(is);
             try {
                 ResteasyContext.pushContext(SecurityContext.class, new QuarkusResteasySecurityContext(request));
