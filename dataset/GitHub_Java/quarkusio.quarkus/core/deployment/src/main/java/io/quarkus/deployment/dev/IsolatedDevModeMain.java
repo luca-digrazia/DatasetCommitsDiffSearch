@@ -3,7 +3,6 @@ package io.quarkus.deployment.dev;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
-import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Files;
@@ -203,11 +202,6 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
             stop();
         } finally {
             try {
-                try {
-                    runtimeUpdatesProcessor.close();
-                } catch (IOException e) {
-                    log.error("Failed to close compiler", e);
-                }
                 for (HotReplacementSetup i : hotReplacementSetups) {
                     i.close();
                 }
