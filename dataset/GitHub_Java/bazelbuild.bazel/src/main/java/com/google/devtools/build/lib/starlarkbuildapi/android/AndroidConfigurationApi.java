@@ -14,8 +14,8 @@
 package com.google.devtools.build.lib.starlarkbuildapi.android;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.docgen.annot.DocCategory;
 import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkDocumentationCategory;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.StarlarkValue;
 
@@ -27,7 +27,7 @@ import net.starlark.java.eval.StarlarkValue;
             + "you will be broken when it is removed. "
             + "A configuration fragment for Android.",
     documented = false,
-    category = DocCategory.CONFIGURATION_FRAGMENT)
+    category = StarlarkDocumentationCategory.CONFIGURATION_FRAGMENT)
 public interface AndroidConfigurationApi extends StarlarkValue {
 
   @StarlarkMethod(
@@ -215,13 +215,6 @@ public interface AndroidConfigurationApi extends StarlarkValue {
   boolean useDataBindingUpdatedArgs();
 
   @StarlarkMethod(
-      name = "android_databinding_use_androidx",
-      structField = true,
-      doc = "",
-      documented = false)
-  boolean useDataBindingAndroidX();
-
-  @StarlarkMethod(
       name = "persistent_busybox_tools",
       structField = true,
       doc = "",
@@ -241,7 +234,4 @@ public interface AndroidConfigurationApi extends StarlarkValue {
       doc = "",
       documented = false)
   boolean incompatibleUseToolchainResolution();
-
-  @StarlarkMethod(name = "hwasan", structField = true, doc = "", documented = false)
-  boolean isHwasan();
 }
