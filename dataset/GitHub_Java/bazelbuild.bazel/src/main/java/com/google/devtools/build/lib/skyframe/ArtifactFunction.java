@@ -315,7 +315,7 @@ class ArtifactFunction implements SkyFunction {
     ArtifactOwner artifactOwner = artifact.getArtifactOwner();
 
     Preconditions.checkState(artifactOwner instanceof ActionLookupKey, "", artifact, artifactOwner);
-    return (ActionLookupKey) artifactOwner;
+    return ActionLookupValue.key((ActionLookupKey) artifactOwner);
   }
 
   @Nullable
@@ -326,7 +326,7 @@ class ArtifactFunction implements SkyFunction {
     if (value == null) {
       ArtifactOwner artifactOwner = artifact.getArtifactOwner();
       Preconditions.checkState(
-          artifactOwner == CoverageReportValue.COVERAGE_REPORT_KEY,
+          artifactOwner == CoverageReportValue.ARTIFACT_OWNER,
           "Not-yet-present artifact owner: %s (%s %s)",
           artifactOwner,
           artifact,

@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
 import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
@@ -81,6 +80,7 @@ import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
 import com.google.devtools.build.skyframe.SequencedRecordingDifferencer;
 import com.google.devtools.build.skyframe.SequentialBuildDriver;
@@ -108,8 +108,10 @@ import org.junit.Before;
  * The common code that's shared between various builder tests.
  */
 public abstract class TimestampBuilderTestCase extends FoundationTestCase {
-  protected static final ActionLookupValue.ActionLookupKey ACTION_LOOKUP_KEY =
+  protected static final ActionLookupValue.ActionLookupKey ALL_OWNER =
       new SingletonActionLookupKey();
+  protected static final SkyKey OWNER_KEY =
+      LegacySkyKey.create(SkyFunctions.ACTION_LOOKUP, ALL_OWNER);
   protected static final Predicate<Action> ALWAYS_EXECUTE_FILTER = Predicates.alwaysTrue();
   protected static final String CYCLE_MSG = "Yarrrr, there be a cycle up in here";
 
@@ -119,7 +121,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   private Set<ActionAnalysisMetadata> actions;
 
   protected AtomicReference<EventBus> eventBusRef = new AtomicReference<>();
-  protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   @Before
   public final void initialize() throws Exception  {
@@ -128,7 +129,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     ResourceManager.instance().setAvailableResources(ResourceSet.createWithRamCpuIo(100, 1, 1));
     actions = new HashSet<>();
     actionTemplateExpansionFunction =
-        new ActionTemplateExpansionFunction(actionKeyContext, Suppliers.ofInstance(false));
+        new ActionTemplateExpansionFunction(Suppliers.ofInstance(false));
   }
 
   protected void clearActions() {
@@ -179,8 +180,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     ActionExecutionStatusReporter statusReporter =
         ActionExecutionStatusReporter.create(new StoredEventHandler());
     final SkyframeActionExecutor skyframeActionExecutor =
-        new SkyframeActionExecutor(
-            actionKeyContext, eventBusRef, new AtomicReference<>(statusReporter));
+        new SkyframeActionExecutor(eventBusRef, new AtomicReference<>(statusReporter));
 
     Path actionOutputBase = scratch.dir("/usr/local/google/_blaze_jrluser/FAKEMD5/action_out/");
     skyframeActionExecutor.setActionLogBufferPathGenerator(
@@ -235,11 +235,10 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
     return new Builder() {
       private void setGeneratingActions() {
-        if (evaluator.getExistingValue(ACTION_LOOKUP_KEY) == null) {
+        if (evaluator.getExistingValue(OWNER_KEY) == null) {
           differencer.inject(
               ImmutableMap.of(
-                  ACTION_LOOKUP_KEY,
-                  new ActionLookupValue(actionKeyContext, ImmutableList.copyOf(actions), false)));
+                  OWNER_KEY, new ActionLookupValue(ImmutableList.copyOf(actions), false)));
         }
       }
 
@@ -264,8 +263,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
             executor,
             keepGoing,
             /*explain=*/ false,
-            new ActionCacheChecker(
-                actionCache, null, actionKeyContext, ALWAYS_EXECUTE_FILTER, null),
+            new ActionCacheChecker(actionCache, null, ALWAYS_EXECUTE_FILTER, null),
             null);
         skyframeActionExecutor.setActionExecutionProgressReportingObjects(
             EMPTY_PROGRESS_SUPPLIER, EMPTY_COMPLETION_RECEIVER);
@@ -339,10 +337,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     PathFragment execPath = PathFragment.create("out").getRelative(name);
     Path path = execRoot.getRelative(execPath);
     return new Artifact(
-        path,
-        Root.asDerivedRoot(execRoot, execRoot.getRelative("out")),
-        execPath,
-        ACTION_LOOKUP_KEY);
+        path, Root.asDerivedRoot(execRoot, execRoot.getRelative("out")), execPath, ALL_OWNER);
   }
 
   /**
@@ -497,8 +492,13 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
   private static class SingletonActionLookupKey extends ActionLookupValue.ActionLookupKey {
     @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.CONFIGURED_TARGET;
+    protected SkyKey getSkyKeyInternal() {
+      return OWNER_KEY;
+    }
+
+    @Override
+    protected SkyFunctionName getType() {
+      throw new UnsupportedOperationException();
     }
   }
 

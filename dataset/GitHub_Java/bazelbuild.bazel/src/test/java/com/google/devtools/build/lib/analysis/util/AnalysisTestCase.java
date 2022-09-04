@@ -22,7 +22,6 @@ import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionGraph;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
@@ -128,7 +127,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected PackageManager packageManager;
   private LoadingPhaseRunner loadingPhaseRunner;
   private BuildView buildView;
-  protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   // Note that these configurations are virtual (they use only VFS)
   private BuildConfigurationCollection masterConfig;
@@ -169,14 +167,12 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         pkgFactory,
         fileSystem,
         directories,
-        actionKeyContext,
         workspaceStatusActionFactory,
         buildInfoFactories,
         ImmutableList.of(),
         analysisMock.getSkyFunctions(directories),
         ImmutableList.of(),
-        BazelSkyframeExecutorConstants.HARDCODED_BLACKLISTED_PACKAGE_PREFIXES,
-        BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
+        PathFragment.EMPTY_FRAGMENT,
         BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
         BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
         BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);

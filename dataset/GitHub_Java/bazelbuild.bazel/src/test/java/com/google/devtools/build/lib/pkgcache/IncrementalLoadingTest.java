@@ -21,7 +21,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -385,7 +384,7 @@ public class IncrementalLoadingTest {
   @Test
   public void testChangedExternalFile() throws Exception {
     tester.addFile("a/BUILD",
-        "load('//a:b.bzl', 'b')",
+        "load('/a/b', 'b')",
         "b()");
 
     tester.addFile("/b.bzl",
@@ -453,7 +452,6 @@ public class IncrementalLoadingTest {
     private final List<Path> changes = new ArrayList<>();
     private boolean everythingModified = false;
     private ModifiedFileSet modifiedFileSet;
-    private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
     public PackageCacheTester(FileSystem fs, ManualClock clock) throws IOException {
       this.clock = clock;
@@ -476,14 +474,12 @@ public class IncrementalLoadingTest {
                   .build(loadingMock.createRuleClassProvider(), fs),
               fs,
               directories,
-              actionKeyContext,
               null, /* workspaceStatusActionFactory */
               loadingMock.createRuleClassProvider().getBuildInfoFactories(),
               ImmutableList.of(new ManualDiffAwarenessFactory()),
               ImmutableMap.<SkyFunctionName, SkyFunction>of(),
               ImmutableList.<SkyValueDirtinessChecker>of(),
-              BazelSkyframeExecutorConstants.HARDCODED_BLACKLISTED_PACKAGE_PREFIXES,
-              BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
+              PathFragment.EMPTY_FRAGMENT,
               BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
               BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
               BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
