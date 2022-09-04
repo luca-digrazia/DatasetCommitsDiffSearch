@@ -216,8 +216,7 @@ final class ActionFileSystem extends AbstractFileSystemWithCustomStat
 
       @Override
       public boolean isDirectory() {
-        // TODO(felly): Support directory awareness, and consider disallowing directory artifacts
-        // eagerly at ActionFS construction.
+        // TODO(felly): Support directory awareness.
         return false;
       }
 
@@ -266,7 +265,7 @@ final class ActionFileSystem extends AbstractFileSystemWithCustomStat
 
   @Override
   protected long getFileSize(Path path, boolean followSymlinks) throws IOException {
-    return stat(path, followSymlinks).getSize();
+    return getMetadataOrThrowFileNotFound(path).getSize();
   }
 
   @Override
@@ -310,11 +309,6 @@ final class ActionFileSystem extends AbstractFileSystemWithCustomStat
       return null;
     }
     return getMetadataOrThrowFileNotFound(path).getDigest();
-  }
-
-  @Override
-  protected byte[] getDigest(Path path, HashFunction hash) throws IOException {
-    return getFastDigest(path, hash);
   }
 
   @Override
