@@ -28,8 +28,6 @@ import smile.math.MathEx;
 
 /**
  * An internal node in CART.
- *
- * @author Haifeng Li
  */
 public abstract class InternalNode implements Node {
     /** The number of samples in the node. */
