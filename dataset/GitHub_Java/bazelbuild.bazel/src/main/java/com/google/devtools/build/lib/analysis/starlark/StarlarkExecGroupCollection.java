@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.starlark;
 
-import static com.google.devtools.build.lib.packages.ExecGroup.DEFAULT_EXEC_GROUP_NAME;
+import static com.google.devtools.build.lib.analysis.ToolchainCollection.DEFAULT_EXEC_GROUP_NAME;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
@@ -62,7 +62,7 @@ public abstract class StarlarkExecGroupCollection implements ExecGroupCollection
   public boolean containsKey(StarlarkSemantics semantics, Object key) throws EvalException {
     String group = castGroupName(key);
     return !DEFAULT_EXEC_GROUP_NAME.equals(group)
-        && toolchainCollection().getExecGroupNames().contains(group);
+        && toolchainCollection().getExecGroups().contains(group);
   }
 
   /**
@@ -81,8 +81,7 @@ public abstract class StarlarkExecGroupCollection implements ExecGroupCollection
           execGroup,
           String.join(", ", getScrubbedExecGroups()));
     }
-    ToolchainContextApi toolchainContext =
-        StarlarkToolchainContext.create(toolchainCollection().getToolchainContext(execGroup));
+    ToolchainContextApi toolchainContext = toolchainCollection().getToolchainContext(execGroup);
     return new AutoValue_StarlarkExecGroupCollection_StarlarkExecGroupContext(toolchainContext);
   }
 
@@ -104,7 +103,7 @@ public abstract class StarlarkExecGroupCollection implements ExecGroupCollection
   }
 
   private List<String> getScrubbedExecGroups() {
-    return toolchainCollection().getExecGroupNames().stream()
+    return toolchainCollection().getExecGroups().stream()
         .filter(group -> !DEFAULT_EXEC_GROUP_NAME.equals(group))
         .sorted()
         .collect(Collectors.toList());
