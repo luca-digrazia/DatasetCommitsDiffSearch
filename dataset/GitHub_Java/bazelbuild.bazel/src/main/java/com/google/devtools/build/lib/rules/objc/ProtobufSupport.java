@@ -164,13 +164,18 @@ final class ProtobufSupport {
   public ProtobufSupport registerGenerationActions() {
     int actionId = 0;
 
+    boolean isLinkingTarget = isLinkingTarget();
     for (ImmutableSet<Artifact> inputProtos : orderedInputOutputKeySet()) {
       Iterable<Artifact> outputProtos = inputsToOutputsMap.get(inputProtos);
-      registerGenerationAction(outputProtos, inputProtos, getUniqueBundledProtosSuffix(actionId));
+      registerGenerationAction(
+          outputProtos,
+          inputProtos,
+          getUniqueBundledProtosSuffix(actionId),
+          /* includeSources */ isLinkingTarget);
       actionId++;
     }
 
-    if (!isLinkingTarget()) {
+    if (!isLinkingTarget) {
       registerModuleMapGenerationAction();
     }
 
@@ -235,12 +240,12 @@ final class ProtobufSupport {
   public ProtobufSupport addFilesToBuild(NestedSetBuilder<Artifact> filesToBuild) {
     for (ImmutableSet<Artifact> inputProtoFiles : inputsToOutputsMap.keySet()) {
       ImmutableSet<Artifact> outputProtoFiles = inputsToOutputsMap.get(inputProtoFiles);
-      Iterable<Artifact> generatedSources = getProtoSourceFilesForCompilation(outputProtoFiles);
-      Iterable<Artifact> generatedHeaders = getGeneratedProtoOutputs(outputProtoFiles,
-          HEADER_SUFFIX);
+      Iterable<Artifact> generatedHeaders =
+          getGeneratedProtoOutputs(outputProtoFiles, HEADER_SUFFIX);
 
-      filesToBuild.addAll(generatedSources).addAll(generatedHeaders);
+      filesToBuild.addAll(generatedHeaders);
     }
+
     return this;
   }
 
@@ -434,14 +439,17 @@ final class ProtobufSupport {
   }
 
   private void registerGenerationAction(
-      Iterable<Artifact> outputProtos, Iterable<Artifact> inputProtos, String protoFileSuffix) {
+      Iterable<Artifact> outputProtos,
+      Iterable<Artifact> inputProtos,
+      String protoFileSuffix,
+      boolean includeSources) {
     Artifact protoInputsFile = getProtoInputsFile(protoFileSuffix);
 
     ruleContext.registerAction(
         FileWriteAction.create(
             ruleContext, protoInputsFile, getProtoInputsFileContents(outputProtos), false));
 
-    ruleContext.registerAction(
+    SpawnAction.Builder actionBuilder =
         new SpawnAction.Builder()
             .setMnemonic("GenObjcBundledProtos")
             .addInput(attributes.getProtoCompiler())
@@ -450,10 +458,14 @@ final class ProtobufSupport {
             .addInput(protoInputsFile)
             .addInputs(inputProtos)
             .addOutputs(getGeneratedProtoOutputs(outputProtos, HEADER_SUFFIX))
-            .addOutputs(getProtoSourceFilesForCompilation(outputProtos))
             .setExecutable(attributes.getProtoCompiler().getExecPath())
-            .addCommandLine(getGenerationCommandLine(protoInputsFile))
-            .build(ruleContext));
+            .addCommandLine(getGenerationCommandLine(protoInputsFile, includeSources));
+
+    if (includeSources) {
+      actionBuilder.addOutputs(getProtoSourceFilesForCompilation(outputProtos));
+    }
+
+    ruleContext.registerAction(actionBuilder.build(ruleContext));
   }
 
   private Artifact getProtoInputsFile(String suffix) {
@@ -470,19 +482,26 @@ final class ProtobufSupport {
     return Artifact.joinRootRelativePaths("\n", sorted);
   }
 
-  private CustomCommandLine getGenerationCommandLine(Artifact protoInputsFile) {
-    return new CustomCommandLine.Builder()
-        .add("--input-file-list")
-        .addExecPath(protoInputsFile)
-        .add("--output-dir")
-        .addDynamicString(getWorkspaceRelativeOutputDir().getSafePathString())
-        .add("--force")
-        .add("--proto-root-dir")
-        .addDynamicString(getGenfilesPathString())
-        .add("--proto-root-dir")
-        .add(".")
-        .addExecPaths(VectorArg.addBefore("--config").each(portableProtoFilters))
-        .build();
+  private CustomCommandLine getGenerationCommandLine(
+      Artifact protoInputsFile, boolean includeSources) {
+    CustomCommandLine.Builder commandBuilder =
+        new CustomCommandLine.Builder()
+            .add("--input-file-list")
+            .addExecPath(protoInputsFile)
+            .add("--output-dir")
+            .addDynamicString(getWorkspaceRelativeOutputDir().getSafePathString())
+            .add("--force")
+            .add("--proto-root-dir")
+            .addDynamicString(getGenfilesPathString())
+            .add("--proto-root-dir")
+            .add(".")
+            .addExecPaths(VectorArg.addBefore("--config").each(portableProtoFilters));
+
+    if (!includeSources) {
+      commandBuilder.add("--headers-only");
+    }
+
+    return commandBuilder.build();
   }
 
   private String getGenfilesPathString() {

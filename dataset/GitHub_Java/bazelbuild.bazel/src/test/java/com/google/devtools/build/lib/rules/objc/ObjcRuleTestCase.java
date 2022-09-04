@@ -42,8 +42,9 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
+import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
+import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -312,14 +313,22 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
    * Verifies a {@code -filelist} file's contents.
    *
    * @param originalAction the action which uses the filelist artifact
+   * @param objlistName the path suffix of the filelist artifact
    * @param inputArchives path suffixes of the expected contents of the filelist
    */
-  protected void verifyObjlist(Action originalAction, String... inputArchives) throws Exception {
+  protected void verifyObjlist(Action originalAction, String objlistName, String... inputArchives)
+      throws Exception {
+    Artifact filelistArtifact =
+        getFirstArtifactEndingWith(originalAction.getInputs(), objlistName);
+
+    ParameterFileWriteAction fileWriteAction =
+        (ParameterFileWriteAction) getGeneratingAction(filelistArtifact);
     ImmutableList.Builder<String> execPaths = ImmutableList.builder();
     for (String inputArchive : inputArchives) {
       execPaths.add(execPathEndingWith(originalAction.getInputs(), inputArchive));
     }
-    assertThat(paramFileArgsForAction(originalAction)).containsExactlyElementsIn(execPaths.build());
+
+    assertThat(fileWriteAction.getContents()).containsExactlyElementsIn(execPaths.build());
   }
 
   /**
@@ -1043,7 +1052,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertThat(compileAction.getOutputs()).containsExactly(storyboardZip);
     assertThat(compileAction.getArguments())
         .containsExactlyElementsIn(
-            new CustomCommandLine.Builder()
+            new Builder()
                 .addDynamicString(MOCK_IBTOOLWRAPPER_PATH)
                 .addExecPath(storyboardZip)
                 .addDynamicString(archiveRoot) // archive root
@@ -1064,7 +1073,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     archiveRoot = targetDevices.contains("watch") ? "ja.lproj/" : "ja.lproj/loc.storyboardc";
     assertThat(compileAction.getArguments())
         .containsExactlyElementsIn(
-            new CustomCommandLine.Builder()
+            new Builder()
                 .addDynamicString(MOCK_IBTOOLWRAPPER_PATH)
                 .addExecPath(storyboardZip)
                 .addDynamicString(archiveRoot) // archive root
@@ -1603,8 +1612,10 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     CommandAction x8664BinAction = (CommandAction) getGeneratingAction(
         getFirstArtifactEndingWith(appLipoAction.getInputs(), x8664Prefix + "x/x_bin"));
 
-    verifyObjlist(i386BinAction, "package/libcclib.a");
-    verifyObjlist(x8664BinAction, "package/libcclib.a");
+    verifyObjlist(
+        i386BinAction, "x/x-linker.objlist", "package/libcclib.a");
+    verifyObjlist(
+        x8664BinAction, "x/x-linker.objlist", "package/libcclib.a");
 
     assertThat(Artifact.toExecPaths(i386BinAction.getInputs()))
         .containsAllOf(
@@ -2267,7 +2278,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "config_setting(",
         "  name = 'flag1@on',",
         "  flag_values = {':flag1': 'on'},",
-        "  transitive_configs = [':flag1'],",
         ")",
         "config_feature_flag(",
         "  name = 'flag2',",
@@ -2277,7 +2287,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "config_setting(",
         "  name = 'flag2@on',",
         "  flag_values = {':flag2': 'on'},",
-        "  transitive_configs = [':flag2'],",
         ")",
         "objc_library(",
         "  name = 'objcLib',",
@@ -2295,7 +2304,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "    ':flag2@on': ['-FLAG_2_ON'],",
         "    '//conditions:default': ['-FLAG_2_OFF'],",
         "  }),",
-        "  transitive_configs = [':flag1', ':flag2'],",
         ")");
   }
 }
