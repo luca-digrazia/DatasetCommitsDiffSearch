@@ -50,7 +50,9 @@ import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CompilationInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -137,10 +139,16 @@ public final class CcCompilationHelper {
    * Contains the providers as well as the {@code CcCompilationOutputs} and the {@code
    * CcCompilationContext}.
    */
+  @SkylarkModule(
+    name = "compilation_info",
+    documented = false,
+    category = SkylarkModuleCategory.BUILTIN,
+    doc = "Helper class containing CC compilation providers."
+  )
   // TODO(plf): Rename so that it's not confused with CcCompilationContext and also consider
   // merging
   // this class with {@code CcCompilationOutputs}.
-  public static final class CompilationInfo implements CompilationInfoApi {
+  public static final class CompilationInfo {
     private final TransitiveInfoProviderMap providers;
     private final Map<String, NestedSet<Artifact>> outputGroups;
     private final CcCompilationOutputs compilationOutputs;
@@ -162,7 +170,7 @@ public final class CcCompilationHelper {
       return outputGroups;
     }
 
-    @Override
+    @SkylarkCallable(name = "cc_output_groups", documented = false)
     public Map<String, SkylarkNestedSet> getSkylarkOutputGroups() {
       Map<String, SkylarkNestedSet> skylarkOutputGroups = new TreeMap<>();
       for (Map.Entry<String, NestedSet<Artifact>> entry : outputGroups.entrySet()) {
@@ -172,12 +180,12 @@ public final class CcCompilationHelper {
       return skylarkOutputGroups;
     }
 
-    @Override
+    @SkylarkCallable(name = "cc_compilation_outputs", documented = false)
     public CcCompilationOutputs getCcCompilationOutputs() {
       return compilationOutputs;
     }
 
-    @Override
+    @SkylarkCallable(name = "cc_compilation_info", documented = false)
     public CcCompilationInfo getCcCompilationInfo() {
       return (CcCompilationInfo) providers.getProvider(CcCompilationInfo.PROVIDER.getKey());
     }
@@ -1509,16 +1517,16 @@ public final class CcCompilationHelper {
         ruleContext,
         featureConfiguration,
         ccToolchain,
-        toPathString(sourceFile),
-        toPathString(builder.getOutputFile()),
-        toPathString(gcnoFile),
-        toPathString(dwoFile),
-        toPathString(ltoIndexingFile),
+        sourceFile,
+        builder.getOutputFile(),
+        gcnoFile,
+        dwoFile,
+        ltoIndexingFile,
         ImmutableList.of(),
         userCompileFlags.build(),
         cppModuleMap,
         usePic,
-        builder.getTempOutputFile(),
+        builder.getRealOutputFilePath(),
         CppHelper.getFdoBuildStamp(ruleContext, fdoSupport.getFdoSupport()),
         dotdFileExecPath,
         ImmutableList.copyOf(variablesExtensions),
@@ -1528,10 +1536,6 @@ public final class CcCompilationHelper {
         ccCompilationContext.getQuoteIncludeDirs(),
         ccCompilationContext.getSystemIncludeDirs(),
         ccCompilationContext.getDefines());
-  }
-
-  private static String toPathString(Artifact a) {
-    return a == null ? null : a.getExecPathString();
   }
 
   /**
