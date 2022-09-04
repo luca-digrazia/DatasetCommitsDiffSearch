@@ -43,7 +43,7 @@ import java.lang.annotation.Target;
  * 
  *     &lt;fragment
  *         android:id="@+id/myFragment"
- *         android:tag="<b>myFragmentTag</b>"
+ *         android:tag="myFragmentTag"
  *         android:name="mypackage.MyFragment_"
  *         android:layout_width="match_parent"
  *         android:layout_height="match_parent" /&gt;
@@ -56,15 +56,16 @@ import java.lang.annotation.Target;
  * // all injected fragment will be the same
  * 
  * 	&#064;FragmentByTag
- * 	public MyFragment <b>myFragmentTag</b>;
+ * 	public MyFragment myFragmentTag;
  * 	
- * 	&#064;FragmentByTag(<b>"myFragmentTag"</b>)
+ * 	&#064;FragmentByTag("myFragmentTag")
  * 	public MyFragment myFragmentTag2;
  * }
  * </pre>
  * 
  * </blockquote>
- *
+ * 
+ * *
  * <p>
  * To use the <code>getChildFragmentManager()</code> to inject the
  * <code>Fragment</code>, set the {@link #childFragment()} annotation parameter

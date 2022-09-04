@@ -15,35 +15,38 @@
  */
 package org.androidannotations.internal.core.handler;
 
-import static com.sun.codemodel.JExpr.lit;
-
 import javax.lang.model.element.Element;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.annotations.FragmentByTag;
+import org.androidannotations.ElementValidation;
+import org.androidannotations.annotations.FragmentById;
+import org.androidannotations.helper.IdValidatorHelper;
 import org.androidannotations.holder.EComponentWithViewSupportHolder;
+import org.androidannotations.rclass.IRClass;
 
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMethod;
 
-public class FragmentByTagHandler extends AbstractFragmentByHandler {
+public class FragmentByIdHandler extends AbstractFragmentByHandler {
 
-	public FragmentByTagHandler(AndroidAnnotationsEnvironment environment) {
-		super(FragmentByTag.class, environment, "findFragmentByTag");
+	public FragmentByIdHandler(AndroidAnnotationsEnvironment environment) {
+		super(FragmentById.class, environment, "findFragmentById");
+	}
+
+	@Override
+	public void validate(Element element, ElementValidation validation) {
+		super.validate(element, validation);
+
+		validatorHelper.resIdsExist(element, IRClass.Res.ID, IdValidatorHelper.FallbackStrategy.USE_ELEMENT_NAME, validation);
 	}
 
 	@Override
 	protected JMethod getFindFragmentMethod(boolean isNativeFragment, EComponentWithViewSupportHolder holder) {
-		return isNativeFragment ? holder.getFindNativeFragmentByTag() : holder.getFindSupportFragmentByTag();
+		return isNativeFragment ? holder.getFindNativeFragmentById() : holder.getFindSupportFragmentById();
 	}
 
 	@Override
 	protected JExpression getFragmentId(Element element, String fieldName) {
-		FragmentByTag annotation = element.getAnnotation(FragmentByTag.class);
-		String tagValue = annotation.value();
-		if (tagValue.equals("")) {
-			tagValue = fieldName;
-		}
-		return lit(tagValue);
+		return annotationHelper.extractOneAnnotationFieldRef(element, IRClass.Res.ID, true);
 	}
 }

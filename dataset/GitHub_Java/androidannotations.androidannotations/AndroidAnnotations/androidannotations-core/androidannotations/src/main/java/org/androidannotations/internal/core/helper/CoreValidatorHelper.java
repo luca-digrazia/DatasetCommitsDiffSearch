@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -66,7 +66,6 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 	private static final List<Receiver.RegisterAt> VALID_SERVICE_REGISTER_AT = Collections.singletonList(Receiver.RegisterAt.OnCreateOnDestroy);
 	private static final List<Receiver.RegisterAt> VALID_FRAGMENT_REGISTER_AT = Arrays.asList(Receiver.RegisterAt.OnCreateOnDestroy, Receiver.RegisterAt.OnResumeOnPause,
 			Receiver.RegisterAt.OnStartOnStop, Receiver.RegisterAt.OnAttachOnDetach);
-	private static final List<Receiver.RegisterAt> VALID_VIEW_REGISTER_AT = Collections.singletonList(Receiver.RegisterAt.OnAttachOnDetach);
 
 	public CoreValidatorHelper(IdAnnotationHelper idAnnotationHelper) {
 		super(idAnnotationHelper);
@@ -117,10 +116,6 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 	public void isSharedPreference(Element element, ElementValidation valid) {
 
 		TypeMirror type = element.asType();
-		if (element instanceof ExecutableElement) {
-			element = ((ExecutableElement) element).getParameters().get(0);
-			type = element.asType();
-		}
 
 		/*
 		 * The type is not available yet because it has just been generated
@@ -378,7 +373,6 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 		validRegisterAts.put(CanonicalNameConstants.ACTIVITY, VALID_ACTIVITY_REGISTER_AT);
 		validRegisterAts.put(CanonicalNameConstants.SERVICE, VALID_SERVICE_REGISTER_AT);
 		validRegisterAts.put(CanonicalNameConstants.FRAGMENT, VALID_FRAGMENT_REGISTER_AT);
-		validRegisterAts.put(CanonicalNameConstants.VIEW, VALID_VIEW_REGISTER_AT);
 
 		for (Map.Entry<String, List<Receiver.RegisterAt>> validRegisterAt : validRegisterAts.entrySet()) {
 			String enclosingType = validRegisterAt.getKey();
