@@ -29,11 +29,6 @@ import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.rclass.IRClass;
 import org.androidannotations.rclass.IRClass.Res;
 
-/**
- * 
- * @author Rostislav Chekan
- * 
- */
 public class FocusChangeValidator implements ElementValidator {
 
 	private IdValidatorHelper validatorHelper;
@@ -66,7 +61,8 @@ public class FocusChangeValidator implements ElementValidator {
 		ExecutableElement executableElement = (ExecutableElement) element;
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
-		validatorHelper.param.hasZeroOrOneViewOrTwoViewBooleanParameters(executableElement, valid);
+		// validatorHelper.zeroOrOneViewParameters(executableElement, valid);
+		int i = 0;
 
 		return valid.isValid();
 	}

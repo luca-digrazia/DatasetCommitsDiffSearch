@@ -40,7 +40,6 @@ import org.androidannotations.annotations.Background;
 import org.androidannotations.annotations.Bean;
 import org.androidannotations.annotations.BeforeTextChange;
 import org.androidannotations.annotations.Click;
-import org.androidannotations.annotations.CustomTitle;
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.EApplication;
 import org.androidannotations.annotations.EBean;
@@ -51,12 +50,12 @@ import org.androidannotations.annotations.EService;
 import org.androidannotations.annotations.EView;
 import org.androidannotations.annotations.EViewGroup;
 import org.androidannotations.annotations.Extra;
+import org.androidannotations.annotations.FocusChange;
 import org.androidannotations.annotations.FragmentArg;
 import org.androidannotations.annotations.FragmentById;
 import org.androidannotations.annotations.FragmentByTag;
 import org.androidannotations.annotations.FromHtml;
 import org.androidannotations.annotations.Fullscreen;
-import org.androidannotations.annotations.HierarchyViewerSupport;
 import org.androidannotations.annotations.HttpsClient;
 import org.androidannotations.annotations.InstanceState;
 import org.androidannotations.annotations.ItemClick;
@@ -127,7 +126,6 @@ import org.androidannotations.processing.BackgroundProcessor;
 import org.androidannotations.processing.BeanProcessor;
 import org.androidannotations.processing.BeforeTextChangeProcessor;
 import org.androidannotations.processing.ClickProcessor;
-import org.androidannotations.processing.CustomTitleProcessor;
 import org.androidannotations.processing.EActivityProcessor;
 import org.androidannotations.processing.EApplicationProcessor;
 import org.androidannotations.processing.EBeanProcessor;
@@ -138,12 +136,12 @@ import org.androidannotations.processing.EServiceProcessor;
 import org.androidannotations.processing.EViewGroupProcessor;
 import org.androidannotations.processing.EViewProcessor;
 import org.androidannotations.processing.ExtraProcessor;
+import org.androidannotations.processing.FocusChangeProcessor;
 import org.androidannotations.processing.FragmentArgProcessor;
 import org.androidannotations.processing.FragmentByIdProcessor;
 import org.androidannotations.processing.FragmentByTagProcessor;
 import org.androidannotations.processing.FromHtmlProcessor;
 import org.androidannotations.processing.FullscreenProcessor;
-import org.androidannotations.processing.HierarchyViewerSupportProcessor;
 import org.androidannotations.processing.HttpsClientProcessor;
 import org.androidannotations.processing.InstanceStateProcessor;
 import org.androidannotations.processing.ItemClickProcessor;
@@ -193,7 +191,6 @@ import org.androidannotations.validation.AppValidator;
 import org.androidannotations.validation.BeanValidator;
 import org.androidannotations.validation.BeforeTextChangeValidator;
 import org.androidannotations.validation.ClickValidator;
-import org.androidannotations.validation.CustomTitleValidator;
 import org.androidannotations.validation.EActivityValidator;
 import org.androidannotations.validation.EApplicationValidator;
 import org.androidannotations.validation.EBeanValidator;
@@ -204,12 +201,12 @@ import org.androidannotations.validation.EServiceValidator;
 import org.androidannotations.validation.EViewGroupValidator;
 import org.androidannotations.validation.EViewValidator;
 import org.androidannotations.validation.ExtraValidator;
+import org.androidannotations.validation.FocusChangeValidator;
 import org.androidannotations.validation.FragmentArgValidator;
 import org.androidannotations.validation.FragmentByIdValidator;
 import org.androidannotations.validation.FragmentByTagValidator;
 import org.androidannotations.validation.FromHtmlValidator;
 import org.androidannotations.validation.FullscreenValidator;
-import org.androidannotations.validation.HierarchyViewerSupportValidator;
 import org.androidannotations.validation.HttpsClientValidator;
 import org.androidannotations.validation.InstanceStateValidator;
 import org.androidannotations.validation.ItemClickValidator;
@@ -260,6 +257,7 @@ import org.androidannotations.validation.rest.RestValidator;
 		ItemClick.class, //
 		ItemLongClick.class, //
 		Touch.class, //
+		FocusChange.class, //
 		ItemSelect.class, //
 		UiThread.class, //
 		Transactional.class, //
@@ -297,7 +295,6 @@ import org.androidannotations.validation.rest.RestValidator;
 		OptionsItem.class, //
 		HtmlRes.class, //
 		NoTitle.class, //
-		CustomTitle.class, //
 		Fullscreen.class, //
 		RestService.class, //
 		EBean.class, //
@@ -323,8 +320,7 @@ import org.androidannotations.validation.rest.RestValidator;
 		OrmLiteDao.class, //
 		HttpsClient.class, //
 		FragmentArg.class, //
-		OnActivityResult.class, //
-		HierarchyViewerSupport.class //
+		OnActivityResult.class //
 })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
@@ -457,6 +453,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new ClickValidator(processingEnv, rClass));
 		modelValidator.register(new LongClickValidator(processingEnv, rClass));
 		modelValidator.register(new TouchValidator(processingEnv, rClass));
+		modelValidator.register(new FocusChangeValidator(processingEnv, rClass));
 		modelValidator.register(new ItemClickValidator(processingEnv, rClass));
 		modelValidator.register(new ItemSelectedValidator(processingEnv, rClass));
 		modelValidator.register(new ItemLongClickValidator(processingEnv, rClass));
@@ -469,7 +466,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new SystemServiceValidator(processingEnv, androidSystemServices));
 		modelValidator.register(new SharedPrefValidator(processingEnv));
 		modelValidator.register(new PrefValidator(processingEnv));
-		modelValidator.register(new RestValidator(processingEnv, androidManifest));
+		modelValidator.register(new RestValidator(processingEnv));
 		modelValidator.register(new DeleteValidator(processingEnv));
 		modelValidator.register(new GetValidator(processingEnv));
 		modelValidator.register(new HeadValidator(processingEnv));
@@ -481,7 +478,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new OptionsMenuValidator(processingEnv, rClass));
 		modelValidator.register(new OptionsItemValidator(processingEnv, rClass));
 		modelValidator.register(new NoTitleValidator(processingEnv));
-		modelValidator.register(new CustomTitleValidator(processingEnv, rClass));
 		modelValidator.register(new FullscreenValidator(processingEnv));
 		modelValidator.register(new RestServiceValidator(processingEnv));
 		modelValidator.register(new RootContextValidator(processingEnv));
@@ -506,7 +502,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new OrmLiteDaoValidator(processingEnv, rClass));
 		modelValidator.register(new HttpsClientValidator(processingEnv, rClass));
 		modelValidator.register(new OnActivityResultValidator(processingEnv, rClass));
-		modelValidator.register(new HierarchyViewerSupportValidator(processingEnv, androidManifest));
 		return modelValidator;
 	}
 
@@ -549,6 +544,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new ClickProcessor(processingEnv, rClass));
 		modelProcessor.register(new LongClickProcessor(processingEnv, rClass));
 		modelProcessor.register(new TouchProcessor(processingEnv, rClass));
+		modelProcessor.register(new FocusChangeProcessor(processingEnv, rClass));
 		modelProcessor.register(new ItemClickProcessor(processingEnv, rClass));
 		modelProcessor.register(new ItemSelectedProcessor(processingEnv, rClass));
 		modelProcessor.register(new ItemLongClickProcessor(processingEnv, rClass));
@@ -559,19 +555,18 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new ExtraProcessor(processingEnv));
 		modelProcessor.register(new FragmentArgProcessor(processingEnv));
 		modelProcessor.register(new SystemServiceProcessor(androidSystemServices));
-		RestImplementationsHolder restImplementationsHolder = new RestImplementationsHolder();
-		modelProcessor.register(new RestProcessor(processingEnv, restImplementationsHolder));
-		modelProcessor.register(new GetProcessor(processingEnv, restImplementationsHolder));
-		modelProcessor.register(new PostProcessor(processingEnv, restImplementationsHolder));
-		modelProcessor.register(new PutProcessor(processingEnv, restImplementationsHolder));
-		modelProcessor.register(new DeleteProcessor(processingEnv, restImplementationsHolder));
-		modelProcessor.register(new HeadProcessor(processingEnv, restImplementationsHolder));
-		modelProcessor.register(new OptionsProcessor(processingEnv, restImplementationsHolder));
+		RestImplementationsHolder restImplementationHolder = new RestImplementationsHolder();
+		modelProcessor.register(new RestProcessor(processingEnv, restImplementationHolder));
+		modelProcessor.register(new GetProcessor(processingEnv, restImplementationHolder));
+		modelProcessor.register(new PostProcessor(processingEnv, restImplementationHolder));
+		modelProcessor.register(new PutProcessor(processingEnv, restImplementationHolder));
+		modelProcessor.register(new DeleteProcessor(processingEnv, restImplementationHolder));
+		modelProcessor.register(new HeadProcessor(processingEnv, restImplementationHolder));
+		modelProcessor.register(new OptionsProcessor(processingEnv, restImplementationHolder));
 		modelProcessor.register(new AppProcessor());
 		modelProcessor.register(new OptionsMenuProcessor(processingEnv, rClass));
 		modelProcessor.register(new OptionsItemProcessor(processingEnv, rClass));
 		modelProcessor.register(new NoTitleProcessor());
-		modelProcessor.register(new CustomTitleProcessor(processingEnv, rClass));
 		modelProcessor.register(new FullscreenProcessor());
 		modelProcessor.register(new RestServiceProcessor());
 		modelProcessor.register(new OrmLiteDaoProcessor(processingEnv));
@@ -598,7 +593,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new InstanceStateProcessor(processingEnv));
 		modelProcessor.register(new HttpsClientProcessor(rClass));
 		modelProcessor.register(new OnActivityResultProcessor(processingEnv, rClass));
-		modelProcessor.register(new HierarchyViewerSupportProcessor());
 		return modelProcessor;
 	}
 

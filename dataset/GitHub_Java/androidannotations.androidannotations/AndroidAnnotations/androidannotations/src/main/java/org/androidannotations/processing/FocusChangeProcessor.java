@@ -1,18 +1,3 @@
-/**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
 package org.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
@@ -33,11 +18,6 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
-/**
- * 
- * @author Rostislav Chekan
- * 
- */
 public class FocusChangeProcessor extends AbstractListenerProcessor {
 
 	public FocusChangeProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
@@ -59,11 +39,8 @@ public class FocusChangeProcessor extends AbstractListenerProcessor {
 		JVar viewParam = listenerMethod.param(classes.VIEW, "view");
 		JVar hasFocusParam = listenerMethod.param(codeModel.BOOLEAN, "hasFocus");
 		boolean hasFocusParamExists = parameters.size() == 2;
-		boolean viewParamExists = parameters.size() >= 1;
 
-		if (viewParamExists) {
-			call.arg(viewParam);
-		}
+		call.arg(viewParam);
 		if (hasFocusParamExists) {
 			call.arg(hasFocusParam);
 		}
@@ -83,4 +60,5 @@ public class FocusChangeProcessor extends AbstractListenerProcessor {
 	protected JClass getListenerClass() {
 		return classes.VIEW_ON_FOCUS_CHANGE_LISTENER;
 	}
+
 }
