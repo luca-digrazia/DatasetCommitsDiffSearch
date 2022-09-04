@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionTemplate.ActionTemplateExpansionException;
@@ -41,6 +40,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
@@ -159,7 +159,6 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
     scratch.file("java/com/google/dummy/test/proto/test.proto");
     scratch.file(
         "java/com/google/dummy/test/proto/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "package(default_visibility=['//visibility:public'])",
         "proto_library(",
         "    name = 'test_proto',",
@@ -244,7 +243,6 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
     scratch.file("java/com/google/dummy/test/proto/test.proto");
     scratch.file(
         "java/com/google/dummy/test/proto/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "package(default_visibility=['//visibility:public'])",
         "proto_library(",
         "    name = 'test_proto',",
@@ -277,7 +275,6 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
   public void testJavaProtoLibraryWithProtoLibrary() throws Exception {
     scratch.file(
         "x/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "proto_library(",
         "    name = 'test_proto',",
         "    srcs = ['test.proto'],",
@@ -312,7 +309,6 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
     // Create the rule '@bla//foo:test_proto'.
     scratch.file(
         "/bla/foo/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "package(default_visibility=['//visibility:public'])",
         "proto_library(",
         "    name = 'test_proto',",
@@ -789,19 +785,18 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     ActionExecutionContext dummyActionExecutionContext =
         new ActionExecutionContext(
-            /*executor=*/ null,
-            /*actionInputFileCache=*/ null,
+            null,
+            null,
             ActionInputPrefetcher.NONE,
             actionKeyContext,
-            /*metadataHandler=*/ null,
-            LostInputsCheck.NONE,
-            /*fileOutErr=*/ null,
-            /*eventHandler=*/ null,
-            /*clientEnv=*/ ImmutableMap.of(),
-            /*topLevelFilesets=*/ ImmutableMap.of(),
+            null,
+            null,
+            null,
+            ImmutableMap.<String, String>of(),
+            ImmutableMap.of(),
             DUMMY_ARTIFACT_EXPANDER,
-            /*actionFileSystem=*/ null,
-            /*skyframeDepsResult=*/ null);
+            null,
+            null);
     ByteArrayOutputStream moduleMapStream = new ByteArrayOutputStream();
     ByteArrayOutputStream umbrellaHeaderStream = new ByteArrayOutputStream();
     moduleMapAction.newDeterministicWriter(dummyActionExecutionContext)
@@ -843,19 +838,18 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     ActionExecutionContext dummyActionExecutionContext =
         new ActionExecutionContext(
-            /*executor=*/ null,
-            /*actionInputFileCache=*/ null,
+            null,
+            null,
             ActionInputPrefetcher.NONE,
             actionKeyContext,
-            /*metadataHandler=*/ null,
-            LostInputsCheck.NONE,
-            /*fileOutErr=*/ null,
-            /*eventHandler=*/ null,
-            /*clientEnv=*/ ImmutableMap.of(),
-            /*topLevelFilesets=*/ ImmutableMap.of(),
+            null,
+            null,
+            null,
+            ImmutableMap.of(),
+            ImmutableMap.of(),
             DUMMY_ARTIFACT_EXPANDER,
-            /*actionFileSystem=*/ null,
-            /*skyframeDepsResult=*/ null);
+            null,
+            null);
 
     ByteArrayOutputStream moduleMapStream = new ByteArrayOutputStream();
     ByteArrayOutputStream umbrellaHeaderStream = new ByteArrayOutputStream();
@@ -1035,8 +1029,6 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     scratch.overwriteFile(
         "tools/j2objc/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
-        TestConstants.LOAD_PROTO_LANG_TOOLCHAIN,
         "package(default_visibility=['//visibility:public'])",
         "exports_files(['j2objc_deploy.jar'])",
         "filegroup(",
@@ -1076,7 +1068,6 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
     scratch.file("java/com/google/dummy/test/proto/test.proto");
     scratch.file(
         "java/com/google/dummy/test/proto/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
         "package(default_visibility=['//visibility:public'])",
         "proto_library(",
         "    name = 'test_proto',",
@@ -1221,6 +1212,8 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
     String genfilesFragment =
         getConfiguration(j2objcLibraryTarget).getGenfilesFragment().toString();
     String binFragment = getConfiguration(j2objcLibraryTarget).getBinFragment().toString();
+    AppleConfiguration appleConfiguration =
+        getConfiguration(j2objcLibraryTarget).getFragment(AppleConfiguration.class);
 
     String commandLine = Joiner.on(" ").join(compileAction.getArguments());
     ImmutableList<String> expectedArgs =
@@ -1235,6 +1228,12 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
             .add("-arch", "i386")
             .add("-isysroot")
             .add(AppleToolchain.sdkDir())
+            .add("-F")
+            .add(AppleToolchain.sdkDir() + "/Developer/Library/Frameworks")
+            .add("-F")
+            .add(
+                AppleToolchain.platformDeveloperFrameworkDir(
+                    appleConfiguration.getSingleArchPlatform()))
             .add("-O0")
             .add("-DDEBUG=1")
             .add("-iquote")

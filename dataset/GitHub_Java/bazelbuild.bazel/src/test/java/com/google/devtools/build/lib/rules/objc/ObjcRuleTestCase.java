@@ -52,6 +52,7 @@ import com.google.devtools.build.lib.packages.util.MockObjcSupport;
 import com.google.devtools.build.lib.packages.util.MockProtoSupport;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
@@ -216,6 +217,11 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     MockProtoSupport.setup(mockToolsConfig);
   }
 
+  protected static String frameworkDir(ApplePlatform platform) {
+    return AppleToolchain.platformDir(
+        platform.getNameInPlist()) + AppleToolchain.DEVELOPER_FRAMEWORK_PATH;
+  }
+
   /**
    * Creates an {@code objc_library} target writer for the label indicated by the given String.
    */
@@ -358,6 +364,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
             .add("-mios-simulator-version-min=" + DEFAULT_IOS_SDK_VERSION)
             .add("-arch " + arch)
             .add("-isysroot " + AppleToolchain.sdkDir())
+            .add(AppleToolchain.sdkDir() + AppleToolchain.DEVELOPER_FRAMEWORK_PATH)
+            .add(frameworkDir(ApplePlatform.forTarget(PlatformType.IOS, arch)))
             .addAll(frameworkPathFragmentParents.build())
             .add("-Xlinker -objc_abi_version -Xlinker 2")
             .add("-fobjc-link-runtime")
@@ -591,12 +599,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   // data_a.proto, data_c.proto and data_d.proto. The same applies for the compilation actions,
   // where the inputs are interpreted as .pbobjc.h files, and the output is a .pbobjc.o file.
   protected void checkProtoBundlingAndLinking(RuleType ruleType) throws Exception {
-    MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("x/filter_a.pbascii");
-    scratch.file("x/filter_b.pbascii");
     scratch.file(
         "protos/BUILD",
-        "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "    name = 'protos_1',",
         "    srcs = ['data_a.proto', 'data_b.proto'],",
@@ -643,7 +647,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     ConfiguredTarget topTarget = getConfiguredTarget("//x:x", childConfig);
 
     assertObjcProtoProviderArtifactsArePropagated(topTarget);
-    assertBundledGenerationActions(topTarget);
+    assertBundledGenerationActionsAreDifferent(topTarget);
+    assertOnlyRequiredInputsArePresentForBundledGeneration(topTarget);
     assertCoptsAndDefinesNotPropagatedToProtos(topTarget);
     assertBundledGroupsGetCreatedAndLinked(topTarget);
   }
@@ -672,9 +677,10 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     ObjcProtoProvider protoProvider = libTarget.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
     assertThat(protoProvider).isNotNull();
+    assertThat(protoProvider.getProtoGroups().toSet()).hasSize(3);
     assertThat(
             Artifact.toExecPaths(
-                ImmutableSet.copyOf(Iterables.concat(protoProvider.getProtoFiles()))))
+                ImmutableSet.copyOf(Iterables.concat(protoProvider.getProtoGroups()))))
         .containsExactly(
             "protos/data_a.proto",
             "protos/data_b.proto",
@@ -684,15 +690,11 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .containsExactly("protos/filter_a.pbascii", "protos/filter_b.pbascii");
   }
 
-  private void assertBundledGenerationActions(ConfiguredTarget topTarget) {
-    Artifact protoHeaderA =
-        getBinArtifact("_generated_objc_protos/x/protos/DataA.pbobjc.h", topTarget);
-    Artifact protoHeaderB =
-        getBinArtifact("_generated_objc_protos/x/protos/DataB.pbobjc.h", topTarget);
-    Artifact protoHeaderC =
-        getBinArtifact("_generated_objc_protos/x/protos/DataC.pbobjc.h", topTarget);
-    Artifact protoHeaderD =
-        getBinArtifact("_generated_objc_protos/x/protos/DataD.pbobjc.h", topTarget);
+  private void assertBundledGenerationActionsAreDifferent(ConfiguredTarget topTarget) {
+    Artifact protoHeaderA = getBinArtifact("_generated_protos/x/protos/DataA.pbobjc.h", topTarget);
+    Artifact protoHeaderB = getBinArtifact("_generated_protos/x/protos/DataB.pbobjc.h", topTarget);
+    Artifact protoHeaderC = getBinArtifact("_generated_protos/x/protos/DataC.pbobjc.h", topTarget);
+    Artifact protoHeaderD = getBinArtifact("_generated_protos/x/protos/DataD.pbobjc.h", topTarget);
     CommandAction protoActionA = (CommandAction) getGeneratingAction(protoHeaderA);
     CommandAction protoActionB = (CommandAction) getGeneratingAction(protoHeaderB);
     CommandAction protoActionC = (CommandAction) getGeneratingAction(protoHeaderC);
@@ -701,6 +703,54 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertThat(protoActionB).isNotNull();
     assertThat(protoActionC).isNotNull();
     assertThat(protoActionD).isNotNull();
+    assertThat(protoActionA).isNotEqualTo(protoActionB);
+    assertThat(protoActionB).isNotEqualTo(protoActionC);
+    assertThat(protoActionC).isNotEqualTo(protoActionD);
+  }
+
+  private void assertOnlyRequiredInputsArePresentForBundledGeneration(ConfiguredTarget topTarget)
+      throws Exception {
+    ConfiguredTarget libTarget =
+        view.getPrerequisiteConfiguredTargetForTesting(
+            reporter, topTarget, Label.parseAbsoluteUnchecked("//libs:objc_lib"), masterConfig);
+    ObjcProtoProvider protoProvider = libTarget.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
+
+    Artifact protoHeaderA = getBinArtifact("_generated_protos/x/protos/DataA.pbobjc.h", topTarget);
+    Artifact protoHeaderB = getBinArtifact("_generated_protos/x/protos/DataB.pbobjc.h", topTarget);
+    Artifact protoHeaderC = getBinArtifact("_generated_protos/x/protos/DataC.pbobjc.h", topTarget);
+    Artifact protoHeaderD = getBinArtifact("_generated_protos/x/protos/DataD.pbobjc.h", topTarget);
+
+    CommandAction protoActionA = (CommandAction) getGeneratingAction(protoHeaderA);
+    CommandAction protoActionB = (CommandAction) getGeneratingAction(protoHeaderB);
+    CommandAction protoActionC = (CommandAction) getGeneratingAction(protoHeaderC);
+    CommandAction protoActionD = (CommandAction) getGeneratingAction(protoHeaderD);
+
+    assertThat(protoActionA.getInputs())
+        .containsAtLeastElementsIn(protoProvider.getPortableProtoFilters());
+    assertThat(protoActionB.getInputs())
+        .containsAtLeastElementsIn(protoProvider.getPortableProtoFilters());
+    assertThat(protoActionC.getInputs())
+        .containsAtLeastElementsIn(protoProvider.getPortableProtoFilters());
+    assertThat(protoActionD.getInputs())
+        .containsAtLeastElementsIn(protoProvider.getPortableProtoFilters());
+
+    assertThat(Artifact.toExecPaths(protoActionA.getInputs())).contains("protos/data_a.proto");
+    assertThat(Artifact.toExecPaths(protoActionA.getInputs()))
+        .containsNoneOf("protos/data_b.proto", "protos/data_c.proto", "protos/data_d.proto");
+
+    assertThat(Artifact.toExecPaths(protoActionB.getInputs())).contains("protos/data_b.proto");
+    assertThat(Artifact.toExecPaths(protoActionB.getInputs()))
+        .containsNoneOf("protos/data_a.proto", "protos/data_c.proto", "protos/data_d.proto");
+
+    assertThat(Artifact.toExecPaths(protoActionC.getInputs())).contains("protos/data_c.proto");
+    assertThat(Artifact.toExecPaths(protoActionC.getInputs()))
+        .containsNoneOf("protos/data_a.proto", "protos/data_b.proto", "protos/data_d.proto");
+
+    assertThat(Artifact.toExecPaths(protoActionD.getInputs())).contains("protos/data_d.proto");
+    assertThat(Artifact.toExecPaths(protoActionD.getInputs()))
+        .containsAtLeast("protos/data_a.proto", "protos/data_c.proto");
+    assertThat(Artifact.toExecPaths(protoActionD.getInputs()))
+        .doesNotContain("protos/data_b.proto");
   }
 
   /**
@@ -741,11 +791,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   protected void checkProtoBundlingDoesNotHappen(RuleType ruleType) throws Exception {
-    MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("x/filter_b.pbascii");
     scratch.file(
         "protos/BUILD",
-        "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "    name = 'protos',",
         "    srcs = ['data_a.proto'],",
@@ -774,11 +821,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   protected void checkProtoBundlingWithTargetsWithNoDeps(RuleType ruleType) throws Exception {
-    MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("x/filter_a.pbascii");
     scratch.file(
         "protos/BUILD",
-        "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "    name = 'protos_a',",
         "    srcs = ['data_a.proto'],",

@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
@@ -57,6 +58,7 @@ import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.junit.Ignore;
@@ -432,6 +434,12 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     assertThat(compileActionA.getArguments())
         .containsAtLeast("-isysroot", AppleToolchain.sdkDir())
         .inOrder();
+    assertThat(Collections.frequency(compileActionA.getArguments(),
+        "-F" + AppleToolchain.sdkDir() + "/Developer/Library/Frameworks")).isEqualTo(1);
+    assertThat(
+            Collections.frequency(
+                compileActionA.getArguments(), "-F" + frameworkDir(ApplePlatform.IOS_SIMULATOR)))
+        .isEqualTo(1);
     assertThat(compileActionA.getArguments())
         .containsAtLeastElementsIn(AppleToolchain.DEFAULT_WARNINGS.values());
     assertThat(compileActionA.getArguments())
@@ -476,6 +484,12 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     assertThat(compileActionA.getArguments())
         .containsAtLeast("-isysroot", AppleToolchain.sdkDir())
         .inOrder();
+    assertThat(Collections.frequency(compileActionA.getArguments(),
+        "-F" + AppleToolchain.sdkDir() + "/Developer/Library/Frameworks")).isEqualTo(1);
+    assertThat(
+            Collections.frequency(
+                compileActionA.getArguments(), "-F" + frameworkDir(ApplePlatform.IOS_DEVICE)))
+        .isEqualTo(1);
     assertThat(compileActionA.getArguments())
         .containsAtLeastElementsIn(AppleToolchain.DEFAULT_WARNINGS.values());
     assertThat(compileActionA.getArguments())
@@ -504,9 +518,28 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testCompileWithFrameworkImportsIncludesFlags() throws Exception {
+  public void testCompileWithFrameworkImportsIncludesFlagsAndInputArtifactsPreCleanup()
+      throws Exception {
     useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
-    addBinWithTransitiveDepOnFrameworkImport();
+    setSkylarkSemanticsOptions("--incompatible_objc_framework_cleanup=false");
+    addBinWithTransitiveDepOnFrameworkImport(false);
+    CommandAction compileAction = compileAction("//lib:lib", "a.o");
+
+    assertThat(compileAction.getArguments()).doesNotContain("-framework");
+    assertThat(Joiner.on("").join(compileAction.getArguments())).contains("-Ffx");
+    assertThat(compileAction.getInputs())
+        .containsAtLeast(
+            getSourceArtifact("fx/fx1.framework/a"),
+            getSourceArtifact("fx/fx1.framework/b"),
+            getSourceArtifact("fx/fx2.framework/c"),
+            getSourceArtifact("fx/fx2.framework/d"));
+  }
+
+  @Test
+  public void testCompileWithFrameworkImportsIncludesFlagsPostCleanup() throws Exception {
+    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
+    setSkylarkSemanticsOptions("--incompatible_objc_framework_cleanup=true");
+    addBinWithTransitiveDepOnFrameworkImport(true);
     CommandAction compileAction = compileAction("//lib:lib", "a.o");
 
     assertThat(compileAction.getArguments()).doesNotContain("-framework");
@@ -1275,9 +1308,29 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     checkSdkIncludesUsedInCompileAction(RULE_TYPE);
   }
 
+  // Test with ios device SDK version 9.0. Framework path differs from previous versions.
+  @Test
+  public void testCompilationActions_deviceSdk9() throws Exception {
+    useConfiguration("--cpu=ios_armv7", "--ios_minimum_os=1.0", "--ios_sdk_version=9.0");
+
+    createLibraryTargetWriter("//objc:lib")
+        .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
+        .setAndCreateFiles("hdrs", "c.h")
+        .write();
+
+    CommandAction compileAction = compileAction("//objc:lib", "a.o");
+
+    // We remove spaces, since the crosstool rules do not use spaces in command line args.
+
+    String compileArgs = Joiner.on("").join(compileAction.getArguments()).replace(" ", "");
+    assertThat(compileArgs)
+        .contains("-F" + AppleToolchain.sdkDir() + AppleToolchain.SYSTEM_FRAMEWORK_PATH);
+  }
+
   @Test
   public void testCompilationActionsWithPch() throws Exception {
     useConfiguration("--apple_platform_type=ios");
+    ApplePlatform platform = ApplePlatform.IOS_SIMULATOR;
     scratch.file("objc/foo.pch");
     createLibraryTargetWriter("//objc:lib")
         .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
@@ -1299,6 +1352,8 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
                 .add("-mios-simulator-version-min=" + DEFAULT_IOS_SDK_VERSION)
                 .add("-arch x86_64")
                 .add("-isysroot", AppleToolchain.sdkDir())
+                .add("-F" + AppleToolchain.sdkDir() + "/Developer/Library/Frameworks")
+                .add("-F" + frameworkDir(platform))
                 .addAll(FASTBUILD_COPTS)
                 .addAll(
                     iquoteArgs(
@@ -1651,11 +1706,81 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
+  public void testDoesNotPropagateProtoIncludes() throws Exception {
+    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
+    scratch.file(
+        "x/BUILD",
+        "proto_library(",
+        "   name = 'protos',",
+        "   srcs = ['data.proto'],",
+        ")",
+        "objc_proto_library(",
+        "   name = 'objc_proto_lib',",
+        "   deps = [':protos'],",
+        "   portable_proto_filters = ['data_filter.pbascii'],",
+        ")");
+    createLibraryTargetWriter("//a:lib")
+        .setList("srcs", "a.m")
+        .setList("deps", "//x:objc_proto_lib")
+        .write();
+    createLibraryTargetWriter("//b:lib").setList("srcs", "b.m").setList("deps", "//a:lib").write();
+
+    CommandAction compileAction1 = compileAction("//a:lib", "a.o");
+    CommandAction compileAction2 = compileAction("//b:lib", "b.o");
+
+    assertThat(Joiner.on(" ").join(compileAction1.getArguments())).contains("objc_proto_lib");
+    assertThat(Joiner.on(" ").join(compileAction2.getArguments())).doesNotContain("objc_proto_lib");
+  }
+
+  @Test
   public void testExportsJ2ObjcProviders() throws Exception {
     useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
     ConfiguredTarget lib = createLibraryTargetWriter("//a:lib").write();
     assertThat(lib.getProvider(J2ObjcEntryClassProvider.class)).isNotNull();
     assertThat(lib.getProvider(J2ObjcMappingFileProvider.class)).isNotNull();
+  }
+
+  @Test
+  public void testObjcProtoLibraryDoesNotCrash() throws Exception {
+    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
+    scratch.file(
+        "x/BUILD",
+        "objc_library(",
+        "   name = 'objc',",
+        "   srcs = ['source.m'],",
+        "   deps = [':objc_proto_lib'],",
+        ")",
+        "proto_library(",
+        "   name = 'protos',",
+        "   srcs = ['data.proto'],",
+        ")",
+        "objc_proto_library(",
+        "   name = 'objc_proto_lib',",
+        "   deps = [':protos'],",
+        "   portable_proto_filters = ['data_filter.pbascii'],",
+        ")");
+    assertThat(getConfiguredTarget("//x:objc")).isNotNull();
+  }
+
+  @Test
+  public void testLegacyObjcProtoLibraryDoesNotCrash() throws Exception {
+    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
+    scratch.file(
+        "x/BUILD",
+        "objc_library(",
+        "   name = 'objc',",
+        "   srcs = ['source.m'],",
+        "   deps = [':objc_proto_lib'],",
+        ")",
+        "proto_library(",
+        "   name = 'protos',",
+        "   srcs = ['data.proto'],",
+        ")",
+        "objc_proto_library(",
+        "   name = 'objc_proto_lib',",
+        "   deps = [':protos'],",
+        ")");
+    assertThat(getConfiguredTarget("//x:objc")).isNotNull();
   }
 
   @Test
@@ -1898,28 +2023,5 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         "in name attribute of objc_library rule //x:foo/bar: "
             + "this attribute has unsupported character '/'",
         "objc_library(name = 'foo/bar', srcs = ['foo.m'])");
-  }
-
-  @Test
-  public void testObjcLibraryLoadedThroughMacro() throws Exception {
-    setupTestObjcLibraryLoadedThroughMacro(/* loadMacro= */ true);
-    assertThat(getConfiguredTarget("//a:a")).isNotNull();
-    assertNoEvents();
-  }
-
-  @Test
-  public void testObjcLibraryNotLoadedThroughMacro() throws Exception {
-    setupTestObjcLibraryLoadedThroughMacro(/* loadMacro= */ false);
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//a:a");
-    assertContainsEvent("rules are deprecated");
-  }
-
-  private void setupTestObjcLibraryLoadedThroughMacro(boolean loadMacro) throws Exception {
-    useConfiguration("--incompatible_load_cc_rules_from_bzl");
-    scratch.file(
-        "a/BUILD",
-        getAnalysisMock().ccSupport().getMacroLoadStatement(loadMacro, "objc_library"),
-        "objc_library(name='a', srcs=['a.cc'])");
   }
 }

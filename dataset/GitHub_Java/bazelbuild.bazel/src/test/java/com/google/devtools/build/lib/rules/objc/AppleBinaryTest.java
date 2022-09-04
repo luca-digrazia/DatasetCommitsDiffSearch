@@ -35,14 +35,14 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.packages.util.MockObjcSupport;
-import com.google.devtools.build.lib.packages.util.MockProtoSupport;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
+import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.objc.AppleBinary.BinaryType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -96,9 +96,6 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file("myinfo/myinfo.bzl", "MyInfo = provider()");
 
     scratch.file("myinfo/BUILD");
-
-    MockProtoSupport.setupWorkspace(scratch);
-    invalidatePackages();
   }
 
   private StructImpl getMyInfoFromTarget(ConfiguredTarget configuredTarget) throws Exception {
@@ -240,13 +237,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
    *     this deduping test is applicable for either
    */
   private void checkProtoDedupingDeps(BinaryType depBinaryType) throws Exception {
-    MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("x/filter_a.pbascii");
-    scratch.file("x/filter_b.pbascii");
     scratch.file(
         "protos/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
-        "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "    name = 'protos_1',",
         "    srcs = ['data_a.proto', 'data_b.proto'],",
@@ -370,13 +362,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
    *     this deduping test is applicable for either
    */
   private void checkProtoDedupingDepsPartial(BinaryType depBinaryType) throws Exception {
-    MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("x/filter_a.pbascii");
-    scratch.file("x/filter_b.pbascii");
     scratch.file(
         "protos/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
-        "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "    name = 'protos_1',",
         "    srcs = ['data_a.proto', 'data_b.proto'],",
@@ -506,13 +493,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
    *     this deduping test is applicable for either
    */
   private void checkProtoDisjointDeps(BinaryType depBinaryType) throws Exception {
-    MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("x/filter_a.pbascii");
-    scratch.file("x/filter_b.pbascii");
     scratch.file(
         "protos/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
-        "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "proto_library(",
         "    name = 'protos_main',",
         "    srcs = ['data_a.proto', 'data_b.proto'],",
@@ -1014,13 +996,23 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   }
 
   @Test
+  public void testFrameworkDepLinkFlagsPreCleanup() throws Exception {
+    checkFrameworkDepLinkFlags(getRuleType(), new ExtraLinkArgs(), false);
+  }
+
+  @Test
   public void testFrameworkDepLinkFlagsPostCleanup() throws Exception {
-    checkFrameworkDepLinkFlags(getRuleType(), new ExtraLinkArgs());
+    checkFrameworkDepLinkFlags(getRuleType(), new ExtraLinkArgs(), true);
+  }
+
+  @Test
+  public void testDylibDependenciesPreCleanup() throws Exception {
+    checkDylibDependencies(getRuleType(), new ExtraLinkArgs(), false);
   }
 
   @Test
   public void testDylibDependenciesPostCleanup() throws Exception {
-    checkDylibDependencies(getRuleType(), new ExtraLinkArgs());
+    checkDylibDependencies(getRuleType(), new ExtraLinkArgs(), true);
   }
 
   @Test
@@ -1050,12 +1042,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testGenfilesProtoGetsCorrectPath() throws Exception {
-    MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("x/filter.pbascii");
     scratch.file(
         "examples/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
-        "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "package(default_visibility = ['//visibility:public'])",
         "apple_binary(",
         "    name = 'bin',",
@@ -1110,12 +1098,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testDifferingProtoDepsPerArchitecture() throws Exception {
-    MockObjcSupport.setupObjcProtoLibrary(scratch);
-    scratch.file("x/filter.pbascii");
     scratch.file(
         "examples/BUILD",
-        TestConstants.LOAD_PROTO_LIBRARY,
-        "load('//objc_proto_library:objc_proto_library.bzl', 'objc_proto_library')",
         "package(default_visibility = ['//visibility:public'])",
         "apple_binary(",
         "    name = 'bin',",
@@ -1532,6 +1516,33 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   @Test
   public void testMinimumOsDifferentTargets() throws Exception {
     checkMinimumOsDifferentTargets(getRuleType(), "_lipobin", "_bin");
+  }
+
+  @Test
+  public void testMacosFrameworkDirectories() throws Exception {
+    scratch.file(
+        "test/BUILD",
+        "apple_binary(",
+        "    name = 'test',",
+        "    deps = [':lib'],",
+        "    platform_type = 'macos',",
+        ")",
+        "objc_library(",
+        "    name = 'lib',",
+        "    srcs = ['a.m'],",
+        ")");
+
+    CommandAction linkAction = linkAction("//test:test");
+    ImmutableList<String> expectedCommandLineFragments =
+        ImmutableList.<String>builder()
+            .add(AppleToolchain.sdkDir() + AppleToolchain.SYSTEM_FRAMEWORK_PATH)
+            .add(frameworkDir(ApplePlatform.forTarget(PlatformType.MACOS, "x86_64")))
+            .build();
+
+    String linkArgs = Joiner.on(" ").join(linkAction.getArguments());
+    for (String expectedCommandLineFragment : expectedCommandLineFragments) {
+      assertThat(linkArgs).contains(expectedCommandLineFragment);
+    }
   }
 
   @Test
