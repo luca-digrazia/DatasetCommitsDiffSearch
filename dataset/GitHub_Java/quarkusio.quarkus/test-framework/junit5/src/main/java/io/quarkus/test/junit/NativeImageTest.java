@@ -9,7 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
  * Annotation that indicates that this test should be run using a native image,
- * rather than in the JVM. This must also be combined with {@link QuarkusTestExtension}.
+ * rather than in the JVM.
  *
  * The standard usage pattern is expected to be a base test class that runs the
  * tests using the JVM version of Quarkus, with a subclass that extends the base
@@ -20,10 +20,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * run, it is expected that the JVM tests will be standard unit tests that are
  * executed by surefire, while the native image tests will be integration tests
  * executed by failsafe.
+ * This also means that injection of beans into a test class using {@code @Inject} is not supported
+ * in native image tests. Such injection is only possible in tests injected with
+ * {@link @QuarkusTest} so the test class structure must take this into account.
  *
  */
 @Target(ElementType.TYPE)
-@ExtendWith({ QuarkusTestExtension.class, DisabledOnNativeImageCondition.class })
+@ExtendWith({ DisabledOnNativeImageCondition.class, QuarkusTestExtension.class, NativeTestExtension.class })
 @Retention(RetentionPolicy.RUNTIME)
 public @interface NativeImageTest {
 }

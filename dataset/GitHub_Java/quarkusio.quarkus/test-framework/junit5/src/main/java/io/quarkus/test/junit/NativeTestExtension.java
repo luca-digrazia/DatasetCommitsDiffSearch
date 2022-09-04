@@ -53,7 +53,6 @@ public class NativeTestExtension
         if (state == null) {
             TestResourceManager testResourceManager = new TestResourceManager(extensionContext.getRequiredTestClass());
             try {
-                testResourceManager.init();
                 Map<String, String> systemProps = testResourceManager.start();
                 NativeImageLauncher launcher = new NativeImageLauncher(extensionContext.getRequiredTestClass());
                 launcher.addSystemProperties(systemProps);
@@ -71,7 +70,7 @@ public class NativeTestExtension
             } catch (Exception e) {
 
                 failedBoot = true;
-                throw new JUnitException("Quarkus native image start failed, original cause: " + e, e);
+                throw new JUnitException("Quarkus native image start failed, original cause: " + e);
             }
         }
     }
@@ -114,7 +113,7 @@ public class NativeTestExtension
 
         @Override
         public void close() throws Throwable {
-            testResourceManager.close();
+            testResourceManager.stop();
             resource.close();
         }
     }
