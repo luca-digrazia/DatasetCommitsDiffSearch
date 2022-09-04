@@ -59,9 +59,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Tiles are no larger than the max supported bitmap size, so with large images tiling may be used even when zoomed out.
  * </p><p>
  * v prefixes - coordinates, translations and distances measured in screen (view) pixels
- * <br>
+ * <br/>
  * s prefixes - coordinates, translations and distances measured in rotated and cropped source image pixels (scaled)
- * <br>
+ * <br/>
  * f prefixes - coordinates, translations and distances measured in original unrotated, uncropped source file pixels
  * </p><p>
  * <a href="https://github.com/davemorrissey/subsampling-scale-image-view">View project on GitHub</a>
@@ -170,7 +170,7 @@ public class SubsamplingScaleImageView extends View {
     private int minimumScaleType = SCALE_TYPE_CENTER_INSIDE;
 
     // overrides for the dimensions of the generated tiles
-    public static final int TILE_SIZE_AUTO = Integer.MAX_VALUE;
+    public static int TILE_SIZE_AUTO = Integer.MAX_VALUE;
     private int maxTileWidth = TILE_SIZE_AUTO;
     private int maxTileHeight = TILE_SIZE_AUTO;
 
@@ -260,7 +260,7 @@ public class SubsamplingScaleImageView extends View {
     private OnLongClickListener onLongClickListener;
 
     // Long click handler
-    private final Handler handler;
+    private Handler handler;
     private static final int MESSAGE_LONG_CLICK = 1;
 
     // Paint objects created once and reused for efficiency
@@ -273,11 +273,11 @@ public class SubsamplingScaleImageView extends View {
     private ScaleAndTranslate satTemp;
     private Matrix matrix;
     private RectF sRect;
-    private final float[] srcArray = new float[8];
-    private final float[] dstArray = new float[8];
+    private float[] srcArray = new float[8];
+    private float[] dstArray = new float[8];
 
     //The logical density of the display
-    private final float density;
+    private float density;
 
     // A global preference for bitmap format, available to decoder classes that respect it
     private static Bitmap.Config preferredBitmapConfig;
@@ -1913,7 +1913,7 @@ public class SubsamplingScaleImageView extends View {
             this.vTranslate = vTranslate;
         }
         private float scale;
-        private final PointF vTranslate;
+        private PointF vTranslate;
     }
 
     /**
