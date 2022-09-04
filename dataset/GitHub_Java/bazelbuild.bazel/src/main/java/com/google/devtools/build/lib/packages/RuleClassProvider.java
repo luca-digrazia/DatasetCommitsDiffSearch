@@ -52,11 +52,13 @@ public interface RuleClassProvider extends RuleDefinitionContext {
    *
    * @param thread StarlarkThread in which to store the context.
    * @param label the label of the .bzl file
+   * @param transitiveDigest digest of the .bzl file and those it transitively loads
    * @param repoMapping map of RepositoryNames to be remapped
    */
   void setStarlarkThreadContext(
       StarlarkThread thread,
       Label label,
+      byte[] transitiveDigest,
       ImmutableMap<RepositoryName, RepositoryName> repoMapping);
 
   /**
