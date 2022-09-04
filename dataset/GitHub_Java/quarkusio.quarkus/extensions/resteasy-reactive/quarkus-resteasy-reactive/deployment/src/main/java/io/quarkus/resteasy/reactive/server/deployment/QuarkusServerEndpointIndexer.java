@@ -3,7 +3,10 @@ package io.quarkus.resteasy.reactive.server.deployment;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.STRING;
 
 import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -11,7 +14,6 @@ import java.util.function.Predicate;
 
 import javax.ws.rs.core.MediaType;
 
-import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
@@ -39,7 +41,6 @@ import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
@@ -51,15 +52,14 @@ public class QuarkusServerEndpointIndexer
     private final BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformerBuildProducer;
     private final BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer;
     private final DefaultProducesHandler defaultProducesHandler;
-    private final ResteasyReactiveRecorder resteasyReactiveRecorder;
 
     private final Map<String, String> multipartGeneratedPopulators = new HashMap<>();
     private final Predicate<String> applicationClassPredicate;
 
-    private static final Set<DotName> CONTEXT_TYPES = Set.of(
+    private static final Set<DotName> CONTEXT_TYPES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             DotName.createSimple(HttpServerRequest.class.getName()),
             DotName.createSimple(HttpServerResponse.class.getName()),
-            DotName.createSimple(RoutingContext.class.getName()));
+            DotName.createSimple(RoutingContext.class.getName()))));
 
     QuarkusServerEndpointIndexer(Builder builder) {
         super(builder);
@@ -69,7 +69,6 @@ public class QuarkusServerEndpointIndexer
         this.reflectiveClassProducer = builder.reflectiveClassProducer;
         this.defaultProducesHandler = builder.defaultProducesHandler;
         this.applicationClassPredicate = builder.applicationClassPredicate;
-        this.resteasyReactiveRecorder = builder.resteasyReactiveRecorder;
     }
 
     protected boolean isContextType(ClassType klass) {
@@ -102,14 +101,6 @@ public class QuarkusServerEndpointIndexer
             return result;
         }
         return super.applyAdditionalDefaults(nonAsyncReturnType);
-    }
-
-    @Override
-    protected boolean handleCustomParameter(Map<DotName, AnnotationInstance> anns, ServerIndexedParameter builder,
-            Type paramType, boolean field, Map<String, Object> methodContext) {
-        methodContext.put(GeneratedClassBuildItem.class.getName(), generatedClassBuildItemBuildProducer);
-        methodContext.put(ResteasyReactiveRecorder.class.getName(), resteasyReactiveRecorder);
-        return super.handleCustomParameter(anns, builder, paramType, field, methodContext);
     }
 
     @Override
@@ -257,7 +248,6 @@ public class QuarkusServerEndpointIndexer
         private BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer;
         private BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformerBuildProducer;
         private BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer;
-        private ResteasyReactiveRecorder resteasyReactiveRecorder;
         private MethodCreator initConverters;
         private DefaultProducesHandler defaultProducesHandler = DefaultProducesHandler.Noop.INSTANCE;
         public Predicate<String> applicationClassPredicate;
@@ -296,11 +286,6 @@ public class QuarkusServerEndpointIndexer
 
         public Builder setInitConverters(MethodCreator initConverters) {
             this.initConverters = initConverters;
-            return this;
-        }
-
-        public Builder setResteasyReactiveRecorder(ResteasyReactiveRecorder resteasyReactiveRecorder) {
-            this.resteasyReactiveRecorder = resteasyReactiveRecorder;
             return this;
         }
 
