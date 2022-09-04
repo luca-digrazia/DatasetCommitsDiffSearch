@@ -16,7 +16,7 @@
  */
 package org.graylog2.indexer.counts;
 
-import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.count.CountRequest;
 import org.elasticsearch.client.Client;
 import org.graylog2.indexer.Deflector;
 
@@ -35,9 +35,7 @@ public class Counts {
     }
 
     public long total() {
-        final SearchRequest request = c.prepareSearch(deflector.getAllDeflectorIndexNames())
-                .setSize(0)
-                .request();
-        return c.search(request).actionGet().getHits().totalHits();
+        return c.count(new CountRequest(deflector.getAllDeflectorIndexNames())).actionGet().getCount();
     }
+
 }

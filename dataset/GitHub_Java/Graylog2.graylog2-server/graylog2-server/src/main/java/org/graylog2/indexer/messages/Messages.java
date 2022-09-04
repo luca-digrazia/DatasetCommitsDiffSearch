@@ -98,12 +98,13 @@ public class Messages {
 
         final BulkRequestBuilder request = c.prepareBulk();
         for (Message msg : messages) {
-            request.add(buildIndexRequest(Deflector.buildName(configuration.getIndexPrefix()),
+            request.add(buildIndexRequest(configuration.getIndexPrefix() + "_" + Deflector.DEFLECTOR_SUFFIX,
                                           msg.toElasticSearchObject(),
                                           msg.getId())); // Main index.
         }
 
         request.setConsistencyLevel(WriteConsistencyLevel.ONE);
+        request.setReplicationType(ReplicationType.ASYNC);
 
         final BulkResponse response = c.bulk(request.request()).actionGet();
 

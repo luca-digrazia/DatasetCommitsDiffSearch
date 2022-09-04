@@ -28,7 +28,7 @@ import org.elasticsearch.action.admin.cluster.tasks.PendingClusterTasksResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.ClusterAdminClient;
 import org.elasticsearch.cluster.service.PendingClusterTask;
-import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.indices.Indices;
 
 import javax.inject.Inject;
 import java.util.List;
@@ -36,12 +36,12 @@ import java.util.List;
 @Singleton
 public class ElasticsearchProbe {
     private final Client client;
-    private final IndexSetRegistry indexSetRegistry;
+    private final Indices indices;
 
     @Inject
-    public ElasticsearchProbe(Client client, IndexSetRegistry indexSetRegistry) {
+    public ElasticsearchProbe(Client client, Indices indices) {
         this.client = client;
-        this.indexSetRegistry = indexSetRegistry;
+        this.indices = indices;
     }
 
     public ElasticsearchStats elasticsearchStats() {
@@ -62,7 +62,8 @@ public class ElasticsearchProbe {
         final IndicesStats indicesStats = IndicesStats.create(
                 clusterStatsResponse.getIndicesStats().getIndexCount(),
                 clusterStatsResponse.getIndicesStats().getStore().sizeInBytes(),
-                clusterStatsResponse.getIndicesStats().getFieldData().getMemorySizeInBytes()
+                clusterStatsResponse.getIndicesStats().getFieldData().getMemorySizeInBytes(),
+                clusterStatsResponse.getIndicesStats().getIdCache().getMemorySizeInBytes()
         );
 
         final PendingClusterTasksResponse pendingClusterTasksResponse = adminClient.pendingClusterTasks(new PendingClusterTasksRequest()).actionGet();
@@ -72,7 +73,7 @@ public class ElasticsearchProbe {
             pendingTasksTimeInQueue.add(pendingClusterTask.getTimeInQueueInMillis());
         }
 
-        final ClusterHealthResponse clusterHealthResponse = adminClient.health(new ClusterHealthRequest(indexSetRegistry.getIndexWildcards())).actionGet();
+        final ClusterHealthResponse clusterHealthResponse = adminClient.health(new ClusterHealthRequest(indices.allIndicesAlias())).actionGet();
         final ClusterHealth clusterHealth = ClusterHealth.create(
                 clusterHealthResponse.getNumberOfNodes(),
                 clusterHealthResponse.getNumberOfDataNodes(),

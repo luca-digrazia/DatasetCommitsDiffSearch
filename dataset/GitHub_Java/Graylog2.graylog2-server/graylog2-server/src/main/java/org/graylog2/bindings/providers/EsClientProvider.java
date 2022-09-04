@@ -16,6 +16,7 @@
  */
 package org.graylog2.bindings.providers;
 
+import com.codahale.metrics.MetricRegistry;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.node.Node;
 
@@ -23,16 +24,20 @@ import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
 
-@Singleton
+import static com.google.common.base.Preconditions.checkNotNull;
+
 public class EsClientProvider implements Provider<Client> {
     private final Node node;
+    private final MetricRegistry metricRegistry;
 
     @Inject
-    public EsClientProvider(Node node) {
+    public EsClientProvider(Node node, MetricRegistry metricRegistry) {
         this.node = node;
+        this.metricRegistry = checkNotNull(metricRegistry);
     }
 
     @Override
+    @Singleton
     public Client get() {
         return node.client();
     }
