@@ -158,15 +158,11 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   /** Types of android manifest mergers. */
   public enum AndroidManifestMerger {
     LEGACY,
-    ANDROID,
-    FORCE_ANDROID;
+    ANDROID;
 
     public static List<String> getAttributeValues() {
       return ImmutableList.of(
-          LEGACY.name().toLowerCase(),
-          ANDROID.name().toLowerCase(),
-          FORCE_ANDROID.name().toLowerCase(),
-          getRuleAttributeDefault());
+          LEGACY.name().toLowerCase(), ANDROID.name().toLowerCase(), getRuleAttributeDefault());
     }
 
     public static String getRuleAttributeDefault() {
