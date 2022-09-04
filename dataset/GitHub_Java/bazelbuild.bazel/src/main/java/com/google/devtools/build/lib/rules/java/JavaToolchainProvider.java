@@ -23,19 +23,19 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.ProviderCollection;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.java.JavaToolchainStarlarkApiProviderApi;
-import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaToolchainSkylarkApiProviderApi;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import java.util.Iterator;
@@ -45,13 +45,12 @@ import javax.annotation.Nullable;
 @Immutable
 @AutoCodec
 public class JavaToolchainProvider extends ToolchainInfo
-    implements JavaToolchainStarlarkApiProviderApi {
+    implements JavaToolchainSkylarkApiProviderApi {
 
   /** Returns the Java Toolchain associated with the rule being analyzed or {@code null}. */
   public static JavaToolchainProvider from(RuleContext ruleContext) {
     TransitiveInfoCollection prerequisite =
-        ruleContext.getPrerequisite(
-            JavaRuleClasses.JAVA_TOOLCHAIN_ATTRIBUTE_NAME, TransitionMode.TARGET);
+        ruleContext.getPrerequisite(JavaRuleClasses.JAVA_TOOLCHAIN_ATTRIBUTE_NAME, Mode.TARGET);
     return from(prerequisite, ruleContext);
   }
 
@@ -78,7 +77,7 @@ public class JavaToolchainProvider extends ToolchainInfo
       ImmutableList<String> javabuilderJvmOptions,
       ImmutableList<String> turbineJvmOptions,
       boolean javacSupportsWorkers,
-      BootClassPathInfo bootclasspath,
+      NestedSet<Artifact> bootclasspath,
       @Nullable Artifact javac,
       NestedSet<Artifact> tools,
       FilesToRunProvider javaBuilder,
@@ -91,7 +90,7 @@ public class JavaToolchainProvider extends ToolchainInfo
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
       @Nullable Artifact oneVersion,
-      @Nullable Artifact oneVersionAllowlist,
+      @Nullable Artifact oneVersionWhitelist,
       Artifact genClass,
       @Nullable Artifact resourceJarBuilder,
       @Nullable Artifact timezoneData,
@@ -115,7 +114,7 @@ public class JavaToolchainProvider extends ToolchainInfo
         forciblyDisableHeaderCompilation,
         singleJar,
         oneVersion,
-        oneVersionAllowlist,
+        oneVersionWhitelist,
         genClass,
         resourceJarBuilder,
         timezoneData,
@@ -132,7 +131,7 @@ public class JavaToolchainProvider extends ToolchainInfo
   }
 
   private final Label label;
-  private final BootClassPathInfo bootclasspath;
+  private final NestedSet<Artifact> bootclasspath;
   @Nullable private final Artifact javac;
   private final NestedSet<Artifact> tools;
   private final FilesToRunProvider javaBuilder;
@@ -145,7 +144,7 @@ public class JavaToolchainProvider extends ToolchainInfo
   private final boolean forciblyDisableHeaderCompilation;
   private final Artifact singleJar;
   @Nullable private final Artifact oneVersion;
-  @Nullable private final Artifact oneVersionAllowlist;
+  @Nullable private final Artifact oneVersionWhitelist;
   private final Artifact genClass;
   @Nullable private final Artifact resourceJarBuilder;
   @Nullable private final Artifact timezoneData;
@@ -163,7 +162,7 @@ public class JavaToolchainProvider extends ToolchainInfo
   @VisibleForSerialization
   JavaToolchainProvider(
       Label label,
-      BootClassPathInfo bootclasspath,
+      NestedSet<Artifact> bootclasspath,
       @Nullable Artifact javac,
       NestedSet<Artifact> tools,
       FilesToRunProvider javaBuilder,
@@ -176,7 +175,7 @@ public class JavaToolchainProvider extends ToolchainInfo
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
       @Nullable Artifact oneVersion,
-      @Nullable Artifact oneVersionAllowlist,
+      @Nullable Artifact oneVersionWhitelist,
       Artifact genClass,
       @Nullable Artifact resourceJarBuilder,
       @Nullable Artifact timezoneData,
@@ -206,7 +205,7 @@ public class JavaToolchainProvider extends ToolchainInfo
     this.forciblyDisableHeaderCompilation = forciblyDisableHeaderCompilation;
     this.singleJar = singleJar;
     this.oneVersion = oneVersion;
-    this.oneVersionAllowlist = oneVersionAllowlist;
+    this.oneVersionWhitelist = oneVersionWhitelist;
     this.genClass = genClass;
     this.resourceJarBuilder = resourceJarBuilder;
     this.timezoneData = timezoneData;
@@ -228,7 +227,7 @@ public class JavaToolchainProvider extends ToolchainInfo
   }
 
   /** @return the target Java bootclasspath */
-  public BootClassPathInfo getBootclasspath() {
+  public NestedSet<Artifact> getBootclasspath() {
     return bootclasspath;
   }
 
@@ -289,7 +288,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   }
 
   /** Returns the {@link Artifact} of the SingleJar deploy jar */
-  @Override
   public Artifact getSingleJar() {
     return singleJar;
   }
@@ -303,16 +301,10 @@ public class JavaToolchainProvider extends ToolchainInfo
     return oneVersion;
   }
 
-  /** Return the {@link Artifact} of the allowlist used by the one-version compliance checker. */
-  @Nullable
-  public Artifact getOneVersionAllowlist() {
-    return oneVersionAllowlist;
-  }
-
-  /** Return the {@link Artifact} of the allowlist used by the one-version compliance checker. */
+  /** Return the {@link Artifact} of the whitelist used by the one-version compliance checker. */
   @Nullable
   public Artifact getOneVersionWhitelist() {
-    return oneVersionAllowlist;
+    return oneVersionWhitelist;
   }
 
   /** Returns the {@link Artifact} of the GenClass deploy jar */
@@ -426,17 +418,17 @@ public class JavaToolchainProvider extends ToolchainInfo
   }
 
   @Override
-  public Depset getStarlarkBootclasspath() {
-    return Depset.of(Artifact.TYPE, getBootclasspath().bootclasspath());
+  public Depset getSkylarkBootclasspath() {
+    return Depset.of(Artifact.TYPE, getBootclasspath());
   }
 
   @Override
-  public Sequence<String> getStarlarkJvmOptions() {
+  public Sequence<String> getSkylarkJvmOptions() {
     return StarlarkList.immutableCopyOf(getJvmOptions());
   }
 
   @Override
-  public Depset getStarlarkTools() {
+  public Depset getSkylarkTools() {
     return Depset.of(Artifact.TYPE, getTools());
   }
 }

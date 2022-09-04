@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -36,6 +35,7 @@ import com.google.devtools.build.lib.analysis.actions.LazyWritePathsFileAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.StrictDepsMode;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -281,23 +281,8 @@ public final class JavaCompilationHelper {
     builder.setTargetLabel(label);
     Artifact coverageArtifact = maybeCreateCoverageArtifact(outputs.output());
     builder.setCoverageArtifact(coverageArtifact);
-    BootClassPathInfo bootClassPathInfo = getBootclasspathOrDefault();
-    builder.setBootClassPath(bootClassPathInfo);
-    if (!bootClassPathInfo.auxiliary().isEmpty()) {
-      builder.setClasspathEntries(
-          NestedSetBuilder.<Artifact>naiveLinkOrder()
-              .addTransitive(bootClassPathInfo.auxiliary())
-              .addTransitive(attributes.getCompileTimeClassPath())
-              .build());
-      builder.setDirectJars(
-          NestedSetBuilder.<Artifact>naiveLinkOrder()
-              .addTransitive(bootClassPathInfo.auxiliary())
-              .addTransitive(attributes.getDirectJars())
-              .build());
-    } else {
-      builder.setClasspathEntries(attributes.getCompileTimeClassPath());
-      builder.setDirectJars(attributes.getDirectJars());
-    }
+    builder.setClasspathEntries(attributes.getCompileTimeClassPath());
+    builder.setBootclasspathEntries(getBootclasspathOrDefault());
     builder.setSourcePathEntries(attributes.getSourcePath());
     builder.setToolsJars(javaToolchain.getTools());
     builder.setJavaBuilder(javaToolchain.getJavaBuilder());
@@ -331,6 +316,7 @@ public final class JavaCompilationHelper {
     builder.setExtraData(JavaCommon.computePerPackageData(ruleContext, javaToolchain));
     builder.setStrictJavaDeps(attributes.getStrictJavaDeps());
     builder.setFixDepsTool(getJavaConfiguration().getFixDepsTool());
+    builder.setDirectJars(attributes.getDirectJars());
     builder.setCompileTimeDependencyArtifacts(attributes.getCompileTimeDependencyArtifacts());
     builder.setTargetLabel(
         attributes.getTargetLabel() == null ? label : attributes.getTargetLabel());
@@ -379,12 +365,12 @@ public final class JavaCompilationHelper {
   }
 
   /** Returns the bootclasspath explicit set in attributes if present, or else the default. */
-  public BootClassPathInfo getBootclasspathOrDefault() {
+  public NestedSet<Artifact> getBootclasspathOrDefault() {
     JavaTargetAttributes attributes = getAttributes();
     if (!attributes.getBootClassPath().isEmpty()) {
       return attributes.getBootClassPath();
     } else {
-      return javaToolchain.getBootclasspath();
+      return getBootClasspath(javaToolchain);
     }
   }
 
@@ -509,7 +495,7 @@ public final class JavaCompilationHelper {
     builder.setSourceFiles(attributes.getSourceFiles());
     builder.setSourceJars(attributes.getSourceJars());
     builder.setClasspathEntries(attributes.getCompileTimeClassPath());
-    builder.setBootclasspathEntries(getBootclasspathOrDefault().bootclasspath());
+    builder.setBootclasspathEntries(getBootclasspathOrDefault());
     // Exclude any per-package configured data (see JavaCommon.computePerPackageData).
     // It is used to allow Error Prone checks to load additional data,
     // and Error Prone doesn't run during header compilation.
@@ -574,7 +560,7 @@ public final class JavaCompilationHelper {
     if (genClass != null) {
       return genClass;
     }
-    return ruleContext.getPrerequisiteArtifact("$genclass", TransitionMode.HOST);
+    return ruleContext.getPrerequisiteArtifact("$genclass", Mode.HOST);
   }
 
   /**
@@ -848,7 +834,7 @@ public final class JavaCompilationHelper {
   /**
    * Returns the javac bootclasspath artifacts from the given toolchain (if it has any) or the rule.
    */
-  public static BootClassPathInfo getBootClasspath(JavaToolchainProvider javaToolchain) {
+  public static NestedSet<Artifact> getBootClasspath(JavaToolchainProvider javaToolchain) {
     return javaToolchain.getBootclasspath();
   }
 

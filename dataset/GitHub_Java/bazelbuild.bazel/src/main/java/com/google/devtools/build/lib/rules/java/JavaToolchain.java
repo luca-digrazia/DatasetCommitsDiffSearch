@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.java;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static com.google.common.collect.Iterables.getOnlyElement;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableCollection;
@@ -33,8 +32,8 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -58,18 +57,17 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
       throws InterruptedException, RuleErrorException, ActionConflictException {
     JavaCommon.checkRuleLoadedThroughMacro(ruleContext);
     ImmutableList<String> javacopts = getJavacOpts(ruleContext);
-    BootClassPathInfo bootclasspath = getBootClassPathInfo(ruleContext);
+    NestedSet<Artifact> bootclasspath =
+        PrerequisiteArtifacts.nestedSet(ruleContext, "bootclasspath", Mode.HOST);
     boolean javacSupportsWorkers =
         ruleContext.attributes().get("javac_supports_workers", Type.BOOLEAN);
-    boolean javacSupportsMultiplexWorkers =
-        ruleContext.attributes().get("javac_supports_multiplex_workers", Type.BOOLEAN);
-    Artifact javac = ruleContext.getPrerequisiteArtifact("javac", TransitionMode.HOST);
+    Artifact javac = ruleContext.getPrerequisiteArtifact("javac", Mode.HOST);
     FilesToRunProvider javabuilder =
-        ruleContext.getExecutablePrerequisite("javabuilder", TransitionMode.HOST);
+        ruleContext.getExecutablePrerequisite("javabuilder", Mode.HOST);
     FilesToRunProvider headerCompiler =
-        ruleContext.getExecutablePrerequisite("header_compiler", TransitionMode.HOST);
+        ruleContext.getExecutablePrerequisite("header_compiler", Mode.HOST);
     FilesToRunProvider headerCompilerDirect =
-        ruleContext.getExecutablePrerequisite("header_compiler_direct", TransitionMode.HOST);
+        ruleContext.getExecutablePrerequisite("header_compiler_direct", Mode.HOST);
     ImmutableSet<String> headerCompilerBuiltinProcessors =
         ImmutableSet.copyOf(
             ruleContext.attributes().get("header_compiler_builtin_processors", Type.STRING_LIST));
@@ -88,26 +86,23 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             ruleContext.attributes().get("turbine_incompatible_processors", Type.STRING_LIST));
     boolean forciblyDisableHeaderCompilation =
         ruleContext.attributes().get("forcibly_disable_header_compilation", Type.BOOLEAN);
-    Artifact singleJar = ruleContext.getPrerequisiteArtifact("singlejar", TransitionMode.HOST);
-    Artifact oneVersion = ruleContext.getPrerequisiteArtifact("oneversion", TransitionMode.HOST);
-    Artifact oneVersionAllowlist =
-        ruleContext.getPrerequisiteArtifact("oneversion_whitelist", TransitionMode.HOST);
-    Artifact genClass = ruleContext.getPrerequisiteArtifact("genclass", TransitionMode.HOST);
-    Artifact resourceJarBuilder =
-        ruleContext.getPrerequisiteArtifact("resourcejar", TransitionMode.HOST);
-    Artifact timezoneData =
-        ruleContext.getPrerequisiteArtifact("timezone_data", TransitionMode.HOST);
-    FilesToRunProvider ijar = ruleContext.getExecutablePrerequisite("ijar", TransitionMode.HOST);
+    Artifact singleJar = ruleContext.getPrerequisiteArtifact("singlejar", Mode.HOST);
+    Artifact oneVersion = ruleContext.getPrerequisiteArtifact("oneversion", Mode.HOST);
+    Artifact oneVersionWhitelist =
+        ruleContext.getPrerequisiteArtifact("oneversion_whitelist", Mode.HOST);
+    Artifact genClass = ruleContext.getPrerequisiteArtifact("genclass", Mode.HOST);
+    Artifact resourceJarBuilder = ruleContext.getPrerequisiteArtifact("resourcejar", Mode.HOST);
+    Artifact timezoneData = ruleContext.getPrerequisiteArtifact("timezone_data", Mode.HOST);
+    FilesToRunProvider ijar = ruleContext.getExecutablePrerequisite("ijar", Mode.HOST);
     ImmutableListMultimap<String, String> compatibleJavacOptions =
         getCompatibleJavacOptions(ruleContext);
 
-    NestedSet<Artifact> tools =
-        PrerequisiteArtifacts.nestedSet(ruleContext, "tools", TransitionMode.HOST);
+    NestedSet<Artifact> tools = PrerequisiteArtifacts.nestedSet(ruleContext, "tools", Mode.HOST);
     if (javac != null) {
       tools = NestedSetBuilder.fromNestedSet(tools).add(javac).build();
     }
 
-    TransitiveInfoCollection javacDep = ruleContext.getPrerequisite("javac", TransitionMode.HOST);
+    TransitiveInfoCollection javacDep = ruleContext.getPrerequisite("javac", Mode.HOST);
 
     ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> locationsBuilder =
         ImmutableMap.builder();
@@ -131,12 +126,10 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
     ImmutableList<JavaPackageConfigurationProvider> packageConfiguration =
         ImmutableList.copyOf(
             ruleContext.getPrerequisites(
-                "package_configuration",
-                TransitionMode.HOST,
-                JavaPackageConfigurationProvider.class));
+                "package_configuration", Mode.HOST, JavaPackageConfigurationProvider.class));
 
     FilesToRunProvider jacocoRunner =
-        ruleContext.getExecutablePrerequisite("jacocorunner", TransitionMode.HOST);
+        ruleContext.getExecutablePrerequisite("jacocorunner", Mode.HOST);
 
     JavaToolchainProvider provider =
         JavaToolchainProvider.create(
@@ -146,7 +139,6 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             javabuilderJvmOpts,
             turbineJvmOpts,
             javacSupportsWorkers,
-            javacSupportsMultiplexWorkers,
             bootclasspath,
             javac,
             tools,
@@ -160,7 +152,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             forciblyDisableHeaderCompilation,
             singleJar,
             oneVersion,
-            oneVersionAllowlist,
+            oneVersionWhitelist,
             genClass,
             resourceJarBuilder,
             timezoneData,
@@ -171,7 +163,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             semantics);
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
-            .addStarlarkTransitiveInfo(JavaToolchainProvider.LEGACY_NAME, provider)
+            .addSkylarkTransitiveInfo(JavaToolchainProvider.LEGACY_NAME, provider)
             .addNativeDeclaredProvider(provider)
             .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY))
             .setFilesToBuild(new NestedSetBuilder<Artifact>(Order.STABLE_ORDER).build());
@@ -213,20 +205,5 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
       ImmutableMap<Label, ImmutableCollection<Artifact>> locations,
       String attribute) {
     return ruleContext.getExpander().withExecLocations(locations).list(attribute);
-  }
-
-  private static BootClassPathInfo getBootClassPathInfo(RuleContext ruleContext) {
-    List<BootClassPathInfo> bootClassPathInfos =
-        ruleContext.getPrerequisites(
-            "bootclasspath", TransitionMode.TARGET, BootClassPathInfo.PROVIDER);
-    if (!bootClassPathInfos.isEmpty()) {
-      if (bootClassPathInfos.size() != 1) {
-        ruleContext.attributeError(
-            "bootclasspath", "expected at most one entry with a BootClassPathInfo provider");
-      }
-      return getOnlyElement(bootClassPathInfos);
-    }
-    return BootClassPathInfo.create(
-        PrerequisiteArtifacts.nestedSet(ruleContext, "bootclasspath", TransitionMode.TARGET));
   }
 }

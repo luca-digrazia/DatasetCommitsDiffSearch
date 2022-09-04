@@ -48,7 +48,10 @@ import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPlugi
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
@@ -147,12 +150,13 @@ public final class JavaCompileActionBuilder {
   private NestedSet<Artifact> directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
   private NestedSet<Artifact> compileTimeDependencyArtifacts =
       NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-  private ImmutableList<String> javacOpts = ImmutableList.of();
+  private List<String> javacOpts = new ArrayList<>();
   private ImmutableList<String> javacJvmOpts = ImmutableList.of();
   private ImmutableMap<String, String> executionInfo = ImmutableMap.of();
   private boolean compressJar;
   private NestedSet<Artifact> classpathEntries = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
-  private BootClassPathInfo bootClassPath = BootClassPathInfo.empty();
+  private NestedSet<Artifact> bootclasspathEntries =
+      NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
   private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
   private FilesToRunProvider javaBuilder;
   private NestedSet<Artifact> toolsJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
@@ -235,17 +239,17 @@ public final class JavaCompileActionBuilder {
         .addAll(sourceJars)
         .addAll(sourceFiles)
         .addTransitive(javabaseInputs)
-        .addTransitive(bootClassPath.bootclasspath())
+        .addTransitive(bootclasspathEntries)
         .addAll(sourcePathEntries);
-    Stream.of(coverageArtifact, bootClassPath.system())
-        .filter(x -> x != null)
-        .forEachOrdered(mandatoryInputs::add);
+    if (coverageArtifact != null) {
+      mandatoryInputs.add(coverageArtifact);
+    }
 
     JavaCompileExtraActionInfoSupplier extraActionInfoSupplier =
         new JavaCompileExtraActionInfoSupplier(
             outputs.output(),
             classpathEntries,
-            bootClassPath.bootclasspath(),
+            bootclasspathEntries,
             plugins.processorClasspath(),
             plugins.processorClasses(),
             sourceJars,
@@ -309,7 +313,9 @@ public final class JavaCompileActionBuilder {
     return result.build();
   }
 
-  private CustomCommandLine buildParamFileContents(ImmutableList<String> javacOpts) {
+  private CustomCommandLine buildParamFileContents(Collection<String> javacOpts) {
+    checkNotNull(classDirectory, "classDirectory should not be null");
+    checkNotNull(tempDirectory, "tempDirectory should not be null");
 
     CustomCommandLine.Builder result = CustomCommandLine.builder();
 
@@ -324,8 +330,7 @@ public final class JavaCompileActionBuilder {
       result.add("--compress_jar");
     }
     result.addExecPath("--output_deps_proto", outputs.depsProto());
-    result.addExecPaths("--bootclasspath", bootClassPath.bootclasspath());
-    result.addExecPath("--system", bootClassPath.system());
+    result.addExecPaths("--bootclasspath", bootclasspathEntries);
     result.addExecPaths("--sourcepath", sourcePathEntries);
     result.addExecPaths("--processorpath", plugins.processorClasspath());
     result.addAll("--processors", plugins.processorClasses());
@@ -335,7 +340,7 @@ public final class JavaCompileActionBuilder {
     result.addExecPaths("--source_jars", ImmutableList.copyOf(sourceJars));
     result.addExecPaths("--sources", sourceFiles);
     if (!javacOpts.isEmpty()) {
-      result.addAll("--javacopts", javacOpts);
+      result.addAll("--javacopts", ImmutableList.copyOf(javacOpts));
       // terminate --javacopts with `--` to support javac flags that start with `--`
       result.add("--");
     }
@@ -450,8 +455,9 @@ public final class JavaCompileActionBuilder {
     return this;
   }
 
-  public JavaCompileActionBuilder setBootClassPath(BootClassPathInfo bootClassPath) {
-    this.bootClassPath = bootClassPath;
+  public JavaCompileActionBuilder setBootclasspathEntries(
+      NestedSet<Artifact> bootclasspathEntries) {
+    this.bootclasspathEntries = bootclasspathEntries;
     return this;
   }
 
