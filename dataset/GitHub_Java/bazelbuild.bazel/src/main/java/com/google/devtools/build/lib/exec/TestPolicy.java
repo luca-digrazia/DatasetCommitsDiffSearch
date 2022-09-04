@@ -14,9 +14,10 @@
 package com.google.devtools.build.lib.exec;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.rules.test.TestRunnerAction;
+import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
 import com.google.devtools.build.lib.util.UserUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,6 +40,8 @@ public class TestPolicy {
 
   public static final String INHERITED = "${inherited}";
 
+  public static final TestPolicy EMPTY_POLICY = new TestPolicy(ImmutableMap.of());
+
   private final ImmutableMap<String, String> envVariables;
 
   /**
@@ -57,8 +60,8 @@ public class TestPolicy {
    */
   public Map<String, String> computeTestEnvironment(
       TestRunnerAction testAction,
-      ImmutableMap<String, String> clientEnv,
-      int timeoutInSeconds,
+      Map<String, String> clientEnv,
+      Duration timeout,
       PathFragment relativeRunfilesDir,
       PathFragment tmpDir) {
     Map<String, String> env = new HashMap<>();
@@ -84,23 +87,18 @@ public class TestPolicy {
       env.put(entry.getKey(), val);
     }
 
+    // Rule-specified test env.
+    env.putAll(testAction.getExtraTestEnv());
+
     // Overwrite with the environment common to all actions, see --action_env.
-    // TODO(ulfjack): This also includes env variables from the configuration fragments, and it does
-    // not include the env variables which are supposed to be inherited, i.e., for with --action_env
-    // does not specify an explicit value.
-    env.putAll(testAction.getConfiguration().getLocalShellEnvironment());
+    testAction.getConfiguration().getActionEnvironment().resolve(env, clientEnv);
 
     // Overwrite with the environment common to all tests, see --test_env.
-    // TODO(ulfjack): This is handled differently from --action_env such that changing the
-    // --test_env flag (or any of the inherited env variables) requires a full re-analysis of
-    // everything, instead of triggering just the subset of actions that rely on inherited
-    // variables. Needless to say, that is not optimal, and we should fix it to use the same
-    // approach as --action_env.
-    env.putAll(testAction.getTestEnv());
+    testAction.getConfiguration().getTestActionEnvironment().resolve(env, clientEnv);
 
     // Setup any test-specific env variables; note that this does not overwrite existing values for
     // TEST_RANDOM_SEED or TEST_SIZE if they're already set.
-    testAction.setupEnvVariables(env, timeoutInSeconds);
+    testAction.setupEnvVariables(env, timeout);
     return env;
   }
 }

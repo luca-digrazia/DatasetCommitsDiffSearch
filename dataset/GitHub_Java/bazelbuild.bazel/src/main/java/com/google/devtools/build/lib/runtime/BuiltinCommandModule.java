@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import com.google.devtools.build.lib.runtime.commands.AqueryCommand;
 import com.google.devtools.build.lib.runtime.commands.BuildCommand;
 import com.google.devtools.build.lib.runtime.commands.CanonicalizeCommand;
 import com.google.devtools.build.lib.runtime.commands.CleanCommand;
@@ -30,7 +29,7 @@ import com.google.devtools.build.lib.runtime.commands.RunCommand;
 import com.google.devtools.build.lib.runtime.commands.ShutdownCommand;
 import com.google.devtools.build.lib.runtime.commands.TestCommand;
 import com.google.devtools.build.lib.runtime.commands.VersionCommand;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 
 /**
  * Internal module for the built-in commands.
@@ -43,7 +42,7 @@ public class BuiltinCommandModule extends BlazeModule {
   }
 
   @Override
-  public void serverInit(OptionsParsingResult startupOptions, ServerBuilder builder) {
+  public void serverInit(OptionsProvider startupOptions, ServerBuilder builder) {
     builder.addCommands(
         new BuildCommand(),
         new CanonicalizeCommand(),
@@ -59,7 +58,6 @@ public class BuiltinCommandModule extends BlazeModule {
         new ShutdownCommand(),
         new TestCommand(),
         new VersionCommand(),
-        new AqueryCommand(),
         new CqueryCommand());
     // Only enable the "license" command when this binary has an embedded LICENSE file.
     if (LicenseCommand.isSupported()) {
