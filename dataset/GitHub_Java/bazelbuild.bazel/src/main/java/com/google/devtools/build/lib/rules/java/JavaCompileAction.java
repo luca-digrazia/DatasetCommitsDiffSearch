@@ -192,15 +192,13 @@ public class JavaCompileAction extends AbstractAction
    * com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyModule#computeStrictClasspath}.
    */
   @VisibleForTesting
-  ReducedClasspath getReducedClasspath(
-      ActionExecutionContext actionExecutionContext, JavaCompileActionContext context) {
+  ReducedClasspath getReducedClasspath(JavaCompileActionContext context) {
     HashSet<String> direct = new HashSet<>();
     for (Artifact directJar : directJars) {
       direct.add(directJar.getExecPathString());
     }
     for (Artifact depArtifact : dependencyArtifacts) {
-      for (Deps.Dependency dep :
-          context.getDependencies(depArtifact, actionExecutionContext).getDependencyList()) {
+      for (Deps.Dependency dep : context.getDependencies(depArtifact).getDependencyList()) {
         direct.add(dep.getPath());
       }
     }
@@ -291,9 +289,8 @@ public class JavaCompileAction extends AbstractAction
     Spawn spawn;
     try {
       if (classpathMode == JavaClasspathMode.BAZEL) {
-        JavaCompileActionContext context =
-            actionExecutionContext.getContext(JavaCompileActionContext.class);
-        reducedClasspath = getReducedClasspath(actionExecutionContext, context);
+        reducedClasspath =
+            getReducedClasspath(actionExecutionContext.getContext(JavaCompileActionContext.class));
         spawn = getReducedSpawn(actionExecutionContext, reducedClasspath, /* fallback= */ false);
       } else {
         reducedClasspath = null;
@@ -525,9 +522,7 @@ public class JavaCompileAction extends AbstractAction
         SpawnResult spawnResult = Iterables.getOnlyElement(results);
         InputStream inMemoryOutput = spawnResult.getInMemoryOutput(outputDepsProto);
         try (InputStream input =
-            inMemoryOutput == null
-                ? actionExecutionContext.getInputPath(outputDepsProto).getInputStream()
-                : inMemoryOutput) {
+            inMemoryOutput == null ? outputDepsProto.getPath().getInputStream() : inMemoryOutput) {
           if (!Deps.Dependencies.parseFrom(input).getRequiresReducedClasspathFallback()) {
             return ActionContinuationOrResult.of(ActionResult.create(results));
           }

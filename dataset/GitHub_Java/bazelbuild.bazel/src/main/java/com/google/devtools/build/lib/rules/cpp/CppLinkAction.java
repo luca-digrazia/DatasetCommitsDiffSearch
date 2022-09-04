@@ -257,7 +257,7 @@ public final class CppLinkAction extends AbstractAction
   }
 
   @Override
-  public List<String> getArguments() throws CommandLineExpansionException {
+  public List<String> getArguments() {
     return linkCommandLine.arguments();
   }
 
@@ -268,8 +268,7 @@ public final class CppLinkAction extends AbstractAction
    * @param expander ArtifactExpander for expanding TreeArtifacts.
    * @return a finalized command line suitable for execution
    */
-  public final List<String> getCommandLine(@Nullable ArtifactExpander expander)
-      throws CommandLineExpansionException {
+  public final List<String> getCommandLine(@Nullable ArtifactExpander expander) {
     return linkCommandLine.getCommandLine(expander);
   }
 
@@ -308,54 +307,41 @@ public final class CppLinkAction extends AbstractAction
     return continuation.get();
   }
 
-  private Spawn createSpawn(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException {
-    try {
-      return new SimpleSpawn(
-          this,
-          ImmutableList.copyOf(getCommandLine(actionExecutionContext.getArtifactExpander())),
-          getEnvironment(actionExecutionContext.getClientEnv()),
-          getExecutionInfo(),
-          ImmutableList.copyOf(getMandatoryInputs()),
-          getOutputs().asList(),
-          estimateResourceConsumptionLocal());
-    } catch (CommandLineExpansionException e) {
-      throw new ActionExecutionException(
-          "failed to generate link command for rule '"
-              + getOwner().getLabel()
-              + ": "
-              + e.getMessage(),
-          this,
-          /* catastrophe= */ false);
-    }
+  private Spawn createSpawn(ActionExecutionContext actionExecutionContext) {
+    return new SimpleSpawn(
+        this,
+        ImmutableList.copyOf(getCommandLine(actionExecutionContext.getArtifactExpander())),
+        getEnvironment(actionExecutionContext.getClientEnv()),
+        getExecutionInfo(),
+        ImmutableList.copyOf(getMandatoryInputs()),
+        getOutputs().asList(),
+        estimateResourceConsumptionLocal());
   }
 
   // Don't forget to update FAKE_LINK_GUID if you modify this method.
   @ThreadCompatible
   private void executeFake(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
-    try {
-      // Prefix all fake output files in the command line with $TEST_TMPDIR/.
-      final String outputPrefix = "$TEST_TMPDIR/";
-      List<String> escapedLinkArgv =
-          escapeLinkArgv(
-              linkCommandLine.getRawLinkArgv(actionExecutionContext.getArtifactExpander()),
-              outputPrefix);
-      // Write the commands needed to build the real target to the fake target
-      // file.
-      StringBuilder s = new StringBuilder();
-      Joiner.on('\n')
-          .appendTo(
-              s,
-              "# This is a fake target file, automatically generated.",
-              "# Do not edit by hand!",
-              "echo $0 is a fake target file and not meant to be executed.",
-              "exit 0",
-              "EOS",
-              "",
-              "makefile_dir=.",
-              "");
+    // Prefix all fake output files in the command line with $TEST_TMPDIR/.
+    final String outputPrefix = "$TEST_TMPDIR/";
+    List<String> escapedLinkArgv =
+        escapeLinkArgv(
+            linkCommandLine.getRawLinkArgv(actionExecutionContext.getArtifactExpander()),
+            outputPrefix);
+    // Write the commands needed to build the real target to the fake target
+    // file.
+    StringBuilder s = new StringBuilder();
+    Joiner.on('\n').appendTo(s,
+        "# This is a fake target file, automatically generated.",
+        "# Do not edit by hand!",
+        "echo $0 is a fake target file and not meant to be executed.",
+        "exit 0",
+        "EOS",
+        "",
+        "makefile_dir=.",
+        "");
 
+    try {
       // Concatenate all the (fake) .o files into the result.
       for (Artifact objectFile : fakeLinkerInputArtifacts) {
         if (CppFileTypes.OBJECT_FILE.matches(objectFile.getFilename())
@@ -381,7 +367,7 @@ public final class CppLinkAction extends AbstractAction
         // actual linking action, but it's good enough for now.
         FileSystemUtils.touchFile(actionExecutionContext.getInputPath(output));
       }
-    } catch (IOException | CommandLineExpansionException e) {
+    } catch (IOException e) {
       throw new ActionExecutionException("failed to create fake link command for rule '"
                                          + getOwner().getLabel() + ": " + e.getMessage(),
                                          this, false);
@@ -414,8 +400,7 @@ public final class CppLinkAction extends AbstractAction
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException {
+  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext) {
     // The uses of getLinkConfiguration in this method may not be consistent with the computed key.
     // I.e., this may be incrementally incorrect.
     CppLinkInfo.Builder info = CppLinkInfo.newBuilder();
@@ -444,8 +429,7 @@ public final class CppLinkAction extends AbstractAction
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
-      throws CommandLineExpansionException {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(fake ? FAKE_LINK_GUID : LINK_GUID);
     fp.addString(ldExecutable.getPathString());
     fp.addStrings(linkCommandLine.arguments());
@@ -478,16 +462,9 @@ public final class CppLinkAction extends AbstractAction
     message.append(ShellEscaper.escapeString(linkCommandLine.getLinkerPathString()));
     message.append('\n');
     // Outputting one argument per line makes it easier to diff the results.
-    try {
-      List<String> arguments = linkCommandLine.arguments();
-      for (String argument : ShellEscaper.escapeAll(arguments)) {
-        message.append("  Argument: ");
-        message.append(argument);
-        message.append('\n');
-      }
-    } catch (CommandLineExpansionException e) {
-      message.append("  Could not expand command line: ");
-      message.append(e);
+    for (String argument : ShellEscaper.escapeAll(linkCommandLine.arguments())) {
+      message.append("  Argument: ");
+      message.append(argument);
       message.append('\n');
     }
     return message.toString();
