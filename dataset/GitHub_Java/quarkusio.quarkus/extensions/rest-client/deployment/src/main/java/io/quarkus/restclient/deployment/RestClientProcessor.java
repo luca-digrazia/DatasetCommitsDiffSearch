@@ -64,6 +64,7 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
+import io.quarkus.restclient.runtime.IncomingHeadersProvider;
 import io.quarkus.restclient.runtime.RestClientBase;
 import io.quarkus.restclient.runtime.RestClientRecorder;
 import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
@@ -82,9 +83,6 @@ class RestClientProcessor {
 
     private static final DotName REGISTER_PROVIDER = DotName.createSimple(RegisterProvider.class.getName());
     private static final DotName REGISTER_PROVIDERS = DotName.createSimple(RegisterProviders.class.getName());
-
-    private static final DotName CLIENT_REQUEST_FILTER = DotName.createSimple(ClientRequestFilter.class.getName());
-    private static final DotName CLIENT_RESPONSE_FILTER = DotName.createSimple(ClientResponseFilter.class.getName());
 
     private static final String PROVIDERS_SERVICE_FILE = "META-INF/services/" + Providers.class.getName();
 
@@ -166,6 +164,10 @@ class RestClientProcessor {
         // Incoming headers
         // required for the non-arg constructor of DCHFImpl to be included in the native image
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, DefaultClientHeadersFactoryImpl.class.getName()));
+        serviceProvider
+                .produce(new ServiceProviderBuildItem(
+                        org.jboss.resteasy.microprofile.client.header.IncomingHeadersProvider.class.getName(),
+                        IncomingHeadersProvider.class.getName()));
 
         // Register Interface return types for reflection
         for (Type returnType : returnTypes) {
@@ -343,15 +345,6 @@ class RestClientProcessor {
         for (AnnotationInstance annotationInstance : allInstances) {
             reflectiveClass
                     .produce(new ReflectiveClassBuildItem(false, false, annotationInstance.value().asClass().toString()));
-        }
-
-        // now retain all un-annotated implementations of ClientRequestFilter and ClientResponseFilter
-        // in case they are programmatically registered by applications
-        for (ClassInfo info : index.getAllKnownImplementors(CLIENT_REQUEST_FILTER)) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, info.name().toString()));
-        }
-        for (ClassInfo info : index.getAllKnownImplementors(CLIENT_RESPONSE_FILTER)) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, info.name().toString()));
         }
     }
 

@@ -232,7 +232,7 @@ public class ResteasyServerCommonProcessor {
             }
         }
 
-        Set<DotName> subresources = findSubresources(beanArchiveIndexBuildItem.getIndex(), scannedResources);
+        Set<DotName> subresources = findSubresources(index, scannedResources);
         if (!subresources.isEmpty()) {
             for (DotName locator : subresources) {
                 reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, locator.toString()));
@@ -247,9 +247,9 @@ public class ResteasyServerCommonProcessor {
         // see https://issues.jboss.org/browse/RESTEASY-2183
         generateDefaultConstructors(transformers, withoutDefaultCtor, additionalJaxRsResourceDefiningAnnotations);
 
-        checkParameterNames(beanArchiveIndexBuildItem.getIndex(), additionalJaxRsResourceMethodParamAnnotations);
+        checkParameterNames(index, additionalJaxRsResourceMethodParamAnnotations);
 
-        registerContextProxyDefinitions(beanArchiveIndexBuildItem.getIndex(), proxyDefinition);
+        registerContextProxyDefinitions(index, proxyDefinition);
 
         registerReflectionForSerialization(reflectiveClass, reflectiveHierarchy, combinedIndexBuildItem,
                 beanArchiveIndexBuildItem, additionalJaxRsResourceMethodAnnotations);

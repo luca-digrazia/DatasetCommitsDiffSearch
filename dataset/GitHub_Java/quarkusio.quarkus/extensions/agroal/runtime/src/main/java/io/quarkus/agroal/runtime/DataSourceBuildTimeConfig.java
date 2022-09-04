@@ -22,10 +22,4 @@ public class DataSourceBuildTimeConfig {
     @ConfigItem(defaultValue = "enabled")
     public TransactionIntegration transactions;
 
-    /**
-     * Enable datasource metrics collection.
-     */
-    @ConfigItem
-    public boolean enableMetrics;
-
 }
