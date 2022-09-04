@@ -109,7 +109,7 @@ class DataBindingV2Context implements DataBindingContext {
 
       for (DataBindingV2Provider provider : providers) {
         for (LabelJavaPackagePair labelJavaPackagePair : provider.getLabelAndJavaPackages()) {
-          javaPackagesOfDirectDependencies.add(labelJavaPackagePair.getJavaPackage());
+          javaPackagesOfDirectDependencies.add(labelJavaPackagePair.javaPackage());
         }
       }
     }
@@ -245,8 +245,7 @@ class DataBindingV2Context implements DataBindingContext {
       for (DataBindingV2Provider provider : providers) {
         for (LabelJavaPackagePair labelJavaPackagePair :
             provider.getTransitiveLabelAndJavaPackages()) {
-          javaPackagesToLabel.put(
-              labelJavaPackagePair.getJavaPackage(), labelJavaPackagePair.getLabel());
+          javaPackagesToLabel.put(labelJavaPackagePair.javaPackage(), labelJavaPackagePair.label());
         }
       }
     }

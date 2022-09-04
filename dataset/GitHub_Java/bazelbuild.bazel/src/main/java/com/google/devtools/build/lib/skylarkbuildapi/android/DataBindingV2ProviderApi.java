@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
+import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
@@ -43,31 +44,16 @@ public interface DataBindingV2ProviderApi<T extends FileApi> extends StructApi {
    * rules. This is for reporting a useful error message if multiple android_library rules with the
    * same Java package end up in the same android_binary.
    */
-  @SkylarkModule(
-      name = "LabelJavaPackagePair",
-      doc =
-          "Do not use this module. It is intended for migration purposes only. If you depend on "
-              + "it, you will be broken when it is removed.",
-      documented = false)
-  public class LabelJavaPackagePair {
+  @AutoValue
+  public abstract class LabelJavaPackagePair {
 
-    private final String label;
-    private final String javaPackage;
-
-    public LabelJavaPackagePair(String label, String javaPackage) {
-      this.label = label;
-      this.javaPackage = javaPackage;
+    public static LabelJavaPackagePair create(String label, String javaPackage) {
+      return new AutoValue_DataBindingV2ProviderApi_LabelJavaPackagePair(label, javaPackage);
     }
 
-    @SkylarkCallable(name = "label", structField = true, doc = "", documented = false)
-    public String getLabel() {
-      return label;
-    }
+    public abstract String label();
 
-    @SkylarkCallable(name = "java_package", structField = true, doc = "", documented = false)
-    public String getJavaPackage() {
-      return javaPackage;
-    }
+    public abstract String javaPackage();
   }
 
   /** Name of this info object. */
