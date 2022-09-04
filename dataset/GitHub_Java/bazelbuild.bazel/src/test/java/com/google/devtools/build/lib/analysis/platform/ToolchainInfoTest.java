@@ -20,7 +20,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.cmdline.Label;
+import net.starlark.java.syntax.Location;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -62,7 +63,8 @@ public class ToolchainInfoTest extends BuildViewTestCase {
 
     ConfiguredTarget extraLabel = (ConfiguredTarget) provider.getValue("extra_label");
     assertThat(extraLabel).isNotNull();
-    assertThat(extraLabel.getLabel()).isEqualTo(makeLabel("//test/toolchain:dep"));
+    assertThat(extraLabel.getLabel())
+        .isEqualTo(Label.parseAbsoluteUnchecked("//test/toolchain:dep"));
     assertThat(provider.getValue("extra_str")).isEqualTo("foo");
   }
 
@@ -71,17 +73,14 @@ public class ToolchainInfoTest extends BuildViewTestCase {
     new EqualsTester()
         .addEqualityGroup(
             // Base case.
-            ToolchainInfo.create(
-                ImmutableMap.<String, Object>of("foo", "val1", "bar", "val2"),
-                Location.BUILTIN),
-            ToolchainInfo.create(
-                ImmutableMap.<String, Object>of("foo", "val1", "bar", "val2"),
-                Location.BUILTIN))
+            new ToolchainInfo(
+                ImmutableMap.<String, Object>of("foo", "val1", "bar", "val2"), Location.BUILTIN),
+            new ToolchainInfo(
+                ImmutableMap.<String, Object>of("foo", "val1", "bar", "val2"), Location.BUILTIN))
         .addEqualityGroup(
             // Different data.
-            ToolchainInfo.create(
-                ImmutableMap.<String, Object>of("foo", "val1", "bar", "val3"),
-                Location.BUILTIN))
+            new ToolchainInfo(
+                ImmutableMap.<String, Object>of("foo", "val1", "bar", "val3"), Location.BUILTIN))
         .testEquals();
   }
 }

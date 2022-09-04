@@ -23,20 +23,20 @@ import com.google.devtools.build.lib.analysis.platform.ConstraintSettingInfo;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
+import com.google.devtools.build.lib.packages.StarlarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.syntax.SkylarkList;
 import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
+import net.starlark.java.eval.Sequence;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests Skylark API for {@link ConstraintCollection} providers. */
+/** Tests Starlark API for {@link ConstraintCollection} providers. */
 @RunWith(JUnit4.class)
-public class ConstraintCollectionApiTest extends PlatformInfoApiTest {
+public class ConstraintCollectionApiTest extends PlatformTestCase {
 
   @Test
   public void testConstraintSettings() throws Exception {
@@ -53,9 +53,10 @@ public class ConstraintCollectionApiTest extends PlatformInfoApiTest {
   }
 
   @Test
-  public void testGet() throws Exception {
+  public void testConstraintValue() throws Exception {
     constraintBuilder("//foo:s1").addConstraintValue("value1").write();
     constraintBuilder("//foo:s2").addConstraintValue("value2").write();
+    constraintBuilder("//foo:unused").write();
     platformBuilder("//foo:my_platform").addConstraint("value1").addConstraint("value2").write();
 
     ConstraintCollection constraintCollection = fetchConstraintCollection("//foo:my_platform");
@@ -63,13 +64,51 @@ public class ConstraintCollectionApiTest extends PlatformInfoApiTest {
 
     ConstraintSettingInfo setting =
         ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:s1"));
+    assertThat(constraintCollection.has(setting)).isTrue();
     ConstraintValueInfo value = constraintCollection.get(setting);
     assertThat(value).isNotNull();
     assertThat(value.label()).isEqualTo(Label.parseAbsoluteUnchecked("//foo:value1"));
+    assertThat(
+            constraintCollection.has(
+                ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:unused"))))
+        .isFalse();
   }
 
   @Test
-  public void testGet_starlark() throws Exception {
+  public void testContraintValue_parent() throws Exception {
+    constraintBuilder("//foo:s1").addConstraintValue("value1").write();
+    constraintBuilder("//foo:s2").addConstraintValue("value2").write();
+    constraintBuilder("//foo:s3").addConstraintValue("value3").addConstraintValue("value4").write();
+    platformBuilder("//foo:p1").addConstraint("value1").addConstraint("value4").write();
+    platformBuilder("//foo:p2").setParent("//foo:p1").addConstraint("value2").write();
+    platformBuilder("//foo:p3").setParent("//foo:p2").addConstraint("value3").write();
+
+    ConstraintCollection constraintCollection = fetchConstraintCollection("//foo:p3");
+    assertThat(constraintCollection).isNotNull();
+
+    ConstraintSettingInfo setting =
+        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:s1"));
+    assertThat(constraintCollection.has(setting)).isTrue();
+    ConstraintValueInfo value = constraintCollection.get(setting);
+    assertThat(value).isNotNull();
+    assertThat(value.label()).isEqualTo(Label.parseAbsoluteUnchecked("//foo:value1"));
+
+    setting = ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:s2"));
+    assertThat(constraintCollection.has(setting)).isTrue();
+    value = constraintCollection.get(setting);
+    assertThat(value).isNotNull();
+    assertThat(value.label()).isEqualTo(Label.parseAbsoluteUnchecked("//foo:value2"));
+
+    setting = ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:s3"));
+    assertThat(constraintCollection.has(setting)).isTrue();
+    value = constraintCollection.get(setting);
+    assertThat(value).isNotNull();
+    assertThat(value.label()).isEqualTo(Label.parseAbsoluteUnchecked("//foo:value3"));
+  }
+
+  @Test
+  public void testConstraintValue_starlark() throws Exception {
+    setBuildLanguageOptions("--experimental_platforms_api=true");
     constraintBuilder("//foo:s1").addConstraintValue("value1").write();
     constraintBuilder("//foo:s2").addConstraintValue("value2").write();
     platformBuilder("//foo:my_platform").addConstraint("value1").addConstraint("value2").write();
@@ -84,10 +123,14 @@ public class ConstraintCollectionApiTest extends PlatformInfoApiTest {
         "  value_from_index = constraint_collection[constraint_setting]",
         "  value_from_get = constraint_collection.get(constraint_setting)",
         "  used_constraints = constraint_collection.constraint_settings",
+        "  has_constraint = constraint_collection.has(constraint_setting)",
+        "  has_constraint_value = constraint_collection.has_constraint_value(value_from_get)",
         "  return [result(",
         "    value_from_index = value_from_index,",
         "    value_from_get = value_from_get,",
         "    used_constraints = used_constraints,",
+        "    has_constraint = has_constraint,",
+        "    has_constraint_value = has_constraint_value,",
         "  )]",
         "verify = rule(",
         "  implementation = _impl,",
@@ -109,7 +152,7 @@ public class ConstraintCollectionApiTest extends PlatformInfoApiTest {
     StructImpl info =
         (StructImpl)
             myRuleTarget.get(
-                new SkylarkKey(
+                new StarlarkProvider.Key(
                     Label.parseAbsolute("//verify:verify.bzl", ImmutableMap.of()), "result"));
 
     @SuppressWarnings("unchecked")
@@ -127,13 +170,19 @@ public class ConstraintCollectionApiTest extends PlatformInfoApiTest {
         .isEqualTo(Label.parseAbsoluteUnchecked("//foo:value1"));
 
     @SuppressWarnings("unchecked")
-    SkylarkList<ConstraintSettingInfo> usedConstraints =
-        (SkylarkList<ConstraintSettingInfo>) info.getValue("used_constraints");
+    Sequence<ConstraintSettingInfo> usedConstraints =
+        (Sequence<ConstraintSettingInfo>) info.getValue("used_constraints");
     assertThat(usedConstraints).isNotNull();
     assertThat(usedConstraints)
         .containsExactly(
             ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:s1")),
             ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:s2")));
+
+    boolean hasConstraint = (boolean) info.getValue("has_constraint");
+    assertThat(hasConstraint).isTrue();
+
+    boolean hasConstraintValue = (boolean) info.getValue("has_constraint_value");
+    assertThat(hasConstraintValue).isTrue();
   }
 
   @Test
@@ -155,17 +204,20 @@ public class ConstraintCollectionApiTest extends PlatformInfoApiTest {
     ConstraintCollection constraintCollectionWithDefault =
         fetchConstraintCollection("//constraint/default:plat_with_default");
     assertThat(constraintCollectionWithDefault).isNotNull();
+    assertThat(constraintCollectionWithDefault.has(basicConstraintSetting)).isTrue();
     assertThat(constraintCollectionWithDefault.get(basicConstraintSetting)).isNotNull();
     assertThat(constraintCollectionWithDefault.get(basicConstraintSetting).label())
-        .isEqualTo(makeLabel("//constraint/default:foo"));
+        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint/default:foo"));
+    assertThat(constraintCollectionWithDefault.has(otherConstraintSetting)).isFalse();
     assertThat(constraintCollectionWithDefault.get(otherConstraintSetting)).isNull();
 
     ConstraintCollection constraintCollectionWithoutDefault =
         fetchConstraintCollection("//constraint/default:plat_without_default");
     assertThat(constraintCollectionWithoutDefault).isNotNull();
+    assertThat(constraintCollectionWithDefault.has(basicConstraintSetting)).isTrue();
     assertThat(constraintCollectionWithoutDefault.get(basicConstraintSetting)).isNotNull();
     assertThat(constraintCollectionWithoutDefault.get(basicConstraintSetting).label())
-        .isEqualTo(makeLabel("//constraint/default:bar"));
+        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint/default:bar"));
   }
 
   private Set<Label> collectLabels(Collection<? extends ConstraintSettingInfo> settings) {

@@ -13,16 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.util;
 
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -90,7 +87,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
+import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
@@ -180,6 +177,7 @@ import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -711,42 +709,17 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Returns a BuildOptions with options in exclude trimmed away.
+   * Asserts that two configurations are the same.
    *
-   * <p>BuildOptions.trim actually retains the options passed to it so must reverse the logic.
+   * <p>Historically this meant they contained the same object reference. But with upcoming dynamic
+   * configurations that may no longer be true (for example, they may have the same values but not
+   * the same {@link Fragment}s. So this method abstracts the "configuration equivalency" checking
+   * into one place, where the implementation logic can evolve as needed.
    */
-  private static BuildOptions trimConfiguration(
-      BuildOptions input, Set<Class<? extends FragmentOptions>> exclude) {
-    Set<Class<? extends FragmentOptions>> include =
-        input.getFragmentClasses().stream()
-            .filter((x) -> !exclude.contains(x))
-            .collect(toImmutableSet());
-    return input.trim(include);
-  }
-
-  /**
-   * Asserts that two configurations are the same, with exclusions.
-   *
-   * <p>Any fragments options of type specified in excludeFragmentOptions are excluded from the
-   * comparison.
-   *
-   * <p>Generally, this means they share the same checksum, which is computed by iterating over all
-   * the individual @Option annotated values contained within the {@link FragmentOption} classes
-   * contained within the {@link BuildOptions} inside the given configurations.
-   */
-  protected void assertConfigurationsEqual(
-      BuildConfiguration config1,
-      BuildConfiguration config2,
-      Set<Class<? extends FragmentOptions>> excludeFragmentOptions) {
+  protected void assertConfigurationsEqual(BuildConfiguration config1, BuildConfiguration config2) {
     // BuildOptions and crosstool files determine a configuration's content. Within the context
     // of these tests only the former actually change.
-
-    assertThat(trimConfiguration(config2.cloneOptions(), excludeFragmentOptions))
-        .isEqualTo(trimConfiguration(config1.cloneOptions(), excludeFragmentOptions));
-  }
-
-  protected void assertConfigurationsEqual(BuildConfiguration config1, BuildConfiguration config2) {
-    assertConfigurationsEqual(config1, config2, ImmutableSet.of());
+    assertThat(config2.cloneOptions()).isEqualTo(config1.cloneOptions());
   }
 
   /**
@@ -2237,7 +2210,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       baselineAction.newDeterministicWriter(ActionsTestUtil.createContext(reporter))
           .writeOutputFile(bytes);
 
-      for (String line : Splitter.on('\n').split(new String(bytes.toByteArray(), UTF_8))) {
+      for (String line : new String(bytes.toByteArray(), StandardCharsets.UTF_8).split("\n")) {
         if (line.startsWith("SF:")) {
           String basename = line.substring(line.lastIndexOf('/') + 1);
           basenames.add(basename);
