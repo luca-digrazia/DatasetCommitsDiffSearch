@@ -38,27 +38,27 @@ public class PaginationParameters {
     @ApiParam
     @QueryParam("query")
     @DefaultValue("")
-    private String query = "";
+    private String query;
 
     @ApiParam
     @QueryParam("page")
     @DefaultValue("1")
-    private int page = 1;
+    private int page;
 
     @ApiParam
     @QueryParam("per_page")
     @DefaultValue("50")
-    private int perPage = 50;
+    private int perPage;
 
     @ApiParam
     @QueryParam("sort")
     @DefaultValue("")
-    private String sortBy = "";
+    private String sortBy;
 
     @ApiParam
     @QueryParam("order")
     @DefaultValue("asc")
-    private String order = "asc";
+    private String order;
 
     public String getQuery() {
         return query;
