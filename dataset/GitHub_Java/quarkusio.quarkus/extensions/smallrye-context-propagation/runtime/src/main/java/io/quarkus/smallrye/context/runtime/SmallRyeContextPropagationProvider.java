@@ -5,7 +5,6 @@ import java.util.concurrent.ExecutorService;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
-import javax.enterprise.inject.Typed;
 import javax.inject.Singleton;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -40,7 +39,6 @@ public class SmallRyeContextPropagationProvider {
         return ThreadContext.builder().propagated(ThreadContext.ALL_REMAINING).cleared().unchanged().build();
     }
 
-    @Typed(ManagedExecutor.class)
     @Produces
     @Singleton
     public ManagedExecutor getAllManagedExecutor() {
