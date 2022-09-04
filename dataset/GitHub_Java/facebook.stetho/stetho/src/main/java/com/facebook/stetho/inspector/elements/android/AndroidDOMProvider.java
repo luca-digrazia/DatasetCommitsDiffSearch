@@ -1,36 +1,88 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 
 package com.facebook.stetho.inspector.elements.android;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.Dialog;
+import android.content.Context;
+import android.graphics.Canvas;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.TextView;
 
-import com.facebook.stetho.common.LogUtil;
+import com.facebook.stetho.common.Accumulator;
+import com.facebook.stetho.common.Predicate;
+import com.facebook.stetho.common.UncheckedCallable;
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.inspector.elements.ChainedDescriptor;
+import com.facebook.stetho.common.android.HandlerUtil;
+import com.facebook.stetho.common.android.ViewUtil;
 import com.facebook.stetho.inspector.elements.DOMProvider;
 import com.facebook.stetho.inspector.elements.Descriptor;
 import com.facebook.stetho.inspector.elements.DescriptorMap;
 import com.facebook.stetho.inspector.elements.NodeDescriptor;
 import com.facebook.stetho.inspector.elements.ObjectDescriptor;
 
+import javax.annotation.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
+
 final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
+  private static final int INSPECT_OVERLAY_COLOR = 0x40FFFFFF;
+  private static final int INSPECT_HOVER_COLOR = 0x404040ff;
+
   private final Application mApplication;
+  private final Handler mHandler;
   private final DescriptorMap mDescriptorMap;
+  private final AndroidDOMRoot mDOMRoot;
   private final ViewHighlighter mHighlighter;
-  private Listener mListener;
+  private final InspectModeHandler mInspectModeHandler;
+  private @Nullable Listener mListener;
+
+  // We don't yet have an an implementation for reliably detecting fine-grained changes in the
+  // View tree. So, for now at least, we have a timer that runs every so often and just reports
+  // that we changed. Our listener will then read the entire DOM from us and transmit the changes to
+  // Chrome. Detecting, reporting, and traversing fine-grained changes is a future work item.
+  private static final long REPORT_CHANGED_INTERVAL_MS = 1000;
+  private boolean mIsReportChangesTimerPosted = false;
+  private final Runnable mReportChangesTimer = new Runnable() {
+    @Override
+    public void run() {
+      mIsReportChangesTimerPosted = false;
+
+      if (mListener != null) {
+        mListener.onPossiblyChanged();
+        mIsReportChangesTimerPosted = true;
+        postDelayed(this, REPORT_CHANGED_INTERVAL_MS);
+      }
+    }
+  };
 
   public AndroidDOMProvider(Application application) {
-    mApplication = application;
+    mApplication = Util.throwIfNull(application);
+    mHandler = new Handler(Looper.getMainLooper());
+    mDOMRoot = new AndroidDOMRoot(application);
 
     mDescriptorMap = new DescriptorMap()
         .beginInit()
         .register(Activity.class, new ActivityDescriptor())
-        .register(Application.class, new ApplicationDescriptor());
+        .register(AndroidDOMRoot.class, mDOMRoot)
+        .register(Application.class, new ApplicationDescriptor())
+        .register(Dialog.class, new DialogDescriptor());
+    DialogFragmentDescriptor.register(mDescriptorMap);
     FragmentDescriptor.register(mDescriptorMap)
         .register(Object.class, new ObjectDescriptor())
         .register(TextView.class, new TextViewDescriptor())
@@ -41,31 +93,84 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
         .endInit();
 
     mHighlighter = ViewHighlighter.newInstance();
+    mInspectModeHandler = new InspectModeHandler();
+  }
+
+  // ThreadBound implementation
+  @Override
+  public boolean checkThreadAccess() {
+    return HandlerUtil.checkThreadAccess(mHandler);
+  }
+
+  @Override
+  public void verifyThreadAccess() {
+    HandlerUtil.verifyThreadAccess(mHandler);
+  }
+
+  @Override
+  public <V> V postAndWait(UncheckedCallable<V> c) {
+    return HandlerUtil.postAndWait(mHandler, c);
+  }
+
+  @Override
+  public void postAndWait(Runnable r) {
+    HandlerUtil.postAndWait(mHandler, r);
+  }
+
+  @Override
+  public void postDelayed(Runnable r, long delayMillis) {
+    if (!mHandler.postDelayed(r, delayMillis)) {
+      throw new RuntimeException("Handler.postDelayed() returned false");
+    }
+  }
+
+  @Override
+  public void removeCallbacks(Runnable r) {
+    mHandler.removeCallbacks(r);
   }
 
   // DOMProvider implementation
   @Override
   public void dispose() {
+    verifyThreadAccess();
+
     mHighlighter.clearHighlight();
+    mInspectModeHandler.disable();
+    removeCallbacks(mReportChangesTimer);
+    mIsReportChangesTimerPosted = false;
+    mListener = null;
   }
 
   @Override
   public void setListener(Listener listener) {
+    verifyThreadAccess();
+
     mListener = listener;
+    if (mListener == null && mIsReportChangesTimerPosted) {
+      mIsReportChangesTimerPosted = false;
+      removeCallbacks(mReportChangesTimer);
+    } else if (mListener != null && !mIsReportChangesTimerPosted) {
+      mIsReportChangesTimerPosted = true;
+      postDelayed(mReportChangesTimer, REPORT_CHANGED_INTERVAL_MS);
+    }
   }
 
   @Override
   public Object getRootElement() {
-    return mApplication;
+    verifyThreadAccess();
+    return mDOMRoot;
   }
 
   @Override
   public NodeDescriptor getNodeDescriptor(Object element) {
+    verifyThreadAccess();
     return getDescriptor(element);
   }
 
   @Override
   public void highlightElement(Object element, int color) {
+    verifyThreadAccess();
+
     View highlightingView = getHighlightingView(element);
     if (highlightingView == null) {
       mHighlighter.clearHighlight();
@@ -76,7 +181,30 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
 
   @Override
   public void hideHighlight() {
+    verifyThreadAccess();
+
     mHighlighter.clearHighlight();
+  }
+
+  @Override
+  public void setInspectModeEnabled(boolean enabled) {
+    verifyThreadAccess();
+
+    if (enabled) {
+      mInspectModeHandler.enable();
+    } else {
+      mInspectModeHandler.disable();
+    }
+  }
+
+  @Override
+  public void setAttributesAsText(Object element, String text) {
+    verifyThreadAccess();
+
+    Descriptor descriptor = mDescriptorMap.get(element.getClass());
+    if (descriptor != null) {
+      descriptor.setAttributesAsText(element, text);
+    }
   }
 
   // Descriptor.Host implementation
@@ -87,22 +215,16 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
 
   @Override
   public void onAttributeModified(Object element, String name, String value) {
-    mListener.onAttributeModified(element, name, value);
+    if (mListener != null) {
+      mListener.onAttributeModified(element, name, value);
+    }
   }
 
   @Override
   public void onAttributeRemoved(Object element, String name) {
-    mListener.onAttributeRemoved(element, name);
-  }
-
-  @Override
-  public void onChildInserted(Object parentElement, Object previousElement, Object childElement) {
-    mListener.onChildInserted(parentElement, previousElement, childElement);
-  }
-
-  @Override
-  public void onChildRemoved(Object parentElement, Object childElement) {
-    mListener.onChildRemoved(parentElement, childElement);
+    if (mListener != null) {
+      mListener.onAttributeRemoved(element, name);
+    }
   }
 
   // AndroidDescriptorHost implementation
@@ -122,7 +244,7 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
       }
 
       if (descriptor != lastDescriptor && descriptor instanceof HighlightableDescriptor) {
-        highlightingView = ((HighlightableDescriptor)descriptor).getViewForHighlighting(element);
+        highlightingView = ((HighlightableDescriptor) descriptor).getViewForHighlighting(element);
       }
 
       lastDescriptor = descriptor;
@@ -130,5 +252,119 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
     }
 
     return highlightingView;
+  }
+
+  private void getWindows(final Accumulator<Window> accumulator) {
+    Descriptor appDescriptor = getDescriptor(mApplication);
+    if (appDescriptor != null) {
+      Accumulator<Object> elementAccumulator = new Accumulator<Object>() {
+        @Override
+        public void store(Object element) {
+          if (element instanceof Window) {
+            // Store the Window and do not recurse into its children.
+            accumulator.store((Window) element);
+          } else {
+            // Recursively scan this element's children in search of more Windows.
+            Descriptor elementDescriptor = getDescriptor(element);
+            if (elementDescriptor != null) {
+              elementDescriptor.getChildren(element, this);
+            }
+          }
+        }
+      };
+
+      appDescriptor.getChildren(mApplication, elementAccumulator);
+    }
+  }
+
+  private final class InspectModeHandler {
+    private final Predicate<View> mViewSelector = new Predicate<View>() {
+      @Override
+      public boolean apply(View view) {
+        return !(view instanceof DOMHiddenView);
+      }
+    };
+
+    private List<View> mOverlays;
+
+    public void enable() {
+      verifyThreadAccess();
+
+      if (mOverlays != null) {
+        disable();
+      }
+
+      mOverlays = new ArrayList<>();
+
+      getWindows(new Accumulator<Window>() {
+        @Override
+        public void store(Window object) {
+          if (object.peekDecorView() instanceof ViewGroup) {
+            final ViewGroup decorView = (ViewGroup) object.peekDecorView();
+
+            OverlayView overlayView = new OverlayView(mApplication);
+
+            WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
+            layoutParams.width = WindowManager.LayoutParams.MATCH_PARENT;
+            layoutParams.height = WindowManager.LayoutParams.MATCH_PARENT;
+
+            decorView.addView(overlayView, layoutParams);
+            decorView.bringChildToFront(overlayView);
+
+            mOverlays.add(overlayView);
+          }
+        }
+      });
+    }
+
+    public void disable() {
+      verifyThreadAccess();
+
+      if (mOverlays == null) {
+        return;
+      }
+
+      for (int i = 0; i < mOverlays.size(); ++i) {
+        final View overlayView = mOverlays.get(i);
+        ViewGroup decorViewGroup = (ViewGroup)overlayView.getParent();
+        decorViewGroup.removeView(overlayView);
+      }
+
+      mOverlays = null;
+    }
+
+    private final class OverlayView extends DOMHiddenView {
+      public OverlayView(Context context) {
+        super(context);
+      }
+
+      @Override
+      protected void onDraw(Canvas canvas) {
+        canvas.drawColor(INSPECT_OVERLAY_COLOR);
+        super.onDraw(canvas);
+      }
+
+      @Override
+      public boolean onTouchEvent(MotionEvent event) {
+        if (getParent() instanceof View) {
+          final View parent = (View)getParent();
+          View view = ViewUtil.hitTest(parent, event.getX(), event.getY(), mViewSelector);
+
+          if (event.getAction() != MotionEvent.ACTION_CANCEL) {
+            if (view != null) {
+              mHighlighter.setHighlightedView(view, INSPECT_HOVER_COLOR);
+
+              if (event.getAction() == MotionEvent.ACTION_UP) {
+                if (mListener != null) {
+                  mListener.onInspectRequested(view);
+                }
+              }
+            }
+          }
+        }
+
+        return true;
+      }
+    }
   }
 }
