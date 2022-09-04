@@ -58,16 +58,6 @@ public final class DeprecationValidatorTest extends BuildViewTestCase {
   }
 
   @Test
-  public void noDeprecationWarningForJavatestsCompanionOfJavaPackage() throws Exception {
-    scratchConfiguredTarget(
-        "java/a",
-        "b",
-        "filegroup(name='b', deprecation='ignored because depending target is javatests match')");
-    scratchConfiguredTarget("javatests/a", "a", "filegroup(name='a', srcs=['//java/a:b'])");
-    assertNoEvents();
-  }
-
-  @Test
   public void deprecationWarningForJavaCompanionOfJavatestsPackage() throws Exception {
     scratchConfiguredTarget(
         "javatests/a",
@@ -94,7 +84,7 @@ public final class DeprecationValidatorTest extends BuildViewTestCase {
 
   @Test
   public void deprecationWarningForSamePackageInDifferentRepository() throws Exception {
-    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(true /* append */)) {
+    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(/* append= */ true)) {
       output.write(
           "\nlocal_repository(name = 'r', path = '/r')\n".getBytes(StandardCharsets.UTF_8));
     }
@@ -111,7 +101,7 @@ public final class DeprecationValidatorTest extends BuildViewTestCase {
   @Test
   public void deprecationWarningForJavatestsCompanionOfJavaPackageInDifferentRepository()
       throws Exception {
-    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(true /* append */)) {
+    try (OutputStream output = scratch.resolve("WORKSPACE").getOutputStream(/* append= */ true)) {
       output.write(
           "\nlocal_repository(name = 'r', path = '/r')\n".getBytes(StandardCharsets.UTF_8));
     }
