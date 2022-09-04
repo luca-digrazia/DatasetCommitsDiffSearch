@@ -31,7 +31,6 @@ public abstract class AbstractService<T extends Configuration> {
 
     private final String name;
     private final List<Module> modules;
-    private final List<ConfiguredModule<? super T>> configuredModules;
     private final SortedMap<String, Command> commands;
     private String banner = null;
 
@@ -43,7 +42,6 @@ public abstract class AbstractService<T extends Configuration> {
     protected AbstractService(String name) {
         this.name = name;
         this.modules = Lists.newArrayList();
-        this.configuredModules = Lists.newArrayList();
         this.commands = Maps.newTreeMap();
         addCommand(new ServerCommand<T>(getConfigurationClass()));
     }
@@ -69,6 +67,15 @@ public abstract class AbstractService<T extends Configuration> {
     }
 
     /**
+     * Returns a list of registered {@link Module} instances.
+     *
+     * @return a list of modules
+     */
+    public final ImmutableList<Module> getModules() {
+        return ImmutableList.copyOf(modules);
+    }
+
+    /**
      * Registers a {@link Module} to be used in initializing the service's {@link Environment}.
      *
      * @param module    a module
@@ -76,17 +83,6 @@ public abstract class AbstractService<T extends Configuration> {
      */
     protected final void addModule(Module module) {
         modules.add(module);
-    }
-
-    /**
-     * Registers a {@link ConfiguredModule} to be used in initializing the service's
-     * {@link Environment}.
-     *
-     * @param module a module
-     * @see ConfiguredModule
-     */
-    protected final void addModule(ConfiguredModule<? super T> module) {
-        configuredModules.add(module);
     }
 
     /**
@@ -164,9 +160,6 @@ public abstract class AbstractService<T extends Configuration> {
     public final void initializeWithModules(T configuration, Environment environment) {
         for (Module module : modules) {
             module.initialize(environment);
-        }
-        for (ConfiguredModule<? super T> module : configuredModules) {
-            module.initialize(configuration, environment);
         }
         initialize(configuration, environment);
     }

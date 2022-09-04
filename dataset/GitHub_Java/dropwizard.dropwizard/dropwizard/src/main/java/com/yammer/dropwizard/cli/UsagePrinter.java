@@ -1,15 +1,15 @@
 package com.yammer.dropwizard.cli;
 
-import com.google.common.base.Optional;
 import com.yammer.dropwizard.AbstractService;
 import com.yammer.dropwizard.util.JarLocation;
 import org.apache.commons.cli.HelpFormatter;
 
+@SuppressWarnings("UseOfSystemOutOrSystemErr")
 public class UsagePrinter {
     private UsagePrinter() {
         // singleton
     }
-    
+
     public static void printRootHelp(AbstractService<?> service) {
         System.out.printf("java -jar %s <command> [arg1 arg2]\n\n", new JarLocation());
         System.out.println("Commands");
@@ -21,12 +21,12 @@ public class UsagePrinter {
     }
 
     public static void printCommandHelp(Command cmd) {
-        printCommandHelp(cmd, Optional.<String>absent());
+        printCommandHelp(cmd, null);
     }
 
-    public static void printCommandHelp(Command cmd, Optional<String> errorMessage) {
-        if (errorMessage.isPresent()) {
-            System.err.printf("%s\n", errorMessage.get());
+    public static void printCommandHelp(Command cmd, String errorMessage) {
+        if (errorMessage != null) {
+            System.err.println(errorMessage);
             System.out.println();
         }
 
@@ -37,12 +37,10 @@ public class UsagePrinter {
                                 cmd.getOptionsWithHelp());
         System.out.println("\n");
     }
-    
+
     private static String formatTitle(Command cmd) {
-        final String title = cmd.getName() +
-                (cmd.getDescription().isPresent() ? "" : ": " + cmd.getDescription().get());
-        
-        return title + "\n" + getBanner(title.length());
+        final String title = cmd.getName() + ": " + cmd.getDescription();
+        return title + '\n' + getBanner(title.length());
     }
 
     private static String getBanner(int length) {
