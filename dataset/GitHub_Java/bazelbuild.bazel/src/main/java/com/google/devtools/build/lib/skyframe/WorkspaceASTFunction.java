@@ -21,16 +21,17 @@ import static com.google.devtools.build.lib.rules.repository.ResolvedHashesFunct
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.ResolvedFileValue;
+import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.LoadStatement;
-import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -45,7 +46,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-/** A SkyFunction to parse WORKSPACE files into a StarlarkFile. */
+/**
+ * A SkyFunction to parse WORKSPACE files into a BuildFileAST.
+ */
 public class WorkspaceASTFunction implements SkyFunction {
   private final RuleClassProvider ruleClassProvider;
 
@@ -79,13 +82,13 @@ public class WorkspaceASTFunction implements SkyFunction {
 
     Path repoWorkspace = workspaceRoot.getRoot().getRelative(workspaceRoot.getRootRelativePath());
     try {
-      StarlarkFile file =
-          StarlarkFile.parse(
-              ParserInput.create(
+      BuildFileAST ast =
+          BuildFileAST.parseBuildFile(
+              ParserInputSource.create(
                   ruleClassProvider.getDefaultWorkspacePrefix(),
                   PathFragment.create("/DEFAULT.WORKSPACE")),
               env.getListener());
-      if (file.containsErrors()) {
+      if (ast.containsErrors()) {
         throw new WorkspaceASTFunctionException(
             new BuildFileContainsErrorsException(
                 LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
@@ -93,42 +96,45 @@ public class WorkspaceASTFunction implements SkyFunction {
             Transience.PERSISTENT);
       }
       if (newWorkspaceFileContents != null) {
-        file =
-            StarlarkFile.parseVirtualBuildFile(
-                ParserInput.create(
+        ast =
+            BuildFileAST.parseVirtualBuildFile(
+                ParserInputSource.create(
                     newWorkspaceFileContents, resolvedFile.get().asPath().asFragment()),
-                file.getStatements(),
+                ast.getStatements(),
+                /* repositoryMapping= */ ImmutableMap.of(),
                 env.getListener());
       } else if (workspaceFileValue.exists()) {
         byte[] bytes =
             FileSystemUtils.readWithKnownFileSize(repoWorkspace, repoWorkspace.getFileSize());
-        file =
-            StarlarkFile.parseWithPrelude(
-                ParserInput.create(bytes, repoWorkspace.asFragment()),
-                file.getStatements(),
+        ast =
+            BuildFileAST.parseBuildFile(
+                ParserInputSource.create(bytes, repoWorkspace.asFragment()),
+                ast.getStatements(),
+                /* repositoryMapping= */ ImmutableMap.of(),
                 env.getListener());
-        if (file.containsErrors()) {
+        if (ast.containsErrors()) {
           throw new WorkspaceASTFunctionException(
               new BuildFileContainsErrorsException(
                   LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, "Failed to parse WORKSPACE file"),
               Transience.PERSISTENT);
         }
       }
-      file =
-          StarlarkFile.parseWithPrelude(
-              ParserInput.create(
+      ast =
+          BuildFileAST.parseBuildFile(
+              ParserInputSource.create(
                   resolvedFile.isPresent() ? "" : ruleClassProvider.getDefaultWorkspaceSuffix(),
                   PathFragment.create("/DEFAULT.WORKSPACE.SUFFIX")),
-              file.getStatements(),
+              ast.getStatements(),
+              /* repositoryMapping= */ ImmutableMap.of(),
               env.getListener());
-      if (file.containsErrors()) {
+      if (ast.containsErrors()) {
         throw new WorkspaceASTFunctionException(
             new BuildFileContainsErrorsException(
                 LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
                 "Failed to parse default WORKSPACE file suffix"),
             Transience.PERSISTENT);
       }
-      return new WorkspaceASTValue(splitAST(file));
+      return new WorkspaceASTValue(splitAST(ast));
     } catch (IOException ex) {
       throw new WorkspaceASTFunctionException(ex, Transience.TRANSIENT);
     }
@@ -220,8 +226,8 @@ public class WorkspaceASTFunction implements SkyFunction {
    * Cut {@code ast} into a list of AST separated by load statements. We cut right before each load
    * statement series.
    */
-  private static ImmutableList<StarlarkFile> splitAST(StarlarkFile ast) {
-    ImmutableList.Builder<StarlarkFile> asts = ImmutableList.builder();
+  private static ImmutableList<BuildFileAST> splitAST(BuildFileAST ast) {
+    ImmutableList.Builder<BuildFileAST> asts = ImmutableList.builder();
     int prevIdx = 0;
     boolean lastIsLoad = true; // don't cut if the first statement is a load.
     List<Statement> statements = ast.getStatements();

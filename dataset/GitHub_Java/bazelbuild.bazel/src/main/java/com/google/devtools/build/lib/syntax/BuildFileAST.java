@@ -295,7 +295,8 @@ public class BuildFileAST extends ASTNode {
       EventHandler eventHandler) {
     Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return create(
-        preludeStatements, result, /* contentHashCode= */ null, repositoryMapping, eventHandler);
+            preludeStatements, result, /* contentHashCode= */ null, repositoryMapping, eventHandler)
+        .validateBuildFile(eventHandler);
   }
 
   /**
@@ -310,22 +311,24 @@ public class BuildFileAST extends ASTNode {
       EventHandler eventHandler) {
     Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return create(
-        preludeStatements,
-        result,
-        /* contentHashCode= */ null,
-        repositoryMapping,
-        eventHandler,
-        true);
+            preludeStatements,
+            result,
+            /* contentHashCode= */ null,
+            repositoryMapping,
+            eventHandler,
+            true)
+        .validateBuildFile(eventHandler);
   }
 
   public static BuildFileAST parseBuildFile(ParserInputSource input, EventHandler eventHandler) {
     Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return create(
-        /* preludeStatements= */ ImmutableList.<Statement>of(),
-        result,
-        /* contentHashCode= */ null,
-        /* repositoryMapping= */ ImmutableMap.of(),
-        eventHandler);
+            /* preludeStatements= */ ImmutableList.<Statement>of(),
+            result,
+            /* contentHashCode= */ null,
+            /* repositoryMapping= */ ImmutableMap.of(),
+            eventHandler)
+        .validateBuildFile(eventHandler);
   }
 
   public static BuildFileAST parseSkylarkFile(
@@ -386,6 +389,19 @@ public class BuildFileAST extends ASTNode {
     return new BuildFileAST(statements, true, contentHashCode, getLocation(), comments, imports);
   }
 
+  /**
+   * Run static checks for a BUILD file.
+   *
+   * @return a new AST (or the same), with the containsErrors flag updated.
+   */
+  public BuildFileAST validateBuildFile(EventHandler eventHandler) {
+    boolean valid = ValidationEnvironment.checkBuildSyntax(statements, eventHandler);
+    if (valid || containsErrors) {
+      return this;
+    }
+    return new BuildFileAST(statements, true, contentHashCode, getLocation(), comments, imports);
+  }
+
   public static BuildFileAST parseString(EventHandler eventHandler, String... content) {
     String str = Joiner.on("\n").join(content);
     ParserInputSource input = ParserInputSource.create(str, PathFragment.EMPTY_FRAGMENT);
@@ -396,6 +412,10 @@ public class BuildFileAST extends ASTNode {
         /* contentHashCode= */ null,
         /* repositoryMapping= */ ImmutableMap.of(),
         eventHandler);
+  }
+
+  public static BuildFileAST parseBuildString(EventHandler eventHandler, String... content) {
+    return parseString(eventHandler, content).validateBuildFile(eventHandler);
   }
 
   /**
@@ -439,8 +459,8 @@ public class BuildFileAST extends ASTNode {
   }
 
   /**
-   * Parses and validates the lines from input and return the AST In case of error during
-   * validation, it throws an EvalException.
+   * Parses and validates the lines from input and return the the AST
+   * In case of error during validation, it throws an EvalException.
    */
   public static BuildFileAST parseAndValidateSkylarkString(Environment env, String[] input)
       throws EvalException {
