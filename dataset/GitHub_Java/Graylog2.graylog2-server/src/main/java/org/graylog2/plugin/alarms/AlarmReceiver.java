@@ -21,6 +21,7 @@
 */
 package org.graylog2.plugin.alarms;
 
+import java.util.Map;
 import org.graylog2.plugin.alarms.transports.Transport;
 
 /**

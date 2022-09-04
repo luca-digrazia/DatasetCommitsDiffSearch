@@ -23,7 +23,6 @@ package org.graylog2.plugin.alarms;
 
 import java.util.Set;
 import org.graylog2.plugin.alarms.transports.Transport;
-import org.graylog2.plugin.streams.Stream;
 
 /**
  *
@@ -33,8 +32,6 @@ public interface Alarm {
     
     public String getTopic();
     public String getDescription();
-    public Stream getStream();
-    public int getMessageCount();
     
     public Set<AlarmReceiver> getReceivers(Transport transport);
     

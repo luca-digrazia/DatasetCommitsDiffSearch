@@ -27,12 +27,7 @@ package org.graylog2.plugin.alarms.transports;
  */
 public class TransportConfigurationException extends Exception {
     
-    /**
-	 * 
-	 */
-	private static final long serialVersionUID = -851955448143684632L;
-
-	public TransportConfigurationException() {
+    public TransportConfigurationException() {
         super();
     }
     

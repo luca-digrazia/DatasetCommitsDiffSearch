@@ -21,18 +21,19 @@
 */
 package org.graylog2.plugin.alarms.callbacks;
 
+import java.util.Map;
+import org.graylog2.plugin.alarms.Alarm;
+
 /**
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class AlarmCallbackConfigurationException extends Exception {
+public interface AlarmCallback {
     
-    public AlarmCallbackConfigurationException() {
-        super();
-    }
-    
-    public AlarmCallbackConfigurationException(String msg) {
-        super(msg);
-    }
+    public void initialize(Map<String, String> config) throws AlarmCallbackConfigurationException;
+    public void call(Alarm alarm) throws AlarmCallbackException;
+
+    public Map<String, String> getRequestedConfiguration();
+    public String getName();
     
 }
