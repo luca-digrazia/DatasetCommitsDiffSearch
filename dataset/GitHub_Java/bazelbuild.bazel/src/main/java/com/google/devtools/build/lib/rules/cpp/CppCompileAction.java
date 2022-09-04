@@ -441,15 +441,12 @@ public class CppCompileAction extends AbstractAction
    * sand-boxed environment) and can diagnose the missing headers.
    */
   private Iterable<Artifact> filterDiscoveredHeaders(
-      ActionExecutionContext actionExecutionContext,
-      Iterable<Artifact> headers,
-      List<CcCompilationContext.HeaderInfo> headerInfo) {
+      ActionExecutionContext actionExecutionContext, Iterable<Artifact> headers) {
     Set<Artifact> undeclaredHeaders = Sets.newHashSet(headers);
 
     // Remove all declared headers and find out which modules were used while at it.
     CcCompilationContext.HeadersAndModules headersAndModules =
-        ccCompilationContext.computeDeclaredHeadersAndUsedModules(
-            usePic, undeclaredHeaders, headerInfo);
+        ccCompilationContext.computeDeclaredHeadersAndUsedModules(usePic, undeclaredHeaders);
     usedModules = ImmutableList.copyOf(headersAndModules.modules);
     undeclaredHeaders.removeAll(headersAndModules.headers);
 
@@ -514,13 +511,11 @@ public class CppCompileAction extends AbstractAction
       }
       commandLineKey = computeCommandLineKey(options);
       List<PathFragment> systemIncludeDirs = getSystemIncludeDirs(options);
-      List<CcCompilationContext.HeaderInfo> headerInfo =
-          ccCompilationContext.getTransitiveHeaderInfos();
       additionalInputs =
           findUsedHeaders(
               actionExecutionContext,
               ccCompilationContext
-                  .createIncludeScanningHeaderData(usePic, useHeaderModules, headerInfo)
+                  .createIncludeScanningHeaderData(usePic, useHeaderModules)
                   .setSystemIncludeDirs(systemIncludeDirs)
                   .setCmdlineIncludes(getCmdlineIncludes(options))
                   .build());
@@ -534,8 +529,7 @@ public class CppCompileAction extends AbstractAction
 
       if (!shouldScanDotdFiles()) {
         // If we aren't looking at .d files later, remove undeclared inputs now.
-        additionalInputs =
-            filterDiscoveredHeaders(actionExecutionContext, additionalInputs, headerInfo);
+        additionalInputs = filterDiscoveredHeaders(actionExecutionContext, additionalInputs);
       }
     }
 
@@ -1457,8 +1451,7 @@ public class CppCompileAction extends AbstractAction
           findUsedHeaders(
               actionExecutionContext,
               ccCompilationContext
-                  .createIncludeScanningHeaderData(
-                      usePic, useHeaderModules, ccCompilationContext.getTransitiveHeaderInfos())
+                  .createIncludeScanningHeaderData(usePic, useHeaderModules)
                   .setSystemIncludeDirs(getSystemIncludeDirs())
                   .setCmdlineIncludes(getCmdlineIncludes(getCompilerOptions()))
                   .build());
