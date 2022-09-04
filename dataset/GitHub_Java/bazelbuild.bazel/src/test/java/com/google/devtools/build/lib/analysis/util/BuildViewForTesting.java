@@ -704,6 +704,7 @@ public class BuildViewForTesting {
         unloadedToolchainCollection.getContextMap().entrySet()) {
       ResolvedToolchainContext toolchainContext =
           ResolvedToolchainContext.load(
+              target.getPackage().getRepositoryMapping(),
               unloadedToolchainContext.getValue(),
               targetDescription,
               prerequisiteMap.get(DependencyKind.forExecGroup(unloadedToolchainContext.getKey())));

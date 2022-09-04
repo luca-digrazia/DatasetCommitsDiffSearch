@@ -1079,8 +1079,7 @@ public final class SkyframeBuildView {
     @Override
     public void evaluated(
         SkyKey skyKey,
-        @Nullable SkyValue newValue,
-        @Nullable ErrorInfo newError,
+        @Nullable SkyValue value,
         Supplier<EvaluationSuccessState> evaluationSuccessState,
         EvaluationState state) {
       // We tolerate any action lookup keys here, although we only expect configured targets,
@@ -1099,8 +1098,8 @@ public final class SkyframeBuildView {
             // During multithreaded operation, this is only set to true, so no concurrency issues.
             someActionLookupValueEvaluated = true;
           }
-          if (newValue instanceof ActionLookupValue) {
-            int numActions = ((ActionLookupValue) newValue).getNumActions();
+          if (value instanceof ActionLookupValue) {
+            int numActions = ((ActionLookupValue) value).getNumActions();
             actionCount.addAndGet(numActions);
             if (isConfiguredTarget) {
               configuredTargetActionCount.addAndGet(numActions);
