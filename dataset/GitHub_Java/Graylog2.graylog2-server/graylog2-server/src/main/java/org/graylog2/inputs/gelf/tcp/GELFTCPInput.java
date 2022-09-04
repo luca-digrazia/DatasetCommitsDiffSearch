@@ -50,10 +50,6 @@ public class GELFTCPInput extends GELFInputBase {
             core.metrics().register(MetricRegistry.name(GELFTCPInput.class, gauge.getKey()), gauge.getValue());
         }
 
-        // Register connection counter gauges.
-        core.metrics().register(MetricRegistry.name(GELFTCPInput.class, "open_connections"), connectionCounter.gaugeCurrent());
-        core.metrics().register(MetricRegistry.name(GELFTCPInput.class, "total_connections"), connectionCounter.gaugeTotal());
-
         final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
                         .setNameFormat("input-" + inputId + "-gelftcp-boss-%d")
@@ -68,7 +64,7 @@ public class GELFTCPInput extends GELFInputBase {
                 new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)
         );
 
-        bootstrap.setPipelineFactory(new GELFTCPPipelineFactory(core, this, throughputCounter, connectionCounter));
+        bootstrap.setPipelineFactory(new GELFTCPPipelineFactory(core, this, throughputCounter));
 
         try {
             channel = ((ServerBootstrap) bootstrap).bind(socketAddress);

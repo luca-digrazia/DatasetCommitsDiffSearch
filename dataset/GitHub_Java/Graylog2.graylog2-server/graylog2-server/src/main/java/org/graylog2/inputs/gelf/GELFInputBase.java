@@ -20,8 +20,7 @@
 package org.graylog2.inputs.gelf;
 
 import org.graylog2.Core;
-import org.graylog2.inputs.util.ConnectionCounter;
-import org.graylog2.inputs.util.ThroughputCounter;
+import org.graylog2.inputs.ThroughputCounter;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
@@ -46,7 +45,6 @@ public class GELFInputBase extends MessageInput {
     protected Channel channel;
 
     protected final ThroughputCounter throughputCounter;
-    protected final ConnectionCounter connectionCounter;
 
     protected Core core;
     protected Configuration config;
@@ -54,7 +52,6 @@ public class GELFInputBase extends MessageInput {
 
     public GELFInputBase() {
         this.throughputCounter = new ThroughputCounter();
-        this.connectionCounter = new ConnectionCounter();
     }
 
     @Override

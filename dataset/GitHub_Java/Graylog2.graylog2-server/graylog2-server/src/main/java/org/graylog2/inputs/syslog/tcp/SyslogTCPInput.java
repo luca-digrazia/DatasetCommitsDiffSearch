@@ -55,10 +55,6 @@ public class SyslogTCPInput extends SyslogInputBase {
             core.metrics().register(MetricRegistry.name(SyslogTCPInput.class, gauge.getKey()), gauge.getValue());
         }
 
-        // Register connection counter gauges.
-        core.metrics().register(MetricRegistry.name(SyslogTCPInput.class, "open_connections"), connectionCounter.gaugeCurrent());
-        core.metrics().register(MetricRegistry.name(SyslogTCPInput.class, "total_connections"), connectionCounter.gaugeTotal());
-
         final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
                         .setNameFormat("input-" + inputId + "-syslogtcp-boss-%d")
@@ -73,7 +69,7 @@ public class SyslogTCPInput extends SyslogInputBase {
                 new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)
         );
 
-        bootstrap.setPipelineFactory(new SyslogTCPPipelineFactory(core, config, this, throughputCounter, connectionCounter));
+        bootstrap.setPipelineFactory(new SyslogTCPPipelineFactory(core, config, this, throughputCounter));
 
         try {
             channel = ((ServerBootstrap) bootstrap).bind(socketAddress);
