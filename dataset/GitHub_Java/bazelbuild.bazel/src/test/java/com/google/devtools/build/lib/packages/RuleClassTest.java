@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTe
 import com.google.devtools.build.lib.packages.Attribute.ValidityPredicate;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
+import com.google.devtools.build.lib.packages.RuleClass.Configurator;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
@@ -100,6 +101,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         false,
         false,
         ImplicitOutputsFunction.NONE,
+        RuleClass.NO_CHANGE,
         null,
         DUMMY_CONFIGURED_TARGET_FACTORY,
         PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -137,6 +139,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         false,
         false,
         ImplicitOutputsFunction.NONE,
+        RuleClass.NO_CHANGE,
         null,
         DUMMY_CONFIGURED_TARGET_FACTORY,
         PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -265,6 +268,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             ImplicitOutputsFunction.NONE,
+            RuleClass.NO_CHANGE,
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
             PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -312,6 +316,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             ImplicitOutputsFunction.NONE,
+            RuleClass.NO_CHANGE,
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
             PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -411,6 +416,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             ImplicitOutputsFunction.fromTemplates(
                 "foo-%{name}.bar", "lib%{name}-wazoo-%{name}.mumble", "stuff-%{outs}-bar"),
+            RuleClass.NO_CHANGE,
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
             PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -452,6 +458,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             ImplicitOutputsFunction.fromTemplates("%{dirname}lib%{basename}.bar"),
+            RuleClass.NO_CHANGE,
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
             PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -489,6 +496,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         false,
         false,
         ImplicitOutputsFunction.fromTemplates("empty"),
+        RuleClass.NO_CHANGE,
         null,
         DUMMY_CONFIGURED_TARGET_FACTORY,
         PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -651,6 +659,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             ImplicitOutputsFunction.fromTemplates("first-%{name}", "second-%{name}", "out-%{outs}"),
+            RuleClass.NO_CHANGE,
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
             PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -694,6 +703,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
             false,
             false,
             ImplicitOutputsFunction.NONE,
+            RuleClass.NO_CHANGE,
             null,
             DUMMY_CONFIGURED_TARGET_FACTORY,
             PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -844,6 +854,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
       boolean workspaceOnly,
       boolean outputsDefaultExecutable,
       ImplicitOutputsFunction implicitOutputsFunction,
+      Configurator<?, ?> configurator,
       RuleTransitionFactory transitionFactory,
       ConfiguredTargetFactory<?, ?> configuredTargetFactory,
       PredicateWithMessage<Rule> validityPredicate,
@@ -872,6 +883,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         outputsDefaultExecutable,
         implicitOutputsFunction,
         /*isConfigMatcher=*/ false,
+        configurator,
         transitionFactory,
         null,
         configuredTargetFactory,
@@ -888,7 +900,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
             .setMissingFragmentPolicy(missingFragmentPolicy)
             .build(),
         supportsConstraintChecking,
-        /*requiredToolchains=*/ ImmutableSet.<Label>of(),
+        /*requiredToolchains=*/ ImmutableList.<Label>of(),
         attributes);
   }
 
@@ -902,6 +914,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         false,
         false,
         ImplicitOutputsFunction.NONE,
+        RuleClass.NO_CHANGE,
         null,
         DUMMY_CONFIGURED_TARGET_FACTORY,
         PredicatesWithMessage.<Rule>alwaysTrue(),
