@@ -2,16 +2,18 @@ package io.quarkus.oidc.common.runtime;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 
+@ConfigGroup
 public class OidcCommonConfig {
     /**
-     * The base URL of the OpenID Connect (OIDC) server, for example, 'https://host:port/auth'.
+     * The base URL of the OpenID Connect (OIDC) server, for example, `https://host:port/auth`.
      * OIDC discovery endpoint will be called by default by appending a '.well-known/openid-configuration' path to this URL.
      * Note if you work with Keycloak OIDC server, make sure the base URL is in the following format:
-     * 'https://host:port/auth/realms/{realm}' where '{realm}' has to be replaced by the name of the Keycloak realm.
+     * `https://host:port/auth/realms/{realm}` where `{realm}` has to be replaced by the name of the Keycloak realm.
      */
     @ConfigItem
     public Optional<String> authServerUrl = Optional.empty();
@@ -37,11 +39,42 @@ public class OidcCommonConfig {
     public Optional<String> clientId = Optional.empty();
 
     /**
-     * The maximum amount of time the adapter will try connecting to the currently unavailable OIDC server for.
-     * For example, setting it to '20S' will let the adapter keep requesting the connection for up to 20 seconds.
+     * The maximum amount of time connecting to the currently unavailable OIDC server will be attempted for.
+     * The number of times the connection request will be repeated is calculated by dividing the value of this property by 2.
+     * For example, setting it to `20S` will allow for requesting the connection up to 10 times with a 2 seconds delay between
+     * the retries.
+     * Note this property is only effective when the initial OIDC connection is created,
+     * for example, when requesting a well-known OIDC configuration.
+     * Use the 'connection-retry-count' property to support trying to re-establish an already available connection which may
+     * have been
+     * dropped.
      */
     @ConfigItem
     public Optional<Duration> connectionDelay = Optional.empty();
+
+    /**
+     * The number of times an attempt to re-establish an already available connection will be repeated for.
+     * Note this property is different to the `connection-delay` property which is only effective during the initial OIDC
+     * connection creation.
+     * This property is used to try to recover the existing connection which may have been temporarily lost.
+     * For example, if a request to the OIDC token endpoint fails due to a connection exception then the request will be retried
+     * for
+     * a number of times configured by this property.
+     */
+    @ConfigItem(defaultValue = "3")
+    public int connectionRetryCount = 3;
+
+    /**
+     * The amount of time after which the current OIDC connection request will time out.
+     */
+    @ConfigItem(defaultValue = "10s")
+    public Duration connectionTimeout = Duration.ofSeconds(10);
+
+    /**
+     * The maximum size of the connection pool used by the WebClient
+     */
+    @ConfigItem
+    public OptionalInt maxPoolSize = OptionalInt.empty();
 
     /**
      * Credentials which the OIDC adapter will use to authenticate to the OIDC server.
@@ -65,16 +98,16 @@ public class OidcCommonConfig {
     public static class Credentials {
 
         /**
-         * Client secret which is used for a 'client_secret_basic' authentication method.
+         * Client secret which is used for a `client_secret_basic` authentication method.
          * Note that a 'client-secret.value' can be used instead but both properties are mutually exclusive.
          */
         @ConfigItem
         public Optional<String> secret = Optional.empty();
 
         /**
-         * Client secret which can be used for the 'client_secret_basic' (default) and 'client_secret_post'
+         * Client secret which can be used for the `client_secret_basic` (default) and `client_secret_post`
          * and 'client_secret_jwt' authentication methods.
-         * Note that a 'secret.value' property can be used instead to support the 'client_secret_basic' method
+         * Note that a `secret.value` property can be used instead to support the `client_secret_basic` method
          * but both properties are mutually exclusive.
          */
         @ConfigItem
@@ -198,6 +231,12 @@ public class OidcCommonConfig {
              */
             @ConfigItem(defaultValue = "password")
             public String keyPassword;
+
+            /**
+             * Key identifier of the signing key added as a JWT 'kid' header
+             */
+            @ConfigItem
+            public Optional<String> tokenKeyId = Optional.empty();
 
             /**
              * JWT life-span in seconds. It will be added to the time it was issued at to calculate the expiration time.
@@ -338,5 +377,21 @@ public class OidcCommonConfig {
 
     public void setProxy(Proxy proxy) {
         this.proxy = proxy;
+    }
+
+    public Duration getConnectionTimeout() {
+        return connectionTimeout;
+    }
+
+    public void setConnectionTimeout(Duration connectionTimeout) {
+        this.connectionTimeout = connectionTimeout;
+    }
+
+    public OptionalInt getMaxPoolSize() {
+        return maxPoolSize;
+    }
+
+    public void setMaxPoolSize(int maxPoolSize) {
+        this.maxPoolSize = OptionalInt.of(maxPoolSize);
     }
 }
