@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.matrix;
 
@@ -29,39 +29,40 @@ public class BiconjugateGradient {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BiconjugateGradient.class);
 
     /**
-     * Returns a simple preconditioner matrix that is the
-     * trivial diagonal part of A in some cases.
+     * The desired convergence tolerance.
      */
-    public static Preconditioner Jacobi(DMatrix A) {
-        return (b, x) -> {
-                double[] diag = A.diag();
-                int n = diag.length;
-
-                for (int i = 0; i < n; i++) {
-                    x[i] = diag[i] != 0.0 ? b[i] / diag[i] : b[i];
-                }
-            };
-    }
+    private double tol = 1E-6;
     /**
-     * Solves A * x = b by iterative biconjugate gradient method with Jacobi
-     * preconditioner matrix.
-     *
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @return the estimated error.
+     * Which convergence test is applied.
+     * If itol = 1, iteration stops when |Ax - b| / |b| is less than the parameter tolerance.
+     * If itol = 2, the stop criterion is |A<sup>-1</sup> (Ax - b)| / |A<sup>-1</sup>b| is less than tolerance.
+     * If tol = 3, |x<sub>k+1</sub> - x<sub>k</sub>|<sub>2</sub> is less than
+     * tolerance.
+     * The setting of tol = 4 is same as tol = 3 except that the
+     * L<sub>&infin;</sub> norm instead of L<sub>2</sub>.
      */
-    public static double solve(DMatrix A, double[] b, double[] x) {
-        return solve(A, b, x, Jacobi(A), 1E-6, 1, 2 * Math.max(A.nrows(), A.ncols()));
-    }
+    private int itol = 1;
+    /**
+     * The maximum number of allowed iterations.
+     */
+    private int maxIter = 1000;
+    /**
+     * The preconditioner matrix.
+     */
+    private Preconditioner preconditioner;
 
     /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @return the estimated error.
-     * @param preconditioner The preconditioner matrix.
+     * Constructor with itol = 1 and tol = 1E-6.
+     * The maximum number of iterations will be determined by
+     * the size of matrix. If null, the preconditioner will be
+     * set as a trivial diagonal part of input matrix.
+     */
+    public BiconjugateGradient() {
+        this(1E-6, 1, 1000, null);
+    }
+
+    /**
+     * Constructor.
      * @param tol The desired convergence tolerance.
      * @param itol Which convergence test is applied.
      *             If itol = 1, iteration stops when |Ax - b| / |b| is less
@@ -72,9 +73,13 @@ public class BiconjugateGradient {
      *             tolerance.
      *             The setting of tol = 4 is same as tol = 3 except that the
      *             L<sub>&infin;</sub> norm instead of L<sub>2</sub>.
-     * @param maxIter The maximum number of iterations.
+     * @param maxIter The maximum number of allowed iterations. If zero or negative,
+     *                the maximum number of iterations will be determined by
+     *                the size of matrix.
+     * @param preconditioner The preconditioner matrix. If null, use a simple preconditioner matrix
+     *                       that is the trivial diagonal part of A.
      */
-    public static double solve(DMatrix A, double[] b, double[] x, Preconditioner preconditioner, double tol, int itol, int maxIter) {
+    public BiconjugateGradient(double tol, int itol, int maxIter, Preconditioner preconditioner) {
         if (tol <= 0.0) {
             throw new IllegalArgumentException("Invalid tolerance: " + tol);
         }
@@ -85,6 +90,43 @@ public class BiconjugateGradient {
 
         if (maxIter <= 0) {
             throw new IllegalArgumentException("Invalid maximum iterations: " + maxIter);
+        }
+
+        this.tol = tol;
+        this.itol = itol;
+        this.maxIter = maxIter;
+        this.preconditioner = preconditioner;
+    }
+
+    /**
+     * Returns a simple preconditioner matrix that is the
+     * trivial diagonal part of A in some cases.
+     */
+    private Preconditioner Jacobi(Matrix A) {
+        return (b, x) -> {
+                double[] diag = A.diag();
+                int n = diag.length;
+
+                for (int i = 0; i < n; i++) {
+                    x[i] = diag[i] != 0.0 ? b[i] / diag[i] : b[i];
+                }
+            };
+    }
+
+    /**
+     * Solves A * x = b by iterative biconjugate gradient method.
+     * @param b the right hand side of linear equations.
+     * @param x on input, x should be set to an initial guess of the solution
+     * (or all zeros). On output, x is reset to the improved solution.
+     * @return the estimated error.
+     */
+    public double solve(Matrix A, double[] b, double[] x) {
+        if (maxIter <= 0) {
+            maxIter = 2 * Math.max(A.nrows(), A.ncols());
+        }
+
+        if (preconditioner == null) {
+            preconditioner = Jacobi(A);
         }
 
         double err = 0.0;
@@ -98,24 +140,24 @@ public class BiconjugateGradient {
         double[] z = new double[n];
         double[] zz = new double[n];
 
-        A.mv(x, r);
+        A.ax(x, r);
         for (j = 0; j < n; j++) {
             r[j] = b[j] - r[j];
             rr[j] = r[j];
         }
 
         if (itol == 1) {
-            bnrm = norm(b, itol);
+            bnrm = snorm(b);
             preconditioner.solve(r, z);
         } else if (itol == 2) {
             preconditioner.solve(b, z);
-            bnrm = norm(z, itol);
+            bnrm = snorm(z);
             preconditioner.solve(r, z);
         } else if (itol == 3 || itol == 4) {
             preconditioner.solve(b, z);
-            bnrm = norm(z, itol);
+            bnrm = snorm(z);
             preconditioner.solve(r, z);
-            znrm = norm(z, itol);
+            znrm = snorm(z);
         } else {
             throw new IllegalArgumentException(String.format("Illegal itol: %d", itol));
         }
@@ -138,12 +180,12 @@ public class BiconjugateGradient {
                 }
             }
             bkden = bknum;
-            A.mv(p, z);
+            A.ax(p, z);
             for (akden = 0.0, j = 0; j < n; j++) {
                 akden += z[j] * pp[j];
             }
             ak = bknum / akden;
-            A.tv(pp, zz);
+            A.atx(pp, zz);
             for (j = 0; j < n; j++) {
                 x[j] += ak * p[j];
                 r[j] -= ak * z[j];
@@ -151,20 +193,20 @@ public class BiconjugateGradient {
             }
             preconditioner.solve(r, z);
             if (itol == 1) {
-                err = norm(r, itol) / bnrm;
+                err = snorm(r) / bnrm;
             } else if (itol == 2) {
-                err = norm(z, itol) / bnrm;
+                err = snorm(z) / bnrm;
             } else if (itol == 3 || itol == 4) {
                 zm1nrm = znrm;
-                znrm = norm(z, itol);
+                znrm = snorm(z);
                 if (Math.abs(zm1nrm - znrm) > MathEx.EPSILON * znrm) {
-                    dxnrm = Math.abs(ak) * norm(p, itol);
+                    dxnrm = Math.abs(ak) * snorm(p);
                     err = znrm / Math.abs(zm1nrm - znrm) * dxnrm;
                 } else {
                     err = znrm / bnrm;
                     continue;
                 }
-                xnrm = norm(x, itol);
+                xnrm = snorm(x);
                 if (err <= 0.5 * xnrm) {
                     err /= xnrm;
                 } else {
@@ -187,9 +229,9 @@ public class BiconjugateGradient {
     }
 
     /**
-     * Computes L2 or L-infinity norms for a vector x, as signaled by itol.
+     * Compute L2 or L-infinity norms for a vector x, as signaled by itol.
      */
-    private static double norm(double[] x, int itol) {
+    private double snorm(double[] x) {
         int n = x.length;
 
         if (itol <= 3) {
