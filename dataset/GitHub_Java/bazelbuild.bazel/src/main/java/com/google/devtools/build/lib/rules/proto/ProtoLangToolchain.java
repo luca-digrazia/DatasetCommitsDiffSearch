@@ -30,7 +30,7 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 
 /** Implements {code proto_lang_toolchain}. */
 public class ProtoLangToolchain implements RuleConfiguredTargetFactory {
@@ -41,12 +41,11 @@ public class ProtoLangToolchain implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Artifact> blacklistedProtos = NestedSetBuilder.stableOrder();
     for (TransitiveInfoCollection protos :
         ruleContext.getPrerequisites("blacklisted_protos", TARGET)) {
+      blacklistedProtos.addTransitive(protos.getProvider(FileProvider.class).getFilesToBuild());
       ProtoInfo protoInfo = protos.get(ProtoInfo.PROVIDER);
       // TODO(cushon): it would be nice to make this mandatory and stop adding files to build too
       if (protoInfo != null) {
-        blacklistedProtos.addTransitive(protoInfo.getTransitiveProtoSources());
-      } else {
-        blacklistedProtos.addTransitive(protos.getProvider(FileProvider.class).getFilesToBuild());
+        blacklistedProtos.addAll(protoInfo.getDirectProtoSources());
       }
     }
 
