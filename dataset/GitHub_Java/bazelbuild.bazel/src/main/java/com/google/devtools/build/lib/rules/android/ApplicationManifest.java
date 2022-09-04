@@ -300,7 +300,7 @@ public final class ApplicationManifest {
         ruleContext,
         false, /* isLibrary */
         resourceDeps,
-        ResourceConfigurationFilter.empty(ruleContext),
+        ImmutableList.<String>of(), /* configurationFilters */
         ImmutableList.<String>of(), /* uncompressedExtensions */
         true, /* crunchPng */
         ImmutableList.<String>of(), /* densities */
@@ -346,7 +346,7 @@ public final class ApplicationManifest {
         ruleContext,
         true, /* isLibrary */
         resourceDeps,
-        ResourceConfigurationFilter.empty(ruleContext),
+        ImmutableList.<String>of(), /* List<String> configurationFilters */
         ImmutableList.<String>of(), /* List<String> uncompressedExtensions */
         false, /* crunchPng */
         ImmutableList.<String>of(), /* List<String> densities */
@@ -368,7 +368,7 @@ public final class ApplicationManifest {
       ResourceDependencies resourceDeps,
       Artifact rTxt,
       Artifact symbols,
-      ResourceConfigurationFilter configurationFilters,
+      List<String> configurationFilters,
       List<String> uncompressedExtensions,
       boolean crunchPng,
       List<String> densities,
@@ -421,7 +421,7 @@ public final class ApplicationManifest {
       RuleContext ruleContext,
       boolean isLibrary,
       ResourceDependencies resourceDeps,
-      ResourceConfigurationFilter configurationFilters,
+      List<String> configurationFilters,
       List<String> uncompressedExtensions,
       boolean crunchPng,
       List<String> densities,
@@ -443,11 +443,6 @@ public final class ApplicationManifest {
     if (ruleContext.hasErrors()) {
       return null;
     }
-    
-    // Filter the resources during analysis to prevent processing of and dependencies on unwanted
-    // resources during execution.
-    resourceContainer = resourceContainer.filter(configurationFilters);
-    resourceDeps = resourceDeps.filter(configurationFilters);
 
     ResourceContainer processed;
     if (isLibrary && AndroidCommon.getAndroidConfig(ruleContext).useParallelResourceProcessing()) {
@@ -604,7 +599,8 @@ public final class ApplicationManifest {
     AndroidAaptActionHelper aaptActionHelper = new AndroidAaptActionHelper(ruleContext,
         getManifest(), Lists.newArrayList(resourceContainers));
 
-    String resourceConfigurationFilters = ResourceConfigurationFilter.extractFilters(ruleContext);
+    List<String> resourceConfigurationFilters =
+        ruleContext.getTokenizedStringListAttr("resource_configuration_filters");
     List<String> uncompressedExtensions =
         ruleContext.getTokenizedStringListAttr("nocompress_extensions");
 
@@ -614,7 +610,7 @@ public final class ApplicationManifest {
       additionalAaptOpts.add("-0").add(extension);
     }
     if (!resourceConfigurationFilters.isEmpty()) {
-      additionalAaptOpts.add("-c").add(resourceConfigurationFilters);
+      additionalAaptOpts.add("-c").add(Joiner.on(",").join(resourceConfigurationFilters));
     }
 
     Artifact javaSourcesJar = null;
