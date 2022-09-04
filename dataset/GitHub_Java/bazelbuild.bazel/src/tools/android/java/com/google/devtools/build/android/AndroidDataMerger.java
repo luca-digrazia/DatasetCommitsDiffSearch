@@ -35,7 +35,7 @@ import java.util.logging.Logger;
 /** Handles the Merging of ParsedAndroidData. */
 class AndroidDataMerger {
 
-  public static class MergeConflictException extends UserException {
+  public static class MergeConflictException extends RuntimeException {
 
     private MergeConflictException(String message) {
       super(message);
