@@ -23,11 +23,12 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.MakeVariableInfo;
-import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
@@ -65,11 +66,13 @@ public final class CcToolchainRule implements RuleDefinition {
     return ruleClass.endsWith("cc_toolchain");
   }
 
-  private static final LateBoundDefault<?, Label> LIBC_TOP =
-      LateBoundDefault.fromTargetConfiguration(
-          CppConfiguration.class,
-          null,
-          (rule, attributes, cppConfig) -> cppConfig.getSysrootLabel());
+  private static final LateBoundLabel<BuildConfiguration> LIBC_TOP =
+      new LateBoundLabel<BuildConfiguration>(CppConfiguration.class) {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+          return configuration.getFragment(CppConfiguration.class).getSysrootLabel();
+        }
+      };
 
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -83,12 +86,10 @@ public final class CcToolchainRule implements RuleDefinition {
     }
     return builder
         .setUndocumented()
-        .requiresConfigurationFragments(CppConfiguration.class, PlatformConfiguration.class)
+        .requiresConfigurationFragments(CppConfiguration.class)
         .advertiseProvider(MakeVariableInfo.class)
         .add(attr("output_licenses", LICENSE))
         .add(attr("cpu", STRING).mandatory())
-        .add(attr("compiler", STRING))
-        .add(attr("libc", STRING))
         .add(attr("all_files", LABEL).legacyAllowAnyFileType().cfg(HOST).mandatory())
         .add(attr("compiler_files", LABEL).legacyAllowAnyFileType().cfg(HOST).mandatory())
         .add(attr("strip_files", LABEL).legacyAllowAnyFileType().cfg(HOST).mandatory())
@@ -112,18 +113,23 @@ public final class CcToolchainRule implements RuleDefinition {
                 .singleArtifact()
                 .value(env.getToolsLabel("//tools/cpp:link_dynamic_library")))
         .add(
-            attr(CcToolchain.CC_TOOLCHAIN_TYPE_ATTRIBUTE_NAME, LABEL)
-                .value(CppRuleClasses.ccToolchainTypeAttribute(env)))
-        .add(
             attr(":zipper", LABEL)
                 .cfg(HOST)
                 .singleArtifact()
                 .value(
-                    LateBoundDefault.fromTargetConfiguration(
-                        CppConfiguration.class,
-                        null,
-                        (rule, attributes, cppConfig) ->
-                            cppConfig.isLLVMOptimizedFdo() ? zipper : null)))
+                    new LateBoundLabel<BuildConfiguration>() {
+                      @Override
+                      public Label resolve(
+                          Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+                        CppConfiguration cppConfiguration =
+                            configuration.getFragment(CppConfiguration.class);
+                        if (cppConfiguration.isLLVMOptimizedFdo()) {
+                          return zipper;
+                        } else {
+                          return null;
+                        }
+                      }
+                    }))
         .add(attr(":libc_top", LABEL).value(LIBC_TOP))
         .add(
             attr(":lipo_context_collector", LABEL)
