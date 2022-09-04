@@ -22,8 +22,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.io.BaseEncoding;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -278,8 +278,8 @@ public class FunctionTransitionUtil {
       }
     }
 
-    CoreOptions buildConfigOptions;
-    buildConfigOptions = buildOptions.get(CoreOptions.class);
+    BuildConfiguration.Options buildConfigOptions;
+    buildConfigOptions = buildOptions.get(BuildConfiguration.Options.class);
 
     if (starlarkTransition.isForAnalysisTesting()) {
       buildConfigOptions.evaluatingForAnalysisTest = true;
@@ -296,7 +296,7 @@ public class FunctionTransitionUtil {
    * @throws IllegalStateException If MD5 support is not available
    */
   private static void updateOutputDirectoryNameFragment(
-      CoreOptions buildConfigOptions, Map<String, Object> transition) {
+      BuildConfiguration.Options buildConfigOptions, Map<String, Object> transition) {
     String transitionString = "";
     for (Map.Entry<String, Object> entry : transition.entrySet()) {
       transitionString += entry.getKey() + ":";
