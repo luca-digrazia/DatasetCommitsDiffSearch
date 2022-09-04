@@ -71,14 +71,10 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     private static final String CK_TLS_KEY_PASSWORD = "tls_key_password";
     private static final String CK_TLS_CLIENT_AUTH = "tls_client_auth";
     private static final String CK_TLS_CLIENT_AUTH_TRUSTED_CERT_FILE = "tls_client_auth_cert_file";
-
-    private static final String TLS_CLIENT_AUTH_DISABLED = "disabled";
-    private static final String TLS_CLIENT_AUTH_OPTIONAL = "optional";
-    private static final String TLS_CLIENT_AUTH_REQUIRED = "required";
     private static final Map<String, String> TLS_CLIENT_AUTH_OPTIONS = ImmutableMap.of(
-            TLS_CLIENT_AUTH_DISABLED, TLS_CLIENT_AUTH_DISABLED,
-            TLS_CLIENT_AUTH_OPTIONAL, TLS_CLIENT_AUTH_OPTIONAL,
-            TLS_CLIENT_AUTH_REQUIRED, TLS_CLIENT_AUTH_REQUIRED);
+            "disabled", "disabled",
+            "optional", "optional",
+            "required", "required");
 
     protected final Executor bossExecutor;
     protected final Executor workerExecutor;
@@ -109,7 +105,7 @@ public abstract class AbstractTcpTransport extends NettyTransport {
         this.tlsCertFile = getTlsFile(configuration, CK_TLS_CERT_FILE);
         this.tlsKeyFile = getTlsFile(configuration, CK_TLS_KEY_FILE);
         this.tlsKeyPassword = configuration.getString(CK_TLS_KEY_PASSWORD);
-        this.tlsClientAuth = configuration.getString(CK_TLS_CLIENT_AUTH, TLS_CLIENT_AUTH_DISABLED);
+        this.tlsClientAuth = configuration.getString(CK_TLS_CLIENT_AUTH, "disabled");
         this.tlsClientAuthCertFile = getTlsFile(configuration, CK_TLS_CLIENT_AUTH_TRUSTED_CERT_FILE);
 
 
@@ -183,7 +179,7 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                 final SSLContext instance = SSLContext.getInstance("TLS");
                 TrustManager[] initTrustStore = new TrustManager[0];
 
-                if (TLS_CLIENT_AUTH_OPTIONAL.equals(tlsClientAuth) || TLS_CLIENT_AUTH_REQUIRED.equals(tlsClientAuth)) {
+                if ("optional".equals(tlsClientAuth) || "required".equals(tlsClientAuth)) {
                     if (tlsClientAuthCertFile.exists()) {
                         initTrustStore = KeyUtil.initTrustStore(tlsClientAuthCertFile);
                     } else {
@@ -197,14 +193,14 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                 engine.setUseClientMode(false);
 
                 switch (tlsClientAuth) {
-                    case TLS_CLIENT_AUTH_DISABLED:
+                    case "disabled":
                         LOG.debug("Not using TLS client authentication");
                         break;
-                    case TLS_CLIENT_AUTH_OPTIONAL:
+                    case "optional":
                         LOG.debug("Using optional TLS client authentication");
                         engine.setWantClientAuth(true);
                         break;
-                    case TLS_CLIENT_AUTH_REQUIRED:
+                    case "required":
                         LOG.debug("Using mandatory TLS client authentication");
                         engine.setNeedClientAuth(true);
                         break;
@@ -263,7 +259,7 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                     new DropdownField(
                             CK_TLS_CLIENT_AUTH,
                             "TLS client authentication",
-                            TLS_CLIENT_AUTH_DISABLED,
+                            "disabled",
                             TLS_CLIENT_AUTH_OPTIONS,
                             "Whether clients need to authenticate themselves in a TLS connection",
                             ConfigurationField.Optional.OPTIONAL
