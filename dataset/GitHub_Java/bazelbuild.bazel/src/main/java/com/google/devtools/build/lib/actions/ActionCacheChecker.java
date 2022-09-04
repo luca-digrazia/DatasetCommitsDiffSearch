@@ -248,8 +248,7 @@ public class ActionCacheChecker {
       EventHandler handler,
       MetadataHandler metadataHandler,
       ArtifactExpander artifactExpander,
-      Map<String, String> remoteDefaultPlatformProperties)
-      throws InterruptedException {
+      Map<String, String> remoteDefaultPlatformProperties) {
     // TODO(bazel-team): (2010) For RunfilesAction/SymlinkAction and similar actions that
     // produce only symlinks we should not check whether inputs are valid at all - all that matters
     // that inputs and outputs are still exist (and new inputs have not appeared). All other checks
@@ -316,8 +315,7 @@ public class ActionCacheChecker {
       ArtifactExpander artifactExpander,
       NestedSet<Artifact> actionInputs,
       Map<String, String> clientEnv,
-      Map<String, String> remoteDefaultPlatformProperties)
-      throws InterruptedException {
+      Map<String, String> remoteDefaultPlatformProperties) {
     // Unconditional execution can be applied only for actions that are allowed to be executed.
     if (unconditionalExecution(action)) {
       Preconditions.checkState(action.isVolatile());
@@ -386,7 +384,7 @@ public class ActionCacheChecker {
       ArtifactExpander artifactExpander,
       Map<String, String> clientEnv,
       Map<String, String> remoteDefaultPlatformProperties)
-      throws IOException, InterruptedException {
+      throws IOException {
     Preconditions.checkState(
         cacheConfig.enabled(), "cache unexpectedly disabled, action: %s", action);
     Preconditions.checkArgument(token != null, "token unexpectedly null, action: %s", action);
