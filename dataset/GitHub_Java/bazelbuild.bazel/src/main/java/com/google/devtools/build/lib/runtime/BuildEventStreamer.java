@@ -16,15 +16,14 @@ package com.google.devtools.build.lib.runtime;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Strings.nullToEmpty;
 import static com.google.devtools.build.lib.events.Event.of;
 import static com.google.devtools.build.lib.events.EventKind.PROGRESS;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.Subscribe;
@@ -75,7 +74,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,7 +82,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -133,18 +130,18 @@ public class BuildEventStreamer implements EventHandler {
    */
   public interface OutErrProvider {
     /**
-     * Return the chunks of stdout that were produced since the last call to this function (or the
+     * Return the chunk of stdout that was produced since the last call to this function (or the
      * beginning of the build, for the first call). It is the responsibility of the class
      * implementing this interface to properly synchronize with simultaneously written output.
      */
-    Iterable<String> getOut();
+    String getOut();
 
     /**
-     * Return the chunks of stderr that were produced since the last call to this function (or the
+     * Return the chunk of stderr that was produced since the last call to this function (or the
      * beginning of the build, for the first call). It is the responsibility of the class
      * implementing this interface to properly synchronize with simultaneously written output.
      */
-    Iterable<String> getErr();
+    String getErr();
   }
 
   @ThreadSafe
@@ -214,7 +211,7 @@ public class BuildEventStreamer implements EventHandler {
    * come before their parents.
    */
   private void post(BuildEvent event) {
-    List<BuildEvent> linkEvents = null;
+    BuildEvent linkEvent = null;
     BuildEventId id = event.getEventId();
     List<BuildEvent> flushEvents = null;
     boolean lastEvent = false;
@@ -227,14 +224,13 @@ public class BuildEventStreamer implements EventHandler {
         // that the set of posted events is always a subset of the set of announced events.
         announcedEvents.add(id);
         if (!event.getChildrenEvents().contains(ProgressEvent.INITIAL_PROGRESS_UPDATE)) {
-          BuildEvent progress = ProgressEvent.progressChainIn(progressCount, event.getEventId());
-          linkEvents = ImmutableList.of(progress);
+          linkEvent = ProgressEvent.progressChainIn(progressCount, event.getEventId());
           progressCount++;
-          announcedEvents.addAll(progress.getChildrenEvents());
+          announcedEvents.addAll(linkEvent.getChildrenEvents());
           // the new first event in the stream, implicitly announced by the fact that complete
           // stream may not be empty.
-          announcedEvents.add(progress.getEventId());
-          postedEvents.add(progress.getEventId());
+          announcedEvents.add(linkEvent.getEventId());
+          postedEvents.add(linkEvent.getEventId());
         }
 
         if (reporter != null) {
@@ -250,25 +246,16 @@ public class BuildEventStreamer implements EventHandler {
         bufferedStdoutStderrPairs = null;
       } else {
         if (!announcedEvents.contains(id)) {
-          Iterable<String> allOut = ImmutableList.of();
-          Iterable<String> allErr = ImmutableList.of();
+          String out = null;
+          String err = null;
           if (outErrProvider != null) {
-            allOut = orEmpty(outErrProvider.getOut());
-            allErr = orEmpty(outErrProvider.getErr());
+            out = outErrProvider.getOut();
+            err = outErrProvider.getErr();
           }
-          linkEvents = new ArrayList<>();
-          List<BuildEvent> finalLinkEvents = linkEvents;
-          consumeAsPairsofStrings(
-              allOut,
-              allErr,
-              (out, err) -> {
-                BuildEvent progressEvent =
-                    ProgressEvent.progressChainIn(progressCount, id, out, err);
-                finalLinkEvents.add(progressEvent);
-                progressCount++;
-                announcedEvents.addAll(progressEvent.getChildrenEvents());
-                postedEvents.add(progressEvent.getEventId());
-              });
+          linkEvent = ProgressEvent.progressChainIn(progressCount, id, out, err);
+          progressCount++;
+          announcedEvents.addAll(linkEvent.getChildrenEvents());
+          postedEvents.add(linkEvent.getEventId());
         }
       }
 
@@ -295,10 +282,8 @@ public class BuildEventStreamer implements EventHandler {
     }
 
     for (BuildEventTransport transport : transports) {
-      if (linkEvents != null) {
-        for (BuildEvent linkEvent : linkEvents) {
-          transport.sendBuildEvent(linkEvent, artifactGroupNamer);
-        }
+      if (linkEvent != null) {
+        transport.sendBuildEvent(linkEvent, artifactGroupNamer);
       }
       transport.sendBuildEvent(mainEvent, artifactGroupNamer);
     }
@@ -579,100 +564,29 @@ public class BuildEventStreamer implements EventHandler {
   }
 
   void flush() {
-    List<BuildEvent> updateEvents = null;
+    BuildEvent updateEvent = null;
     synchronized (this) {
-      Iterable<String> allOut = ImmutableList.of();
-      Iterable<String> allErr = ImmutableList.of();
+      String out = null;
+      String err = null;
       if (outErrProvider != null) {
-        allOut = orEmpty(outErrProvider.getOut());
-        allErr = orEmpty(outErrProvider.getErr());
+        out = outErrProvider.getOut();
+        err = outErrProvider.getErr();
       }
-      if (Iterables.isEmpty(allOut) && Iterables.isEmpty(allErr)) {
+      if (Strings.isNullOrEmpty(out) && Strings.isNullOrEmpty(err)) {
         // Nothing to flush; avoid generating an unneeded progress event.
         return;
       }
       if (announcedEvents != null) {
-        updateEvents = new ArrayList<>();
-        List<BuildEvent> finalUpdateEvents = updateEvents;
-        consumeAsPairsofStrings(
-            allOut, allErr, (s1, s2) -> finalUpdateEvents.add(flushStdoutStderrEvent(s1, s2)));
+        updateEvent = flushStdoutStderrEvent(out, err);
       } else {
-        consumeAsPairsofStrings(
-            allOut, allErr, (s1, s2) -> bufferedStdoutStderrPairs.add(Pair.of(s1, s2)));
+        bufferedStdoutStderrPairs.add(Pair.of(out, err));
       }
     }
-    if (updateEvents != null) {
-      for (BuildEvent updateEvent : updateEvents) {
-        for (BuildEventTransport transport : transports) {
-          transport.sendBuildEvent(updateEvent, artifactGroupNamer);
-        }
+    if (updateEvent != null) {
+      for (BuildEventTransport transport : transports) {
+        transport.sendBuildEvent(updateEvent, artifactGroupNamer);
       }
     }
-  }
-
-  // Returns the given Iterable, or an empty list if null.
-  private static <T> Iterable<T> orEmpty(Iterable<T> original) {
-    return original == null ? ImmutableList.of() : original;
-  }
-
-  // Given a pair of iterables and {@link BiConsumer}s, emit a sequence of pairs to the consumers.
-  // Given the leftIterables [L1, L2, ... LN], and the rightIterable [R1, R2, ... RM], the consumers
-  // will see this sequence of calls:
-  //  biConsumer.accept(L1, null);
-  //  biConsumer.accept(L2, null);
-  //  ....
-  //  biConsumer.accept(L(N-1), null);
-  //  biConsumer.accept(LN, R1);
-  //  biConsumer.accept(R2, null);
-  //  ...
-  //  biConsumer.accept(R(M-1), null);
-  //  lastConsumer.accept(RM, null);
-  //
-  // The lastConsumer is always called exactly once, even if both Iterables are empty.
-  @VisibleForTesting
-  static <T> void consumeAsPairs(
-      Iterable<T> leftIterable,
-      Iterable<T> rightIterable,
-      BiConsumer<T, T> biConsumer,
-      BiConsumer<T, T> lastConsumer) {
-    if (Iterables.isEmpty(leftIterable) && Iterables.isEmpty(rightIterable)) {
-      lastConsumer.accept(null, null);
-      return;
-    }
-
-    Iterator<T> leftIterator = leftIterable.iterator();
-    Iterator<T> rightIterator = rightIterable.iterator();
-    while (leftIterator.hasNext()) {
-      T left = leftIterator.next();
-      boolean lastT = !leftIterator.hasNext();
-      T right = (lastT && rightIterator.hasNext()) ? rightIterator.next() : null;
-      boolean lastItem = lastT && !rightIterator.hasNext();
-      (lastItem ? lastConsumer : biConsumer).accept(left, right);
-    }
-
-    while (rightIterator.hasNext()) {
-      T right = rightIterator.next();
-      (!rightIterator.hasNext() ? lastConsumer : biConsumer).accept(null, right);
-    }
-  }
-
-  private static <T> void consumeAsPairsofStrings(
-      Iterable<String> leftIterable,
-      Iterable<String> rightIterable,
-      BiConsumer<String, String> biConsumer,
-      BiConsumer<String, String> lastConsumer) {
-    consumeAsPairs(
-        leftIterable,
-        rightIterable,
-        (s1, s2) -> biConsumer.accept(nullToEmpty(s1), nullToEmpty(s2)),
-        (s1, s2) -> lastConsumer.accept(nullToEmpty(s1), nullToEmpty(s2)));
-  }
-
-  private static <T> void consumeAsPairsofStrings(
-      Iterable<String> leftIterable,
-      Iterable<String> rightIterable,
-      BiConsumer<String, String> biConsumer) {
-    consumeAsPairsofStrings(leftIterable, rightIterable, biConsumer, biConsumer);
   }
 
   @VisibleForTesting
@@ -682,17 +596,13 @@ public class BuildEventStreamer implements EventHandler {
 
   private synchronized void clearEventsAndPostFinalProgress(ChainableEvent event) {
     clearPendingEvents();
-    Iterable<String> allOut = ImmutableList.of();
-    Iterable<String> allErr = ImmutableList.of();
+    String out = null;
+    String err = null;
     if (outErrProvider != null) {
-      allOut = orEmpty(outErrProvider.getOut());
-      allErr = orEmpty(outErrProvider.getErr());
+      out = outErrProvider.getOut();
+      err = outErrProvider.getErr();
     }
-    consumeAsPairsofStrings(
-        allOut,
-        allErr,
-        (s1, s2) -> post(flushStdoutStderrEvent(s1, s2)),
-        (s1, s2) -> post(ProgressEvent.finalProgressUpdate(progressCount, s1, s2)));
+    post(ProgressEvent.finalProgressUpdate(progressCount, out, err));
     clearAnnouncedEvents(event == null ? ImmutableList.of() : event.getChildrenEvents());
   }
 
