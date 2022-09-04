@@ -29,7 +29,6 @@ import org.graylog2.indexer.searches.Sorting;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
@@ -79,7 +78,6 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
     @Override
     protected CheckResult runCheck() {
         this.searchHits = Collections.emptyList();
-        final List<MessageSummary> summaries = Lists.newArrayList();
         try {
             String filter = "streams:" + stream.getId();
             CountResult result = searches.count("*", new RelativeRange(time * 60), filter);
@@ -103,16 +101,14 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
                     SearchResult backlogResult = searches.search("*", filter, new RelativeRange(time * 60), backlogSize, 0, new Sorting("timestamp", Sorting.Direction.DESC));
                     this.searchHits = Lists.newArrayList();
                     for (ResultMessage resultMessage : backlogResult.getResults()) {
-                        final Message msg = new Message(resultMessage.getMessage());
-                        searchHits.add(msg);
-                        summaries.add(new MessageSummary(resultMessage.getIndex(), msg));
+                        searchHits.add(new Message(resultMessage.getMessage()));
                     }
                 }
 
                 final String resultDescription = "Stream had " + count + " messages in the last " + time
                         + " minutes with trigger condition " + thresholdType.toString().toLowerCase()
                         + " than " + threshold + " messages. " + "(Current grace time: " + grace + " minutes)";
-                return new CheckResult(true, this, resultDescription, Tools.iso8601(), summaries);
+                return new CheckResult(true, this, resultDescription, Tools.iso8601());
             } else {
                 return new CheckResult(false);
             }
