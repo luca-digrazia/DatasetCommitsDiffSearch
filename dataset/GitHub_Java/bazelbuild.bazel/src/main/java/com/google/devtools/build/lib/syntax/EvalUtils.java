@@ -254,7 +254,7 @@ public final class EvalUtils {
       return "List"; // This case shouldn't happen in normal code, but we keep it for debugging.
     } else if (Map.class.isAssignableFrom(c)) { // This is a Java Map that isn't a SkylarkDict
       return "Map"; // This case shouldn't happen in normal code, but we keep it for debugging.
-    } else if (StarlarkFunction.class.isAssignableFrom(c)) {
+    } else if (BaseFunction.class.isAssignableFrom(c)) {
       return "function";
     } else if (c.equals(SelectorValue.class)) {
       return "select";
@@ -424,6 +424,26 @@ public final class EvalUtils {
       builder.add(String.valueOf(c));
     }
     return builder.build();
+  }
+
+  /**
+   * @return the size of the Skylark object or -1 in case the object doesn't have a size.
+   */
+  public static int size(Object arg) {
+    if (arg instanceof String) {
+      return ((String) arg).length();
+    } else if (arg instanceof Map) {
+      return ((Map<?, ?>) arg).size();
+    } else if (arg instanceof SkylarkList) {
+      return ((SkylarkList<?>) arg).size();
+    } else if (arg instanceof SkylarkNestedSet) {
+      // TODO(bazel-team): Add a deprecation warning: don't implicitly flatten depsets.
+      return ((SkylarkNestedSet) arg).toCollection().size();
+    } else if (arg instanceof Iterable) {
+      // Iterables.size() checks if arg is a Collection so it's efficient in that sense.
+      return Iterables.size((Iterable<?>) arg);
+    }
+    return -1;
   }
 
   // The following functions for indexing and slicing match the behavior of Python.

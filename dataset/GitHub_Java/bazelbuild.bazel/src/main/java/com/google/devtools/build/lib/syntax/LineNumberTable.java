@@ -32,7 +32,7 @@ import java.util.Objects;
  */
 @AutoCodec
 @Immutable
-class LineNumberTable implements Serializable {
+public class LineNumberTable implements Serializable {
   private static final Interner<LineNumberTable> LINE_NUMBER_TABLE_INTERNER =
       BlazeInterners.newWeakInterner();
 
@@ -42,11 +42,11 @@ class LineNumberTable implements Serializable {
   private final PathFragment path;
   private final int bufferLength;
 
-  private LineNumberTable(char[] buffer, PathFragment path) {
+  public LineNumberTable(char[] buffer, PathFragment path) {
     this(computeLinestart(buffer), path, buffer.length);
   }
 
-  private LineNumberTable(int[] linestart, PathFragment path, int bufferLength) {
+  LineNumberTable(int[] linestart, PathFragment path, int bufferLength) {
     this.linestart = linestart;
     this.path = path;
     this.bufferLength = bufferLength;
@@ -110,7 +110,7 @@ class LineNumberTable implements Serializable {
 
   @Override
   public boolean equals(Object other) {
-    if (!(other instanceof LineNumberTable)) {
+    if (other == null || !other.getClass().equals(getClass())) {
       return false;
     }
     LineNumberTable that = (LineNumberTable) other;

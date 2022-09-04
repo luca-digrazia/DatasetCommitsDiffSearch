@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -64,12 +65,12 @@ import javax.annotation.Nullable;
  */
 @AutoCodec
 @AutoValue
-public abstract class FunctionSignature {
+public abstract class FunctionSignature implements Serializable {
 
   /** The shape of a FunctionSignature, without names */
   @AutoValue
   @AutoCodec
-  public abstract static class Shape {
+  public abstract static class Shape implements Serializable {
     private static final Interner<Shape> interner = BlazeInterners.newWeakInterner();
 
     /** Create a function signature */
@@ -202,7 +203,7 @@ public abstract class FunctionSignature {
    */
   @AutoCodec
   @AutoValue
-  public abstract static class WithValues<V, T> {
+  public abstract static class WithValues<V, T> implements Serializable {
 
     // The fields
     /** The underlying signature with parameter shape and names */

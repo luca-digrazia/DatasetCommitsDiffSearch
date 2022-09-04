@@ -93,7 +93,7 @@ public final class BinaryOperatorExpression extends Expression {
               + "Use --incompatible_depset_is_not_iterable=false to temporarily disable "
               + "this check.");
     } else if (rval instanceof SkylarkQueryable) {
-      return ((SkylarkQueryable) rval).containsKey(lval, location, env.getStarlarkContext());
+      return ((SkylarkQueryable) rval).containsKey(lval, location);
     } else if (rval instanceof String) {
       if (lval instanceof String) {
         return ((String) rval).contains((String) lval);
@@ -189,10 +189,14 @@ public final class BinaryOperatorExpression extends Expression {
           return mult(lhs, rhs, env, location);
 
         case DIVIDE:
-          throw new EvalException(
-              location,
-              "The `/` operator is not allowed. Please use the `//` operator for integer "
-                  + "division.");
+          if (env.getSemantics().incompatibleDisallowSlashOperator()) {
+            throw new EvalException(
+                location,
+                "The `/` operator has been removed. Please use the `//` operator for integer "
+                    + "division. You can temporarily enable the `/` operator by passing "
+                    + "the flag --incompatible_disallow_slash_operator=false");
+          }
+          return divide(lhs, rhs, location);
 
         case FLOOR_DIVIDE:
           return divide(lhs, rhs, location);
@@ -402,7 +406,7 @@ public final class BinaryOperatorExpression extends Expression {
       // We want to follow Python semantics, so we use float division and round down.
       return (int) Math.floor(Double.valueOf((Integer) lval) / (Integer) rval);
     }
-    throw typeException(lval, rval, Operator.FLOOR_DIVIDE, location);
+    throw typeException(lval, rval, Operator.DIVIDE, location);
   }
 
   /** Implements Operator.PERCENT. */
