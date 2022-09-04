@@ -71,7 +71,6 @@ public final class JavaLibraryHelper {
   private final JavaClasspathMode classpathMode;
   private String injectingRuleKind;
   private boolean neverlink;
-  private boolean enableDirectClasspath = true;
 
   public JavaLibraryHelper(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
@@ -81,11 +80,6 @@ public final class JavaLibraryHelper {
 
   public JavaLibraryHelper setNeverlink(boolean neverlink) {
     this.neverlink = neverlink;
-    return this;
-  }
-
-  public JavaLibraryHelper enableDirectClasspath(boolean enableDirectClasspath) {
-    this.enableDirectClasspath = enableDirectClasspath;
     return this;
   }
 
@@ -265,7 +259,6 @@ public final class JavaLibraryHelper {
             additionalInputForDatabinding);
     helper.enableJspecify(enableJspecify);
     helper.addLocalClassPathEntries(localClassPathEntries);
-    helper.enableDirectClasspath(enableDirectClasspath);
     JavaCompileOutputs<Artifact> outputs = helper.createOutputs(output);
     artifactsBuilder.setCompileTimeDependencies(outputs.depsProto());
     helper.createCompileAction(outputs);
@@ -274,8 +267,6 @@ public final class JavaLibraryHelper {
     if (!sourceJars.isEmpty() || !sourceFiles.isEmpty()) {
       artifactsBuilder.addRuntimeJar(output);
       iJar = helper.createCompileTimeJarAction(output, artifactsBuilder);
-    } else if (!resources.isEmpty()) {
-      artifactsBuilder.addRuntimeJar(output);
     }
 
     if (createOutputSourceJar) {
