@@ -20,11 +20,6 @@
 
 package org.graylog2.messagehandlers.common;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.productivity.java.syslog4j.server.SyslogServerEventIF;
-
 /**
  * MessageFilterHook.java: Feb 7, 2011 5:56:21 PM
  *
@@ -39,18 +34,7 @@ public class MessageFilterHook implements MessagePostReceiveHookIF {
      */
     public void process(Object message) {
 	// 1. Get regex filters
-    	String regex = ".*(kernel).*";
-    	Pattern pat = Pattern.compile(regex);
-    	
 	// 2. Match message against regular expression
-    	//
 	// 3. Log filter matched or dropped
-    	String msg = new String(((SyslogServerEventIF) message).getRaw());
-    	Matcher m = pat.matcher(msg);
-    	if(m.matches()){
-    		System.out.println("found a match: " + m.group(1));
-    	} else {
-    		System.out.println("no match: " + msg);
-    	}
     }
 }
