@@ -25,7 +25,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.cliffc.high_scale_lib.Counter;
-import org.elasticsearch.action.admin.indices.settings.UpdateSettingsRequest;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -44,10 +43,11 @@ import org.graylog2.indexer.Indexer;
 import org.graylog2.initializers.Initializers;
 import org.graylog2.inputs.Inputs;
 import org.graylog2.jersey.container.netty.NettyContainer;
-import org.graylog2.metrics.jersey2.AnyExceptionClassMapper;
-import org.graylog2.metrics.jersey2.MetricsDynamicBinding;
+import org.graylog2.metrics.jetty2.AnyExceptionClassMapper;
+import org.graylog2.metrics.jetty2.MetricsDynamicBinding;
 import org.graylog2.outputs.Outputs;
 import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.transports.Transport;
 import org.graylog2.plugin.buffers.Buffer;
@@ -61,7 +61,6 @@ import org.graylog2.plugins.PluginLoader;
 import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.streams.StreamImpl;
-import org.graylog2.system.NodeId;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJobManager;
@@ -140,7 +139,7 @@ public class Core implements GraylogServer {
 
     private SystemJobManager systemJobManager;
 
-    private String nodeId;
+    private String serverId;
     
     private boolean localMode = false;
     private boolean statsMode = false;
@@ -153,9 +152,7 @@ public class Core implements GraylogServer {
 
     public void initialize(Configuration configuration, MetricRegistry metrics) {
     	startedAt = new DateTime(DateTimeZone.UTC);
-
-        NodeId id = new NodeId(configuration.getNodeIdFile());
-        this.nodeId = id.readOrGenerate();
+        serverId = Tools.generateServerId();
 
         this.metricRegistry = metrics;
         
@@ -245,9 +242,6 @@ public class Core implements GraylogServer {
         // Ramp it all up. (both plugins and built-in types)
         initializers().initialize();
         outputs().initialize();
-
-        // Load persisted inputs.
-        inputs().launchPersisted();
 
         /*
         // Initialize all registered transports.
@@ -471,8 +465,8 @@ public class Core implements GraylogServer {
     }
     
     @Override
-    public String getNodeId() {
-        return this.nodeId;
+    public String getServerId() {
+        return this.serverId;
     }
     
     @Override
