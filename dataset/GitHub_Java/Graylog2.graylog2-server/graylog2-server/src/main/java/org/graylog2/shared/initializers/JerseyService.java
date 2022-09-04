@@ -16,15 +16,16 @@
  */
 package org.graylog2.shared.initializers;
 
+import com.google.common.base.Strings;
+import com.google.common.util.concurrent.AbstractIdleService;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider;
-import com.google.common.base.Strings;
-import com.google.common.util.concurrent.AbstractIdleService;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import org.glassfish.grizzly.http.CompressionConfig;
-import org.glassfish.grizzly.http.server.ErrorPageGenerator;
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.glassfish.grizzly.http.server.NetworkListener;
 import org.glassfish.grizzly.ssl.SSLContextConfigurator;
@@ -56,12 +57,6 @@ import org.graylog2.shared.security.tls.PemKeyStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.ws.rs.container.ContainerResponseFilter;
-import javax.ws.rs.container.DynamicFeature;
-import javax.ws.rs.ext.ContextResolver;
-import javax.ws.rs.ext.ExceptionMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -83,9 +78,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.stream.Collectors;
 
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.ws.rs.container.ContainerResponseFilter;
+import javax.ws.rs.container.DynamicFeature;
+import javax.ws.rs.ext.ContextResolver;
+import javax.ws.rs.ext.ExceptionMapper;
+
 import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.MoreObjects.firstNonNull;
-import static java.util.Objects.requireNonNull;
 
 public class JerseyService extends AbstractIdleService {
     public static final String PLUGIN_PREFIX = "/plugins";
@@ -103,7 +104,6 @@ public class JerseyService extends AbstractIdleService {
     private final Set<PluginAuditEventTypes> pluginAuditEventTypes;
     private final ObjectMapper objectMapper;
     private final MetricRegistry metricRegistry;
-    private final ErrorPageGenerator errorPageGenerator;
 
     private HttpServer apiHttpServer = null;
     private HttpServer webHttpServer = null;
@@ -118,19 +118,17 @@ public class JerseyService extends AbstractIdleService {
                          @Named("RestControllerPackages") final String[] restControllerPackages,
                          Set<PluginAuditEventTypes> pluginAuditEventTypes,
                          ObjectMapper objectMapper,
-                         MetricRegistry metricRegistry,
-                         ErrorPageGenerator errorPageGenerator) {
-        this.configuration = requireNonNull(configuration, "configuration");
-        this.dynamicFeatures = requireNonNull(dynamicFeatures, "dynamicFeatures");
-        this.containerResponseFilters = requireNonNull(containerResponseFilters, "containerResponseFilters");
-        this.exceptionMappers = requireNonNull(exceptionMappers, "exceptionMappers");
-        this.additionalComponents = requireNonNull(additionalComponents, "additionalComponents");
-        this.pluginRestResources = requireNonNull(pluginRestResources, "pluginResources");
-        this.restControllerPackages = requireNonNull(restControllerPackages, "restControllerPackages");
-        this.pluginAuditEventTypes = requireNonNull(pluginAuditEventTypes, "pluginAuditEventTypes");
-        this.objectMapper = requireNonNull(objectMapper, "objectMapper");
-        this.metricRegistry = requireNonNull(metricRegistry, "metricRegistry");
-        this.errorPageGenerator = requireNonNull(errorPageGenerator, "errorPageGenerator");
+                         MetricRegistry metricRegistry) {
+        this.configuration = configuration;
+        this.dynamicFeatures = dynamicFeatures;
+        this.containerResponseFilters = containerResponseFilters;
+        this.exceptionMappers = exceptionMappers;
+        this.additionalComponents = additionalComponents;
+        this.pluginRestResources = pluginRestResources;
+        this.restControllerPackages = restControllerPackages;
+        this.pluginAuditEventTypes = pluginAuditEventTypes;
+        this.objectMapper = objectMapper;
+        this.metricRegistry = metricRegistry;
     }
 
     @Override
@@ -361,7 +359,7 @@ public class JerseyService extends AbstractIdleService {
         // See "Selector runners count" at https://grizzly.java.net/bestpractices.html for details.
         listener.getTransport().setSelectorRunnersCount(selectorRunnersCount);
 
-        listener.setDefaultErrorPageGenerator(errorPageGenerator);
+        listener.setDefaultErrorPageGenerator(new GraylogErrorPageGenerator());
 
         if(enableGzip) {
             final CompressionConfig compressionConfig = listener.getCompressionConfig();
@@ -392,7 +390,7 @@ public class JerseyService extends AbstractIdleService {
             throw new IllegalStateException("Couldn't initialize SSL context for HTTP server");
         }
 
-        return new SSLEngineConfigurator(sslContext.createSSLContext(false), false, false, false);
+        return new SSLEngineConfigurator(sslContext.createSSLContext(), false, false, false);
     }
 
     private ExecutorService instrumentedExecutor(final String executorName,

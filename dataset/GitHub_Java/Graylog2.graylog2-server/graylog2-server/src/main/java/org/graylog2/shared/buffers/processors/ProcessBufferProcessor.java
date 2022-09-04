@@ -16,33 +16,31 @@
  */
 package org.graylog2.shared.buffers.processors;
 
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
 import com.google.inject.Provider;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.lmax.disruptor.WorkHandler;
-import de.huxhorn.sulky.ulid.ULID;
+
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.messageprocessors.OrderedMessageProcessors;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Messages;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.messageprocessors.MessageProcessor;
 import org.graylog2.plugin.streams.DefaultStream;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.system.processing.ProcessingStatusRecorder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
 import java.util.Collection;
-import java.util.Optional;
+
+import javax.annotation.Nonnull;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class ProcessBufferProcessor implements WorkHandler<MessageEvent> {
     private static final Logger LOG = LoggerFactory.getLogger(ProcessBufferProcessor.class);
@@ -51,34 +49,25 @@ public class ProcessBufferProcessor implements WorkHandler<MessageEvent> {
 
     private final Timer processTime;
     private final Meter outgoingMessages;
+    protected final MetricRegistry metricRegistry;
     private final OrderedMessageProcessors orderedMessageProcessors;
 
     private final OutputBuffer outputBuffer;
-    private final ProcessingStatusRecorder processingStatusRecorder;
-    private final ULID ulid;
     private final DecodingProcessor decodingProcessor;
     private final Provider<Stream> defaultStreamProvider;
-    private volatile Message currentMessage;
 
     @AssistedInject
-    public ProcessBufferProcessor(MetricRegistry metricRegistry,
-                                  OrderedMessageProcessors orderedMessageProcessors,
-                                  OutputBuffer outputBuffer,
-                                  ProcessingStatusRecorder processingStatusRecorder,
-                                  ULID ulid,
-                                  @Assisted DecodingProcessor decodingProcessor,
-                                  @DefaultStream Provider<Stream> defaultStreamProvider) {
+    public ProcessBufferProcessor(MetricRegistry metricRegistry, OrderedMessageProcessors orderedMessageProcessors, OutputBuffer outputBuffer,
+                                  @Assisted DecodingProcessor decodingProcessor, @DefaultStream Provider<Stream> defaultStreamProvider) {
+        this.metricRegistry = metricRegistry;
         this.orderedMessageProcessors = orderedMessageProcessors;
         this.outputBuffer = outputBuffer;
-        this.processingStatusRecorder = processingStatusRecorder;
-        this.ulid = ulid;
         this.decodingProcessor = decodingProcessor;
         this.defaultStreamProvider = defaultStreamProvider;
 
         incomingMessages = metricRegistry.meter(name(ProcessBufferProcessor.class, "incomingMessages"));
         outgoingMessages = metricRegistry.meter(name(ProcessBufferProcessor.class, "outgoingMessages"));
         processTime = metricRegistry.timer(name(ProcessBufferProcessor.class, "processTime"));
-        currentMessage = null;
     }
 
     @Override
@@ -107,12 +96,7 @@ public class ProcessBufferProcessor implements WorkHandler<MessageEvent> {
         }
     }
 
-    public Optional<Message> getCurrentMessage() {
-        return Optional.ofNullable(currentMessage);
-    }
-
     private void dispatchMessage(final Message msg) {
-        currentMessage = msg;
         incomingMessages.mark();
 
         LOG.debug("Starting to process message <{}>.", msg.getId());
@@ -123,7 +107,6 @@ public class ProcessBufferProcessor implements WorkHandler<MessageEvent> {
         } catch (Exception e) {
             LOG.warn("Unable to process message <{}>: {}", msg.getId(), e);
         } finally {
-            currentMessage = null;
             outgoingMessages.mark();
         }
     }
@@ -136,16 +119,6 @@ public class ProcessBufferProcessor implements WorkHandler<MessageEvent> {
             messages = messageProcessor.process(messages);
         }
         for (Message message : messages) {
-            if (!message.hasField(Message.FIELD_GL2_MESSAGE_ID) || isNullOrEmpty(message.getFieldAs(String.class, Message.FIELD_GL2_MESSAGE_ID))) {
-                // Set the message ID once all message processors have finished
-                // See documentation of Message.FIELD_GL2_MESSAGE_ID for details
-                message.addField(Message.FIELD_GL2_MESSAGE_ID, ulid.nextULID(message.getTimestamp().getMillis()));
-            }
-
-            // The processing time should only be set once all message processors have finished
-            message.setProcessingTime(Tools.nowUTC());
-            processingStatusRecorder.updatePostProcessingReceiveTime(message.getReceiveTime());
-
             outputBuffer.insertBlocking(message);
         }
     }
