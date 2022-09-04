@@ -46,10 +46,10 @@ public class QuarkusErrorHandler implements Handler<RoutingContext> {
         String stack = "";
         Throwable exception = event.failure();
         if (showStack && exception != null) {
-            details = generateHeaderMessage(exception, uuid);
+            details = generateHeaderMessage(exception, uuid == null ? null : uuid.toString());
             stack = generateStackTrace(exception);
 
-        } else {
+        } else if (uuid != null) {
             details += "Error id " + uuid;
         }
         if (event.failure() instanceof IOException) {
