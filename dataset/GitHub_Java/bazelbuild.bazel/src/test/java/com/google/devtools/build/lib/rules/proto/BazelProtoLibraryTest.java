@@ -241,6 +241,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
   @Test
   public void testProtoSourceRootWithoutDeps() throws Exception {
+    useConfiguration("--proto_compiler=//proto:compiler");
     scratch.file(
         "x/foo/BUILD",
         "proto_library(",
@@ -260,6 +261,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
   @Test
   public void testProtoSourceRootWithoutDeps_notPackageName() throws Exception {
+    useConfiguration("--proto_compiler=//proto:compiler");
     scratch.file(
         "x/foo/BUILD",
         "proto_library(",
@@ -282,6 +284,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
   @Test
   public void testProtoSourceRootWithDepsDuplicate() throws Exception {
+    useConfiguration("--proto_compiler=//proto:compiler");
     scratch.file(
         "x/foo/BUILD",
         "proto_library(",
@@ -307,6 +310,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
   @Test
   public void testProtoSourceRootWithDeps() throws Exception {
+    useConfiguration("--proto_compiler=//proto:compiler");
     scratch.file(
         "x/foo/BUILD",
         "proto_library(",
@@ -338,6 +342,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
 
   @Test
   public void testExportedProtoSourceRoots() throws Exception {
+    useConfiguration("--proto_compiler=//proto:compiler");
     scratch.file("ad/BUILD",
         "proto_library(name='ad', proto_source_root='ad', srcs=['ad.proto'])");
     scratch.file("ae/BUILD",
