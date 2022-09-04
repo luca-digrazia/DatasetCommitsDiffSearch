@@ -8,7 +8,6 @@ import java.io.OutputStreamWriter;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -29,10 +28,16 @@ import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.Converter;
 import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.logging.Logger;
+import org.jboss.protean.gizmo.BranchResult;
+import org.jboss.protean.gizmo.BytecodeCreator;
+import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.ClassOutput;
+import org.jboss.protean.gizmo.FieldDescriptor;
+import org.jboss.protean.gizmo.MethodCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 import org.objectweb.asm.Opcodes;
 import org.wildfly.common.net.CidrAddress;
-import org.wildfly.security.ssl.CipherSuiteSelector;
-import org.wildfly.security.ssl.Protocol;
 
 import io.quarkus.deployment.AccessorFinder;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -51,14 +56,6 @@ import io.quarkus.deployment.configuration.ConfigPatternMap;
 import io.quarkus.deployment.configuration.LeafConfigType;
 import io.quarkus.deployment.recording.ObjectLoader;
 import io.quarkus.deployment.util.ServiceUtil;
-import io.quarkus.gizmo.BranchResult;
-import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.ClassOutput;
-import io.quarkus.gizmo.FieldDescriptor;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.configuration.ApplicationPropertiesConfigSource;
 import io.quarkus.runtime.configuration.CidrAddressConverter;
@@ -68,11 +65,8 @@ import io.quarkus.runtime.configuration.ExpandingConfigSource;
 import io.quarkus.runtime.configuration.InetAddressConverter;
 import io.quarkus.runtime.configuration.InetSocketAddressConverter;
 import io.quarkus.runtime.configuration.NameIterator;
-import io.quarkus.runtime.configuration.PathConverter;
 import io.quarkus.runtime.configuration.RegexConverter;
 import io.quarkus.runtime.configuration.SimpleConfigurationProviderResolver;
-import io.quarkus.runtime.configuration.ssl.CipherSuiteSelectorConverter;
-import io.quarkus.runtime.configuration.ssl.ProtocolConverter;
 import io.smallrye.config.SmallRyeConfig;
 import io.smallrye.config.SmallRyeConfigBuilder;
 import io.smallrye.config.SmallRyeConfigProviderResolver;
@@ -144,18 +138,6 @@ public class ConfigurationSetup {
                 200,
                 Pattern.class,
                 RegexConverter.class));
-        configurationTypes.produce(new ConfigurationCustomConverterBuildItem(
-                200,
-                CipherSuiteSelector.class,
-                CipherSuiteSelectorConverter.class));
-        configurationTypes.produce(new ConfigurationCustomConverterBuildItem(
-                200,
-                Protocol.class,
-                ProtocolConverter.class));
-        configurationTypes.produce(new ConfigurationCustomConverterBuildItem(
-                200,
-                Path.class,
-                PathConverter.class));
     }
 
     /**
