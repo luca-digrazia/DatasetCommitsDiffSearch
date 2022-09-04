@@ -31,7 +31,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * {@link AttributeMap} implementation that binds a rule's attribute as follows:
@@ -118,21 +117,17 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
   }
 
   private static class ConfigKeyAndValue<T> {
-    final Label configKey;
-    final T value;
-    /** If null, this means the default condition (doesn't correspond to a config_setting). * */
-    @Nullable final ConfigMatchingProvider provider;
-
-    ConfigKeyAndValue(Label key, T value, @Nullable ConfigMatchingProvider provider) {
+    Label configKey;
+    T value;
+    ConfigKeyAndValue(Label key, T value) {
       this.configKey = key;
       this.value = value;
-      this.provider = provider;
     }
   }
 
   private <T> ConfigKeyAndValue<T> resolveSelector(String attributeName, Selector<T> selector)
       throws EvalException {
-    Map<Label, ConfigKeyAndValue<T>> matchingConditions = new LinkedHashMap<>();
+    Map<ConfigMatchingProvider, ConfigKeyAndValue<T>> matchingConditions = new LinkedHashMap<>();
     Set<Label> conditionLabels = new LinkedHashSet<>();
     ConfigKeyAndValue<T> matchingResult = null;
 
@@ -149,7 +144,7 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
         // This can happen if the rule is in error
         continue;
       }
-      conditionLabels.add(selectorKey);
+      conditionLabels.add(curCondition.label());
 
       if (curCondition.matches()) {
         // We keep track of all matches which are more precise than any we have found so far.
@@ -157,10 +152,9 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
         // one, and only add this one if none of the previous matches are more precise.
         // It is an error if we do not end up with only one most-precise match.
         boolean suppressed = false;
-        Iterator<Map.Entry<Label, ConfigKeyAndValue<T>>> it =
-            matchingConditions.entrySet().iterator();
+        Iterator<ConfigMatchingProvider> it = matchingConditions.keySet().iterator();
         while (it.hasNext()) {
-          ConfigMatchingProvider existingMatch = it.next().getValue().provider;
+          ConfigMatchingProvider existingMatch = it.next();
           if (curCondition.refines(existingMatch)) {
             it.remove();
           } else if (existingMatch.refines(curCondition)) {
@@ -170,7 +164,7 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
         }
         if (!suppressed) {
           matchingConditions.put(
-              selectorKey, new ConfigKeyAndValue<>(selectorKey, entry.getValue(), curCondition));
+              curCondition, new ConfigKeyAndValue<>(selectorKey, entry.getValue()));
         }
       }
     }
@@ -202,11 +196,9 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
         }
         throw new EvalException(rule.getLocation(), noMatchMessage);
       }
-      matchingResult =
-          selector.hasDefault()
-              ? new ConfigKeyAndValue<>(
-                  Selector.DEFAULT_CONDITION_LABEL, selector.getDefault(), null)
-              : null;
+      matchingResult = selector.hasDefault()
+          ? new ConfigKeyAndValue<>(Selector.DEFAULT_CONDITION_LABEL, selector.getDefault())
+          : null;
     }
 
     return matchingResult;

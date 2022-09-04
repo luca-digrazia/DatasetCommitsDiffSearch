@@ -45,14 +45,22 @@ public class AttributeContainerTest {
   }
 
   @Test
-  public void testAttributeSettingAndRetrieval() throws Exception {
+  public void testAttributeSettingAndRetrievalByName() throws Exception {
     Object someValue1 = new Object();
     Object someValue2 = new Object();
-    container.setAttributeValue(attribute1, someValue1, /*explicit=*/ true);
-    container.setAttributeValue(attribute2, someValue2, /*explicit=*/ true);
+    container.setAttributeValueByName(attribute1.getName(), someValue1);
+    container.setAttributeValueByName(attribute2.getName(), someValue2);
     assertThat(container.getAttr(attribute1.getName())).isEqualTo(someValue1);
     assertThat(container.getAttr(attribute2.getName())).isEqualTo(someValue2);
     assertThat(container.getAttr("nomatch")).isNull();
+  }
+
+  @Test
+  public void testExplicitSpecificationsByName() throws Exception {
+    // Name-based setters are automatically considered explicit.
+    container.setAttributeValueByName(attribute1.getName(), new Object());
+    assertThat(container.isAttributeValueExplicitlySpecified(attribute1)).isTrue();
+    assertThat(container.isAttributeValueExplicitlySpecified("nomatch")).isFalse();
   }
 
   @Test

@@ -17,12 +17,12 @@ package com.google.devtools.build.lib.rules.repository;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
 import javax.annotation.Nullable;
 
 /**
@@ -50,8 +50,8 @@ public class WorkspaceAttributeMapper {
     Object value = getObject(attributeName);
     try {
       return type.cast(value);
-    } catch (ClassCastException ex) {
-      throw new EvalException(ex);
+    } catch (ClassCastException e) {
+      throw new EvalException(rule.getLocation(), e.getMessage());
     }
   }
 
@@ -62,10 +62,16 @@ public class WorkspaceAttributeMapper {
   public Object getObject(String attributeName) throws EvalException {
     Object value = rule.getAttributeContainer().getAttr(checkNotNull(attributeName));
     if (value instanceof SelectorList) {
-      throw Starlark.errorf(
-          "got value of type 'select' for attribute '%s' of %s rule '%s'; select may not be used"
-              + " in repository rules",
-          attributeName, rule.getRuleClass(), rule.getName());
+      String message;
+      if (rule.getLocation()
+          .getPath()
+          .getBaseName()
+          .equals(LabelConstants.WORKSPACE_FILE_NAME.getPathString())) {
+        message = "select() cannot be used in WORKSPACE files";
+      } else {
+        message = "select() cannot be used in macros called from WORKSPACE files";
+      }
+      throw new EvalException(rule.getLocation(), message);
     }
     return value;
   }

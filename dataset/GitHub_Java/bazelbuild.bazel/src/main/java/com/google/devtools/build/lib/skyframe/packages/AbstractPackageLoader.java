@@ -345,7 +345,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
 
   private static NoSuchPackageException exceptionFromErrorInfo(
       ErrorInfo error, PackageIdentifier pkgId) {
-    if (!error.getCycleInfo().isEmpty()) {
+    if (!Iterables.isEmpty(error.getCycleInfo())) {
       return new BuildFileContainsErrorsException(
           pkgId, "Cycle encountered while loading package " + pkgId);
     }
