@@ -13,17 +13,16 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /**
  * Configured targets implementing this provider can contribute Android IDL information to the
@@ -31,62 +30,76 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
  */
 @SkylarkModule(
     name = "AndroidIdlInfo",
-    doc = "Information about Android IDLs",
+    doc =
+        "Do not use this module. It is intended for migration purposes only. If you depend on it, "
+            + "you will be broken when it is removed."
+            + "Information about Android IDLs",
+    documented = false,
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidIdlProviderApi<FileT extends FileApi> extends StructApi {
 
   /** Name of this info object. */
-  public static final String NAME = "AndroidIdlInfo";
+  String NAME = "AndroidIdlInfo";
 
   /** The set of IDL import roots need for compiling the IDL sources in the transitive closure. */
   @SkylarkCallable(
       name = "transitive_idl_import_roots",
       structField = true,
-      doc = "Returns a depset of strings of all the idl import roots.")
-  NestedSet<String> getTransitiveIdlImportRoots();
+      doc = "Returns a depset of strings of all the idl import roots.",
+      documented = false)
+  Depset /*<String>*/ getTransitiveIdlImportRootsForStarlark();
 
   /** The IDL files in the transitive closure. */
   @SkylarkCallable(
       name = "transitive_idl_imports",
       structField = true,
-      doc = "Returns a depset of artifacts of all the idl imports.")
-  NestedSet<FileT> getTransitiveIdlImports();
+      doc = "Returns a depset of artifacts of all the idl imports.",
+      documented = false)
+  Depset /*<FileT>*/ getTransitiveIdlImportsForStarlark();
 
   /** The IDL jars in the transitive closure, both class and source jars. */
   @SkylarkCallable(
       name = "transitive_idl_jars",
       structField = true,
-      doc = "Returns a depset of artifacts of all the idl class and source jars.")
-  NestedSet<FileT> getTransitiveIdlJars();
+      doc = "Returns a depset of artifacts of all the idl class and source jars.",
+      documented = false)
+  Depset /*<FileT>*/ getTransitiveIdlJarsForStarlark();
 
   /** The preprocessed IDL files in the transitive closure. */
   @SkylarkCallable(
       name = "transitive_idl_preprocessed",
       structField = true,
-      doc = "Returns a depset of artifacts of all the idl preprocessed files.")
-  NestedSet<FileT> getTransitiveIdlPreprocessed();
+      doc = "Returns a depset of artifacts of all the idl preprocessed files.",
+      documented = false)
+  Depset /*<FileT>*/ getTransitiveIdlPreprocessedForStarlark();
 
   /** The provider implementing this can construct the AndroidIdlInfo provider. */
-  @SkylarkModule(name = "Provider", doc = "", documented = false)
-  public interface Provider<FileT extends FileApi> extends ProviderApi {
+  @SkylarkModule(
+      name = "Provider",
+      doc =
+          "Do not use this module. It is intended for migration purposes only. If you depend on "
+              + "it, you will be broken when it is removed.",
+      documented = false)
+  interface Provider<FileT extends FileApi> extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
         doc = "The <code>AndroidIdlInfo</code> constructor.",
+        documented = false,
         parameters = {
           @Param(
               name = "transitive_idl_import_roots",
               doc = "A depset of strings of all the idl import roots in the transitive closure.",
               positional = true,
               named = false,
-              type = SkylarkNestedSet.class,
+              type = Depset.class,
               generic1 = String.class),
           @Param(
               name = "transitive_idl_imports",
               doc = "A depset of artifacts of all the idl imports in the transitive closure.",
               positional = true,
               named = false,
-              type = SkylarkNestedSet.class,
+              type = Depset.class,
               generic1 = FileApi.class),
           @Param(
               name = "transitive_idl_jars",
@@ -95,7 +108,7 @@ public interface AndroidIdlProviderApi<FileT extends FileApi> extends StructApi 
                       + "transitive closure.",
               positional = true,
               named = false,
-              type = SkylarkNestedSet.class,
+              type = Depset.class,
               generic1 = FileApi.class),
           @Param(
               name = "transitive_idl_preprocessed",
@@ -104,16 +117,16 @@ public interface AndroidIdlProviderApi<FileT extends FileApi> extends StructApi 
                       + "closure.",
               positional = true,
               named = false,
-              type = SkylarkNestedSet.class,
+              type = Depset.class,
               generic1 = FileApi.class),
         },
         selfCall = true)
-    @SkylarkConstructor(objectType = AndroidIdlProviderApi.class)
+    @SkylarkConstructor(objectType = AndroidIdlProviderApi.class, receiverNameForDoc = NAME)
     AndroidIdlProviderApi<FileT> createInfo(
-        SkylarkNestedSet transitiveIdlImportRoots,
-        SkylarkNestedSet transitiveIdlImports,
-        SkylarkNestedSet transitiveIdlJars,
-        SkylarkNestedSet transitiveIdlPreprocessed)
+        Depset transitiveIdlImportRoots,
+        Depset transitiveIdlImports,
+        Depset transitiveIdlJars,
+        Depset transitiveIdlPreprocessed)
         throws EvalException;
   }
 }

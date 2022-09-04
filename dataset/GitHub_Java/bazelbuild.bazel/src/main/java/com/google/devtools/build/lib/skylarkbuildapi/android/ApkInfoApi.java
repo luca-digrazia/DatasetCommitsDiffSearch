@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
@@ -84,7 +85,8 @@ public interface ApkInfoApi<FileT extends FileApi> extends StructApi {
         // This is left undocumented as it throws a "not-implemented in Skylark" error when invoked.
         documented = false,
         extraKeywords = @Param(name = "kwargs"),
+        useLocation = true,
         selfCall = true)
-    ApkInfoApi<?> createInfo(Dict<String, Object> kwargs) throws EvalException;
+    ApkInfoApi<?> createInfo(Dict<?, ?> kwargs, Location loc) throws EvalException;
   }
 }

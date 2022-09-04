@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
@@ -34,15 +33,13 @@ import com.google.devtools.build.lib.syntax.EvalException;
             + "Information about the c++ libraries to be linked into Android targets.",
     documented = false,
     category = SkylarkModuleCategory.PROVIDER)
-public interface AndroidCcLinkParamsProviderApi<
-        FileT extends FileApi, CcInfoT extends CcInfoApi<FileT>>
-    extends StructApi {
+public interface AndroidCcLinkParamsProviderApi<T extends CcInfoApi> extends StructApi {
   /** Name of this info object. */
   String NAME = "AndroidCcLinkParamsInfo";
 
   /** Returns the cc link params. */
   @SkylarkCallable(name = "link_params", structField = true, doc = "", documented = false)
-  CcInfoT getLinkParams();
+  T getLinkParams();
 
   /** The provider implementing this can construct the AndroidCcLinkParamsInfo provider. */
   @SkylarkModule(
@@ -51,7 +48,7 @@ public interface AndroidCcLinkParamsProviderApi<
           "Do not use this module. It is intended for migration purposes only. If you depend on "
               + "it, you will be broken when it is removed.",
       documented = false)
-  interface Provider<FileT extends FileApi, CcInfoT extends CcInfoApi<FileT>> extends ProviderApi {
+  interface Provider<T extends CcInfoApi> extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
@@ -69,7 +66,6 @@ public interface AndroidCcLinkParamsProviderApi<
     @SkylarkConstructor(
         objectType = AndroidCcLinkParamsProviderApi.class,
         receiverNameForDoc = NAME)
-    public AndroidCcLinkParamsProviderApi<FileT, CcInfoT> createInfo(CcInfoT store)
-        throws EvalException;
+    AndroidCcLinkParamsProviderApi<T> createInfo(T store) throws EvalException;
   }
 }

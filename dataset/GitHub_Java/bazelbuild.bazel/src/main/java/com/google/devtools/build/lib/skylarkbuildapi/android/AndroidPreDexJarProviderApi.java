@@ -15,8 +15,8 @@
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
@@ -27,23 +27,33 @@ import com.google.devtools.build.lib.syntax.EvalException;
 /** A provider of the final Jar to be dexed for targets that build APKs. */
 @SkylarkModule(
     name = "AndroidPreDexJarInfo",
-    doc = "Information about the final Jar to be dexed for targets that build APKs.",
+    doc =
+        "Do not use this module. It is intended for migration purposes only. If you depend on it, "
+            + "you will be broken when it is removed."
+            + "Information about the final Jar to be dexed for targets that build APKs.",
+    documented = false,
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidPreDexJarProviderApi<FileT extends FileApi> extends StructApi {
   /** Name of this info object. */
-  public static String NAME = "AndroidPreDexJarInfo";
+  String NAME = "AndroidPreDexJarInfo";
 
-  /** Returns the Java package. */
+  /** Returns the jar to be dexed. */
   @SkylarkCallable(name = "pre_dex_jar", structField = true, doc = "", documented = false)
   FileT getPreDexJar();
 
-  /** The provider implementing this can construct the AndroidIdeInfo provider. */
-  @SkylarkModule(name = "Provider", doc = "", documented = false)
-  public interface Provider<FileT extends FileApi> extends ProviderApi {
+  /** The provider implementing this can construct the AndroidPreDexJarInfo provider. */
+  @SkylarkModule(
+      name = "Provider",
+      doc =
+          "Do not use this module. It is intended for migration purposes only. If you depend on "
+              + "it, you will be broken when it is removed.",
+      documented = false)
+  interface Provider<FileT extends FileApi> extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
         doc = "The <code>AndroidPreDexJarInfo</code> constructor.",
+        documented = false,
         parameters = {
           @Param(
               name = "pre_dex_jar",
@@ -53,7 +63,7 @@ public interface AndroidPreDexJarProviderApi<FileT extends FileApi> extends Stru
               type = FileApi.class),
         },
         selfCall = true)
-    @SkylarkConstructor(objectType = AndroidPreDexJarProviderApi.class)
-    public AndroidPreDexJarProviderApi<FileT> createInfo(FileT preDexJar) throws EvalException;
+    @SkylarkConstructor(objectType = AndroidPreDexJarProviderApi.class, receiverNameForDoc = NAME)
+    AndroidPreDexJarProviderApi<FileT> createInfo(FileT preDexJar) throws EvalException;
   }
 }

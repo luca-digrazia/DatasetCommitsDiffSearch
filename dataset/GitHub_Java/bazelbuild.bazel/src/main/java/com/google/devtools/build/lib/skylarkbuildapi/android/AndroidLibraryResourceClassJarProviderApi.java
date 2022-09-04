@@ -13,50 +13,60 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 /** Provides resource class jars from android_library rules. */
 @SkylarkModule(
     name = "AndroidLibraryResourceClassJarProvider",
-    doc = "Resource class jars from android_library rules.",
+    doc =
+        "Do not use this module. It is intended for migration purposes only. If you depend on it, "
+            + "you will be broken when it is removed."
+            + "Resource class jars from android_library rules.",
+    documented = false,
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidLibraryResourceClassJarProviderApi<FileT extends FileApi>
     extends StructApi {
-
-  public static final String NAME = "AndroidLibraryResourceClassJarProvider";
+  /** The name of the provider for this info object. */
+  String NAME = "AndroidLibraryResourceClassJarProvider";
 
   @SkylarkCallable(name = "jars", structField = true, doc = "", documented = false)
-  NestedSet<FileT> getResourceClassJars();
+  Depset /*<FileT>*/ getResourceClassJarsForStarlark();
 
   /** The provider implementing this can construct the AndroidLibraryResourceClassJarProvider. */
-  @SkylarkModule(name = "Provider", doc = "", documented = false)
-  public interface Provider<FileT extends FileApi> extends ProviderApi {
+  @SkylarkModule(
+      name = "Provider",
+      doc =
+          "Do not use this module. It is intended for migration purposes only. If you depend on "
+              + "it, you will be broken when it is removed.",
+      documented = false)
+  interface Provider<FileT extends FileApi> extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
         doc = "The <code>AndroidLibraryResourceClassJarProvider</code> constructor.",
+        documented = false,
         parameters = {
           @Param(
               name = "jars",
               doc = "Resource class jars.",
               positional = true,
               named = false,
-              type = SkylarkNestedSet.class,
+              type = Depset.class,
               generic1 = FileApi.class),
         },
         selfCall = true)
-    @SkylarkConstructor(objectType = AndroidLibraryResourceClassJarProviderApi.class)
-    AndroidLibraryResourceClassJarProviderApi<FileT> create(SkylarkNestedSet jars)
-        throws EvalException;
+    @SkylarkConstructor(
+        objectType = AndroidLibraryResourceClassJarProviderApi.class,
+        receiverNameForDoc = NAME)
+    AndroidLibraryResourceClassJarProviderApi<FileT> create(Depset jars) throws EvalException;
   }
 }

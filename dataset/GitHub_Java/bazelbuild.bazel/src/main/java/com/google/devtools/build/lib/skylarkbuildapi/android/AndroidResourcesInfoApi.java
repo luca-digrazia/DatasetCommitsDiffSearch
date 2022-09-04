@@ -14,26 +14,26 @@
 package com.google.devtools.build.lib.skylarkbuildapi.android;
 
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkConstructor;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 
 /** A provider that supplies resource information from its transitive closure. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "AndroidResourcesInfo",
     doc =
         "Do not use this module. It is intended for migration purposes only. If you depend on it, "
             + "you will be broken when it is removed."
             + "Android resources provided by a rule",
     documented = false,
-    category = StarlarkDocumentationCategory.PROVIDER)
+    category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidResourcesInfoApi<
         FileT extends FileApi,
         ValidatedAndroidDataT extends ValidatedAndroidDataApi<?, ?>,
@@ -119,7 +119,7 @@ public interface AndroidResourcesInfoApi<
   Depset /*<FileT>*/ getTransitiveRTxtForStarlark();
 
   /** Provider for {@link AndroidResourcesInfoApi}. */
-  @StarlarkBuiltin(
+  @SkylarkModule(
       name = "Provider",
       doc =
           "Do not use this module. It is intended for migration purposes only. If you depend on "
@@ -202,13 +202,11 @@ public interface AndroidResourcesInfoApi<
               type = Depset.class,
               generic1 = FileApi.class),
           @Param(
-              // TODO(b/119560471): remove.
               name = "transitive_static_lib",
               doc = "A depset of Artifacts of static lib files in the transitive closure.",
               positional = true,
               named = true,
               type = Depset.class,
-              defaultValue = "unbound",
               generic1 = FileApi.class),
           @Param(
               name = "transitive_r_txt",
@@ -216,7 +214,6 @@ public interface AndroidResourcesInfoApi<
               positional = true,
               named = true,
               type = Depset.class,
-              defaultValue = "unbound", // needed to allow removing any earlier parameters.
               generic1 = FileApi.class),
           // TODO(b/132383435): remove this
           @Param(
@@ -229,7 +226,7 @@ public interface AndroidResourcesInfoApi<
               generic1 = FileApi.class),
         },
         selfCall = true)
-    @StarlarkConstructor(objectType = AndroidResourcesInfoApi.class, receiverNameForDoc = NAME)
+    @SkylarkConstructor(objectType = AndroidResourcesInfoApi.class, receiverNameForDoc = NAME)
     AndroidResourcesInfoApi<FileT, ValidatedAndroidDataT, AndroidManifestInfoT> createInfo(
         Label label,
         AndroidManifestInfoT manifest,
@@ -241,8 +238,8 @@ public interface AndroidResourcesInfoApi<
         Depset transitiveAapt2RTxt,
         Depset transitiveSymbolsBin,
         Depset transitiveCompiledSymbols,
-        Object transitiveStaticLib,
-        Object transitiveRTxt,
+        Depset transitiveStaticLib,
+        Depset transitiveRTxt,
         Object transitiveAapt2ValidationArtifacts)
         throws EvalException;
   }

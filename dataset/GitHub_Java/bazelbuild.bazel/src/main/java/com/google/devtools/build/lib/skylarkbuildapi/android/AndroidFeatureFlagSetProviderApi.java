@@ -15,48 +15,63 @@ package com.google.devtools.build.lib.skylarkbuildapi.android;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
 
 /** */
 @SkylarkModule(
     name = "AndroidFeatureFlagSetInfo",
-    doc = "Information about the android_binary feature flags",
+    doc =
+        "Do not use this module. It is intended for migration purposes only. If you depend on it, "
+            + "you will be broken when it is removed."
+            + "Information about the android_binary feature flags",
+    documented = false,
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidFeatureFlagSetProviderApi extends StructApi {
 
-  public static final String NAME = "AndroidFeatureFlagSet";
+  /** The name of the provider for this info object. */
+  String NAME = "AndroidFeatureFlagSet";
 
   @SkylarkCallable(
       name = "flags",
       doc = "Returns the flags contained by the provider.",
+      documented = false,
       structField = true)
   ImmutableMap<Label, String> getFlagMap();
 
   /** The provider implementing this can construct the AndroidIdeInfo provider. */
-  @SkylarkModule(name = "Provider", doc = "", documented = false)
-  public interface Provider extends ProviderApi {
+  @SkylarkModule(
+      name = "Provider",
+      doc =
+          "Do not use this module. It is intended for migration purposes only. If you depend on "
+              + "it, you will be broken when it is removed.",
+      documented = false)
+  interface Provider extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
         doc = "The <code>AndroidFeatureFlagSetProvider</code> constructor.",
+        documented = false,
         parameters = {
           @Param(
               name = "flags",
               doc = "Map of flags",
               positional = true,
               named = false,
-              type = SkylarkDict.class),
+              type = Dict.class),
         },
         selfCall = true)
-    @SkylarkConstructor(objectType = AndroidFeatureFlagSetProviderApi.class)
-    AndroidFeatureFlagSetProviderApi create(SkylarkDict<Label, String> flags) throws EvalException;
+    @SkylarkConstructor(
+        objectType = AndroidFeatureFlagSetProviderApi.class,
+        receiverNameForDoc = NAME)
+    AndroidFeatureFlagSetProviderApi create(Dict<?, ?> flags /* <Label, String> */)
+        throws EvalException;
   }
 }
