@@ -1,21 +1,18 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.lib;
 
@@ -29,9 +26,6 @@ import org.joda.time.format.DateTimeFormatter;
 
 import java.util.Set;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class DateTools {
 
     public static final String ES_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
@@ -40,9 +34,10 @@ public class DateTools {
     public static final DateTimeFormatter DEFAULT_DATE_FORMAT = DateTimeFormat.forPattern("E MMM dd YYYY HH:mm:ss.SSS ZZ");
     public static final DateTimeFormatter SHORT_DATE_FORMAT_TZ = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS ZZ");
     public static final DateTimeFormatter SHORT_DATE_FORMAT = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS");
-    private static DateTimeZone globalTimezone = DateTimeZone.getDefault();
+    private static DateTimeZone globalTimezone = DateTimeZone.UTC;
 
     private static final TreeMultimap<String, String> groupedZones;
+
     static {
         groupedZones = TreeMultimap.create();
 
@@ -87,21 +82,25 @@ public class DateTools {
         return DateTime.now(DateTimeZone.UTC);
     }
 
-    public static int getUserTimeZoneOffset() {
+    public static int getUserTimeZoneOffset(User currentUser) {
         DateTimeZone tz = globalTimezone;
-
-        final User currentUser = UserService.current();
 
         if (currentUser != null && currentUser.getTimeZone() != null) {
             tz = currentUser.getTimeZone();
         }
 
-        int offsetMillis = tz.toTimeZone().getRawOffset() / 1000;
+        int offset = tz.getOffset(new DateTime(DateTimeZone.UTC).getMillis());
 
-        if (tz.toTimeZone().useDaylightTime()) {
-            offsetMillis += 3600;
+        return ((offset / 1000) / 60) * -1;
+    }
+
+    public static String getUserTimeZone(User currentUser) {
+        DateTimeZone tz = globalTimezone;
+
+        if (currentUser != null && currentUser.getTimeZone() != null) {
+            tz = currentUser.getTimeZone();
         }
 
-        return (offsetMillis / 60) * -1;
+        return tz.toString();
     }
 }

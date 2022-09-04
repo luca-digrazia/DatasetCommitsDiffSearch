@@ -16,8 +16,8 @@
  */
 package org.graylog2.commands.journal;
 
-import com.github.rvesse.airline.annotations.Command;
-import com.github.rvesse.airline.annotations.Option;
+import io.airlift.airline.Command;
+import io.airlift.airline.Option;
 import kafka.log.LogSegment;
 import org.graylog2.shared.journal.KafkaJournal;
 import org.joda.time.DateTime;
@@ -39,12 +39,12 @@ public class JournalShow extends AbstractJournalCommand {
         long sizeInBytes = journal.size();
         int numSegments = journal.numberOfSegments();
         long committedReadOffset = journal.getCommittedReadOffset();
-        final StringBuilder sb = new StringBuilder();
+        final StringBuffer sb = new StringBuffer();
 
         final long startOffset = journal.getLogStartOffset();
         final long lastOffset = journal.getLogEndOffset() - 1;
 
-        sb.append("Graylog message journal in directory: ").append(kafkaJournalConfiguration.getMessageJournalDir().toAbsolutePath()).append(
+        sb.append("Graylog message journal in directory: ").append(kafkaJournalConfiguration.getMessageJournalDir().getAbsolutePath()).append(
                 "\n");
         sb.append("\t").append("Total size in bytes: ").append(sizeInBytes).append("\n");
         sb.append("\t").append("Number of segments: ").append(numSegments).append("\n");
@@ -68,7 +68,7 @@ public class JournalShow extends AbstractJournalCommand {
         System.out.flush();
     }
 
-    private void appendSegmentDetails(KafkaJournal journal, StringBuilder sb) {
+    private void appendSegmentDetails(KafkaJournal journal, StringBuffer sb) {
         final Iterable<LogSegment> segments = journal.getSegments();
         int i = 1;
         for (LogSegment segment : segments) {
