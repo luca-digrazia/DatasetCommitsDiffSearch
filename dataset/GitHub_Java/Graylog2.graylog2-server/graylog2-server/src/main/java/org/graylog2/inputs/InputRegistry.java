@@ -107,7 +107,7 @@ public class InputRegistry {
                     notification.addThisNode();
                     notification.addDetail("input_id", input.getId());
                     notification.addDetail("reason", causeMsg.toString());
-                    notification.publishIfFirst();
+                    notification.publish();
 
                     // Clean up.
                     //cleanInput(input);
