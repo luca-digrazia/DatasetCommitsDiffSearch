@@ -56,7 +56,7 @@ public class ErrorInfo {
         ImmutableList.of(cycleInfo),
         /*isDirectlyTransient=*/ false,
         /*isTransitivelyTransient=*/ false,
-        /* isCatastrophic= */ false);
+        /* isCatostrophic= */ false);
   }
 
   /** Create an ErrorInfo from a collection of existing errors. */
@@ -110,7 +110,7 @@ public class ErrorInfo {
       ImmutableList<CycleInfo> cycles,
       boolean isDirectlyTransient,
       boolean isTransitivelyTransient,
-      boolean isCatastrophic) {
+      boolean isCatostrophic) {
     Preconditions.checkState(exception != null || !Iterables.isEmpty(cycles),
         "At least one of exception and cycles must be non-null/empty, respectively");
     Preconditions.checkState((exception == null) == (rootCauseOfException == null),
@@ -123,7 +123,7 @@ public class ErrorInfo {
     this.cycles = cycles;
     this.isDirectlyTransient = isDirectlyTransient;
     this.isTransitivelyTransient = isTransitivelyTransient;
-    this.isCatastrophic = isCatastrophic;
+    this.isCatastrophic = isCatostrophic;
   }
 
   @Override
@@ -234,7 +234,7 @@ public class ErrorInfo {
    * path is returned here. However, if there are multiple paths to the same cycle, each of which
    * goes through a different child, each of them is returned here.
    */
-  public ImmutableList<CycleInfo> getCycleInfo() {
+  public Iterable<CycleInfo> getCycleInfo() {
     return cycles;
   }
 
