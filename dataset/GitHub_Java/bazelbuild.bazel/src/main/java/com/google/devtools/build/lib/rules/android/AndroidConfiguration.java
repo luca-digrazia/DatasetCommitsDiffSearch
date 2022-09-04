@@ -343,15 +343,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public boolean incrementalDexingErrorOnMissedJars;
 
-    @Option(
-      name = "experimental_android_use_parallel_dex2oat",
-      category = "experimental",
-      defaultValue = "false",
-      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      help = "Use dex2oat in parallel to possibly speed up android_test."
-    )
-    public boolean useParallelDex2Oat;
-
     // Do not use on the command line.
     // This flag is intended to be updated as we add supported flags to the incremental dexing tools
     @Option(
@@ -535,16 +526,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public boolean exportsManifestDefault;
 
-    @Option(
-      name = "experimental_android_generate_robolectric_r_class",
-      defaultValue = "false",
-      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      help =
-          "If passed, R classes will be generated for Robolectric tests. Otherwise, only inherited"
-              + " R classes will be used."
-    )
-    public boolean generateRobolectricRClass;
-
     @Override
     public void addAllLabels(Multimap<String, Label> labelMap) {
       if (androidCrosstoolTop != null) {
@@ -630,8 +611,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean includeLibraryResourceJars;
   private final boolean useNocompressExtensionsOnApk;
   private final boolean exportsManifestDefault;
-  private final boolean generateRobolectricRClass;
-  private final boolean useParallelDex2Oat;
 
   AndroidConfiguration(Options options, Label androidSdk) throws InvalidConfigurationException {
     this.sdk = androidSdk;
@@ -664,8 +643,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.includeLibraryResourceJars = options.includeLibraryResourceJars;
     this.useNocompressExtensionsOnApk = options.useNocompressExtensionsOnApk;
     this.exportsManifestDefault = options.exportsManifestDefault;
-    this.generateRobolectricRClass = options.generateRobolectricRClass;
-    this.useParallelDex2Oat = options.useParallelDex2Oat;
 
     if (!dexoptsSupportedInIncrementalDexing.contains("--no-locals")) {
       // TODO(bazel-team): Still needed? See DexArchiveAspect
@@ -766,10 +743,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     return resourceFilter;
   }
 
-  public boolean useParallelDex2Oat() {
-    return useParallelDex2Oat;
-  }
-
   boolean compressJavaResources() {
     return compressJavaResources;
   }
@@ -784,10 +757,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   boolean getExportsManifestDefault(RuleContext ruleContext) {
     return exportsManifestDefault;
-  }
-
-  boolean generateRobolectricRClass() {
-    return generateRobolectricRClass;
   }
 
   @Override
