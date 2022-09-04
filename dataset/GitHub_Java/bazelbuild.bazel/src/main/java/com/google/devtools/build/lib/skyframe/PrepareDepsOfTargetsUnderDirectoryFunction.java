@@ -56,8 +56,8 @@ public class PrepareDepsOfTargetsUnderDirectoryFunction implements SkyFunction {
         processPackageDirectory.getPackageExistenceAndSubdirDeps(
             recursivePkgKey.getRootedPath(),
             recursivePkgKey.getRepository(),
-            recursivePkgKey.getExcludedPaths(),
-            env);
+            env,
+            recursivePkgKey.getExcludedPaths());
     if (env.valuesMissing()) {
       return null;
     }

@@ -552,9 +552,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.actionExecutionFunction = actionExecutionFunction;
     map.put(SkyFunctions.RECURSIVE_FILESYSTEM_TRAVERSAL,
         new RecursiveFilesystemTraversalFunction());
-    map.put(
-        SkyFunctions.FILESET_ENTRY,
-        new FilesetEntryFunction(directories.getExecRoot().asFragment()));
+    map.put(SkyFunctions.FILESET_ENTRY, new FilesetEntryFunction());
     map.put(
         SkyFunctions.ACTION_TEMPLATE_EXPANSION,
         new ActionTemplateExpansionFunction(actionKeyContext));
@@ -2494,5 +2492,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     int result = modifiedFilesDuringPreviousBuild;
     modifiedFilesDuringPreviousBuild = 0;
     return result;
+  }
+
+  protected boolean allowsAnalysisDuringExecution() {
+    return false;
   }
 }

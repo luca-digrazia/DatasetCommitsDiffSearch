@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.auto.value.AutoValue;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.skyframe.AbstractSkyKey;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -39,19 +39,18 @@ public class CollectTestSuitesInPackageValue implements SkyValue {
   }
 
   /** {@link SkyKey} argument. */
+  @AutoValue
   @AutoCodec
-  public static class Key extends AbstractSkyKey<PackageIdentifier> {
+  public abstract static class Key implements SkyKey {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
-
-    private Key(PackageIdentifier arg) {
-      super(arg);
-    }
 
     @AutoCodec.VisibleForSerialization
     @AutoCodec.Instantiator
-    static Key create(PackageIdentifier arg) {
-      return interner.intern(new Key(arg));
+    static Key create(PackageIdentifier packageId) {
+      return interner.intern(new AutoValue_CollectTestSuitesInPackageValue_Key(packageId));
     }
+
+    public abstract PackageIdentifier getPackageId();
 
     @Override
     public SkyFunctionName functionName() {
