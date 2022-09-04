@@ -63,7 +63,6 @@ import com.google.devtools.common.options.OptionsParsingException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -101,6 +100,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         ")");
 
     useConfiguration(
+        "--apple_crosstool_in_output_directory_name",
         "--cpu=ios_x86_64",
         "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
 
@@ -1955,13 +1955,11 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  @Ignore("apple_grte_top isn't being applied because the cpu doesn't change")
   public void testSysrootArgSpecifiedWithGrteTopFlag() throws Exception {
-    MockObjcSupport.setup(mockToolsConfig);
+    MockObjcSupport.setup(mockToolsConfig, "default_grte_top : '//x'");
     useConfiguration(
         "--cpu=ios_x86_64",
-        "--ios_cpu=x86_64",
-        "--apple_grte_top=//x");
+        "--ios_cpu=x86_64");
     scratch.file(
         "x/BUILD",
         "objc_library(",
