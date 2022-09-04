@@ -533,7 +533,11 @@ public class MethodLibraryTest extends EvaluationTestCase {
 
   @Test
   public void testEnumerateBadArg() throws Exception {
-    new BothModesTest().testIfErrorContains("type 'string' is not a collection", "enumerate('a')");
+    new BothModesTest()
+        .testIfErrorContains(
+            "expected value of type 'sequence' for parameter 'list', "
+                + "for call to function enumerate(list, start = 0)",
+            "enumerate('a')");
   }
 
   @Test
@@ -705,7 +709,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
   // keyword, or may be None, even in places where it does not quite make sense.
   @Test
   public void testLegacyNamed() throws Exception {
-    new SkylarkTest("--incompatible_restrict_named_params=false")
+    new SkylarkTest()
         // Parameters which may be specified by keyword but are not explicitly 'named'.
         .testStatement("all(elements=[True, True])", Boolean.TRUE)
         .testStatement("any(elements=[True, False])", Boolean.TRUE)
