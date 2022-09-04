@@ -22,7 +22,6 @@ import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelp
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -30,11 +29,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ExtraActionArtifactsProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.SkylarkProvider;
-import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
@@ -94,6 +89,12 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
       scratch.file(RULE_DIRECTORY + "/" + file.getName(), Files.readAllBytes(file.toPath()));
     }
     scratch.file(RULE_DIRECTORY + "/BUILD", "exports_files(['java_lite_proto_library.bzl'])");
+    scratch.file(
+        "tools/jdk/build_defs.bzl",
+        Files.readAllBytes(Runfiles.location("tools/jdk/build_defs.bzl").toPath()));
+    scratch.file(
+        "tools/jdk/toolchain_utils.bzl",
+        Files.readAllBytes(Runfiles.location("tools/jdk/toolchain_utils.bzl").toPath()));
     invalidatePackages();
   }
 
@@ -165,7 +166,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
             .getRemainingArguments();
 
     assertThat(args)
-        .containsAtLeast(
+        .containsAllOf(
             "--java_out=lite,immutable,no_enforce_api_compatibility:"
                 + genfilesDir
                 + "/x/protolib-lite-src.jar",
@@ -247,7 +248,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
     List<String> args =
         getGeneratingSpawnAction(litepb2, "cross/bravo-lite-src.jar").getRemainingArguments();
     assertThat(args)
-        .containsAtLeast(
+        .containsAllOf(
             "--java_out=lite,immutable,no_enforce_api_compatibility:"
                 + genfilesDir
                 + "/cross/bravo-lite-src.jar",
@@ -534,16 +535,15 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
   public void testJavaLiteProtoLibraryAspectProviders() throws Exception {
     scratch.file(
         "x/aspect.bzl",
-        "MyInfo = provider()",
         "def _foo_aspect_impl(target,ctx):",
         "  proto_found = hasattr(target, 'proto_java')",
         "  if hasattr(ctx.rule.attr, 'deps'):",
         "    for dep in ctx.rule.attr.deps:",
         "      proto_found = proto_found or dep.proto_found",
-        "  return MyInfo(proto_found = proto_found)",
+        "  return struct(proto_found = proto_found)",
         "foo_aspect = aspect(_foo_aspect_impl, attr_aspects = ['deps'])",
         "def _foo_rule_impl(ctx):",
-        "  return MyInfo(result = ctx.attr.dep.proto_found)",
+        "  return struct(result = ctx.attr.dep.proto_found)",
         "foo_rule = rule(_foo_rule_impl, attrs = { 'dep' : attr.label(aspects = [foo_aspect])})");
     scratch.file(
         "x/BUILD",
@@ -554,11 +554,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
         "proto_library(name = 'foo_proto', srcs = ['foo.proto'], java_lib = ':lib')",
         "foo_rule(name = 'foo_rule', dep = 'foo_java_proto')");
     ConfiguredTarget target = getConfiguredTarget("//x:foo_rule");
-    Provider.Key key =
-        new SkylarkProvider.SkylarkKey(
-            Label.parseAbsolute("//x:aspect.bzl", ImmutableMap.of()), "MyInfo");
-    StructImpl myInfo = (StructImpl) target.get(key);
-    Boolean result = (Boolean) myInfo.getValue("result");
+    Boolean result = (Boolean) target.get("result");
 
     // "yes" means that "proto_java" was found on the proto_library + java_proto_library aspect.
     assertThat(result).isTrue();
