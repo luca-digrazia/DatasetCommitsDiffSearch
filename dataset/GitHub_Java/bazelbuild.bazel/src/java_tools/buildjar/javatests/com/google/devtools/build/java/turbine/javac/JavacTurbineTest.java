@@ -995,14 +995,10 @@ public class JavacTurbineTest {
 
     optionsBuilder.setSourceJars(ImmutableList.of(sourceJar2.toString(), sourceJar1.toString()));
 
-    StringWriter errOutput = new StringWriter();
-    Result result;
-    try (JavacTurbine turbine =
-        new JavacTurbine(new PrintWriter(errOutput, true), optionsBuilder.build())) {
-      result = turbine.compile();
-    }
-    assertThat(result).isEqualTo(Result.ERROR);
-    assertThat(errOutput.toString()).contains("duplicate class: Hello");
+    compile();
+
+    Map<String, byte[]> outputs = collectOutputs();
+    assertThat(outputs.keySet()).containsExactly("Hello.class");
   }
 
   @Test
