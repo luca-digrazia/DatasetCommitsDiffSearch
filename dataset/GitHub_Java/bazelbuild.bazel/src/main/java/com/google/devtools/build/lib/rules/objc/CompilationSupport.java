@@ -725,12 +725,19 @@ public class CompilationSupport {
     this.outputGroupCollector = outputGroupCollector;
     this.objectFilesCollector = objectFilesCollector;
     this.usePch = usePch;
-    if (toolchain == null && ruleContext.attributes().has(
-        CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, BuildType.LABEL)) {
-      toolchain =  CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
+    // TODO(b/62143697): Remove this check once all rules are using the crosstool support.
+    if (ruleContext
+            .attributes()
+            .has(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, BuildType.LABEL)
+        || ruleContext.attributes().has(":j2objc_cc_toolchain", BuildType.LABEL)) {
+      if (toolchain == null) {
+        toolchain =  CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
+      }
+      this.toolchain = toolchain;
+    } else {
+      // Since the rule context doesn't have a toolchain at all, ignore any provided override.
+      this.toolchain = null;
     }
-
-    this.toolchain = toolchain;
   }
 
   /** Builder for {@link CompilationSupport} */
