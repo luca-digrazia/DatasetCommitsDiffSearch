@@ -35,6 +35,7 @@ import com.facebook.stetho.dumpapp.StreamingDumpappHandler;
 import com.facebook.stetho.dumpapp.plugins.SharedPreferencesDumperPlugin;
 import com.facebook.stetho.inspector.ChromeDevtoolsServer;
 import com.facebook.stetho.inspector.ChromeDiscoveryHandler;
+import com.facebook.stetho.inspector.database.SqliteDatabasePeer;
 import com.facebook.stetho.inspector.elements.Document;
 import com.facebook.stetho.inspector.elements.android.ActivityTracker;
 import com.facebook.stetho.inspector.elements.android.AndroidDOMConstants;
@@ -274,10 +275,12 @@ public class Stetho {
       provideIfDesired(new Network(mContext));
       provideIfDesired(new Page(mContext));
       provideIfDesired(new Profiler());
-      provideIfDesired(new Runtime(mContext));
+      provideIfDesired(new Runtime());
       provideIfDesired(new Worker());
       if (Build.VERSION.SDK_INT >= DatabaseConstants.MIN_API_LEVEL) {
-        provideIfDesired(new Database(mContext, new DefaultDatabaseFilesProvider(mContext)));
+        Database database = new Database();
+        database.add(new SqliteDatabasePeer(mContext, new DefaultDatabaseFilesProvider(mContext)));
+        provideIfDesired(database);
       }
       return mDelegate.finish();
     }

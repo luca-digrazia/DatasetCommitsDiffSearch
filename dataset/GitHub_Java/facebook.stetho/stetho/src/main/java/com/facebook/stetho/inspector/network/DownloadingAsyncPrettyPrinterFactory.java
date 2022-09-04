@@ -3,6 +3,7 @@ package com.facebook.stetho.inspector.network;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.concurrent.Callable;
@@ -21,9 +22,6 @@ import javax.annotation.Nullable;
  */
 public abstract class DownloadingAsyncPrettyPrinterFactory implements AsyncPrettyPrinterFactory {
 
-  private final static ExecutorService sExecutorService =
-      AsyncPrettyPrinterExecutorHolder.sExecutorService;
-
   @Override
   public AsyncPrettyPrinter getInstance(final String headerName, final String headerValue) {
 
@@ -36,7 +34,12 @@ public abstract class DownloadingAsyncPrettyPrinterFactory implements AsyncPrett
     if (schemaURL == null) {
       return getErrorAsyncPrettyPrinter(headerName, headerValue);
     } else {
-      final Future<String> response = sExecutorService.submit(new Request(schemaURL));
+      ExecutorService  executorService = AsyncPrettyPrinterExecutorHolder.getExecutorService();
+      if (executorService == null) {
+        //last peer is unregistered...
+        return null;
+      }
+      final Future<String> response = executorService.submit(new Request(schemaURL));
       return new AsyncPrettyPrinter() {
         public void printTo(PrintWriter output, InputStream payload)
             throws IOException {
@@ -155,10 +158,18 @@ public abstract class DownloadingAsyncPrettyPrinterFactory implements AsyncPrett
 
     @Override
     public String call() throws IOException {
-      InputStream urlStream = url.openStream();
-      String result = Util.readAsUTF8(urlStream);
-      urlStream.close();
-      return result;
+      HttpURLConnection connection = (HttpURLConnection)url.openConnection();
+      int statusCode = connection.getResponseCode();
+      if (statusCode != 200) {
+        throw new IOException("Got status code: " + statusCode + " while downloading " +
+            "schema with url: " + url.toString());
+      }
+      InputStream urlStream = connection.getInputStream();
+      try {
+        return Util.readAsUTF8(urlStream);
+      } finally {
+        urlStream.close();
+      }
     }
   }
 }
