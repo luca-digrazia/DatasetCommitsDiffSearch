@@ -147,16 +147,6 @@ public class ExperimentalEventHandler implements EventHandler {
         stream.write(b);
       }
     }
-
-    @Override
-    public void flush() throws IOException {
-      stream.flush();
-    }
-
-    @Override
-    public void close() throws IOException {
-      stream.close();
-    }
   }
 
   public ExperimentalEventHandler(
