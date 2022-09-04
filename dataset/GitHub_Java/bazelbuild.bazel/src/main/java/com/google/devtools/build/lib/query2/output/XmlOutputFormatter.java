@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,32 +13,34 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.output;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.graph.Digraph;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.EnvironmentGroup;
+import com.google.devtools.build.lib.packages.FilesetEntry;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.FakeSubincludeTarget;
-import com.google.devtools.build.lib.syntax.FilesetEntry;
-import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.util.BinaryPredicate;
-import com.google.devtools.build.lib.util.Pair;
-
-import org.w3c.dom.DOMException;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-
-import java.io.PrintStream;
+import com.google.devtools.build.lib.query2.CommonQueryOptions;
+import com.google.devtools.build.lib.query2.FakeLoadTarget;
+import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
+import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
+import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.output.OutputFormatter.AbstractUnorderedFormatter;
+import com.google.devtools.build.lib.syntax.Type;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
@@ -48,15 +50,18 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.TransformerFactoryConfigurationError;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import org.w3c.dom.DOMException;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 
 /**
  * An output formatter that prints the result as XML.
  */
-class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.UnorderedFormatter {
+class XmlOutputFormatter extends AbstractUnorderedFormatter {
 
-  private boolean xmlLineNumbers;
-  private boolean showDefaultValues;
-  private BinaryPredicate<Rule, Attribute> dependencyFilter;
+  // AbstractUnorderedFormatter also has an options field it's of type CommonQueryOptions, a
+  // superclass of QueryOptions. Store this here to ensure correct type is passed to this class.
+  private QueryOptions queryOptions;
 
   @Override
   public String getName() {
@@ -64,41 +69,65 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
   }
 
   @Override
-  public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out) {
-    this.xmlLineNumbers = options.xmlLineNumbers;
-    this.showDefaultValues = options.xmlShowDefaultValues;
-    this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
-
-    Document doc;
-    try {
-      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-      doc = factory.newDocumentBuilder().newDocument();
-    } catch (ParserConfigurationException e) {
-      // This shouldn't be possible: all the configuration is hard-coded.
-      throw new IllegalStateException("XML output failed",  e);
-    }
-    doc.setXmlVersion("1.1");
-    Element queryElem = doc.createElement("query");
-    queryElem.setAttribute("version", "2");
-    doc.appendChild(queryElem);
-    for (Target target : result) {
-      queryElem.appendChild(createTargetElement(doc, target));
-    }
-    try {
-      Transformer transformer = TransformerFactory.newInstance().newTransformer();
-      transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-      transformer.transform(new DOMSource(doc), new StreamResult(out));
-    } catch (TransformerFactoryConfigurationError | TransformerException e) {
-      // This shouldn't be possible: all the configuration is hard-coded.
-      throw new IllegalStateException("XML output failed",  e);
-    }
+  public ThreadSafeOutputFormatterCallback<Target> createStreamCallback(
+      OutputStream out, QueryOptions options, QueryEnvironment<?> env) {
+    return new SynchronizedDelegatingOutputFormatterCallback<>(
+        createPostFactoStreamCallback(out, options));
   }
 
   @Override
-  public void output(QueryOptions options, Digraph<Target> result, PrintStream out) {
-    Iterable<Target> ordered = Iterables.transform(
-        result.getTopologicalOrder(new TargetOrdering()), OutputFormatter.EXTRACT_NODE_LABEL);
-    outputUnordered(options, ordered, out);
+  public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
+    super.setOptions(options, aspectResolver);
+
+    Preconditions.checkArgument(options instanceof QueryOptions);
+    this.queryOptions = (QueryOptions) options;
+  }
+
+  @Override
+  public OutputFormatterCallback<Target> createPostFactoStreamCallback(
+      final OutputStream out, final QueryOptions options) {
+    return new OutputFormatterCallback<Target>() {
+
+      private Document doc;
+      private Element queryElem;
+
+      @Override
+      public void start() {
+        try {
+          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+          doc = factory.newDocumentBuilder().newDocument();
+        } catch (ParserConfigurationException e) {
+          // This shouldn't be possible: all the configuration is hard-coded.
+          throw new IllegalStateException("XML output failed", e);
+        }
+        doc.setXmlVersion("1.1");
+        queryElem = doc.createElement("query");
+        queryElem.setAttribute("version", "2");
+        doc.appendChild(queryElem);
+      }
+
+      @Override
+      public void processOutput(Iterable<Target> partialResult)
+          throws IOException, InterruptedException {
+        for (Target target : partialResult) {
+          queryElem.appendChild(createTargetElement(doc, target));
+        }
+      }
+
+      @Override
+      public void close(boolean failFast) throws IOException {
+        if (!failFast) {
+          try {
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+            transformer.transform(new DOMSource(doc), new StreamResult(out));
+          } catch (TransformerFactoryConfigurationError | TransformerException e) {
+            // This shouldn't be possible: all the configuration is hard-coded.
+            throw new IllegalStateException("XML output failed", e);
+          }
+        }
+      }
+    };
   }
 
   /**
@@ -111,17 +140,19 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
    * - 'name' attribute is target's label.
    * - 'location' attribute is consistent with output of --output location.
    * - rule attributes are represented in the DOM structure.
+   * @throws InterruptedException
    */
-  private Element createTargetElement(Document doc, Target target) {
+  private Element createTargetElement(Document doc, Target target)
+      throws InterruptedException {
     Element elem;
     if (target instanceof Rule) {
       Rule rule = (Rule) target;
       elem = doc.createElement("rule");
       elem.setAttribute("class", rule.getRuleClass());
-      for (Attribute attr: rule.getAttributes()) {
-        Pair<Iterable<Object>, AttributeValueSource> values = getAttributeValues(rule, attr);
-        if (values.second == AttributeValueSource.RULE || showDefaultValues) {
-          Element attrElem = createValueElement(doc, attr.getType(), values.first);
+      for (Attribute attr : rule.getAttributes()) {
+        PossibleAttributeValues values = getPossibleAttributeValues(rule, attr);
+        if (values.source == AttributeValueSource.RULE || queryOptions.xmlShowDefaultValues) {
+          Element attrElem = createValueElement(doc, attr.getType(), values);
           attrElem.setAttribute("name", attr.getName());
           elem.appendChild(attrElem);
         }
@@ -136,12 +167,18 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
         inputElem.setAttribute("name", label.toString());
         elem.appendChild(inputElem);
       }
+      for (Label label :
+          aspectResolver.computeAspectDependencies(target, dependencyFilter).values()) {
+        Element inputElem = doc.createElement("rule-input");
+        inputElem.setAttribute("name", label.toString());
+        elem.appendChild(inputElem);
+      }
       for (OutputFile outputFile: rule.getOutputFiles()) {
         Element outputElem = doc.createElement("rule-output");
         outputElem.setAttribute("name", outputFile.getLabel().toString());
         elem.appendChild(outputElem);
       }
-      for (String feature : rule.getFeatures()) {
+      for (String feature : rule.getPackage().getFeatures()) {
         Element outputElem = doc.createElement("rule-default-setting");
         outputElem.setAttribute("name", feature);
         elem.appendChild(outputElem);
@@ -151,13 +188,12 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
       elem = doc.createElement("package-group");
       elem.setAttribute("name", packageGroup.getName());
       Element includes = createValueElement(doc,
-          com.google.devtools.build.lib.packages.Type.LABEL_LIST,
+          BuildType.LABEL_LIST,
           packageGroup.getIncludes());
       includes.setAttribute("name", "includes");
       elem.appendChild(includes);
-      Element packages = createValueElement(doc,
-          com.google.devtools.build.lib.packages.Type.STRING_LIST,
-          packageGroup.getContainedPackages());
+      Element packages =
+          createValueElement(doc, Type.STRING_LIST, packageGroup.getContainedPackages());
       packages.setAttribute("name", "packages");
       elem.appendChild(packages);
     } else if (target instanceof OutputFile) {
@@ -169,22 +205,37 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
       elem = doc.createElement("source-file");
       InputFile inputFile = (InputFile) target;
       if (inputFile.getName().equals("BUILD")) {
-        addSubincludedFilesToElement(doc, elem, inputFile);
         addSkylarkFilesToElement(doc, elem, inputFile);
         addFeaturesToElement(doc, elem, inputFile);
+        elem.setAttribute("package_contains_errors",
+            String.valueOf(inputFile.getPackage().containsErrors()));
       }
 
       addPackageGroupsToElement(doc, elem, inputFile);
-    } else if (target instanceof FakeSubincludeTarget) {
+    } else if (target instanceof EnvironmentGroup) {
+      EnvironmentGroup envGroup = (EnvironmentGroup) target;
+      elem = doc.createElement("environment-group");
+      elem.setAttribute("name", envGroup.getName());
+      Element environments = createValueElement(doc,
+          BuildType.LABEL_LIST,
+          envGroup.getEnvironments());
+      environments.setAttribute("name", "environments");
+      elem.appendChild(environments);
+      Element defaults = createValueElement(doc,
+          BuildType.LABEL_LIST,
+          envGroup.getDefaults());
+      defaults.setAttribute("name", "defaults");
+      elem.appendChild(defaults);
+    } else if (target instanceof FakeLoadTarget) {
       elem = doc.createElement("source-file");
     } else {
       throw new IllegalArgumentException(target.toString());
     }
 
     elem.setAttribute("name", target.getLabel().toString());
-    String location = target.getLocation().print();
-    if (!xmlLineNumbers) {
-      int firstColon = location.indexOf(":");
+    String location = getLocation(target, options.relativeLocations);
+    if (!queryOptions.xmlLineNumbers) {
+      int firstColon = location.indexOf(':');
       if (firstColon != -1) {
         location = location.substring(0, firstColon);
       }
@@ -216,16 +267,12 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
     }
   }
 
-  private void addSubincludedFilesToElement(Document doc, Element parent, InputFile inputFile) {
-    for (Label subinclude : inputFile.getPackage().getSubincludeLabels()) {
-      Element elem = doc.createElement("subinclude");
-      elem.setAttribute("name", subinclude.toString());
-      parent.appendChild(elem);
-    }
-  }
+  private void addSkylarkFilesToElement(Document doc, Element parent, InputFile inputFile)
+      throws InterruptedException {
+    Iterable<Label> dependencies =
+        aspectResolver.computeBuildFileDependencies(inputFile.getPackage());
 
-  private void addSkylarkFilesToElement(Document doc, Element parent, InputFile inputFile) {
-    for (Label skylarkFileDep : inputFile.getPackage().getSkylarkFileDependencies()) {
+    for (Label skylarkFileDep : dependencies) {
       Element elem = doc.createElement("load");
       elem.setAttribute("name", skylarkFileDep.toString());
       parent.appendChild(elem);
@@ -243,20 +290,18 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
    * simply refrain to set a value and annotate the DOM element as configurable.
    *
    * <P>(The ungainly qualified class name is required to avoid ambiguity with
-   * OutputFormatter.Type.)
+   * OutputFormatter.OutputType.)
    */
-  private static Element createValueElement(Document doc,
-      com.google.devtools.build.lib.packages.Type<?> type, Iterable<Object> values) {
+  private static Element createValueElement(Document doc, Type<?> type, Iterable<Object> values) {
     // "Import static" with method scope:
-    com.google.devtools.build.lib.packages.Type<?>
-        FILESET_ENTRY = com.google.devtools.build.lib.packages.Type.FILESET_ENTRY,
-        LABEL_LIST    = com.google.devtools.build.lib.packages.Type.LABEL_LIST,
-        LICENSE       = com.google.devtools.build.lib.packages.Type.LICENSE,
-        STRING_LIST   = com.google.devtools.build.lib.packages.Type.STRING_LIST;
+    Type<?> FILESET_ENTRY = BuildType.FILESET_ENTRY;
+    Type<?> LABEL_LIST = BuildType.LABEL_LIST;
+    Type<?> LICENSE = BuildType.LICENSE;
+    Type<?> STRING_LIST = Type.STRING_LIST;
 
     final Element elem;
     final boolean hasMultipleValues = Iterables.size(values) > 1;
-    com.google.devtools.build.lib.packages.Type<?> elemType = type.getListElementType();
+    Type<?> elemType = type.getListElementType();
     if (elemType != null) { // it's a list (includes "distribs")
       elem = doc.createElement("list");
       for (Object value : values) {
@@ -264,11 +309,10 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
           elem.appendChild(createValueElement(doc, elemType, elemValue));
         }
       }
-    } else if (type instanceof com.google.devtools.build.lib.packages.Type.DictType) {
+    } else if (type instanceof Type.DictType) {
       Set<Object> visitedValues = new HashSet<>();
       elem = doc.createElement("dict");
-      com.google.devtools.build.lib.packages.Type.DictType<?, ?> dictType =
-          (com.google.devtools.build.lib.packages.Type.DictType<?, ?>) type;
+      Type.DictType<?, ?> dictType = (Type.DictType<?, ?>) type;
       for (Object value : values) {
         for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
           if (visitedValues.add(entry.getKey())) {
@@ -298,8 +342,8 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
       // Fileset entries: not configurable.
       FilesetEntry filesetEntry = (FilesetEntry) Iterables.getOnlyElement(values);
       elem = doc.createElement("fileset-entry");
-      elem.setAttribute("srcdir",  filesetEntry.getSrcLabel().toString());
-      elem.setAttribute("destdir",  filesetEntry.getDestDir().toString());
+      elem.setAttribute("srcdir", filesetEntry.getSrcLabel().toString());
+      elem.setAttribute("destdir", filesetEntry.getDestDir().toString());
       elem.setAttribute("symlinks", filesetEntry.getSymlinkBehavior().toString());
       elem.setAttribute("strip_prefix", filesetEntry.getStripPrefix());
 
@@ -331,8 +375,7 @@ class XmlOutputFormatter extends OutputFormatter implements OutputFormatter.Unor
     return elem;
   }
 
-  private static Element createValueElement(Document doc,
-        com.google.devtools.build.lib.packages.Type<?> type, Object value) {
+  private static Element createValueElement(Document doc, Type<?> type, Object value) {
     return createValueElement(doc, type, ImmutableList.of(value));
   }
 

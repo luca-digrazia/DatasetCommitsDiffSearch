@@ -176,11 +176,6 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
         : ruleClass.hasBinaryOutput();
   }
 
-  /** Returns true if this rule is an analysis test (set by analysis_test = true). */
-  public boolean isAnalysisTest() {
-    return ruleClass.isAnalysisTest();
-  }
-
   /**
    * Returns true iff there were errors while constructing this rule, such as
    * attributes with missing values or values of the wrong type.
