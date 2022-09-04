@@ -19,20 +19,22 @@ package smile.validation;
 
 import java.io.Serializable;
 import java.util.List;
+import smile.classification.Classifier;
 import smile.math.MathEx;
 
 /**
  * Classification model validation results.
  *
- * @param <M> the model type.
+ * @type T the instance type.
+ * @type M the model type.
  *
  * @author Haifeng
  */
-public class ClassificationValidations<M> implements Serializable {
+public class ClassificationValidations<T, M extends Classifier<T>> implements Serializable {
     private static final long serialVersionUID = 2L;
 
     /** The multiple round validations. */
-    public final List<ClassificationValidation<M>> rounds;
+    public final List<ClassificationValidation<T, M>> rounds;
 
     /** The average of metrics. */
     public final ClassificationMetrics avg;
@@ -41,7 +43,7 @@ public class ClassificationValidations<M> implements Serializable {
     public final ClassificationMetrics sd;
 
     /** Constructor. */
-    public ClassificationValidations(List<ClassificationValidation<M>> rounds) {
+    public ClassificationValidations(List<ClassificationValidation<T, M>> rounds) {
         this.rounds = rounds;
 
         int k = rounds.size();
@@ -103,17 +105,17 @@ public class ClassificationValidations<M> implements Serializable {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("{\n");
-        sb.append(String.format("  fit time: %.3f ms ± %.3f,\n", avg.fitTime, sd.fitTime));
-        sb.append(String.format("  score time: %.3f ms ± %.3f,\n", avg.scoreTime, sd.scoreTime));
-        sb.append(String.format("  accuracy: %.2f%% ± %.2f", 100 * avg.accuracy, 100 * sd.accuracy));
-        if (!Double.isNaN(avg.sensitivity)) sb.append(String.format(",\n  sensitivity: %.2f%% ± %.2f", 100 * avg.sensitivity, 100 * sd.sensitivity));
-        if (!Double.isNaN(avg.specificity)) sb.append(String.format(",\n  specificity: %.2f%% ± %.2f", 100 * avg.specificity, 100 * sd.specificity));
-        if (!Double.isNaN(avg.precision)) sb.append(String.format(",\n  precision: %.2f%% ± %.2f", 100 * avg.precision, 100 * sd.precision));
-        if (!Double.isNaN(avg.f1)) sb.append(String.format(",\n  F1 score: %.2f%% ± %.2f", 100 * avg.f1, 100 * sd.f1));
-        if (!Double.isNaN(avg.mcc)) sb.append(String.format(",\n  MCC: %.2f%% ± %.2f", 100 * avg.mcc, 100 * sd.mcc));
-        if (!Double.isNaN(avg.auc)) sb.append(String.format(",\n  AUC: %.2f%% ± %.2f", 100 * avg.auc, 100 * sd.auc));
-        if (!Double.isNaN(avg.logloss)) sb.append(String.format(",\n  log loss: %.4f ± %.4f", avg.logloss, sd.logloss));
-        else if (!Double.isNaN(avg.crossentropy)) sb.append(String.format(",\n  cross entropy: %.4f ± %.4f", avg.crossentropy, sd.crossentropy));
+        sb.append(String.format("  fit time: %.3f ms +/- %.3f,\n", avg.fitTime, sd.fitTime));
+        sb.append(String.format("  score time: %.3f ms +/- %.3f,\n", avg.scoreTime, sd.scoreTime));
+        sb.append(String.format("  accuracy: %.2f%% +/- %.2f", 100 * avg.accuracy, 100 * sd.accuracy));
+        if (!Double.isNaN(avg.sensitivity)) sb.append(String.format(",\n  sensitivity: %.2f%% +/- %.2f", 100 * avg.sensitivity, 100 * sd.sensitivity));
+        if (!Double.isNaN(avg.specificity)) sb.append(String.format(",\n  specificity: %.2f%% +/- %.2f", 100 * avg.specificity, 100 * sd.specificity));
+        if (!Double.isNaN(avg.precision)) sb.append(String.format(",\n  precision: %.2f%% +/- %.2f", 100 * avg.precision, 100 * sd.precision));
+        if (!Double.isNaN(avg.f1)) sb.append(String.format(",\n  F1 score: %.2f%% +/- %.2f", 100 * avg.f1, 100 * sd.f1));
+        if (!Double.isNaN(avg.mcc)) sb.append(String.format(",\n  MCC: %.2f%% +/- %.2f", 100 * avg.mcc, 100 * sd.mcc));
+        if (!Double.isNaN(avg.auc)) sb.append(String.format(",\n  AUC: %.2f%% +/- %.2f", 100 * avg.auc, 100 * sd.auc));
+        if (!Double.isNaN(avg.logloss)) sb.append(String.format(",\n  log loss: %.4f +/- %.4f", avg.logloss, sd.logloss));
+        else if (!Double.isNaN(avg.crossentropy)) sb.append(String.format(",\n  cross entropy: %.4f +/- %.4f", avg.crossentropy, sd.crossentropy));
         sb.append("\n}");
         return sb.toString();
     }

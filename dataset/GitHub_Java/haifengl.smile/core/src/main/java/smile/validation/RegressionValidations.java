@@ -20,19 +20,21 @@ package smile.validation;
 import java.io.Serializable;
 import java.util.List;
 import smile.math.MathEx;
+import smile.regression.Regression;
 
 /**
  * Regression model validation results.
  *
- * @param <M> the regression model type.
+ * @type T the instance type.
+ * @type M the model type.
  *
  * @author Haifeng
  */
-public class RegressionValidations<M> implements Serializable {
+public class RegressionValidations<T, M extends Regression<T>> implements Serializable {
     private static final long serialVersionUID = 2L;
 
     /** The multiple round validations. */
-    public final List<RegressionValidation<M>> rounds;
+    public final List<RegressionValidation<T, M>> rounds;
 
     /** The average of metrics. */
     public final RegressionMetrics avg;
@@ -41,7 +43,7 @@ public class RegressionValidations<M> implements Serializable {
     public final RegressionMetrics sd;
 
     /** Constructor. */
-    public RegressionValidations(List<RegressionValidation<M>> rounds) {
+    public RegressionValidations(List<RegressionValidation<T, M>> rounds) {
         this.rounds = rounds;
 
         int k = rounds.size();
@@ -87,13 +89,13 @@ public class RegressionValidations<M> implements Serializable {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("{\n");
-        sb.append(String.format("  fit time: %.3f ms ± %.3f,\n", avg.fitTime, sd.fitTime));
-        sb.append(String.format("  score time: %.3f ms ± %.3f,\n", avg.scoreTime, sd.scoreTime));
-        sb.append(String.format("  RSS: %.4f ± %.4f,\n", avg.rss, sd.rss));
-        sb.append(String.format("  MSE: %.4f ± %.4f,\n", avg.mse, sd.mse));
-        sb.append(String.format("  RMSE: %.4f ± %.4f,\n", avg.rmse, sd.rmse));
-        sb.append(String.format("  MAD: %.4f ± %.4f,\n", avg.mad, sd.mad));
-        sb.append(String.format("  R2: %.2f%% ± %.2f\n}", 100 * avg.r2, 100 * sd.r2));
+        sb.append(String.format("  fit time: %.3f ms +/- %.3f,\n", avg.fitTime, sd.fitTime));
+        sb.append(String.format("  score time: %.3f ms +/- %.3f,\n", avg.scoreTime, sd.scoreTime));
+        sb.append(String.format("  RSS: %.4f +/- %.4f,\n", avg.rss, sd.rss));
+        sb.append(String.format("  MSE: %.4f +/- %.4f,\n", avg.mse, sd.mse));
+        sb.append(String.format("  RMSE: %.4f +/- %.4f,\n", avg.rmse, sd.rmse));
+        sb.append(String.format("  MAD: %.4f +/- %.4f,\n", avg.mad, sd.mad));
+        sb.append(String.format("  R2: %.2f%% +/- %.2f", 100 * avg.r2, 100 * sd.r2));
         return sb.toString();
     }
 }

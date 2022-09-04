@@ -24,35 +24,30 @@ import java.util.function.BiFunction;
 import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.data.DataFrame;
-import smile.regression.DataFrameRegression;
+import smile.data.Tuple;
 import smile.regression.Regression;
 import smile.validation.metric.*;
 
 /**
  * Regression model validation results.
  *
- * @param <M> the regression model type.
+ * @type T the instance type.
+ * @type M the model type.
  *
  * @author Haifeng
  */
-public class RegressionValidation<M> implements Serializable {
+public class RegressionValidation<T, M extends Regression<T>> implements Serializable {
     private static final long serialVersionUID = 2L;
 
     /** The model. */
     public final M model;
-    /** The true response variable of validation data. */
-    public final double[] truth;
-    /** The model prediction. */
-    public final double[] prediction;
     /** The regression metrics. */
     public final RegressionMetrics metrics;
 
     /** Constructor. */
-    public RegressionValidation(M model, double[] truth, double[] prediction, RegressionMetrics metrics) {
+    public RegressionValidation(M model, double fitTime, double scoreTime, double rss, double mse, double rmse, double mad, double r2) {
         this.model = model;
-        this.truth = truth;
-        this.prediction = prediction;
-        this.metrics = metrics;
+        this.metrics = new RegressionMetrics(fitTime, scoreTime, rss, mse, rmse, mad, r2);
     }
 
     @Override
@@ -63,7 +58,7 @@ public class RegressionValidation<M> implements Serializable {
     /**
      * Trains and validates a model on a train/validation split.
      */
-    public static <T, M extends Regression<T>> RegressionValidation<M> of(T[] x, double[] y, T[] testx, double[] testy, BiFunction<T[], double[], M> trainer) {
+    public static <T, M extends Regression<T>> RegressionValidation<T, M> of(T[] x, double[] y, T[] testx, double[] testy, BiFunction<T[], double[], M> trainer) {
         long start = System.nanoTime();
         M model = trainer.apply(x, y);
         double fitTime = (System.nanoTime() - start) / 1E6;
@@ -72,22 +67,21 @@ public class RegressionValidation<M> implements Serializable {
         double[] prediction = model.predict(testx);
         double scoreTime = (System.nanoTime() - start) / 1E6;
 
-        RegressionMetrics metrics = new RegressionMetrics(fitTime, scoreTime,
+        return new RegressionValidation<>(model, fitTime, scoreTime,
                 RSS.of(testy, prediction),
                 MSE.of(testy, prediction),
                 RMSE.of(testy, prediction),
                 MAD.of(testy, prediction),
                 R2.of(testy, prediction)
         );
-        return new RegressionValidation<>(model, testy, prediction, metrics);
     }
 
     /**
      * Trains and validates a model on multiple train/validation split.
      */
     @SuppressWarnings("unchecked")
-    public static <T, M extends Regression<T>> RegressionValidations<M> of(Split[] splits, T[] x, double[] y, BiFunction<T[], double[], M> trainer) {
-        List<RegressionValidation<M>> rounds = new ArrayList<>(splits.length);
+    public static <T, M extends Regression<T>> RegressionValidations<T, M> of(Split[] splits, T[] x, double[] y, BiFunction<T[], double[], M> trainer) {
+        List<RegressionValidation<T, M>> rounds = new ArrayList<>(splits.length);
 
         for (Split split : splits) {
             T[] trainx = MathEx.slice(x, split.train);
@@ -104,7 +98,7 @@ public class RegressionValidation<M> implements Serializable {
     /**
      * Trains and validates a model on a train/validation split.
      */
-    public static <M extends DataFrameRegression> RegressionValidation<M> of(Formula formula, DataFrame train, DataFrame test, BiFunction<Formula, DataFrame, M> trainer) {
+    public static <M extends Regression<Tuple>> RegressionValidation<Tuple, M> of(Formula formula, DataFrame train, DataFrame test, BiFunction<Formula, DataFrame, M> trainer) {
         double[] testy = formula.y(test).toDoubleArray();
 
         long start = System.nanoTime();
@@ -119,22 +113,21 @@ public class RegressionValidation<M> implements Serializable {
         }
         double scoreTime = (System.nanoTime() - start) / 1E6;
 
-        RegressionMetrics metrics = new RegressionMetrics(fitTime, scoreTime,
+        return new RegressionValidation<>(model, fitTime, scoreTime,
                 RSS.of(testy, prediction),
                 MSE.of(testy, prediction),
                 RMSE.of(testy, prediction),
                 MAD.of(testy, prediction),
                 R2.of(testy, prediction)
         );
-        return new RegressionValidation<>(model, testy, prediction, metrics);
     }
 
     /**
      * Trains and validates a model on multiple train/validation split.
      */
     @SuppressWarnings("unchecked")
-    public static <M extends DataFrameRegression> RegressionValidations<M> of(Split[] splits, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {
-        List<RegressionValidation<M>> rounds = new ArrayList<>(splits.length);
+    public static <M extends Regression<Tuple>> RegressionValidations<Tuple, M> of(Split[] splits, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {
+        List<RegressionValidation<Tuple, M>> rounds = new ArrayList<>(splits.length);
 
         for (Split split : splits) {
             rounds.add(of(formula, data.of(split.train), data.of(split.test), trainer));
