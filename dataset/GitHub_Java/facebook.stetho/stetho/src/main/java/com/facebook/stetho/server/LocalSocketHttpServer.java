@@ -1,21 +1,54 @@
+// Copyright 2004-present Facebook. All Rights Reserved.
+// This is based on ElementalHttpServer.java in the Apache httpcore
+// examples.
+
 /*
- * Copyright (c) 2014-present, Facebook, Inc.
- * All rights reserved.
+ * ====================================================================
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ * ====================================================================
+ *
+ * This software consists of voluntary contributions made by many
+ * individuals on behalf of the Apache Software Foundation.  For more
+ * information on the Apache Software Foundation, please see
+ * <http://www.apache.org/>.
+ *
  */
 
 package com.facebook.stetho.server;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.InterruptedIOException;
+import java.net.BindException;
+import java.net.SocketException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import android.annotation.SuppressLint;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.util.Log;
+
 import com.facebook.stetho.common.LogUtil;
-import com.facebook.stetho.common.ProcessUtil;
+import com.facebook.stetho.common.Utf8Charset;
 import com.facebook.stetho.common.Util;
+
 import org.apache.http.ConnectionClosedException;
 import org.apache.http.HttpException;
 import org.apache.http.HttpServerConnection;
@@ -25,14 +58,17 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.CoreConnectionPNames;
 import org.apache.http.params.CoreProtocolPNames;
 import org.apache.http.params.HttpParams;
-import org.apache.http.protocol.*;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.BasicHttpProcessor;
+import org.apache.http.protocol.HttpContext;
+import org.apache.http.protocol.HttpRequestHandlerRegistry;
+import org.apache.http.protocol.HttpService;
+import org.apache.http.protocol.ResponseConnControl;
+import org.apache.http.protocol.ResponseContent;
+import org.apache.http.protocol.ResponseDate;
+import org.apache.http.protocol.ResponseServer;
 
 import javax.annotation.Nonnull;
-import java.io.IOException;
-import java.io.InterruptedIOException;
-import java.net.BindException;
-import java.net.SocketException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class LocalSocketHttpServer {
 
@@ -45,6 +81,12 @@ public class LocalSocketHttpServer {
    * Convince {@code chrome://inspect/devices} that we're "one of them" :)
    */
   private static final String SOCKET_NAME_SUFFIX = "_devtools_remote";
+
+  /**
+   * Maximum length allowed in {@code /proc/self/cmdline}.  Imposed to avoid a large buffer
+   * allocation during the init path.
+   */
+  private static final int CMDLINE_BUFFER_SIZE = 64;
 
   private static final AtomicInteger sThreadId = new AtomicInteger();
 
@@ -135,10 +177,44 @@ public class LocalSocketHttpServer {
   }
 
   private static String getDefaultAddress() throws IOException {
-    return
-        SOCKET_NAME_PREFIX +
-        ProcessUtil.getProcessName() +
-        SOCKET_NAME_SUFFIX;
+    return SOCKET_NAME_PREFIX + getProcessName() + SOCKET_NAME_SUFFIX;
+  }
+
+  private static String getProcessName() throws IOException {
+    byte[] cmdlineBuffer = new byte[CMDLINE_BUFFER_SIZE];
+
+    // Avoid using a Reader to not pick up a forced 16K buffer.  Silly java.io...
+    FileInputStream stream = new FileInputStream("/proc/self/cmdline");
+    boolean success = false;
+    try {
+      int n = stream.read(cmdlineBuffer);
+      success = true;
+      int endIndex = tidyProcessName(cmdlineBuffer, n);
+      return new String(cmdlineBuffer, 0, endIndex);
+    } finally {
+      Util.close(stream, !success);
+    }
+  }
+
+  private static int tidyProcessName(byte[] processName, int count) {
+    int i = 0;
+    OUTER:
+    for (; i < count; i++) {
+      switch (processName[i]) {
+        case '\\':
+        case '.':
+        case ':':
+          processName[i] = '_';
+          break;
+        case 0:
+        case ' ':
+        case '\r':
+        case '\n':
+        case '\t':
+          break OUTER;
+      }
+    }
+    return i;
   }
 
   private HttpParams createParams() {

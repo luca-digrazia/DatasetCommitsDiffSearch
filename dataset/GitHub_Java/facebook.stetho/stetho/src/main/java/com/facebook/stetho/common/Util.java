@@ -21,12 +21,6 @@ public class Util {
     }
   }
 
-  public static void throwIf(boolean condition) {
-    if (condition) {
-      throw new IllegalStateException();
-    }
-  }
-
   public static void throwIfNot(boolean condition) {
     if (!condition) {
       throw new IllegalStateException();
