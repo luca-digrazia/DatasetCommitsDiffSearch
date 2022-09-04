@@ -60,8 +60,7 @@ public class JavaCommon {
   public static final InstrumentationSpec JAVA_COLLECTION_SPEC =
       new InstrumentationSpec(FileTypeSet.of(JavaSemantics.JAVA_SOURCE))
           .withSourceAttributes("srcs")
-          .withDependencyAttributes(
-              "deps", "data", "resources", "resource_jars", "exports", "runtime_deps", "jars");
+          .withDependencyAttributes("deps", "data", "resources", "exports", "runtime_deps");
 
   private ClasspathConfiguredFragment classpathFragment = new ClasspathConfiguredFragment();
   private JavaCompilationArtifacts javaArtifacts = JavaCompilationArtifacts.EMPTY;
@@ -331,7 +330,7 @@ public class JavaCommon {
    * @see JavaNativeLibraryInfo
    */
   protected NestedSet<LibraryToLink> collectTransitiveJavaNativeLibraries() {
-    NativeLibraryNestedSetBuilder builder = new NativeLibraryNestedSetBuilder(ruleContext);
+    NativeLibraryNestedSetBuilder builder = new NativeLibraryNestedSetBuilder();
     builder.addJavaTargets(targetsTreatedAsDeps(ClasspathType.BOTH));
 
     if (ruleContext.getRule().isAttrDefined("data", BuildType.LABEL_LIST)) {
