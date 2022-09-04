@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.analysis.AspectCollection;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
@@ -59,8 +58,6 @@ import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -245,16 +242,9 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
     }
 
     @Override
-    protected Map<Label, Target> getTargets(
-        Iterable<Label> labels,
-        Target fromTarget,
-        NestedSetBuilder<Cause> rootCauses,
-        int labelsSizeHint) {
-      return Streams.stream(labels)
-          .distinct()
-          .filter(Objects::nonNull)
-          .filter(partialResultMap::containsKey)
-          .collect(Collectors.toMap(Function.identity(), partialResultMap::get));
+    protected Target getTarget(Target from, Label label, NestedSetBuilder<Cause> rootCauses)
+        throws InterruptedException {
+      return partialResultMap.get(label);
     }
 
     @Override

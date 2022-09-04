@@ -34,18 +34,20 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skylarkbuildapi.ToolchainContextApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.SkylarkIndexable;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.StreamSupport;
+import javax.annotation.Nullable;
 
 /** Contains toolchain-related information needed for a {@link RuleContext}. */
 @Immutable
 @ThreadSafe
 public class ToolchainContext implements ToolchainContextApi {
-
   public static ToolchainContext create(
       String targetDescription,
       PlatformInfo executionPlatform,
@@ -76,7 +78,7 @@ public class ToolchainContext implements ToolchainContextApi {
   private final ResolvedToolchainLabels resolvedToolchainLabels;
 
   /** Stores the actual ToolchainInfo provider for each toolchain type. */
-  private ImmutableMap<Label, ToolchainInfo> toolchainProviders;
+  private ResolvedToolchainProviders resolvedToolchainProviders;
 
   private ToolchainContext(
       String targetDescription,
@@ -89,29 +91,36 @@ public class ToolchainContext implements ToolchainContextApi {
     this.targetPlatform = targetPlatform;
     this.requiredToolchains = ImmutableList.copyOf(requiredToolchains);
     this.resolvedToolchainLabels = resolvedToolchainLabels;
-    this.toolchainProviders = ImmutableMap.of();
+    this.resolvedToolchainProviders =
+        new ResolvedToolchainProviders(ImmutableMap.<Label, ToolchainInfo>of());
   }
 
-  public PlatformInfo executionPlatform() {
+  public PlatformInfo getExecutionPlatform() {
     return executionPlatform;
   }
 
-  public PlatformInfo targetPlatform() {
+  public PlatformInfo getTargetPlatform() {
     return targetPlatform;
   }
 
-  public ImmutableList<Label> requiredToolchainTypes() {
+  public ImmutableList<Label> getRequiredToolchains() {
     return requiredToolchains;
   }
 
   public void resolveToolchains(
       OrderedSetMultimap<Attribute, ConfiguredTargetAndData> prerequisiteMap) {
     if (!this.requiredToolchains.isEmpty()) {
-      this.toolchainProviders = findToolchains(resolvedToolchainLabels, prerequisiteMap);
+      this.resolvedToolchainProviders =
+          new ResolvedToolchainProviders(findToolchains(resolvedToolchainLabels, prerequisiteMap));
     }
   }
 
-  public ImmutableSet<Label> resolvedToolchainLabels() {
+  @Nullable
+  public SkylarkIndexable getResolvedToolchainProviders() {
+    return resolvedToolchainProviders;
+  }
+
+  public ImmutableSet<Label> getResolvedToolchainLabels() {
     return resolvedToolchainLabels.getToolchainLabels();
   }
 
@@ -124,7 +133,6 @@ public class ToolchainContext implements ToolchainContextApi {
 
   /** Tracks the mapping from toolchain type label to the label of the actual resolved toolchain. */
   private static class ResolvedToolchainLabels {
-
     private final ImmutableBiMap<Label, Label> toolchainLabels;
 
     private ResolvedToolchainLabels(ImmutableBiMap<Label, Label> toolchainLabels) {
@@ -177,71 +185,80 @@ public class ToolchainContext implements ToolchainContextApi {
     return toolchains.build();
   }
 
-  // Implement SkylarkValue and SkylarkIndexable.
+  /** Tracks the mapping from toolchain type label to {@link ToolchainInfo} provider. */
+  public class ResolvedToolchainProviders implements SkylarkValue, SkylarkIndexable {
 
-  @Override
-  public boolean isImmutable() {
-    return true;
-  }
+    private final ImmutableMap<Label, ToolchainInfo> toolchains;
 
-  @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.append("<toolchain_context.resolved_labels: ");
-    printer.append(
-        toolchainProviders.keySet().stream().map(key -> key.toString()).collect(joining(", ")));
-    printer.append(">");
-  }
+    private ResolvedToolchainProviders(ImmutableMap<Label, ToolchainInfo> toolchains) {
+      this.toolchains = toolchains;
+    }
 
-  private Label transformKey(Object key, Location loc) throws EvalException {
-    if (key instanceof Label) {
-      Label toolchainType = (Label) key;
-      return toolchainType;
-    } else if (key instanceof String) {
-      Label toolchainType = null;
-      String rawLabel = (String) key;
-      try {
-        toolchainType = Label.parseAbsolute(rawLabel);
-      } catch (LabelSyntaxException e) {
+    @Override
+    public boolean isImmutable() {
+      return true;
+    }
+
+    @Override
+    public void repr(SkylarkPrinter printer) {
+      printer.append("<toolchain_context.resolved_labels: ");
+      printer.append(toolchains.keySet().stream()
+          .map(key -> key.toString())
+          .collect(joining(", ")));
+      printer.append(">");
+    }
+
+    private Label transformKey(Object key, Location loc) throws EvalException {
+      if (key instanceof Label) {
+        Label toolchainType = (Label) key;
+        return toolchainType;
+      } else if (key instanceof String) {
+        Label toolchainType = null;
+        String rawLabel = (String) key;
+        try {
+          toolchainType = Label.parseAbsolute(rawLabel);
+        } catch (LabelSyntaxException e) {
+          throw new EvalException(
+              loc, String.format("Unable to parse toolchain %s: %s", rawLabel, e.getMessage()), e);
+        }
+        return toolchainType;
+      } else {
         throw new EvalException(
-            loc, String.format("Unable to parse toolchain %s: %s", rawLabel, e.getMessage()), e);
+            loc,
+            String.format(
+                "Toolchains only supports indexing by toolchain type, got %s instead",
+                EvalUtils.getDataTypeName(key)));
       }
-      return toolchainType;
-    } else {
-      throw new EvalException(
-          loc,
-          String.format(
-              "Toolchains only supports indexing by toolchain type, got %s instead",
-              EvalUtils.getDataTypeName(key)));
     }
-  }
 
-  @Override
-  public ToolchainInfo getIndex(Object key, Location loc) throws EvalException {
-    Label toolchainType = transformKey(key, loc);
+    @Override
+    public ToolchainInfo getIndex(Object key, Location loc) throws EvalException {
+      Label toolchainType = transformKey(key, loc);
 
-    if (!requiredToolchains.contains(toolchainType)) {
-      throw new EvalException(
-          loc,
-          String.format(
-              "In %s, toolchain type %s was requested but only types [%s] are configured",
-              targetDescription,
-              toolchainType,
-              requiredToolchains
-                  .stream()
-                  .map(toolchain -> toolchain.toString())
-                  .collect(joining())));
+      if (!requiredToolchains.contains(toolchainType)) {
+        throw new EvalException(
+            loc,
+            String.format(
+                "In %s, toolchain type %s was requested but only types [%s] are configured",
+                targetDescription,
+                toolchainType,
+                requiredToolchains
+                    .stream()
+                    .map(toolchain -> toolchain.toString())
+                    .collect(joining())));
+      }
+      return toolchains.get(toolchainType);
     }
-    return toolchainProviders.get(toolchainType);
-  }
 
-  /** Returns the toolchain for the given type */
-  public ToolchainInfo forToolchainType(Label toolchainType) {
-    return toolchainProviders.get(toolchainType);
-  }
+    /** Returns the toolchain for the given type */
+    public ToolchainInfo getForToolchainType(Label toolchainType) {
+      return toolchains.get(toolchainType);
+    }
 
-  @Override
-  public boolean containsKey(Object key, Location loc) throws EvalException {
-    Label toolchainType = transformKey(key, loc);
-    return toolchainProviders.containsKey(toolchainType);
+    @Override
+    public boolean containsKey(Object key, Location loc) throws EvalException {
+      Label toolchainType = transformKey(key, loc);
+      return toolchains.containsKey(toolchainType);
+    }
   }
 }
