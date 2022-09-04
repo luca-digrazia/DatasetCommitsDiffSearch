@@ -174,7 +174,7 @@ public class ObserverInfo implements InjectionTargetInfo {
 
     /**
      * 
-     * @return the class of the declaring bean or the class provided by the configurator for synthetic observers
+     * @return the class of the declaring bean or
      */
     public DotName getBeanClass() {
         return beanClass;

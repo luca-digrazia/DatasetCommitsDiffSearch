@@ -35,7 +35,6 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Qualifier;
-import javax.inject.Singleton;
 import javax.interceptor.AroundConstruct;
 import javax.interceptor.AroundInvoke;
 import javax.interceptor.Interceptor;
@@ -77,7 +76,6 @@ public final class DotNames {
     public static final DotName ALTERNATIVE = create(Alternative.class);
     public static final DotName ALTERNATIVE_PRIORITY = create(AlternativePriority.class);
     public static final DotName DEFAULT_BEAN = create(DefaultBean.class);
-    public static final DotName SINGLETON = create(Singleton.class);
     public static final DotName STEREOTYPE = create(Stereotype.class);
     public static final DotName TYPED = create(Typed.class);
     public static final DotName VETOED = create(Vetoed.class);
@@ -99,8 +97,6 @@ public final class DotNames {
     public static final DotName LONG = create(Long.class);
     public static final DotName SHORT = create(Short.class);
     public static final DotName STRING = create(String.class);
-
-    public static final DotName DEPRECATED = create(Deprecated.class);
 
     private DotNames() {
     }
