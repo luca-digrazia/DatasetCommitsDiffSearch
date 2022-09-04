@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.StarlarkAction;
 import com.google.devtools.build.lib.analysis.actions.Substitution;
-import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkCustomCommandLine.ScalarArg;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -129,20 +128,13 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   }
 
   @Override
-  public Artifact declareFile(String filename, Object sibling, Location loc) throws EvalException {
+  public Artifact declareFile(String filename, Object sibling) throws EvalException {
     context.checkMutable("actions.declare_file");
     if (Runtime.NONE.equals(sibling)) {
       return ruleContext.getPackageRelativeArtifact(filename, newFileRoot());
     } else {
       PathFragment original = ((Artifact) sibling).getRootRelativePath();
       PathFragment fragment = original.replaceName(filename);
-      if (!fragment.startsWith(ruleContext.getPackageDirectory())) {
-        throw new EvalException(
-            loc,
-            String.format(
-                "the output artifact '%s' is not under package directory '%s' for target '%s'",
-                fragment, ruleContext.getPackageDirectory(), ruleContext.getLabel()));
-      }
       return ruleContext.getDerivedArtifact(fragment, newFileRoot());
     }
   }
@@ -165,40 +157,6 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
           String.format(
               "'%s' has already been declared as a regular file, not directory.", filename));
     }
-    return result;
-  }
-
-  @Override
-  public Artifact declareSymlink(String filename, Object sibling, Location location)
-      throws EvalException {
-    context.checkMutable("actions.declare_symlink");
-
-    if (!ruleContext.getConfiguration().allowUnresolvedSymlinks()) {
-      throw new EvalException(
-          location,
-          "actions.declare_symlink() is not allowed; "
-              + "use the --experimental_allow_unresolved_symlinks command line option");
-    }
-
-    Artifact result;
-    PathFragment rootRelativePath;
-    if (Runtime.NONE.equals(sibling)) {
-      rootRelativePath = ruleContext.getPackageDirectory().getRelative(filename);
-    } else {
-      PathFragment original = ((Artifact) sibling).getRootRelativePath();
-      rootRelativePath = original.replaceName(filename);
-    }
-
-    result =
-        ruleContext.getAnalysisEnvironment().getSymlinkArtifact(rootRelativePath, newFileRoot());
-
-    if (!result.isSymlink()) {
-      throw new EvalException(
-          location,
-          String.format(
-              "'%s' has already been declared as something other than a symlink.", filename));
-    }
-
     return result;
   }
 
@@ -227,33 +185,6 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   @AutoCodec @AutoCodec.VisibleForSerialization
   static final GeneratedMessage.GeneratedExtension<ExtraActionInfo, SpawnInfo> SPAWN_INFO =
       SpawnInfo.spawnInfo;
-
-  @Override
-  public void symlink(FileApi output, String path, Location location) throws EvalException {
-    context.checkMutable("actions.symlink");
-
-    if (!ruleContext.getConfiguration().allowUnresolvedSymlinks()) {
-      throw new EvalException(
-          null,
-          "actions.symlink() is not allowed; "
-              + "use the --experimental_allow_unresolved_symlinks command line option");
-    }
-
-    PathFragment targetPath = PathFragment.create(path);
-    Artifact outputArtifact = (Artifact) output;
-    if (!outputArtifact.isSymlink()) {
-      throw new EvalException(
-          location, "output of symlink action must be created by declare_symlink()");
-    }
-
-    Action action =
-        SymlinkAction.createUnresolved(
-            ruleContext.getActionOwner(),
-            outputArtifact,
-            targetPath,
-            "creating symlink " + ((Artifact) output).getRootRelativePathString());
-    registerAction(location, action);
-  }
 
   @Override
   public void write(FileApi output, Object content, Boolean isExecutable, Location location)
@@ -635,7 +566,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
         TargetUtils.getFilteredExecutionInfo(
             executionRequirementsUnchecked,
             ruleContext.getRule(),
-            starlarkSemantics.experimentalAllowTagsPropagation());
+            starlarkSemantics.incompatibleAllowTagsPropagation());
     builder.setExecutionInfo(executionInfo);
 
     if (inputManifestsUnchecked != Runtime.NONE) {

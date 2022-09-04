@@ -27,8 +27,7 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -131,7 +130,7 @@ public final class CommandHelper {
   public static int maxCommandLength = OS.getCurrent() == OS.WINDOWS ? 8000 : 64000;
 
   /** {@link RunfilesSupplier}s for tools used by this rule. */
-  private final Sequence<RunfilesSupplier> toolsRunfilesSuppliers;
+  private final SkylarkList<RunfilesSupplier> toolsRunfilesSuppliers;
 
   /**
    * Use labelMap for heuristically expanding labels (does not include "outs")
@@ -209,7 +208,7 @@ public final class CommandHelper {
     }
 
     this.resolvedTools = resolvedToolsBuilder.build();
-    this.toolsRunfilesSuppliers = StarlarkList.immutableCopyOf(toolsRunfilesBuilder.build());
+    this.toolsRunfilesSuppliers = SkylarkList.createImmutable(toolsRunfilesBuilder.build());
     ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> labelMapBuilder =
         ImmutableMap.builder();
     for (Map.Entry<Label, Collection<Artifact>> entry : tempLabelMap.entrySet()) {
@@ -222,7 +221,7 @@ public final class CommandHelper {
     return resolvedTools;
   }
 
-  public Sequence<RunfilesSupplier> getToolsRunfilesSuppliers() {
+  public SkylarkList<RunfilesSupplier> getToolsRunfilesSuppliers() {
     return toolsRunfilesSuppliers;
   }
 
@@ -356,15 +355,5 @@ public final class CommandHelper {
   public static BashCommandConstructor buildBashCommandConstructor(
       Map<String, String> executionInfo, PathFragment shExecutable, String scriptPostFix) {
     return new BashCommandConstructor(shellPath(executionInfo, shExecutable), scriptPostFix);
-  }
-
-  public static WindowsBatchCommandConstructor buildWindowsBatchCommandConstructor(
-      String scriptPostFix) {
-    return new WindowsBatchCommandConstructor(scriptPostFix);
-  }
-
-  public static WindowsPowershellCommandConstructor buildWindowsPowershellCommandConstructor(
-      String scriptPostFix) {
-    return new WindowsPowershellCommandConstructor(scriptPostFix);
   }
 }
