@@ -1,21 +1,22 @@
 package org.jboss.shamrock.example.test;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-
+import org.jboss.shamrock.junit.GraalTest;
 import org.jboss.shamrock.junit.ShamrockTest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import static org.junit.Assert.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+
+import static org.junit.Assert.assertEquals;
 
 /**
  * Test reflection around JPA entities
  *
  * @author Emmanuel Bernard emmanuel@hibernate.org
  */
-@RunWith(ShamrockTest.class)
-public class JPAReflectionTestCase {
+@RunWith(GraalTest.class)
+public class JPAReflectionInGraalTestCase {
 
     @Test
     public void testFieldAndGetterReflectionOnEntity() throws Exception {
