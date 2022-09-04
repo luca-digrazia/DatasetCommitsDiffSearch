@@ -899,7 +899,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                   + "  flag_set {"
                   + "    action: 'c-compile'"
                   + "    action: 'c++-compile'"
-                  + "    action: 'c++-module-codegen'"
                   + "    action: 'assemble'"
                   + "    action: 'preprocess-assemble'"
                   + "    action: 'lto-backend'"

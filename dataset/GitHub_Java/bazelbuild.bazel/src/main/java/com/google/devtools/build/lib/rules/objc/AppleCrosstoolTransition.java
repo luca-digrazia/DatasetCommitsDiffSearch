@@ -90,6 +90,7 @@ public class AppleCrosstoolTransition implements PatchTransition {
    */
   public static boolean appleCrosstoolTransitionIsAppliedForAllObjc(BuildOptions options) {
     return (options.get(AppleCommandLineOptions.class).enableAppleCrosstoolTransition
+        || options.get(ObjcCommandLineOptions.class).experimentalObjcLibrary
         || options.get(ObjcCommandLineOptions.class).objcCrosstoolMode != ObjcCrosstoolMode.OFF);
   }
 }
