@@ -528,8 +528,6 @@ public final class SandboxModule extends BlazeModule {
       sandboxBase = null;
     }
 
-    spawnRunners.clear();
-
     env.getEventBus().unregister(this);
     env = null;
   }
