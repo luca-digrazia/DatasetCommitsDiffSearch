@@ -24,6 +24,8 @@ import com.google.devtools.build.lib.analysis.LocationExpander;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
+import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -44,6 +46,7 @@ import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -69,10 +72,8 @@ public class SkylarkRuleImplementationFunctions {
   @SkylarkSignature(
     name = "action",
     doc =
-        "DEPRECATED. Use <a href=\"acttions.html#run\">ctx.actions.run()</a> or"
-            + " <a href=\"acttions.html#run_shell\">ctx.actions.run_shell()</a>. <br>"
-            + "Creates an action that runs an executable or a shell command."
-            + " You must specify either <code>command</code> or <code>executable</code>.\n"
+        "Creates an action that runs an executable or a shell command. You must specify either "
+            + "<code>command</code> or <code>executable</code>.\n"
             + "Actions and genrules are very similar, but have different use cases. Actions are "
             + "used inside rules, and genrules are used inside macros. Genrules also have make "
             + "variable expansion.",
@@ -400,11 +401,9 @@ public class SkylarkRuleImplementationFunctions {
 
   @SkylarkSignature(
     name = "template_action",
-    doc = "DEPRECATED. "
-        + "Use <a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a> instead."
-        + "<br>Creates a template expansion action.",
+    doc = "Creates a template expansion action.",
     objectType = SkylarkRuleContext.class,
-    returnType = Runtime.NoneType.class,
+    returnType = TemplateExpansionAction.class,
     parameters = {
       @Param(name = "self", type = SkylarkRuleContext.class, doc = "this context."),
       @Param(
@@ -440,7 +439,7 @@ public class SkylarkRuleImplementationFunctions {
   )
   private static final BuiltinFunction createTemplateAction =
       new BuiltinFunction("template_action", Arrays.<Object>asList(false)) {
-        public Runtime.NoneType invoke(
+        public TemplateExpansionAction invoke(
             SkylarkRuleContext ctx,
             Artifact template,
             Artifact output,
@@ -448,10 +447,39 @@ public class SkylarkRuleImplementationFunctions {
             Boolean executable)
             throws EvalException, ConversionException {
           ctx.checkMutable("template_action");
-          ctx.actions().expandTemplate(template, output, substitutionsUnchecked, executable);
-          return Runtime.NONE;
+          ImmutableList.Builder<Substitution> substitutionsBuilder = ImmutableList.builder();
+          for (Map.Entry<String, String> substitution :
+              substitutionsUnchecked
+                  .getContents(String.class, String.class, "substitutions")
+                  .entrySet()) {
+            // ParserInputSource.create(Path) uses Latin1 when reading BUILD files, which might
+            // contain UTF-8 encoded symbols as part of template substitution.
+            // As a quick fix, the substitution values are corrected before being passed on.
+            // In the long term, fixing ParserInputSource.create(Path) would be a better approach.
+            substitutionsBuilder.add(
+                Substitution.of(
+                    substitution.getKey(), convertLatin1ToUtf8(substitution.getValue())));
+          }
+          TemplateExpansionAction action =
+              new TemplateExpansionAction(
+                  ctx.getRuleContext().getActionOwner(),
+                  template,
+                  output,
+                  substitutionsBuilder.build(),
+                  executable);
+          ctx.getRuleContext().registerAction(action);
+          return action;
         }
       };
+
+  /**
+   * Returns the proper UTF-8 representation of a String that was erroneously read using Latin1.
+   * @param latin1 Input string
+   * @return The input string, UTF8 encoded
+   */
+  private static String convertLatin1ToUtf8(String latin1) {
+    return new String(latin1.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
+  }
 
   // TODO(bazel-team): Remove runfile states from Skylark.
   @SkylarkSignature(name = "runfiles",

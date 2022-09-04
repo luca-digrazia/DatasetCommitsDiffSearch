@@ -25,8 +25,6 @@ import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
-import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -45,7 +43,6 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -517,6 +514,7 @@ public class SkylarkActionFactory implements SkylarkValue {
     context.checkMutable("actions.run_shell");
 
     // TODO(bazel-team): builder still makes unnecessary copies of inputs, outputs and args.
+    boolean hasCommand = true;
     SpawnAction.Builder builder = new SpawnAction.Builder();
     if (arguments.size() > 0) {
       // When we use a shell command, add an empty argument before other arguments.
@@ -525,10 +523,7 @@ public class SkylarkActionFactory implements SkylarkValue {
       // arg1 and arg2 will be $1 and $2, as a user expects.
       builder.addArgument("");
     }
-
-    @SuppressWarnings("unchecked")
-    List<String> argumentsContents = arguments.getContents(String.class, "arguments");
-    builder.addArguments(argumentsContents);
+    builder.addArguments(arguments.getContents(String.class, "arguments"));
 
     if (commandUnchecked instanceof String) {
       builder.setShellCommand((String) commandUnchecked);
@@ -537,9 +532,7 @@ public class SkylarkActionFactory implements SkylarkValue {
       if (commandList.size() < 3) {
         throw new EvalException(null, "'command' list has to be of size at least 3");
       }
-      @SuppressWarnings("unchecked")
-      List<String> command = commandList.getContents(String.class, "command");
-      builder.setShellCommand(command);
+      builder.setShellCommand(commandList.getContents(String.class, "command"));
     } else {
       throw new EvalException(
           null,
@@ -625,82 +618,6 @@ public class SkylarkActionFactory implements SkylarkValue {
     // Always register the action
     ruleContext.registerAction(builder.build(ruleContext));
   }
-
-  @SkylarkCallable(
-      name = "expand_template",
-      doc = "Creates a template expansion action.",
-      parameters = {
-          @Param(
-              name = "template",
-              type = Artifact.class,
-              named = true,
-              positional = false,
-              doc = "the template file, which is a UTF-8 encoded text file."
-          ),
-          @Param(
-              name = "output",
-              type = Artifact.class,
-              named = true,
-              positional = false,
-              doc = "the output file, which is a UTF-8 encoded text file."
-          ),
-          @Param(
-              name = "substitutions",
-              type = SkylarkDict.class,
-              named = true,
-              positional = false,
-              doc = "substitutions to make when expanding the template."
-          ),
-          @Param(
-              name = "executable",
-              type = Boolean.class,
-              defaultValue = "False",
-              named = true,
-              positional = false,
-              doc = "whether the output file should be executable (default is False)."
-          )
-      }
-  )
-  public void expandTemplate(
-            Artifact template,
-            Artifact output,
-            SkylarkDict<?, ?> substitutionsUnchecked,
-            Boolean executable)
-            throws EvalException {
-    context.checkMutable("actions.expand_template");
-    ImmutableList.Builder<Substitution> substitutionsBuilder = ImmutableList.builder();
-    for (Map.Entry<String, String> substitution :
-        substitutionsUnchecked
-            .getContents(String.class, String.class, "substitutions")
-            .entrySet()) {
-      // ParserInputSource.create(Path) uses Latin1 when reading BUILD files, which might
-      // contain UTF-8 encoded symbols as part of template substitution.
-      // As a quick fix, the substitution values are corrected before being passed on.
-      // In the long term, fixing ParserInputSource.create(Path) would be a better approach.
-      substitutionsBuilder.add(
-          Substitution.of(
-              substitution.getKey(), convertLatin1ToUtf8(substitution.getValue())));
-    }
-    TemplateExpansionAction action =
-        new TemplateExpansionAction(
-            ruleContext.getActionOwner(),
-            template,
-            output,
-            substitutionsBuilder.build(),
-            executable);
-    ruleContext.registerAction(action);
-  }
-
-  /**
-   * Returns the proper UTF-8 representation of a String that was erroneously read using Latin1.
-   * @param latin1 Input string
-   * @return The input string, UTF8 encoded
-   */
-  private static String convertLatin1ToUtf8(String latin1) {
-    return new String(latin1.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
-  }
-
-
 
   @Override
   public boolean isImmutable() {
