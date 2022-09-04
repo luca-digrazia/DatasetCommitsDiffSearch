@@ -901,8 +901,6 @@ public final class BuildOptions implements Cloneable, Serializable {
      */
     public static ConfigurationComparer.Result compareFragments(
         OptionsDiffForReconstruction left, OptionsDiffForReconstruction right) {
-      // TODO: Add support for marking Starlark options as known default when trimming
-      // (sentinel object?)
       Preconditions.checkArgument(
           Arrays.equals(left.baseFingerprint, right.baseFingerprint),
           "Can't compare diffs with different bases: %s and %s",
