@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.io;
@@ -24,13 +23,12 @@ import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.avro.Schema;
 import org.apache.commons.csv.CSVFormat;
 import smile.data.DataFrame;
 import smile.data.Dataset;
 import smile.data.Instance;
 import smile.data.type.StructType;
-import smile.util.SparseArray;
+import smile.math.SparseArray;
 
 /**
  * Interface to load a Dataset from external storage systems.
@@ -42,14 +40,9 @@ public class DatasetReader {
 
     /** Reads a limited number of records. */
     private int limit = Integer.MAX_VALUE;
-    /** CSV format. */
+
+     /** CSV format. */
     private CSVFormat format = CSVFormat.DEFAULT;
-    /** Avro schema. */
-    private Schema schema;
-    /** CSV or JSON schema. */
-    private StructType struct;
-    /** JSON mode. */
-    private JSON.Mode mode = JSON.Mode.SINGLE_LINE;
 
     /**
      * Constructor.
@@ -75,39 +68,16 @@ public class DatasetReader {
         this.format = format;
     }
 
-    /**
-     * Sets the JSON read mode.
-     */
-    public void mode(JSON.Mode mode) {
-        this.mode = mode;
-    }
-
-    /**
-     * Sets the Avro schema.
-     */
-    public void schema(Schema schema) {
-        this.schema = schema;
-    }
-
-    /**
-     * Sets the CSV or JSON schema.
-     */
-    public void schema(StructType schema) {
-        this.struct = schema;
-    }
-
     /** Reads a CSV file. */
     public DataFrame csv(Path path) throws IOException {
         CSV csv = new CSV(format);
-        if (struct != null) csv.schema(struct);
         return csv.read(path, limit);
     }
 
-    /** Reads a JSON file. */
-    public DataFrame json(Path path) throws IOException {
-        JSON json = new JSON().mode(mode);
-        if (struct != null) json.schema(struct);
-        return json.read(path, limit);
+    /** Reads a CSV file with customized format. */
+    public DataFrame csv(Path path, StructType schema) throws IOException {
+        CSV csv = new CSV(format).withSchema(schema);
+        return csv.read(path, limit);
     }
 
     /**
@@ -143,16 +113,6 @@ public class DatasetReader {
     }
 
     /**
-     * Reads a SAS7BDAT file.
-     *
-     * @param path the input file path.
-     */
-    public DataFrame sas(Path path) throws IOException {
-        SAS sas = new SAS();
-        return sas.read(path, limit);
-    }
-
-    /**
      * Reads an Apache Arrow file.
      * Apache Arrow is a cross-language development platform for in-memory data.
      * It specifies a standardized language-independent columnar memory format
@@ -164,20 +124,6 @@ public class DatasetReader {
     public DataFrame arrow(Path path) throws IOException {
         Arrow arrow = new Arrow();
         return arrow.read(path, limit);
-    }
-
-    /**
-     * Reads an Apache Avro file.
-     *
-     * @param path the input file path.
-     */
-    public DataFrame avro(Path path) throws IOException {
-        if (schema == null) {
-            throw new IllegalStateException("Avro schema is not set yet. Call schema(org.apache.avro.Schema) first.");
-        }
-
-        Avro avro = new Avro(schema);
-        return avro.read(path, limit);
     }
 
     /**
