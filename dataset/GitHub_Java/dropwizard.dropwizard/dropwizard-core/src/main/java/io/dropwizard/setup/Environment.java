@@ -21,6 +21,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+// TODO: 5/15/13 <coda> -- add tests for Environment
+
 /**
  * A Dropwizard application's environment.
  */
@@ -167,6 +169,8 @@ public class Environment {
     /*
     * Internal Accessors
     */
+
+    // TODO: 5/4/13 <coda> -- figure out how to make these accessors not a public API
 
     public MutableServletContextHandler getApplicationContext() {
         return servletContext;
