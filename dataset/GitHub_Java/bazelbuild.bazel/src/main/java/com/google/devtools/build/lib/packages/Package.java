@@ -800,6 +800,22 @@ public class Package {
        * during package loading. Called by {@link PackageFactory}.
        */
       Package createFreshPackage(PackageIdentifier packageId, String runfilesPrefix);
+
+      /**
+       * Called after {@link com.google.devtools.build.lib.skyframe.PackageFunction} has
+       * successfully loaded the given {@link Package}.
+       *
+       * @param pkg the loaded {@link Package}
+       * @param starlarkSemantics are the semantics used to load the package
+       * @param loadTimeNanos the wall time, in ns, that it took to load the package. More
+       *     precisely, this is the wall time of the call to {@link
+       *     PackageFactory#createPackageFromAst}. Notably, this does not include the time to read
+       *     and parse the package's BUILD file, nor the time to read, parse, or evaluate any of the
+       *     transitively loaded .bzl files, and it includes time the OS thread is runnable but not
+       *     running.
+       */
+      void onLoadingCompleteAndSuccessful(
+          Package pkg, StarlarkSemantics starlarkSemantics, long loadTimeNanos);
     }
 
     /** {@link Helper} that simply calls the {@link Package} constructor. */
@@ -813,6 +829,10 @@ public class Package {
       public Package createFreshPackage(PackageIdentifier packageId, String runfilesPrefix) {
         return new Package(packageId, runfilesPrefix);
       }
+
+      @Override
+      public void onLoadingCompleteAndSuccessful(
+          Package pkg, StarlarkSemantics starlarkSemantics, long loadTimeNanos) {}
     }
 
     /**
@@ -853,7 +873,6 @@ public class Package {
     @Nullable private IOException ioException = null;
     private boolean containsErrors = false;
 
-    private ImmutableList<Label> defaultApplicableLicenses = ImmutableList.of();
     private License defaultLicense = License.NO_LICENSE;
     private Set<License.DistributionType> defaultDistributionSet = License.DEFAULT_DISTRIB;
 
@@ -976,6 +995,7 @@ public class Package {
       return this.repositoryMapping;
     }
 
+    /** Returns the interner to use to intern lists within the package currently being built. */
     Interner<ImmutableList<?>> getListInterner() {
       return listInterner;
     }
@@ -1170,10 +1190,6 @@ public class Package {
         setContainsErrors();
       }
       pkg.setDefaultApplicableLicenses(ImmutableSet.copyOf(licenses));
-    }
-
-    ImmutableList<Label> getDefaultApplicableLicenses() {
-      return defaultApplicableLicenses;
     }
 
     /**
