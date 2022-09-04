@@ -15,10 +15,9 @@
 package com.google.devtools.build.buildjar.javac.plugins.dependency;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static java.util.stream.Collectors.joining;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
@@ -344,18 +343,16 @@ public final class DependencyModule {
     private static class DefaultFixMessage implements FixMessage {
       @Override
       public String get(Iterable<JarOwner> missing, String recipient, DependencyModule depModule) {
-        ImmutableSet<String> missingTargets =
+        // TODO(cushon): remove the extra whitespace at the end, and fix local_repository_test_jdk8
+        String missingTargetsStr =
             Streams.stream(missing)
                 .flatMap(owner -> owner.label().map(Stream::of).orElse(Stream.empty()))
-                .collect(toImmutableSet());
-        if (missingTargets.isEmpty()) {
-          return "";
-        }
+                .collect(joining(" ", "", " "));
         return String.format(
             "%1$s ** Please add the following dependencies:%2$s \n  %3$s to %4$s \n"
                 + "%1$s ** You can use the following buildozer command:%2$s "
                 + "\nbuildozer 'add deps %3$s' %4$s \n\n",
-            "\033[35m\033[1m", "\033[0m", Joiner.on(" ").join(missingTargets), recipient);
+            "\033[35m\033[1m", "\033[0m", missingTargetsStr.toString(), recipient);
       }
     }
 
