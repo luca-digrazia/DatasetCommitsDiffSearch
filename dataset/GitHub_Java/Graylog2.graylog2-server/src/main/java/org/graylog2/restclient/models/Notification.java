@@ -19,7 +19,6 @@
 package org.graylog2.restclient.models;
 
 import com.google.inject.Inject;
-import org.graylog2.restclient.lib.notifications.*;
 import org.graylog2.restclient.models.api.responses.system.NotificationSummaryResponse;
 import org.joda.time.DateTime;
 
@@ -41,7 +40,10 @@ public class Notification {
         NO_INPUT_RUNNING,
         INPUT_FAILED_TO_START,
         CHECK_SERVER_CLOCKS,
-        OUTDATED_VERSION;
+        OUTDATED_VERSION,
+        EMAIL_TRANSPORT_CONFIGURATION_INVALID,
+        EMAIL_TRANSPORT_FAILED,
+        STREAM_PROCESSING_DISABLED;
 
         public static Type fromString(String name) {
             return valueOf(name.toUpperCase());
@@ -64,29 +66,6 @@ public class Notification {
         this.severity = Severity.valueOf(x.severity.toUpperCase());
         this.node_id = x.node_id;
         this.details = x.details;
-    }
-
-    public NotificationType get() {
-        switch (type) {
-            case DEFLECTOR_EXISTS_AS_INDEX:
-                return new DeflectorExistsAsIndexNotification();
-            case MULTI_MASTER:
-                return new MultiMasterNotification();
-            case NO_MASTER:
-                return new NoMasterNotification();
-            case ES_OPEN_FILES:
-                return new EsOpenFilesNotification();
-            case NO_INPUT_RUNNING:
-                return new NoInputRunningNotification(getNodeId());
-            case INPUT_FAILED_TO_START:
-                return new InputFailedToStartNotification(this);
-            case CHECK_SERVER_CLOCKS:
-                return new CheckServerClocksNotification();
-            case OUTDATED_VERSION:
-                return new OutdatedVersionNotification(this);
-        }
-
-        throw new RuntimeException("No notification registered for " + type);
     }
 
     public Type getType() {
