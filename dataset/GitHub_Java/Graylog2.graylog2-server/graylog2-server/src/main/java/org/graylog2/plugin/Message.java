@@ -68,56 +68,49 @@ public class Message implements Messages {
     private static final Pattern VALID_KEY_CHARS = Pattern.compile("^[\\w\\.\\-@]*$");
     private static final char KEY_REPLACEMENT_CHAR = '_';
 
-    private static final ImmutableSet<String> GRAYLOG_FIELDS = ImmutableSet.of(
-        "gl2_source_node",
-        "gl2_source_input",
-        // TODO Due to be removed in Graylog 3.x
-        "gl2_source_radio",
-        "gl2_source_radio_input",
+    public static final ImmutableSet<String> RESERVED_FIELDS = ImmutableSet.of(
+            // ElasticSearch fields.
+            FIELD_ID,
+            "_ttl",
+            "_source",
+            "_all",
+            "_index",
+            "_type",
+            "_score",
 
-        "gl2_source_collector",
-        "gl2_source_collector_input",
-        "gl2_remote_ip",
-        "gl2_remote_port",
-        "gl2_remote_hostname"
+            // Our reserved fields.
+            FIELD_MESSAGE,
+            FIELD_SOURCE,
+            FIELD_TIMESTAMP,
+            "gl2_source_node",
+            "gl2_source_input",
+            "gl2_source_collector",
+            "gl2_source_collector_input",
+            "gl2_remote_ip",
+            "gl2_remote_port",
+            "gl2_remote_hostname",
+            // TODO Due to be removed in Graylog 3.x
+            "gl2_source_radio",
+            "gl2_source_radio_input"
     );
 
-    private static final ImmutableSet<String> CORE_MESSAGE_FIELDS = ImmutableSet.of(
-        FIELD_MESSAGE,
-        FIELD_SOURCE,
-        FIELD_TIMESTAMP
+    public static final ImmutableSet<String> RESERVED_SETTABLE_FIELDS = ImmutableSet.of(
+            FIELD_MESSAGE,
+            FIELD_SOURCE,
+            FIELD_TIMESTAMP,
+            "gl2_source_node",
+            "gl2_source_input",
+            "gl2_source_radio",
+            "gl2_source_radio_input",
+            "gl2_source_collector",
+            "gl2_source_collector_input",
+            "gl2_remote_ip",
+            "gl2_remote_port",
+            "gl2_remote_hostname"
     );
-
-    private static final ImmutableSet<String> ES_FIELDS = ImmutableSet.of(
-        // ElasticSearch fields.
-        FIELD_ID,
-        "_ttl",
-        "_source",
-        "_all",
-        "_index",
-        "_type",
-        "_score"
-    );
-
-    public static final ImmutableSet<String> RESERVED_SETTABLE_FIELDS = new ImmutableSet.Builder<String>()
-        .addAll(GRAYLOG_FIELDS)
-        .addAll(CORE_MESSAGE_FIELDS)
-        .build();
-
-    public static final ImmutableSet<String> RESERVED_FIELDS = new ImmutableSet.Builder<String>()
-        .addAll(RESERVED_SETTABLE_FIELDS)
-        .addAll(ES_FIELDS)
-        .build();
-
-    public static final ImmutableSet<String> FILTERED_FIELDS = new ImmutableSet.Builder<String>()
-        .addAll(GRAYLOG_FIELDS)
-        .addAll(ES_FIELDS)
-        .add(FIELD_STREAMS)
-        .add(FIELD_FULL_MESSAGE)
-        .build();
 
     private static final ImmutableSet<String> REQUIRED_FIELDS = ImmutableSet.of(
-        FIELD_MESSAGE, FIELD_ID
+            FIELD_MESSAGE, FIELD_ID
     );
 
     public static final Function<Message, String> ID_FUNCTION = new MessageIdFunction();
@@ -157,7 +150,7 @@ public class Message implements Messages {
     public boolean isComplete() {
         for (final String key : REQUIRED_FIELDS) {
             final Object field = getField(key);
-            if (field == null || field instanceof String && ((String) field).isEmpty()) {
+            if (field == null || (field instanceof String && ((String) field).isEmpty())) {
                 return false;
             }
         }
@@ -205,7 +198,7 @@ public class Message implements Messages {
                     obj.put(newKey, entry.getValue());
                 } else {
                     LOG.warn("Keys must not contain a \".\" character! Ignoring field \"{}\"=\"{}\" in message [{}] - Unable to replace \".\" with a \"{}\" because of key conflict: \"{}\"=\"{}\"",
-                        key, entry.getValue(), getId(), KEY_REPLACEMENT_CHAR, newKey, obj.get(newKey));
+                            key, entry.getValue(), getId(), KEY_REPLACEMENT_CHAR, newKey, obj.get(newKey));
                     LOG.debug("Full message with \".\" in message key: {}", this);
                 }
             } else {
@@ -214,7 +207,7 @@ public class Message implements Messages {
                     // Deliberate warning duplicates because the key with the "." might be transformed before reaching
                     // the duplicate original key with a "_". Otherwise we would silently overwrite the transformed key.
                     LOG.warn("Keys must not contain a \".\" character! Ignoring field \"{}\"=\"{}\" in message [{}] - Unable to replace \".\" with a \"{}\" because of key conflict: \"{}\"=\"{}\"",
-                        newKey, fields.get(newKey), getId(), KEY_REPLACEMENT_CHAR, key, entry.getValue());
+                            newKey, fields.get(newKey), getId(), KEY_REPLACEMENT_CHAR, key, entry.getValue());
                     LOG.debug("Full message with \".\" in message key: {}", this);
                 }
                 obj.put(key, entry.getValue());
@@ -305,7 +298,7 @@ public class Message implements Messages {
         final String trimmedKey = key.trim();
 
         // Don't accept protected keys. (some are allowed though lol)
-        if ((RESERVED_FIELDS.contains(trimmedKey) && !RESERVED_SETTABLE_FIELDS.contains(trimmedKey)) || !validKey(trimmedKey)) {
+        if (RESERVED_FIELDS.contains(trimmedKey) && !RESERVED_SETTABLE_FIELDS.contains(trimmedKey) || !validKey(trimmedKey)) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Ignoring invalid or reserved key {} for message {}", trimmedKey, getId());
             }

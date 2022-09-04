@@ -25,24 +25,14 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.shared.SuppressForbidden;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.time.chrono.ThaiBuddhistDate;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -53,7 +43,6 @@ import java.util.regex.Pattern;
 
 import static com.google.common.collect.Sets.symmetricDifference;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.graylog2.plugin.streams.Stream.DEFAULT_STREAM_ID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -75,18 +64,10 @@ public class MessageTest {
 
     @Before
     public void setUp() {
-        DateTimeUtils.setCurrentMillisFixed(1524139200000L);
-
         metricRegistry = new MetricRegistry();
         originalTimestamp = Tools.nowUTC();
         message = new Message("foo", "bar", originalTimestamp);
         invalidTimestampMeter = metricRegistry.meter("test");
-
-    }
-
-    @After
-    public void tearDown() {
-        DateTimeUtils.setCurrentMillisSystem();
     }
 
     @Test
@@ -163,7 +144,6 @@ public class MessageTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testAddStringFields() throws Exception {
         final Map<String, String> map = Maps.newHashMap();
 
@@ -177,7 +157,6 @@ public class MessageTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testAddLongFields() throws Exception {
         final Map<String, Long> map = Maps.newHashMap();
 
@@ -191,7 +170,6 @@ public class MessageTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testAddDoubleFields() throws Exception {
         final Map<String, Double> map = Maps.newHashMap();
 
@@ -449,20 +427,6 @@ public class MessageTest {
     }
 
     @Test
-    public void messageSizes() {
-        final Meter invalidTimestampMeter = new Meter();
-
-        final Message message = new Message("1234567890", "12345", Tools.nowUTC());
-        assertThat(message.getSize()).isEqualTo(45);
-
-        final Stream defaultStream = mock(Stream.class);
-        when(defaultStream.getId()).thenReturn(DEFAULT_STREAM_ID);
-        message.addStream(defaultStream);
-
-        assertThat(message.getSize()).isEqualTo(53);
-    }
-
-    @Test
     public void testIsComplete() throws Exception {
         Message message = new Message("message", "source", Tools.nowUTC());
         assertTrue(message.isComplete());
@@ -481,7 +445,6 @@ public class MessageTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testGetValidationErrorsWithEmptyMessage() throws Exception {
         final Message message = new Message("", "source", Tools.nowUTC());
 
@@ -489,7 +452,6 @@ public class MessageTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testGetValidationErrorsWithNullMessage() throws Exception {
         final Message message = new Message(null, "source", Tools.nowUTC());
 
@@ -570,63 +532,5 @@ public class MessageTest {
 
         assertThat(message.getStreamIds()).containsOnly("test1", "test2");
 
-    }
-
-    @Test
-    public void fieldTest() {
-        assertThat(Message.sizeForField("", true)).isEqualTo(4);
-        assertThat(Message.sizeForField("", (byte)1)).isEqualTo(1);
-        assertThat(Message.sizeForField("", (char)1)).isEqualTo(2);
-        assertThat(Message.sizeForField("", (short)1)).isEqualTo(2);
-        assertThat(Message.sizeForField("", 1)).isEqualTo(4);
-        assertThat(Message.sizeForField("", 1L)).isEqualTo(8);
-        assertThat(Message.sizeForField("", 1.0f)).isEqualTo(4);
-        assertThat(Message.sizeForField("", 1.0d)).isEqualTo(8);
-    }
-
-    @Test
-    public void assignZonedDateTimeAsTimestamp() {
-        final Message message = new Message("message", "source", Tools.nowUTC());
-        message.addField(Message.FIELD_TIMESTAMP, ZonedDateTime.of(2018, 4, 19, 12, 0, 0, 0, ZoneOffset.UTC));
-        assertThat(message.getTimestamp()).isEqualTo(new DateTime(2018, 4, 19, 12, 0, 0, 0, DateTimeZone.UTC));
-    }
-
-    @Test
-    public void assignOffsetDateTimeAsTimestamp() {
-        final Message message = new Message("message", "source", Tools.nowUTC());
-        message.addField(Message.FIELD_TIMESTAMP, OffsetDateTime.of(2018, 4, 19, 12, 0, 0, 0, ZoneOffset.UTC));
-        assertThat(message.getTimestamp()).isEqualTo(new DateTime(2018, 4, 19, 12, 0, 0, 0, DateTimeZone.UTC));
-    }
-
-    @Test
-    @SuppressForbidden("Intentionally using system default time zone")
-    public void assignLocalDateTimeAsTimestamp() {
-        final Message message = new Message("message", "source", Tools.nowUTC());
-        message.addField(Message.FIELD_TIMESTAMP, LocalDateTime.of(2018, 4, 19, 12, 0, 0, 0));
-        final DateTimeZone defaultTimeZone = DateTimeZone.getDefault();
-        assertThat(message.getTimestamp()).isEqualTo(new DateTime(2018, 4, 19, 12, 0, 0, 0, defaultTimeZone).withZone(DateTimeZone.UTC));
-    }
-
-    @Test
-    @SuppressForbidden("Intentionally using system default time zone")
-    public void assignLocalDateAsTimestamp() {
-        final Message message = new Message("message", "source", Tools.nowUTC());
-        message.addField(Message.FIELD_TIMESTAMP, LocalDate.of(2018, 4, 19));
-        final DateTimeZone defaultTimeZone = DateTimeZone.getDefault();
-        assertThat(message.getTimestamp()).isEqualTo(new DateTime(2018, 4, 19, 0, 0, 0, 0, defaultTimeZone).withZone(DateTimeZone.UTC));
-    }
-
-    @Test
-    public void assignInstantAsTimestamp() {
-        final Message message = new Message("message", "source", Tools.nowUTC());
-        message.addField(Message.FIELD_TIMESTAMP, Instant.ofEpochMilli(1524139200000L));
-        assertThat(message.getTimestamp()).isEqualTo(new DateTime(2018, 4, 19, 12, 0, 0, 0, DateTimeZone.UTC));
-    }
-
-    @Test
-    public void assignUnsupportedTemporalTypeAsTimestamp() {
-        final Message message = new Message("message", "source", Tools.nowUTC());
-        message.addField(Message.FIELD_TIMESTAMP, ThaiBuddhistDate.of(0, 4, 19));
-        assertThat(message.getTimestamp()).isGreaterThan(new DateTime(2018, 4, 19, 0, 0, 0, 0, DateTimeZone.UTC));
     }
 }
