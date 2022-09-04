@@ -911,7 +911,7 @@ public class ObjcRuleClasses {
               attr(PLATFORM_TYPE_ATTR_NAME, STRING)
                   .mandatory()
                   .nonconfigurable("Determines the configuration transition on deps"))
-          /* <!-- #BLAZE_RULE($apple_platform_rule).ATTRIBUTE(minimum_os_version) -->
+          /* <!-- #BLAZE_RULE($apple_platform_rule).ATTRIBUTE(minimum_os) -->
           The minimum OS version that this target and its dependencies should be built for.
 
           This should be a dotted version string such as "7.3".
@@ -937,19 +937,6 @@ public class ObjcRuleClasses {
    */
   public static class MultiArchPlatformRule implements RuleDefinition {
 
-    private final ObjcProtoAspect objcProtoAspect;
-
-    public MultiArchPlatformRule(ObjcProtoAspect objcProtoAspect) {
-      this.objcProtoAspect = objcProtoAspect;
-    }
-
-    /**
-     * Rule class names for cc rules which are allowed as targets of the 'deps' attribute of this
-     * rule.
-     */
-    static final ImmutableSet<String> ALLOWED_CC_DEPS_RULE_CLASSES =
-        ImmutableSet.of("cc_library", "cc_inc_library");
-
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       MultiArchSplitTransitionProvider splitTransitionProvider =
@@ -962,57 +949,6 @@ public class ObjcRuleClasses {
               attr(CHILD_CONFIG_ATTR, LABEL)
                   .cfg(splitTransitionProvider)
                   .value(ObjcRuleClasses.APPLE_TOOLCHAIN))
-          /* <!-- #BLAZE_RULE($apple_multiarch_rule).ATTRIBUTE(deps) -->
-          The list of targets that are linked together to form the final binary.
-          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .override(
-              attr("deps", LABEL_LIST)
-                  .direct_compile_time_input()
-                  .allowedRuleClasses(ALLOWED_CC_DEPS_RULE_CLASSES)
-                  .mandatoryProviders(ObjcProvider.SKYLARK_CONSTRUCTOR.id())
-                  .cfg(splitTransitionProvider)
-                  .aspect(objcProtoAspect)
-                  .allowedFileTypes())
-          /* <!-- #BLAZE_RULE($apple_multiarch_rule).ATTRIBUTE(linkopts) -->
-          Extra flags to pass to the linker.
-          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(attr("linkopts", STRING_LIST))
-          /* <!-- #BLAZE_RULE($apple_multiarch_rule).ATTRIBUTE(non_propagated_deps) -->
-          The list of targets that are required in order to build this target,
-          but which are not included in the final binary.
-          This attribute should only rarely be used, and probably only for proto
-          dependencies.
-          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(
-              attr("non_propagated_deps", LABEL_LIST)
-                  .direct_compile_time_input()
-                  .allowedRuleClasses(ALLOWED_CC_DEPS_RULE_CLASSES)
-                  .mandatoryProviders(ObjcProvider.SKYLARK_CONSTRUCTOR.id())
-                  .cfg(splitTransitionProvider)
-                  .allowedFileTypes())
-          .add(
-              attr("$j2objc_dead_code_pruner", LABEL)
-                  .allowedFileTypes(FileType.of(".py"))
-                  .cfg(HOST)
-                  .exec()
-                  .singleArtifact()
-                  .value(env.getToolsLabel("//tools/objc:j2objc_dead_code_pruner")))
-          .add(attr("$dummy_lib", LABEL).value(env.getToolsLabel("//tools/objc:dummy_lib")))
-          .add(
-              attr(PROTO_COMPILER_ATTR, LABEL)
-                  .allowedFileTypes(FileType.of(".sh"))
-                  .cfg(HOST)
-                  .singleArtifact()
-                  .value(env.getToolsLabel("//tools/objc:protobuf_compiler_wrapper")))
-          .add(
-              attr(PROTO_COMPILER_SUPPORT_ATTR, LABEL)
-                  .legacyAllowAnyFileType()
-                  .cfg(HOST)
-                  .value(env.getToolsLabel("//tools/objc:protobuf_compiler_support")))
-          .add(
-              ProtoSourceFileBlacklist.blacklistFilegroupAttribute(
-                  PROTOBUF_WELL_KNOWN_TYPES,
-                  ImmutableList.of(env.getToolsLabel("//tools/objc:protobuf_well_known_types"))))
           .build();
     }
 
@@ -1021,8 +957,7 @@ public class ObjcRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$apple_multiarch_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(PlatformRule.class, CrosstoolRule.class, BaseRuleClasses.RuleBase.class,
-              XcrunRule.class, SdkFrameworksDependerRule.class, LibtoolRule.class)
+          .ancestors(PlatformRule.class, CrosstoolRule.class)
           .build();
     }
   }
@@ -1048,7 +983,7 @@ public class ObjcRuleClasses {
       return builder
           /* <!-- #BLAZE_RULE($apple_dylib_depending_rule).ATTRIBUTE(dylibs) -->
           <p>A list of dynamic library targets to be linked against in this rule and included
-          in the final binary. Libraries which are transitive dependencies of any such dylibs will
+          in the final bundle. Libraries which are transitive dependencies of any such dylibs will
           not be statically linked in this target (even if they are otherwise
           transitively depended on via the <code>deps</code> attribute) to avoid duplicate symbols.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
