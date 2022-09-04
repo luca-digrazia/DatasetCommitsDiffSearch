@@ -32,11 +32,9 @@ import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.BlazeWorkspace;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.DumpCommand.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.RuleStat;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -55,7 +53,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /** Implementation of the dump command. */
 @Command(
@@ -164,7 +161,7 @@ public class DumpCommand implements BlazeCommand {
         help =
             "Dumps a pprof-compatible memory profile to the specified path. To learn more please"
                 + " see https://github.com/google/pprof.")
-    public String starlarkMemory;
+    public String skylarkMemory;
 
     @Option(
       name = "skyframe",
@@ -206,7 +203,7 @@ public class DumpCommand implements BlazeCommand {
             || dumpOptions.dumpActionGraph != null
             || dumpOptions.dumpRuleClasses
             || dumpOptions.dumpRules
-            || dumpOptions.starlarkMemory != null
+            || dumpOptions.skylarkMemory != null
             || (dumpOptions.dumpSkyframe != SkyframeDumpOption.OFF);
     if (!anyOutput) {
       Collection<Class<? extends OptionsBase>> optionList = new ArrayList<>();
@@ -222,14 +219,14 @@ public class DumpCommand implements BlazeCommand {
                   optionList,
                   OptionsParser.HelpVerbosity.LONG,
                   runtime.getProductName()));
-      return createFailureResult("no output specified", Code.NO_OUTPUT_SPECIFIED);
+      return BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
     }
     PrintStream out = new PrintStream(env.getReporter().getOutErr().getOutputStream());
     try {
       out.println("Warning: this information is intended for consumption by developers");
       out.println("only, and may change at any time. Script against it at your own risk!");
       out.println();
-      Optional<BlazeCommandResult> failure = Optional.empty();
+      boolean success = true;
 
       if (dumpOptions.dumpPackages) {
         env.getPackageManager().dump(out);
@@ -237,31 +234,26 @@ public class DumpCommand implements BlazeCommand {
       }
 
       if (dumpOptions.dumpActionCache) {
-        if (!dumpActionCache(env, out)) {
-          failure =
-              Optional.of(
-                  createFailureResult("action cache dump failed", Code.ACTION_CACHE_DUMP_FAILED));
-        }
+        success &= dumpActionCache(env, out);
         out.println();
       }
 
       if (dumpOptions.dumpActionGraph != null) {
         try {
-          dumpActionGraph(
-              env.getSkyframeExecutor(),
-              dumpOptions.dumpActionGraph,
-              dumpOptions.actionGraphTargets,
-              dumpOptions.actionGraphIncludeCmdLine,
-              dumpOptions.actionGraphIncludeArtifacts,
-              out);
+          success &=
+              dumpActionGraph(
+                  env.getSkyframeExecutor(),
+                  dumpOptions.dumpActionGraph,
+                  dumpOptions.actionGraphTargets,
+                  dumpOptions.actionGraphIncludeCmdLine,
+                  dumpOptions.actionGraphIncludeArtifacts,
+                  out);
         } catch (CommandLineExpansionException e) {
-          String message = "Error expanding command line: " + e;
-          env.getReporter().handle(Event.error(null, message));
-          failure = Optional.of(createFailureResult(message, Code.COMMAND_LINE_EXPANSION_FAILURE));
+          env.getReporter().handle(Event.error(null, "Error expanding command line: " + e));
         } catch (IOException e) {
-          String message = "Could not dump action graph to '" + dumpOptions.dumpActionGraph + "'";
-          env.getReporter().error(null, message, e);
-          failure = Optional.of(createFailureResult(message, Code.ACTION_GRAPH_DUMP_FAILED));
+          env.getReporter()
+              .error(
+                  null, "Could not dump action graph to '" + dumpOptions.dumpActionGraph + "'", e);
         }
       }
 
@@ -275,23 +267,26 @@ public class DumpCommand implements BlazeCommand {
         out.println();
       }
 
-      if (dumpOptions.starlarkMemory != null) {
+      if (dumpOptions.skylarkMemory != null) {
         try {
-          dumpStarlarkHeap(env.getBlazeWorkspace(), dumpOptions.starlarkMemory, out);
+          dumpSkylarkHeap(env.getBlazeWorkspace(), dumpOptions.skylarkMemory, out);
         } catch (IOException e) {
-          String message = "Could not dump Starlark memory";
-          env.getReporter().error(null, message, e);
-          failure = Optional.of(createFailureResult(message, Code.STARLARK_HEAP_DUMP_FAILED));
+          env.getReporter().error(null, "Could not dump Starlark memory", e);
         }
       }
 
       if (dumpOptions.dumpSkyframe != SkyframeDumpOption.OFF) {
-        dumpSkyframe(
-            env.getSkyframeExecutor(), dumpOptions.dumpSkyframe == SkyframeDumpOption.SUMMARY, out);
+        success &= dumpSkyframe(
+            env.getSkyframeExecutor(),
+            dumpOptions.dumpSkyframe == SkyframeDumpOption.SUMMARY,
+            out);
         out.println();
       }
 
-      return failure.orElse(BlazeCommandResult.success());
+      return success
+          ? BlazeCommandResult.success()
+          : BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
+
     } finally {
       out.flush();
     }
@@ -307,7 +302,7 @@ public class DumpCommand implements BlazeCommand {
     return true;
   }
 
-  private static void dumpActionGraph(
+  private boolean dumpActionGraph(
       SkyframeExecutor executor,
       String path,
       List<String> actionGraphTargets,
@@ -322,10 +317,12 @@ public class DumpCommand implements BlazeCommand {
     FileOutputStream protoOutputStream = new FileOutputStream(path);
     actionGraphContainer.writeTo(protoOutputStream);
     protoOutputStream.close();
+    return true;
   }
 
-  private static void dumpSkyframe(SkyframeExecutor executor, boolean summarize, PrintStream out) {
+  private boolean dumpSkyframe(SkyframeExecutor executor, boolean summarize, PrintStream out) {
     executor.dump(summarize, out);
+    return true;
   }
 
   private void dumpRuleClasses(BlazeRuntime runtime, PrintStream out) {
@@ -453,7 +450,7 @@ public class DumpCommand implements BlazeCommand {
     return String.format("%,d", number);
   }
 
-  private void dumpStarlarkHeap(BlazeWorkspace workspace, String path, PrintStream out)
+  private void dumpSkylarkHeap(BlazeWorkspace workspace, String path, PrintStream out)
       throws IOException {
     AllocationTracker allocationTracker = workspace.getAllocationTracker();
     if (allocationTracker == null) {
@@ -464,14 +461,6 @@ public class DumpCommand implements BlazeCommand {
       return;
     }
     out.println("Dumping Starlark heap to: " + path);
-    allocationTracker.dumpStarlarkAllocations(path);
-  }
-
-  private static BlazeCommandResult createFailureResult(String message, Code detailedCode) {
-    return BlazeCommandResult.failureDetail(
-        FailureDetail.newBuilder()
-            .setMessage(message)
-            .setDumpCommand(FailureDetails.DumpCommand.newBuilder().setCode(detailedCode))
-            .build());
+    allocationTracker.dumpSkylarkAllocations(path);
   }
 }

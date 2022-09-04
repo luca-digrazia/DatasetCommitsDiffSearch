@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.common.options;
 
-import com.google.common.base.Ascii;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
@@ -124,7 +123,7 @@ class OptionsUsage {
     if (optionDefinition.getAbbreviation() != '\0') {
       usage.append(" [-").append(optionDefinition.getAbbreviation()).append(']');
     }
-    if (!typeDescription.isEmpty()) {
+    if (!typeDescription.equals("")) {
       usage.append(" (").append(typeDescription).append("; ");
       if (optionDefinition.allowsMultiple()) {
         usage.append("may be used multiple times");
@@ -183,7 +182,7 @@ class OptionsUsage {
             .filter(OptionsUsage::shouldMetadataTagBeListed);
     String tagList =
         Stream.concat(effectTagStream, metadataTagStream)
-            .map(tag -> Ascii.toLowerCase(tag.toString()))
+            .map(tag -> tag.toString().toLowerCase())
             .collect(Collectors.joining(", "));
     if (!tagList.isEmpty()) {
       usage.append(paragraphFill("Tags: " + tagList, 6, 80)); // (indent, width)
@@ -283,7 +282,7 @@ class OptionsUsage {
               .append("</a></code><br/>\n");
         }
       }
-      usage.append(expandsMsg);
+      usage.append(expandsMsg.toString());
     }
 
     // Add effect tags, if not UNKNOWN, and metadata tags, if not empty.
@@ -300,12 +299,12 @@ class OptionsUsage {
                       tag ->
                           String.format(
                               "<a href=\"#effect_tag_%s\"><code>%s</code></a>",
-                              tag, Ascii.toLowerCase(tag.name()))),
+                              tag, tag.name().toLowerCase())),
                   metadataTagStream.map(
                       tag ->
                           String.format(
                               "<a href=\"#metadata_tag_%s\"><code>%s</code></a>",
-                              tag, Ascii.toLowerCase(tag.name()))))
+                              tag, tag.name().toLowerCase())))
               .collect(Collectors.joining(", "));
       if (!tagList.isEmpty()) {
         usage.append("<br>Tags: \n").append(tagList);
