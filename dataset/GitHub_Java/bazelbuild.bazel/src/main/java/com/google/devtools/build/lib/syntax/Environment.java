@@ -1337,12 +1337,13 @@ public final class Environment implements Freezable, Debuggable {
   }
 
   /** A read-only {@link Environment.GlobalFrame} with False/True/None constants only. */
-  @AutoCodec static final GlobalFrame CONSTANTS_ONLY = createConstantsGlobals();
+  static final GlobalFrame CONSTANTS_ONLY = createConstantsGlobals();
 
   /**
-   * A read-only {@link Environment.GlobalFrame} with initial globals as defined in MethodLibrary.
+   * A read-only {@link Environment.GlobalFrame} with initial globals as defined in
+   * MethodLibrary.
    */
-  @AutoCodec public static final GlobalFrame DEFAULT_GLOBALS = createDefaultGlobals();
+  public static final GlobalFrame DEFAULT_GLOBALS = createDefaultGlobals();
 
   /** To be removed when all call-sites are updated. */
   public static final GlobalFrame SKYLARK = DEFAULT_GLOBALS;
