@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -33,7 +33,6 @@ import org.androidannotations.annotations.rest.Head;
 import org.androidannotations.annotations.rest.Options;
 import org.androidannotations.annotations.rest.Post;
 import org.androidannotations.annotations.rest.Put;
-import org.androidannotations.annotations.rest.RequiresCookie;
 import org.androidannotations.annotations.rest.Rest;
 import org.androidannotations.api.rest.MediaType;
 
@@ -44,7 +43,6 @@ public interface MyService {
 	// *** GET ***
 
 	// url variables are mapped to method parameter names.
-	@RequiresCookie("xt")
 	@Get("/events/{year}/{location}")
 	@Accept(MediaType.APPLICATION_JSON)
 	EventList getEvents(String location, int year);
