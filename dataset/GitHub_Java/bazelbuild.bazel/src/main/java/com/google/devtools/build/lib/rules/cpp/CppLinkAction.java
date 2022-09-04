@@ -438,11 +438,12 @@ public final class CppLinkAction extends AbstractAction
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(fake ? FAKE_LINK_GUID : LINK_GUID);
-    fp.addString(ldExecutable.getPathString());
-    fp.addStrings(linkCommandLine.arguments());
-    fp.addStrings(getExecutionInfo().keySet());
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint();
+    f.addString(fake ? FAKE_LINK_GUID : LINK_GUID);
+    f.addString(ldExecutable.getPathString());
+    f.addStrings(linkCommandLine.arguments());
+    f.addStrings(getExecutionInfo().keySet());
 
     // TODO(bazel-team): For correctness, we need to ensure the invariant that all values accessed
     // during the execution phase are also covered by the key. Above, we add the argv to the key,
@@ -451,12 +452,13 @@ public final class CppLinkAction extends AbstractAction
     // key. We either need to change the code to cover them in the key computation, or change the
     // LinkConfiguration to disallow the combinations where the value of a setting does not affect
     // the argv.
-    fp.addBoolean(linkCommandLine.isNativeDeps());
-    fp.addBoolean(linkCommandLine.useTestOnlyFlags());
+    f.addBoolean(linkCommandLine.isNativeDeps());
+    f.addBoolean(linkCommandLine.useTestOnlyFlags());
     if (linkCommandLine.getRuntimeSolibDir() != null) {
-      fp.addPath(linkCommandLine.getRuntimeSolibDir());
+      f.addPath(linkCommandLine.getRuntimeSolibDir());
     }
-    fp.addBoolean(isLtoIndexing);
+    f.addBoolean(isLtoIndexing);
+    return f.hexDigestAndReset();
   }
 
   @Override

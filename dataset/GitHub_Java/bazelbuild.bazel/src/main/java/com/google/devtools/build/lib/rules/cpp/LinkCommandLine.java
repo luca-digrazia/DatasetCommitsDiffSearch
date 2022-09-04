@@ -45,6 +45,7 @@ import javax.annotation.Nullable;
 public final class LinkCommandLine extends CommandLine {
   private final String actionName;
   private final String forcedToolPath;
+  private final PathFragment crosstoolTopPathFragment;
   private final CcToolchainFeatures.Variables variables;
   // The feature config can be null for tests.
   @Nullable private final FeatureConfiguration featureConfiguration;
@@ -64,6 +65,7 @@ public final class LinkCommandLine extends CommandLine {
   LinkCommandLine(
       String actionName,
       String forcedToolPath,
+      PathFragment crosstoolTopPathFragment,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       Iterable<LinkerInput> linkerInputs,
       Iterable<LinkerInput> runtimeInputs,
@@ -79,6 +81,7 @@ public final class LinkCommandLine extends CommandLine {
 
     this.actionName = actionName;
     this.forcedToolPath = forcedToolPath;
+    this.crosstoolTopPathFragment = crosstoolTopPathFragment;
     this.variables = variables;
     this.featureConfiguration = featureConfiguration;
     this.buildInfoHeaderArtifacts = Preconditions.checkNotNull(buildInfoHeaderArtifacts);
@@ -138,7 +141,7 @@ public final class LinkCommandLine extends CommandLine {
   public String getLinkerPathString() {
     return featureConfiguration
         .getToolForAction(linkTargetType.getActionName())
-        .getToolPathFragment()
+        .getToolPath(crosstoolTopPathFragment)
         .getPathString();
   }
 
@@ -223,6 +226,7 @@ public final class LinkCommandLine extends CommandLine {
     private final String forcedToolPath;
     private final FeatureConfiguration featureConfiguration;
     private final String actionName;
+    private final PathFragment crosstoolTopPathFragment;
     private final Variables variables;
 
     public ParamFileCommandLine(
@@ -231,12 +235,14 @@ public final class LinkCommandLine extends CommandLine {
         String forcedToolPath,
         FeatureConfiguration featureConfiguration,
         String actionName,
+        PathFragment crosstoolTopPathFragment,
         Variables variables) {
       this.paramsFile = paramsFile;
       this.linkTargetType = linkTargetType;
       this.forcedToolPath = forcedToolPath;
       this.featureConfiguration = featureConfiguration;
       this.actionName = actionName;
+      this.crosstoolTopPathFragment = crosstoolTopPathFragment;
       this.variables = variables;
     }
 
@@ -249,6 +255,7 @@ public final class LinkCommandLine extends CommandLine {
               featureConfiguration,
               actionName,
               linkTargetType,
+              crosstoolTopPathFragment,
               variables);
       return splitCommandline(paramsFile, argv, linkTargetType).getSecond();
     }
@@ -262,6 +269,7 @@ public final class LinkCommandLine extends CommandLine {
               featureConfiguration,
               actionName,
               linkTargetType,
+              crosstoolTopPathFragment,
               variables);
       return splitCommandline(paramsFile, argv, linkTargetType).getSecond();
     }
@@ -278,6 +286,7 @@ public final class LinkCommandLine extends CommandLine {
         forcedToolPath,
         featureConfiguration,
         actionName,
+        crosstoolTopPathFragment,
         variables);
   }
 
@@ -341,7 +350,7 @@ public final class LinkCommandLine extends CommandLine {
       }
     }
   }
-
+  
   /**
    * Returns a raw link command for the given link invocation, including both command and arguments
    * (argv). The version that uses the expander is preferred, but that one can't be used during
@@ -367,6 +376,7 @@ public final class LinkCommandLine extends CommandLine {
         featureConfiguration,
         actionName,
         linkTargetType,
+        crosstoolTopPathFragment,
         variables);
   }
 
@@ -376,6 +386,7 @@ public final class LinkCommandLine extends CommandLine {
       FeatureConfiguration featureConfiguration,
       String actionName,
       LinkTargetType linkTargetType,
+      PathFragment crosstoolTopPathFragment,
       Variables variables) {
     List<String> argv = new ArrayList<>();
     if (forcedToolPath != null) {
@@ -387,7 +398,7 @@ public final class LinkCommandLine extends CommandLine {
       argv.add(
           featureConfiguration
               .getToolForAction(linkTargetType.getActionName())
-              .getToolPathFragment()
+              .getToolPath(crosstoolTopPathFragment)
               .getPathString());
     }
     argv.addAll(featureConfiguration.getCommandLine(actionName, variables, expander));
@@ -432,6 +443,7 @@ public final class LinkCommandLine extends CommandLine {
     @Nullable private Artifact paramFile;
     private Variables variables;
     private FeatureConfiguration featureConfiguration;
+    private PathFragment crosstoolTopPathFragment;
 
     public Builder(RuleContext ruleContext) {
       this.ruleContext = ruleContext;
@@ -459,6 +471,7 @@ public final class LinkCommandLine extends CommandLine {
       return new LinkCommandLine(
           actionName,
           forcedToolPath,
+          crosstoolTopPathFragment,
           buildInfoHeaderArtifacts,
           linkerInputs,
           runtimeInputs,
@@ -575,6 +588,12 @@ public final class LinkCommandLine extends CommandLine {
 
     public Builder setRuntimeSolibDir(PathFragment runtimeSolibDir) {
       this.runtimeSolibDir = runtimeSolibDir;
+      return this;
+    }
+
+    /** Sets the path to the CROSSTOOL, to be used in finding paths to tools (e.g. the linker) */
+    public Builder setCrosstoolTopPathFragment(PathFragment crosstoolTopPathFragment) {
+      this.crosstoolTopPathFragment = crosstoolTopPathFragment;
       return this;
     }
   }
