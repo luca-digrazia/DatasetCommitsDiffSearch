@@ -26,10 +26,10 @@ import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.ArtifactFileMetadata;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileStateValue;
+import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.cache.Md5Digest;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -84,12 +84,8 @@ public class ActionMetadataHandler implements MetadataHandler {
    */
   private final ActionInputMap inputArtifactData;
 
-  /**
-   * {@link ArtifactFileMetadata} for each output Artifact. The value is {@link
-   * ArtifactFileMetadata#PLACEHOLDER} if the artifact's metadata is not fully captured in {@link
-   * #additionalOutputData}.
-   */
-  private final ConcurrentMap<Artifact, ArtifactFileMetadata> outputArtifactData =
+  /** FileValues for each output Artifact. */
+  private final ConcurrentMap<Artifact, FileValue> outputArtifactData =
       new ConcurrentHashMap<>();
 
   /**
@@ -214,8 +210,8 @@ public class ActionMetadataHandler implements MetadataHandler {
       throw new FileNotFoundException(artifact + " not found");
     }
     // It's an ordinary artifact.
-    ArtifactFileMetadata fileMetadata = outputArtifactData.get(artifact);
-    if (fileMetadata != null) {
+    FileValue fileValue = outputArtifactData.get(artifact);
+    if (fileValue != null) {
       // Non-middleman artifacts should only have additionalOutputData if they have
       // outputArtifactData. We don't assert this because of concurrency possibilities, but at least
       // we don't check additionalOutputData unless we expect that we might see the artifact there.
@@ -225,15 +221,15 @@ public class ActionMetadataHandler implements MetadataHandler {
       if (value != null) {
         return metadataFromValue(value);
       }
-      if (!fileMetadata.exists()) {
+      if (!fileValue.exists()) {
         throw new FileNotFoundException(artifact.prettyPrint() + " does not exist");
       }
-      return FileArtifactValue.createNormalFile(fileMetadata);
+      return FileArtifactValue.createNormalFile(fileValue);
     }
     // We do not cache exceptions besides nonexistence here, because it is unlikely that the file
     // will be requested from this cache too many times.
-    fileMetadata = constructArtifactFileMetadata(artifact, /*statNoFollow=*/ null);
-    return maybeStoreAdditionalData(artifact, fileMetadata, null);
+    fileValue = constructFileValue(artifact, /*statNoFollow=*/ null);
+    return maybeStoreAdditionalData(artifact, fileValue, null);
   }
 
   /**
@@ -242,8 +238,7 @@ public class ActionMetadataHandler implements MetadataHandler {
    */
   @Nullable
   private FileArtifactValue maybeStoreAdditionalData(
-      Artifact artifact, ArtifactFileMetadata data, @Nullable byte[] injectedDigest)
-      throws IOException {
+      Artifact artifact, FileValue data, @Nullable byte[] injectedDigest) throws IOException {
     if (!data.exists()) {
       // Nonexistent files should only occur before executing an action.
       throw new FileNotFoundException(artifact.prettyPrint() + " does not exist");
@@ -254,12 +249,11 @@ public class ActionMetadataHandler implements MetadataHandler {
       // and that is all that is needed for this file's metadata.
       return FileArtifactValue.createNormalFile(data);
     }
-    // Unfortunately, the ArtifactFileMetadata does not contain enough information for us to
-    // calculate the corresponding FileArtifactValue -- either the metadata must use the modified
-    // time, which we do not expose in the ArtifactFileMetadata, or the ArtifactFileMetadata didn't
-    // store the digest So we store the metadata separately.
-    // Use the ArtifactFileMetadata's digest if no digest was injected, or if the file can't be
-    // digested.
+    // Unfortunately, the FileValue does not contain enough information for us to calculate the
+    // corresponding FileArtifactValue -- either the metadata must use the modified time, which we
+    // do not expose in the FileValue, or the FileValue didn't store the digest So we store the
+    // metadata separately.
+    // Use the FileValue's digest if no digest was injected, or if the file can't be digested.
     injectedDigest = injectedDigest != null || !isFile ? injectedDigest : data.getDigest();
     FileArtifactValue value = FileArtifactValue.create(artifact, artifactPathResolver, data,
         injectedDigest);
@@ -352,14 +346,14 @@ public class ActionMetadataHandler implements MetadataHandler {
     for (TreeFileArtifact treeFileArtifact : contents) {
       FileArtifactValue cachedValue = additionalOutputData.get(treeFileArtifact);
       if (cachedValue == null) {
-        ArtifactFileMetadata fileMetadata = outputArtifactData.get(treeFileArtifact);
+        FileValue fileValue = outputArtifactData.get(treeFileArtifact);
         // This is similar to what's present in getRealMetadataForArtifact, except
-        // we get back the ArtifactFileMetadata, not the metadata.
+        // we get back the FileValue, not the metadata.
         // We do not cache exceptions besides nonexistence here, because it is unlikely that the
         // file will be requested from this cache too many times.
-        if (fileMetadata == null) {
+        if (fileValue == null) {
           try {
-            fileMetadata = constructArtifactFileMetadata(treeFileArtifact, /*statNoFollow=*/ null);
+            fileValue = constructFileValue(treeFileArtifact, /*statNoFollow=*/ null);
           } catch (FileNotFoundException e) {
             String errorMessage = String.format(
                 "Failed to resolve relative path %s inside TreeArtifact %s. "
@@ -372,7 +366,7 @@ public class ActionMetadataHandler implements MetadataHandler {
 
         // A minor hack: maybeStoreAdditionalData will force the data to be stored
         // in additionalOutputData.
-        maybeStoreAdditionalData(treeFileArtifact, fileMetadata, null);
+        maybeStoreAdditionalData(treeFileArtifact, fileValue, null);
         cachedValue = Preconditions.checkNotNull(
             additionalOutputData.get(treeFileArtifact), treeFileArtifact);
       }
@@ -424,36 +418,24 @@ public class ActionMetadataHandler implements MetadataHandler {
     // Assumption: any non-Artifact output is 'virtual' and should be ignored here.
     if (output instanceof Artifact) {
       final Artifact artifact = (Artifact) output;
-      // We have to add the artifact to injectedFiles before calling constructArtifactFileMetadata
-      // to avoid
+      // We have to add the artifact to injectedFiles before calling constructFileValue to avoid
       // duplicate chmod calls.
       injectedFiles.add(artifact);
-      ArtifactFileMetadata fileMetadata;
+      FileValue fileValue;
       try {
         // This call may do an unnecessary call to Path#getFastDigest to see if the digest is
         // readily available. We cannot pass the digest in, though, because if it is not available
-        // from the filesystem, this ArtifactFileMetadata will not compare equal to another one
-        // created for the
+        // from the filesystem, this FileValue will not compare equal to another one created for the
         // same file, because the other one will be missing its digest.
-        fileMetadata =
-            constructArtifactFileMetadata(
-                artifact, FileStatusWithDigestAdapter.adapt(statNoFollow));
+        fileValue = constructFileValue(artifact, FileStatusWithDigestAdapter.adapt(statNoFollow));
         // Ensure the digest supplied matches the actual digest if it exists.
-        byte[] fileDigest = fileMetadata.getDigest();
+        byte[] fileDigest = fileValue.getDigest();
         if (fileDigest != null && !Arrays.equals(digest, fileDigest)) {
           BaseEncoding base16 = BaseEncoding.base16();
           String digestString = (digest != null) ? base16.encode(digest) : "null";
           String fileDigestString = base16.encode(fileDigest);
-          throw new IllegalStateException(
-              "Expected digest "
-                  + digestString
-                  + " for artifact "
-                  + artifact
-                  + ", but got "
-                  + fileDigestString
-                  + " ("
-                  + fileMetadata
-                  + ")");
+          throw new IllegalStateException("Expected digest " + digestString + " for artifact "
+              + artifact + ", but got " + fileDigestString + " (" + fileValue + ")");
         }
       } catch (IOException e) {
         // Do nothing - we just failed to inject metadata. Real error handling will be done later,
@@ -464,12 +446,16 @@ public class ActionMetadataHandler implements MetadataHandler {
       // the filesystem does not support fast digests. Since we usually only inject digests when
       // running with a filesystem that supports fast digests, this is fairly unlikely.
       try {
-        maybeStoreAdditionalData(artifact, fileMetadata, digest);
+        maybeStoreAdditionalData(artifact, fileValue, digest);
       } catch (IOException e) {
-        throw new IllegalStateException(
-            "Filesystem should not have been accessed while injecting data for "
-                + artifact.prettyPrint(),
-            e);
+        if (fileValue.getSize() != 0) {
+          // Empty files currently have their mtimes examined, and so could throw. No other files
+          // should throw, since all filesystem access has already been done.
+          throw new IllegalStateException(
+              "Filesystem should not have been accessed while injecting data for "
+                  + artifact.prettyPrint(), e);
+        }
+        // Ignore exceptions for empty files, as above.
       }
     }
   }
@@ -500,7 +486,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     // While `artifactValue` carries the important information, the control flow of `getMetadata`
     // requires an entry in `outputArtifactData` to access `additionalOutputData`, so a
     // `PLACEHOLDER` is added to `outputArtifactData`.
-    outputArtifactData.put(output, ArtifactFileMetadata.PLACEHOLDER);
+    outputArtifactData.put(output, FileValue.PLACEHOLDER);
     additionalOutputData.put(output, artifactValue);
   }
 
@@ -535,7 +521,7 @@ public class ActionMetadataHandler implements MetadataHandler {
   }
 
   /** @return data for output files that was computed during execution. */
-  Map<Artifact, ArtifactFileMetadata> getOutputArtifactData() {
+  Map<Artifact, FileValue> getOutputArtifactData() {
     return outputArtifactData;
   }
 
@@ -551,43 +537,28 @@ public class ActionMetadataHandler implements MetadataHandler {
    * Returns data for any output files whose metadata was not computable from the corresponding
    * entry in {@link #getOutputArtifactData}.
    *
-   * <p>There are two bits to consider: the filesystem possessing fast digests and the execution
-   * service injecting metadata via {@link #injectRemoteFile} or {@link #injectDigest}.
+   * <p>There are three reasons why we might not be able to compute metadata for an artifact from
+   * the FileValue. First, middleman artifacts have no corresponding FileValues. Second, if
+   * computing a file's digest is not fast, the FileValue does not do so, so a file on a filesystem
+   * without fast digests has to have its metadata stored separately. Third, some files' metadata
+   * (directories, empty files) contain their mtimes, which the FileValue does not expose, so that
+   * has to be stored separately.
    *
-   * <ol>
-   *   <li>If the filesystem does not possess fast digests, then we will have additional output data
-   *       for practically every artifact, since we will need to store their digests.
-   *   <li>If we have a remote execution service injecting metadata, then we will just store that
-   *       metadata here, and put {@link ArtifactFileMetadata#PLACEHOLDER} objects into {@link
-   *       #outputArtifactData} if the filesystem supports fast digests, and the actual metadata if
-   *       the filesystem does not support fast digests.
-   *   <li>If the filesystem has fast digests <i>but</i> there is no remote execution injecting
-   *       metadata, then we will not store additional metadata here.
-   * </ol>
-   *
-   * <p>Note that this means that in the vastly common cases (Google-internal, where we have fast
-   * digests and remote execution, and Bazel, where there is often neither), this map is always
-   * populated. Locally executed actions are the exception to this rule inside Google.
-   *
-   * <p>Moreover, there are some artifacts that are always stored here. First, middleman artifacts
-   * have no corresponding {@link ArtifactFileMetadata}. Second, directories' metadata contain their
-   * mtimes, which the {@link ArtifactFileMetadata} does not expose, so that has to be stored
-   * separately.
-   *
-   * <p>Note that for files that need digests, we can't easily inject the digest in the {@link
-   * ArtifactFileMetadata} because it would complicate equality-checking on subsequent builds -- if
-   * our filesystem doesn't do fast digests, the comparison value would not have a digest.
+   * <p>Note that for files that need digests, we can't easily inject the digest in the FileValue
+   * because it would complicate equality-checking on subsequent builds -- if our filesystem doesn't
+   * do fast digests, the comparison value would not have a digest.
    */
   Map<Artifact, FileArtifactValue> getAdditionalOutputData() {
     return additionalOutputData;
   }
 
   /**
-   * Constructs a new {@link ArtifactFileMetadata}, saves it, and checks inconsistent data. This
-   * calls chmod on the file if we're in executionMode.
+   * Constructs a new FileValue, saves it, and checks inconsistent data. This calls chmod on the
+   * file if we're in executionMode.
    */
-  private ArtifactFileMetadata constructArtifactFileMetadata(
-      Artifact artifact, @Nullable FileStatusWithDigest statNoFollow) throws IOException {
+  private FileValue constructFileValue(
+      Artifact artifact, @Nullable FileStatusWithDigest statNoFollow)
+          throws IOException {
     // We first chmod the output files before we construct the FileContentsProxy. The proxy may use
     // ctime, which is affected by chmod.
     if (executionMode.get()) {
@@ -595,30 +566,24 @@ public class ActionMetadataHandler implements MetadataHandler {
       setPathReadOnlyAndExecutable(artifact);
     }
 
-    ArtifactFileMetadata value =
-        fileMetadataFromArtifact(
-            artifact, artifactPathResolver, statNoFollow, getTimestampGranularityMonitor(artifact));
+    FileValue value = fileValueFromArtifact(artifact, artifactPathResolver, statNoFollow,
+        getTimestampGranularityMonitor(artifact));
     outputArtifactData.put(artifact, value);
     return value;
   }
 
   @VisibleForTesting
-  static ArtifactFileMetadata fileMetadataFromArtifact(
-      Artifact artifact,
-      @Nullable FileStatusWithDigest statNoFollow,
-      @Nullable TimestampGranularityMonitor tsgm)
+  static FileValue fileValueFromArtifact(Artifact artifact,
+      @Nullable FileStatusWithDigest statNoFollow, @Nullable TimestampGranularityMonitor tsgm)
       throws IOException {
-    return fileMetadataFromArtifact(artifact, ArtifactPathResolver.IDENTITY, statNoFollow, tsgm);
+    return fileValueFromArtifact(artifact, ArtifactPathResolver.IDENTITY, statNoFollow, tsgm);
   }
 
-  private static ArtifactFileMetadata fileMetadataFromArtifact(
-      Artifact artifact,
+  private static FileValue fileValueFromArtifact(Artifact artifact,
       ArtifactPathResolver artifactPathResolver,
-      @Nullable FileStatusWithDigest statNoFollow,
-      @Nullable TimestampGranularityMonitor tsgm)
+      @Nullable FileStatusWithDigest statNoFollow, @Nullable TimestampGranularityMonitor tsgm)
       throws IOException {
     Path path = artifactPathResolver.toPath(artifact);
-    PathFragment pathFragment = path.asFragment();
     RootedPath rootedPath =
         RootedPath.toRootedPath(
             artifactPathResolver.transformRoot(artifact.getRoot().getRoot()),
@@ -626,11 +591,8 @@ public class ActionMetadataHandler implements MetadataHandler {
     if (statNoFollow == null) {
       statNoFollow = FileStatusWithDigestAdapter.adapt(path.statIfFound(Symlinks.NOFOLLOW));
       if (statNoFollow == null) {
-        return ArtifactFileMetadata.value(
-            pathFragment,
-            FileStateValue.NONEXISTENT_FILE_STATE_NODE,
-            pathFragment,
-            FileStateValue.NONEXISTENT_FILE_STATE_NODE);
+        return FileValue.value(rootedPath, FileStateValue.NONEXISTENT_FILE_STATE_NODE,
+            rootedPath, FileStateValue.NONEXISTENT_FILE_STATE_NODE);
       }
     }
     Path realPath = path;
@@ -638,8 +600,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     // done by the latter.
     if (statNoFollow.isSymbolicLink()) {
       realPath = path.resolveSymbolicLinks();
-      // We need to protect against symlink cycles since ArtifactFileMetadata#value assumes it's
-      // dealing with a
+      // We need to protect against symlink cycles since FileValue#value assumes it's dealing with a
       // file that's not in a symlink cycle.
       if (realPath.equals(path)) {
         throw new IOException("symlink cycle");
@@ -656,8 +617,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     FileStateValue realFileStateValue = realPath.equals(path)
         ? fileStateValue
         : FileStateValue.create(realRootedPath, tsgm);
-    return ArtifactFileMetadata.value(
-        pathFragment, fileStateValue, realPath.asFragment(), realFileStateValue);
+    return FileValue.value(rootedPath, fileStateValue, realRootedPath, realFileStateValue);
   }
 
   private void setPathReadOnlyAndExecutable(Artifact artifact) throws IOException {
