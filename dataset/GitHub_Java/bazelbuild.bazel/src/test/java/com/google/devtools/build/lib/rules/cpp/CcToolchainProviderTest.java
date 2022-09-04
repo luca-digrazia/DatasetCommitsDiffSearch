@@ -46,8 +46,7 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
                 .setBuiltinSysroot("/usr/local/custom-sysroot")
                 .addToolPath(ToolPath.newBuilder().setName("ar").setPath("foo/ar/path").build())
                 .buildPartial());
-    useConfiguration(
-        "--cpu=k8", "--force_pic", "--noincompatible_disable_legacy_flags_cc_toolchain_api");
+    useConfiguration("--cpu=k8", "--force_pic");
     scratch.file(
         "test/rule.bzl",
         "def _impl(ctx):",
@@ -217,18 +216,14 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
             "compilation_mode_flags { mode: OPT linker_flag: '-baz_from_compilation_mode' }");
     scratch.file("a/BUILD", "cc_library(name='a', srcs=['a.cc'])");
 
-    useConfiguration("-c", "opt", "--noincompatible_disable_legacy_flags_cc_toolchain_api");
+    useConfiguration("-c", "opt");
     CcToolchainProvider ccToolchainProvider = getCcToolchainProvider();
     assertThat(ccToolchainProvider.getCompilerOptions()).contains("-foo_from_compilation_mode");
     assertThat(ccToolchainProvider.getLegacyCxxOptions()).contains("-bar_from_compilation_mode");
     assertThat(ccToolchainProvider.getLegacyMostlyStaticLinkFlags(CompilationMode.OPT))
         .contains("-baz_from_compilation_mode");
 
-    useConfiguration(
-        "-c",
-        "opt",
-        "--experimental_disable_compilation_mode_flags",
-        "--noincompatible_disable_legacy_flags_cc_toolchain_api");
+    useConfiguration("-c", "opt", "--experimental_disable_compilation_mode_flags");
     ccToolchainProvider = getCcToolchainProvider();
     assertThat(ccToolchainProvider.getCompilerOptions())
         .doesNotContain("-foo_from_compilation_mode");
