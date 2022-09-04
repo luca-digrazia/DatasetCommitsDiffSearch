@@ -54,6 +54,10 @@ public abstract class OutputFormatter implements Serializable {
    * by the QueryEnvironment), and print it to "out".
    */
   public abstract void output(
-      QueryOptions options, Digraph<Target> result, OutputStream out, AspectResolver aspectProvider)
+      QueryOptions options,
+      Digraph<Target> result,
+      OutputStream out,
+      AspectResolver aspectProvider,
+      ConditionalEdges conditionalEdges)
       throws IOException, InterruptedException;
 }

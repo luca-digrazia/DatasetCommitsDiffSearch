@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.query2.common.CommonQueryOptions;
 import com.google.devtools.build.lib.query2.compat.FakeLoadTarget;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
@@ -36,6 +35,7 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.query.aspectresolvers.AspectResolver;
+import com.google.devtools.build.lib.syntax.Type;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Collection;
@@ -210,7 +210,7 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
       elem = doc.createElement("source-file");
       InputFile inputFile = (InputFile) target;
       if (inputFile.getName().equals("BUILD")) {
-        addStarlarkFilesToElement(doc, elem, inputFile);
+        addSkylarkFilesToElement(doc, elem, inputFile);
         addFeaturesToElement(doc, elem, inputFile);
         elem.setAttribute("package_contains_errors",
             String.valueOf(inputFile.getPackage().containsErrors()));
@@ -272,14 +272,14 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
     }
   }
 
-  private void addStarlarkFilesToElement(Document doc, Element parent, InputFile inputFile)
+  private void addSkylarkFilesToElement(Document doc, Element parent, InputFile inputFile)
       throws InterruptedException {
     Iterable<Label> dependencies =
         aspectResolver.computeBuildFileDependencies(inputFile.getPackage());
 
-    for (Label starlarkFileDep : dependencies) {
+    for (Label skylarkFileDep : dependencies) {
       Element elem = doc.createElement("load");
-      elem.setAttribute("name", starlarkFileDep.toString());
+      elem.setAttribute("name", skylarkFileDep.toString());
       parent.appendChild(elem);
     }
   }

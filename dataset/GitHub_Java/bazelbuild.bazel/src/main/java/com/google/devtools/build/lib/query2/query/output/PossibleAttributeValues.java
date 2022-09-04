@@ -20,17 +20,32 @@ import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
+import java.util.Iterator;
 
-/** Logic for retrieving possible values for an attribute. */
-public class PossibleAttributeValues {
+/** Encapsulates possible values for an attribute. */
+public class PossibleAttributeValues implements Iterable<Object> {
+  private final Iterable<Object> values;
+  private final AttributeValueSource source;
 
-  private PossibleAttributeValues() {}
+  public PossibleAttributeValues(Iterable<Object> values, AttributeValueSource source) {
+    this.values = values;
+    this.source = source;
+  }
+
+  AttributeValueSource getSource() {
+    return source;
+  }
+
+  @Override
+  public Iterator<Object> iterator() {
+    return values.iterator();
+  }
 
   /**
    * Returns the possible values of the specified attribute in the specified rule. For simple
    * attributes, this is a single value. For configurable and computed attributes, this may be a
-   * list of values. See {@link AggregatingAttributeMapper#visitAttribute} for how the values are
-   * determined.
+   * list of values. See {@link AggregatingAttributeMapper#getPossibleAttributeValues} for how the
+   * values are determined.
    *
    * <p>This applies an important optimization for label lists: instead of returning all possible
    * values, it only returns possible <i>labels</i>. For example, given:
@@ -52,7 +67,8 @@ public class PossibleAttributeValues {
    * operations generally don't care about specific attribute values - they just care which labels
    * are possible.
    */
-  static Iterable<Object> forRuleAndAttribute(Rule rule, Attribute attr) {
+  static PossibleAttributeValues forRuleAndAttribute(Rule rule, Attribute attr) {
+    AttributeValueSource source = AttributeValueSource.forRuleAndAttribute(rule, attr);
     AggregatingAttributeMapper attributeMap = AggregatingAttributeMapper.of(rule);
     Iterable<?> list;
     if (attr.getType().equals(BuildType.LABEL_LIST)
@@ -61,19 +77,19 @@ public class PossibleAttributeValues {
       // there's currently no syntax for expressing multiple scalar values). This unfortunately
       // isn't trivial because Bazel's label visitation logic includes special methods built
       // directly into Type.
-      return ImmutableList.<Object>of(
-          attributeMap.getReachableLabels(attr.getName(), /*includeSelectKeys=*/ false));
+      return new PossibleAttributeValues(
+          ImmutableList.<Object>of(
+              attributeMap.getReachableLabels(attr.getName(), /*includeSelectKeys=*/ false)),
+          source);
     } else if ((list =
             attributeMap.getConcatenatedSelectorListsOfListType(
                 attr.getName(), attr.getType()))
         != null) {
-      return Lists.newArrayList(list);
+      return new PossibleAttributeValues(Lists.newArrayList(list), source);
     } else {
-      // The call to visitAttributes below is especially slow with selector lists.
-      @SuppressWarnings("unchecked") // Casting Iterable<T> -> Iterable<Object>
-      Iterable<Object> possibleValues =
-          (Iterable<Object>) attributeMap.visitAttribute(attr.getName(), attr.getType());
-      return possibleValues;
+      // The call to getPossibleAttributeValues below is especially slow with selector lists.
+      return new PossibleAttributeValues(attributeMap.getPossibleAttributeValues(rule, attr),
+          source);
     }
   }
 }
