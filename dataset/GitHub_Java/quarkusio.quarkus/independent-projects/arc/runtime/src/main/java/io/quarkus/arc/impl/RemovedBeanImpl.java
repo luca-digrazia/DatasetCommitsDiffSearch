@@ -4,7 +4,6 @@ import io.quarkus.arc.InjectableBean.Kind;
 import io.quarkus.arc.RemovedBean;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.util.Collections;
 import java.util.Set;
 
 public final class RemovedBeanImpl implements RemovedBean {
@@ -15,15 +14,15 @@ public final class RemovedBeanImpl implements RemovedBean {
     private final Set<Annotation> qualifiers;
 
     public RemovedBeanImpl(Kind kind, String description, Set<Type> types, Set<Annotation> qualifiers) {
-        this.kind = kind != null ? kind : Kind.CLASS;
+        this.kind = kind;
         this.description = description;
-        this.types = Collections.unmodifiableSet(types);
-        this.qualifiers = qualifiers != null ? Collections.unmodifiableSet(qualifiers) : Qualifiers.DEFAULT_QUALIFIERS;
+        this.types = CollectionHelpers.toImmutableSmallSet(types);
+        this.qualifiers = CollectionHelpers.toImmutableSmallSet(qualifiers);
     }
 
     @Override
     public Kind getKind() {
-        return kind;
+        return kind != null ? kind : Kind.CLASS;
     }
 
     @Override
@@ -38,7 +37,7 @@ public final class RemovedBeanImpl implements RemovedBean {
 
     @Override
     public Set<Annotation> getQualifiers() {
-        return qualifiers;
+        return qualifiers != null ? qualifiers : Qualifiers.DEFAULT_QUALIFIERS;
     }
 
     @Override
