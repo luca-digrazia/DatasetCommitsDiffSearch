@@ -1,17 +1,7 @@
 package io.quarkus.example.arc;
 
-import javax.enterprise.context.Dependent;
-import javax.enterprise.inject.spi.InjectionPoint;
-import javax.inject.Inject;
+import javax.enterprise.context.ApplicationScoped;
 
-@Dependent
+@ApplicationScoped
 public class UnusedBean {
-
-    @Inject
-    InjectionPoint injectionPoint;
-
-    public InjectionPoint getInjectionPoint() {
-        return injectionPoint;
-    }
-
 }
