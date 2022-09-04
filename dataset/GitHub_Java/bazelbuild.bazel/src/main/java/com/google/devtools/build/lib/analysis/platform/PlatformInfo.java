@@ -22,8 +22,10 @@ import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -65,17 +67,16 @@ public class PlatformInfo extends SkylarkClassObject {
                   SkylarkType.LIST, SkylarkType.of(ConstraintValueInfo.class))));
 
   /** Skylark constructor and identifier for this provider. */
-  public static final NativeClassObjectConstructor<PlatformInfo> SKYLARK_CONSTRUCTOR =
-      new NativeClassObjectConstructor<PlatformInfo>(PlatformInfo.class, SKYLARK_NAME, SIGNATURE) {
+  public static final ClassObjectConstructor SKYLARK_CONSTRUCTOR =
+      new NativeClassObjectConstructor(SKYLARK_NAME, SIGNATURE) {
         @Override
         protected PlatformInfo createInstanceFromSkylark(Object[] args, Location loc)
             throws EvalException {
           // Based on SIGNATURE above, the args are label, constraint_values.
 
           Label label = (Label) args[0];
-          List<ConstraintValueInfo> constraintValues =
-              SkylarkList.castSkylarkListOrNoneToList(
-                  args[1], ConstraintValueInfo.class, "constraint_values");
+          SkylarkList<ConstraintValueInfo> constraintValues =
+              (SkylarkList<ConstraintValueInfo>) args[1];
           try {
             return builder()
                 .setLabel(label)
@@ -88,6 +89,10 @@ public class PlatformInfo extends SkylarkClassObject {
           }
         }
       };
+
+  /** Identifier used to retrieve this provider from rules which export it. */
+  public static final SkylarkProviderIdentifier SKYLARK_IDENTIFIER =
+      SkylarkProviderIdentifier.forKey(SKYLARK_CONSTRUCTOR.getKey());
 
   private final Label label;
   private final ImmutableList<ConstraintValueInfo> constraints;
