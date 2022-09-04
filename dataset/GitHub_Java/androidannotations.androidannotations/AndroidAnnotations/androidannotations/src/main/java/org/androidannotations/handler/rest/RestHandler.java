@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,21 +15,13 @@
  */
 package org.androidannotations.handler.rest;
 
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JExpr.lit;
-import static org.androidannotations.helper.CanonicalNameConstants.ARRAYLIST;
-import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_REQUEST_INTERCEPTOR;
-
-import java.util.List;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.DeclaredType;
-
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
 import org.androidannotations.annotations.rest.Rest;
-import org.androidannotations.handler.BaseGeneratingAnnotationHandler;
+import org.androidannotations.handler.BaseAnnotationHandler;
+import org.androidannotations.handler.GeneratingAnnotationHandler;
 import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.holder.RestHolder;
@@ -37,12 +29,17 @@ import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 import org.androidannotations.process.ProcessHolder;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JInvocation;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import java.util.List;
 
-public class RestHandler extends BaseGeneratingAnnotationHandler<RestHolder> {
+import static com.sun.codemodel.JExpr.*;
+import static org.androidannotations.helper.CanonicalNameConstants.ARRAYLIST;
+import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_REQUEST_INTERCEPTOR;
+
+public class RestHandler extends BaseAnnotationHandler<RestHolder> implements GeneratingAnnotationHandler<RestHolder> {
 
 	private final AnnotationHelper annotationHelper;
 	private final APTCodeModelHelper codeModelHelper;
@@ -60,8 +57,6 @@ public class RestHandler extends BaseGeneratingAnnotationHandler<RestHolder> {
 
 	@Override
 	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		super.validate(element, validatedElements, valid);
-
 		TypeElement typeElement = (TypeElement) element;
 
 		validatorHelper.notAlreadyValidated(element, validatedElements, valid);
@@ -103,7 +98,6 @@ public class RestHandler extends BaseGeneratingAnnotationHandler<RestHolder> {
 		List<DeclaredType> converters = annotationHelper.extractAnnotationClassArrayParameter(element, getTarget(), "converters");
 		JFieldVar restTemplateField = holder.getRestTemplateField();
 		JBlock init = holder.getInit().body();
-		init.add(invoke(restTemplateField, "getMessageConverters").invoke("clear"));
 		for (DeclaredType converterType : converters) {
 			JInvocation newConverter = codeModelHelper.newBeanOrEBean(holder, converterType, holder.getInitContextParam());
 			init.add(invoke(restTemplateField, "getMessageConverters").invoke("add").arg(newConverter));

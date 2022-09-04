@@ -17,28 +17,14 @@ package org.androidannotations.api.sharedpreferences;
 
 import java.util.Set;
 
-import android.content.SharedPreferences;
+public final class StringSetPrefEditorField<T extends EditorHelper<T>> extends AbstractPrefEditorField<T> {
 
-public final class StringSetPrefField extends AbstractPrefField {
-
-	private final Set<String> defaultValue;
-
-	StringSetPrefField(SharedPreferences sharedPreferences, String key, Set<String> defaultValue) {
-		super(sharedPreferences, key);
-		this.defaultValue = defaultValue;
+	StringSetPrefEditorField(T editorHelper, String key) {
+		super(editorHelper, key);
 	}
 
-	public Set<String> get() {
-		return getOr(defaultValue);
-	}
-
-	public Set<String> getOr(Set<String> defaultValue) {
-		return SharedPreferencesCompat.getStringSet(sharedPreferences, key, defaultValue);
-	}
-
-	public void put(Set<String> value) {
-		SharedPreferences.Editor editor = sharedPreferences.edit();
-		SharedPreferencesCompat.putStringSet(editor, key, value);
-		apply(editor);
+	public T put(Set<String> value) {
+		SharedPreferencesCompat.putStringSet(editorHelper.getEditor(), key, value);
+		return editorHelper;
 	}
 }
