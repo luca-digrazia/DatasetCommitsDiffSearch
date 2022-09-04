@@ -1,11 +1,11 @@
 package io.quarkus.elytron.security.runtime;
 
 import java.security.Permission;
-import java.security.Security;
 
 import javax.enterprise.inject.spi.CDI;
 
 import org.jboss.logging.Logger;
+import org.wildfly.security.auth.server.RealmMapper;
 import org.wildfly.security.auth.server.SecurityDomain;
 import org.wildfly.security.auth.server.SecurityRealm;
 import org.wildfly.security.authz.AuthorizationIdentity;
@@ -13,7 +13,6 @@ import org.wildfly.security.authz.PermissionMappable;
 import org.wildfly.security.authz.PermissionMapper;
 import org.wildfly.security.authz.RoleDecoder;
 import org.wildfly.security.authz.Roles;
-import org.wildfly.security.password.WildFlyElytronPasswordProvider;
 import org.wildfly.security.permission.PermissionVerifier;
 
 import io.quarkus.arc.runtime.BeanContainer;
@@ -70,6 +69,9 @@ public class ElytronRecorder {
                         };
                     }
                 });
+        if (CDI.current().select(RealmMapper.class).isResolvable()) {
+            domain.setRealmMapper(CDI.current().select(RealmMapper.class).get());
+        }
 
         return new RuntimeValue<>(domain);
     }
@@ -83,7 +85,12 @@ public class ElytronRecorder {
      * @param realm - the runtime value for the SecurityRealm
      */
     public void addRealm(RuntimeValue<SecurityDomain.Builder> builder, String realmName, RuntimeValue<SecurityRealm> realm) {
-        builder.getValue().addRealm(realmName, realm.getValue());
+        builder.getValue().addRealm(realmName, realm.getValue()).setRoleDecoder(new RoleDecoder() {
+            @Override
+            public Roles decodeRoles(AuthorizationIdentity authorizationIdentity) {
+                return CDI.current().select(DefaultRoleDecoder.class).get().decodeRoles(authorizationIdentity);
+            }
+        }).build();
     }
 
     /**
@@ -93,7 +100,6 @@ public class ElytronRecorder {
      * @return the security domain runtime value
      */
     public RuntimeValue<SecurityDomain> buildDomain(RuntimeValue<SecurityDomain.Builder> builder) {
-        Security.addProvider(new WildFlyElytronPasswordProvider());
         return new RuntimeValue<>(builder.getValue().build());
     }
 }
