@@ -485,17 +485,6 @@ public class CppOptions extends FragmentOptions {
   }
 
   @Option(
-    name = "convert_lipo_to_thinlto",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    help =
-        "If set, builds using LIPO will automatically be converted to ThinLTO for the LLVM "
-            + "compiler."
-  )
-  public boolean convertLipoToThinLto;
-
-  @Option(
     name = "lipo",
     defaultValue = "off",
     converter = LipoModeConverter.class,
@@ -756,6 +745,26 @@ public class CppOptions extends FragmentOptions {
             + "build nodes instead of being written to disk."
   )
   public boolean inmemoryDotdFiles;
+
+  @Option(
+    name = "experimental_skip_unused_modules",
+    defaultValue = "false",
+    category = "experimental",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help = "Deprecated. No effect."
+  )
+  public boolean skipUnusedModules;
+
+  @Option(
+    name = "experimental_prune_more_modules",
+    defaultValue = "false",
+    category = "experimental",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help = "Deprecated. No effect."
+  )
+  public boolean pruneMoreModules;
 
   @Option(
     name = "prune_cpp_modules",
