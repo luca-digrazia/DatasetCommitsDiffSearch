@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
@@ -45,7 +44,6 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class ConfigurableAttributesTest extends BuildViewTestCase {
-
   private void writeConfigRules() throws Exception {
     scratch.file("conditions/BUILD",
         "config_setting(",
@@ -152,15 +150,6 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
                           .value(Label.parseAbsoluteUnchecked("//foo:default"))
                           .allowedFileTypes(FileTypeSet.ANY_FILE)));
 
-  private static final MockRule RULE_WITH_NO_PLATFORM =
-      () ->
-          MockRule.define(
-              "rule_with_no_platform",
-              (builder, env) ->
-                  builder
-                      .add(attr("deps", LABEL_LIST).allowedFileTypes())
-                      .useToolchainResolution(false));
-
   @Override
   protected ConfiguredRuleClassProvider createRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder =
@@ -169,8 +158,7 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
             .addRuleDefinition(RULE_WITH_COMPUTED_DEFAULT)
             .addRuleDefinition(RULE_WITH_BOOLEAN_ATTR)
             .addRuleDefinition(RULE_WITH_ALLOWED_VALUES)
-            .addRuleDefinition(RULE_WITH_LABEL_DEFAULT)
-            .addRuleDefinition(RULE_WITH_NO_PLATFORM);
+            .addRuleDefinition(RULE_WITH_LABEL_DEFAULT);
     TestRuleClassProvider.addStandardRules(builder);
     return builder.build();
   }
@@ -490,7 +478,7 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         "    out = 'b.out')");
     writeHelloRules(/*includeDefaultCondition=*/true);
     assertThat(getConfiguredTarget("//java/hello:hello")).isNull();
-    assertContainsEvent("//conditions:b is not a valid select() condition for //java/hello:hello");
+    assertContainsEvent("//conditions:b is not a valid configuration key for //java/hello:hello");
     assertDoesNotContainEvent("//conditions:a"); // This one is legitimate..
   }
 
@@ -504,7 +492,7 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         "    cmd = select({':fake': ''})",
         ")");
     assertThat(getConfiguredTarget("//foo:g")).isNull();
-    assertContainsEvent("//foo:fake is not a valid select() condition for //foo:g");
+    assertContainsEvent("//foo:fake is not a valid configuration key for //foo:g");
   }
 
   @Test
@@ -1085,7 +1073,7 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
     useConfiguration("--test_arg=a");
     ConfiguredTargetAndData ctad = getConfiguredTargetAndData("//srctest:gen");
     AttributeMap attributes = getMapperFromConfiguredTargetAndTarget(ctad);
-    assertThat(attributes.get("srcs", LABEL_LIST)).isEmpty();
+    assertThat(attributes.get("srcs", BuildType.LABEL_LIST)).isEmpty();
   }
 
   @Test
@@ -1174,6 +1162,9 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         "    name = 'b',",
         "    constraint_values = [':banana']",
         ")");
+    scratch.file("afile", "acontents");
+    scratch.file("bfile", "bcontents");
+    scratch.file("defaultfile", "defaultcontents");
     scratch.file(
         "check/BUILD",
         "filegroup(name = 'adep', srcs = ['afile'])",
@@ -1191,79 +1182,6 @@ public class ConfigurableAttributesTest extends BuildViewTestCase {
         ImmutableList.of("--experimental_platforms=//conditions:apple_platform"),
         /*expected:*/ ImmutableList.of("src check/afile"),
         /*not expected:*/ ImmutableList.of("src check/bfile", "src check/defaultfile"));
-  }
-
-  @Test
-  public void selectDirectlyOnConstraints() throws Exception {
-    // Tests select()ing directly on a constraint_value (with no intermediate config_setting).
-    scratch.file(
-        "conditions/BUILD",
-        "constraint_setting(name = 'fruit')",
-        "constraint_value(name = 'apple', constraint_setting = 'fruit')",
-        "constraint_value(name = 'banana', constraint_setting = 'fruit')",
-        "platform(",
-        "    name = 'apple_platform',",
-        "    constraint_values = [':apple'],",
-        ")",
-        "platform(",
-        "    name = 'banana_platform',",
-        "    constraint_values = [':banana'],",
-        ")");
-    scratch.file(
-        "check/defs.bzl",
-        "def _impl(ctx):",
-        "  pass",
-        "simple_rule = rule(",
-        "  implementation = _impl,",
-        "  attrs = {'srcs': attr.label_list(allow_files = True)}",
-        ")");
-    scratch.file(
-        "check/BUILD",
-        "load('//check:defs.bzl', 'simple_rule')",
-        "filegroup(name = 'adep', srcs = ['afile'])",
-        "filegroup(name = 'bdep', srcs = ['bfile'])",
-        "simple_rule(name = 'hello',",
-        "    srcs = select({",
-        "        '//conditions:apple': [':adep'],",
-        "        '//conditions:banana': [':bdep'],",
-        "    }))");
-    checkRule(
-        "//check:hello",
-        "srcs",
-        ImmutableList.of("--platforms=//conditions:apple_platform"),
-        /*expected:*/ ImmutableList.of("src check/afile"),
-        /*not expected:*/ ImmutableList.of("src check/bfile", "src check/defaultfile"));
-    checkRule(
-        "//check:hello",
-        "srcs",
-        ImmutableList.of("--platforms=//conditions:banana_platform"),
-        /*expected:*/ ImmutableList.of("src check/bfile"),
-        /*not expected:*/ ImmutableList.of("src check/afile", "src check/defaultfile"));
-  }
-
-  @Test
-  public void nonToolchainResolvingTargetsCantSelectDirectlyOnConstraints() throws Exception {
-    // Tests select()ing directly on a constraint_value (with no intermediate config_setting).
-    scratch.file(
-        "conditions/BUILD",
-        "constraint_setting(name = 'fruit')",
-        "constraint_value(name = 'apple', constraint_setting = 'fruit')",
-        "platform(",
-        "    name = 'apple_platform',",
-        "    constraint_values = [':apple'],",
-        ")");
-    scratch.file(
-        "check/BUILD",
-        "filegroup(name = 'adep', srcs = ['afile'])",
-        "rule_with_no_platform(name = 'hello',",
-        "    deps = select({",
-        "        '//conditions:apple': [':adep'],",
-        "    })",
-        ")");
-    reporter.removeHandler(failFastHandler);
-    useConfiguration("--platforms=//conditions:apple_platform");
-    assertThat(getConfiguredTarget("//check:hello")).isNull();
-    assertContainsEvent("//conditions:apple is not a valid select() condition for //check:hello");
   }
 
   @Test
