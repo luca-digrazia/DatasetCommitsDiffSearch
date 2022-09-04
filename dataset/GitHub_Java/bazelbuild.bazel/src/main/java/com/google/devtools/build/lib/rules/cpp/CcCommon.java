@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
+import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
@@ -160,7 +161,7 @@ public final class CcCommon {
 
   private final FdoContext fdoContext;
 
-  public CcCommon(RuleContext ruleContext) throws RuleErrorException {
+  public CcCommon(RuleContext ruleContext) {
     this(
         ruleContext,
         Preconditions.checkNotNull(
@@ -977,7 +978,8 @@ public final class CcCommon {
    */
   public static String computeCcFlags(RuleContext ruleContext, TransitiveInfoCollection toolchain)
       throws RuleErrorException {
-    CcToolchainProvider toolchainProvider = toolchain.get(CcToolchainProvider.PROVIDER);
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) toolchain.get(ToolchainInfo.PROVIDER);
 
     // Determine the original value of CC_FLAGS.
     String originalCcFlags = toolchainProvider.getLegacyCcFlagsMakeVariable();
@@ -1094,6 +1096,16 @@ public final class CcCommon {
     return outputGroupsBuilder.build();
   }
 
+  public static void checkRuleLoadedThroughMacro(RuleContext ruleContext) {
+    if (!ruleContext.getFragment(CppConfiguration.class).loadCcRulesFromBzl()) {
+      return;
+    }
+
+    if (!hasValidTag(ruleContext) || !ruleContext.getRule().wasCreatedByMacro()) {
+      registerMigrationRuleError(ruleContext);
+    }
+  }
+
   public static boolean isOldStarlarkApiWhiteListed(
       StarlarkRuleContext starlarkRuleContext, List<String> whitelistedPackages) {
     RuleContext context = starlarkRuleContext.getRuleContext();
@@ -1106,5 +1118,21 @@ public final class CcCommon {
           .anyMatch(path -> label.getPackageFragment().toString().startsWith(path));
     }
     return false;
+  }
+
+  private static boolean hasValidTag(RuleContext ruleContext) {
+    return ruleContext
+        .attributes()
+        .get("tags", Type.STRING_LIST)
+        .contains("__CC_RULES_MIGRATION_DO_NOT_USE_WILL_BREAK__");
+  }
+
+  private static void registerMigrationRuleError(RuleContext ruleContext) {
+    ruleContext.ruleError(
+        "The native C++/Objc rules are deprecated. Please load "
+            + ruleContext.getRule().getRuleClass()
+            + " from the rules_cc repository. See http://github.com/bazelbuild/rules_cc and "
+            + "https://github.com/bazelbuild/bazel/issues/7643. You can temporarily bypass this "
+            + "error by setting --incompatible_load_cc_rules_from_bzl=false.");
   }
 }
