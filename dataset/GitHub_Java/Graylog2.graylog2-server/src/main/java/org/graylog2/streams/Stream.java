@@ -20,9 +20,6 @@
 
 package org.graylog2.streams;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Stream.java: Mar 16, 2011 10:25:42 PM
  *
@@ -31,11 +28,5 @@ import java.util.List;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class Stream {
-
-    public static List<Stream> fetchAll() {
-        ArrayList<Stream> streams = new ArrayList<Stream>();
-
-        return streams;
-    }
 
 }

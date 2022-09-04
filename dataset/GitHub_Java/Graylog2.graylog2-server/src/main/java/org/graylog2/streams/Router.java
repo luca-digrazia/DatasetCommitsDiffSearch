@@ -22,8 +22,6 @@ package org.graylog2.streams;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.bson.types.ObjectId;
-import org.graylog2.Log;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
 
 /**
@@ -38,32 +36,14 @@ public class Router {
     // Hidden.
     private Router() { }
 
-    public static List<ObjectId> route(GELFMessage msg) {
-        ArrayList<ObjectId> matches = new ArrayList<ObjectId>();
-        ArrayList<Stream> streams = null;
-        try {
-            streams = Stream.fetchAll();
-        } catch (Exception e) {
-            Log.emerg("Could not fetch streams: " + e.toString());
-        }
+    public static List<Integer> route(GELFMessage msg) {
+        ArrayList<Integer> streams = new ArrayList<Integer>();
 
-        for (Stream stream : streams) {
-            boolean missed = false;
-            
-            Log.info("[router] Matching on " + stream.toString()); // TODO: REMOVE
-            Log.info("[router] Has " + stream.getStreamRules().size() + " rules."); // TODO: REMOVE
+        streams.add(1);
+        streams.add(2);
+        streams.add(10);
 
-            for (StreamRule rule : stream.getStreamRules()) {
-                // break and set missed to true if a rule does not match.
-            }
-
-            // All rules were matched.
-            if (!missed) {
-                matches.add(stream.getId());
-            }
-        }
-
-        return matches;
+        return streams;
     }
 
 }

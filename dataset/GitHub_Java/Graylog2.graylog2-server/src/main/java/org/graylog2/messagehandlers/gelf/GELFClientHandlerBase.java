@@ -20,15 +20,12 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import org.apache.log4j.Logger;
-import org.graylog2.messagehandlers.syslog.SyslogEventHandler;
+import java.util.Iterator;
+import java.util.Set;
+import org.graylog2.Log;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
-
-import java.util.Iterator;
-import java.util.Set;
-import org.graylog2.Tools;
 
 /**
  * GELFClient.java: Sep 14, 2010 6:43:00 PM
@@ -41,9 +38,6 @@ import org.graylog2.Tools;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 class GELFClientHandlerBase {
-
-    private static final Logger LOG = Logger.getLogger(SyslogEventHandler.class);
-
     protected String clientMessage = null;
     protected GELFMessage message = new GELFMessage();
 
@@ -52,7 +46,7 @@ class GELFClientHandlerBase {
     protected boolean parse() throws Exception{
         JSONObject json = this.getJSON(this.clientMessage.toString());
         if (json == null) {
-            LOG.warn("JSON is null/could not be parsed (invalid JSON) - clientMessage was: " + this.clientMessage);
+            Log.warn("JSON is null/could not be parsed (invalid JSON) - clientMessage was: " + this.clientMessage);
             return false;
         }
 
@@ -80,14 +74,6 @@ class GELFClientHandlerBase {
             this.message.setFacility(facility);
         }
 
-        // Set createdAt to provided timestamp - Set to current time if not set.
-        double timestamp = this.jsonToDouble(json.get("timestamp"));
-        if (timestamp <= 0) {
-            this.message.setCreatedAt(Tools.getUTCTimestampWithMilliseconds());
-        } else {
-            this.message.setCreatedAt(timestamp);
-        }
-
         // Add additional data if there is some.
         Set<String> set = json.keySet();
         Iterator<String> iter = set.iterator();
@@ -101,12 +87,12 @@ class GELFClientHandlerBase {
 
             // Don'T allow to override _id. (just to make sure...)
             if (key.equals("_id")) {
-                LOG.warn("Client tried to override _id field! Skipped field, but still storing message.");
+                Log.warn("Client tried to override _id field! Skipped field, but still storing message.");
                 continue;
             }
 
             // Add to message.
-            this.message.addAdditionalData(key, json.get(key));
+            this.message.addAdditionalData(key, this.jsonToString(json.get(key)));
         }
 
         return true;
@@ -146,19 +132,6 @@ class GELFClientHandlerBase {
                 String str = this.jsonToString(json);
                 if (str != null) {
                     return Integer.parseInt(str);
-                }
-            }
-        } catch(Exception e) {}
-
-        return -1;
-    }
-
-    private double jsonToDouble(Object json) {
-        try {
-            if (json != null) {
-                String str = this.jsonToString(json);
-                if (str != null) {
-                    return Double.parseDouble(str);
                 }
             }
         } catch(Exception e) {}
