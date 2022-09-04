@@ -458,7 +458,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         ImmutableList.Builder<Artifact> objectFiles = ImmutableList.builder();
         objectFiles.addAll(ccCompilationOutputs.getObjectFiles(false));
 
-        for (LibraryToLink library : depsCcLinkingContext.getLibraries().toList()) {
+        for (LibraryToLink library : depsCcLinkingContext.getLibraries()) {
           if (isStaticMode
               || (library.getDynamicLibrary() == null && library.getInterfaceLibrary() == null)) {
             if (library.getPicStaticLibrary() != null) {
@@ -604,7 +604,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           createDynamicLibrariesCopyActions(
               ruleContext,
               LibraryToLink.getDynamicLibrariesForRuntime(
-                  isStaticMode, depsCcLinkingContext.getLibraries().toList()));
+                  isStaticMode, depsCcLinkingContext.getLibraries()));
     }
 
     // TODO(bazel-team): Do we need to put original shared libraries (along with
@@ -804,7 +804,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .setOwner(ruleContext.getLabel())
         .addNonCodeInputs(
             ImmutableList.<Artifact>builder()
-                .addAll(ccCompilationContext.getTransitiveCompilationPrerequisites().toList())
+                .addAll(ccCompilationContext.getTransitiveCompilationPrerequisites())
                 .addAll(common.getLinkerScripts())
                 .build())
         .addUserLinkFlags(
@@ -957,8 +957,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // at the leaves than the root, but that both increases parallelism and reduces the final
     // action's input size.
     Packager packager =
-        createIntermediateDwpPackagers(
-            context, dwpOutput, toolchain, dwpFiles, dwoFiles.toList(), 1);
+        createIntermediateDwpPackagers(context, dwpOutput, toolchain, dwpFiles, dwoFiles, 1);
     packager.spawnAction.setMnemonic("CcGenerateDwp").addOutput(dwpOutput);
     packager.commandLine.addExecPath("-o", dwpOutput);
     context.registerAction(packager.build(context));
@@ -984,7 +983,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       Artifact dwpOutput,
       CcToolchainProvider toolchain,
       NestedSet<Artifact> dwpFiles,
-      List<Artifact> dwoFiles,
+      Iterable<Artifact> dwoFiles,
       int intermediateDwpCount)
       throws RuleErrorException {
     List<Packager> packagers = new ArrayList<>();
@@ -1226,7 +1225,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                 (NestedSet<?>)
                     Depset.getSetFromNoneableParam(dynamicDepsField, Tuple.class, "dynamic_deps");
 
-        for (Tuple<Object> exportsAndLinkerInput : dynamicDeps.toList()) {
+        for (Tuple<Object> exportsAndLinkerInput : dynamicDeps) {
           List<String> exportsFromDynamicDep =
               Sequence.castSkylarkListOrNoneToList(
                   exportsAndLinkerInput.get(0), String.class, "exports_from_dynamic_deps");
