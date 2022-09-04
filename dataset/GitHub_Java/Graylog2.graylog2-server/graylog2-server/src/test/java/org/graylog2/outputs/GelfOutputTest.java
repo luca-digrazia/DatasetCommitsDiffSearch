@@ -10,6 +10,7 @@ import org.testng.annotations.Test;
 
 import static org.mockito.Matchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.MockitoAnnotations.Mock;
 import static org.testng.Assert.*;
 
 /**
