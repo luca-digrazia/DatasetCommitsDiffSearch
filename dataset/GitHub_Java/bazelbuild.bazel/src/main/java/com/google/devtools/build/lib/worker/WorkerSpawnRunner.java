@@ -19,7 +19,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
@@ -54,6 +54,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.SortedMap;
 import java.util.regex.Pattern;
 
@@ -115,7 +116,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
   @Override
   public SpawnResult exec(Spawn spawn, SpawnExecutionContext context)
       throws ExecException, IOException, InterruptedException {
-    if (!Spawns.supportsWorkers(spawn) && !Spawns.supportsMultiplexWorkers(spawn)) {
+    if (!Spawns.supportsWorkers(spawn)) {
       // TODO(ulfjack): Don't circumvent SpawnExecutionPolicy. Either drop the warning here, or
       // provide a mechanism in SpawnExecutionPolicy to report warnings.
       reporter.handle(
@@ -130,12 +131,12 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
   @Override
   public boolean canExec(Spawn spawn) {
-    return Spawns.supportsWorkers(spawn) || Spawns.supportsMultiplexWorkers(spawn);
+    return Spawns.supportsWorkers(spawn);
   }
 
   private SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
       throws ExecException, IOException, InterruptedException {
-    if (spawn.getToolFiles().isEmpty()) {
+    if (Iterables.isEmpty(spawn.getToolFiles())) {
       throw new UserExecException(
           String.format(ERROR_MESSAGE_PREFIX + REASON_NO_TOOLS, spawn.getMnemonic()));
     }
@@ -154,7 +155,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     // its args and put them into the WorkRequest instead.
     List<String> flagFiles = new ArrayList<>();
     ImmutableList<String> workerArgs = splitSpawnArgsIntoWorkerArgsAndFlagFiles(spawn, flagFiles);
-    ImmutableMap<String, String> env =
+    Map<String, String> env =
         localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), binTools, "/tmp");
 
     MetadataProvider inputFileCache = context.getMetadataProvider();
@@ -181,12 +182,12 @@ final class WorkerSpawnRunner implements SpawnRunner {
             spawn.getMnemonic(),
             workerFilesCombinedHash,
             workerFiles,
-            context.speculating(),
-            Spawns.supportsMultiplexWorkers(spawn));
+            context.speculating());
+
+    WorkRequest workRequest = createWorkRequest(spawn, context, flagFiles, inputFileCache);
 
     long startTime = System.currentTimeMillis();
-    WorkResponse response =
-        execInWorker(spawn, key, context, inputFiles, outputs, flagFiles, inputFileCache);
+    WorkResponse response = execInWorker(spawn, key, workRequest, context, inputFiles, outputs);
     Duration wallTime = Duration.ofMillis(System.currentTimeMillis() - startTime);
 
     FileOutErr outErr = context.getFileOutErr();
@@ -234,8 +235,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       Spawn spawn,
       SpawnExecutionContext context,
       List<String> flagfiles,
-      MetadataProvider inputFileCache,
-      int workerId)
+      MetadataProvider inputFileCache)
       throws IOException {
     WorkRequest.Builder requestBuilder = WorkRequest.newBuilder();
     for (String flagfile : flagfiles) {
@@ -260,7 +260,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
           .setDigest(digest)
           .build();
     }
-    return requestBuilder.setRequestId(workerId).build();
+    return requestBuilder.build();
   }
 
   /**
@@ -297,22 +297,18 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private WorkResponse execInWorker(
       Spawn spawn,
       WorkerKey key,
+      WorkRequest request,
       SpawnExecutionContext context,
       SandboxInputs inputFiles,
-      SandboxOutputs outputs,
-      List<String> flagFiles,
-      MetadataProvider inputFileCache)
+      SandboxOutputs outputs)
       throws InterruptedException, ExecException {
     Worker worker = null;
     WorkResponse response;
-    WorkRequest request;
 
     ActionExecutionMetadata owner = spawn.getResourceOwner();
     try {
       try {
         worker = workers.borrowObject(key);
-        request =
-            createWorkRequest(spawn, context, flagFiles, inputFileCache, worker.getWorkerId());
       } catch (IOException e) {
         throw new UserExecException(
             ErrorMessage.builder()
@@ -349,7 +345,8 @@ final class WorkerSpawnRunner implements SpawnRunner {
         }
 
         try {
-          worker.putRequest(request);
+          request.writeDelimitedTo(worker.getOutputStream());
+          worker.getOutputStream().flush();
         } catch (IOException e) {
           throw new UserExecException(
               ErrorMessage.builder()
@@ -362,13 +359,17 @@ final class WorkerSpawnRunner implements SpawnRunner {
                   .toString());
         }
 
+        RecordingInputStream recordingStream = new RecordingInputStream(worker.getInputStream());
+        recordingStream.startRecording(4096);
         try {
-          response = worker.getResponse();
+          // response can be null when the worker has already closed stdout at this point and thus
+          // the InputStream is at EOF.
+          response = WorkResponse.parseDelimitedFrom(recordingStream);
         } catch (IOException e) {
           // If protobuf couldn't parse the response, try to print whatever the failing worker wrote
           // to stdout - it's probably a stack trace or some kind of error message that will help
           // the user figure out why the compiler is failing.
-          String recordingStreamMessage = worker.getRecordingStreamMessage();
+          recordingStream.readRemaining();
           throw new UserExecException(
               ErrorMessage.builder()
                   .message(
@@ -376,7 +377,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
                           + "Did you try to print something to stdout? Workers aren't allowed to "
                           + "do this, as it breaks the protocol between Bazel and the worker "
                           + "process.")
-                  .logText(recordingStreamMessage)
+                  .logText(recordingStream.getRecordedDataAsString())
                   .exception(e)
                   .build()
                   .toString());
