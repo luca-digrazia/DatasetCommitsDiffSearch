@@ -48,7 +48,7 @@ import org.junit.runners.JUnit4;
 public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
   @Override
-  protected ConfiguredRuleClassProvider createRuleClassProvider() {
+  protected ConfiguredRuleClassProvider getRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
     builder.addConfigurationFragment(new DummyTestLoader());
@@ -936,6 +936,8 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
   @Test
   public void testTransitionOnBuildSetting_fromDefault() throws Exception {
+    setStarlarkSemanticsOptions(
+        "--experimental_starlark_config_transitions=true", "--experimental_build_setting_api=true");
     writeWhitelistFile();
     writeBuildSettingsBzl();
     writeRulesWithAttrTransitionBzl();
@@ -962,6 +964,8 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
   @Test
   public void testTransitionOnBuildSetting_fromCommandLine() throws Exception {
+    setStarlarkSemanticsOptions(
+        "--experimental_starlark_config_transitions=true", "--experimental_build_setting_api=true");
     writeWhitelistFile();
     writeBuildSettingsBzl();
     writeRulesWithAttrTransitionBzl();
@@ -1625,6 +1629,8 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
   @Test
   public void testTransitionOnBuildSetting_badValue() throws Exception {
+    setStarlarkSemanticsOptions(
+        "--experimental_build_setting_api=true", "--experimental_starlark_config_transitions");
     writeWhitelistFile();
     writeBuildSettingsBzl();
     scratch.file(
@@ -1677,6 +1683,8 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
   @Test
   public void testTransitionOnBuildSetting_noSuchTarget() throws Exception {
+    setStarlarkSemanticsOptions(
+        "--experimental_build_setting_api=true", "--experimental_starlark_config_transitions");
     writeWhitelistFile();
     writeRulesWithAttrTransitionBzl();
     // Still need to write this file in order not to rewrite rules.bzl file (has loads from this
@@ -1697,6 +1705,8 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
   @Test
   public void testTransitionOnBuildSetting_notABuildSetting() throws Exception {
+    setStarlarkSemanticsOptions(
+        "--experimental_build_setting_api=true", "--experimental_starlark_config_transitions");
     writeWhitelistFile();
     writeRulesWithAttrTransitionBzl();
     scratch.file(
