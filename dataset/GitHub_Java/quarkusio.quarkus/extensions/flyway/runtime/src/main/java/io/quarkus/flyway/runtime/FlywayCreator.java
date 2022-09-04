@@ -21,31 +21,17 @@ class FlywayCreator {
     public Flyway createFlyway(DataSource dataSource) {
         FluentConfiguration configure = Flyway.configure();
         configure.dataSource(dataSource);
-        if (flywayRuntimeConfig.connectRetries.isPresent()) {
-            configure.connectRetries(flywayRuntimeConfig.connectRetries.getAsInt());
-        }
-        if (flywayRuntimeConfig.schemas.isPresent()) {
-            configure.schemas(flywayRuntimeConfig.schemas.get().toArray(EMPTY_ARRAY));
-        }
-        if (flywayRuntimeConfig.table.isPresent()) {
-            configure.table(flywayRuntimeConfig.table.get());
-        }
+        flywayRuntimeConfig.connectRetries.ifPresent(configure::connectRetries);
+        flywayRuntimeConfig.schemas.ifPresent(list -> configure.schemas(list.toArray(EMPTY_ARRAY)));
+        flywayRuntimeConfig.table.ifPresent(configure::table);
         configure.locations(flywayBuildTimeConfig.locations.toArray(EMPTY_ARRAY));
-        if (flywayRuntimeConfig.sqlMigrationPrefix.isPresent()) {
-            configure.sqlMigrationPrefix(flywayRuntimeConfig.sqlMigrationPrefix.get());
-        }
-        if (flywayRuntimeConfig.repeatableSqlMigrationPrefix.isPresent()) {
-            configure.repeatableSqlMigrationPrefix(flywayRuntimeConfig.repeatableSqlMigrationPrefix.get());
-        }
+        flywayRuntimeConfig.sqlMigrationPrefix.ifPresent(configure::sqlMigrationPrefix);
+        flywayRuntimeConfig.repeatableSqlMigrationPrefix.ifPresent(configure::repeatableSqlMigrationPrefix);
         configure.baselineOnMigrate(flywayRuntimeConfig.baselineOnMigrate);
         configure.validateOnMigrate(flywayRuntimeConfig.validateOnMigrate);
         configure.outOfOrder(flywayRuntimeConfig.outOfOrder);
-        if (flywayRuntimeConfig.baselineVersion.isPresent()) {
-            configure.baselineVersion(flywayRuntimeConfig.baselineVersion.get());
-        }
-        if (flywayRuntimeConfig.baselineDescription.isPresent()) {
-            configure.baselineDescription(flywayRuntimeConfig.baselineDescription.get());
-        }
+        flywayRuntimeConfig.baselineVersion.ifPresent(configure::baselineVersion);
+        flywayRuntimeConfig.baselineDescription.ifPresent(configure::baselineDescription);
         configure.placeholders(flywayRuntimeConfig.placeholders);
         return configure.load();
     }
