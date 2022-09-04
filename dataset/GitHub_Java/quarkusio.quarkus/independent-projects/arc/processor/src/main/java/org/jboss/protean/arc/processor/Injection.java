@@ -90,18 +90,10 @@ public class Injection {
         // if the class has a single non no-arg constructor that is not annotated with @Inject,
         // the class is not a non-static inner or and it not a superclass of of a bean
         // we consider that constructor as an injection
-        if (isFirstLevel) {
-            boolean constrInjectionExists = false;
-            for (Injection injection : injections) {
-                if (injection.isConstructor()) {
-                    constrInjectionExists = true;
-                    break;
-                }
-            }
-
+        if (injections.isEmpty() && isFirstLevel) {
             final boolean isNonStaticInnerClass = beanTarget.name().isInner()
                     && !Modifier.isStatic(beanTarget.flags());
-            if (!isNonStaticInnerClass && !constrInjectionExists) {
+            if (!isNonStaticInnerClass) {
                 List<MethodInfo> nonNoargConstrs = new ArrayList<>();
                 for (MethodInfo constr : beanTarget.methods()) {
                     if ("<init>".equals(constr.name()) && constr.parameters().size() > 0) {

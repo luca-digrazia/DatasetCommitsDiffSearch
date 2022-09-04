@@ -22,7 +22,6 @@ import org.junit.Rule;
 import org.junit.Test;
 
 import javax.enterprise.context.Dependent;
-import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import static org.junit.Assert.assertNotNull;
@@ -46,9 +45,6 @@ public class SingleNonNoArgConstructorInjectionTest {
     static class CombineHarvester {
 
         private final Head head;
-
-        @Inject
-        private Head head2;
 
         public CombineHarvester(Head head) {
             this.head = head;
