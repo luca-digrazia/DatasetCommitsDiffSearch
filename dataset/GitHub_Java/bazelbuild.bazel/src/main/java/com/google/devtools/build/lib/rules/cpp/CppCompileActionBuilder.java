@@ -208,21 +208,18 @@ public class CppCompileActionBuilder {
    * <p>This method may be called multiple times to create multiple compile actions (usually after
    * calling some setters to modify the generated action).
    */
-  CppCompileAction buildOrThrowRuleError(RuleErrorConsumer ruleErrorConsumer)
+  public CppCompileAction buildOrThrowRuleError(RuleErrorConsumer ruleErrorConsumer)
       throws RuleErrorException {
     List<String> errorMessages = new ArrayList<>();
     CppCompileAction result =
         buildAndVerify((String errorMessage) -> errorMessages.add(errorMessage));
 
     if (!errorMessages.isEmpty()) {
-      RuleErrorException exception = null;
-      try {
-        exception = ruleErrorConsumer.throwWithRuleError(errorMessages.get(0));
-      } catch (RuleErrorException e) {
-        exception = e;
+      for (String errorMessage : errorMessages) {
+        ruleErrorConsumer.ruleError(errorMessage);
       }
-      errorMessages.stream().skip(1L).forEach(ruleErrorConsumer::ruleError);
-      throw exception;
+
+      throw new RuleErrorException(errorMessages.get(0));
     }
 
     return result;
@@ -365,7 +362,9 @@ public class CppCompileActionBuilder {
   }
 
   NestedSet<Artifact> buildPrunableHeaders() {
-    return NestedSetBuilder.<Artifact>stableOrder().addAll(additionalPrunableHeaders).build();
+    return NestedSetBuilder.fromNestedSet(cppSemantics.getAdditionalPrunableIncludes())
+        .addAll(additionalPrunableHeaders)
+        .build();
   }
 
   NestedSet<Artifact> buildInputsForInvalidation() {

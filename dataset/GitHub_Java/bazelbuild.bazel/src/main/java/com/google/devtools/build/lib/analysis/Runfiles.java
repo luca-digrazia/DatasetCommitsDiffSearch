@@ -32,13 +32,13 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.RunfilesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SymlinkEntryApi;
 import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -405,7 +406,9 @@ public final class Runfiles implements RunfilesApi {
     Map<PathFragment, Artifact> newManifest = new HashMap<>();
 
     outer:
-    for (Map.Entry<PathFragment, Artifact> entry : workingManifest.entrySet()) {
+    for (Iterator<Map.Entry<PathFragment, Artifact>> i = workingManifest.entrySet().iterator();
+        i.hasNext(); ) {
+      Map.Entry<PathFragment, Artifact> entry = i.next();
       PathFragment source = entry.getKey();
       Artifact symlink = entry.getValue();
       // drop nested entries; warn if this changes anything
@@ -744,13 +747,13 @@ public final class Runfiles implements RunfilesApi {
               (previous == null) ? "empty file" : previous.getExecPath().toString();
           String artifactStr =
               (artifact == null) ? "empty file" : artifact.getExecPath().toString();
-          if (!previousStr.equals(artifactStr)) {
-            String message =
-                String.format(
-                    "overwrote runfile %s, was symlink to %s, now symlink to %s",
-                    path.getSafePathString(), previousStr, artifactStr);
-            eventHandler.handle(Event.of(eventKind, location, message));
-          }
+          String message =
+              String.format(
+                  "overwrote runfile %s, was symlink to %s, now symlink to %s",
+                  path.getSafePathString(),
+                  previousStr,
+                  artifactStr);
+          eventHandler.handle(Event.of(eventKind, location, message));
         }
       }
       map.put(path, artifact);
