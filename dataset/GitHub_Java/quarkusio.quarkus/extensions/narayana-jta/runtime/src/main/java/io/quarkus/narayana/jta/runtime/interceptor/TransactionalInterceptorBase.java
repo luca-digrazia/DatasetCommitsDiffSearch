@@ -19,10 +19,10 @@ import org.eclipse.microprofile.reactive.streams.operators.ReactiveStreams;
 import org.jboss.tm.usertx.client.ServerVMClientUserTransaction;
 import org.reactivestreams.Publisher;
 
+import com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionManagerImple;
 import com.arjuna.ats.jta.logging.jtaLogger;
 
 import io.quarkus.arc.runtime.InterceptorBindings;
-import io.quarkus.narayana.jta.runtime.CDIDelegatingTransactionManager;
 import io.quarkus.narayana.jta.runtime.TransactionConfiguration;
 import io.smallrye.reactive.converters.ReactiveTypeConverter;
 import io.smallrye.reactive.converters.Registry;
@@ -97,7 +97,7 @@ public abstract class TransactionalInterceptorBase implements Serializable {
             throws Exception {
 
         TransactionConfiguration configAnnotation = getTransactionConfiguration(ic);
-        int currentTmTimeout = ((CDIDelegatingTransactionManager) transactionManager).getTransactionTimeout();
+        int currentTmTimeout = ((TransactionManagerImple) transactionManager).getTimeout();
         if (configAnnotation != null && configAnnotation.timeout() != TransactionConfiguration.UNSET_TIMEOUT) {
             tm.setTransactionTimeout(configAnnotation.timeout());
         }
@@ -125,7 +125,7 @@ public abstract class TransactionalInterceptorBase implements Serializable {
             if (!throwing && ret != null) {
                 ReactiveTypeConverter<Object> converter = null;
                 if (ret instanceof CompletionStage == false
-                        && (ret instanceof Publisher == false || ic.getMethod().getReturnType() != Publisher.class)) {
+                        && ret instanceof Publisher == false) {
                     @SuppressWarnings({ "rawtypes", "unchecked" })
                     Optional<ReactiveTypeConverter<Object>> lookup = Registry.lookup((Class) ret.getClass());
                     if (lookup.isPresent()) {
@@ -309,6 +309,7 @@ public abstract class TransactionalInterceptorBase implements Serializable {
     }
 
     protected boolean setUserTransactionAvailable(boolean available) {
+
         boolean previousUserTransactionAvailability = ServerVMClientUserTransaction.isAvailable();
 
         ServerVMClientUserTransaction.setAvailability(available);
