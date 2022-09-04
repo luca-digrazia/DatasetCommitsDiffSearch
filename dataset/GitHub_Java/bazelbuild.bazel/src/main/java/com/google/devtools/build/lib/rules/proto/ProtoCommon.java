@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
+import net.starlark.java.syntax.Location;
 
 /**
  * Utility functions for proto_library and proto aspect implementations.
@@ -468,7 +469,8 @@ public class ProtoCommon {
             exportedProtos,
             exportedProtoSourceRoots,
             directDescriptorSet,
-            transitiveDescriptorSets);
+            transitiveDescriptorSets,
+            Location.BUILTIN);
 
     return protoInfo;
   }
