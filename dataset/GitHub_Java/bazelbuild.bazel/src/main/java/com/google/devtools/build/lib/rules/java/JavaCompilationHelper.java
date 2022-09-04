@@ -38,9 +38,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
-import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -191,8 +189,7 @@ public final class JavaCompilationHelper {
       Artifact outputJar,
       Artifact manifestProtoOutput,
       @Nullable Artifact gensrcOutputJar,
-      @Nullable Artifact nativeHeaderOutput)
-      throws InterruptedException {
+      @Nullable Artifact nativeHeaderOutput) {
 
     JavaTargetAttributes attributes = getAttributes();
 
@@ -255,19 +252,13 @@ public final class JavaCompilationHelper {
     return builder.build(ruleContext, semantics);
   }
 
-  private ImmutableMap<String, String> getExecutionInfo() throws InterruptedException {
-    ImmutableMap.Builder<String, String> executionInfo = ImmutableMap.builder();
-    executionInfo.putAll(
-        getConfiguration()
-            .modifiedExecutionInfo(
-                javaToolchain.getJavacSupportsWorkers()
-                    ? ExecutionRequirements.WORKER_MODE_ENABLED
-                    : ImmutableMap.of(),
-                JavaCompileActionBuilder.MNEMONIC));
-    executionInfo.putAll(
-        TargetUtils.getExecutionInfo(ruleContext.getRule(), ruleContext.isAllowTagsPropagation()));
-
-    return executionInfo.build();
+  private ImmutableMap<String, String> getExecutionInfo() {
+    return getConfiguration()
+        .modifiedExecutionInfo(
+            javaToolchain.getJavacSupportsWorkers()
+                ? ExecutionRequirements.WORKER_MODE_ENABLED
+                : ImmutableMap.of(),
+            JavaCompileActionBuilder.MNEMONIC);
   }
 
   /** Returns the bootclasspath explicit set in attributes if present, or else the default. */
@@ -361,8 +352,7 @@ public final class JavaCompilationHelper {
    *     for new artifacts.
    */
   private Artifact createHeaderCompilationAction(
-      Artifact runtimeJar, JavaCompilationArtifacts.Builder artifactBuilder)
-      throws InterruptedException {
+      Artifact runtimeJar, JavaCompilationArtifacts.Builder artifactBuilder) {
 
     Artifact headerJar =
         getAnalysisEnvironment()
@@ -384,17 +374,11 @@ public final class JavaCompilationHelper {
         ImmutableList.copyOf(Iterables.concat(getBootclasspathOrDefault(), getExtdirInputs())));
 
     // only run API-generating annotation processors during header compilation
-    JavaPluginInfo plugins = attributes.plugins().apiGeneratingPlugins();
-    builder.setPlugins(plugins);
+    builder.setPlugins(attributes.plugins().apiGeneratingPlugins());
     // Exclude any per-package configured data (see JavaCommon.computePerPackageData).
     // It is used to allow Error Prone checks to load additional data,
     // and Error Prone doesn't run during header compilation.
-    builder.addAllJavacOpts(getJavacOpts());
-    if (Iterables.contains(
-        plugins.processorClasses(), "dagger.internal.codegen.ComponentProcessor")) {
-      // see b/31371210
-      builder.addJavacOpt("-Aexperimental_turbine_hjar");
-    }
+    builder.setJavacOpts(getJavacOpts());
     builder.setTempDirectory(tempDir(headerJar, ruleContext.getLabel()));
     builder.setOutputJar(headerJar);
     builder.setOutputDepsProto(headerDeps);
@@ -644,7 +628,7 @@ public final class JavaCompilationHelper {
    * @return the header jar (if requested), or ijar (if requested), or else the class jar
    */
   public Artifact createCompileTimeJarAction(
-      Artifact runtimeJar, JavaCompilationArtifacts.Builder builder) throws InterruptedException {
+      Artifact runtimeJar, JavaCompilationArtifacts.Builder builder) {
     Artifact jar;
     boolean isFullJar = false;
     if (shouldUseHeaderCompilation()) {

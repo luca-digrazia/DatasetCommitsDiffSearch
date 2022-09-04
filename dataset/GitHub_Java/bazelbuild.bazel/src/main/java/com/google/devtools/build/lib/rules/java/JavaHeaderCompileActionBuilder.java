@@ -271,9 +271,6 @@ public class JavaHeaderCompileActionBuilder {
             .addAll(sourceJars)
             .addAll(sourceFiles);
 
-    // Tools are by definition a subset of the inputs, so make sure they're present there, too.
-    mandatoryInputs.addTransitive(toolsJars);
-
     ImmutableList<RunfilesSupplier> runfilesSuppliers = ImmutableList.of();
     FilesToRunProvider headerCompiler =
         useHeaderCompilerDirect
