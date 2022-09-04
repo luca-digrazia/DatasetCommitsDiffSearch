@@ -46,13 +46,16 @@ import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
+import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -272,8 +275,8 @@ public class WorkspaceFactory {
     if (aPackage.containsErrors()) {
       builder.setContainsErrors();
     }
-    builder.addRegisteredExecutionPlatforms(aPackage.getRegisteredExecutionPlatforms());
-    builder.addRegisteredToolchains(aPackage.getRegisteredToolchains());
+    builder.addRegisteredExecutionPlatformLabels(aPackage.getRegisteredExecutionPlatformLabels());
+    builder.addRegisteredToolchainLabels(aPackage.getRegisteredToolchainLabels());
     for (Rule rule : aPackage.getTargets(Rule.class)) {
       try {
         // The old rule references another Package instance and we wan't to keep the invariant that
@@ -413,10 +416,25 @@ public class WorkspaceFactory {
                 SkylarkList<String> platformLabels, Location location, Environment env)
                 throws EvalException, InterruptedException {
 
+              // Collect the platform labels.
+              List<Label> platforms = new ArrayList<>();
+              for (String rawLabel : platformLabels.getContents(String.class, "platform_labels")) {
+                try {
+                  platforms.add(Label.parseAbsolute(rawLabel));
+                } catch (LabelSyntaxException e) {
+                  throw new EvalException(
+                      location,
+                      String.format(
+                          "In register_execution_platforms: unable to parse platform label %s: %s",
+                          rawLabel, e.getMessage()),
+                      e);
+                }
+              }
+
               // Add to the package definition for later.
-              Package.Builder builder = PackageFactory.getContext(env, location).pkgBuilder;
-              builder.addRegisteredExecutionPlatforms(
-                  platformLabels.getContents(String.class, "platform_labels"));
+              Package.Builder builder =
+                  PackageFactory.getContext(env, location).pkgBuilder;
+              builder.addRegisteredExecutionPlatformLabels(platforms);
 
               return NONE;
             }
@@ -450,10 +468,26 @@ public class WorkspaceFactory {
                 SkylarkList<String> toolchainLabels, Location location, Environment env)
                 throws EvalException, InterruptedException {
 
+              // Collect the toolchain labels.
+              List<Label> toolchains = new ArrayList<>();
+              for (String rawLabel :
+                  toolchainLabels.getContents(String.class, "toolchain_labels")) {
+                try {
+                  toolchains.add(Label.parseAbsolute(rawLabel));
+                } catch (LabelSyntaxException e) {
+                  throw new EvalException(
+                      location,
+                      String.format(
+                          "In register_toolchains: unable to parse toolchain label %s: %s",
+                          rawLabel, e.getMessage()),
+                      e);
+                }
+              }
+
               // Add to the package definition for later.
-              Package.Builder builder = PackageFactory.getContext(env, location).pkgBuilder;
-              builder.addRegisteredToolchains(
-                  toolchainLabels.getContents(String.class, "toolchain_labels"));
+              Package.Builder builder =
+                  PackageFactory.getContext(env, location).pkgBuilder;
+              builder.addRegisteredToolchainLabels(toolchains);
 
               return NONE;
             }
@@ -550,10 +584,9 @@ public class WorkspaceFactory {
   private static ClassObject newNativeModule(
       ImmutableMap<String, BaseFunction> workspaceFunctions, String version) {
     ImmutableMap.Builder<String, Object> builder = new ImmutableMap.Builder<>();
-    SkylarkNativeModule nativeModuleInstance = new SkylarkNativeModule();
-    for (String nativeFunction : FuncallExpression.getMethodNames(SkylarkNativeModule.class)) {
-      builder.put(nativeFunction,
-          FuncallExpression.getBuiltinCallable(nativeModuleInstance, nativeFunction));
+    Runtime.BuiltinRegistry builtins = Runtime.getBuiltinRegistry();
+    for (String nativeFunction : builtins.getFunctionNames(SkylarkNativeModule.class)) {
+      builder.put(nativeFunction, builtins.getFunction(SkylarkNativeModule.class, nativeFunction));
     }
     for (Map.Entry<String, BaseFunction> function : workspaceFunctions.entrySet()) {
       builder.put(function.getKey(), function.getValue());
