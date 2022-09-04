@@ -14,7 +14,6 @@ import com.shuyu.gsyvideoplayer.player.BasePlayerManager;
 import com.shuyu.gsyvideoplayer.player.IPlayerInitSuccessListener;
 import com.shuyu.gsyvideoplayer.player.PlayerFactory;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
-import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
 import com.squareup.leakcanary.LeakCanary;
 
 import static com.google.android.exoplayer2.util.Util.inferContentType;
@@ -51,9 +50,6 @@ public class GSYApplication extends MultiDexApplication {
         //GSYVideoType.setShowType(GSYVideoType.SCREEN_MATCH_FULL);
         //GSYVideoType.setShowType(GSYVideoType.SCREEN_TYPE_FULL);
         //GSYVideoType.setShowType(GSYVideoType.SCREEN_MATCH_FULL);
-
-        //GSYVideoType.setShowType(GSYVideoType.SCREEN_TYPE_CUSTOM);
-        //GSYVideoType.setScreenScaleRatio(9.0f/16);
 
         //GSYVideoType.setRenderType(GSYVideoType.SUFRACE);
         //GSYVideoType.setRenderType(GSYVideoType.GLSURFACE);
