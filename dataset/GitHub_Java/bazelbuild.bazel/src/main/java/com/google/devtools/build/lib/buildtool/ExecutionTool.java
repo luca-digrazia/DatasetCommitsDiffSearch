@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
-import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
@@ -108,7 +107,6 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -323,23 +321,19 @@ public class ExecutionTool {
   }
 
   /**
-   * Performs the execution phase (phase 3) of the build, in which the Builder is applied to the
-   * action graph to bring the targets up to date. (This function will return prior to
-   * execution-proper if --nobuild was specified.)
-   *
+   * Performs the execution phase (phase 3) of the build, in which the Builder
+   * is applied to the action graph to bring the targets up to date. (This
+   * function will return prior to execution-proper if --nobuild was specified.)
    * @param buildId UUID of the build id
    * @param analysisResult the analysis phase output
    * @param buildResult the mutable build result
    * @param packageRoots package roots collected from loading phase and BuildConfigurationCollection
-   *     creation. May be empty if {@link
-   *     SkyframeExecutor#getForcedSingleSourceRootIfNoExecrootSymlinkCreation} is false.
+   * creation
    */
-  void executeBuild(
-      UUID buildId,
-      AnalysisResult analysisResult,
+  void executeBuild(UUID buildId, AnalysisResult analysisResult,
       BuildResult buildResult,
       BuildConfigurationCollection configurations,
-      PackageRoots packageRoots,
+      ImmutableMap<PackageIdentifier, Path> packageRoots,
       TopLevelArtifactContext topLevelArtifactContext)
       throws BuildFailedException, InterruptedException, TestExecException, AbruptExitException {
     Stopwatch timer = Stopwatch.createStarted();
@@ -386,7 +380,6 @@ public class ExecutionTool {
         request.getBuildOptions().getSymlinkPrefix(productName), productName);
 
     ActionCache actionCache = getActionCache();
-    actionCache.resetStatistics();
     SkyframeExecutor skyframeExecutor = env.getSkyframeExecutor();
     Builder builder = createBuilder(
         request, actionCache, skyframeExecutor, modifiedOutputFiles);
@@ -522,19 +515,15 @@ public class ExecutionTool {
     }
   }
 
-  private void prepare(PackageRoots packageRoots) throws ExecutorInitException {
-    Optional<ImmutableMap<PackageIdentifier, Path>> packageRootMap =
-        packageRoots.getPackageRootsMap();
-    if (!packageRootMap.isPresent()) {
-      return;
-    }
+  private void prepare(ImmutableMap<PackageIdentifier, Path> packageRoots)
+      throws ExecutorInitException {
     // Prepare for build.
     Profiler.instance().markPhase(ProfilePhase.PREPARE);
 
     // Plant the symlink forest.
     try {
       new SymlinkForest(
-              packageRootMap.get(), getExecRoot(), runtime.getProductName(), env.getWorkspaceName())
+          packageRoots, getExecRoot(), runtime.getProductName(), env.getWorkspaceName())
           .plantSymlinkForest();
     } catch (IOException e) {
       throw new ExecutorInitException("Source forest creation failed", e);
@@ -745,7 +734,6 @@ public class ExecutionTool {
    */
   private void saveActionCache(ActionCache actionCache) {
     ActionCacheStatistics.Builder builder = ActionCacheStatistics.newBuilder();
-    actionCache.mergeIntoActionCacheStatistics(builder);
 
     AutoProfiler p =
         AutoProfiler.profiledAndLogged("Saving action cache", ProfilerTask.INFO, logger);
