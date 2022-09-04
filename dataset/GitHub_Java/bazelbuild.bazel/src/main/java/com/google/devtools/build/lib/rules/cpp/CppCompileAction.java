@@ -292,7 +292,9 @@ public class CppCompileAction extends AbstractAction
   }
 
   private boolean shouldScanDotdFiles() {
-    return !useHeaderModules || !shouldPruneModules;
+    return !cppConfiguration.getNoDotdScanningWithModules()
+        || !useHeaderModules
+        || !shouldPruneModules;
   }
 
   @Override
