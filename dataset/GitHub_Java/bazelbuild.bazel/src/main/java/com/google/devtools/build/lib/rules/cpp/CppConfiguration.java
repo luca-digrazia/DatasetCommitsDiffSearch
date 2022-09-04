@@ -396,10 +396,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.legacyWholeArchive;
   }
 
-  public boolean removeLegacyWholeArchive() {
-    return cppOptions.removeLegacyWholeArchive;
-  }
-
   public boolean getInmemoryDotdFiles() {
     return cppOptions.inmemoryDotdFiles;
   }
@@ -546,10 +542,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean disableLegacyCrosstoolFields() {
     return cppOptions.disableLegacyCrosstoolFields;
-  }
-
-  public boolean disableExpandIfAllAvailableInFlagSet() {
-    return cppOptions.disableExpandIfAllAvailableInFlagSet;
   }
 
   public static String getLegacyCrosstoolFieldErrorMessage(String field) {
