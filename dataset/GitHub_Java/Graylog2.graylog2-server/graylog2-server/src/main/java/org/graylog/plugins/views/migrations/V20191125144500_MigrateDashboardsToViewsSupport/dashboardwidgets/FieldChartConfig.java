@@ -13,9 +13,7 @@ import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToV
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Series;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.TimeHistogramConfig;
 
-import javax.annotation.Nullable;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Set;
 
 @AutoValue
@@ -78,13 +76,11 @@ public abstract class FieldChartConfig extends WidgetConfigBase implements Widge
             @JsonProperty("field") String field,
             @JsonProperty("interval") String interval,
             @JsonProperty("query") String query,
-            @JsonProperty("timerange") TimeRange timerange,
-            @JsonProperty("stream_id") @Nullable String streamId
+            @JsonProperty("timerange") TimeRange timerange
     ) {
         return new AutoValue_FieldChartConfig(
                 query,
                 timerange,
-                Optional.ofNullable(streamId),
                 valuetype,
                 renderer,
                 interpolation,

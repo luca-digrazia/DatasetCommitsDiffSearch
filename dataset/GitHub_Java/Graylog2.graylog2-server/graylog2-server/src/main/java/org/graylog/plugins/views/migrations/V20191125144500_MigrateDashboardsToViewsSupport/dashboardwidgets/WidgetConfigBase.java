@@ -33,8 +33,7 @@ abstract class WidgetConfigBase implements WidgetConfig {
 
     Interval timestampInterval(String interval) {
         switch (interval) {
-            case "minute": return TimeUnitInterval.create(TimeUnitInterval.IntervalUnit.MINUTES, 1);
-            case "hour": return TimeUnitInterval.create(TimeUnitInterval.IntervalUnit.HOURS, 1);
+            case "minute": return TimeUnitInterval.builder().unit(TimeUnitInterval.IntervalUnit.MINUTES).value(1).build();
         }
         throw new RuntimeException("Unable to map interval: " + interval);
     }
