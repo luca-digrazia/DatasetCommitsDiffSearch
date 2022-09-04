@@ -59,12 +59,6 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
   private final Set<PathFragment> writableDirs;
 
   /**
-   * Writable directory where the spawn runner keeps control files and the execroot outside of the
-   * sandboxfs instance.
-   */
-  private final Path sandboxPath;
-
-  /**
    * Writable directory to support the writes performed by the command. This acts as the target
    * of all writable mappings in the sandboxfs instance.
    */
@@ -83,7 +77,7 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
    * Constructs a new sandboxfs-based spawn runner.
    *
    * @param process sandboxfs instance to use for this spawn
-   * @param sandboxPath writable directory where the spawn runner keeps control files
+   * @param outerDir writable directory where the spawn runner keeps control files
    * @param arguments arguments to pass to the spawn, including the binary name
    * @param environment environment variables to pass to the spawn
    * @param inputs input files to be made available to the spawn in read-only mode
@@ -93,7 +87,7 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
    */
   SandboxfsSandboxedSpawn(
       SandboxfsProcess process,
-      Path sandboxPath,
+      Path outerDir,
       List<String> arguments,
       Map<String, String> environment,
       Map<PathFragment, Path> inputs,
@@ -115,8 +109,7 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
     }
     this.writableDirs = writableDirs;
 
-    this.sandboxPath = sandboxPath;
-    this.sandboxScratchDir = sandboxPath.getRelative("scratch");
+    this.sandboxScratchDir = outerDir.getRelative("scratch");
 
     int id = lastId.getAndIncrement();
     this.execRoot = process.getMountPoint().getRelative("" + id);
@@ -162,19 +155,6 @@ class SandboxfsSandboxedSpawn implements SandboxedSpawn {
       // annoying, is not a big deal.  The sandboxfs instance will be unmounted anyway after
       // the build, which will cause these to go away anyway.
       log.warning("Cannot unmap " + innerExecRoot + ": " + e);
-    }
-
-    try {
-      FileSystemUtils.deleteTree(sandboxPath);
-    } catch (IOException e) {
-      // This usually means that the Spawn itself exited but still has children running that
-      // we couldn't wait for, which now block deletion of the sandbox directory.  (Those processes
-      // may be creating new files in the directories we are trying to delete, preventing the
-      // deletion.)  On Linux this should never happen: we use PID namespaces when available and the
-      // subreaper feature when not to make sure all children have been reliably killed before
-      // returning, but on other OSes this might not always work.  The SandboxModule will try to
-      // delete them again when the build is all done, at which point it hopefully works... so let's
-      // just go on here.
     }
   }
 
