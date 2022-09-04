@@ -8,6 +8,7 @@ import io.quarkus.arc.CreationalContextImpl;
 import io.quarkus.arc.CurrentInjectionPointProvider;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableObserverMethod;
+import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
 import io.quarkus.arc.processor.BuiltinBean.GeneratorContext;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
@@ -35,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.event.Reception;
 import javax.enterprise.inject.spi.EventContext;
@@ -146,7 +146,7 @@ public class ObserverGenerator extends AbstractGenerator {
                 // We do not need a provider for event metadata
                 continue;
             }
-            injectionPointToProvider.put(injectionPoint, "observerProviderSupplier" + providerIdx++);
+            injectionPointToProvider.put(injectionPoint, "observerProvider" + providerIdx++);
         }
     }
 
@@ -186,12 +186,11 @@ public class ObserverGenerator extends AbstractGenerator {
 
         AssignableResultHandle declaringProviderInstanceHandle = notify.createVariable(Object.class);
         AssignableResultHandle ctxHandle = notify.createVariable(CreationalContextImpl.class);
-        ResultHandle declaringProviderSupplierHandle = notify.readInstanceField(
-                FieldDescriptor.of(observerCreator.getClassName(), "declaringProviderSupplier",
-                        Supplier.class.getName()),
-                notify.getThis());
-        ResultHandle declaringProviderHandle = notify.invokeInterfaceMethod(
-                MethodDescriptors.SUPPLIER_GET, declaringProviderSupplierHandle);
+        ResultHandle declaringProviderHandle = notify
+                .readInstanceField(
+                        FieldDescriptor.of(observerCreator.getClassName(), "declaringProvider",
+                                InjectableBean.class.getName()),
+                        notify.getThis());
         // It is safe to skip CreationalContext.release() for normal scoped declaring provider and no injection points
         boolean skipRelease = observer.getDeclaringBean().getScope().isNormal()
                 && observer.getInjection().injectionPoints.isEmpty();
@@ -244,12 +243,9 @@ public class ObserverGenerator extends AbstractGenerator {
                         notify.getMethodParam(0));
             } else {
                 ResultHandle childCtxHandle = notify.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD, ctxHandle);
-                ResultHandle providerSupplierHandle = notify
-                        .readInstanceField(FieldDescriptor.of(observerCreator.getClassName(),
-                                injectionPointToProviderField.get(injectionPointsIterator.next()),
-                                Supplier.class.getName()), notify.getThis());
-                ResultHandle providerHandle = notify.invokeInterfaceMethod(MethodDescriptors.SUPPLIER_GET,
-                        providerSupplierHandle);
+                ResultHandle providerHandle = notify.readInstanceField(FieldDescriptor.of(observerCreator.getClassName(),
+                        injectionPointToProviderField.get(injectionPointsIterator.next()),
+                        InjectableReferenceProvider.class.getName()), notify.getThis());
                 ResultHandle referenceHandle = notify.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
                         providerHandle, childCtxHandle);
                 referenceHandles[i] = referenceHandle;
@@ -294,10 +290,10 @@ public class ObserverGenerator extends AbstractGenerator {
     protected void createProviderFields(ClassCreator observerCreator, ObserverInfo observer,
             Map<InjectionPointInfo, String> injectionPointToProvider) {
         // Declaring bean provider
-        observerCreator.getFieldCreator("declaringProviderSupplier", Supplier.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+        observerCreator.getFieldCreator("declaringProvider", InjectableBean.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         // Injection points
         for (String provider : injectionPointToProvider.values()) {
-            observerCreator.getFieldCreator(provider, Supplier.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+            observerCreator.getFieldCreator(provider, InjectableReferenceProvider.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
     }
 
@@ -307,10 +303,10 @@ public class ObserverGenerator extends AbstractGenerator {
 
         // First collect all param types
         List<String> parameterTypes = new ArrayList<>();
-        parameterTypes.add(Supplier.class.getName());
+        parameterTypes.add(InjectableBean.class.getName());
         for (InjectionPointInfo injectionPoint : observer.getInjection().injectionPoints) {
             if (BuiltinBean.resolve(injectionPoint) == null) {
-                parameterTypes.add(Supplier.class.getName());
+                parameterTypes.add(InjectableReferenceProvider.class.getName());
             }
         }
 
@@ -320,7 +316,7 @@ public class ObserverGenerator extends AbstractGenerator {
 
         int paramIdx = 0;
         constructor.writeInstanceField(
-                FieldDescriptor.of(observerCreator.getClassName(), "declaringProviderSupplier", Supplier.class.getName()),
+                FieldDescriptor.of(observerCreator.getClassName(), "declaringProvider", InjectableBean.class.getName()),
                 constructor.getThis(), constructor.getMethodParam(0));
         paramIdx++;
         for (InjectionPointInfo injectionPoint : observer.getInjection().injectionPoints) {
@@ -347,28 +343,23 @@ public class ObserverGenerator extends AbstractGenerator {
                             observer.getDeclaringBean().getDeployment(), constructor,
                             injectionPoint, annotationLiterals);
                     ResultHandle javaMemberHandle = BeanGenerator.getJavaMemberHandle(constructor, injectionPoint);
-
-                    // Wrap the constructor arg in a Supplier so we can pass it to CurrentInjectionPointProvider c'tor.
-                    ResultHandle delegateSupplier = constructor.newInstance(
-                            MethodDescriptors.FIXED_VALUE_SUPPLIER_CONSTRUCTOR, constructor.getMethodParam(paramIdx++));
-
                     ResultHandle wrapHandle = constructor.newInstance(
                             MethodDescriptor.ofConstructor(CurrentInjectionPointProvider.class, InjectableBean.class,
-                                    Supplier.class, java.lang.reflect.Type.class,
+                                    InjectableReferenceProvider.class, java.lang.reflect.Type.class,
                                     Set.class, Set.class, Member.class, int.class),
-                            constructor.getThis(), delegateSupplier,
+                            constructor.getThis(), constructor.getMethodParam(paramIdx++),
                             Types.getTypeHandle(constructor, injectionPoint.getRequiredType()),
                             requiredQualifiersHandle, annotationsHandle, javaMemberHandle,
                             constructor.load(injectionPoint.getPosition()));
 
                     constructor.writeInstanceField(FieldDescriptor.of(observerCreator.getClassName(),
                             injectionPointToProviderField.get(injectionPoint),
-                            Supplier.class.getName()), constructor.getThis(), wrapHandle);
+                            InjectableReferenceProvider.class.getName()), constructor.getThis(), wrapHandle);
                 } else {
                     constructor.writeInstanceField(
                             FieldDescriptor.of(observerCreator.getClassName(),
                                     injectionPointToProviderField.get(injectionPoint),
-                                    Supplier.class.getName()),
+                                    InjectableReferenceProvider.class.getName()),
                             constructor.getThis(), constructor.getMethodParam(paramIdx++));
                 }
             }

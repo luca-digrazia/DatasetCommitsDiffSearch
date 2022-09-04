@@ -20,17 +20,15 @@ public class InterceptedBeanInjectionTest {
     public void testInterception() {
         InterceptedBean bean = Arc.container().instance(InterceptedBean.class).get();
         assertEquals(InterceptedBean.class.getName() + InterceptedBean.class.getName(), bean.ping());
-        assertEquals(InterceptedBean.class.getName(), SimpleInterceptor.aroundConstructResult);
-        assertEquals(InterceptedBean.class.getName(), SimpleInterceptor.postConstructResult);
     }
 
     @ApplicationScoped
-    @Simple
     static class InterceptedBean {
 
         @Inject
         Bean<?> bean;
 
+        @Simple
         public String ping() {
             return bean.getBeanClass().getName();
         }

@@ -1,6 +1,5 @@
 package io.quarkus.arc.processor;
 
-import io.quarkus.arc.AlternativePriority;
 import io.quarkus.arc.ComputingCache;
 import io.quarkus.arc.DefaultBean;
 import java.util.Optional;
@@ -11,7 +10,6 @@ import javax.enterprise.context.control.ActivateRequestContext;
 import javax.enterprise.event.Event;
 import javax.enterprise.event.Observes;
 import javax.enterprise.event.ObservesAsync;
-import javax.enterprise.event.TransactionPhase;
 import javax.enterprise.inject.Alternative;
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
@@ -69,7 +67,6 @@ public final class DotNames {
     public static final DotName EVENT = create(Event.class);
     public static final DotName EVENT_METADATA = create(EventMetadata.class);
     public static final DotName ALTERNATIVE = create(Alternative.class);
-    public static final DotName ALTERNATIVE_PRIORITY = create(AlternativePriority.class);
     public static final DotName DEFAULT_BEAN = create(DefaultBean.class);
     public static final DotName STEREOTYPE = create(Stereotype.class);
     public static final DotName TYPED = create(Typed.class);
@@ -80,7 +77,6 @@ public final class DotNames {
     public static final DotName OPTIONAL = create(Optional.class);
     public static final DotName NAMED = create(Named.class);
     public static final DotName ACTIVATE_REQUEST_CONTEXT = create(ActivateRequestContext.class);
-    public static final DotName TRANSACTION_PHASE = create(TransactionPhase.class);
 
     public static final DotName BOOLEAN = create(Boolean.class);
     public static final DotName BYTE = create(Byte.class);
