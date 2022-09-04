@@ -13,14 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime.commands;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.OutputDirectoryLinksUtils;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
-import com.google.devtools.build.lib.runtime.BlazeCommandResult;
+import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownBlazeServerException;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -113,21 +112,11 @@ public final class CleanCommand implements BlazeCommand {
     }
   }
 
-  private final OS os;
-
-  public CleanCommand() {
-    this(OS.getCurrent());
-  }
-
-  @VisibleForTesting
-  public CleanCommand(OS os) {
-    this.os = os;
-  }
-
   private static final Logger logger = Logger.getLogger(CleanCommand.class.getName());
 
   @Override
-  public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
+  public ExitCode exec(CommandEnvironment env, OptionsProvider options)
+      throws ShutdownBlazeServerException {
     Options cleanOptions = options.getOptions(Options.class);
     boolean async = cleanOptions.async;
     env.getEventBus().post(new NoBuildEvent());
@@ -137,8 +126,7 @@ public final class CleanCommand implements BlazeCommand {
     // MacOS and FreeBSD support setsid(2) but don't have /usr/bin/setsid, so if we wanted to
     // support --expunge_async on these platforms, we'd have to write a wrapper that calls setsid(2)
     // and exec(2).
-    boolean asyncSupport = os == OS.LINUX;
-    if (async && !asyncSupport) {
+    if (async && OS.getCurrent() != OS.LINUX) {
       String fallbackName = cleanOptions.expunge ? "--expunge" : "synchronous clean";
       env.getReporter()
           .handle(
@@ -150,7 +138,7 @@ public final class CleanCommand implements BlazeCommand {
     }
 
     String cleanBanner =
-        (async || !asyncSupport)
+        async
             ? "Starting clean."
             : "Starting clean (this may take a while). "
                 + "Consider using --async if the clean takes more than several minutes.";
@@ -163,16 +151,17 @@ public final class CleanCommand implements BlazeCommand {
           options
               .getOptions(BuildRequestOptions.class)
               .getSymlinkPrefix(env.getRuntime().getProductName());
-      return actuallyClean(env, env.getOutputBase(), cleanOptions.expunge, async, symlinkPrefix);
+      actuallyClean(env, env.getOutputBase(), cleanOptions.expunge, async, symlinkPrefix);
+      return ExitCode.SUCCESS;
     } catch (IOException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
-      return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
+      return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     } catch (CommandException | ExecException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
-      return BlazeCommandResult.exitCode(ExitCode.RUN_FAILURE);
+      return ExitCode.RUN_FAILURE;
     } catch (InterruptedException e) {
       env.getReporter().handle(Event.error("clean interrupted"));
-      return BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
+      return ExitCode.INTERRUPTED;
     }
   }
 
@@ -205,9 +194,9 @@ public final class CleanCommand implements BlazeCommand {
         .execute();
   }
 
-  private BlazeCommandResult actuallyClean(
+  private void actuallyClean(
       CommandEnvironment env, Path outputBase, boolean expunge, boolean async, String symlinkPrefix)
-      throws IOException, CommandException, ExecException,
+      throws IOException, ShutdownBlazeServerException, CommandException, ExecException,
           InterruptedException {
     String workspaceDirectory = env.getWorkspace().getBaseName();
     if (env.getOutputService() != null) {
@@ -263,10 +252,9 @@ public final class CleanCommand implements BlazeCommand {
 
     // shutdown on expunge cleans
     if (expunge) {
-      return BlazeCommandResult.shutdown(ExitCode.SUCCESS);
+      throw new ShutdownBlazeServerException(0);
     }
     System.gc();
-    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 
   @Override
