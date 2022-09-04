@@ -26,7 +26,6 @@ import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.Configuration;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.slf4j.Logger;
@@ -35,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -43,11 +43,11 @@ import static com.codahale.metrics.MetricRegistry.name;
  */
 public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
     private final Configuration configuration;
-    private final ServerStatus serverStatus;
 
     public interface Factory {
         public ServerProcessBufferProcessor create(
                 OutputBuffer outputBuffer,
+                AtomicInteger processBufferWatermark,
                 @Assisted("ordinal") final long ordinal,
                 @Assisted("numberOfConsumers") final long numberOfConsumers
         );
@@ -63,13 +63,12 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
     public ServerProcessBufferProcessor(MetricRegistry metricRegistry,
                                   Set<MessageFilter> filterRegistry,
                                   Configuration configuration,
-                                  ServerStatus serverStatus,
+                                  @Assisted AtomicInteger processBufferWatermark,
                                   @Assisted("ordinal") final long ordinal,
                                   @Assisted("numberOfConsumers") final long numberOfConsumers,
                                   @Assisted OutputBuffer outputBuffer) {
-        super(metricRegistry, ordinal, numberOfConsumers);
+        super(metricRegistry, processBufferWatermark, ordinal, numberOfConsumers);
         this.configuration = configuration;
-        this.serverStatus = serverStatus;
 
         // we need to keep this sorted properly, so that the filters run in the correct order
         this.filterRegistry = Ordering.from(new Comparator<MessageFilter>() {
@@ -92,9 +91,8 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
         if (filterRegistry.size() == 0)
             throw new RuntimeException("Empty filter registry!");
 
-        for (final MessageFilter filter : filterRegistry) {
-            final String timerName = name(filter.getClass(), "executionTime");
-            final Timer timer = metricRegistry.timer(timerName);
+        for (MessageFilter filter : filterRegistry) {
+            Timer timer = metricRegistry.timer(name(filter.getClass(), "executionTime"));
             final Timer.Context timerContext = timer.time();
 
             try {
@@ -108,14 +106,13 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
             } catch (Exception e) {
                 LOG.error("Could not apply filter [" + filter.getName() +"] on message <" + msg.getId() +">: ", e);
             } finally {
-                final long elapsedNanos = timerContext.stop();
-                msg.recordTiming(serverStatus, timerName, elapsedNanos);
+                timerContext.stop();
             }
         }
 
         if (configuration.isDisableOutputCache()) {
             LOG.debug("Finished processing message. Writing to output buffer.");
-            outputBuffer.insertBlocking(msg);
+                outputBuffer.insertBlocking(msg);
         } else {
             LOG.debug("Finished processing message. Writing to output cache.");
             outputBuffer.insertCached(msg, null);
