@@ -22,7 +22,6 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.graph.MutableGraph;
 import org.graylog.events.contentpack.entities.AggregationEventProcessorConfigEntity;
 import org.graylog.events.contentpack.entities.EventProcessorConfigEntity;
 import org.graylog.events.processor.EventDefinition;
@@ -31,23 +30,16 @@ import org.graylog.events.processor.EventProcessorSchedulerConfig;
 import org.graylog.scheduler.clock.JobSchedulerClock;
 import org.graylog.events.processor.EventProcessorExecutionJob;
 import org.graylog.scheduler.schedule.IntervalJobSchedule;
-import org.graylog2.contentpacks.EntityDescriptorIds;
-import org.graylog2.contentpacks.model.ModelId;
-import org.graylog2.contentpacks.model.ModelTypes;
-import org.graylog2.contentpacks.model.entities.EntityDescriptor;
 import org.graylog2.contentpacks.model.entities.references.ValueReference;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.rest.ValidationResult;
-import org.graylog2.shared.security.RestPermissions;
 import org.joda.time.DateTime;
 
 import javax.annotation.Nullable;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 @AutoValue
 @JsonTypeName(AggregationEventProcessorConfig.TYPE_NAME)
@@ -83,18 +75,6 @@ public abstract class AggregationEventProcessorConfig implements EventProcessorC
 
     @JsonProperty(FIELD_EXECUTE_EVERY_MS)
     public abstract long executeEveryMs();
-
-    @Override
-    public Set<String> requiredPermissions() {
-        // When there are no streams the event processor will search in all streams so we need to require the
-        // generic stream permission.
-        if (streams().isEmpty()) {
-            return Collections.singleton(RestPermissions.STREAMS_READ);
-        }
-        return streams().stream()
-            .map(streamId -> String.join(":", RestPermissions.STREAMS_READ, streamId))
-            .collect(Collectors.toSet());
-    }
 
     public static Builder builder() {
         return Builder.create();
@@ -188,32 +168,16 @@ public abstract class AggregationEventProcessorConfig implements EventProcessorC
     }
 
     @Override
-    public EventProcessorConfigEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
-        final ImmutableSet<String> streamRefs = ImmutableSet.copyOf(streams().stream()
-            .map(streamId -> entityDescriptorIds.get(streamId, ModelTypes.STREAM_V1))
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .collect(Collectors.toSet()));
+    public EventProcessorConfigEntity toContentPackEntity() {
         return AggregationEventProcessorConfigEntity.builder()
             .type(type())
             .query(ValueReference.of(query()))
-            .streams(streamRefs)
+            .streams(streams())
             .groupBy(groupBy())
             .series(series())
             .conditions(conditions().orElse(null))
             .executeEveryMs(ValueReference.of(executeEveryMs()))
             .searchWithinMs(ValueReference.of(searchWithinMs()))
             .build();
-    }
-
-    @Override
-    public void resolveNativeEntity(EntityDescriptor entityDescriptor, MutableGraph<EntityDescriptor> mutableGraph) {
-        streams().forEach(streamId -> {
-                final EntityDescriptor depStream = EntityDescriptor.builder()
-                    .id(ModelId.of(streamId))
-                    .type(ModelTypes.STREAM_V1)
-                    .build();
-                mutableGraph.putEdge(entityDescriptor, depStream);
-            });
     }
 }

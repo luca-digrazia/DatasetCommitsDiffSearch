@@ -23,12 +23,9 @@ import org.graylog.events.contentpack.entities.EventProcessorConfigEntity;
 import org.graylog.scheduler.JobDefinitionConfig;
 import org.graylog.scheduler.clock.JobSchedulerClock;
 import org.graylog2.contentpacks.ContentPackable;
-import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.plugin.rest.ValidationResult;
 
-import java.util.Collections;
 import java.util.Optional;
-import java.util.Set;
 
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
@@ -55,23 +52,8 @@ public interface EventProcessorConfig extends ContentPackable<EventProcessorConf
         return Optional.empty();
     }
 
-    /**
-     * Validates the event processor configuration.
-     *
-     * @return the validation result
-     */
     @JsonIgnore
     ValidationResult validate();
-
-    /**
-     * Returns the permissions that are required to create the event processor configuration. (e.g. stream permissions)
-     *
-     * @return the required permissions
-     */
-    @JsonIgnore
-    default Set<String> requiredPermissions() {
-        return Collections.emptySet();
-    }
 
     interface Builder<SELF> {
         @JsonProperty(TYPE_FIELD)
@@ -90,8 +72,8 @@ public interface EventProcessorConfig extends ContentPackable<EventProcessorConf
         }
 
         @Override
-        public EventProcessorConfigEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
-            return null;
+        public EventProcessorConfigEntity toContentPackEntity() {
+            throw new UnsupportedOperationException();
         }
     }
 }

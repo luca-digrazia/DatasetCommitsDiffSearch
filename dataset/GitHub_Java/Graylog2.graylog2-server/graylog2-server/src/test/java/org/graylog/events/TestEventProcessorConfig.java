@@ -27,7 +27,6 @@ import org.graylog.events.processor.EventProcessorSchedulerConfig;
 import org.graylog.scheduler.clock.JobSchedulerClock;
 import org.graylog.events.processor.EventProcessorExecutionJob;
 import org.graylog.scheduler.schedule.IntervalJobSchedule;
-import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.rest.ValidationResult;
 import org.joda.time.DateTime;
@@ -102,7 +101,7 @@ public abstract class TestEventProcessorConfig implements EventProcessorConfig {
     }
 
     @Override
-    public EventProcessorConfigEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
+    public EventProcessorConfigEntity toContentPackEntity() {
         return null;
     }
 
