@@ -113,7 +113,7 @@ abstract class FileTransport implements BuildEventTransport {
         exitFunc.accept(
             new AbruptExitException(
                 format("Couldn't open BEP file '%s' for writing.", path),
-                ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
+                ExitCode.PUBLISH_ERROR,
                 e));
       }
       this.writerThread = new Thread(this, "bep-local-writer");
@@ -165,9 +165,7 @@ abstract class FileTransport implements BuildEventTransport {
     private void exitFailure(Throwable e) {
       exitFunc.accept(
           new AbruptExitException(
-              "Failed to write BEP events to file.",
-              ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
-              e));
+              "Failed to write BEP events to file.", ExitCode.PUBLISH_ERROR, e));
       pendingWrites.clear();
       logger.log(Level.SEVERE, "Failed to write BEP events to file.", e);
     }
