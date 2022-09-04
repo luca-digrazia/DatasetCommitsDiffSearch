@@ -26,11 +26,7 @@ import com.google.devtools.build.lib.bugreport.CrashContext;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetStore.MissingNestedSetException;
 import com.google.devtools.build.lib.concurrent.MoreFutures;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Interrupted;
-import com.google.devtools.build.lib.server.FailureDetails.Interrupted.Code;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.protobuf.ByteString;
 import java.time.Duration;
@@ -290,24 +286,20 @@ public final class NestedSet<E> {
     PROPAGATE
   }
 
-  /**
-   * Implementation of {@link #getChildren} that crashes with the appropriate failure detail if it
-   * encounters {@link InterruptedException}.
-   */
+  /** Implementation of {@link #getChildren} that will catch an InterruptedException and crash. */
   private Object getChildrenUninterruptibly() {
-    if (!(children instanceof ListenableFuture)) {
+    if (children instanceof ListenableFuture) {
+      try {
+        return MoreFutures.waitForFutureAndGet((ListenableFuture<Object[]>) children);
+      } catch (InterruptedException e) {
+        System.err.println(
+            "An interrupted exception occurred during nested set deserialization, "
+                + "exiting abruptly.");
+        BugReport.handleCrash(Crash.from(e, ExitCode.INTERRUPTED), CrashContext.halt());
+        throw new IllegalStateException("Should have halted", e);
+      }
+    } else {
       return children;
-    }
-    try {
-      return MoreFutures.waitForFutureAndGet((ListenableFuture<Object[]>) children);
-    } catch (InterruptedException e) {
-      FailureDetail failureDetail =
-          FailureDetail.newBuilder()
-              .setMessage("Interrupted during NestedSet deserialization")
-              .setInterrupted(Interrupted.newBuilder().setCode(Code.INTERRUPTED))
-              .build();
-      BugReport.handleCrash(Crash.from(e, DetailedExitCode.of(failureDetail)), CrashContext.halt());
-      throw new IllegalStateException("Should have halted", e);
     }
   }
 
@@ -377,7 +369,7 @@ public final class NestedSet<E> {
    * <p>This function may return an overapproximation of the true depth if the NestedSet was derived
    * from the result of calling {@link #getNonLeaves} or {@link #splitIfExceedsMaximumSize}.
    */
-  public int getApproxDepth() {
+  int getApproxDepth() {
     return this.depthAndOrder >>> 2;
   }
 
@@ -529,10 +521,6 @@ public final class NestedSet<E> {
     int size = 0;
     for (int i = memo.length - 1; ; i--) {
       size = (size << 7) | (memo[i] & 0x7f);
-      if (size < 0) {
-        throw new IllegalStateException(
-            "int overflow calculating size (" + size + "), memo: " + Arrays.toString(memo));
-      }
       if ((memo[i] & 0x80) != 0) {
         return size;
       }
