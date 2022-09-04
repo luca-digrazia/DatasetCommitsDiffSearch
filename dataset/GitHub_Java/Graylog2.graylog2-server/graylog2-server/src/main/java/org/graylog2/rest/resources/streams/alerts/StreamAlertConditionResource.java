@@ -63,7 +63,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RequiresAuthentication
-@Api(value = "Stream/AlertConditions", description = "Manage stream legacy alert conditions")
+@Api(value = "Stream/AlertConditions", description = "Manage stream alert conditions")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 @Path("/streams/{streamId}/alerts/conditions")
@@ -147,7 +147,7 @@ public class StreamAlertConditionResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public AlertConditionListSummary list(@ApiParam(name = "streamId", value = "The id of the stream whose alert conditions we want.", required = true)
+    public AlertConditionListSummary list(@ApiParam(name = "streamId", value = "The stream id this new alert condition belongs to.", required = true)
                                           @PathParam("streamId") String streamid) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 

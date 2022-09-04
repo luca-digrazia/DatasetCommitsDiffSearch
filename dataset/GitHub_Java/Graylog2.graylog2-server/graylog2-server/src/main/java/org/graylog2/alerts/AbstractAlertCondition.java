@@ -1,62 +1,76 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.alerts;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import org.graylog2.indexer.Indexer;
+import com.fasterxml.jackson.annotation.JsonValue;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
+import org.graylog2.plugin.configuration.fields.BooleanField;
+import org.graylog2.plugin.configuration.fields.ConfigurationField;
+import org.graylog2.plugin.configuration.fields.NumberField;
+import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public abstract class AbstractAlertCondition implements EmbeddedPersistable, AlertCondition {
+import static com.google.common.base.Preconditions.checkArgument;
 
-    private static final Logger LOG = LoggerFactory.getLogger(AbstractAlertCondition.class);
+public abstract class AbstractAlertCondition implements EmbeddedPersistable, AlertCondition {
+    protected static final String CK_QUERY = "query";
+    protected static final String CK_QUERY_DEFAULT_VALUE = "*";
 
     public enum Type {
         MESSAGE_COUNT,
         FIELD_VALUE,
-        DUMMY
+        FIELD_CONTENT_VALUE,
+        DUMMY;
+
+        @JsonValue
+        @Override
+        public String toString() {
+            return super.toString().toLowerCase(Locale.ENGLISH);
+        }
     }
 
     protected final String id;
     protected final Stream stream;
-    protected final Type type;
+    protected final String type;
     protected final DateTime createdAt;
     protected final String creatorUserId;
     protected final int grace;
+    protected final int backlog;
+    protected final boolean repeatNotifications;
+    protected final String title;
 
-    private final Map<String, Object> parameters;
+    private Map<String, Object> parameters;
 
-    protected AbstractAlertCondition(Stream stream, String id, Type type, DateTime createdAt, String creatorUserId, Map<String, Object> parameters) {
-        if(id == null) {
+    protected AbstractAlertCondition(Stream stream, String id, String type, DateTime createdAt, String creatorUserId, Map<String, Object> parameters, String title) {
+        this.title = title;
+        if (id == null) {
             this.id = UUID.randomUUID().toString();
         } else {
             this.id = id;
@@ -66,30 +80,26 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
         this.type = type;
         this.createdAt = createdAt;
         this.creatorUserId = creatorUserId;
-        this.parameters = parameters;
+        this.parameters = ImmutableMap.copyOf(parameters);
 
-        if (this.parameters.containsKey("grace")) {
-            this.grace = (Integer) this.parameters.get("grace");
-        } else {
-            this.grace = 0;
-        }
-
+        this.grace = Tools.getNumber(this.parameters.get("grace"), 0).intValue();
+        this.backlog = Tools.getNumber(this.parameters.get("backlog"), 0).intValue();
+        this.repeatNotifications = (boolean) this.parameters.getOrDefault("repeat_notifications", false);
     }
-
-    protected abstract CheckResult runCheck(Indexer indexer);
 
     @Override
     public String getId() {
         return id;
     }
 
-    public Type getType() {
+    @Override
+    public String getType() {
         return type;
     }
 
     @Override
-    public String getTypeString() {
-        return type.toString();
+    public String getTitle() {
+        return title;
     }
 
     @Override
@@ -103,8 +113,13 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
     }
 
     @JsonIgnore
+    @Override
     public Stream getStream() {
         return stream;
+    }
+
+    protected void setParameters(Map<String, Object> parameters) {
+        this.parameters = ImmutableMap.copyOf(parameters);
     }
 
     @Override
@@ -114,31 +129,25 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
 
     @Override
     public Integer getBacklog() {
-        Object rawParameter = getParameters().get("backlog");
-        if (rawParameter != null && rawParameter instanceof Number)
-            return (Integer)rawParameter;
-        else
-            return 0;
+        return backlog;
     }
 
     @Override
     public String toString() {
-        return new StringBuilder().append(id).append(":").append(type)
-                .append("={").append(getDescription()).append("}")
-                .append(", stream:={").append(stream).append("}")
-                .toString();
+        return id + ":" + type + "={" + getDescription() + "}" + ", stream:={" + stream + "}";
     }
 
     @Override
     @JsonIgnore
     public Map<String, Object> getPersistedFields() {
-        return new HashMap<String, Object>() {{
-            put("id", id);
-            put("type", type.toString().toLowerCase());
-            put("creator_user_id", creatorUserId);
-            put("created_at", Tools.getISO8601String(createdAt));
-            put("parameters", parameters);
-        }};
+        return ImmutableMap.<String, Object>builder()
+                .put("id", id)
+                .put("type", type)
+                .put("creator_user_id", creatorUserId)
+                .put("created_at", Tools.getISO8601String(createdAt))
+                .put("parameters", parameters)
+                .put("title", title)
+                .build();
     }
 
     @Override
@@ -146,10 +155,35 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
         return grace;
     }
 
-    public static class NoSuchAlertConditionTypeException extends Throwable {
-        public NoSuchAlertConditionTypeException(String msg) {
-            super(msg);
+    @Override
+    public boolean shouldRepeatNotifications() {
+        return repeatNotifications;
+    }
+
+    /**
+     * Combines the given stream ID and query string into a single filter string.
+     *
+     * @param streamId the stream ID
+     * @param query    the query string (might be null or empty)
+     * @return the combined filter string
+     */
+    protected String buildQueryFilter(String streamId, String query) {
+        checkArgument(streamId != null, "streamId parameter cannot be null");
+
+        final String trimmedStreamId = streamId.trim();
+
+        checkArgument(!trimmedStreamId.isEmpty(), "streamId parameter cannot be empty");
+
+        final StringBuilder builder = new StringBuilder().append("streams:").append(trimmedStreamId);
+
+        if (query != null) {
+            final String trimmedQuery = query.trim();
+            if (!trimmedQuery.isEmpty() && !"*".equals(trimmedQuery)) {
+                builder.append(" AND (").append(trimmedQuery).append(")");
+            }
         }
+
+        return builder.toString();
     }
 
     public static class CheckResult implements AlertCondition.CheckResult {
@@ -158,35 +192,61 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
         private final String resultDescription;
         private final AlertCondition triggeredCondition;
         private final DateTime triggeredAt;
+        private final ArrayList<MessageSummary> summaries = Lists.newArrayList();
 
-        public CheckResult(boolean isTriggered, AlertCondition triggeredCondition, String resultDescription, DateTime triggeredAt) {
+        public CheckResult(boolean isTriggered,
+                           AlertCondition triggeredCondition,
+                           String resultDescription,
+                           DateTime triggeredAt,
+                           List<MessageSummary> summaries) {
             this.isTriggered = isTriggered;
             this.resultDescription = resultDescription;
             this.triggeredCondition = triggeredCondition;
             this.triggeredAt = triggeredAt;
+            if (summaries != null) {
+                this.summaries.addAll(summaries);
+            }
         }
 
-        public CheckResult(boolean isTriggered) {
-            this(false, null, null, null);
-            if (isTriggered)
-                throw new RuntimeException("Boolean only constructor should only be called if CheckResult is not triggered!");
-        }
-
+        @Override
         public boolean isTriggered() {
             return isTriggered;
         }
 
+        @Override
         public String getResultDescription() {
             return resultDescription;
         }
 
+        @Override
         public AlertCondition getTriggeredCondition() {
             return triggeredCondition;
         }
 
+        @Override
         public DateTime getTriggeredAt() {
             return triggeredAt;
         }
+
+        @Override
+        public List<MessageSummary> getMatchingMessages() {
+            return summaries;
+        }
     }
 
+    public static class NegativeCheckResult extends CheckResult {
+        public NegativeCheckResult() {
+            super(false, null, null, null, null);
+        }
+    }
+
+    public static List<ConfigurationField> getDefaultConfigurationFields() {
+        return Lists.newArrayList(
+            // The query field needs to be optional for backwards compatibility
+            new TextField(CK_QUERY, "Search Query", CK_QUERY_DEFAULT_VALUE, "Query string that should be used to filter messages in the stream", ConfigurationField.Optional.OPTIONAL),
+            new NumberField("grace", "Grace Period", 0, "Number of minutes to wait after an alert is resolved, to trigger another alert", ConfigurationField.Optional.NOT_OPTIONAL),
+            new NumberField("backlog", "Message Backlog", 0, "The number of messages to be included in alert notifications", ConfigurationField.Optional.NOT_OPTIONAL),
+            new BooleanField("repeat_notifications", "Repeat notifications", false, "Check this box to send notifications every time the alert condition is evaluated and satisfied regardless of its state.")
+        );
+    }
 }
