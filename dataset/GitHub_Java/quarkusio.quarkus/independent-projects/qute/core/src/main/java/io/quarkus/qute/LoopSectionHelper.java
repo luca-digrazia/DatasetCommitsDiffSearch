@@ -5,6 +5,8 @@ import static io.quarkus.qute.Parameter.EMPTY;
 import io.quarkus.qute.Results.Result;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -92,15 +94,14 @@ public class LoopSectionHelper implements SectionHelper {
     CompletionStage<ResultNode> nextElement(Object element, int index, boolean hasNext, SectionResolutionContext context) {
         AtomicReference<ResolutionContext> resolutionContextHolder = new AtomicReference<>();
         ResolutionContext child = context.resolutionContext().createChild(new IterationElement(alias, element, index, hasNext),
-                null, null);
+                null);
         resolutionContextHolder.set(child);
         return context.execute(child);
     }
 
     public static class Factory implements SectionHelperFactory<LoopSectionHelper> {
 
-        public static final String HINT_ELEMENT = "<loop-element>";
-        public static final String HINT_PREFIX = "<loop#";
+        public static final String HINT = "<for-element>";
         private static final String ALIAS = "alias";
         private static final String IN = "in";
         private static final String ITERABLE = "iterable";
@@ -125,35 +126,27 @@ public class LoopSectionHelper implements SectionHelper {
         }
 
         @Override
-        public Scope initializeBlock(Scope previousScope, BlockInfo block) {
+        public Map<String, String> initializeBlock(Map<String, String> outerNameTypeInfos, BlockInfo block) {
             if (block.getLabel().equals(MAIN_BLOCK_NAME)) {
                 String iterable = block.getParameters().get(ITERABLE);
                 if (iterable == null) {
                     iterable = ValueResolvers.THIS;
                 }
-                // foo.items
-                // > |org.acme.Foo|.items<loop-element>
-                previousScope.setLastPartHint(HINT_ELEMENT);
                 Expression iterableExpr = block.addExpression(ITERABLE, iterable);
-                previousScope.setLastPartHint(null);
-
                 String alias = block.getParameters().get(ALIAS);
-
-                if (iterableExpr.hasTypeInfo()) {
-                    // it.name
-                    // > it<loop#123>.name
+                if (iterableExpr.getParts().get(0).getTypeInfo() != null) {
                     alias = alias.equals(Parameter.EMPTY) ? DEFAULT_ALIAS : alias;
-                    Scope newScope = new Scope(previousScope);
-                    newScope.putBinding(alias, alias + HINT_PREFIX + iterableExpr.getGeneratedId() + ">");
-                    return newScope;
+                    Map<String, String> typeInfos = new HashMap<String, String>(outerNameTypeInfos);
+                    typeInfos.put(alias, iterableExpr.collectTypeInfo() + HINT);
+                    return typeInfos;
                 } else {
+                    Map<String, String> typeInfos = new HashMap<String, String>(outerNameTypeInfos);
                     // Make sure we do not try to validate against the parent context
-                    Scope newScope = new Scope(previousScope);
-                    newScope.putBinding(alias, null);
-                    return newScope;
+                    typeInfos.put(alias, null);
+                    return typeInfos;
                 }
             } else {
-                return previousScope;
+                return Collections.emptyMap();
             }
         }
     }

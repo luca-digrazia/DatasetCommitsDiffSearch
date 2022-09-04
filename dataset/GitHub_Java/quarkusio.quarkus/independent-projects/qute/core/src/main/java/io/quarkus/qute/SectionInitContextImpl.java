@@ -1,8 +1,10 @@
 package io.quarkus.qute;
 
 import io.quarkus.qute.SectionHelperFactory.SectionInitContext;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * 
@@ -11,10 +13,12 @@ final class SectionInitContextImpl implements SectionInitContext {
 
     private final EngineImpl engine;
     private final List<SectionBlock> blocks;
+    private final Function<String, TemplateException> errorFun;
 
-    public SectionInitContextImpl(EngineImpl engine, List<SectionBlock> blocks) {
+    public SectionInitContextImpl(EngineImpl engine, List<SectionBlock> blocks, Function<String, TemplateException> errorFun) {
         this.engine = engine;
         this.blocks = blocks;
+        this.errorFun = errorFun;
     }
 
     /**
@@ -22,7 +26,7 @@ final class SectionInitContextImpl implements SectionInitContext {
      * @return the params of the main block
      */
     public Map<String, String> getParameters() {
-        return blocks.get(0).parameters;
+        return blocks.isEmpty() ? Collections.emptyMap() : blocks.get(0).parameters;
     }
 
     public boolean hasParameter(String name) {
@@ -35,12 +39,12 @@ final class SectionInitContextImpl implements SectionInitContext {
 
     @Override
     public Expression getExpression(String parameterName) {
-        return blocks.get(0).expressions.get(parameterName);
+        return blocks.isEmpty() ? null : blocks.get(0).expressions.get(parameterName);
     }
 
     @Override
-    public Expression parseValue(String value) {
-        return Expression.from(value);
+    public ExpressionImpl parseValue(String value) {
+        return ExpressionImpl.from(value);
     }
 
     public List<SectionBlock> getBlocks() {
@@ -50,6 +54,11 @@ final class SectionInitContextImpl implements SectionInitContext {
     @Override
     public EngineImpl getEngine() {
         return engine;
+    }
+
+    @Override
+    public TemplateException createParserError(String message) {
+        return errorFun.apply(message);
     }
 
 }
