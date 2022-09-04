@@ -1,28 +1,8 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.graylog2.periodical;
 
-import com.google.inject.Inject;
+import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.notifications.Notification;
-import org.graylog2.notifications.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,22 +11,16 @@ import org.slf4j.LoggerFactory;
  */
 public class ClusterHealthCheckThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterHealthCheckThread.class);
-    private NotificationService notificationService;
-
-    @Inject
-    public ClusterHealthCheckThread(NotificationService notificationService) {
-        this.notificationService = notificationService;
-    }
 
     @Override
     public void run() {
         try {
             if (core.inputs().runningCount() == 0) {
                 LOG.debug("No input running in cluster!");
-                notificationService.publishIfFirst(getNotification());
+                getNotification().publishIfFirst();
             } else {
                 LOG.debug("Running inputs found, disabling notification");
-                notificationService.fixed(getNotification());
+                getNotification().fixed();
             }
         } catch (NodeNotFoundException e) {
             LOG.error("Unable to find own node: ", e.getMessage(), e);
@@ -54,10 +28,10 @@ public class ClusterHealthCheckThread extends Periodical {
     }
 
     protected Notification getNotification() throws NodeNotFoundException {
-        Notification notification = notificationService.buildNow();
+        Notification notification = Notification.buildNow(core);
         notification.addType(Notification.Type.NO_INPUT_RUNNING);
         notification.addSeverity(Notification.Severity.URGENT);
-        notification.addNode(core.getNodeId());
+        notification.addNode(Node.thisNode(core));
 
         return notification;
     }
