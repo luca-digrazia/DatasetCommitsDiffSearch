@@ -211,7 +211,7 @@ public final class RequiredConfigFragmentsTest extends BuildViewTestCase {
   }
 
   @Override
-  protected ConfiguredRuleClassProvider createRuleClassProvider() {
+  protected ConfiguredRuleClassProvider getRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder =
         new ConfiguredRuleClassProvider.Builder()
             .addRuleDefinition(new RuleThatAttachesAspect())
