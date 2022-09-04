@@ -11,7 +11,6 @@ import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.IntStream;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.maven.shared.invoker.MavenInvocationException;
@@ -42,17 +41,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         //make sure webjars work
         getHttpResponse("webjars/bootstrap/3.1.0/css/bootstrap.min.css");
         assertThatOutputWorksCorrectly(running.log());
-    }
-
-    @Test
-    public void testThatResteasyWithoutUndertowCanRun() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic-no-undertow", "projects/project-classic-no-undertow-run");
-        run();
-
-        //make sure that a simple HTTP GET request always works
-        IntStream.range(0, 10).forEach(i -> {
-            assertThat(getStrictHttpResponse("/hello", 200)).isTrue();
-        });
     }
 
     @Test
@@ -331,31 +319,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 .pollDelay(1, TimeUnit.SECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(configurationFile::isFile);
-
-        // Wait until we get "uuid"
-        await()
-                .pollDelay(1, TimeUnit.SECONDS)
-                .atMost(10, TimeUnit.SECONDS)
-                .until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
-    }
-
-    @Test
-    public void testThatExternalConfigOverridesConfigInJar() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic", "projects/project-classic-external-config");
-        File configurationFile = new File(testDir, "target/config/application.properties");
-        assertThat(configurationFile).doesNotExist();
-
-        String uuid = UUID.randomUUID().toString();
-
-        FileUtils.write(configurationFile,
-                "greeting=" + uuid,
-                "UTF-8");
-        await()
-                .pollDelay(1, TimeUnit.SECONDS)
-                .pollInterval(1, TimeUnit.SECONDS)
-                .until(configurationFile::isFile);
-
-        run();
 
         // Wait until we get "uuid"
         await()
