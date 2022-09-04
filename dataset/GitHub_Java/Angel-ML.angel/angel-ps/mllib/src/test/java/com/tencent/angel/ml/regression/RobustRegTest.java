@@ -33,7 +33,7 @@ import org.junit.Test;
 
 public class RobustRegTest {
   private Configuration conf = new Configuration();
-  private static final Log LOG = LogFactory.getLog(RobustRegTest.class);
+  private static final Log LOG = LogFactory.getLog(LinearRegTest.class);
   private static String LOCAL_FS = FileSystem.DEFAULT_FS;
   private static String CLASSBASE = "com.tencent.angel.ml.regression.";
   private static String TMP_PATH = System.getProperty("java.io.tmpdir", "/tmp");
@@ -46,9 +46,9 @@ public class RobustRegTest {
   @Before public void setConf() {
     try {
       // Feature number of train data
-      int featureNum = 8;
+      int featureNum = 9;
       // Total iteration number
-      int epochNum = 10;
+      int epochNum = 5;
       // Validation sample Ratio
       double vRatio = 0.3;
       // Data format, libsvm or dummy
@@ -131,35 +131,6 @@ public class RobustRegTest {
     }
   }
 
-
-  private void incTrain() {
-    try {
-      String inputPath = "../../data/abalone/abalone_8d_train.libsvm";
-      String savePath = LOCAL_FS + TMP_PATH + "/model/RobustReg";
-      String newPath = LOCAL_FS + TMP_PATH + "/model/NewRobustReg";
-      String logPath = LOCAL_FS + TMP_PATH + "/log//RobustReg/trainLog";
-
-      // Set trainning data path
-      conf.set(AngelConf.ANGEL_TRAIN_DATA_PATH, inputPath);
-      // Set load model path
-      conf.set(AngelConf.ANGEL_LOAD_MODEL_PATH, savePath);
-      // Set save model path
-      conf.set(AngelConf.ANGEL_SAVE_MODEL_PATH, newPath);
-      // Set actionType incremental train
-      conf.set(AngelConf.ANGEL_ACTION_TYPE, MLConf.ANGEL_ML_INC_TRAIN());
-      // Set log path
-      conf.set(AngelConf.ANGEL_LOG_PATH, logPath);
-
-
-      GraphRunner runner = new GraphRunner();
-      runner.train(conf);
-    } catch (Exception e) {
-      LOG.error("run incTrainTest failed", e);
-      throw e;
-    }
-  }
-
-
   private void predictTest() {
     try {
       String inputPath = "../../data/abalone/abalone_8d_train.libsvm";
@@ -190,7 +161,6 @@ public class RobustRegTest {
   @Test public void testLR() throws Exception {
     setConf();
     trainTest();
-    incTrain();
     predictTest();
   }
 
