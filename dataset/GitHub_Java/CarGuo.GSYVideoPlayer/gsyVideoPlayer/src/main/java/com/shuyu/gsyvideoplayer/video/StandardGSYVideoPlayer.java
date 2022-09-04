@@ -25,7 +25,6 @@ import android.widget.Toast;
 
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.R;
-import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.listener.StandardVideoAllCallBack;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
@@ -70,8 +69,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     protected StandardVideoAllCallBack mStandardVideoAllCallBack;//标准播放器的回调
 
     protected DismissControlViewTimerTask mDismissControlViewTimerTask;
-
-    protected LockClickListener mLockClickListener;//点击锁屏的回调
 
     protected Dialog mProgressDialog;
     protected ProgressBar mDialogProgressBar;
@@ -157,9 +154,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
                     if (mOrientationUtils != null)
                         mOrientationUtils.setEnable(false);
                     hideAllWidget();
-                }
-                if (mLockClickListener != null) {
-                    mLockClickListener.onClick(v, mLockCurScreen);
                 }
             }
         });
@@ -750,7 +744,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         if (gsyBaseVideoPlayer != null) {
             StandardGSYVideoPlayer gsyVideoPlayer = (StandardGSYVideoPlayer) gsyBaseVideoPlayer;
             gsyVideoPlayer.setStandardVideoAllCallBack(mStandardVideoAllCallBack);
-            gsyVideoPlayer.setLockClickListener(mLockClickListener);
             gsyVideoPlayer.setNeedLockFull(isNeedLockFull());
             initFullUI(gsyVideoPlayer);
         }
@@ -953,10 +946,5 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         this.mNeedLockFull = needLoadFull;
     }
 
-    /**
-     * 锁屏点击
-     */
-    public void setLockClickListener(LockClickListener lockClickListener) {
-        this.mLockClickListener = lockClickListener;
-    }
+
 }

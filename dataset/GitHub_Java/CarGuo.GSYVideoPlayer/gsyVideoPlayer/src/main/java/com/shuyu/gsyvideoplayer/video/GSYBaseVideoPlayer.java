@@ -128,13 +128,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     private Handler mHandler = new Handler();
 
-    /**
-     * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
-     */
-    public GSYBaseVideoPlayer(Context context, Boolean fullFlag) {
-        super(context);
-        mIfCurrentIsFullscreen = fullFlag;
-    }
 
     public GSYBaseVideoPlayer(Context context) {
         super(context);
@@ -293,26 +286,9 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
         saveLocationStatus(context, statusBar, actionBar);
 
-        boolean hadNewConstructor = true;
-
         try {
-            GSYBaseVideoPlayer.this.getClass().getConstructor(Context.class, Boolean.class);
-        } catch (Exception e) {
-            hadNewConstructor = false;
-        }
-
-        try {
-            //通过被重载的不同构造器来选择
-            Constructor<GSYBaseVideoPlayer> constructor;
-            final GSYBaseVideoPlayer gsyVideoPlayer;
-            if (!hadNewConstructor) {
-                constructor = (Constructor<GSYBaseVideoPlayer>) GSYBaseVideoPlayer.this.getClass().getConstructor(Context.class);
-                gsyVideoPlayer = constructor.newInstance(getContext());
-            } else {
-                constructor = (Constructor<GSYBaseVideoPlayer>) GSYBaseVideoPlayer.this.getClass().getConstructor(Context.class, Boolean.class);
-                gsyVideoPlayer = constructor.newInstance(getContext(), true);
-            }
-
+            Constructor<GSYBaseVideoPlayer> constructor = (Constructor<GSYBaseVideoPlayer>) GSYBaseVideoPlayer.this.getClass().getConstructor(Context.class);
+            final GSYBaseVideoPlayer gsyVideoPlayer = constructor.newInstance(getContext());
             gsyVideoPlayer.setId(FULLSCREEN_ID);
             gsyVideoPlayer.setIfCurrentIsFullscreen(true);
             gsyVideoPlayer.setVideoAllCallBack(mVideoAllCallBack);
@@ -381,14 +357,11 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      */
     public void clearFullscreenLayout() {
         mIfCurrentIsFullscreen = false;
-        int delay = 0;
+        int delay = mOrientationUtils.backToProtVideo();
+        mOrientationUtils.setEnable(false);
         if (mOrientationUtils != null) {
-            delay = mOrientationUtils.backToProtVideo();
-            mOrientationUtils.setEnable(false);
-            if (mOrientationUtils != null) {
-                mOrientationUtils.releaseListener();
-                mOrientationUtils = null;
-            }
+            mOrientationUtils.releaseListener();
+            mOrientationUtils = null;
         }
         mHandler.postDelayed(new Runnable() {
             @Override
@@ -396,7 +369,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
                 backToNormal();
             }
         }, delay);
-
     }
 
     /**
