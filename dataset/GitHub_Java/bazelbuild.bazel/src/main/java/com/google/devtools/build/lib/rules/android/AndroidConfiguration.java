@@ -841,57 +841,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     )
     public boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
 
-    @Option(
-        name = "persistent_android_resource_processor",
-        defaultValue = "null",
-        documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-        effectTags = {
-            OptionEffectTag.HOST_MACHINE_RESOURCE_OPTIMIZATIONS,
-            OptionEffectTag.EXECUTION,
-        },
-        help = "Enable the persistent Android resource processor by using workers.",
-        expansion = {
-            "--internal_persistent_busybox_tools",
-            // This implementation uses unique workers for each tool in the busybox.
-            "--strategy=AaptPackage=worker",
-            "--strategy=AndroidResourceParser=worker",
-            "--strategy=AndroidResourceValidator=worker",
-            "--strategy=AndroidResourceCompiler=worker",
-            "--strategy=RClassGenerator=worker",
-            "--strategy=AndroidResourceLink=worker",
-            "--strategy=AndroidAapt2=worker",
-            "--strategy=AndroidAssetMerger=worker",
-            "--strategy=AndroidResourceMerger=worker",
-            "--strategy=AndroidCompiledResourceMerger=worker",
-            // TODO(jingwen): ManifestMerger prints to stdout when there's a manifest merge
-            // conflict. The worker protocol does not like this because it uses std i/o to
-            // for communication. To get around this, re-configure manifest merger to *not*
-            // use stdout for merge conflict warnings.
-            // "--strategy=ManifestMerger=worker",
-        })
-    public Void persistentResourceProcessor;
-
-    /**
-     * We use this option to decide when to enable workers for busybox tools. This flag is also a
-     * guard against enabling workers using nothing but --persistent_android_resource_processor.
-     *
-     * Consequently, we use this option to decide between param files or regular command
-     * line parameters. If we're not using workers or on Windows, there's no need to always use
-     * param files for I/O performance reasons.
-     */
-    @Option(
-        name = "internal_persistent_busybox_tools",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {
-            OptionEffectTag.HOST_MACHINE_RESOURCE_OPTIMIZATIONS,
-            OptionEffectTag.EXECUTION,
-        },
-        defaultValue = "false",
-        help =
-            "Tracking flag for when busybox workers are enabled."
-    )
-    public boolean persistentBusyboxTools;
-
     @Override
     public FragmentOptions getHost() {
       Options host = (Options) super.getHost();
@@ -916,7 +865,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
       host.allowAndroidLibraryDepsWithoutSrcs = allowAndroidLibraryDepsWithoutSrcs;
       host.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
           oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
-      host.persistentBusyboxTools = persistentBusyboxTools;
       return host;
     }
   }
@@ -975,7 +923,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   private final boolean checkForMigrationTag;
   private final boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
   private final boolean dataBindingV2;
-  private final boolean persistentBusyboxTools;
 
   AndroidConfiguration(Options options) throws InvalidConfigurationException {
     this.sdk = options.sdk;
@@ -1017,7 +964,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
         options.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
     this.dataBindingV2 = options.dataBindingV2;
-    this.persistentBusyboxTools = options.persistentBusyboxTools;
 
     if (incrementalDexingShardsAfterProguard < 0) {
       throw new InvalidConfigurationException(
@@ -1070,8 +1016,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
       AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel,
       boolean checkForMigrationTag,
       boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest,
-      boolean dataBindingV2,
-      boolean persistentBusyboxTools) {
+      boolean dataBindingV2) {
     this.sdk = sdk;
     this.cpu = cpu;
     this.useIncrementalNativeLibs = useIncrementalNativeLibs;
@@ -1108,10 +1053,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
         oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
     this.dataBindingV2 = dataBindingV2;
-    this.persistentBusyboxTools = persistentBusyboxTools;
   }
 
-  @Override
   public String getCpu() {
     return cpu;
   }
@@ -1125,31 +1068,26 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     return sdk;
   }
 
-  @Override
   public boolean useIncrementalNativeLibs() {
     return useIncrementalNativeLibs;
   }
 
   /** Returns whether to use incremental dexing. */
-  @Override
   public boolean useIncrementalDexing() {
     return incrementalDexing;
   }
 
   /** Returns whether to process proguarded Android binaries with incremental dexing tools. */
-  @Override
   public int incrementalDexingShardsAfterProguard() {
     return incrementalDexingShardsAfterProguard;
   }
 
   /** Whether to use a separate tool to shard classes before merging them into final dex files. */
-  @Override
   public boolean incrementalDexingUseDexSharder() {
     return incrementalDexingUseDexSharder;
   }
 
   /** Whether to use incremental dexing to build proguarded binaries by default. */
-  @Override
   public boolean incrementalDexingAfterProguardByDefault() {
     return incrementalDexingAfterProguardByDefault;
   }
@@ -1158,19 +1096,16 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
    * Returns true if an -assumevalues should be generated for Proguard based on the minSdkVersion of
    * the merged AndroidManifest.
    */
-  @Override
   public boolean assumeMinSdkVersion() {
     return assumeMinSdkVersion;
   }
 
   /** dx flags supported in incremental dexing actions. */
-  @Override
   public ImmutableList<String> getDexoptsSupportedInIncrementalDexing() {
     return dexoptsSupportedInIncrementalDexing;
   }
 
   /** dx flags supported in dexmerger actions. */
-  @Override
   public ImmutableList<String> getDexoptsSupportedInDexMerger() {
     return dexoptsSupportedInDexMerger;
   }
@@ -1179,33 +1114,27 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
    * Incremental dexing must not be used for binaries that list any of these flags in their {@code
    * dexopts} attribute.
    */
-  @Override
   public ImmutableList<String> getTargetDexoptsThatPreventIncrementalDexing() {
     return targetDexoptsThatPreventIncrementalDexing;
   }
 
   /** Whether to assume the dexbuilder tool supports local worker mode. */
-  @Override
   public boolean useWorkersWithDexbuilder() {
     return useWorkersWithDexbuilder;
   }
 
-  @Override
   public boolean desugarJava8() {
     return desugarJava8;
   }
 
-  @Override
   public boolean desugarJava8Libs() {
     return desugarJava8Libs;
   }
 
-  @Override
   public boolean checkDesugarDeps() {
     return checkDesugarDeps;
   }
 
-  @Override
   public boolean useRexToCompressDexFiles() {
     return useRexToCompressDexFiles;
   }
@@ -1215,12 +1144,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
         && Whitelist.isAvailable(ruleContext, "allow_deps_without_srcs");
   }
 
-  @Override
   public boolean useAndroidResourceShrinking() {
     return useAndroidResourceShrinking;
   }
 
-  @Override
   public boolean useAndroidResourceCycleShrinking() {
     return useAndroidResourceCycleShrinking;
   }
@@ -1237,42 +1164,34 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     return apkSigningMethod;
   }
 
-  @Override
   public boolean useSingleJarApkBuilder() {
     return useSingleJarApkBuilder;
   }
 
-  @Override
   public boolean useParallelDex2Oat() {
     return useParallelDex2Oat;
   }
 
-  @Override
-  public boolean compressJavaResources() {
+  boolean compressJavaResources() {
     return compressJavaResources;
   }
 
-  @Override
-  public boolean getExportsManifestDefault() {
+  boolean getExportsManifestDefault() {
     return exportsManifestDefault;
   }
 
-  @Override
   public boolean useAapt2ForRobolectric() {
     return useAapt2ForRobolectric;
   }
 
-  @Override
-  public boolean throwOnResourceConflict() {
+  boolean throwOnResourceConflict() {
     return throwOnResourceConflict;
   }
 
-  @Override
   public boolean skipParsingAction() {
     return this.skipParsingAction;
   }
 
-  @Override
   public boolean fixedResourceNeverlinking() {
     return this.fixedResourceNeverlinking;
   }
@@ -1281,24 +1200,16 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     return robolectricTestDeprecationLevel;
   }
 
-  @Override
   public boolean checkForMigrationTag() {
     return checkForMigrationTag;
   }
 
-  @Override
   public boolean getOneVersionEnforcementUseTransitiveJarsForBinaryUnderTest() {
     return oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
   }
 
-  @Override
   public boolean useDataBindingV2() {
     return dataBindingV2;
-  }
-
-  @Override
-  public boolean persistentBusyboxTools() {
-    return persistentBusyboxTools;
   }
 
   @Override

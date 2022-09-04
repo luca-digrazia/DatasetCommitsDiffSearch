@@ -18,7 +18,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidDataConverter.JoinerType;
-import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
+import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import java.util.Collections;
@@ -42,7 +42,6 @@ public class AndroidResourcesProcessorBuilder {
 
   private Artifact proguardOut;
   private Artifact mainDexProguardOut;
-  private Artifact resourcePathShorteningMapOut;
   private boolean conditionalKeepRules;
   private Artifact rTxtOut;
   private Artifact sourceJarOut;
@@ -125,12 +124,6 @@ public class AndroidResourcesProcessorBuilder {
 
   public AndroidResourcesProcessorBuilder setMainDexProguardOut(Artifact mainDexProguardCfg) {
     this.mainDexProguardOut = mainDexProguardCfg;
-    return this;
-  }
-
-  public AndroidResourcesProcessorBuilder setResourcePathShorteningMapOut(
-      Artifact resourcePathShorteningMapOut) {
-    this.resourcePathShorteningMapOut = resourcePathShorteningMapOut;
     return this;
   }
 
@@ -221,6 +214,12 @@ public class AndroidResourcesProcessorBuilder {
       StampedAndroidManifest primaryManifest,
       DataBindingContext dataBindingContext) {
 
+    if (aaptVersion == AndroidAaptVersion.AAPT2) {
+      createAapt2ApkAction(dataContext, primaryResources, primaryAssets, primaryManifest);
+    } else {
+      createAaptAction(dataContext, primaryResources, primaryAssets, primaryManifest);
+    }
+
     // Wrap the new manifest, if any
     ProcessedAndroidManifest processedManifest =
         new ProcessedAndroidManifest(
@@ -228,28 +227,10 @@ public class AndroidResourcesProcessorBuilder {
             primaryManifest.getPackage(),
             primaryManifest.isExported());
 
-    // In databinding v2, this strips out the databinding and generates the layout info file.
-    AndroidResources databindingProcessedResources = dataBindingContext.processResources(
-        dataContext, primaryResources, processedManifest.getPackage());
-
-    if (aaptVersion == AndroidAaptVersion.AAPT2) {
-      createAapt2ApkAction(
-          dataContext,
-          databindingProcessedResources,
-          primaryAssets,
-          primaryManifest);
-    } else {
-      createAaptAction(
-          dataContext,
-          databindingProcessedResources,
-          primaryAssets,
-          primaryManifest);
-    }
-
     // Wrap the parsed resources
     ParsedAndroidResources parsedResources =
         ParsedAndroidResources.of(
-            databindingProcessedResources,
+            primaryResources,
             symbols,
             /* compiledSymbols = */ null,
             dataContext.getLabel(),
@@ -368,7 +349,6 @@ public class AndroidResourcesProcessorBuilder {
     }
 
     builder
-        .maybeAddOutput("--resourcePathShorteningMapOutput", resourcePathShorteningMapOut)
         .maybeAddFlag("--useCompiledResourcesForMerge", useCompiledResourcesForMerge)
         .maybeAddFlag("--conditionalKeepRules", conditionalKeepRules);
 

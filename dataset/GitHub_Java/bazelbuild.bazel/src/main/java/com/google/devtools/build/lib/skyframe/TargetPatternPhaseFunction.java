@@ -13,13 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.collect.ImmutableSetMultimap.flatteningToImmutableSetMultimap;
-
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -221,8 +218,7 @@ final class TargetPatternPhaseFunction implements SkyFunction {
                 testFilteredTargets,
                 options.getTargetPatterns(),
                 expandedTargets.getTargets(),
-                failedPatterns,
-                mapOriginalPatternsToLabels(expandedPatterns, targets.getTargets())));
+                failedPatterns));
     env.getListener()
         .post(new LoadingPhaseCompleteEvent(result.getTargetLabels(), removedTargetLabels));
     return result;
@@ -438,23 +434,6 @@ final class TargetPatternPhaseFunction implements SkyFunction {
 
     testTargetsBuilder.filter(testFilter);
     return testTargetsBuilder.build();
-  }
-
-  private static ImmutableSetMultimap<String, Label> mapOriginalPatternsToLabels(
-      List<ExpandedPattern> expandedPatterns, Set<Target> includedTargets) {
-    return expandedPatterns
-        .stream()
-        .filter(expansion -> !expansion.pattern().isNegative())
-        .collect(
-            flatteningToImmutableSetMultimap(
-                expansion -> expansion.pattern().getPattern(),
-                expansion ->
-                    expansion
-                        .resolvedTargets()
-                        .getTargets()
-                        .stream()
-                        .filter(includedTargets::contains)
-                        .map(Target::getLabel)));
   }
 
   @Nullable
