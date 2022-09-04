@@ -67,7 +67,7 @@ public class IOState<T extends Stoppable> {
         this.eventbus = eventbus;
         this.state = state;
         this.stoppable = stoppable;
-        this.startedAt = Tools.nowUTC();
+        this.startedAt = Tools.iso8601();
     }
 
     public T getStoppable() {
