@@ -1,5 +1,11 @@
 package io.dropwizard.logging;
 
+import javax.validation.constraints.Min;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonTypeName;
+
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.FileAppender;
@@ -12,16 +18,11 @@ import ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy;
 import ch.qos.logback.core.rolling.TimeBasedFileNamingAndTriggeringPolicy;
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
 import ch.qos.logback.core.spi.DeferredProcessingAware;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonTypeName;
 import io.dropwizard.logging.async.AsyncAppenderFactory;
 import io.dropwizard.logging.filter.LevelFilterFactory;
 import io.dropwizard.logging.layout.LayoutFactory;
 import io.dropwizard.util.Size;
 import io.dropwizard.validation.ValidationMethod;
-
-import javax.validation.constraints.Min;
 
 /**
  * An {@link AppenderFactory} implementation which provides an appender that writes events to a file, archiving older
@@ -185,7 +186,7 @@ public class FileAppenderFactory<E extends DeferredProcessingAware> extends Abst
         return !archive || !(archivedLogFilenamePattern != null && archivedLogFilenamePattern.contains("%i")) ||
                 maxFileSize != null;
     }
-
+    
     @JsonIgnore
     @ValidationMethod(message = "currentLogFilename can only be null when archiving is enabled")
     public boolean isValidFileConfiguration() {
@@ -220,19 +221,16 @@ public class FileAppenderFactory<E extends DeferredProcessingAware> extends Abst
 
             if (maxFileSize != null && !archivedLogFilenamePattern.contains("%d")) {
                 final FixedWindowRollingPolicy rollingPolicy = new FixedWindowRollingPolicy();
-                rollingPolicy.setContext(context);
-                rollingPolicy.setMaxIndex(getArchivedFileCount());
-                rollingPolicy.setFileNamePattern(getArchivedLogFilenamePattern());
-                rollingPolicy.setParent(appender);
-                rollingPolicy.start();
-                appender.setRollingPolicy(rollingPolicy);
-                
                 final SizeBasedTriggeringPolicy<E> triggeringPolicy = new SizeBasedTriggeringPolicy<>();
                 triggeringPolicy.setMaxFileSize(String.valueOf(maxFileSize.toBytes()));
                 triggeringPolicy.setContext(context);
-                triggeringPolicy.start();
+                rollingPolicy.setContext(context);
+                rollingPolicy.setMaxIndex(getArchivedFileCount());
+                rollingPolicy.setFileNamePattern(getArchivedLogFilenamePattern());
+                appender.setRollingPolicy(rollingPolicy);
                 appender.setTriggeringPolicy(triggeringPolicy);
-                
+                rollingPolicy.setParent(appender);
+                rollingPolicy.start();
                 return appender;
             } else {
                 final TimeBasedFileNamingAndTriggeringPolicy<E> triggeringPolicy;
