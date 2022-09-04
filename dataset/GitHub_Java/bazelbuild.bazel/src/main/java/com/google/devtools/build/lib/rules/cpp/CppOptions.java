@@ -398,7 +398,7 @@ public class CppOptions extends FragmentOptions {
             + "an auto profile. This flag also accepts files specified as labels, for "
             + "example //foo/bar:file.afdo. Such labels must refer to input files; you may "
             + "need to add an exports_files directive to the corresponding package to make "
-            + "the file visible to Blaze. It also accepts a raw or an indexed LLVM profile file."
+            + "the file visible to Blaze. It also accepts an indexed LLVM profile file."
   )
   /**
    * Never read FDO/LIPO options directly. This is because {@link #lipoConfigurationState}
@@ -651,8 +651,8 @@ public class CppOptions extends FragmentOptions {
     defaultValue = "false",
     category = "flags",
     help =
-        "If enabled, for every C++ binary linked with gold, the number of defined symbols "
-            + "and the number of used symbols per input file is stored in a .sc file."
+        "If enabled, every C++ binary linked with gold will store the number of used "
+            + "symbols per object file in a .sc file."
   )
   public boolean symbolCounts;
 
@@ -875,8 +875,4 @@ public class CppOptions extends FragmentOptions {
     return isFdo() || lipoModeForBuild == LipoMode.BINARY;
   }
 
-  @Override
-  public boolean enableActions() {
-    return !isLipoContextCollector();
-  }
 }

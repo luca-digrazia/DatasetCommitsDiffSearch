@@ -75,7 +75,8 @@ public class OptionsDataTest {
       construct(ExampleNameConflictOptions.class);
       fail("foo should conflict with the previous flag foo");
     } catch (DuplicateOptionDeclarationException e) {
-      assertThat(e).hasMessageThat().contains("Duplicate option name, due to option: --foo");
+      assertThat(e.getMessage()).contains(
+          "Duplicate option name, due to option: --foo");
     }
   }
 
@@ -103,7 +104,8 @@ public class OptionsDataTest {
       construct(ExampleIntegerFooOptions.class, ExampleBooleanFooOptions.class);
       fail("foo should conflict with the previous flag foo");
     } catch (DuplicateOptionDeclarationException e) {
-      assertThat(e).hasMessageThat().contains("Duplicate option name, due to option: --foo");
+      assertThat(e.getMessage()).contains(
+          "Duplicate option name, due to option: --foo");
     }
   }
 
@@ -125,11 +127,9 @@ public class OptionsDataTest {
       fail("nofoo should conflict with the previous flag foo, "
          + "since foo, as a boolean flag, can be written as --nofoo");
     } catch (DuplicateOptionDeclarationException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains(
-              "Duplicate option name, due to option --nofoo, it "
-                  + "conflicts with a negating alias for boolean flag --foo");
+      assertThat(e.getMessage()).contains(
+          "Duplicate option name, due to option --nofoo, it "
+          + "conflicts with a negating alias for boolean flag --foo");
     }
 
     try {
@@ -137,9 +137,8 @@ public class OptionsDataTest {
       fail("nofoo should conflict with the previous flag foo, "
          + "since foo, as a boolean flag, can be written as --nofoo");
     } catch (DuplicateOptionDeclarationException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains("Duplicate option name, due to boolean option alias: --nofoo");
+      assertThat(e.getMessage()).contains(
+          "Duplicate option name, due to boolean option alias: --nofoo");
     }
   }
 
@@ -162,9 +161,8 @@ public class OptionsDataTest {
       fail("nofoo should conflict with the previous flag foo, "
          + "since foo, as a boolean flag, can be written as --nofoo");
     } catch (DuplicateOptionDeclarationException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains("Duplicate option name, due to boolean option alias: --nofoo");
+      assertThat(e.getMessage()).contains(
+          "Duplicate option name, due to boolean option alias: --nofoo");
     }
   }
 
@@ -187,11 +185,9 @@ public class OptionsDataTest {
       fail("nofoo, the old name for bar, should conflict with the previous flag foo, "
          + "since foo, as a boolean flag, can be written as --nofoo");
     } catch (DuplicateOptionDeclarationException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains(
-              "Duplicate option name, due to old option name --nofoo, it conflicts with a "
-                  + "negating alias for boolean flag --foo");
+      assertThat(e.getMessage()).contains(
+          "Duplicate option name, due to old option name --nofoo, it conflicts with a "
+          + "negating alias for boolean flag --foo");
     }
   }
 
@@ -416,48 +412,5 @@ public class OptionsDataTest {
         .containsExactly("X", "Y").inOrder();
     assertThat(getOptionNames(data.getFieldsForClass(ReverseOrderedOptions.class)))
         .containsExactly("A", "B", "C").inOrder();
-  }
-
-  /** Dummy options class. */
-  public static class InvalidExpansionOptions extends OptionsBase {
-    @Option(name = "foo", defaultValue = "1")
-    public int foo;
-
-    @Option(
-      name = "bar",
-      defaultValue = "1",
-      expansion = {"--foo=42"}
-    )
-    public int bar;
-  }
-
-  @Test
-  public void staticExpansionOptionsShouldNotHaveValues() {
-    try {
-      construct(InvalidExpansionOptions.class);
-      fail();
-    } catch (ConstructionException e) {
-      // Expected exception
-      assertThat(e).hasMessageThat().contains(
-          "Option bar is an expansion flag with a static expansion, but does not have Void type.");
-    }
-  }
-
-  /** Dummy options class. */
-  public static class ValidExpansionOptions extends OptionsBase {
-    @Option(name = "foo", defaultValue = "1")
-    public int foo;
-
-    @Option(
-      name = "bar",
-      defaultValue = "null",
-      expansion = {"--foo=42"}
-    )
-    public Void bar;
-  }
-
-  @Test
-  public void staticExpansionOptionsCanBeVoidType() {
-    construct(ValidExpansionOptions.class);
   }
 }
