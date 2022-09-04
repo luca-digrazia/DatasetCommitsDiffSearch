@@ -20,22 +20,19 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import org.apache.log4j.Logger;
-
 import java.net.DatagramPacket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.graylog2.Log;
 
 /**
  * GELFMainThread.java: Jun 23, 2010 6:43:21 PM
  *
  * Thread responsible for listening for GELF messages.
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFMainThread extends Thread {
-
-    private static final Logger LOG = Logger.getLogger(GELFMainThread.class);
 
     private int port = 0;
 
@@ -73,7 +70,7 @@ public class GELFMainThread extends Thread {
                 // We got a connected client. Start a GELFClientHandlerThread() in our thread pool and wait for next client.
                 threadPool.execute(new GELFClientHandlerThread(receivedGelfSentence));
             } catch (Exception e) {
-                LOG.error("Skipping GELF client. Error: " + e.getMessage(), e);
+                Log.crit("Skipping GELF client. Error: " + e.toString());
             }
         }
     }

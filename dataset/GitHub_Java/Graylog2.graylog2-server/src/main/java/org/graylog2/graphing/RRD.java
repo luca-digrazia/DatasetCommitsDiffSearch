@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@scopeport.org>
+ * Copyright 2010 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -18,48 +18,50 @@
  *
  */
 
-/**
- * RRD.java: lennart | Aug 18, 2010 6:59:04 PM
- */
-
 package org.graylog2.graphing;
 
 import java.io.File;
 import org.graylog2.Main;
 
-class RRDInvalidStorageException extends Exception {
-    public RRDInvalidStorageException(){
-    }
-
-    public RRDInvalidStorageException(String msg){
-        super(msg);
-    }
-}
-
-class RRDInvalidFileException extends Exception {
-    public RRDInvalidFileException(){
-    }
-
-    public RRDInvalidFileException(String msg){
-        super(msg);
-    }
-}
-
+/**
+ * RRD.java: Aug 18, 2010 6:59:04 PM
+ *
+ * Write to RRD files using the rrdtool binary defined in graylog2.conf
+ *
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class RRD {
+    /**
+     * The interval the RRD file is written to.
+     */
     public static final int INTERVAL = 60;
+
+    /**
+     * How many days of data the RRD should be holding.
+     */
     public static final int HOLD_DAYS = 7;
 
+    /**
+     * "Total messages" graph.
+     */
     public static final int GRAPH_TYPE_TOTAL = 1;
 
-    int type = 0;
-    File folder = null;
-    File rrdFile = null;
-    String rrdFilePath = null;
+    private int type = 0;
+    private File rrdFile = null;
+    private String rrdFilePath = null;
 
+    /**
+     * @return the path of the RRD storage dir as defined in graylog2.conf
+     */
     public static String getStorageFolderPath() {
         return Main.masterConfig.getProperty("rrd_storage_dir");
     }
 
+    /**
+     * @param type Type of the graph. Use constant like RRD.GRAPH_TYPE_TOTAL
+     * @return The filename of the specified type
+     * @throws Exception
+     */
     public static String getFilename(int type) throws Exception {
         switch (type) {
             case RRD.GRAPH_TYPE_TOTAL:
@@ -69,6 +71,11 @@ public class RRD {
         }
     }
 
+    /**
+     * Get the RRD storage folder
+     * @return RRD storage folder
+     * @throws RRDInvalidStorageException
+     */
     public static File getStorageFolder() throws RRDInvalidStorageException {
         String directory = RRD.getStorageFolderPath();
         File folder = new File(directory);
@@ -84,6 +91,12 @@ public class RRD {
         return folder;
     }
 
+    /**
+     * Get the RRD file
+     * @param type Type of the graph. Use constant like RRD.GRAPH_TYPE_TOTAL
+     * @return RRD file
+     * @throws RRDInvalidFileException
+     */
     public static File getFile(int type) throws RRDInvalidFileException {
         String directory = RRD.getStorageFolderPath();
         String path = null;
@@ -95,19 +108,16 @@ public class RRD {
             throw new RRDInvalidFileException(e.toString());
         }
 
-        File rrd = new File(path);
-
-        return rrd;
+        return new File(path);
     }
 
+    /**
+     * Write to RRD files. Files are created lazy if not found.
+     * @param type Type of the graph. Use constant like RRD.GRAPH_TYPE_TOTAL
+     * @throws Exception
+     */
     public RRD(int type) throws Exception {
         this.type = type;
-
-        try {
-            this.folder = RRD.getStorageFolder();
-        } catch (RRDInvalidStorageException e) {
-            throw new Exception("Error: " + e.toString());
-        }
 
         // Find the RRD.
         try {
@@ -131,6 +141,12 @@ public class RRD {
 
     }
 
+    /**
+     * Writes a value with current timestamp to RRD
+     * @param value Value to write
+     * @return boolean
+     * @throws Exception
+     */
     public boolean write(int value) throws Exception {
         Runtime rt = Runtime.getRuntime();
         Process p;
