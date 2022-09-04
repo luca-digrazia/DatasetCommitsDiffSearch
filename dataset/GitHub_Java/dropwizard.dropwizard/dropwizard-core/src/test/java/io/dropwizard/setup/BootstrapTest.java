@@ -28,42 +28,42 @@ public class BootstrapTest {
     private Bootstrap<Configuration> bootstrap;
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         bootstrap = new Bootstrap<>(application);
     }
 
     @Test
-    void hasAnApplication() throws Exception {
+    public void hasAnApplication() throws Exception {
         assertThat(bootstrap.getApplication())
                 .isEqualTo(application);
     }
 
     @Test
-    void hasAnObjectMapper() throws Exception {
+    public void hasAnObjectMapper() throws Exception {
         assertThat(bootstrap.getObjectMapper())
                 .isNotNull();
     }
 
     @Test
-    void hasHealthCheckRegistry() {
+    public void hasHealthCheckRegistry() {
         assertThat(bootstrap.getHealthCheckRegistry())
             .isNotNull();
     }
 
     @Test
-    void defaultsToUsingFilesForConfiguration() throws Exception {
+    public void defaultsToUsingFilesForConfiguration() throws Exception {
         assertThat(bootstrap.getConfigurationSourceProvider())
                 .isInstanceOfAny(FileConfigurationSourceProvider.class);
     }
 
     @Test
-    void defaultsToUsingTheDefaultClassLoader() throws Exception {
+    public void defaultsToUsingTheDefaultClassLoader() throws Exception {
         assertThat(bootstrap.getClassLoader())
                 .isEqualTo(Thread.currentThread().getContextClassLoader());
     }
 
     @Test
-    void comesWithJvmInstrumentation() throws Exception {
+    public void comesWithJvmInstrumentation() throws Exception {
         bootstrap.registerMetrics();
         assertThat(bootstrap.getMetricRegistry().getNames())
                 .contains("jvm.buffers.mapped.capacity", "jvm.threads.count", "jvm.memory.heap.usage",
@@ -71,13 +71,13 @@ public class BootstrapTest {
     }
 
     @Test
-    void defaultsToDefaultConfigurationFactoryFactory() throws Exception {
+    public void defaultsToDefaultConfigurationFactoryFactory() throws Exception {
         assertThat(bootstrap.getConfigurationFactoryFactory())
                 .isInstanceOf(DefaultConfigurationFactoryFactory.class);
     }
 
     @Test
-    void bringsYourOwnMetricRegistry() {
+    public void bringsYourOwnMetricRegistry() {
         final MetricRegistry newRegistry = new MetricRegistry() {
             @Override
             public Histogram histogram(String name) {
@@ -94,7 +94,7 @@ public class BootstrapTest {
     }
 
     @Test
-    void allowsAccessToJmxReporter() {
+    public void allowsAccessToJmxReporter() {
         final MetricRegistry newRegistry = new MetricRegistry();
         bootstrap.setMetricRegistry(newRegistry);
         assertThat(bootstrap.getJmxReporter()).isNull();
@@ -103,7 +103,7 @@ public class BootstrapTest {
     }
 
     @Test
-    void canUseCustomValidatorFactory() throws Exception {
+    public void canUseCustomValidatorFactory() throws Exception {
         ValidatorFactory factory = Validation
                 .byProvider(HibernateValidator.class)
                 .configure()
@@ -114,14 +114,14 @@ public class BootstrapTest {
     }
 
     @Test
-    void canUseCustomObjectMapper() {
+    public void canUseCustomObjectMapper() {
         final ObjectMapper minimalObjectMapper = Jackson.newMinimalObjectMapper();
         bootstrap.setObjectMapper(minimalObjectMapper);
         assertThat(bootstrap.getObjectMapper()).isSameAs(minimalObjectMapper);
     }
 
     @Test
-    void canUseCustomHealthCheckRegistry() {
+    public void canUseCustomHealthCheckRegistry() {
         final HealthCheckRegistry healthCheckRegistry = new HealthCheckRegistry();
         bootstrap.setHealthCheckRegistry(healthCheckRegistry);
         assertThat(bootstrap.getHealthCheckRegistry()).isSameAs(healthCheckRegistry);
