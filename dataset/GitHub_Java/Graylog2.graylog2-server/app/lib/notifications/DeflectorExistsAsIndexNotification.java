@@ -18,8 +18,7 @@
  */
 package lib.notifications;
 
-import org.graylog2.restclient.models.Notification;
-import org.graylog2.restclient.models.SystemJob;
+import models.SystemJob;
 import org.joda.time.DateTime;
 
 import java.util.HashMap;
@@ -35,15 +34,6 @@ public class DeflectorExistsAsIndexNotification implements NotificationType {
             "failures of infrastructure can lead to this. Your messages are still indexed but searches and all " +
             "maintenance tasks will fail or produce incorrect results. It is strongly recommend that you act as soon " +
             "as possible.";
-    private final Notification notification;
-
-    public DeflectorExistsAsIndexNotification(Notification notification) {
-        this.notification = notification;
-    }
-
-    public Notification getNotification() {
-        return notification;
-    }
 
     @Override
     public Map<SystemJob.Type, String> options() {
