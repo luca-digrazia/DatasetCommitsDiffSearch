@@ -13,10 +13,10 @@ import org.jboss.resteasy.reactive.client.handlers.ClientResponseCompleteRestHan
 import org.jboss.resteasy.reactive.client.impl.ClientRequestContextImpl;
 import org.jboss.resteasy.reactive.common.jaxrs.ResponseImpl;
 
-public class MicroProfileRestClientResponseFilter implements ClientResponseFilter {
+public class RestClientReactiveResponseFilter implements ClientResponseFilter {
     private final List<ResponseExceptionMapper<?>> exceptionMappers;
 
-    public MicroProfileRestClientResponseFilter(List<ResponseExceptionMapper<?>> exceptionMappers) {
+    public RestClientReactiveResponseFilter(List<ResponseExceptionMapper<?>> exceptionMappers) {
         if (exceptionMappers == null) {
             throw new NullPointerException("exceptionMappers cannot be null");
         }
