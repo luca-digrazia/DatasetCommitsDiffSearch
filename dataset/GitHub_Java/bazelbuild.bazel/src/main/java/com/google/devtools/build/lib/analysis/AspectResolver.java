@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.skyframe.AspectCreationException;
 import com.google.devtools.build.lib.skyframe.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -123,7 +124,11 @@ public final class AspectResolver {
 
     for (Map.Entry<DependencyKind, Dependency> entry : depValueNames.entries()) {
       Dependency dep = entry.getValue();
-      SkyKey depKey = dep.getConfiguredTargetKey();
+      SkyKey depKey =
+          ConfiguredTargetKey.builder()
+              .setLabel(dep.getLabel())
+              .setConfiguration(dep.getConfiguration())
+              .build();
       ConfiguredTargetAndData depConfiguredTarget = depConfiguredTargetMap.get(depKey);
 
       result.put(

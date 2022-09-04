@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
@@ -290,13 +289,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       }
 
       // Determine what toolchains are needed by this target.
-      unloadedToolchainContexts =
-          computeUnloadedToolchainContexts(
-              env,
-              ruleClassProvider,
-              defaultBuildOptions,
-              ctgValue,
-              configuredTargetKey.getToolchainContextKey());
+      unloadedToolchainContexts = computeUnloadedToolchainContexts(env, ctgValue);
       if (env.valuesMissing()) {
         return null;
       }
@@ -332,7 +325,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       if (unloadedToolchainContexts != null) {
         String targetDescription = target.toString();
         ToolchainCollection.Builder<ResolvedToolchainContext> contextsBuilder =
-            ToolchainCollection.builder();
+            new ToolchainCollection.Builder<>();
         for (Map.Entry<String, UnloadedToolchainContext> unloadedContext :
             unloadedToolchainContexts.getContextMap().entrySet()) {
           contextsBuilder.addContext(
@@ -440,14 +433,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
    * <p>This involves Skyframe evaluation: callers should check {@link Environment#valuesMissing()
    * to check the result is valid.
    */
-  @VisibleForTesting
   @Nullable
-  static ToolchainCollection<UnloadedToolchainContext> computeUnloadedToolchainContexts(
-      Environment env,
-      RuleClassProvider ruleClassProvider,
-      BuildOptions defaultBuildOptions,
-      TargetAndConfiguration targetAndConfig,
-      @Nullable ToolchainContextKey parentToolchainContextKey)
+  private ToolchainCollection<UnloadedToolchainContext> computeUnloadedToolchainContexts(
+      Environment env, TargetAndConfiguration targetAndConfig)
       throws InterruptedException, ToolchainException {
     if (!(targetAndConfig.getTarget() instanceof Rule)) {
       return null;
@@ -500,19 +488,14 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     Map<String, ToolchainContextKey> toolchainContextKeys = new HashMap<>();
     String targetUnloadedToolchainContext = "target-unloaded-toolchain-context";
-    ToolchainContextKey toolchainContextKey;
-    if (parentToolchainContextKey != null) {
-      toolchainContextKey = parentToolchainContextKey;
-    } else {
-      toolchainContextKey =
-          ToolchainContextKey.key()
-              .configurationKey(toolchainConfig)
-              .requiredToolchainTypeLabels(requiredDefaultToolchains)
-              .execConstraintLabels(defaultExecConstraintLabels)
-              .shouldSanityCheckConfiguration(configuration.trimConfigurationsRetroactively())
-              .build();
-    }
-    toolchainContextKeys.put(targetUnloadedToolchainContext, toolchainContextKey);
+    toolchainContextKeys.put(
+        targetUnloadedToolchainContext,
+        ToolchainContextKey.key()
+            .configurationKey(toolchainConfig)
+            .requiredToolchainTypeLabels(requiredDefaultToolchains)
+            .execConstraintLabels(defaultExecConstraintLabels)
+            .shouldSanityCheckConfiguration(configuration.trimConfigurationsRetroactively())
+            .build());
     for (Map.Entry<String, ExecGroup> group : execGroups.entrySet()) {
       ExecGroup execGroup = group.getValue();
       toolchainContextKeys.put(
@@ -531,7 +514,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     boolean valuesMissing = env.valuesMissing();
 
     ToolchainCollection.Builder<UnloadedToolchainContext> toolchainContexts =
-        valuesMissing ? null : ToolchainCollection.builder();
+        valuesMissing ? null : new ToolchainCollection.Builder<>();
     for (Map.Entry<String, ToolchainContextKey> unloadedToolchainContextKey :
         toolchainContextKeys.entrySet()) {
       UnloadedToolchainContext unloadedToolchainContext =
