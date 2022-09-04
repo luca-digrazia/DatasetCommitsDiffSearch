@@ -23,9 +23,11 @@ import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackSummary;
 import org.graylog2.rest.models.alarmcallbacks.responses.AvailableAlarmCallbackSummaryResponse;
 import org.joda.time.DateTime;
 
-import java.util.Date;
 import java.util.Map;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class AlarmCallback extends ConfigurableEntity {
     public interface Factory {
         AlarmCallback fromSummaryResponse(String streamId, AlarmCallbackSummary response);
@@ -36,7 +38,7 @@ public class AlarmCallback extends ConfigurableEntity {
     private String streamId;
     private String type;
     private Map<String, Object> configuration;
-    private Date createdAt;
+    private DateTime createdAt;
     private String creatorUserId;
     private User creatorUser;
 
@@ -76,7 +78,7 @@ public class AlarmCallback extends ConfigurableEntity {
     }
 
     public DateTime getCreatedAt() {
-        return createdAt == null ? null : new DateTime(createdAt);
+        return createdAt;
     }
 
     public String getCreatorUserId() {
