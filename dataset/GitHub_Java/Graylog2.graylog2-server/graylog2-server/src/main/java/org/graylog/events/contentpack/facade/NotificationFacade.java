@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.graylog.events.contentpack.entities.NotificationEntity;
 import org.graylog.events.notifications.DBNotificationService;
 import org.graylog.events.notifications.NotificationDto;
+import org.graylog.events.notifications.NotificationResourceHandler;
 import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.contentpacks.facades.EntityFacade;
 import org.graylog2.contentpacks.model.ModelId;
@@ -47,12 +48,15 @@ public class NotificationFacade implements EntityFacade<NotificationDto> {
 
     private final ObjectMapper objectMapper;
     private final DBNotificationService notificationService;
+    private final NotificationResourceHandler notificationResourceHandler;
 
     @Inject
     public NotificationFacade(ObjectMapper objectMapper,
+                              NotificationResourceHandler notificationResourceHandler,
                               DBNotificationService notificationService) {
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
+        this.notificationResourceHandler = notificationResourceHandler;
     }
 
     @Override
@@ -64,14 +68,14 @@ public class NotificationFacade implements EntityFacade<NotificationDto> {
             return Optional.empty();
         }
 
-        final NotificationEntity entity = (NotificationEntity) notificationDto.get().toContentPackEntity();
+        final NotificationEntity entity = (NotificationEntity) notificationDto.get().toContentPackEntity(entityDescriptorIds);
         final JsonNode data = objectMapper.convertValue(entity, JsonNode.class);
         return Optional.of(
-            EntityV1.builder()
-                .id(ModelId.of(entityDescriptorIds.getOrThrow(notificationDto.get().id(), ModelTypes.NOTIFICATION_V1)))
-                .type(ModelTypes.NOTIFICATION_V1)
-                .data(data)
-                .build());
+                EntityV1.builder()
+                        .id(ModelId.of(entityDescriptorIds.getOrThrow(notificationDto.get().id(), ModelTypes.NOTIFICATION_V1)))
+                        .type(ModelTypes.NOTIFICATION_V1)
+                        .data(data)
+                        .build());
     }
 
     @Override
@@ -87,8 +91,8 @@ public class NotificationFacade implements EntityFacade<NotificationDto> {
                                                  Map<String, ValueReference> parameters,
                                                  Map<EntityDescriptor, Object> nativeEntities) {
         final NotificationEntity entity = objectMapper.convertValue(entityV1.data(), NotificationEntity.class);
-        final NotificationDto notificationDto = entity.toNativeEntity(parameters);
-        final NotificationDto savedDto = notificationService.save(notificationDto);
+        final NotificationDto notificationDto = entity.toNativeEntity(parameters, nativeEntities);
+        final NotificationDto savedDto = notificationResourceHandler.create(notificationDto);
         return NativeEntity.create(entityV1.id(), savedDto.id(), ModelTypes.NOTIFICATION_V1, savedDto.title(), savedDto);
     }
 
@@ -100,22 +104,22 @@ public class NotificationFacade implements EntityFacade<NotificationDto> {
 
     @Override
     public void delete(NotificationDto nativeEntity) {
-        notificationService.delete(nativeEntity.id());
+        notificationResourceHandler.delete(nativeEntity.id());
     }
 
     @Override
     public EntityExcerpt createExcerpt(NotificationDto nativeEntity) {
         return EntityExcerpt.builder()
-            .id(ModelId.of(nativeEntity.id()))
-            .type(ModelTypes.NOTIFICATION_V1)
-            .title(nativeEntity.title())
-            .build();
+                .id(ModelId.of(nativeEntity.id()))
+                .type(ModelTypes.NOTIFICATION_V1)
+                .title(nativeEntity.title())
+                .build();
     }
 
     @Override
     public Set<EntityExcerpt> listEntityExcerpts() {
         return notificationService.streamAll()
-            .map(this::createExcerpt)
-            .collect(Collectors.toSet());
+                .map(this::createExcerpt)
+                .collect(Collectors.toSet());
     }
 }
