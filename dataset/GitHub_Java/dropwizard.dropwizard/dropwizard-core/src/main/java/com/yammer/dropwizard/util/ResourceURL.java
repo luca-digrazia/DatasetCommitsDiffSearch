@@ -3,7 +3,10 @@ package com.yammer.dropwizard.util;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.*;
+import java.net.JarURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
@@ -19,7 +22,7 @@ public class ResourceURL {
      * @param resourceURL the URL to check
      * @return true if resource is a directory
      */
-    public static boolean isDirectory(final URL resourceURL) throws URISyntaxException {
+    public static boolean isDirectory(final URL resourceURL) {
         final String protocol = resourceURL.getProtocol();
         if ("jar".equals(protocol)) {
             try {
@@ -47,7 +50,7 @@ public class ResourceURL {
                 throw new ResourceNotFoundException(e);
             }
         } else if ("file".equals(protocol)) {
-            return new File(resourceURL.toURI()).isDirectory();
+            return new File(resourceURL.getFile()).isDirectory();
         } else {
             throw new IllegalArgumentException("Unsupported protocol " + resourceURL.getProtocol() + " for resource " + resourceURL);
         }
