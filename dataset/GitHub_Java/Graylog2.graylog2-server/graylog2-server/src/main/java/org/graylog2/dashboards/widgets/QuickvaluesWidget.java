@@ -17,7 +17,6 @@
 package org.graylog2.dashboards.widgets;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import org.graylog2.indexer.results.TermsResult;
@@ -90,7 +89,9 @@ public class QuickvaluesWidget extends DashboardWidget {
 
     @Override
     protected ComputationResult compute() {
-        Preconditions.checkArgument(timeRange != null, "Invalid time range provided");
+        if (timeRange == null) {
+            throw new RuntimeException("Invalid time range provided");
+        }
 
         String filter = null;
         if (!isNullOrEmpty(streamId)) {
