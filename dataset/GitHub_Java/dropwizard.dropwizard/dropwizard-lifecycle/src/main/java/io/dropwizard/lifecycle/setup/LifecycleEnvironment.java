@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
-import static java.util.Objects.requireNonNull;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class LifecycleEnvironment {
     private static final Logger LOGGER = LoggerFactory.getLogger(LifecycleEnvironment.class);
@@ -38,7 +38,7 @@ public class LifecycleEnvironment {
      * @param managed a managed object
      */
     public void manage(Managed managed) {
-        managedObjects.add(new JettyManaged(requireNonNull(managed)));
+        managedObjects.add(new JettyManaged(checkNotNull(managed)));
     }
 
     /**
@@ -47,7 +47,7 @@ public class LifecycleEnvironment {
      * @param managed a Jetty-managed object
      */
     public void manage(LifeCycle managed) {
-        managedObjects.add(requireNonNull(managed));
+        managedObjects.add(checkNotNull(managed));
     }
 
     public ExecutorServiceBuilder executorService(String nameFormat) {
