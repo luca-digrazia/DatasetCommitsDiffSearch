@@ -16,8 +16,7 @@
  */
 package org.graylog2.indexer;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequestBuilder;
 import org.elasticsearch.client.Client;
@@ -25,6 +24,8 @@ import org.graylog2.indexer.messages.Messages;
 import org.graylog2.plugin.Tools;
 
 import java.io.Serializable;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -32,22 +33,25 @@ import java.util.Map;
 /**
  * Representing the message type mapping in ElasticSearch. This is giving ES more
  * information about what the fields look like and how it should analyze them.
+ *
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
+@SuppressWarnings({"unchecked"})
 public class Mapping {
 
     public static PutMappingRequest getPutMappingRequest(final Client client, final String index, final String analyzer) {
-        final PutMappingRequestBuilder builder = client.admin().indices().preparePutMapping(index);
+        final PutMappingRequestBuilder builder = client.admin().indices().preparePutMapping(new String[] {index});
         builder.setType(Messages.TYPE);
 
-        final Map<String, Object> mapping = ImmutableMap.of(
-                "properties", partFieldProperties(analyzer),
-                "dynamic_templates", partDefaultAllInDynamicTemplate(),
-                // Compress source field
-                "_source", enabledAndCompressed(),
-                // Enable purging by TTL
-                "_ttl", enabled());
+        final Map<String, Object> mapping = new HashMap<String, Object>();
+        mapping.put("properties", partFieldProperties(analyzer));
+        mapping.put("dynamic_templates", partDefaultAllInDynamicTemplate());
+        mapping.put("_source", enabledAndCompressed()); // Compress source field..
+        mapping.put("_ttl", enabled()); // Enable purging by TTL.
 
-        final Map<String, Map<String, Object>> completeMapping = ImmutableMap.of(Messages.TYPE, mapping);
+        // TODO: use multimap?
+        final Map<String, Map<String, Object>> completeMapping = Maps.newHashMap();
+        completeMapping.put(Messages.TYPE, mapping);
 
         builder.setSource(completeMapping);
         return builder.request();
@@ -56,55 +60,79 @@ public class Mapping {
     /*
      * Disable analyzing for every field by default.
      */
-    private static List<Map<String, Map<String, Object>>> partDefaultAllInDynamicTemplate() {
-        final Map<String, String> notAnalyzed = ImmutableMap.of("index", "not_analyzed");
-        final Map<String, Object> defaultAll = ImmutableMap.of(
-                // Match all
-                "match", "*",
-                // Analyze nothing by default
-                "mapping", notAnalyzed);
-        final Map<String, Map<String, Object>> template = ImmutableMap.of("store_generic", defaultAll);
+    // TODO warnings
+    @SuppressWarnings("rawtypes")
+	private static List partDefaultAllInDynamicTemplate() {
+        final List dynamicTemplates = new LinkedList();
+        final Map template = new HashMap();
+        final Map defaultAll = new HashMap();
+        final Map notAnalyzed = new HashMap();
+        notAnalyzed.put("index", "not_analyzed");
 
-        return ImmutableList.of(template);
+        // Match all.
+        defaultAll.put("match", "*");
+        // Analyze nothing by default.
+        defaultAll.put("mapping", notAnalyzed);
+
+        template.put("store_generic", defaultAll);
+        dynamicTemplates.add(template);
+
+        return dynamicTemplates;
     }
 
     /*
      * Enable analyzing for some fields again. Like for message and full_message.
      */
-    private static Map<String, Map<String, ? extends Serializable>> partFieldProperties(String analyzer) {
-        return ImmutableMap.of(
-                "message", analyzedString(analyzer),
-                "full_message", analyzedString(analyzer),
-                // http://joda-time.sourceforge.net/api-release/org/joda/time/format/DateTimeFormat.html
-                // http://www.elasticsearch.org/guide/reference/mapping/date-format.html
-                "timestamp", typeTimeWithMillis(),
-                // to support wildcard searches in source we need to lowercase the content (wildcard search lowercases search term)
-                "source", analyzedString("analyzer_keyword"));
+    // TODO warnings
+    @SuppressWarnings("rawtypes")
+	private static Map partFieldProperties(String analyzer) {
+        final Map<String, Map<?, ?>> properties = Maps.newHashMap();
+
+        properties.put("message", analyzedString(analyzer));
+        properties.put("full_message", analyzedString(analyzer));
+
+        // http://joda-time.sourceforge.net/api-release/org/joda/time/format/DateTimeFormat.html
+        // http://www.elasticsearch.org/guide/reference/mapping/date-format.html
+        properties.put("timestamp", typeTimeWithMillis());
+
+        // to support wildcard searches in source we need to lowercase the content (wildcard search lowercases search term)
+        properties.put("source", analyzedString("analyzer_keyword"));
+
+        return properties;
     }
 
     private static Map<String, String> analyzedString(String analyzer) {
-        return ImmutableMap.of(
-                "index", "analyzed",
-                "type", "string",
-                "analyzer", analyzer);
+        final Map<String, String> type = Maps.newHashMap();
+        type.put("index", "analyzed");
+        type.put("type", "string");
+        type.put("analyzer", analyzer);
+
+        return type;
     }
 
     private static Map<String, Serializable> typeTimeWithMillis() {
-        return ImmutableMap.<String, Serializable>of(
-                "type", "date",
-                "format", Tools.ES_DATE_FORMAT,
-                "doc_values", true);
+        final Map<String, Serializable> type = Maps.newHashMap();
+        type.put("type", "date");
+        type.put("format", Tools.ES_DATE_FORMAT);
+        type.put("doc_values", true);
+
+        return type;
     }
 
     private static Map<String, Boolean> enabled() {
-        return ImmutableMap.of("enabled", true);
+        final Map<String, Boolean> e = Maps.newHashMap();
+        e.put("enabled", true);
+
+        return e;
     }
 
-
+    
     private static Map<String, Boolean> enabledAndCompressed() {
-        return ImmutableMap.of(
-                "enabled", true,
-                "compress", true);
+        final Map<String, Boolean> e = Maps.newHashMap();
+        e.put("enabled", true);
+        e.put("compress", true);
+
+        return e;
     }
 
 }
