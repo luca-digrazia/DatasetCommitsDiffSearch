@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault.Resolve
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.RuleClass.ExecutionPlatformConstraintsAllowed;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
@@ -169,16 +168,14 @@ public class BaseRuleClasses {
               attr("$test_runtime", LABEL_LIST)
                   .cfg(HostTransition.INSTANCE)
                   .value(ImmutableList.of(env.getToolsLabel("//tools/test:runtime"))))
-          .add(
-              attr("$test_setup_script", LABEL)
-                  .cfg(HostTransition.INSTANCE)
-                  .singleArtifact()
-                  .value(env.getToolsLabel("//tools/test:test_setup")))
-          .add(
-              attr("$collect_coverage_script", LABEL)
-                  .cfg(HostTransition.INSTANCE)
-                  .singleArtifact()
-                  .value(env.getToolsLabel("//tools/test:collect_coverage")))
+          .add(attr("$test_setup_script", LABEL)
+              .cfg(HostTransition.INSTANCE)
+              .singleArtifact()
+              .value(env.getToolsLabel("//tools/test:test_setup")))
+          .add(attr("$collect_coverage_script", LABEL)
+              .cfg(HostTransition.INSTANCE)
+              .singleArtifact()
+              .value(env.getToolsLabel("//tools/test:collect_coverage")))
           // Input files for test actions collecting code coverage
           .add(
               attr(":coverage_support", LABEL)
@@ -192,9 +189,14 @@ public class BaseRuleClasses {
                       coverageReportGeneratorAttribute(
                           env.getToolsLabel(DEFAULT_COVERAGE_REPORT_GENERATOR_VALUE)))
                   .singleArtifact())
-          // The target itself and run_under both run on the same machine.
-          .add(attr(":run_under", LABEL).value(RUN_UNDER).skipPrereqValidatorCheck())
-          .executionPlatformConstraintsAllowed(ExecutionPlatformConstraintsAllowed.PER_TARGET)
+
+          // The target itself and run_under both run on the same machine. We use the DATA config
+          // here because the run_under acts like a data dependency (e.g. no LIPO optimization).
+          .add(
+              attr(":run_under", LABEL)
+                  .cfg(env.getLipoDataTransition())
+                  .value(RUN_UNDER)
+                  .skipPrereqValidatorCheck())
           .build();
     }
 
@@ -378,10 +380,9 @@ public class BaseRuleClasses {
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(attr("deps", LABEL_LIST).legacyAllowAnyFileType())
-          .add(
-              attr("data", LABEL_LIST)
-                  .allowedFileTypes(FileTypeSet.ANY_FILE)
-                  .dontCheckConstraints())
+          .add(attr("data", LABEL_LIST).cfg(env.getLipoDataTransition())
+              .allowedFileTypes(FileTypeSet.ANY_FILE)
+              .dontCheckConstraints())
           .build();
     }
 

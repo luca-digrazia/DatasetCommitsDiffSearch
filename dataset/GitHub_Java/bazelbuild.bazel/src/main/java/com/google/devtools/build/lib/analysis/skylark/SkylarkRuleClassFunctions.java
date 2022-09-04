@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.analysis.DefaultInfo;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.config.ConfigAwareRuleClassBuilder;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -58,7 +59,6 @@ import com.google.devtools.build.lib.packages.PredicateWithMessage;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.RuleClass.ExecutionPlatformConstraintsAllowed;
 import com.google.devtools.build.lib.packages.RuleFactory;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
@@ -137,7 +137,8 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
           .build();
 
   /** Parent rule class for test Skylark rules. */
-  public static final RuleClass getTestBaseRule(String toolsRepository) {
+  public static final RuleClass getTestBaseRule(String toolsRepository,
+      PatchTransition lipoDataTransition) {
     return new RuleClass.Builder("$test_base_rule", RuleClassType.ABSTRACT, true, baseRule)
         .requiresConfigurationFragments(TestConfiguration.class)
         .add(
@@ -198,8 +199,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
                             toolsRepository
                                 + BaseRuleClasses.DEFAULT_COVERAGE_REPORT_GENERATOR_VALUE)))
                 .singleArtifact())
-        .add(attr(":run_under", LABEL).value(RUN_UNDER))
-        .executionPlatformConstraintsAllowed(ExecutionPlatformConstraintsAllowed.PER_TARGET)
+        .add(attr(":run_under", LABEL).cfg(lipoDataTransition).value(RUN_UNDER))
         .build();
   }
 
@@ -316,8 +316,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       SkylarkList<String> toolchains,
       String doc,
       SkylarkList<?> providesArg,
-      Boolean executionPlatformConstraintsAllowed,
-      SkylarkList<?> execCompatibleWith,
       FuncallExpression ast,
       Environment funcallEnv)
       throws EvalException, ConversionException {
@@ -325,7 +323,9 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     RuleClassType type = test ? RuleClassType.TEST : RuleClassType.NORMAL;
     RuleClass parent =
         test
-            ? getTestBaseRule(SkylarkUtils.getToolsRepository(funcallEnv))
+            ? getTestBaseRule(
+                SkylarkUtils.getToolsRepository(funcallEnv),
+                (PatchTransition) SkylarkUtils.getLipoDataTransition(funcallEnv))
             : (executable ? binaryBaseRule : baseRule);
 
     // We'll set the name later, pass the empty string for now.
@@ -397,16 +397,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       builder.advertiseSkylarkProvider(skylarkProvider);
     }
 
-    if (!execCompatibleWith.isEmpty()) {
-      builder.addExecutionPlatformConstraints(
-          collectConstraintLabels(
-              execCompatibleWith.getContents(String.class, "exec_compatile_with"),
-              ast.getLocation()));
-    }
-    if (executionPlatformConstraintsAllowed) {
-      builder.executionPlatformConstraintsAllowed(ExecutionPlatformConstraintsAllowed.PER_TARGET);
-    }
-
     return new SkylarkRuleFunction(builder, type, attributes, ast.getLocation());
   }
 
@@ -451,22 +441,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     }
 
     return requiredToolchains.build();
-  }
-
-  private static ImmutableList<Label> collectConstraintLabels(
-      Iterable<String> rawLabels, Location loc) throws EvalException {
-    ImmutableList.Builder<Label> constraintLabels = new ImmutableList.Builder<>();
-    for (String rawLabel : rawLabels) {
-      try {
-        Label constraintLabel = Label.parseAbsolute(rawLabel);
-        constraintLabels.add(constraintLabel);
-      } catch (LabelSyntaxException e) {
-        throw new EvalException(
-            loc, String.format("Unable to parse constraint %s: %s", rawLabel, e.getMessage()), e);
-      }
-    }
-
-    return constraintLabels.build();
   }
 
   @Override
@@ -681,11 +655,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         addAttribute(definitionLocation, builder,
             descriptor.build(attribute.getFirst()));
       }
-      try {
-        this.ruleClass = builder.build(ruleClassName, skylarkLabel + "%" + ruleClassName);
-      } catch (IllegalArgumentException | IllegalStateException ex) {
-        throw new EvalException(location, ex);
-      }
+      this.ruleClass = builder.build(ruleClassName, skylarkLabel + "%" + ruleClassName);
 
       this.builder = null;
       this.attributes = null;
