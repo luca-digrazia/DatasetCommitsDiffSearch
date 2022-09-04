@@ -93,14 +93,7 @@ public class ElasticsearchBackendUsingCorrectIndicesTest extends ElasticsearchBa
     public void setupSUT() throws Exception {
         when(jestClient.execute(any(), any())).thenReturn(resultFor(resourceFile("successfulResponseWithSingleQuery.json")));
 
-        final FieldTypesLookup fieldTypesLookup = mock(FieldTypesLookup.class);
-        this.backend = new ElasticsearchBackend(handlers,
-                queryStringParser,
-                jestClient,
-                indexRangeService,
-                streamService,
-                new ESQueryDecorators.Fake(),
-                (elasticsearchBackend, ssb, job, query, results) -> new ESGeneratedQueryContext(elasticsearchBackend, ssb, job, query, results, fieldTypesLookup));
+        this.backend = new ElasticsearchBackend(handlers, queryStringParser, jestClient, indexRangeService, streamService, new ESQueryDecorators.Fake());
     }
 
     @Before
