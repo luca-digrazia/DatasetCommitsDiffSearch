@@ -18,6 +18,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -56,6 +57,7 @@ import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.java.JavaCompileActionBuilder.JavaCompileExtraActionInfoSupplier;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
@@ -190,8 +192,7 @@ public class JavaCompileAction extends AbstractAction
    */
   @VisibleForTesting
   ReducedClasspath getReducedClasspath(
-      ActionExecutionContext actionExecutionContext, JavaCompileActionContext context)
-      throws IOException {
+      ActionExecutionContext actionExecutionContext, JavaCompileActionContext context) {
     HashSet<String> direct = new HashSet<>();
     for (Artifact directJar : directJars) {
       direct.add(directJar.getExecPathString());
@@ -291,15 +292,8 @@ public class JavaCompileAction extends AbstractAction
       if (classpathMode == JavaClasspathMode.BAZEL) {
         JavaCompileActionContext context =
             actionExecutionContext.getContext(JavaCompileActionContext.class);
-        try {
-          reducedClasspath = getReducedClasspath(actionExecutionContext, context);
-          spawn = getReducedSpawn(actionExecutionContext, reducedClasspath, /* fallback= */ false);
-        } catch (IOException e) {
-          // There was an error reading some of the dependent .jdeps files. Fall back to a
-          // compilation with the full classpath.
-          reducedClasspath = null;
-          spawn = getFullSpawn(actionExecutionContext);
-        }
+        reducedClasspath = getReducedClasspath(actionExecutionContext, context);
+        spawn = getReducedSpawn(actionExecutionContext, reducedClasspath, /* fallback= */ false);
       } else {
         reducedClasspath = null;
         spawn = getFullSpawn(actionExecutionContext);
@@ -463,6 +457,19 @@ public class JavaCompileAction extends AbstractAction
     return outputDepsProto;
   }
 
+  private ActionExecutionException printIOExceptionAndConvertToActionExecutionException(
+      ActionExecutionContext actionExecutionContext, IOException e) {
+    // Print the stack trace, otherwise the unexpected I/O error is hard to diagnose.
+    // A stack trace could help with bugs like https://github.com/bazelbuild/bazel/issues/4924
+    String stackTrace = Throwables.getStackTraceAsString(e);
+    actionExecutionContext
+        .getEventHandler()
+        .handle(Event.error("Unexpected I/O exception:\n" + stackTrace));
+    return toActionExecutionException(
+        new EnvironmentalExecException("unexpected I/O exception", e),
+        actionExecutionContext.getVerboseFailures());
+  }
+
   private ActionExecutionException toActionExecutionException(
       ExecException e, boolean verboseFailures) {
     String failMessage = getRawProgressMessage();
@@ -530,8 +537,7 @@ public class JavaCompileAction extends AbstractAction
                 SpawnContinuation.ofBeginExecution(spawn, actionExecutionContext))
             .execute();
       } catch (IOException e) {
-        throw toActionExecutionException(
-            new EnvironmentalExecException(e), actionExecutionContext.getVerboseFailures());
+        throw printIOExceptionAndConvertToActionExecutionException(actionExecutionContext, e);
       } catch (ExecException e) {
         throw toActionExecutionException(e, actionExecutionContext.getVerboseFailures());
       }
