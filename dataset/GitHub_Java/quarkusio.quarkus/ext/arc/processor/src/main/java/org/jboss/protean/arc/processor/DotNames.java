@@ -3,9 +3,7 @@ package org.jboss.protean.arc.processor;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import javax.annotation.Priority;
-import javax.enterprise.event.Event;
 import javax.enterprise.event.Observes;
-import javax.enterprise.inject.Alternative;
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
 import javax.enterprise.inject.Disposes;
@@ -13,7 +11,6 @@ import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.enterprise.inject.spi.Bean;
 import javax.enterprise.inject.spi.BeanManager;
-import javax.enterprise.inject.spi.EventMetadata;
 import javax.enterprise.inject.spi.InjectionPoint;
 import javax.enterprise.util.Nonbinding;
 import javax.inject.Inject;
@@ -47,9 +44,6 @@ final class DotNames {
     static final DotName ANY = DotName.createSimple(Any.class.getName());
     static final DotName BEAN = DotName.createSimple(Bean.class.getName());
     static final DotName BEAN_MANAGER = DotName.createSimple(BeanManager.class.getName());
-    static final DotName EVENT = DotName.createSimple(Event.class.getName());
-    static final DotName EVENT_METADATA = DotName.createSimple(EventMetadata.class.getName());
-    static final DotName ALTERNATIVE = DotName.createSimple(Alternative.class.getName());
 
     private DotNames() {
     }

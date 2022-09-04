@@ -14,7 +14,7 @@ import org.jboss.jandex.MethodParameterInfo;
  *
  * @author Martin Kouba
  */
-public class DisposerInfo {
+class DisposerInfo {
 
     private final BeanInfo declaringBean;
 
@@ -31,26 +31,20 @@ public class DisposerInfo {
         this.disposedParameter = initDisposedParam(disposerMethod);
     }
 
-    public BeanInfo getDeclaringBean() {
+    BeanInfo getDeclaringBean() {
         return declaringBean;
     }
 
-    public MethodInfo getDisposerMethod() {
+    MethodInfo getDisposerMethod() {
         return disposerMethod;
     }
 
-    public MethodParameterInfo getDisposedParameter() {
+    MethodParameterInfo getDisposedParameter() {
         return disposedParameter;
     }
 
     Injection getInjection() {
         return injection;
-    }
-
-    public List<InjectionPointInfo> getAllInjectionPoints() {
-        List<InjectionPointInfo> injectionPoints = new ArrayList<>();
-        injectionPoints.addAll(injection.injectionPoints);
-        return injectionPoints;
     }
 
     void init() {

@@ -1,23 +1,17 @@
 package org.jboss.protean.arc.processor;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 import javax.enterprise.context.spi.CreationalContext;
-import javax.enterprise.inject.spi.EventContext;
-import javax.enterprise.inject.spi.EventMetadata;
 
 import org.jboss.protean.arc.ClientProxy;
 import org.jboss.protean.arc.CreationalContextImpl;
 import org.jboss.protean.arc.InjectableBean;
 import org.jboss.protean.arc.InjectableInterceptor;
 import org.jboss.protean.arc.InjectableReferenceProvider;
-import org.jboss.protean.arc.InvocationContextImpl;
 import org.jboss.protean.arc.InvocationContextImpl.InterceptorInvocation;
 import org.jboss.protean.arc.Reflections;
 import org.jboss.protean.gizmo.MethodDescriptor;
@@ -69,24 +63,9 @@ final class MethodDescriptors {
 
     static final MethodDescriptor INJECTABLE_BEAN_DESTROY = MethodDescriptor.ofMethod(InjectableBean.class, "destroy", void.class, Object.class,
             CreationalContext.class);
-
+    
     static final MethodDescriptor CREATIONAL_CTX_RELEASE = MethodDescriptor.ofMethod(CreationalContext.class, "release", void.class);
 
-    static final MethodDescriptor EVENT_CONTEXT_GET_EVENT = MethodDescriptor.ofMethod(EventContext.class, "getEvent", Object.class);
-
-    static final MethodDescriptor EVENT_CONTEXT_GET_METADATA = MethodDescriptor.ofMethod(EventContext.class, "getMetadata", EventMetadata.class);
-
-    static final MethodDescriptor INVOCATION_CONTEXT_AROUND_INVOKE = MethodDescriptor.ofMethod(InvocationContextImpl.class, "aroundInvoke",
-            InvocationContextImpl.class, Object.class, Method.class, Object[].class, List.class, Function.class, Set.class);
-
-    static final MethodDescriptor INVOCATION_CONTEXT_AROUND_CONSTRUCT = MethodDescriptor.ofMethod(InvocationContextImpl.class, "aroundConstruct",
-            InvocationContextImpl.class, Constructor.class, List.class, Supplier.class, Set.class);
-
-    static final MethodDescriptor INVOCATION_CONTEXT_POST_CONSTRUCT = MethodDescriptor.ofMethod(InvocationContextImpl.class, "postConstruct",
-            InvocationContextImpl.class, Object.class, List.class, Set.class);
-
-    static final MethodDescriptor INVOCATION_CONTEXT_PRE_DESTROY = MethodDescriptor.ofMethod(InvocationContextImpl.class, "preDestroy",
-            InvocationContextImpl.class, Object.class, List.class, Set.class);
 
     private MethodDescriptors() {
     }

@@ -7,20 +7,11 @@ import java.util.List;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationTarget.Kind;
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.Logger;
 
 /**
- * Injection abstraction, basically a collection of injection points plus the annotation target:
- * <ul>
- * <li>an injected field,</li>
- * <li>a bean constructor,</li>
- * <li>an initializer method,</li>
- * <li>a producer method,</li>
- * <li>a disposer method,</li>
- * <li>an observer method.</li>
- * </ul>
+ * Injection abstraction - an injected field, a bean constructor, an initializer or a disposer method.
  *
  * @author Martin Kouba
  */
@@ -37,7 +28,24 @@ public class Injection {
     static List<Injection> forBean(AnnotationTarget beanTarget, BeanDeployment beanDeployment) {
         if (Kind.CLASS.equals(beanTarget.kind())) {
             List<Injection> injections = new ArrayList<>();
-            forClassBean(beanTarget.asClass(), beanDeployment, injections);
+            List<AnnotationInstance> injectAnnotations = beanTarget.asClass().annotations().get(DotNames.INJECT);
+            if (injectAnnotations != null) {
+                for (AnnotationInstance injectAnnotation : injectAnnotations) {
+                    AnnotationTarget injectTarget = injectAnnotation.target();
+                    switch (injectAnnotation.target().kind()) {
+                        case FIELD:
+                            injections.add(new Injection(injectTarget,
+                                    Collections.singletonList(InjectionPointInfo.fromField(injectTarget.asField(), beanDeployment))));
+                            break;
+                        case METHOD:
+                            injections.add(new Injection(injectTarget, InjectionPointInfo.fromMethod(injectTarget.asMethod(), beanDeployment)));
+                            break;
+                        default:
+                            LOGGER.warn("Unsupported @Inject target ignored: " + injectAnnotation.target());
+                            continue;
+                    }
+                }
+            }
             return injections;
         } else if (Kind.METHOD.equals(beanTarget.kind())) {
             if (beanTarget.asMethod().parameters().isEmpty()) {
@@ -49,42 +57,9 @@ public class Injection {
         throw new IllegalArgumentException("Unsupported annotation target");
     }
 
-    private static void forClassBean(ClassInfo beanTarget, BeanDeployment beanDeployment, List<Injection> injections) {
-        List<AnnotationInstance> injectAnnotations = beanTarget.annotations().get(DotNames.INJECT);
-        if (injectAnnotations != null) {
-            for (AnnotationInstance injectAnnotation : injectAnnotations) {
-                AnnotationTarget injectTarget = injectAnnotation.target();
-                switch (injectAnnotation.target().kind()) {
-                    case FIELD:
-                        injections.add(
-                                new Injection(injectTarget, Collections.singletonList(InjectionPointInfo.fromField(injectTarget.asField(), beanDeployment))));
-                        break;
-                    case METHOD:
-                        injections.add(new Injection(injectTarget, InjectionPointInfo.fromMethod(injectTarget.asMethod(), beanDeployment)));
-                        break;
-                    default:
-                        LOGGER.warn("Unsupported @Inject target ignored: " + injectAnnotation.target());
-                        continue;
-                }
-            }
-        }
-        if (!beanTarget.superName().equals(DotNames.OBJECT)) {
-            ClassInfo info = beanDeployment.getIndex().getClassByName(beanTarget.superName());
-            if (info != null) {
-                forClassBean(info, beanDeployment, injections);
-            }
-        }
-
-    }
-
     static Injection forDisposer(MethodInfo disposerMethod, BeanDeployment beanDeployment) {
         return new Injection(disposerMethod, InjectionPointInfo.fromMethod(disposerMethod, beanDeployment,
                 annotations -> annotations.stream().anyMatch(a -> a.name().equals(DotNames.DISPOSES))));
-    }
-
-    static Injection forObserver(MethodInfo observerMethod, BeanDeployment beanDeployment) {
-        return new Injection(observerMethod, InjectionPointInfo.fromMethod(observerMethod, beanDeployment,
-                annotations -> annotations.stream().anyMatch(a -> a.name().equals(DotNames.OBSERVES))));
     }
 
     final AnnotationTarget target;

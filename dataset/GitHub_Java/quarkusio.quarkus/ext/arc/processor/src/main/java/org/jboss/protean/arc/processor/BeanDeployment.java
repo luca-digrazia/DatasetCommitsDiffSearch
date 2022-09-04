@@ -43,8 +43,6 @@ public class BeanDeployment {
 
     private final List<InterceptorInfo> interceptors;
 
-    private final List<ObserverInfo> observers;
-
     private final BeanResolver beanResolver;
 
     private final InterceptorResolver interceptorResolver;
@@ -57,19 +55,14 @@ public class BeanDeployment {
         this.interceptorBindings = findInterceptorBindings(index);
         this.interceptors = findInterceptors();
         this.beanResolver = new BeanResolver(this);
-        List<ObserverInfo> observers = new ArrayList<>();
-        this.beans = findBeans(initBeanDefiningAnnotations(additionalBeanDefiningAnnotations), observers);
-        this.observers = observers;
+        this.beans = findBeans(initBeanDefiningAnnotations(additionalBeanDefiningAnnotations));
         this.interceptorResolver = new InterceptorResolver(this);
+        // TODO observers
         LOGGER.infof("Build deployment created in %s ms", System.currentTimeMillis() - start);
     }
 
     Collection<BeanInfo> getBeans() {
         return beans;
-    }
-
-    Collection<ObserverInfo> getObservers() {
-        return observers;
     }
 
     Collection<InterceptorInfo> getInterceptors() {
@@ -123,13 +116,12 @@ public class BeanDeployment {
         return bindings;
     }
 
-    private List<BeanInfo> findBeans(List<DotName> beanDefiningAnnotations, List<ObserverInfo> observers) {
+    private List<BeanInfo> findBeans(List<DotName> beanDefiningAnnotations) {
 
         Set<ClassInfo> beanClasses = new HashSet<>();
         Set<MethodInfo> producerMethods = new HashSet<>();
         Set<MethodInfo> disposerMethods = new HashSet<>();
         Set<FieldInfo> producerFields = new HashSet<>();
-        Set<MethodInfo> observerMethods = new HashSet<>();
 
         for (DotName beanDefiningAnnotation : beanDefiningAnnotations) {
             for (AnnotationInstance annotation : index.getAnnotations(beanDefiningAnnotation)) {
@@ -142,9 +134,8 @@ public class BeanDeployment {
                         continue;
                     }
                     if (beanClass.nestingType().equals(NestingType.ANONYMOUS) || beanClass.nestingType().equals(NestingType.LOCAL)
-                            || (beanClass.nestingType().equals(NestingType.INNER) && !Modifier.isStatic(beanClass.flags())) ||
-                            Modifier.isInterface(beanClass.flags())) {
-                        // Skip interfaces, annonymous, local and inner classes
+                            || (beanClass.nestingType().equals(NestingType.INNER) && !Modifier.isStatic(beanClass.flags()))) {
+                        // Skip annonymous, local and inner classes
                         continue;
                     }
                     beanClasses.add(beanClass);
@@ -154,8 +145,6 @@ public class BeanDeployment {
                             producerMethods.add(method);
                         } else if (method.hasAnnotation(DotNames.DISPOSES)) {
                             disposerMethods.add(method);
-                        } else if (method.hasAnnotation(DotNames.OBSERVES)) {
-                            observerMethods.add(method);
                         }
                     }
                     for (FieldInfo field : beanClass.fields()) {
@@ -190,21 +179,12 @@ public class BeanDeployment {
                 beans.add(Beans.createProducerMethod(producerMethod, declaringBean, this, findDisposer(declaringBean, producerMethod, disposers)));
             }
         }
-        
         for (FieldInfo producerField : producerFields) {
             BeanInfo declaringBean = beanClassToBean.get(producerField.declaringClass());
             if (declaringBean != null) {
                 beans.add(Beans.createProducerField(producerField, declaringBean, this, findDisposer(declaringBean, producerField, disposers)));
             }
         }
-
-        for (MethodInfo observerMethod : observerMethods) {
-            BeanInfo declaringBean = beanClassToBean.get(observerMethod.declaringClass());
-            if (declaringBean != null) {
-                observers.add(new ObserverInfo(declaringBean, observerMethod, Injection.forObserver(observerMethod, this)));
-            }
-        }
-
         if (LOGGER.isDebugEnabled()) {
             for (BeanInfo bean : beans) {
                 LOGGER.logf(Level.DEBUG, "Created %s", bean);
