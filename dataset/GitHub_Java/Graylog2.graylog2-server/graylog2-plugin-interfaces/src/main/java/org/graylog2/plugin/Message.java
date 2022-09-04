@@ -25,7 +25,6 @@ package org.graylog2.plugin;
 import com.eaio.uuid.UUID;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -46,8 +45,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-import static com.google.common.base.Predicates.equalTo;
-import static com.google.common.base.Predicates.not;
 import static org.graylog2.plugin.Tools.buildElasticSearchTimeFormat;
 import static org.joda.time.DateTimeZone.UTC;
 
@@ -100,7 +97,7 @@ public class Message {
     );
 
     private static final ImmutableSet<String> REQUIRED_FIELDS = ImmutableSet.of(
-            FIELD_MESSAGE, FIELD_ID
+            FIELD_MESSAGE, FIELD_SOURCE, FIELD_ID
     );
 
     public static final Function<Message, String> ID_FUNCTION = new MessageIdFunction();
@@ -128,13 +125,7 @@ public class Message {
     }
 
     public Message(final Map<String, Object> fields) {
-        this((String) fields.get(FIELD_ID), Maps.filterKeys(fields, not(equalTo(FIELD_ID))));
-    }
-
-    private Message(String id, Map<String, Object> newFields) {
-        Preconditions.checkArgument(id != null, "message id cannot be null");
-        fields.put(FIELD_ID, id);
-        addFields(newFields);
+        addFields(fields);
     }
 
     public boolean isComplete() {

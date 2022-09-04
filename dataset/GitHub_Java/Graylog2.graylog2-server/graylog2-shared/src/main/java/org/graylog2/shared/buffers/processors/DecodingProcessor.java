@@ -1,25 +1,24 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 package org.graylog2.shared.buffers.processors;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
 import com.google.common.net.InetAddresses;
 import com.google.inject.assistedinject.Assisted;
@@ -171,26 +170,17 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
 
         final ResolvableInetSocketAddress remoteAddress = raw.getRemoteAddress();
         if (remoteAddress != null) {
-            final String addrString = InetAddresses.toAddrString(remoteAddress.getAddress());
-            message.addField("gl2_remote_ip", addrString);
+            message.addField("gl2_remote_ip", InetAddresses.toAddrString(remoteAddress.getAddress()));
             if (remoteAddress.getPort() > 0) {
                 message.addField("gl2_remote_port", remoteAddress.getPort());
             }
             if (remoteAddress.isReverseLookedUp()) { // avoid reverse lookup if the hostname is available
                 message.addField("gl2_remote_hostname", remoteAddress.getHostName());
             }
-            if (Strings.isNullOrEmpty(message.getSource())) {
-                message.setSource(addrString);
-            }
         }
 
         if (codec.getConfiguration().stringIsSet(Codec.Config.CK_OVERRIDE_SOURCE)) {
             message.setSource(codec.getConfiguration().getString(Codec.Config.CK_OVERRIDE_SOURCE));
-        }
-
-        // Make sure that there is a value for the source field.
-        if (Strings.isNullOrEmpty(message.getSource())) {
-            message.setSource("unknown");
         }
 
         metricRegistry.meter(name(baseMetricName, "processedMessages")).mark();
