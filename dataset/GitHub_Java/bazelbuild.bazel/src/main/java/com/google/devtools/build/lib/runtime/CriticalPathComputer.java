@@ -15,9 +15,9 @@
 package com.google.devtools.build.lib.runtime;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Comparators;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Ordering;
 import com.google.common.eventbus.AllowConcurrentEvents;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.Action;
@@ -35,13 +35,11 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.clock.Clock;
 import java.time.Duration;
 import java.util.Comparator;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BinaryOperator;
-import java.util.stream.Stream;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -72,22 +70,27 @@ public class CriticalPathComputer {
   /** Maximum critical path found. */
   private final AtomicReference<CriticalPathComponent> maxCriticalPath;
   private final Clock clock;
+  protected final boolean discardActions;
 
-  protected CriticalPathComputer(ActionKeyContext actionKeyContext, Clock clock) {
+  protected CriticalPathComputer(
+      ActionKeyContext actionKeyContext, Clock clock, boolean discardActions) {
     this.actionKeyContext = actionKeyContext;
     this.clock = clock;
+    this.discardActions = discardActions;
     maxCriticalPath = new AtomicReference<>();
   }
 
   /**
    * Creates a critical path component for an action.
-   *
    * @param action the action for the critical path component
-   * @param relativeStartNanos time when the action started to run in nanos. Only meant to be used
-   *     for computing time differences.
+   * @param relativeStartNanos time when the action started to run in nanos. Only mean to be used
+   * for computing time differences.
    */
-  private CriticalPathComponent createComponent(Action action, long relativeStartNanos) {
-    return new CriticalPathComponent(idGenerator.getAndIncrement(), action, relativeStartNanos);
+  public CriticalPathComponent createComponent(Action action, long relativeStartNanos) {
+    int id = idGenerator.getAndIncrement();
+    return discardActions
+        ? new ActionDiscardingCriticalPathComponent(id, action, relativeStartNanos)
+        : new CriticalPathComponent(id, action, relativeStartNanos);
   }
 
   /**
@@ -173,36 +176,28 @@ public class CriticalPathComputer {
   }
 
   /** Returns the list of components using the most memory. */
-  public List<CriticalPathComponent> getLargestMemoryComponents() {
-    return uniqueActions()
-        .collect(
-            Comparators.greatest(
-                LARGEST_MEMORY_COMPONENTS_SIZE,
-                Comparator.comparingLong((c) -> c.getSpawnMetrics().memoryEstimate())));
+  public ImmutableList<CriticalPathComponent> getLargestMemoryComponents() {
+    return ImmutableList.copyOf(
+        Ordering.from(
+                Comparator.comparingLong(
+                    (CriticalPathComponent c) -> c.getSpawnMetrics().memoryEstimate()))
+            .greatestOf(outputArtifactToComponent.values(), LARGEST_MEMORY_COMPONENTS_SIZE));
   }
 
   /** Returns the list of components with the largest input sizes. */
-  public List<CriticalPathComponent> getLargestInputSizeComponents() {
-    return uniqueActions()
-        .collect(
-            Comparators.greatest(
-                LARGEST_INPUT_SIZE_COMPONENTS_SIZE,
-                Comparator.comparingLong((c) -> c.getSpawnMetrics().inputBytes())));
+  public ImmutableList<CriticalPathComponent> getLargestInputSizeComponents() {
+    return ImmutableList.copyOf(
+        Ordering.from(
+            Comparator.comparingLong(
+                (CriticalPathComponent c) -> c.getSpawnMetrics().inputBytes()))
+            .greatestOf(outputArtifactToComponent.values(), LARGEST_INPUT_SIZE_COMPONENTS_SIZE));
   }
 
   /** Returns the list of slowest components. */
-  public List<CriticalPathComponent> getSlowestComponents() {
-    return uniqueActions()
-        .collect(
-            Comparators.greatest(
-                SLOWEST_COMPONENTS_SIZE,
-                Comparator.comparingLong(CriticalPathComponent::getElapsedTimeNanos)));
-  }
-
-  private Stream<CriticalPathComponent> uniqueActions() {
-    return outputArtifactToComponent.entrySet().stream()
-        .filter((e) -> e.getValue().isPrimaryOutput(e.getKey()))
-        .map((e) -> e.getValue());
+  public ImmutableList<CriticalPathComponent> getSlowestComponents() {
+    return ImmutableList.copyOf(
+        Ordering.from(Comparator.comparingLong(CriticalPathComponent::getElapsedTimeNanos))
+            .greatestOf(outputArtifactToComponent.values(), SLOWEST_COMPONENTS_SIZE));
   }
 
   /**
@@ -348,27 +343,23 @@ public class CriticalPathComputer {
     if (depComponent != null) {
       Action action = depComponent.maybeGetAction();
       if (depComponent.isRunning && action != null) {
-        checkCriticalPathInconsistency(input, action, actionStats);
+        // Rare case that an action depending on a previously-cached shared action sees a different
+        // shared action that is in the midst of being an action cache hit.
+        for (Artifact actionOutput : action.getOutputs()) {
+          if (input.equals(actionOutput)
+              && Objects.equals(input.getArtifactOwner(), actionOutput.getArtifactOwner())) {
+            // As far as we can tell, this (currently running) action is the same action that
+            // produced input, not another shared action. This should be impossible.
+            throw new IllegalStateException(
+                String.format(
+                    "Cannot add critical path stats when the action is not finished. %s. %s. %s",
+                    input, actionStats.prettyPrintAction(), action));
+          }
+        }
         return;
       }
       actionStats.addDepInfo(depComponent);
     }
   }
-
-  protected void checkCriticalPathInconsistency(
-      Artifact input, Action action, CriticalPathComponent actionStats) {
-    // Rare case that an action depending on a previously-cached shared action sees a different
-    // shared action that is in the midst of being an action cache hit.
-    for (Artifact actionOutput : action.getOutputs()) {
-      if (input.equals(actionOutput)
-          && Objects.equals(input.getArtifactOwner(), actionOutput.getArtifactOwner())) {
-        // As far as we can tell, this (currently running) action is the same action that
-        // produced input, not another shared action. This should be impossible.
-        throw new IllegalStateException(
-            String.format(
-                "Cannot add critical path stats when the action is not finished. %s. %s. %s",
-                input, actionStats.prettyPrintAction(), action));
-      }
-    }
-  }
 }
+
