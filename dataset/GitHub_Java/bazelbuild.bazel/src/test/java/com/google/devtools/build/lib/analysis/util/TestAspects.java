@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -142,7 +143,7 @@ public class TestAspects {
         continue;
       }
       Iterable<AspectInfo> prerequisites =
-          ruleContext.getPrerequisites(attributeName, AspectInfo.class);
+          ruleContext.getPrerequisites(attributeName, TransitionMode.DONT_CHECK, AspectInfo.class);
       for (AspectInfo prerequisite : prerequisites) {
         result.addTransitive(prerequisite.getData());
       }
@@ -201,8 +202,10 @@ public class TestAspects {
     @Override
     public ConfiguredTarget create(RuleContext ruleContext)
         throws InterruptedException, RuleErrorException, ActionConflictException {
-      TransitiveInfoCollection fooAttribute = ruleContext.getPrerequisite("foo");
-      TransitiveInfoCollection barAttribute = ruleContext.getPrerequisite("bar");
+      TransitiveInfoCollection fooAttribute =
+          ruleContext.getPrerequisite("foo", TransitionMode.DONT_CHECK);
+      TransitiveInfoCollection barAttribute =
+          ruleContext.getPrerequisite("bar", TransitionMode.DONT_CHECK);
 
       NestedSetBuilder<String> infoBuilder = NestedSetBuilder.<String>stableOrder();
 
@@ -236,7 +239,7 @@ public class TestAspects {
         RuleContext ruleContext,
         AspectParameters parameters,
         String toolsRepository)
-        throws ActionConflictException, InterruptedException {
+        throws ActionConflictException {
       String information = parameters.isEmpty()
           ? ""
           : " data " + Iterables.getFirst(parameters.getAttribute("baz"), null);
@@ -286,7 +289,7 @@ public class TestAspects {
         RuleContext ruleContext,
         AspectParameters parameters,
         String toolsRepository)
-        throws ActionConflictException, InterruptedException {
+        throws ActionConflictException {
       return new ConfiguredAspect.Builder(ruleContext).addProvider(new FooProvider()).build();
     }
   }
@@ -307,7 +310,7 @@ public class TestAspects {
         RuleContext ruleContext,
         AspectParameters parameters,
         String toolsRepository)
-        throws ActionConflictException, InterruptedException {
+        throws ActionConflictException {
       return new ConfiguredAspect.Builder(ruleContext).addProvider(new BarProvider()).build();
     }
   }
@@ -351,7 +354,7 @@ public class TestAspects {
           .add(
               attr("$dep", LABEL)
                   .value(Label.parseAbsoluteUnchecked("//extra:extra"))
-                  .mandatoryBuiltinProviders(ImmutableList.of(PackageSpecificationProvider.class)))
+                  .mandatoryNativeProviders(ImmutableList.of(PackageSpecificationProvider.class)))
           .build();
 
   public static final ComputedAttributeAspect COMPUTED_ATTRIBUTE_ASPECT =
@@ -487,13 +490,14 @@ public class TestAspects {
         RuleContext ruleContext,
         AspectParameters parameters,
         String toolsRepository)
-        throws ActionConflictException, InterruptedException {
+        throws ActionConflictException {
       StringBuilder information = new StringBuilder("aspect " + ruleContext.getLabel());
       if (!parameters.isEmpty()) {
         information.append(" data " + Iterables.getFirst(parameters.getAttribute("baz"), null));
         information.append(" ");
       }
-      List<? extends TransitiveInfoCollection> deps = ruleContext.getPrerequisites("$dep");
+      List<? extends TransitiveInfoCollection> deps =
+          ruleContext.getPrerequisites("$dep", TransitionMode.TARGET);
       information.append("$dep:[");
       for (TransitiveInfoCollection dep : deps) {
         information.append(" ");
@@ -537,7 +541,7 @@ public class TestAspects {
         RuleContext ruleContext,
         AspectParameters parameters,
         String toolsRepository)
-        throws ActionConflictException, InterruptedException {
+        throws ActionConflictException {
       ruleContext.ruleWarning("Aspect warning on " + ctadBase.getTarget().getLabel());
       return new ConfiguredAspect.Builder(ruleContext).build();
     }

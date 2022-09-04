@@ -14,55 +14,94 @@
 
 package com.google.devtools.build.lib.rules.java.proto;
 
-import static com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType.BOTH;
-
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.packages.AttributeContainer;
-import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArgs;
+import com.google.devtools.build.lib.analysis.TransitionMode;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaInfo;
 
 public class StrictDepsUtils {
 
   /**
-   * Returns true iff 'ruleContext' should enforce strict-deps.
+   * Used in JavaXXXProtoLibrary.java files to construct a JCAP from 'deps', where those were
+   * populated by the Aspect it injected.
    *
-   * <ol>
-   * <li>If the rule explicitly specifies the 'strict_deps' attribute, returns its value.
-   * <li>Otherwise, if the package explicitly specifies 'default_strict_deps_java_proto_library',
-   *     returns that value.
-   * <li>Otherwise, returns the value of the --strict_deps_java_proto_library flag.
-   * </ol>
-   *
-   * Using this method requires requesting the JavaConfiguration fragment.
+   * <p>Takes care of strict deps.
    */
-  public static boolean isStrictDepsJavaProtoLibrary(RuleContext ruleContext) {
-    AttributeContainer attributeContainer = ruleContext.getRule().getAttributeContainer();
-    if (attributeContainer.isAttributeValueExplicitlySpecified("strict_deps")) {
-      return (boolean) attributeContainer.getAttr("strict_deps");
+  public static JavaCompilationArgsProvider constructJcapFromAspectDeps(
+      RuleContext ruleContext,
+      Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders) {
+    return constructJcapFromAspectDeps(
+        ruleContext, javaProtoLibraryAspectProviders, /* alwaysStrict= */ false);
+  }
+
+  public static JavaCompilationArgsProvider constructJcapFromAspectDeps(
+      RuleContext ruleContext,
+      Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders,
+      boolean alwaysStrict) {
+    JavaCompilationArgsProvider strictCompProvider =
+        JavaCompilationArgsProvider.merge(
+            ruleContext.getPrerequisites(
+                "deps", TransitionMode.TARGET, JavaCompilationArgsProvider.class));
+    if (alwaysStrict || StrictDepsUtils.isStrictDepsJavaProtoLibrary(ruleContext)) {
+      return strictCompProvider;
+    } else {
+      JavaCompilationArgsProvider.Builder nonStrictDirectJars =
+          JavaCompilationArgsProvider.builder();
+      for (JavaProtoLibraryAspectProvider p : javaProtoLibraryAspectProviders) {
+        JavaCompilationArgsProvider args = p.getNonStrictCompArgs();
+        nonStrictDirectJars
+            .addRuntimeJars(args.getRuntimeJars())
+            .addDirectCompileTimeJars(
+                /* interfaceJars= */ args.getDirectCompileTimeJars(),
+                /* fullJars= */ args.getDirectFullCompileTimeJars())
+            .addTransitiveCompileTimeJars(args.getTransitiveCompileTimeJars());
+      }
+      // Don't collect .jdeps recursively for legacy "feature" compatibility reasons. Collecting
+      // .jdeps here is probably a mistake; see JavaCompilationArgsProvider#makeNonStrict.
+      return nonStrictDirectJars
+          .addCompileTimeJavaDependencyArtifacts(
+              strictCompProvider.getCompileTimeJavaDependencyArtifacts())
+          .build();
     }
-    TriState defaultJavaProtoLibraryStrictDeps =
-        ruleContext.getRule().getPackage().getDefaultStrictDepsJavaProtos();
-    if (defaultJavaProtoLibraryStrictDeps == TriState.AUTO) {
-      return ruleContext.getFragment(JavaConfiguration.class).strictDepsJavaProtos();
-    }
-    return defaultJavaProtoLibraryStrictDeps == TriState.YES;
   }
 
   /**
-   * Returns a new JavaCompilationArgsProvider whose direct-jars part is the union of both the
-   * direct and indirect jars of 'provider'.
+   * Creates a JavaCompilationArgsProvider that's used when java_proto_library sets strict_deps=0.
+   * It contains the jars a proto_library (or the proto aspect) produced, as well as all transitive
+   * proto jars, and the proto runtime jars, all described as direct dependencies.
    */
-  public static JavaCompilationArgsProvider makeNonStrict(JavaCompilationArgsProvider provider) {
-    JavaCompilationArgs.Builder directCompilationArgs = JavaCompilationArgs.builder();
-    directCompilationArgs
-        .addTransitiveArgs(provider.getJavaCompilationArgs(), BOTH)
-        .addTransitiveArgs(provider.getRecursiveJavaCompilationArgs(), BOTH);
-    return new JavaCompilationArgsProvider(
-        directCompilationArgs.build(),
-        provider.getRecursiveJavaCompilationArgs(),
-        provider.getCompileTimeJavaDependencyArtifacts(),
-        provider.getRunTimeJavaDependencyArtifacts());
+  public static JavaCompilationArgsProvider createNonStrictCompilationArgsProvider(
+      Iterable<JavaProtoLibraryAspectProvider> deps,
+      JavaCompilationArgsProvider directJars,
+      ImmutableList<TransitiveInfoCollection> protoRuntimes) {
+    JavaCompilationArgsProvider.Builder result = JavaCompilationArgsProvider.builder();
+    result.addExports(directJars);
+    for (JavaProtoLibraryAspectProvider p : deps) {
+      result.addExports(p.getNonStrictCompArgs());
+    }
+    for (TransitiveInfoCollection t : protoRuntimes) {
+      JavaCompilationArgsProvider p = JavaInfo.getProvider(JavaCompilationArgsProvider.class, t);
+      if (p != null) {
+        result.addExports(p);
+      }
+    }
+    return result.build();
+  }
+
+  /**
+   * Returns true iff 'ruleContext' should enforce strict-deps.
+   *
+   * <p>Using this method requires requesting the JavaConfiguration fragment.
+   */
+  public static boolean isStrictDepsJavaProtoLibrary(RuleContext ruleContext) {
+    if (ruleContext.getFragment(JavaConfiguration.class).strictDepsJavaProtos()
+        || !ruleContext.attributes().has("strict_deps", Type.BOOLEAN)) {
+      return true;
+    }
+    return (boolean) ruleContext.getRule().getAttr("strict_deps");
   }
 }

@@ -40,6 +40,7 @@ import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -88,14 +89,17 @@ public class StarlarkOptionsParser {
         Maps.newHashMapWithExpectedSize(nativeOptionsParser.getResidue().size());
 
     // sort the old residue into starlark flags and legitimate residue
-    for (String arg : nativeOptionsParser.getPreDoubleDashResidue()) {
+    Iterator<String> unparsedArgs = nativeOptionsParser.getPreDoubleDashResidue().iterator();
+    while (unparsedArgs.hasNext()) {
+      String arg = unparsedArgs.next();
+
       // TODO(bazel-team): support single dash options?
       if (!arg.startsWith("--")) {
         residue.add(arg);
         continue;
       }
 
-      parseArg(arg, unparsedOptions, eventHandler);
+      parseArg(arg, unparsedArgs, unparsedOptions, eventHandler);
     }
 
     List<String> postDoubleDashResidue = nativeOptionsParser.getPostDoubleDashResidue();
@@ -142,6 +146,7 @@ public class StarlarkOptionsParser {
 
   private void parseArg(
       String arg,
+      Iterator<String> unparsedArgs,
       Map<String, Pair<String, Target>> unparsedOptions,
       ExtendedEventHandler eventHandler)
       throws OptionsParsingException {
@@ -154,7 +159,7 @@ public class StarlarkOptionsParser {
 
     if (value != null) {
       // --flag=value or -flag=value form
-      Target buildSettingTarget = loadBuildSetting(name, eventHandler);
+      Target buildSettingTarget = loadBuildSetting(name, nativeOptionsParser, eventHandler);
       unparsedOptions.put(name, new Pair<>(value, buildSettingTarget));
     } else {
       boolean booleanValue = true;
@@ -163,7 +168,7 @@ public class StarlarkOptionsParser {
         booleanValue = false;
         name = name.substring(2);
       }
-      Target buildSettingTarget = loadBuildSetting(name, eventHandler);
+      Target buildSettingTarget = loadBuildSetting(name, nativeOptionsParser, eventHandler);
       BuildSetting current =
           buildSettingTarget.getAssociatedRule().getRuleClassObject().getBuildSetting();
       if (current.getType().equals(BOOLEAN)) {
@@ -175,12 +180,18 @@ public class StarlarkOptionsParser {
           throw new OptionsParsingException(
               "Illegal use of 'no' prefix on non-boolean option: " + name, name);
         }
-        throw new OptionsParsingException("Expected value after " + arg);
+        if (unparsedArgs.hasNext()) {
+          // --flag value
+          unparsedOptions.put(name, new Pair<>(unparsedArgs.next(), buildSettingTarget));
+        } else {
+          throw new OptionsParsingException("Expected value after " + arg);
+        }
       }
     }
   }
 
-  private Target loadBuildSetting(String targetToBuild, ExtendedEventHandler eventHandler)
+  private Target loadBuildSetting(
+      String targetToBuild, OptionsParser optionsParser, ExtendedEventHandler eventHandler)
       throws OptionsParsingException {
     Target buildSetting;
     try {
@@ -190,7 +201,7 @@ public class StarlarkOptionsParser {
               Collections.singletonList(targetToBuild),
               relativeWorkingDirectory,
               SkyframeExecutor.DEFAULT_THREAD_COUNT,
-              /*keepGoing=*/ false);
+              optionsParser.getOptions(KeepGoingOption.class).keepGoing);
       buildSetting =
           Iterables.getOnlyElement(
               result.getTargets(eventHandler, skyframeExecutor.getPackageManager()));

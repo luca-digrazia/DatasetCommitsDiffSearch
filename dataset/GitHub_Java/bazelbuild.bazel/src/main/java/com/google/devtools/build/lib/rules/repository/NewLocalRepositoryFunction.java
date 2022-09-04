@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.ResolvedEvent;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.skyframe.DirectoryListingValue;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -167,9 +167,9 @@ public class NewLocalRepositoryFunction extends RepositoryFunction {
     StringBuilder repr =
         new StringBuilder()
             .append("new_local_repository(name = ")
-            .append(Starlark.repr(name))
+            .append(Printer.getPrinter().repr(name))
             .append(", path = ")
-            .append(Starlark.repr(pathObj));
+            .append(Printer.getPrinter().repr(pathObj));
 
     Object buildFileObj = rule.getAttr("build_file");
     if ((buildFileObj instanceof String) && ((String) buildFileObj).length() > 0) {
@@ -182,16 +182,17 @@ public class NewLocalRepositoryFunction extends RepositoryFunction {
       if (pathFragment.isAbsolute() && pathFragment.startsWith(embeddedDir)) {
         buildFileArg =
             "__embedded_dir__ + \"/\" + "
-                + Starlark.repr(pathFragment.relativeTo(embeddedDir).toString());
+                + Printer.getPrinter().repr(pathFragment.relativeTo(embeddedDir).toString());
       } else {
-        buildFileArg = Starlark.repr(buildFileObj.toString()).toString();
+        buildFileArg = Printer.getPrinter().repr(buildFileObj).toString();
       }
       repr.append(", build_file = ").append(buildFileArg);
     } else {
       Object buildFileContentObj = rule.getAttr("build_file_content");
       if (buildFileContentObj != null) {
         origAttr.put("build_file_content", buildFileContentObj);
-        repr.append(", build_file_content = ").append(Starlark.repr(buildFileContentObj));
+        repr.append(", build_file_content = ")
+            .append(Printer.getPrinter().repr(buildFileContentObj));
       }
     }
 

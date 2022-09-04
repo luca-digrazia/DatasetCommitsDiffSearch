@@ -17,12 +17,12 @@ package com.google.devtools.build.lib.rules.repository;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Starlark;
 import javax.annotation.Nullable;
 
 /**
@@ -50,9 +50,8 @@ public class WorkspaceAttributeMapper {
     Object value = getObject(attributeName);
     try {
       return type.cast(value);
-    } catch (ClassCastException e) {
-      throw new EvalException(
-          rule.getAttributeContainer().getAttributeLocation(attributeName), e.getMessage());
+    } catch (ClassCastException ex) {
+      throw new EvalException(ex);
     }
   }
 
@@ -61,23 +60,18 @@ public class WorkspaceAttributeMapper {
    */
   @Nullable
   public Object getObject(String attributeName) throws EvalException {
-    Object value = rule.getAttributeContainer().getAttr(checkNotNull(attributeName));
+    Object value = rule.getAttr(checkNotNull(attributeName));
     if (value instanceof SelectorList) {
-      String message;
-      if (rule.getLocation().getPath().getBaseName().equals(
-          Label.EXTERNAL_PACKAGE_FILE_NAME.getPathString())) {
-        message = "select() cannot be used in WORKSPACE files";
-      } else {
-        message = "select() cannot be used in macros called from WORKSPACE files";
-      }
-      throw new EvalException(
-          rule.getAttributeContainer().getAttributeLocation(attributeName), message);
+      throw Starlark.errorf(
+          "got value of type 'select' for attribute '%s' of %s rule '%s'; select may not be used"
+              + " in repository rules",
+          attributeName, rule.getRuleClass(), rule.getName());
     }
     return value;
   }
 
   public boolean isAttributeValueExplicitlySpecified(String attr) {
-    return rule.getAttributeContainer().isAttributeValueExplicitlySpecified(attr);
+    return rule.isAttributeValueExplicitlySpecified(attr);
   }
 
   public Iterable<String> getAttributeNames() {

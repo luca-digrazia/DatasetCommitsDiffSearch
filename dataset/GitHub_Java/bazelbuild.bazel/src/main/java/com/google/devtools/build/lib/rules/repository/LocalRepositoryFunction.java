@@ -20,7 +20,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.ResolvedEvent;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -111,11 +111,12 @@ public class LocalRepositoryFunction extends RepositoryFunction {
     if (pathFragment.isAbsolute() && pathFragment.startsWith(embeddedDir)) {
       pathArg =
           "__embedded_dir__ + \"/\" + "
-              + Starlark.repr(pathFragment.relativeTo(embeddedDir).toString());
+              + Printer.getPrinter().repr(pathFragment.relativeTo(embeddedDir).toString());
     } else {
-      pathArg = Starlark.repr(path);
+      pathArg = Printer.getPrinter().repr(path).toString();
     }
-    String repr = Starlark.format("local_repository(name = %r, path = %s)", name, pathArg);
+    String repr =
+        "local_repository(name = " + Printer.getPrinter().repr(name) + ", path = " + pathArg + ")";
     return new ResolvedEvent() {
       @Override
       public String getName() {

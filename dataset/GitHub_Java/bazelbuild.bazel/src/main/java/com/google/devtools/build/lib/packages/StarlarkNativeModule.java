@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkNativeModuleApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.NoneType;
@@ -197,7 +198,7 @@ public class StarlarkNativeModule implements StarlarkNativeModuleApi {
     List<String> files = Type.STRING_LIST.convert(srcs, "'exports_files' operand");
 
     RuleVisibility visibility =
-        Starlark.isNullOrNone(visibilityO)
+        EvalUtils.isNullOrNone(visibilityO)
             ? ConstantRuleVisibility.PUBLIC
             : PackageUtils.getVisibility(
                 pkgBuilder.getBuildFileLabel(),

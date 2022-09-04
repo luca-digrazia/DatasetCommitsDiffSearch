@@ -21,12 +21,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.Type;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 /** Faked implementation of {@link AttributeMap} for use in testing. */
@@ -108,13 +106,14 @@ public class FakeAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public void visitAllLabels(BiConsumer<Attribute, Label> consumer) {}
+  public Collection<DepEdge> visitLabels() throws InterruptedException {
+    return ImmutableList.of();
+  }
 
   @Override
-  public void visitLabels(Attribute attribute, Consumer<Label> consumer) {}
-
-  @Override
-  public void visitLabels(DependencyFilter filter, BiConsumer<Attribute, Label> consumer) {}
+  public Collection<DepEdge> visitLabels(Attribute attribute) throws InterruptedException {
+    return ImmutableList.of();
+  }
 
   @Override
   public String getPackageDefaultHdrsCheck() {
@@ -152,7 +151,7 @@ public class FakeAttributeMapper implements AttributeMap {
     private final ImmutableMap.Builder<String, FakeAttributeMapperEntry<?>> mapBuilder =
         ImmutableMap.builder();
 
-    private Builder() {}
+    private Builder() { }
 
     public Builder withStringList(String attribute, List<String> value) {
       mapBuilder.put(attribute, FakeAttributeMapperEntry.forStringList(value));
