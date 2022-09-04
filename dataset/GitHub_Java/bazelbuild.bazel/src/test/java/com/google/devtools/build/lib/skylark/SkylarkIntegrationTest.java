@@ -29,8 +29,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
-import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
 import com.google.devtools.build.lib.analysis.test.AnalysisTestResultInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -1055,115 +1053,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testNoOutputAttrDefault() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_output_attr_default=true");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  out_file = ctx.actions.declare_file(ctx.attr._o1.name)",
-        "  ctx.actions.write(output=out_file, content='hi')",
-        "  return struct(o1=ctx.attr._o1)",
-        "",
-        "def output_fn():",
-        "  return Label('//test/skylark:foo.txt')",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl,",
-        "  attrs = {'_o1': attr.output(default = output_fn)})");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'r')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:r");
-    assertContainsEvent("'default' is no longer a supported parameter for attr.output");
-  }
-
-  @Test
-  public void testTransitionGuardedByExperimentalFlag() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions=false");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return []",
-        "def transition_func(settings):",
-        "  return settings",
-        "my_transition = transition(implementation = transition_func, inputs = [], outputs = [])",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'r')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:r");
-    assertContainsEvent("transition() is experimental and disabled by default");
-  }
-
-  @Test
-  public void testNoOutputListAttrDefault() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_output_attr_default=true");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return []",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl,",
-        "  attrs = {'outs': attr.output_list(default = [])})");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'r')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:r");
-    assertContainsEvent("'default' is no longer a supported parameter for attr.output_list");
-  }
-
-  @Test
-  public void testLegacyOutputAttrDefault() throws Exception {
-    // Note that use of the "default" parameter of attr.output and attr.output_label is deprecated
-    // and barely functional. This test simply serves as proof-of-concept verification that the
-    // legacy behavior remains intact.
-    setSkylarkSemanticsOptions("--incompatible_no_output_attr_default=false");
-
-    scratch.file(
-        "test/skylark/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  out_file = ctx.actions.declare_file(ctx.attr._o1.name)",
-        "  ctx.actions.write(output=out_file, content='hi')",
-        "  return struct(o1=ctx.attr._o1,",
-        "                o2=ctx.attr.o2)",
-        "",
-        "def output_fn():",
-        "  return Label('//test/skylark:foo.txt')",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl,",
-        "  attrs = {'_o1': attr.output(default = output_fn),",
-        "           'o2': attr.output_list(default = [])})");
-
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'cr')");
-
-    ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
-    assertThat(target.get("o1")).isEqualTo(Label.parseAbsoluteUnchecked("//test/skylark:foo.txt"));
-    assertThat(target.get("o2")).isEqualTo(MutableList.empty());
-  }
-
-  @Test
   public void testRuleClassNonMandatoryEmptyOutputs() throws Exception {
     scratch.file(
         "test/skylark/extension.bzl",
@@ -2049,34 +1938,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testAnalysisFailureInfo() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "   fail('This Is My Failure Message')",
-        "   return []",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
-
-    scratch.file(
-        "test/BUILD",
-        "load('//test:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'r')");
-
-    useConfiguration("--experimental_allow_analysis_failures=true");
-
-    ConfiguredTarget target = getConfiguredTarget("//test:r");
-    AnalysisFailureInfo info =
-        (AnalysisFailureInfo) target.get(AnalysisFailureInfo.SKYLARK_CONSTRUCTOR.getKey());
-    AnalysisFailure failure = info.getCauses().toList().get(0);
-    assertThat(failure.getMessage()).contains("This Is My Failure Message");
-    assertThat(failure.getLabel()).isEqualTo(Label.parseAbsoluteUnchecked("//test:r"));
-  }
-
-  @Test
   public void testTestResultInfo() throws Exception {
     setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
 
@@ -2120,71 +1981,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:r");
     assertContainsEvent("'Provider' object is not callable");
-  }
-
-  @Test
-  public void testAnalysisTestRuleWithoutFlag() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=false");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return []",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl, analysis_test = True)");
-
-    scratch.file(
-        "test/BUILD", "load('//test:extension.bzl', 'custom_rule')", "", "custom_rule(name = 'r')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:r");
-    assertContainsEvent(
-        "analysis_test parameter is experimental and not available for general use");
-  }
-
-  @Test
-  public void testAnalysisTestRuleWithActionRegistration() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  out_file = ctx.actions.declare_file('file.txt')",
-        "  ctx.actions.write(output=out_file, content='hi')",
-        "  return []",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl, analysis_test = True)");
-
-    scratch.file(
-        "test/BUILD", "load('//test:extension.bzl', 'custom_rule')", "", "custom_rule(name = 'r')");
-
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:r");
-    assertContainsEvent(
-        "implementation function of a rule with analysis_test=true may not register actions");
-  }
-
-  @Test
-  public void testAnalysisTestRuleWithFlag() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_analysis_testing_improvements=true");
-
-    scratch.file(
-        "test/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return [AnalysisTestResultInfo(success = True, message = 'message contents')]",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl, analysis_test = True)");
-
-    scratch.file(
-        "test/BUILD", "load('//test:extension.bzl', 'custom_rule')", "", "custom_rule(name = 'r')");
-
-    ConfiguredTarget target = getConfiguredTarget("//test:r");
-    AnalysisTestResultInfo info =
-        (AnalysisTestResultInfo) target.get(AnalysisTestResultInfo.SKYLARK_CONSTRUCTOR.getKey());
-    assertThat(info.getSuccess()).isTrue();
-    assertThat(info.getMessage()).isEqualTo("message contents");
-
-    // TODO(cparsons): Verify implicit action registration via AnalysisTestResultInfo.
   }
 
   /**
