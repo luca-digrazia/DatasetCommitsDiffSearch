@@ -1,11 +1,11 @@
 package io.quarkus.it.jackson.model;
 
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategy.SnakeCaseStrategy.class)
 @RegisterForReflection
 public class SampleResponse {
 
