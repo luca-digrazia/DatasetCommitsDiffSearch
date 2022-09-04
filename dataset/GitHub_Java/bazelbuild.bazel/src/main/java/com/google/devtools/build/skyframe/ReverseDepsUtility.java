@@ -13,14 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.KeyToConsolidate.Op;
 import com.google.devtools.build.skyframe.KeyToConsolidate.OpToStoreBare;
 import java.util.ArrayList;
@@ -54,7 +53,7 @@ import java.util.Set;
 abstract class ReverseDepsUtility {
   private ReverseDepsUtility() {}
 
-  @VisibleForTesting static final int MAYBE_CHECK_THRESHOLD = 10;
+  static final int MAYBE_CHECK_THRESHOLD = 10;
 
   /**
    * We can store one type of operation bare in order to save memory. For done nodes, most

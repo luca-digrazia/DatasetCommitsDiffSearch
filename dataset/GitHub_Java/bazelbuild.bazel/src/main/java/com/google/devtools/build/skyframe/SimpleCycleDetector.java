@@ -16,7 +16,6 @@ package com.google.devtools.build.skyframe;
 import static com.google.devtools.build.skyframe.AbstractParallelEvaluator.isDoneForBuild;
 import static com.google.devtools.build.skyframe.AbstractParallelEvaluator.maybeMarkRebuilding;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -25,6 +24,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.util.GroupedList;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.util.ArrayDeque;
@@ -42,7 +42,7 @@ import javax.annotation.Nullable;
  * Depth-first implementation of cycle detection after a {@link ParallelEvaluator} evaluation has
  * completed with at least one root unfinished.
  */
-public class SimpleCycleDetector implements CycleDetector {
+class SimpleCycleDetector implements CycleDetector {
   private static final Logger logger = Logger.getLogger(SimpleCycleDetector.class.getName());
 
   @Override
