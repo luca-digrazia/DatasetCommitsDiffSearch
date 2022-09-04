@@ -32,15 +32,11 @@ import javax.lang.model.element.Element;
 import com.googlecode.androidannotations.annotations.HttpsClient;
 import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
-import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
@@ -48,12 +44,6 @@ import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JVar;
 
 public class HttpsClientProcessor implements ElementProcessor {
-
-	private final IRClass rClass;
-
-	public HttpsClientProcessor(IRClass rClass) {
-		this.rClass = rClass;
-	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
@@ -65,16 +55,16 @@ public class HttpsClientProcessor implements ElementProcessor {
 		EBeanHolder holder = eBeansHolder.getEnclosingEBeanHolder(element);
 
 		HttpsClient annotation = element.getAnnotation(HttpsClient.class);
-		int trustStoreRawId = annotation.trustStore();
+		int trustStoreFile = annotation.trustStore();
 		String trustStorePwd = annotation.trustStorePwd();
 
-		int keyStoreRawId = annotation.keyStore();
+		int keyStoreFile = annotation.keyStore();
 		String keyStorePwd = annotation.keyStorePwd();
 
 		boolean allowAllHostnames = annotation.allowAllHostnames();
 
-		boolean useCustomTrustStore = Id.DEFAULT_VALUE != trustStoreRawId ? true : false;
-		boolean useCustomKeyStore = Id.DEFAULT_VALUE != keyStoreRawId ? true : false;
+		boolean useCustomTrustStore = Id.DEFAULT_VALUE != trustStoreFile ? true : false;
+		boolean useCustomKeyStore = Id.DEFAULT_VALUE != keyStoreFile ? true : false;
 
 		String fieldName = element.getSimpleName().toString();
 		JBlock methodBody = holder.init.body();
@@ -112,16 +102,13 @@ public class HttpsClientProcessor implements ElementProcessor {
 			jVarRes = jTryBlock.body().decl(classes.RESOURCES, "res", invoke("getResources"));
 		}
 
-		IRInnerClass rInnerClass = rClass.get(Res.RAW);
 		if (useCustomKeyStore) {
-			JFieldRef rawIdRef = rInnerClass.getIdStaticRef(keyStoreRawId, holder);
-			JInvocation jInvRawKey = jVarRes.invoke("openRawResource").arg(rawIdRef);
+			JInvocation jInvRawKey = jVarRes.invoke("openRawResource").arg(lit(keyStoreFile));
 			jVarKeyFile = jTryBlock.body().decl(classes.INPUT_STREAM, "inKeystore", jInvRawKey);
 		}
 
 		if (useCustomTrustStore) {
-			JFieldRef rawIdRef = rInnerClass.getIdStaticRef(trustStoreRawId, holder);
-			JInvocation jInvRawTrust = jVarRes.invoke("openRawResource").arg(rawIdRef);
+			JInvocation jInvRawTrust = jVarRes.invoke("openRawResource").arg(lit(trustStoreFile));
 			jVarTrstFile = jTryBlock.body().decl(classes.INPUT_STREAM, "inTrustStore", jInvRawTrust);
 
 		} else if (useCustomKeyStore) {
