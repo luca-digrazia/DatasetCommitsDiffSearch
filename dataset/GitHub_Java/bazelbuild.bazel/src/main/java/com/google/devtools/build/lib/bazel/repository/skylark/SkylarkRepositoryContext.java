@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
-import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.shell.BadExitStatusException;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -59,8 +58,6 @@ import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -86,8 +83,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import javax.annotation.Nullable;
 
 /** Skylark API for the repository_rule's context. */
 public class SkylarkRepositoryContext
@@ -96,7 +91,6 @@ public class SkylarkRepositoryContext
   private final Rule rule;
   private final PathPackageLocator packageLocator;
   private final Path outputDirectory;
-  private final Path embeddedBinariesRoot;
   private final StructImpl attrObject;
   private final SkylarkOS osObject;
   private final ImmutableSet<PathFragment> blacklistedPatterns;
@@ -118,7 +112,6 @@ public class SkylarkRepositoryContext
       Environment environment,
       Map<String, String> env,
       HttpDownloader httpDownloader,
-      Path embeddedBinariesRoot,
       double timeoutScaling,
       Map<String, String> markerData,
       boolean useNativePatch)
@@ -126,7 +119,6 @@ public class SkylarkRepositoryContext
     this.rule = rule;
     this.packageLocator = packageLocator;
     this.outputDirectory = outputDirectory;
-    this.embeddedBinariesRoot = embeddedBinariesRoot;
     this.blacklistedPatterns = blacklistedPatterns;
     this.env = environment;
     this.osObject = new SkylarkOS(env);
@@ -144,7 +136,8 @@ public class SkylarkRepositoryContext
             val == null
                 ? Runtime.NONE
                 // Attribute values should be type safe
-                : SkylarkType.convertToSkylark(val, (StarlarkThread) null));
+                : SkylarkType.convertToSkylark(val,
+                    (com.google.devtools.build.lib.syntax.Environment) null));
       }
     }
     attrObject = StructProvider.STRUCT.create(attrBuilder.build(), "No such attribute '%s'");
@@ -372,15 +365,13 @@ public class SkylarkRepositoryContext
 
   @Override
   public SkylarkExecutionResult execute(
-      SkylarkList<?> arguments, // <String> or <SkylarkPath> expected
+      SkylarkList<Object> arguments,
       Integer timeout,
-      SkylarkDict<?, ?> uncheckedEnvironment, // <String, String> expected
+      SkylarkDict<String, String> environment,
       boolean quiet,
       String workingDirectory,
       Location location)
       throws EvalException, RepositoryFunctionException, InterruptedException {
-    Map<String, String> environment =
-        uncheckedEnvironment.getContents(String.class, String.class, "environment");
     WorkspaceRuleEvent w =
         WorkspaceRuleEvent.newExecuteEvent(
             arguments,
@@ -394,30 +385,16 @@ public class SkylarkRepositoryContext
     env.getListener().post(w);
     createDirectory(outputDirectory);
 
-    long timeoutMillis = Math.round(timeout.longValue() * 1000 * timeoutScaling);
-    List<?> args = arguments;
-    if (OS.getCurrent() != OS.WINDOWS && embeddedBinariesRoot != null) {
-      Path processWrapper = ProcessWrapperUtil.getProcessWrapper(embeddedBinariesRoot);
-      if (processWrapper.exists()) {
-        args =
-            ProcessWrapperUtil.commandLineBuilder(
-                    processWrapper.getPathString(),
-                    arguments.stream().map(Object::toString).collect(Collectors.toList()))
-                .setTimeout(Duration.ofMillis(timeoutMillis))
-                .build();
-      }
-    }
-
     Path workingDirectoryPath = outputDirectory;
     if (workingDirectory != null && !workingDirectory.isEmpty()) {
       workingDirectoryPath = getPath("execute()", workingDirectory).getPath();
     }
     createDirectory(workingDirectoryPath);
     return SkylarkExecutionResult.builder(osObject.getEnvironmentVariables())
-        .addArguments(args)
+        .addArguments(arguments)
         .setDirectory(workingDirectoryPath.getPathFile())
         .addEnvironmentVariables(environment)
-        .setTimeout(timeoutMillis)
+        .setTimeout(Math.round(timeout.longValue() * 1000 * timeoutScaling))
         .setQuiet(quiet)
         .execute();
   }
@@ -548,7 +525,7 @@ public class SkylarkRepositoryContext
     return null;
   }
 
-  private void warnAboutChecksumError(List<URL> urls, String errorMessage) {
+  private void warnAboutSha256Error(List<URL> urls, String sha256) {
     // Inform the user immediately, even though the file will still be downloaded.
     // This cannot be done by a regular error event, as all regular events are recorded
     // and only shown once the execution of the repository rule is finished.
@@ -557,21 +534,7 @@ public class SkylarkRepositoryContext
     if (urls.size() > 0) {
       url = urls.get(0).toString();
     }
-    reportProgress("Will fail after download of " + url + ". " + errorMessage);
-  }
-
-  @SuppressWarnings({"unchecked", "rawtypes"}) // Explained in method comment
-  private static Map<String, SkylarkDict<?, ?>> getAuthContents(
-      SkylarkDict<?, ?> authUnchecked, @Nullable String description) throws EvalException {
-    // This method would not be worth having (SkylarkDict#getContents could be called
-    // instead), except that some trickery is required to cast Map<String, SkylarkDict> to
-    // Map<String, SkylarkDict<?, ?>>.
-
-    // getContents can only guarantee raw types, so SkylarkDict is the raw type here.
-    Map<String, SkylarkDict> result =
-        authUnchecked.getContents(String.class, SkylarkDict.class, description);
-
-    return (Map<String, SkylarkDict<?, ?>>) (Map<String, ? extends SkylarkDict>) result;
+    reportProgress("Will fail after download of " + url + ". Invalid SHA256 '" + sha256 + "'");
   }
 
   @Override
@@ -582,39 +545,28 @@ public class SkylarkRepositoryContext
       Boolean executable,
       Boolean allowFail,
       String canonicalId,
-      SkylarkDict<?, ?> authUnchecked, // <String, SkylarkDict<?, ?>> expected
-      String integrity,
+      SkylarkDict<String, SkylarkDict<Object, Object>> auth,
       Location location)
       throws RepositoryFunctionException, EvalException, InterruptedException {
-    Map<URI, Map<String, String>> authHeaders =
-        getAuthHeaders(getAuthContents(authUnchecked, "auth"));
+    Map<URI, Map<String, String>> authHeaders = getAuthHeaders(auth);
 
     List<URL> urls =
-        getUrls(
-            url,
-            /* ensureNonEmpty= */ !allowFail,
-            env,
-            /* checksumGiven= */ !Strings.isNullOrEmpty(sha256)
-                || !Strings.isNullOrEmpty(integrity));
-    Optional<Checksum> checksum;
-    RepositoryFunctionException checksumValidation = null;
-    try {
-      checksum = validateChecksum(sha256, integrity, urls, location);
-    } catch (RepositoryFunctionException e) {
-      checksum = Optional.<Checksum>absent();
-      checksumValidation = e;
+        getUrls(url, /* ensureNonEmpty= */ !allowFail, env, !Strings.isNullOrEmpty(sha256));
+    RepositoryFunctionException sha256Validation = validateSha256(sha256, location);
+    if (sha256Validation != null) {
+      warnAboutSha256Error(urls, sha256);
+      sha256 = "";
     }
-
+    Optional<Checksum> checksum;
+    if (sha256.isEmpty()) {
+      checksum = Optional.absent();
+    } else {
+      checksum = Optional.of(Checksum.fromString(KeyType.SHA256, sha256));
+    }
     SkylarkPath outputPath = getPath("download()", output);
     WorkspaceRuleEvent w =
         WorkspaceRuleEvent.newDownloadEvent(
-            urls,
-            output.toString(),
-            sha256,
-            integrity,
-            executable,
-            rule.getLabel().toString(),
-            location);
+            urls, output.toString(), sha256, executable, rule.getLabel().toString(), location);
     env.getListener().post(w);
     Path downloadedPath;
     try {
@@ -645,11 +597,20 @@ public class SkylarkRepositoryContext
         throw new RepositoryFunctionException(e, Transience.TRANSIENT);
       }
     }
-    if (checksumValidation != null) {
-      throw checksumValidation;
+    if (sha256Validation != null) {
+      throw sha256Validation;
     }
-
-    return calculateDownloadResult(checksum, downloadedPath);
+    String finalSha256;
+    try {
+      finalSha256 = calculateSha256(sha256, downloadedPath);
+    } catch (IOException e) {
+      throw new RepositoryFunctionException(
+          new IOException(
+              "Couldn't hash downloaded file (" + downloadedPath.getPathString() + ")", e),
+          Transience.PERSISTENT);
+    }
+    SkylarkDict<String, Object> dict = SkylarkDict.of(null, "sha256", finalSha256, "success", true);
+    return StructProvider.STRUCT.createStruct(dict, null);
   }
 
   @Override
@@ -696,26 +657,23 @@ public class SkylarkRepositoryContext
       String stripPrefix,
       Boolean allowFail,
       String canonicalId,
-      SkylarkDict<?, ?> auth, // <String, SkylarkDict<?, ?>> expected
-      String integrity,
+      SkylarkDict<String, SkylarkDict<Object, Object>> auth,
       Location location)
       throws RepositoryFunctionException, InterruptedException, EvalException {
-    Map<URI, Map<String, String>> authHeaders = getAuthHeaders(getAuthContents(auth, "auth"));
+    Map<URI, Map<String, String>> authHeaders = getAuthHeaders(auth);
 
     List<URL> urls =
-        getUrls(
-            url,
-            /* ensureNonEmpty= */ !allowFail,
-            env,
-            /* checksumGiven= */ !Strings.isNullOrEmpty(sha256)
-                || !Strings.isNullOrEmpty(integrity));
+        getUrls(url, /* ensureNonEmpty= */ !allowFail, env, !Strings.isNullOrEmpty(sha256));
+    RepositoryFunctionException sha256Validation = validateSha256(sha256, location);
+    if (sha256Validation != null) {
+      warnAboutSha256Error(urls, sha256);
+      sha256 = "";
+    }
     Optional<Checksum> checksum;
-    RepositoryFunctionException checksumValidation = null;
-    try {
-      checksum = validateChecksum(sha256, integrity, urls, location);
-    } catch (RepositoryFunctionException e) {
-      checksum = Optional.<Checksum>absent();
-      checksumValidation = e;
+    if (sha256.isEmpty()) {
+      checksum = Optional.absent();
+    } else {
+      checksum = Optional.of(Checksum.fromString(KeyType.SHA256, sha256));
     }
 
     WorkspaceRuleEvent w =
@@ -723,7 +681,6 @@ public class SkylarkRepositoryContext
             urls,
             output.toString(),
             sha256,
-            integrity,
             type,
             stripPrefix,
             rule.getLabel().toString(),
@@ -760,8 +717,8 @@ public class SkylarkRepositoryContext
         throw new RepositoryFunctionException(e, Transience.TRANSIENT);
       }
     }
-    if (checksumValidation != null) {
-      throw checksumValidation;
+    if (sha256Validation != null) {
+      throw sha256Validation;
     }
     env.getListener().post(w);
     DecompressorValue.decompress(
@@ -772,8 +729,15 @@ public class SkylarkRepositoryContext
             .setRepositoryPath(outputPath.getPath())
             .setPrefix(stripPrefix)
             .build());
-
-    StructImpl downloadResult = calculateDownloadResult(checksum, downloadedPath);
+    String finalSha256 = null;
+    try {
+      finalSha256 = calculateSha256(sha256, downloadedPath);
+    } catch (IOException e) {
+      throw new RepositoryFunctionException(
+          new IOException(
+              "Couldn't hash downloaded file (" + downloadedPath.getPathString() + ")", e),
+          Transience.PERSISTENT);
+    }
     try {
       if (downloadedPath.exists()) {
         downloadedPath.delete();
@@ -784,84 +748,33 @@ public class SkylarkRepositoryContext
               "Couldn't delete temporary file (" + downloadedPath.getPathString() + ")", e),
           Transience.TRANSIENT);
     }
-    return downloadResult;
+    SkylarkDict<String, Object> dict = SkylarkDict.of(null, "sha256", finalSha256, "success", true);
+    return StructProvider.STRUCT.createStruct(dict, null);
   }
 
-  private Checksum calculateChecksum(Optional<Checksum> originalChecksum, Path path)
+  private String calculateSha256(String originalSha, Path path)
       throws IOException, InterruptedException {
-    if (originalChecksum.isPresent()) {
-      // The checksum is checked on download, so if we got here, the user provided checksum is good
-      return originalChecksum.get();
+    if (!Strings.isNullOrEmpty(originalSha)) {
+      // The sha is checked on download, so if we got here, the user provided sha is good
+      return originalSha;
     }
-    return Checksum.fromString(KeyType.SHA256, RepositoryCache.getChecksum(KeyType.SHA256, path));
+    return RepositoryCache.getChecksum(KeyType.SHA256, path);
   }
 
-  private Optional<Checksum> validateChecksum(
-      String sha256, String integrity, List<URL> urls, Location loc)
-      throws RepositoryFunctionException, EvalException {
-    if (!sha256.isEmpty()) {
-      if (!integrity.isEmpty()) {
-        throw new EvalException(loc, "Expected either 'sha256' or 'integrity', but not both");
-      }
-      try {
-        return Optional.of(Checksum.fromString(KeyType.SHA256, sha256));
-      } catch (IllegalArgumentException e) {
-        warnAboutChecksumError(urls, e.getMessage());
-        throw new RepositoryFunctionException(
-            new EvalException(
-                loc,
-                "Definition of repository "
-                    + rule.getName()
-                    + ": "
-                    + e.getMessage()
-                    + " at "
-                    + rule.getLocation()),
-            Transience.PERSISTENT);
-      }
-    }
-
-    if (integrity.isEmpty()) {
-      return Optional.absent();
-    }
-
-    try {
-      return Optional.of(Checksum.fromSubresourceIntegrity(integrity));
-    } catch (IllegalArgumentException e) {
-      warnAboutChecksumError(urls, e.getMessage());
-      throw new RepositoryFunctionException(
+  private RepositoryFunctionException validateSha256(String sha256, Location loc) {
+    if (!sha256.isEmpty() && !KeyType.SHA256.isValid(sha256)) {
+      return new RepositoryFunctionException(
           new EvalException(
               loc,
               "Definition of repository "
                   + rule.getName()
-                  + ": "
-                  + e.getMessage()
-                  + " at "
+                  + ": Syntactically invalid SHA256 checksum: '"
+                  + sha256
+                  + "' at "
                   + rule.getLocation()),
           Transience.PERSISTENT);
     }
-  }
-
-  private StructImpl calculateDownloadResult(Optional<Checksum> checksum, Path downloadedPath)
-      throws EvalException, InterruptedException, RepositoryFunctionException {
-    Checksum finalChecksum;
-    try {
-      finalChecksum = calculateChecksum(checksum, downloadedPath);
-    } catch (IOException e) {
-      throw new RepositoryFunctionException(
-          new IOException(
-              "Couldn't hash downloaded file (" + downloadedPath.getPathString() + ")", e),
-          Transience.PERSISTENT);
-    }
-
-    ImmutableMap.Builder<String, Object> out = new ImmutableMap.Builder<>();
-    out.put("success", true);
-    out.put("integrity", finalChecksum.toSubresourceIntegrity());
-
-    // For compatibility with older Bazel versions that don't support non-SHA256 checksums.
-    if (finalChecksum.getKeyType() == KeyType.SHA256) {
-      out.put("sha256", finalChecksum.toString());
-    }
-    return StructProvider.STRUCT.createStruct(SkylarkDict.copyOf(null, out.build()), null);
+    return null;
   }
 
   private static ImmutableList<String> checkAllUrls(Iterable<?> urlList) throws EvalException {
@@ -1011,13 +924,14 @@ public class SkylarkRepositoryContext
    * authentication, adding those headers is enough; for other forms of authentication other
    * measures might be necessary.
    */
-  private static Map<URI, Map<String, String>> getAuthHeaders(Map<String, SkylarkDict<?, ?>> auth)
+  private static Map<URI, Map<String, String>> getAuthHeaders(
+      SkylarkDict<String, SkylarkDict<Object, Object>> auth)
       throws RepositoryFunctionException, EvalException {
     ImmutableMap.Builder<URI, Map<String, String>> headers = new ImmutableMap.Builder<>();
-    for (Map.Entry<String, SkylarkDict<?, ?>> entry : auth.entrySet()) {
+    for (Map.Entry<String, SkylarkDict<Object, Object>> entry : auth.entrySet()) {
       try {
         URL url = new URL(entry.getKey());
-        SkylarkDict<?, ?> authMap = entry.getValue();
+        SkylarkDict<Object, Object> authMap = entry.getValue();
         if (authMap.containsKey("type")) {
           if ("basic".equals(authMap.get("type"))) {
             if (!authMap.containsKey("login") || !authMap.containsKey("password")) {
