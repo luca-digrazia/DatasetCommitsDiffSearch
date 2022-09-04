@@ -714,7 +714,8 @@ public class AndroidCommon {
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
         .addNativeDeclaredProvider(javaInfo)
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(getRunfiles()))
-        .addNativeDeclaredProvider(
+        .addProvider(
+            AndroidIdeInfoProvider.class,
             createAndroidIdeInfoProvider(
                 ruleContext,
                 idlHelper,
@@ -758,7 +759,7 @@ public class AndroidCommon {
         !hasSrcs
             && ruleContext
                 .getFragment(AndroidConfiguration.class)
-                .allowSrcsLessAndroidLibraryDeps(ruleContext);
+                .allowSrcsLessAndroidLibraryDeps();
     return javaCommon.collectJavaCompilationArgs(isNeverLink, exportDeps);
   }
 

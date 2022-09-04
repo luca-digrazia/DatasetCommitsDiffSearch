@@ -657,7 +657,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 androidCommon.getInstrumentedJar(),
                 applicationManifest.getManifest(),
                 AndroidCommon.getApkDebugSigningKey(ruleContext)))
-        .addNativeDeclaredProvider(new AndroidPreDexJarProvider(jarToDex))
+        .addProvider(AndroidPreDexJarProvider.class, AndroidPreDexJarProvider.create(jarToDex))
         .addProvider(
             AndroidFeatureFlagSetProvider.class,
             AndroidFeatureFlagSetProvider.create(
@@ -1886,7 +1886,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Artifact filterJar =
         ruleContext
             .getPrerequisite("instruments", Mode.TARGET)
-            .get(AndroidPreDexJarProvider.PROVIDER)
+            .getProvider(AndroidPreDexJarProvider.class)
             .getPreDexJar();
     Artifact filteredDeployJar =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_TEST_FILTERED_JAR);
