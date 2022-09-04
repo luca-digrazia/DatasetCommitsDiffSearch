@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 
 /**
  * An interface for an info type that provides all compiling and linking information in the
@@ -169,9 +169,10 @@ public interface ObjcProviderApi<FileApiT extends FileApi> extends SkylarkValue 
       name = "merge_zip",
       structField = true,
       doc =
-          "Merge zips to include in the bundle. The entries of these zip files are included "
+           "Merge zips to include in the bundle. The entries of these zip files are included "
               + "in the final bundle with the same path. The entries in the merge zips should not "
-              + "include the bundle root path (e.g. 'Foo.app').")
+              + "include the bundle root path (e.g. 'Foo.app').",
+      disableWithFlag = FlagIdentifier.INCOMPATIBLE_DISABLE_OBJC_PROVIDER_RESOURCES)
   public NestedSet<FileApiT> mergeZip();
 
   @SkylarkCallable(name = "module_map",
