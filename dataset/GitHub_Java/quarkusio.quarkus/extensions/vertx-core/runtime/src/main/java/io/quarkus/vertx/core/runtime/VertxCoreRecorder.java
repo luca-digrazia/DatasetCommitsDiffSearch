@@ -15,7 +15,6 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import org.jboss.logging.Logger;
 import org.wildfly.common.cpu.ProcessorInfo;
 
 import io.netty.channel.EventLoopGroup;
@@ -43,8 +42,6 @@ import io.vertx.core.spi.resolver.ResolverProvider;
 
 @Recorder
 public class VertxCoreRecorder {
-
-    private static final Logger LOGGER = Logger.getLogger(VertxCoreRecorder.class.getName());
 
     private static final Pattern COMMA_PATTERN = Pattern.compile(",");
 
@@ -103,21 +100,20 @@ public class VertxCoreRecorder {
     public static void initializeWeb(VertxConfiguration conf) {
         if (webVertx != null) {
         } else if (conf == null) {
-            webVertx = logVertxInitialization(Vertx.vertx());
+            webVertx = Vertx.vertx();
         } else {
             VertxOptions options = convertToVertxOptions(conf, false);
-            webVertx = logVertxInitialization(Vertx.vertx(options));
+            webVertx = Vertx.vertx(options);
         }
     }
 
     public static Vertx initialize(VertxConfiguration conf) {
         if (conf == null) {
-            return logVertxInitialization(Vertx.vertx());
+            return Vertx.vertx();
         }
 
         VertxOptions options = convertToVertxOptions(conf, true);
 
-        Vertx vertx;
         if (options.getEventBusOptions().isClustered()) {
             CompletableFuture<Vertx> latch = new CompletableFuture<>();
             Vertx.clusteredVertx(options, ar -> {
@@ -127,16 +123,10 @@ public class VertxCoreRecorder {
                     latch.complete(ar.result());
                 }
             });
-            vertx = latch.join();
+            return latch.join();
         } else {
-            vertx = Vertx.vertx(options);
+            return Vertx.vertx(options);
         }
-        return logVertxInitialization(vertx);
-    }
-
-    private static Vertx logVertxInitialization(Vertx vertx) {
-        LOGGER.debugf("Vertx has Native Transport Enabled: %s", vertx.isNativeTransportEnabled());
-        return vertx;
     }
 
     private static VertxOptions convertToVertxOptions(VertxConfiguration conf, boolean allowClustering) {
@@ -182,8 +172,6 @@ public class VertxCoreRecorder {
         }
 
         options.setWarningExceptionTime(conf.warningExceptionTime.toNanos());
-
-        options.setPreferNativeTransport(conf.preferNativeTransport);
 
         return options;
     }
