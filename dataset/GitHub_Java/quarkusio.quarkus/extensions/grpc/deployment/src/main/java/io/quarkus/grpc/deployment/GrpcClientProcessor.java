@@ -75,7 +75,7 @@ public class GrpcClientProcessor {
 
     @BuildStep
     void discoverInjectedGrpcServices(BeanDiscoveryFinishedBuildItem beanDiscovery,
-            BuildProducer<GrpcClientBuildItem> clients,
+            BuildProducer<GrpcClientBuildItem> services,
             BuildProducer<FeatureBuildItem> features,
             CombinedIndexBuildItem index) {
 
@@ -105,17 +105,17 @@ public class GrpcClientProcessor {
                 continue;
             }
 
-            String clientName;
-            AnnotationValue clientNameValue = clientAnnotation.value();
-            if (clientNameValue == null || clientNameValue.asString().equals(GrpcClient.ELEMENT_NAME)) {
+            String serviceName;
+            AnnotationValue serviceNameValue = clientAnnotation.value();
+            if (serviceNameValue == null || serviceNameValue.asString().equals(GrpcClient.ELEMENT_NAME)) {
                 // Determine the service name from the annotated element
                 if (clientAnnotation.target().kind() == Kind.FIELD) {
-                    clientName = clientAnnotation.target().asField().name();
+                    serviceName = clientAnnotation.target().asField().name();
                 } else if (clientAnnotation.target().kind() == Kind.METHOD_PARAMETER) {
                     MethodParameterInfo param = clientAnnotation.target().asMethodParameter();
-                    clientName = param.method().parameterName(param.position());
-                    if (clientName == null) {
-                        throw new DeploymentException("Unable to determine the client name from the parameter at position "
+                    serviceName = param.method().parameterName(param.position());
+                    if (serviceName == null) {
+                        throw new DeploymentException("Unable to determine the service name from the parameter at position "
                                 + param.position()
                                 + " in method "
                                 + param.method().declaringClass().name() + "#" + param.method().name()
@@ -126,23 +126,29 @@ public class GrpcClientProcessor {
                     throw new IllegalStateException(clientAnnotation + " may not be declared at " + clientAnnotation.target());
                 }
             } else {
-                clientName = clientNameValue.asString();
+                serviceName = serviceNameValue.asString();
             }
 
-            if (clientName.trim().isEmpty()) {
+            if (serviceName.trim().isEmpty()) {
                 throw new DeploymentException(
-                        "Invalid @GrpcClient `" + injectionPoint.getTargetInfo() + "` - client name cannot be empty");
+                        "Invalid @GrpcClient `" + injectionPoint.getTargetInfo() + "` - service name cannot be empty");
             }
 
             GrpcClientBuildItem item;
-            if (items.containsKey(clientName)) {
-                item = items.get(clientName);
+            if (items.containsKey(serviceName)) {
+                item = items.get(serviceName);
             } else {
-                item = new GrpcClientBuildItem(clientName);
-                items.put(clientName, item);
+                item = new GrpcClientBuildItem(serviceName);
+                items.put(serviceName, item);
             }
 
             Type injectionType = injectionPoint.getRequiredType();
+
+            // Programmatic lookup - take the param type
+            if (DotNames.INSTANCE.equals(injectionType.name()) || DotNames.INJECTABLE_INSTANCE.equals(injectionType.name())) {
+                injectionType = injectionType.asParameterizedType().arguments().get(0);
+            }
+
             if (injectionType.name().equals(GrpcDotNames.CHANNEL)) {
                 // No need to add the stub class for Channel
                 continue;
@@ -172,18 +178,18 @@ public class GrpcClientProcessor {
 
         if (!items.isEmpty()) {
             for (GrpcClientBuildItem item : items.values()) {
-                clients.produce(item);
-                LOGGER.debugf("Detected GrpcService associated with the '%s' configuration prefix", item.getClientName());
+                services.produce(item);
+                LOGGER.debugf("Detected GrpcService associated with the '%s' configuration prefix", item.getServiceName());
             }
             features.produce(new FeatureBuildItem(GRPC_CLIENT));
         }
     }
 
     @BuildStep
-    public void generateGrpcClientProducers(List<GrpcClientBuildItem> clients,
+    public void generateGrpcServicesProducers(List<GrpcClientBuildItem> clients,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
 
-        for (GrpcClientBuildItem client : clients) {
+        for (GrpcClientBuildItem svcClients : clients) {
             // For every service we register:
             // 1. the channel
             // 2. the blocking stub - if needed
@@ -194,26 +200,26 @@ public class GrpcClientProcessor {
             // bean that provides the GrpcClientConfiguration for the specific service.
 
             syntheticBeans.produce(SyntheticBeanBuildItem.configure(GrpcDotNames.CHANNEL)
-                    .addQualifier().annotation(GrpcDotNames.GRPC_CLIENT).addValue("value", client.getClientName()).done()
+                    .addQualifier().annotation(GrpcDotNames.GRPC_CLIENT).addValue("value", svcClients.getServiceName()).done()
                     .scope(Singleton.class)
                     .unremovable()
                     .creator(new Consumer<MethodCreator>() {
                         @Override
                         public void accept(MethodCreator mc) {
-                            GrpcClientProcessor.this.generateChannelProducer(mc, client);
+                            GrpcClientProcessor.this.generateChannelProducer(mc, svcClients);
                         }
                     })
                     .destroyer(Channels.ChannelDestroyer.class).done());
 
-            String svcName = client.getClientName();
-            for (ClientInfo clientInfo : client.getClients()) {
-                syntheticBeans.produce(SyntheticBeanBuildItem.configure(clientInfo.className)
+            String svcName = svcClients.getServiceName();
+            for (ClientInfo client : svcClients.getClients()) {
+                syntheticBeans.produce(SyntheticBeanBuildItem.configure(client.className)
                         .addQualifier().annotation(GrpcDotNames.GRPC_CLIENT).addValue("value", svcName).done()
                         .scope(Singleton.class)
                         .creator(new Consumer<MethodCreator>() {
                             @Override
                             public void accept(MethodCreator mc) {
-                                GrpcClientProcessor.this.generateClientProducer(mc, svcName, clientInfo);
+                                GrpcClientProcessor.this.generateClientProducer(mc, svcName, client);
                             }
                         }).done());
             }
@@ -283,7 +289,7 @@ public class GrpcClientProcessor {
     }
 
     private void generateChannelProducer(MethodCreator mc, GrpcClientBuildItem svc) {
-        ResultHandle name = mc.load(svc.getClientName());
+        ResultHandle name = mc.load(svc.getServiceName());
         ResultHandle result = mc.invokeStaticMethod(CREATE_CHANNEL_METHOD, name);
         mc.returnValue(result);
         mc.close();
