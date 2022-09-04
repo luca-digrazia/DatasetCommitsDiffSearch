@@ -145,13 +145,8 @@ public class DynamicExecutionModule extends BlazeModule {
       throws ExecutorInitException {
     DynamicExecutionOptions options = env.getOptions().getOptions(DynamicExecutionOptions.class);
     if (options.internalSpawnScheduler) {
-      if (options.legacySpawnScheduler) {
-        builder.addActionContext(
-            new LegacyDynamicSpawnStrategy(executorService, options, this::getExecutionPolicy));
-      } else {
-        builder.addActionContext(
-            new DynamicSpawnStrategy(executorService, options, this::getExecutionPolicy));
-      }
+      builder.addActionContext(
+          new DynamicSpawnStrategy(executorService, options, this::getExecutionPolicy));
       builder.addStrategyByContext(SpawnActionContext.class, "dynamic");
       setDefaultStrategiesByMnemonic(options);
       addStrategiesByMnemonic(remoteStrategiesByMnemonic, builder, "--dynamic_remote_strategy");

@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BaseSpawn;
-import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
@@ -322,7 +321,6 @@ public class DynamicSpawnStrategyTest {
         forceLocal
             ? ImmutableMap.of("local", "1")
             : forceRemote ? ImmutableMap.of("remote", "1") : ImmutableMap.<String, String>of(),
-        EmptyRunfilesSupplier.INSTANCE,
         action,
         ResourceSet.create(1, 0, 0));
   }
