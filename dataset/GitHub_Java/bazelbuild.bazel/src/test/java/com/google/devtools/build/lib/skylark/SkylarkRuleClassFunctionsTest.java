@@ -594,9 +594,17 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void incompatibleDataTransition() throws Exception {
+    ev =
+        createEvaluationTestCase(
+            StarlarkSemantics.DEFAULT_SEMANTICS
+                .toBuilder()
+                .incompatibleDisallowDataTransition(true)
+                .build());
+    ev.initialize();
     EvalException expected =
         assertThrows(EvalException.class, () -> eval("attr.label(cfg = 'data')"));
-    assertThat(expected).hasMessageThat().contains("cfg must be either 'host' or 'target'");
+    assertThat(expected).hasMessageThat().contains(
+        "Using cfg = \"data\" on an attribute is a noop and no longer supported");
   }
 
   @Test
