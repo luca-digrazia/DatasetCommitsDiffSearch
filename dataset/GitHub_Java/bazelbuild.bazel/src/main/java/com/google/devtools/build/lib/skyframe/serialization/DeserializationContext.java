@@ -69,7 +69,7 @@ public class DeserializationContext {
     return deserializeInternal(codedIn, memoizationStrategy);
   }
 
-  @SuppressWarnings({"TypeParameterUnusedInFormals", "unchecked"})
+  @SuppressWarnings({"TypeParameterUnusedInFormals"})
   private <T> T deserializeInternal(
       CodedInputStream codedIn, @Nullable MemoizationStrategy customMemoizationStrategy)
       throws IOException, SerializationException {
@@ -79,7 +79,7 @@ public class DeserializationContext {
     }
     if (tag < 0) {
       // Subtract 1 to undo transformation from SerializationContext to avoid null.
-      return (T) deserializer.getMemoized(-tag - 1); // unchecked cast
+      return (T) deserializer.getMemoized(-tag - 1);
     }
     T constant = (T) registry.maybeGetConstantByTag(tag);
     if (constant != null) {
@@ -87,7 +87,7 @@ public class DeserializationContext {
     }
     CodecDescriptor codecDescriptor = registry.getCodecDescriptorByTag(tag);
     if (deserializer == null) {
-      return (T) codecDescriptor.deserialize(this, codedIn); // unchecked cast
+      return (T) codecDescriptor.deserialize(this, codedIn);
     } else {
       @SuppressWarnings("unchecked")
       ObjectCodec<T> castCodec = (ObjectCodec<T>) codecDescriptor.getCodec();

@@ -263,7 +263,7 @@ class Memoizer {
       return Preconditions.checkNotNull(memo.lookup(memoIndex), memoIndex);
     }
 
-    private static <T> T safeCast(Object obj, ObjectCodec<T> codec) throws SerializationException {
+    private <T> T safeCast(Object obj, ObjectCodec<T> codec) throws SerializationException {
       if (obj == null) {
         return null;
       }
@@ -295,7 +295,7 @@ class Memoizer {
               + expectedTypes);
     }
 
-    private static <T> T castedDeserialize(
+    private <T> T castedDeserialize(
         DeserializationContext context, ObjectCodec<T> codec, CodedInputStream codedIn)
         throws IOException, SerializationException {
       return safeCast(codec.deserialize(context, codedIn), codec);

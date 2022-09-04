@@ -62,10 +62,7 @@ public class Parser {
     /** Whether the file contained any errors. */
     public final boolean containsErrors;
 
-    public ParseResult(
-        List<Statement> statements,
-        List<Comment> comments,
-        Location location,
+    public ParseResult(List<Statement> statements, List<Comment> comments, Location location,
         boolean containsErrors) {
       // No need to copy here; when the object is created, the parser instance is just about to go
       // out of scope and be garbage collected.
@@ -546,7 +543,7 @@ public class Parser {
   private ImmutableList<Argument.Passed> parseFuncallArguments() {
     ImmutableList<Argument.Passed> arguments = parseFunctionArguments(this::parseFuncallArgument);
     try {
-      Argument.validateFuncallArguments(arguments);
+      Argument.legacyValidateFuncallArguments(arguments);
     } catch (Argument.ArgumentException e) {
       reportError(e.getLocation(), e.getMessage());
     }
