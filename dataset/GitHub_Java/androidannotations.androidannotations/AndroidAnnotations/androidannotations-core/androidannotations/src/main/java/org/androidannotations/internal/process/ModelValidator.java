@@ -71,7 +71,7 @@ public class ModelValidator {
 
 				AnnotationMirror annotationMirror = elementValidation.getAnnotationMirror();
 				for (ElementValidation.Error error : elementValidation.getErrors()) {
-					LOGGER.error(error.getElement(), annotationMirror, error.getMessage());
+					LOGGER.error(error.getMessage(), error.getElement(), annotationMirror);
 				}
 
 				for (String warning : elementValidation.getWarnings()) {

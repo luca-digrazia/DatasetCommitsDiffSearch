@@ -57,7 +57,7 @@ public class Logger {
 		error(message, null, null, args);
 	}
 
-	public void error(Element element, String message, Object... args) {
+	public void error(String message, Element element, Object... args) {
 		error(message, element, null, args);
 	}
 
