@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import org.jboss.logging.Logger;
+import org.jboss.threads.ContextHandler;
 import org.jboss.threads.EnhancedQueueExecutor;
 import org.jboss.threads.JBossExecutors;
 import org.jboss.threads.JBossThreadFactory;
@@ -26,48 +28,33 @@ public class ExecutorRecorder {
     public ExecutorRecorder() {
     }
 
-    /**
-     * In dev mode for now we need the executor to last for the life of the app, as it is used by Undertow. This will likely
-     * change
-     */
-    static volatile CleanableExecutor devModeExecutor;
-
     private static volatile Executor current;
 
     public ExecutorService setupRunTime(ShutdownContext shutdownContext, ThreadPoolConfig threadPoolConfig,
-            LaunchMode launchMode) {
-        if (devModeExecutor != null) {
-            current = devModeExecutor;
-            return devModeExecutor;
-        }
-        final EnhancedQueueExecutor underlying = createExecutor(threadPoolConfig);
-        ExecutorService executor;
-        Runnable shutdownTask = createShutdownTask(threadPoolConfig, underlying);
+            LaunchMode launchMode, ThreadFactory threadFactory, ContextHandler<Object> contextHandler) {
+        final EnhancedQueueExecutor underlying = createExecutor(threadPoolConfig, threadFactory, contextHandler);
         if (launchMode == LaunchMode.DEVELOPMENT) {
-            devModeExecutor = new CleanableExecutor(underlying);
-            shutdownContext.addShutdownTask(new Runnable() {
+            shutdownContext.addLastShutdownTask(new Runnable() {
                 @Override
                 public void run() {
-                    devModeExecutor.clean();
+                    for (Runnable i : underlying.shutdownNow()) {
+                        Thread thread = new Thread(i, "Shutdown task thread");
+                        thread.setDaemon(true);
+                        thread.start();
+                    }
+                    current = null;
+
                 }
             });
-            executor = devModeExecutor;
-            Runtime.getRuntime().addShutdownHook(new Thread(shutdownTask, "Executor shutdown thread"));
         } else {
-            shutdownContext.addShutdownTask(shutdownTask);
-            executor = underlying;
+            Runnable shutdownTask = createShutdownTask(threadPoolConfig, underlying);
+            shutdownContext.addLastShutdownTask(shutdownTask);
         }
-        current = executor;
-        return executor;
-    }
-
-    public static ExecutorService createDevModeExecutorForFailedStart(ThreadPoolConfig config) {
-        EnhancedQueueExecutor underlying = createExecutor(config);
-        Runnable task = createShutdownTask(config, underlying);
-        devModeExecutor = new CleanableExecutor(underlying);
-        Runtime.getRuntime().addShutdownHook(new Thread(task, "Executor shutdown thread"));
-        current = devModeExecutor;
-        return devModeExecutor;
+        if (threadPoolConfig.prefill) {
+            underlying.prestartAllCoreThreads();
+        }
+        current = underlying;
+        return underlying;
     }
 
     private static Runnable createShutdownTask(ThreadPoolConfig threadPoolConfig, EnhancedQueueExecutor executor) {
@@ -83,9 +70,13 @@ public class ExecutorRecorder {
                 long interruptRemaining = threadPoolConfig.shutdownInterrupt.toNanos();
 
                 long start = System.nanoTime();
-                for (;;)
+                int loop = 1;
+                for (;;) {
+                    // This log can be very useful when debugging problems
+                    log.debugf("loop: %s, remaining: %s, intervalRemaining: %s, interruptRemaining: %s", loop++, remaining,
+                            intervalRemaining, interruptRemaining);
                     try {
-                        if (!executor.awaitTermination(Math.min(remaining, intervalRemaining), TimeUnit.MILLISECONDS)) {
+                        if (!executor.awaitTermination(Math.min(remaining, intervalRemaining), TimeUnit.NANOSECONDS)) {
                             long elapsed = System.nanoTime() - start;
                             intervalRemaining -= elapsed;
                             remaining -= elapsed;
@@ -137,17 +128,22 @@ public class ExecutorRecorder {
                                     break;
                                 }
                             }
+                        } else {
+                            return;
                         }
-                        return;
                     } catch (InterruptedException ignored) {
                     }
+                }
             }
         };
     }
 
-    private static EnhancedQueueExecutor createExecutor(ThreadPoolConfig threadPoolConfig) {
-        final JBossThreadFactory threadFactory = new JBossThreadFactory(new ThreadGroup("executor"), Boolean.TRUE, null,
-                "executor-thread-%t", JBossExecutors.loggingExceptionHandler("org.jboss.executor.uncaught"), null);
+    private static EnhancedQueueExecutor createExecutor(ThreadPoolConfig threadPoolConfig, ThreadFactory threadFactory,
+            ContextHandler<Object> contextHandler) {
+        if (threadFactory == null) {
+            threadFactory = new JBossThreadFactory(new ThreadGroup("executor"), Boolean.TRUE, null,
+                    "executor-thread-%t", JBossExecutors.loggingExceptionHandler("org.jboss.executor.uncaught"), null);
+        }
         final EnhancedQueueExecutor.Builder builder = new EnhancedQueueExecutor.Builder()
                 .setRegisterMBean(false)
                 .setHandoffExecutor(JBossExecutors.rejectingExecutor())
@@ -155,7 +151,7 @@ public class ExecutorRecorder {
         final int cpus = ProcessorInfo.availableProcessors();
         // run time config variables
         builder.setCorePoolSize(threadPoolConfig.coreThreads);
-        builder.setMaximumPoolSize(threadPoolConfig.maxThreads.orElse(8 * cpus));
+        builder.setMaximumPoolSize(threadPoolConfig.maxThreads.orElse(Math.max(8 * cpus, 200)));
         if (threadPoolConfig.queueSize.isPresent()) {
             if (threadPoolConfig.queueSize.getAsInt() < 0) {
                 builder.setMaximumQueueSize(Integer.MAX_VALUE);
@@ -165,6 +161,11 @@ public class ExecutorRecorder {
         }
         builder.setGrowthResistance(threadPoolConfig.growthResistance);
         builder.setKeepAliveTime(threadPoolConfig.keepAliveTime);
+
+        if (contextHandler != null) {
+            builder.setContextHandler(contextHandler);
+        }
+
         return builder.build();
     }
 
