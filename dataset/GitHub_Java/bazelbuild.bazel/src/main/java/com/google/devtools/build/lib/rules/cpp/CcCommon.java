@@ -487,7 +487,7 @@ public final class CcCommon {
         ruleContext.attributeError("includes",
             "Path references a path above the execution root.");
       }
-      if (includesPath.isEmpty()) {
+      if (includesPath.segmentCount() == 0) {
         ruleContext.attributeError(
             "includes",
             "'"
