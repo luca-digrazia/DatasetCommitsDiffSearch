@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
 
 /**
  * Displays an image subsampled as necessary to avoid loading too much image data into memory. After a pinch to zoom in,
@@ -44,6 +43,8 @@ import java.util.concurrent.Executor;
  * This view will not work very well with images that are far larger in one dimension than the other because the tile grid
  * for each subsampling level has the same number of rows as columns, so each tile has the same width:height ratio as
  * the source image. This could result in image data totalling several times the screen area being loaded.
+ *
+ * Dynamically changing the image is not supported but should be a simple change.
  *
  * v prefixes - coordinates, translations and distances measured in screen (view) pixels
  * s prefixes - coordinates, translations and distances measured in source image pixels (scaled)
@@ -115,9 +116,8 @@ public class SubsamplingScaleImageView extends View implements OnTouchListener {
      * @param extFile URI of the file to display
      */
     public void setImageFile(String extFile) throws IOException {
-        reset();
         BitmapInitTask task = new BitmapInitTask(this, getContext(), extFile, false);
-        task.execute();
+        task.executeOnExecutor(BitmapInitTask.SERIAL_EXECUTOR);
         try {
             initialize();
             invalidate();
@@ -131,55 +131,14 @@ public class SubsamplingScaleImageView extends View implements OnTouchListener {
      * @param assetName asset name.
      */
     public void setImageAsset(String assetName) throws IOException {
-        reset();
         BitmapInitTask task = new BitmapInitTask(this, getContext(), assetName, true);
-        task.execute();
+        task.executeOnExecutor(BitmapInitTask.SERIAL_EXECUTOR);
         try {
             initialize();
             invalidate();
         } catch (IOException e) {
             Log.e(TAG, "Image view init failed", e);
         }
-    }
-
-    /**
-     * Reset all state before setting/changing image.
-     */
-    private void reset() {
-        setOnTouchListener(null);
-        if (decoder != null) {
-            synchronized (decoder) {
-                decoder.recycle();
-            }
-            decoder = null;
-        }
-        if (tileMap != null) {
-            for (Map.Entry<Integer, List<Tile>> tileMapEntry : tileMap.entrySet()) {
-                for (Tile tile : tileMapEntry.getValue()) {
-                    if (tile.bitmap != null) {
-                        tile.bitmap.recycle();
-                    }
-                }
-            }
-        }
-        scale = 0f;
-        scaleStart = 0f;
-        vTranslate = null;
-        vTranslateStart = null;
-        pendingScale = 0f;
-        sPendingCenter = null;
-        sWidth = 0;
-        sHeight = 0;
-        isZooming = false;
-        detector = null;
-        fullImageSampleSize = 0;
-        tileMap = null;
-        vCenterStart = null;
-        vDistStart = 0;
-        flingStart = 0;
-        flingFrom = null;
-        flingMomentum = null;
-        readySent = false;
     }
 
     /**
@@ -198,7 +157,7 @@ public class SubsamplingScaleImageView extends View implements OnTouchListener {
         detector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                if (vTranslate != null && (Math.abs(e1.getX() - e2.getX()) > 50 || Math.abs(e1.getY() - e2.getY()) > 50) && (Math.abs(velocityX) > 500 || Math.abs(velocityY) > 500) && !isZooming) {
+                if ((Math.abs(e1.getX() - e2.getX()) > 50 || Math.abs(e1.getY() - e2.getY()) > 50) && (Math.abs(velocityX) > 500 || Math.abs(velocityY) > 500) && !isZooming) {
                     flingMomentum = new PointF(velocityX * 0.5f, velocityY * 0.5f);
                     flingFrom = new PointF(vTranslate.x, vTranslate.y);
                     flingStart = System.currentTimeMillis();
@@ -396,7 +355,7 @@ public class SubsamplingScaleImageView extends View implements OnTouchListener {
         List<Tile> baseGrid = tileMap.get(fullImageSampleSize);
         for (Tile baseTile : baseGrid) {
             BitmapTileTask task = new BitmapTileTask(this, decoder, baseTile);
-            task.execute();
+            task.executeOnExecutor(BitmapTileTask.SERIAL_EXECUTOR);
         }
 
     }
@@ -427,7 +386,7 @@ public class SubsamplingScaleImageView extends View implements OnTouchListener {
                         tile.visible = true;
                         if (!tile.loading && tile.bitmap == null && load) {
                             BitmapTileTask task = new BitmapTileTask(this, decoder, tile);
-                            task.execute();
+                            task.executeOnExecutor(BitmapTileTask.SERIAL_EXECUTOR);
                         }
                     } else if (tile.sampleSize != fullImageSampleSize) {
                         tile.visible = false;
@@ -631,15 +590,14 @@ public class SubsamplingScaleImageView extends View implements OnTouchListener {
         protected Bitmap doInBackground(Void... params) {
             try {
                 if (decoderRef != null && tileRef != null && viewRef != null) {
+
                     final BitmapRegionDecoder decoder = decoderRef.get();
                     final Tile tile = tileRef.get();
-                    if (decoder != null && tile != null && !decoder.isRecycled()) {
-                        synchronized (decoder) {
-                            BitmapFactory.Options options = new BitmapFactory.Options();
-                            options.inSampleSize = tile.sampleSize;
-                            options.inPreferredConfig = Config.RGB_565;
-                            return decoder.decodeRegion(tile.sRect, options);
-                        }
+                    if (decoder != null && tile != null) {
+                        BitmapFactory.Options options = new BitmapFactory.Options();
+                        options.inSampleSize = tile.sampleSize;
+                        options.inPreferredConfig = Config.RGB_565;
+                        return decoder.decodeRegion(tile.sRect, options);
                     }
                 }
             } catch (Exception e) {
