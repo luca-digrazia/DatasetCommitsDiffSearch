@@ -35,7 +35,6 @@ import org.graylog2.security.InMemoryRolePermissionResolver;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.shared.users.Role;
-import org.graylog2.shared.users.Roles;
 import org.graylog2.users.RoleImpl;
 import org.graylog2.users.RoleService;
 import org.joda.time.DateTimeZone;
@@ -185,7 +184,7 @@ public class RolesResource extends RestResource {
             final Set<String> roleIds = user.getRoleIds();
             final Set<String> roleNames = Sets.newHashSet(
                     Collections2.transform(roleIds,
-                                           Roles.roleIdToNameFunction(idMap)));
+                                           new Role.RoleIdToNameFunction(idMap)));
             userSummaries.add(UserSummary.create(
                     user.getId(),
                     user.getName(),
