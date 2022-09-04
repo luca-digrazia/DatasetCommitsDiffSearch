@@ -384,7 +384,6 @@ public class TestAspects {
   private static final AspectDefinition ASPECT_REQUIRING_PROVIDER_DEFINITION =
       new AspectDefinition.Builder(ASPECT_REQUIRING_PROVIDER)
           .requireProviders(RequiredProvider.class)
-          .propagateAlongAttribute("foo")
           .build();
   private static final AspectDefinition ASPECT_REQUIRING_PROVIDER_SETS_DEFINITION =
       new AspectDefinition.Builder(ASPECT_REQUIRING_PROVIDER_SETS)

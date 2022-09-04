@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
@@ -31,6 +30,7 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
+import com.google.devtools.build.lib.rules.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.BaseFunction;
@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
-import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Map;
 
 /**
@@ -156,7 +155,7 @@ public class SkylarkRepositoryModule {
     public Object call(
         Object[] args, FuncallExpression ast, com.google.devtools.build.lib.syntax.Environment env)
         throws EvalException, InterruptedException {
-      String ruleClassName = Preconditions.checkNotNull(ast.getFunctionNameIfPossible());
+      String ruleClassName = ast.getFunction().getName();
       try {
         RuleClass ruleClass = builder.build(ruleClassName);
         PackageContext context = PackageFactory.getContext(env, ast);
