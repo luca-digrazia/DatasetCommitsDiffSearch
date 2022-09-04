@@ -71,9 +71,9 @@ import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkExportable;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
+import com.google.devtools.build.lib.packages.ToolchainConstructor;
 import com.google.devtools.build.lib.rules.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
@@ -384,7 +384,7 @@ public class SkylarkRuleClassFunctions {
       @Param(
         name = "toolchains",
         type = SkylarkList.class,
-        generic1 = String.class,
+        generic1 = ToolchainConstructor.class,
         defaultValue = "[]",
         doc =
             "<i>(Experimental)</i><br/><br/>"
@@ -410,7 +410,7 @@ public class SkylarkRuleClassFunctions {
             SkylarkList fragments,
             SkylarkList hostFragments,
             Boolean skylarkTestable,
-            SkylarkList<String> toolchains,
+            SkylarkList<ToolchainConstructor> toolchains,
             FuncallExpression ast,
             Environment funcallEnv)
             throws EvalException, ConversionException {
@@ -469,7 +469,10 @@ public class SkylarkRuleClassFunctions {
               hostFragments.getContents(String.class, "host_fragments"));
           builder.setConfiguredTargetFunction(implementation);
           builder.setRuleDefinitionEnvironment(funcallEnv);
-          builder.addRequiredToolchains(collectToolchainLabels(toolchains, ast));
+
+          for (ToolchainConstructor toolchain : toolchains) {
+            builder.addRequiredToolchain(toolchain.getKey());
+          }
 
           return new RuleFunction(builder, type, attributes, ast.getLocation());
         }
@@ -498,24 +501,6 @@ public class SkylarkRuleClassFunctions {
     } catch (IllegalArgumentException ex) {
       throw new EvalException(location, ex);
     }
-  }
-
-  private static ImmutableList<Label> collectToolchainLabels(
-      Iterable<String> rawLabels, FuncallExpression ast) throws EvalException {
-    ImmutableList.Builder<Label> requiredToolchains = new ImmutableList.Builder<>();
-    for (String rawLabel : rawLabels) {
-      try {
-        Label toolchainLabel = Label.parseAbsolute(rawLabel);
-        requiredToolchains.add(toolchainLabel);
-      } catch (LabelSyntaxException e) {
-        throw new EvalException(
-            ast.getLocation(),
-            String.format("Unable to parse toolchain %s: %s", rawLabel, e.getMessage()),
-            e);
-      }
-    }
-
-    return requiredToolchains.build();
   }
 
   @SkylarkSignature(
@@ -598,7 +583,7 @@ public class SkylarkRuleClassFunctions {
       @Param(
         name = "toolchains",
         type = SkylarkList.class,
-        generic1 = String.class,
+        generic1 = ToolchainConstructor.class,
         defaultValue = "[]",
         doc =
             "<i>(Experimental)</i><br/><br/>"
@@ -620,7 +605,7 @@ public class SkylarkRuleClassFunctions {
             SkylarkList providesArg,
             SkylarkList fragments,
             SkylarkList hostFragments,
-            SkylarkList<String> toolchains,
+            SkylarkList<ToolchainConstructor> toolchains,
             FuncallExpression ast,
             Environment funcallEnv)
             throws EvalException {
@@ -699,6 +684,14 @@ public class SkylarkRuleClassFunctions {
             }
           }
 
+          // Collect the required toolchain keys.
+          ImmutableList.Builder<ClassObjectConstructor.Key> requiredToolchains =
+              new ImmutableList.Builder<>();
+          for (ToolchainConstructor toolchain :
+              toolchains.getContents(ToolchainConstructor.class, "toolchains")) {
+            requiredToolchains.add(toolchain.getKey());
+          }
+
           return new SkylarkAspect(
               implementation,
               attrAspects.build(),
@@ -709,7 +702,7 @@ public class SkylarkRuleClassFunctions {
               requiredParams.build(),
               ImmutableSet.copyOf(fragments.getContents(String.class, "fragments")),
               ImmutableSet.copyOf(hostFragments.getContents(String.class, "host_fragments")),
-              collectToolchainLabels(toolchains, ast),
+              requiredToolchains.build(),
               funcallEnv);
         }
       };
@@ -815,11 +808,6 @@ public class SkylarkRuleClassFunctions {
     @Override
     public boolean isExported() {
       return skylarkLabel != null;
-    }
-
-    @Override
-    public void repr(SkylarkPrinter printer) {
-      printer.append("<rule>");
     }
   }
 
