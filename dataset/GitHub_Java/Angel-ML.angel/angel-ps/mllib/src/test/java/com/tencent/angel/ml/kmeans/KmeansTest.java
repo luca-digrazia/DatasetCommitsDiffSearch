@@ -52,7 +52,7 @@ public class KmeansTest {
       // Feature number of train data
       long featureNum = 256;
       // Total iteration number
-      int epochNum = 5;
+      int epochNum = 10;
       // Sample ratio per mini-batch
       double spratio = 1.0;
       // C
@@ -65,9 +65,7 @@ public class KmeansTest {
       conf.setBoolean("mapred.mapper.new-api", true);
       conf.set(AngelConf.ANGEL_INPUTFORMAT_CLASS, CombineTextInputFormat.class.getName());
       conf.setBoolean(AngelConf.ANGEL_JOB_OUTPUT_PATH_DELETEONEXIST, true);
-      conf.setInt(AngelConf.ANGEL_PSAGENT_CACHE_SYNC_TIMEINTERVAL_MS, 10);
-      conf.setInt(AngelConf.ANGEL_WORKER_HEARTBEAT_INTERVAL_MS, 1000);
-      conf.setInt(AngelConf.ANGEL_PS_HEARTBEAT_INTERVAL_MS, 1000);
+      conf.setInt(AngelConf.ANGEL_PSAGENT_CACHE_SYNC_TIMEINTERVAL_MS, 100);
 
       //set angel resource parameters #worker, #task, #PS
       conf.setInt(AngelConf.ANGEL_WORKERGROUP_NUMBER, 1);
@@ -78,6 +76,7 @@ public class KmeansTest {
       conf.set(MLConf.KMEANS_CENTER_NUM(), String.valueOf(centerNum));
       conf.set(MLConf.ML_FEATURE_INDEX_RANGE(), String.valueOf(featureNum));
       conf.set(MLConf.ML_EPOCH_NUM(), String.valueOf(epochNum));
+      conf.set(MLConf.KMEANS_SAMPLE_RATIO_PERBATCH(), String.valueOf(spratio));
       conf.set(MLConf.KMEANS_C(), String.valueOf(c));
 
       // Set data format
