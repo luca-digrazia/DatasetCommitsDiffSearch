@@ -20,6 +20,7 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.resteasy.common.deployment.ResteasyConfigBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import io.quarkus.resteasy.runtime.AuthenticationCompletionExceptionMapper;
 import io.quarkus.resteasy.runtime.AuthenticationFailedExceptionMapper;
@@ -36,7 +37,6 @@ import io.quarkus.security.spi.AdditionalSecuredClassesBuildIem;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.RouteDescriptionBuildItem;
-import io.quarkus.vertx.http.runtime.devmode.AdditionalRouteDescription;
 import io.quarkus.vertx.http.runtime.devmode.RouteDescription;
 
 public class ResteasyBuiltinsProcessor {
@@ -46,6 +46,11 @@ public class ResteasyBuiltinsProcessor {
     @BuildStep
     CapabilityBuildItem capability() {
         return new CapabilityBuildItem(Capability.RESTEASY);
+    }
+
+    @BuildStep
+    ResteasyConfigBuildItem resteasyConfig(ResteasyJsonConfig resteasyJsonConfig) {
+        return new ResteasyConfigBuildItem(resteasyJsonConfig.jsonDefault);
     }
 
     @BuildStep
@@ -109,10 +114,9 @@ public class ResteasyBuiltinsProcessor {
     @BuildStep(onlyIf = IsDevelopment.class)
     void addAdditionalEndpointsExceptionMapper(List<NotFoundPageDisplayableEndpointBuildItem> displayableEndpoints,
             ExceptionMapperRecorder recorder, HttpRootPathBuildItem httpRoot) {
-        List<AdditionalRouteDescription> endpoints = displayableEndpoints
+        List<String> endpoints = displayableEndpoints
                 .stream()
-                .map(displayableAdditionalBuildItem -> new AdditionalRouteDescription(
-                        displayableAdditionalBuildItem.getEndpoint(), displayableAdditionalBuildItem.getDescription()))
+                .map(displayableAdditionalBuildItem -> displayableAdditionalBuildItem.getEndpoint())
                 .sorted()
                 .collect(Collectors.toList());
 

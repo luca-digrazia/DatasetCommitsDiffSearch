@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -55,7 +56,6 @@ import io.quarkus.deployment.builditem.ProxyUnwrapperBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.resteasy.common.runtime.ResteasyInjectorFactoryRecorder;
-import io.quarkus.resteasy.common.spi.ResteasyConfigBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyDotNames;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import io.quarkus.runtime.RuntimeValue;
@@ -81,14 +81,9 @@ public class ResteasyCommonProcessor {
     private static final DotName QUARKUS_OBJECT_MAPPER_CONTEXT_RESOLVER = DotName
             .createSimple("io.quarkus.resteasy.common.runtime.jackson.QuarkusObjectMapperContextResolver");
     private static final DotName OBJECT_MAPPER = DotName.createSimple("com.fasterxml.jackson.databind.ObjectMapper");
-    private static final DotName QUARKUS_JACKSON_SERIALIZER = DotName
-            .createSimple("io.quarkus.resteasy.common.runtime.jackson.QuarkusJacksonSerializer");
-
     private static final DotName QUARKUS_JSONB_CONTEXT_RESOLVER = DotName
             .createSimple("io.quarkus.resteasy.common.runtime.jsonb.QuarkusJsonbContextResolver");
     private static final DotName JSONB = DotName.createSimple("javax.json.bind.Jsonb");
-    private static final DotName QUARKUS_JSONB_SERIALIZER = DotName
-            .createSimple("io.quarkus.resteasy.common.runtime.jsonb.QuarkusJsonbSerializer");
 
     private ResteasyCommonConfig resteasyCommonConfig;
 
@@ -118,12 +113,6 @@ public class ResteasyCommonProcessor {
     }
 
     @BuildStep
-    ResteasyConfigBuildItem resteasyConfig(ResteasyJsonConfig resteasyJsonConfig, Capabilities capabilities) {
-        return new ResteasyConfigBuildItem(resteasyJsonConfig.jsonDefault &&
-                (capabilities.isPresent(Capability.REST_JACKSON) || capabilities.isPresent(Capability.REST_JSONB)));
-    }
-
-    @BuildStep
     void setupGzipProviders(BuildProducer<ResteasyJaxrsProviderBuildItem> providers) {
         // If GZIP support is enabled, enable it
         if (resteasyCommonConfig.gzip.enabled) {
@@ -137,7 +126,6 @@ public class ResteasyCommonProcessor {
     @BuildStep
     ResteasyInjectionReadyBuildItem setupResteasyInjection(List<ProxyUnwrapperBuildItem> proxyUnwrappers,
             BeanContainerBuildItem beanContainerBuildItem,
-            Capabilities capabilities,
             ResteasyInjectorFactoryRecorder recorder) {
         List<Function<Object, Object>> unwrappers = new ArrayList<>();
         for (ProxyUnwrapperBuildItem i : proxyUnwrappers) {
@@ -153,7 +141,7 @@ public class ResteasyCommonProcessor {
             BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             List<ResteasyJaxrsProviderBuildItem> contributedProviderBuildItems,
             List<RestClientBuildItem> restClients,
-            ResteasyConfigBuildItem resteasyConfig,
+            Optional<ResteasyConfigBuildItem> resteasyConfig,
             Capabilities capabilities) throws Exception {
 
         Set<String> contributedProviders = new HashSet<>();
@@ -215,9 +203,8 @@ public class ResteasyCommonProcessor {
         IndexView beansIndex = beanArchiveIndexBuildItem.getIndex();
 
         // find the providers declared in our services
-        boolean useBuiltinProviders = collectDeclaredProviders(restClients, resteasyConfig,
-                providersToRegister, categorizedReaders, categorizedWriters, categorizedContextResolvers,
-                index, beansIndex);
+        boolean useBuiltinProviders = collectDeclaredProviders(restClients, resteasyConfig, providersToRegister,
+                categorizedReaders, categorizedWriters, categorizedContextResolvers, index, beansIndex);
 
         if (useBuiltinProviders) {
             providersToRegister = new HashSet<>(contributedProviders);
@@ -264,7 +251,6 @@ public class ResteasyCommonProcessor {
     @BuildStep
     void registerJsonContextResolvers(CombinedIndexBuildItem combinedIndexBuildItem,
             Capabilities capabilities,
-            ResteasyJsonConfig resteasyJsonConfig,
             BuildProducer<ResteasyJaxrsProviderBuildItem> jaxrsProvider,
             BuildProducer<AdditionalBeanBuildItem> additionalBean,
             BuildProducer<UnremovableBeanBuildItem> unremovable) {
@@ -272,17 +258,11 @@ public class ResteasyCommonProcessor {
         if (capabilities.isPresent(Capability.REST_JACKSON)) {
             registerJsonContextResolver(OBJECT_MAPPER, QUARKUS_OBJECT_MAPPER_CONTEXT_RESOLVER, combinedIndexBuildItem,
                     jaxrsProvider, additionalBean, unremovable);
-            if (resteasyJsonConfig.jsonDefault) {
-                jaxrsProvider.produce(new ResteasyJaxrsProviderBuildItem(QUARKUS_JACKSON_SERIALIZER.toString()));
-            }
         }
 
         if (capabilities.isPresent(Capability.REST_JSONB)) {
             registerJsonContextResolver(JSONB, QUARKUS_JSONB_CONTEXT_RESOLVER, combinedIndexBuildItem, jaxrsProvider,
                     additionalBean, unremovable);
-            if (resteasyJsonConfig.jsonDefault) {
-                jaxrsProvider.produce(new ResteasyJaxrsProviderBuildItem(QUARKUS_JSONB_SERIALIZER.toString()));
-            }
         }
     }
 
@@ -426,11 +406,10 @@ public class ResteasyCommonProcessor {
     }
 
     private static boolean collectDeclaredProviders(List<RestClientBuildItem> restClients,
-            ResteasyConfigBuildItem resteasyConfig,
+            Optional<ResteasyConfigBuildItem> resteasyConfig,
             Set<String> providersToRegister,
             MediaTypeMap<String> categorizedReaders, MediaTypeMap<String> categorizedWriters,
-            MediaTypeMap<String> categorizedContextResolvers,
-            IndexView... indexes) {
+            MediaTypeMap<String> categorizedContextResolvers, IndexView... indexes) {
         Set<String> restClientNames = restClients.stream()
                 .map(RestClientBuildItem::getInterfaceName)
                 .collect(Collectors.toSet());
@@ -441,41 +420,43 @@ public class ResteasyCommonProcessor {
                 for (AnnotationInstance getMethod : getMethods) {
                     MethodInfo methodTarget = getMethod.target().asMethod();
                     boolean isRestClient = restClientNames.contains(methodTarget.declaringClass().name().toString());
+                    boolean jsonDefault = !isRestClient
+                            && (resteasyConfig.isPresent() ? resteasyConfig.get().isJsonDefault() : false);
 
                     if (isRestClient) {
                         // when dealing with a REST client, we need to collect @Consumes as writers and @Produces as readers
                         if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedWriters,
                                 methodTarget, ResteasyDotNames.CONSUMES, providerDiscoverer.noConsumesDefaultsToAll(),
-                                resteasyConfig.isJsonDefault())) {
+                                false)) {
                             return true;
                         }
                         if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedReaders,
                                 methodTarget, ResteasyDotNames.PRODUCES, providerDiscoverer.noProducesDefaultsToAll(),
-                                resteasyConfig.isJsonDefault())) {
+                                false)) {
                             return true;
                         }
                     } else {
                         // for JAX-RS resources, we do the opposite
                         if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedReaders,
                                 methodTarget, ResteasyDotNames.CONSUMES, providerDiscoverer.noConsumesDefaultsToAll(),
-                                resteasyConfig.isJsonDefault())) {
+                                jsonDefault)) {
                             return true;
                         }
                         if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedWriters,
                                 methodTarget, ResteasyDotNames.PRODUCES, providerDiscoverer.noProducesDefaultsToAll(),
-                                resteasyConfig.isJsonDefault())) {
+                                jsonDefault)) {
                             return true;
                         }
                     }
 
                     if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister,
                             categorizedContextResolvers, methodTarget, ResteasyDotNames.CONSUMES,
-                            providerDiscoverer.noConsumesDefaultsToAll(), resteasyConfig.isJsonDefault())) {
+                            providerDiscoverer.noConsumesDefaultsToAll(), jsonDefault)) {
                         return true;
                     }
                     if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister,
                             categorizedContextResolvers, methodTarget, ResteasyDotNames.PRODUCES,
-                            providerDiscoverer.noProducesDefaultsToAll(), resteasyConfig.isJsonDefault())) {
+                            providerDiscoverer.noProducesDefaultsToAll(), jsonDefault)) {
                         return true;
                     }
                 }
