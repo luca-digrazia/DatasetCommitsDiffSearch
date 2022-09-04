@@ -422,6 +422,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new TransactionalValidator(processingEnv));
 		modelValidator.register(new ExtraValidator(processingEnv));
 		modelValidator.register(new SystemServiceValidator(processingEnv, androidSystemServices));
+		modelValidator.register(new AfterViewsValidator(processingEnv));
 		modelValidator.register(new SharedPrefValidator(processingEnv));
 		modelValidator.register(new PrefValidator(processingEnv));
 		modelValidator.register(new RestValidator(processingEnv));
@@ -441,7 +442,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new RootContextValidator(processingEnv));
 		modelValidator.register(new BeanValidator(processingEnv));
 		modelValidator.register(new AfterInjectValidator(processingEnv));
-		modelValidator.register(new AfterViewsValidator(processingEnv));
 		if (traceActivated()) {
 			modelValidator.register(new TraceValidator(processingEnv));
 		}
@@ -481,17 +481,17 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new EServiceProcessor());
 		modelProcessor.register(new EReceiverProcessor());
 		modelProcessor.register(new EProviderProcessor());
-		modelProcessor.register(new EFragmentProcessor(processingEnv, rClass));
-		modelProcessor.register(new EViewGroupProcessor(processingEnv, rClass));
+		modelProcessor.register(new EFragmentProcessor(rClass));
+		modelProcessor.register(new EViewGroupProcessor(rClass));
 		modelProcessor.register(new EViewProcessor());
 		modelProcessor.register(new EBeanProcessor());
 		modelProcessor.register(new SharedPrefProcessor());
 		modelProcessor.register(new PrefProcessor(validatedModel));
 		modelProcessor.register(new RoboGuiceProcessor());
-		modelProcessor.register(new ViewByIdProcessor(processingEnv, rClass));
+		modelProcessor.register(new ViewByIdProcessor(rClass));
 		modelProcessor.register(new FragmentByIdProcessor(processingEnv, rClass));
 		modelProcessor.register(new FragmentByTagProcessor(processingEnv));
-		modelProcessor.register(new FromHtmlProcessor(processingEnv, rClass));
+		modelProcessor.register(new FromHtmlProcessor(rClass));
 		modelProcessor.register(new ClickProcessor(processingEnv, rClass));
 		modelProcessor.register(new LongClickProcessor(processingEnv, rClass));
 		modelProcessor.register(new TouchProcessor(processingEnv, rClass));
@@ -499,11 +499,12 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new ItemSelectedProcessor(processingEnv, rClass));
 		modelProcessor.register(new ItemLongClickProcessor(processingEnv, rClass));
 		for (AndroidRes androidRes : AndroidRes.values()) {
-			modelProcessor.register(new ResProcessor(processingEnv, androidRes, rClass));
+			modelProcessor.register(new ResProcessor(androidRes, rClass));
 		}
 		modelProcessor.register(new TransactionalProcessor());
 		modelProcessor.register(new ExtraProcessor(processingEnv));
 		modelProcessor.register(new SystemServiceProcessor(androidSystemServices));
+		modelProcessor.register(new AfterViewsProcessor());
 		RestImplementationsHolder restImplementationHolder = new RestImplementationsHolder();
 		modelProcessor.register(new RestProcessor(restImplementationHolder));
 		modelProcessor.register(new GetProcessor(processingEnv, restImplementationHolder));
@@ -520,13 +521,12 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new RestServiceProcessor());
 		modelProcessor.register(new RootContextProcessor());
 		modelProcessor.register(new BeanProcessor(processingEnv));
-		modelProcessor.register(new AfterViewsProcessor());
 		modelProcessor.register(new TraceProcessor());
 		modelProcessor.register(new UiThreadProcessor());
 		modelProcessor.register(new BackgroundProcessor());
 		modelProcessor.register(new AfterInjectProcessor());
 		modelProcessor.register(new InstanceStateProcessor(processingEnv));
-		modelProcessor.register(new NonConfigurationInstanceProcessor(processingEnv));
+		modelProcessor.register(new NonConfigurationInstanceProcessor());
 		modelProcessor.register(new TextChangeProcessor(processingEnv, rClass));
 		modelProcessor.register(new BeforeTextChangeProcessor(processingEnv, rClass));
 		modelProcessor.register(new AfterTextChangeProcessor(processingEnv, rClass));
