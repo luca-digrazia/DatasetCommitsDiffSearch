@@ -199,20 +199,10 @@ public class LtoBackendActionTest extends BuildViewTestCase {
 
             if (attributesToFlip.contains(KeyAttributes.RUNFILES_SUPPLIER)) {
               builder.addRunfilesSupplier(
-                  new RunfilesSupplierImpl(
-                      PathFragment.create("a"),
-                      Runfiles.EMPTY,
-                      artifactA,
-                      /* buildRunfileLinks= */ false,
-                      /* runfileLinksEnabled= */ false));
+                  new RunfilesSupplierImpl(PathFragment.create("a"), Runfiles.EMPTY, artifactA));
             } else {
               builder.addRunfilesSupplier(
-                  new RunfilesSupplierImpl(
-                      PathFragment.create("a"),
-                      Runfiles.EMPTY,
-                      artifactB,
-                      /* buildRunfileLinks= */ false,
-                      /* runfileLinksEnabled= */ false));
+                  new RunfilesSupplierImpl(PathFragment.create("a"), Runfiles.EMPTY, artifactB));
             }
 
             if (attributesToFlip.contains(KeyAttributes.INPUT)) {
