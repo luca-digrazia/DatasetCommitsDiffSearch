@@ -31,7 +31,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassFinalFieldsWritablePredicateBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyIgnoreWarningBuildItem;
-import io.quarkus.deployment.util.JandexUtil;
 
 public class ReflectiveHierarchyStep {
 
@@ -124,19 +123,17 @@ public class ReflectiveHierarchyStep {
                 return;
             }
 
-            addClassTypeHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, type.name(), type.name(),
+            addClassTypeHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, type.name(),
                     processedReflectiveHierarchies, unindexedClasses,
                     finalFieldsWritable, reflectiveClass);
 
             for (ClassInfo subclass : combinedIndexBuildItem.getIndex().getAllKnownSubclasses(type.name())) {
                 addClassTypeHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, subclass.name(),
-                        subclass.name(),
                         processedReflectiveHierarchies,
                         unindexedClasses, finalFieldsWritable, reflectiveClass);
             }
             for (ClassInfo subclass : combinedIndexBuildItem.getIndex().getAllKnownImplementors(type.name())) {
                 addClassTypeHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, subclass.name(),
-                        subclass.name(),
                         processedReflectiveHierarchies,
                         unindexedClasses, finalFieldsWritable, reflectiveClass);
             }
@@ -149,7 +146,6 @@ public class ReflectiveHierarchyStep {
             ParameterizedType parameterizedType = (ParameterizedType) type;
             if (!reflectiveHierarchyBuildItem.getIgnoreTypePredicate().test(parameterizedType.name())) {
                 addClassTypeHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, parameterizedType.name(),
-                        parameterizedType.name(),
                         processedReflectiveHierarchies,
                         unindexedClasses, finalFieldsWritable, reflectiveClass);
             }
@@ -165,7 +161,6 @@ public class ReflectiveHierarchyStep {
             ReflectiveHierarchyBuildItem reflectiveHierarchyBuildItem,
             String source,
             DotName name,
-            DotName initialName,
             Set<DotName> processedReflectiveHierarchies,
             Map<DotName, Set<String>> unindexedClasses,
             Predicate<ClassInfo> finalFieldsWritable,
@@ -203,7 +198,7 @@ public class ReflectiveHierarchyStep {
             return;
         }
 
-        addClassTypeHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, info.superName(), initialName,
+        addClassTypeHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, info.superName(),
                 processedReflectiveHierarchies,
                 unindexedClasses, finalFieldsWritable, reflectiveClass);
         for (FieldInfo field : info.fields()) {
@@ -215,24 +210,7 @@ public class ReflectiveHierarchyStep {
                 // also skip the outer class elements (unfortunately, we don't have a way to test for synthetic fields in Jandex)
                 continue;
             }
-            Type fieldType = field.type();
-            if ((field.type().kind() == Kind.TYPE_VARIABLE) && (info.typeParameters().size() == 1)) {
-                // handle the common case where the super type has a generic type in the class signature which
-                // is completely resolved by the sub type
-                // this could be made to handle more complex cases, but it is unlikely we will have to do so
-                if (field.type().asTypeVariable().identifier().equals(info.typeParameters().get(0).identifier())) {
-                    try {
-                        List<Type> types = JandexUtil.resolveTypeParameters(initialName, info.name(),
-                                combinedIndexBuildItem.getIndex());
-                        if (types.size() == 1) {
-                            fieldType = types.get(0);
-                        }
-                    } catch (IllegalArgumentException ignored) {
-
-                    }
-                }
-            }
-            addReflectiveHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, fieldType,
+            addReflectiveHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, field.type(),
                     processedReflectiveHierarchies,
                     unindexedClasses, finalFieldsWritable, reflectiveClass);
         }
