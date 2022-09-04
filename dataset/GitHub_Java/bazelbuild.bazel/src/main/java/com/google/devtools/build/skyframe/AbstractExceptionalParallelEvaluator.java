@@ -114,8 +114,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
       DirtyTrackingProgressReceiver progressReceiver,
       GraphInconsistencyReceiver graphInconsistencyReceiver,
       ForkJoinPool forkJoinPool,
-      CycleDetector cycleDetector,
-      EvaluationVersionBehavior evaluationVersionBehavior) {
+      CycleDetector cycleDetector) {
     super(
         graph,
         graphVersion,
@@ -128,8 +127,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
         progressReceiver,
         graphInconsistencyReceiver,
         forkJoinPool,
-        cycleDetector,
-        evaluationVersionBehavior);
+        cycleDetector);
   }
 
   private void informProgressReceiverThatValueIsDone(SkyKey key, NodeEntry entry)
@@ -260,24 +258,17 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
             throw new IllegalStateException(entry + " for " + skyKey + " in unknown state");
         }
       }
-    } catch (InterruptedException ie) {
+    } catch (InterruptedException e) {
       // When multiple keys are being evaluated, it's possible that a key may get queued before
       // an InterruptedException is thrown from either #addReverseDepAndCheckIfDone or
       // #informProgressReceiverThatValueIsDone on a different key. Therefore we have to make sure
       // all evaluation threads are properly interrupted and shut down, if main thread (current
       // thread) is interrupted.
       Thread.currentThread().interrupt();
-      try {
-        evaluatorContext.getVisitor().waitForCompletion();
-      } catch (SchedulerException se) {
-        // A SchedulerException due to a SkyFunction observing the interrupt is completely expected.
-        if (!(se.getCause() instanceof InterruptedException)) {
-          throw se;
-        }
-      }
+      evaluatorContext.getVisitor().waitForCompletion();
 
       // Rethrow the InterruptedException to avoid proceeding to construct the result.
-      throw ie;
+      throw e;
     }
 
     return waitForCompletionAndConstructResult(skyKeys);
@@ -478,7 +469,6 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
             maybeMarkRebuilding(parentEntry);
             // Fall through to REBUILDING.
           case REBUILDING:
-          case FORCED_REBUILDING:
             break;
           default:
             throw new AssertionError(parent + " not in valid dirty state: " + parentEntry);
@@ -513,8 +503,8 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
               errorKey,
               ValueWithMetadata.error(
                   ErrorInfo.fromChildErrors(errorKey, ImmutableSet.of(error)),
-                  env.buildAndReportEvents(parentEntry, /*expectDoneDeps=*/ false),
-                  env.buildAndReportPostables(parentEntry, /*expectDoneDeps=*/ false)));
+                  env.buildEvents(parentEntry, /*expectDoneDeps=*/ false),
+                  env.buildPosts(parentEntry, /*expectDoneDeps=*/ false)));
           continue;
         }
       } finally {
@@ -526,8 +516,8 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
           errorKey,
           ValueWithMetadata.error(
               ErrorInfo.fromChildErrors(errorKey, ImmutableSet.of(error)),
-              env.buildAndReportEvents(parentEntry, /*expectDoneDeps=*/ false),
-              env.buildAndReportPostables(parentEntry, /*expectDoneDeps=*/ false)));
+              env.buildEvents(parentEntry, /*expectDoneDeps=*/ false),
+              env.buildPosts(parentEntry, /*expectDoneDeps=*/ false)));
     }
 
     // Reset the interrupt bit if there was an interrupt from outside this evaluator interrupt.
