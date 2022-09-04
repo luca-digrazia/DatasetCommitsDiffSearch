@@ -31,7 +31,6 @@ import java.util.zip.ZipOutputStream;
 import org.apache.tools.ant.types.Commandline;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
-import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.artifacts.ResolvedArtifact;
@@ -76,6 +75,8 @@ public class QuarkusDev extends QuarkusTask {
     private boolean preventnoverify = false;
 
     private List<String> args = new LinkedList<String>();
+
+    private List<String> compilerArgs = new LinkedList<>();
 
     public QuarkusDev() {
         super("Development mode: enables hot deployment with background compilation");
@@ -161,6 +162,17 @@ public class QuarkusDev extends QuarkusTask {
             "(which is on by default)", option = "prevent-noverify")
     public void setPreventnoverify(boolean preventnoverify) {
         this.preventnoverify = preventnoverify;
+    }
+
+    @Optional
+    @Input
+    public List<String> getCompilerArgs() {
+        return compilerArgs;
+    }
+
+    @Option(description = "Additional parameters to pass to javac when recompiling changed source files", option = "compiler-args")
+    public void setCompilerArgs(List<String> compilerArgs) {
+        this.compilerArgs = compilerArgs;
     }
 
     @TaskAction
@@ -260,16 +272,19 @@ public class QuarkusDev extends QuarkusTask {
             }
 
             args.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
+            File wiringClassesDirectory = new File(getBuildDir(), "wiring-classes");
+            wiringClassesDirectory.mkdirs();
+            addToClassPaths(classPathManifest, context, wiringClassesDirectory);
 
             final Set<AppArtifactKey> projectDependencies = new HashSet<>();
-            addSelfWithLocalDeps(project, context, new HashSet<>(), projectDependencies, true);
+            addSelfWithLocalDeps(project, context, new HashSet<>(), projectDependencies);
 
             for (AppDependency appDependency : appModel.getFullDeploymentDeps()) {
                 final AppArtifact appArtifact = appDependency.getArtifact();
                 if (!projectDependencies.contains(new AppArtifactKey(appArtifact.getGroupId(), appArtifact.getArtifactId()))) {
                     appArtifact.getPaths().forEach(p -> {
                         if (Files.exists(p)) {
-                            addToClassPaths(classPathManifest, p.toFile());
+                            addToClassPaths(classPathManifest, context, p.toFile());
                         }
                     });
                 }
@@ -280,11 +295,22 @@ public class QuarkusDev extends QuarkusTask {
             //to the runner jar
             addGradlePluginDeps(classPathManifest, context);
 
+            appModel.getAppArtifact().getPaths().forEach(p -> context.getClassesRoots().add(p.toFile()));
+            context.setFrameworkClassesDir(wiringClassesDirectory.getAbsoluteFile());
             context.setCacheDir(new File(getBuildDir(), "transformer-cache").getAbsoluteFile());
 
             JavaPluginConvention javaPluginConvention = project.getConvention().findPlugin(JavaPluginConvention.class);
             if (javaPluginConvention != null) {
+                context.setSourceJavaVersion(javaPluginConvention.getSourceCompatibility().toString());
                 context.setTargetJvmVersion(javaPluginConvention.getTargetCompatibility().toString());
+            }
+
+            if (getCompilerArgs().isEmpty()) {
+                getJavaCompileTask()
+                        .map(compileTask -> compileTask.getOptions().getCompilerArgs())
+                        .ifPresent(context::setCompilerOptions);
+            } else {
+                context.setCompilerOptions(getCompilerArgs());
             }
 
             // this is the jar file we will use to launch the dev mode main class
@@ -323,6 +349,10 @@ public class QuarkusDev extends QuarkusTask {
 
             extension.outputDirectory().mkdirs();
 
+            if (context.isEnablePreview()) {
+                args.add(DevModeContext.ENABLE_PREVIEW_FLAG);
+            }
+
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
             args.addAll(this.getArgs());
@@ -342,7 +372,7 @@ public class QuarkusDev extends QuarkusTask {
     }
 
     private void addSelfWithLocalDeps(Project project, DevModeContext context, Set<String> visited,
-            Set<AppArtifactKey> addedDeps, boolean root) {
+            Set<AppArtifactKey> addedDeps) {
         if (!visited.add(project.getPath())) {
             return;
         }
@@ -350,15 +380,15 @@ public class QuarkusDev extends QuarkusTask {
         if (compileCp != null) {
             compileCp.getIncoming().getDependencies().forEach(d -> {
                 if (d instanceof ProjectDependency) {
-                    addSelfWithLocalDeps(((ProjectDependency) d).getDependencyProject(), context, visited, addedDeps, false);
+                    addSelfWithLocalDeps(((ProjectDependency) d).getDependencyProject(), context, visited, addedDeps);
                 }
             });
         }
 
-        addLocalProject(project, context, addedDeps, root);
+        addLocalProject(project, context, addedDeps);
     }
 
-    private void addLocalProject(Project project, DevModeContext context, Set<AppArtifactKey> addeDeps, boolean root) {
+    private void addLocalProject(Project project, DevModeContext context, Set<AppArtifactKey> addeDeps) {
         final AppArtifactKey key = new AppArtifactKey(project.getGroup().toString(), project.getName());
         if (addeDeps.contains(key)) {
             return;
@@ -396,20 +426,21 @@ public class QuarkusDev extends QuarkusTask {
                 classesDir,
                 resourcesSrcDir.getAbsolutePath(),
                 resourcesOutputPath);
-        if (root) {
-            context.setApplicationRoot(wsModuleInfo);
-        } else {
-            context.getAdditionalModules().add(wsModuleInfo);
-        }
+
+        context.getModules().add(wsModuleInfo);
+
         addeDeps.add(key);
     }
 
     private String getSourceEncoding() {
-        Task javaCompile = getProject().getTasks().getByName(JavaPlugin.COMPILE_JAVA_TASK_NAME);
-        if (javaCompile != null) {
-            return ((JavaCompile) javaCompile).getOptions().getEncoding();
-        }
-        return null;
+        return getJavaCompileTask()
+                .map(javaCompile -> javaCompile.getOptions().getEncoding())
+                .orElse(null);
+    }
+
+    private java.util.Optional<JavaCompile> getJavaCompileTask() {
+        return java.util.Optional
+                .ofNullable((JavaCompile) getProject().getTasks().getByName(JavaPlugin.COMPILE_JAVA_TASK_NAME));
     }
 
     private void addGradlePluginDeps(StringBuilder classPathManifest, DevModeContext context) {
@@ -426,7 +457,7 @@ public class QuarkusDev extends QuarkusTask {
                         if ("io.quarkus.gradle.plugin".equals(rd.getModuleName())) {
                             rd.getAllModuleArtifacts().stream()
                                     .map(ResolvedArtifact::getFile)
-                                    .forEach(f -> addToClassPaths(classPathManifest, f));
+                                    .forEach(f -> addToClassPaths(classPathManifest, context, f));
                             foundQuarkusPlugin = true;
                             break;
                         }
@@ -453,7 +484,7 @@ public class QuarkusDev extends QuarkusTask {
                     for (String cpElement : classpath.split(File.pathSeparator)) {
                         final File f = new File(cpElement);
                         if (f.exists()) {
-                            addToClassPaths(classPathManifest, f);
+                            addToClassPaths(classPathManifest, context, f);
                         }
                     }
                 }
@@ -463,11 +494,12 @@ public class QuarkusDev extends QuarkusTask {
         }
     }
 
-    private void addToClassPaths(StringBuilder classPathManifest, File file) {
+    private void addToClassPaths(StringBuilder classPathManifest, DevModeContext context, File file) {
         if (filesIncludedInClasspath.add(file)) {
             getProject().getLogger().info("Adding dependency {}", file);
 
             final URI uri = file.toPath().toAbsolutePath().toUri();
+            context.getClassPath().add(toUrl(uri));
             classPathManifest.append(uri).append(" ");
         }
     }
