@@ -72,7 +72,7 @@ public class ApplicationArchiveBuildStep {
     static final class IndexDependencyConfiguration {
         /**
          * Artifacts on the class path that should also be indexed, which will allow classes in the index to be
-         * processed by Quarkus processors
+         * processed by quarkuss processors
          */
         @ConfigItem(name = ConfigItem.PARENT)
         Map<String, IndexDependencyConfig> indexDependency;
