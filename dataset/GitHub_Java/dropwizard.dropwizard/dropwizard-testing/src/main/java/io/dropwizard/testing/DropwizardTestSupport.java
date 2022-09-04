@@ -78,9 +78,6 @@ public class DropwizardTestSupport<C extends Configuration> {
         this(applicationClass, configPath, (String) null, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
                                  @Nullable String configPath,
                                  @Nullable ConfigurationSourceProvider configSourceProvider,
@@ -99,9 +96,6 @@ public class DropwizardTestSupport<C extends Configuration> {
         this(applicationClass, configPath, customPropertyPrefix.orElse(null), ServerCommand::new, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
                                  @Nullable String configPath,
                                  @Nullable ConfigurationSourceProvider configSourceProvider,
@@ -110,9 +104,6 @@ public class DropwizardTestSupport<C extends Configuration> {
         this(applicationClass, configPath, configSourceProvider, customPropertyPrefix, ServerCommand::new, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
                                  @Nullable String configPath,
                                  @Nullable String customPropertyPrefix,
@@ -132,9 +123,6 @@ public class DropwizardTestSupport<C extends Configuration> {
         this(applicationClass, configPath, customPropertyPrefix.orElse(null), commandInstantiator, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
                                  @Nullable String configPath,
                                  @Nullable String customPropertyPrefix,
@@ -143,9 +131,6 @@ public class DropwizardTestSupport<C extends Configuration> {
         this(applicationClass, configPath, null, customPropertyPrefix, commandInstantiator, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
                                  @Nullable String configPath,
                                  @Nullable ConfigurationSourceProvider configSourceProvider,

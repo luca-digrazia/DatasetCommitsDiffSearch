@@ -62,9 +62,6 @@ public class DAOTest {
             return (B) this;
         }
 
-        /**
-         * @since 2.0
-         */
         public B bootstrapLogging(boolean value){
             bootstrapLogging = value;
             return (B) this;
