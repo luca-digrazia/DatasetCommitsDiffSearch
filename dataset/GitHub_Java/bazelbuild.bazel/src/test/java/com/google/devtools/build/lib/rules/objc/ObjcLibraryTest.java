@@ -54,7 +54,6 @@ import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -981,9 +980,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testAssetCatalogsAttributeErrorForNotInXcAssetsDir() throws Exception {
-    useConfiguration(
-        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
-        "--incompatible_disable_objc_library_resources=false");
+    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
     scratch.file("lib/ac/notinxcassets1");
     scratch.file("lib/ac/notinxcassets2");
     scratch.file("lib/ac/foo.xcassets/isinxcassets");
@@ -995,9 +992,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testXcdatamodelsAttributeErrorForNotInXcdatamodelDir() throws Exception {
-    useConfiguration(
-        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
-        "--incompatible_disable_objc_library_resources=false");
+    useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
     scratch.file("lib/xcd/notinxcdatamodel1");
     scratch.file("lib/xcd/notinxcdatamodel2");
     scratch.file("lib/xcd/foo.xcdatamodel/isinxcdatamodel");
@@ -1134,7 +1129,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testProvidesXcassetCatalogsTransitively() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=false");
     scratch.file("lib1/ac.xcassets/foo");
     scratch.file("lib1/ac.xcassets/bar");
     createLibraryTargetWriter("//lib1:lib1")
@@ -1956,10 +1950,17 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
   @Test
   public void testDefaultEnabledFeatureIsUsed() throws Exception {
-    // Although using --cpu=ios_x86_64, it transitions to darwin_x86_64, so the actual
-    // cc_toolchain in use will be the darwin_x86_64 one.
-    MockObjcSupport.setupCcToolchainConfig(
-        mockToolsConfig, MockObjcSupport.darwinX86_64().withFeatures("default_feature"));
+    MockObjcSupport.setup(mockToolsConfig,
+        "feature {",
+        "  name: 'default'",
+        "  enabled : true",
+        "  flag_set {",
+        "    action: 'objc-compile'",
+        "    flag_group {",
+        "      flag: '-dummy'",
+        "    }",
+        "  }",
+        "}");
     useConfiguration(
         "--cpu=ios_x86_64",
         "--ios_cpu=x86_64");
@@ -1979,8 +1980,17 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   }
 
   private boolean containsObjcFeature(String srcName) throws Exception {
-    MockObjcSupport.setupCcToolchainConfig(
-        mockToolsConfig, MockObjcSupport.darwinX86_64().withFeatures("contains_objc_sources"));
+     MockObjcSupport.setup(
+        mockToolsConfig,
+        "feature {",
+        "  name: 'contains_objc_sources'",
+        "  flag_set {",
+        "    flag_group {",
+        "      flag: 'DUMMY_FLAG'",
+        "    }",
+        "    action: 'c++-compile'",
+        "  }",
+        "}");
     createLibraryTargetWriter("//bottom:lib").setList("srcs", srcName).write();
     createLibraryTargetWriter("//middle:lib")
         .setList("srcs", "b.cc")
@@ -2123,23 +2133,5 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         "x",
         "objc_library resource attributes are not allowed. Please use the 'data' attribute instead",
         "objc_library(name = 'x', resources = [])");
-  }
-
-  /** Regression test for https://github.com/bazelbuild/bazel/issues/7721. */
-  @Test
-  public void testToolchainRuntimeLibrariesSolibDir() throws Exception {
-    MockObjcSupport.setupCcToolchainConfig(
-        mockToolsConfig,
-        MockObjcSupport.darwinX86_64()
-            .withFeatures(
-                CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES,
-                CppRuleClasses.SUPPORTS_DYNAMIC_LINKER));
-    scratch.file(
-        "foo/BUILD",
-        "cc_test(name = 'd', deps = [':b'])",
-        "objc_library(name = 'b', deps = [':a'])",
-        "cc_library(name = 'a', srcs = ['a.c'])");
-    ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:d");
-    assertThat(configuredTarget).isNotNull();
   }
 }
