@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.skyframe.PlatformLookupUtil.InvalidPlatformException;
 import com.google.devtools.build.lib.skyframe.RegisteredToolchainsFunction.InvalidToolchainLabelException;
-import com.google.devtools.build.lib.skyframe.SingleToolchainResolutionValue.SingleToolchainResolutionKey;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -52,7 +51,7 @@ public class SingleToolchainResolutionFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws ToolchainResolutionFunctionException, InterruptedException {
-    SingleToolchainResolutionKey key = (SingleToolchainResolutionKey) skyKey.argument();
+    SingleToolchainResolutionValue.Key key = (SingleToolchainResolutionValue.Key) skyKey.argument();
 
     // This call could be combined with the call below, but this SkyFunction is evaluated so rarely
     // it's not worth optimizing.
@@ -83,7 +82,6 @@ public class SingleToolchainResolutionFunction implements SkyFunction {
         key.toolchainTypeLabel(),
         key.availableExecutionPlatformKeys(),
         key.targetPlatformKey(),
-        configuration.trimConfigurationsRetroactively(),
         toolchains.registeredToolchains(),
         env,
         debug ? env.getListener() : null);
@@ -99,7 +97,6 @@ public class SingleToolchainResolutionFunction implements SkyFunction {
       Label toolchainTypeLabel,
       List<ConfiguredTargetKey> availableExecutionPlatformKeys,
       ConfiguredTargetKey targetPlatformKey,
-      boolean sanityCheckConfigurations,
       ImmutableList<DeclaredToolchainInfo> toolchains,
       Environment env,
       @Nullable EventHandler eventHandler)
@@ -115,8 +112,7 @@ public class SingleToolchainResolutionFunction implements SkyFunction {
                   .add(targetPlatformKey)
                   .addAll(availableExecutionPlatformKeys)
                   .build(),
-              env,
-              sanityCheckConfigurations);
+              env);
       if (env.valuesMissing()) {
         return null;
       }
@@ -215,21 +211,7 @@ public class SingleToolchainResolutionFunction implements SkyFunction {
     // Check every constraint_setting in either the toolchain or the platform.
     ImmutableSet<ConstraintSettingInfo> mismatchSettings =
         toolchainConstraints.diff(platform.constraints());
-    boolean matches = true;
     for (ConstraintSettingInfo mismatchSetting : mismatchSettings) {
-      // If a constraint_setting has a default_constraint_value, and the platform
-      // sets a non-default constraint value for the same constraint_setting, then
-      // even toolchains with no reference to that constraint_setting will detect
-      // a mismatch here. This manifests as a toolchain resolution failure (#8778).
-      //
-      // To allow combining rulesets with their own toolchains in a single top-level
-      // workspace, toolchains that do not reference a constraint_setting should not
-      // be forced to match with it.
-      if (!toolchainConstraints.hasWithoutDefault(mismatchSetting)) {
-        continue;
-      }
-      matches = false;
-
       debugMessage(
           eventHandler,
           "    Toolchain constraint %s has value %s, "
@@ -244,7 +226,7 @@ public class SingleToolchainResolutionFunction implements SkyFunction {
           platformType,
           platform.label());
     }
-    return matches;
+    return mismatchSettings.isEmpty();
   }
 
   @Nullable
