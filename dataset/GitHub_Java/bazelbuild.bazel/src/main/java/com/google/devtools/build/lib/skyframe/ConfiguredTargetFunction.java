@@ -944,7 +944,15 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       throws ConfiguredTargetFunctionException, InterruptedException {
     StoredEventHandler events = new StoredEventHandler();
     CachingAnalysisEnvironment analysisEnvironment =
-        view.createAnalysisEnvironment(configuredTargetKey, false, events, env, configuration);
+        view.createAnalysisEnvironment(
+            ConfiguredTargetKey.builder()
+                .setLabel(target.getLabel())
+                .setConfiguration(configuration)
+                .build(),
+            false,
+            events,
+            env,
+            configuration);
     if (env.valuesMissing()) {
       return null;
     }
