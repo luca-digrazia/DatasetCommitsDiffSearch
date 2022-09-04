@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidSkylarkApiProviderApi;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import java.util.function.Function;
 import javax.annotation.Nullable;
 
@@ -72,8 +71,8 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider
   }
 
   @Override
-  public ImmutableMap<String, SkylarkNestedSet> getNativeLibs() {
-    return getIdeInfoProvider().getNativeLibsSkylark();
+  public ImmutableMap<String, NestedSet<Artifact>> getNativeLibs() {
+    return getIdeInfoProvider().getNativeLibs();
   }
 
   @Override
@@ -98,7 +97,7 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider
 
   @Override
   public NestedSet<Artifact> getResources() {
-    return collectDirectArtifacts(ValidatedAndroidResources::getResources);
+    return collectDirectArtifacts(ValidatedAndroidData::getResources);
   }
 
   @Override
@@ -113,13 +112,12 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider
   }
 
   private NestedSet<Artifact> collectDirectArtifacts(
-      final Function<ValidatedAndroidResources, Iterable<Artifact>> artifactFunction) {
+      final Function<ValidatedAndroidData, Iterable<Artifact>> artifactFunction) {
     if (resourceInfo == null) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
     // This will iterate over all (direct) resources. If this turns out to be a performance
-    // problem, {@link ValidatedAndroidResources#getArtifacts()} can be changed to return
-    // NestedSets.
+    // problem, {@link ResourceContainer#getArtifacts} can be changed to return NestedSets.
     return NestedSetBuilder.wrap(
         Order.STABLE_ORDER,
         Iterables.concat(
@@ -155,7 +153,6 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider
       Artifact idlSourceJar = getIdeInfoProvider().getIdlSourceJar();
       return new OutputJar(
           getIdeInfoProvider().getIdlClassJar(),
-          null,
           null,
           idlSourceJar == null ? ImmutableList.<Artifact>of() : ImmutableList.of(idlSourceJar));
     }

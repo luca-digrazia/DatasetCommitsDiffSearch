@@ -42,6 +42,7 @@ import javax.annotation.Nullable;
 public final class AndroidIdeInfoProvider extends NativeInfo
     implements AndroidIdeInfoProviderApi<Artifact, OutputJar> {
 
+  public static final String PROVIDER_NAME = "AndroidIdeInfo";
   public static final Provider PROVIDER = new Provider();
 
   /** Builder for {@link AndroidIdeInfoProvider} */
@@ -166,25 +167,25 @@ public final class AndroidIdeInfoProvider extends NativeInfo
     }
   }
 
-  @Nullable private final String javaPackage;
-  @Nullable private final String idlImportRoot;
-  @Nullable private final Artifact manifest;
-  @Nullable private final Artifact generatedManifest;
-  @Nullable private final Artifact signedApk;
+  private final String javaPackage;
+  private final String idlImportRoot;
+  private final Artifact manifest;
+  private final Artifact generatedManifest;
+  private final Artifact signedApk;
   @Nullable private final Artifact idlClassJar;
   @Nullable private final Artifact idlSourceJar;
   @Nullable private final OutputJar resourceJar;
   @Nullable private final Artifact resourceApk;
   private final boolean definesAndroidResources;
-  @Nullable private final Artifact aar;
+  private final Artifact aar;
   private final ImmutableCollection<Artifact> idlSrcs;
   private final ImmutableCollection<Artifact> idlGeneratedJavaFiles;
   private final ImmutableCollection<Artifact> apksUnderTest;
   private final ImmutableMap<String, NestedSet<Artifact>> nativeLibs;
 
   public AndroidIdeInfoProvider(
-      @Nullable String javaPackage,
-      @Nullable String idlImportRoot,
+      String javaPackage,
+      String idlImportRoot,
       @Nullable Artifact manifest,
       @Nullable Artifact generatedManifest,
       @Nullable Artifact signedApk,
@@ -197,7 +198,7 @@ public final class AndroidIdeInfoProvider extends NativeInfo
       ImmutableCollection<Artifact> idlGeneratedJavaFiles,
       ImmutableCollection<Artifact> apksUnderTest,
       ImmutableMap<String, NestedSet<Artifact>> nativeLibs,
-      @Nullable Artifact resourceApk) {
+      Artifact resourceApk) {
     super(PROVIDER);
     this.javaPackage = javaPackage;
     this.idlImportRoot = idlImportRoot;
@@ -217,7 +218,6 @@ public final class AndroidIdeInfoProvider extends NativeInfo
   }
 
   @Override
-  @Nullable
   public String getJavaPackage() {
     return javaPackage;
   }
@@ -313,22 +313,22 @@ public final class AndroidIdeInfoProvider extends NativeInfo
   public static class Provider extends BuiltinProvider<AndroidIdeInfoProvider>
       implements AndroidIdeInfoProviderApi.Provider<Artifact, OutputJar> {
     private Provider() {
-      super(NAME, AndroidIdeInfoProvider.class);
+      super(PROVIDER_NAME, AndroidIdeInfoProvider.class);
     }
 
     @Override
     public AndroidIdeInfoProvider createInfo(
-        Object javaPackage,
+        String javaPackage,
         Object manifest,
         Object generatedManifest,
-        Object idlImportRoot,
+        String idlImportRoot,
         SkylarkList<Artifact> idlSrcs,
         SkylarkList<Artifact> idlGeneratedJavaFiles,
         Object idlSourceJar,
         Object idlClassJar,
         boolean definesAndroidResources,
         Object resourceJar,
-        Object resourceApk,
+        Artifact resourceApk,
         Object signedApk,
         Object aar,
         SkylarkList<Artifact> apksUnderTest,
@@ -342,8 +342,8 @@ public final class AndroidIdeInfoProvider extends NativeInfo
         builder.put(entry.getKey(), entry.getValue().getSet(Artifact.class));
       }
       return new AndroidIdeInfoProvider(
-          fromNoneable(javaPackage, String.class),
-          fromNoneable(idlImportRoot, String.class),
+          javaPackage,
+          idlImportRoot,
           fromNoneable(manifest, Artifact.class),
           fromNoneable(generatedManifest, Artifact.class),
           fromNoneable(signedApk, Artifact.class),
@@ -356,7 +356,7 @@ public final class AndroidIdeInfoProvider extends NativeInfo
           idlGeneratedJavaFiles.getImmutableList(),
           apksUnderTest.getImmutableList(),
           builder.build(),
-          fromNoneable(resourceApk, Artifact.class));
+          resourceApk);
     }
   }
 }
