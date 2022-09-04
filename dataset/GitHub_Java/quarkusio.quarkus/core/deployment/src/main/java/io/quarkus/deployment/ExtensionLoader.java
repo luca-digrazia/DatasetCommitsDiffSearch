@@ -39,7 +39,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.eclipse.microprofile.config.spi.ConfigBuilder;
 import org.jboss.logging.Logger;
 import org.wildfly.common.function.Functions;
 
@@ -111,7 +110,6 @@ public final class ExtensionLoader {
 
     private static final String CONFIG_ROOTS_LIST = "META-INF/quarkus-config-roots.list";
 
-    @SuppressWarnings("deprecation")
     private static boolean isRecorder(AnnotatedElement element) {
         return element.isAnnotationPresent(Recorder.class) || element.isAnnotationPresent(Template.class);
     }
@@ -138,10 +136,9 @@ public final class ExtensionLoader {
      * @throws IOException if the class loader could not load a resource
      * @throws ClassNotFoundException if a build step class is not found
      */
-    public static Consumer<BuildChainBuilder> loadStepsFrom(ClassLoader classLoader, LaunchMode launchMode,
-            Consumer<ConfigBuilder> configCustomizer)
+    public static Consumer<BuildChainBuilder> loadStepsFrom(ClassLoader classLoader, LaunchMode launchMode)
             throws IOException, ClassNotFoundException {
-        return loadStepsFrom(classLoader, new Properties(), launchMode, configCustomizer);
+        return loadStepsFrom(classLoader, new Properties(), launchMode);
     }
 
     /**
@@ -155,7 +152,7 @@ public final class ExtensionLoader {
      */
     public static Consumer<BuildChainBuilder> loadStepsFrom(ClassLoader classLoader, Properties buildSystemProps)
             throws IOException, ClassNotFoundException {
-        return loadStepsFrom(classLoader, buildSystemProps, LaunchMode.NORMAL, null);
+        return loadStepsFrom(classLoader, buildSystemProps, LaunchMode.NORMAL);
     }
 
     /**
@@ -168,7 +165,7 @@ public final class ExtensionLoader {
      * @throws ClassNotFoundException if a build step class is not found
      */
     public static Consumer<BuildChainBuilder> loadStepsFrom(ClassLoader classLoader, Properties buildSystemProps,
-            LaunchMode launchMode, Consumer<ConfigBuilder> configCustomizer)
+            LaunchMode launchMode)
             throws IOException, ClassNotFoundException {
 
         // set up the configuration definitions
@@ -213,9 +210,6 @@ public final class ExtensionLoader {
         // populate builder with all converters loaded from ServiceLoader
         ConverterSupport.populateConverters(builder);
 
-        if (configCustomizer != null) {
-            configCustomizer.accept(builder);
-        }
         final SmallRyeConfig src = (SmallRyeConfig) builder
                 .addDefaultSources()
                 .addDiscoveredSources()
@@ -246,12 +240,7 @@ public final class ExtensionLoader {
                 .produces(UnmatchedConfigBuildItem.class)
                 .build());
         for (Class<?> clazz : ServiceUtil.classesNamedIn(classLoader, "META-INF/quarkus-build-steps.list")) {
-            try {
-                result = result
-                        .andThen(ExtensionLoader.loadStepsFrom(clazz, buildTimeConfig, buildTimeRunTimeConfig, launchMode));
-            } catch (Throwable e) {
-                throw new RuntimeException("Failed to load steps from " + clazz, e);
-            }
+            result = result.andThen(ExtensionLoader.loadStepsFrom(clazz, buildTimeConfig, buildTimeRunTimeConfig, launchMode));
         }
         return result;
     }
@@ -531,7 +520,7 @@ public final class ExtensionLoader {
             if (isRecorder) {
                 boolean recorderFound = false;
                 for (Class<?> p : method.getParameterTypes()) {
-                    if (isRecorder(p)) {
+                    if (p.isAnnotationPresent(Recorder.class) || p.isAnnotationPresent(Template.class)) {
                         recorderFound = true;
                         break;
                     }

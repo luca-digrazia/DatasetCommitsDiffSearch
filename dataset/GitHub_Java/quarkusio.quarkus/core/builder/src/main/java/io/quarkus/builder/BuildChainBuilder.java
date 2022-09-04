@@ -22,6 +22,8 @@ import java.util.regex.Pattern;
 import org.wildfly.common.Assert;
 
 import io.quarkus.builder.item.BuildItem;
+import io.quarkus.builder.item.NamedBuildItem;
+import io.quarkus.builder.item.SymbolicBuildItem;
 
 /**
  * A build chain builder.
@@ -103,7 +105,23 @@ public final class BuildChainBuilder {
      */
     public BuildChainBuilder addInitial(Class<? extends BuildItem> type) {
         Assert.checkNotNullParam("type", type);
-        initialIds.add(new ItemId(type));
+        if (NamedBuildItem.class.isAssignableFrom(type)) {
+            throw new IllegalArgumentException("Cannot produce a named build item without a name");
+        }
+        initialIds.add(new ItemId(type, null));
+        return this;
+    }
+
+    public BuildChainBuilder addInitial(Enum<?> symbolic) {
+        Assert.checkNotNullParam("symbolic", symbolic);
+        initialIds.add(new ItemId(SymbolicBuildItem.class, symbolic));
+        return this;
+    }
+
+    public <N> BuildChainBuilder addInitial(Class<? extends NamedBuildItem<N>> type, N name) {
+        Assert.checkNotNullParam("type", type);
+        Assert.checkNotNullParam("name", name);
+        initialIds.add(new ItemId(type, name));
         return this;
     }
 
@@ -125,7 +143,23 @@ public final class BuildChainBuilder {
      */
     public BuildChainBuilder addFinal(Class<? extends BuildItem> type) {
         Assert.checkNotNullParam("type", type);
-        finalIds.add(new ItemId(type));
+        if (NamedBuildItem.class.isAssignableFrom(type)) {
+            throw new IllegalArgumentException("Cannot consume a named build item without a name");
+        }
+        finalIds.add(new ItemId(type, null));
+        return this;
+    }
+
+    public BuildChainBuilder addFinal(Enum<?> symbolic) {
+        Assert.checkNotNullParam("symbolic", symbolic);
+        finalIds.add(new ItemId(SymbolicBuildItem.class, symbolic));
+        return this;
+    }
+
+    public <N> BuildChainBuilder addFinal(Class<? extends NamedBuildItem<N>> type, N name) {
+        Assert.checkNotNullParam("type", type);
+        Assert.checkNotNullParam("name", name);
+        finalIds.add(new ItemId(type, name));
         return this;
     }
 
