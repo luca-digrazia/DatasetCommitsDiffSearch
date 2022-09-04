@@ -42,7 +42,7 @@ public class GraphiteInitializer extends SimpleFixedRateScheduleInitializer impl
                 TimeUnit.SECONDS,
                 this.graylogServer.getConfiguration().getGraphiteCarbonHost(),
                 this.graylogServer.getConfiguration().getGraphiteCarbonTcpPort(),
-                this.graylogServer.getConfiguration().getGraphitePrefix()
+                "graylog2-server"
         );
 
         configureScheduler(

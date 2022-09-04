@@ -21,16 +21,14 @@
 package org.graylog2.forwarders.forwarders;
 
 /**
- * MessageForwarderConfigurationException.java: Mar 18, 2011 9:38:20 PM
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class MessageForwarderConfigurationException extends Exception {
 
+    private static final long serialVersionUID = -4421621020570961381L;
+
     /**
      * Thrown in case of missing or invalid configuration of an MessageForwarder.
-     *
-     * @param msg
      */
     public MessageForwarderConfigurationException(String msg) {
         super(msg);

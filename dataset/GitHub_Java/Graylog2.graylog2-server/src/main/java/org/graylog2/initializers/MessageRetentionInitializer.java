@@ -25,8 +25,6 @@ import org.graylog2.GraylogServer;
 import org.graylog2.periodical.MessageRetentionThread;
 
 /**
- * MessageCounterInitializer.java: Apr 11, 2012 7:36:25 PM
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class MessageRetentionInitializer implements Initializer {
@@ -44,6 +42,11 @@ public class MessageRetentionInitializer implements Initializer {
     @Override
     public void initialize() {
         this.graylogServer.getScheduler().schedule(new MessageRetentionThread(graylogServer),0,TimeUnit.SECONDS);
+    }
+    
+    @Override
+    public boolean masterOnly() {
+        return true;
     }
     
 }

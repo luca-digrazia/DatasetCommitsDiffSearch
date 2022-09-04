@@ -31,7 +31,6 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.UnknownHostException;
 import java.util.Calendar;
-import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 import org.drools.util.codec.Base64;
@@ -205,17 +204,6 @@ public final class Tools {
 
         return addr.getHostName();
     }
-    
-    public static String getLocalCanonicalHostname() {
-        InetAddress addr = null;
-        try {
-            addr = InetAddress.getLocalHost();
-        } catch (UnknownHostException ex) {
-            return "Unknown";
-        }
-
-        return addr.getCanonicalHostName();
-    }
 
     public static int getTimestampDaysAgo(int ts, int days) {
         return (ts - (days*86400));
@@ -232,11 +220,4 @@ public final class Tools {
     public static String rdnsLookup(InetAddress socketAddress) throws UnknownHostException {
         return socketAddress.getCanonicalHostName();
     }
-    
-    public static String generateServerId() {
-        UUID id = UUID.randomUUID();
-        
-        return getLocalHostname() + "-" + id.toString();
-    }
- 
 }

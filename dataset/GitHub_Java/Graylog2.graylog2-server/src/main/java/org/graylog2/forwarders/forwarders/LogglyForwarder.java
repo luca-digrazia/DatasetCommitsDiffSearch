@@ -20,44 +20,52 @@
 
 package org.graylog2.forwarders.forwarders;
 
+import org.apache.log4j.Logger;
+import org.graylog2.forwarders.MessageForwarderIF;
+
 import java.io.DataOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import org.graylog2.Log;
-import org.graylog2.forwarders.MessageForwarderIF;
-import org.graylog2.messagehandlers.gelf.GELFMessage;
+import org.graylog2.logmessage.LogMessage;
 
 /**
- * LogglyForwarder.java: Mar 18, 2011 9:32:24 PM
+ * Forwards messages to Logg.ly. (via HTTP/S API)
  *
- * Forwards messages to Logg.ly. (via HTTP/S API(
- *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class LogglyForwarder implements MessageForwarderIF {
+
+    private static final Logger LOG = Logger.getLogger(LogglyForwarder.class);
+
+    private static int timeout;
 
     private boolean succeeded = false;
     private String url = null;
 
-    public LogglyForwarder(String where) {
-        this.url = where;
+    /**
+     * @param url URL API endpoint
+     */
+    public LogglyForwarder(String url) throws MessageForwarderConfigurationException {
+
+        if (url == null || url.isEmpty()) {
+            throw new MessageForwarderConfigurationException("No endpoint URL configured.");
+        }
+
+        this.url = url;
     }
 
     /**
      * Forward a GELF (or converted syslog) message to Logg.ly
      *
-     * @param where URL API endpoint
+     *
      * @param message The message to forward
      * @return true in case of success, otherwise false
-     * @throws MessageForwarderConfigurationException
      */
-    public boolean forward(GELFMessage message) throws MessageForwarderConfigurationException {
-        if (url == null || url.length() == 0) {
-            throw new MessageForwarderConfigurationException("No endpoint URL configured.");
-        }
-
+    public boolean forward(LogMessage message) {
+/*
         this.succeeded = this.send(message.toOneLiner());
-        return this.succeeded;
+        return this.succeeded();*/
+        return false;
     }
 
     private boolean send(String what) {
@@ -72,12 +80,12 @@ public class LogglyForwarder implements MessageForwarderIF {
             connection.setDoInput(true);
             connection.setDoOutput(true);
 
-            connection.setConnectTimeout(2);
-            connection.setReadTimeout(2);
+            connection.setConnectTimeout(timeout);
+            connection.setReadTimeout(timeout);
             
-            connection.addRequestProperty("X-GRAYLOG2", "forwarded");
+            connection.addRequestProperty("x-graylog2", "stream-forwarded");
 
-            //Send request
+            // Send request
             DataOutputStream wr = new DataOutputStream (
             connection.getOutputStream ());
             wr.writeBytes(what);
@@ -85,11 +93,11 @@ public class LogglyForwarder implements MessageForwarderIF {
             wr.close();
 
             if(connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                Log.crit("Could not forward message to Logg.ly: Expected HTTP 200 but was " + connection.getResponseCode());
+                LOG.error("Could not forward message to Logg.ly: Expected HTTP 200 but was " + connection.getResponseCode());
                 return false;
             }
         } catch (Exception e) {
-            Log.crit("Could not forward message to Logg.ly: " + e.toString());
+            LOG.error("Could not forward message to Logg.ly: " + e.getMessage(), e);
             return false;
         } finally {
             // Make sure to close connection.
@@ -103,8 +111,6 @@ public class LogglyForwarder implements MessageForwarderIF {
 
     /**
      * Indicates if the last forward has succeeded.
-     *
-     * @return
      */
     public boolean succeeded() {
         return this.succeeded;
@@ -117,4 +123,7 @@ public class LogglyForwarder implements MessageForwarderIF {
         return url;
     }
 
+    public static void setTimeout(int timeout) {
+        LogglyForwarder.timeout = timeout;
+    }
 }

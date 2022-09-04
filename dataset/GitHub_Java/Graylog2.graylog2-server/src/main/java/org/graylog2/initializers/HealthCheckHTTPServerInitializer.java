@@ -27,8 +27,6 @@ import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 
 /**
- * HealthCheckHTTPServerInitializer.java: 19.06.2012 16:43:44
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class HealthCheckHTTPServerInitializer implements Initializer {
@@ -55,6 +53,11 @@ public class HealthCheckHTTPServerInitializer implements Initializer {
         // Bind and start to accept incoming connections.
         bootstrap.bind(new InetSocketAddress(this.port));
 
+    }
+    
+    @Override
+    public boolean masterOnly() {
+        return false;
     }
 
 }

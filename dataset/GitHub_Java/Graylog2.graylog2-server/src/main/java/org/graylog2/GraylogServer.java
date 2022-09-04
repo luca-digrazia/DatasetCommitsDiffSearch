@@ -39,12 +39,9 @@ import org.graylog2.outputs.MessageOutput;
 import org.graylog2.streams.StreamCache;
 
 import com.google.common.collect.Lists;
-import org.graylog2.activities.Activity;
-import org.graylog2.activities.ActivityWriter;
-import org.graylog2.communicator.Communicator;
-import org.graylog2.communicator.methods.CommunicatorMethod;
+import com.yammer.metrics.HealthChecks;
+import com.yammer.metrics.core.HealthCheck;
 import org.graylog2.database.HostCounterCache;
-import org.graylog2.indexer.Deflector;
 
 public class GraylogServer implements Runnable {
 
@@ -76,16 +73,9 @@ public class GraylogServer implements Runnable {
     private List<MessageInput> inputs = Lists.newArrayList();
     private List<Class<? extends MessageFilter>> filters = Lists.newArrayList();
     private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
-    private List<Class<? extends CommunicatorMethod>> communicatorMethods = Lists.newArrayList();
-    
+
     private ProcessBuffer processBuffer;
     private OutputBuffer outputBuffer;
-    
-    private Deflector deflector;
-    
-    private ActivityWriter activityWriter;
-    
-    private Communicator communicator;
     
     private String serverId;
 
@@ -105,14 +95,6 @@ public class GraylogServer implements Runnable {
         mongoConnection.setThreadsAllowedToBlockMultiplier(configuration.getMongoThreadsAllowedToBlockMultiplier());
         mongoConnection.setReplicaSet(configuration.getMongoReplicaSet());
 
-        mongoBridge = new MongoBridge();
-        mongoBridge.setConnection(mongoConnection); // TODO use dependency injection
-        mongoConnection.connect();
-        
-        communicator = new Communicator(this);
-        
-        activityWriter = new ActivityWriter(mongoBridge, communicator);
-        
         messageCounterManager = new MessageCounterManager();
         messageCounterManager.register(MASTER_COUNTER_NAME);
 
@@ -124,19 +106,15 @@ public class GraylogServer implements Runnable {
         outputBuffer = new OutputBuffer(this);
         outputBuffer.initialize();
 
+        mongoBridge = new MongoBridge();
+        mongoBridge.setConnection(mongoConnection); // TODO use dependency injection
+
         gelfChunkManager = new GELFChunkManager(this);
 
         indexer = new EmbeddedElasticSearchClient(this);
         serverValues = new ServerValue(this);
-                
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                activityWriter.write(new Activity("Shutting down.", GraylogServer.class));
-            }
-        });
     }
-    
+
     public void registerInitializer(Initializer initializer) {
         if (initializer.masterOnly() && !this.isMaster()) {
             LOG.info("Not registering initializer " + initializer.getClass().getSimpleName()
@@ -160,32 +138,27 @@ public class GraylogServer implements Runnable {
         this.outputs.add(klazz);
     }
 
-    public <T extends CommunicatorMethod> void registerCommunicatorMethod(Class<T> klazz) {
-        this.communicatorMethods.add(klazz);
+    public void registerHealthCheck(HealthCheck check) {
+        HealthChecks.register(check);
     }
 
     @Override
     public void run() {
 
         // initiate the mongodb connection, this might fail but it will retry to establish the connection
+        mongoConnection.connect();
         gelfChunkManager.start();
         BlacklistCache.initialize(this);
         StreamCache.initialize(this);
-        
-        // Set up deflector.
-        LOG.info("Setting up deflector.");
-        deflector = new Deflector(this);
-        deflector.setUp();
-        
-        // Set up recent index.
-        if (indexer.indexExists(EmbeddedElasticSearchClient.RECENT_INDEX_NAME)) {
-            LOG.info("Recent index exists. Not creating it.");
+
+        if (indexer.indexExists()) {
+            LOG.info("Index exists. Not creating it.");
         } else {
-            LOG.info("Recent index does not exist! Trying to create it ...");
-            if (indexer.createRecentIndex()) {
-                LOG.info("Successfully created recent index.");
+            LOG.info("Index does not exist! Trying to create it ...");
+            if (indexer.createIndex()) {
+                LOG.info("Successfully created index.");
             } else {
-                LOG.fatal("Could not create recent index. Terminating.");
+                LOG.fatal("Could not create Index. Terminating.");
                 System.exit(1);
             }
         }
@@ -208,7 +181,6 @@ public class GraylogServer implements Runnable {
             LOG.debug("Initialized input: " + input.getName());
         }
 
-        activityWriter.write(new Activity("Started up.", GraylogServer.class));
         LOG.info("Graylog2 up and running.");
 
         while (true) {
@@ -269,24 +241,12 @@ public class GraylogServer implements Runnable {
         return this.outputs;
     }
 
-    public List<Class<? extends CommunicatorMethod>> getCommunicatorMethods() {
-        return this.communicatorMethods;
-    }
-    
     public MessageCounterManager getMessageCounterManager() {
         return this.messageCounterManager;
     }
 
     public HostCounterCache getHostCounterCache() {
         return this.hostCounterCache;
-    }
-    
-    public Deflector getDeflector() {
-        return this.deflector;
-    }
-    
-    public ActivityWriter getActivityWriter() {
-        return this.activityWriter;
     }
     
     public int getLastReceivedMessageTimestamp() {

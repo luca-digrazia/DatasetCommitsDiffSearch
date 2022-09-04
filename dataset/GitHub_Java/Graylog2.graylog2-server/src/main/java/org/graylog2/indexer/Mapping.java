@@ -29,9 +29,6 @@ import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequestBuilder;
 import org.elasticsearch.client.Client;
 
-import com.google.common.collect.Maps;
-
-
 /**
  * Representing the message type mapping in ElasticSearch. This is giving ES more
  * information about what the fields look like and how it should analyze them.
@@ -41,30 +38,41 @@ import com.google.common.collect.Maps;
 @SuppressWarnings({"unchecked"})
 public class Mapping {
 
-    public static PutMappingRequest getPutMappingRequest(final Client client, final String index, final String analyzer) {
+    public static PutMappingRequest getPutMappingRequest(final Client client, final String index) {
         final PutMappingRequestBuilder builder = client.admin().indices().preparePutMapping(new String[] {index});
-        builder.setType(Indexer.TYPE);
+        builder.setType(EmbeddedElasticSearchClient.TYPE);
 
         final Map<String, Object> mapping = new HashMap<String, Object>();
-        mapping.put("properties", partFieldProperties(analyzer));
+        mapping.put("properties", partFieldProperties());
         mapping.put("dynamic_templates", partDefaultAllInDynamicTemplate());
         mapping.put("_source", enabledAndCompressed()); // Compress source field..
-        mapping.put("_ttl", enabled()); // Enable purging by TTL.
 
-        // TODO: use multimap?
-        final Map<String, Map<String, Object>> completeMapping = Maps.newHashMap();
-        completeMapping.put(Indexer.TYPE, mapping);
+        final Map completeMapping = new HashMap();
+        completeMapping.put(EmbeddedElasticSearchClient.TYPE, mapping);
 
         builder.setSource(completeMapping);
         return builder.request();
     }
 
+    public static Map get() {
+        final Map mapping = new HashMap();
+        mapping.put("properties", partFieldProperties());
+        mapping.put("dynamic_templates", partDefaultAllInDynamicTemplate());
+        mapping.put("_source", enabledAndCompressed()); // Compress source field..
+
+        final Map completeMapping = new HashMap();
+        completeMapping.put(EmbeddedElasticSearchClient.TYPE, mapping);
+
+        final Map spec = new HashMap();
+        spec.put("mappings", completeMapping);
+
+        return spec;
+    }
+
     /*
      * Disable analyzing for every field by default.
      */
-    // TODO warnings
-    @SuppressWarnings("rawtypes")
-	private static List partDefaultAllInDynamicTemplate() {
+    private static List partDefaultAllInDynamicTemplate() {
         final List dynamicTemplates = new LinkedList();
         final Map template = new HashMap();
         final Map defaultAll = new HashMap();
@@ -85,48 +93,47 @@ public class Mapping {
     /*
      * Enable analyzing for some fields again. Like for message and full_message.
      */
-    // TODO warnings
-    @SuppressWarnings("rawtypes")
-	private static Map partFieldProperties(String analyzer) {
-        final Map<String, Map<?, ?>> properties = Maps.newHashMap();
+    private static Map partFieldProperties() {
+        final Map properties = new HashMap();
 
-        properties.put("message", analyzedString(analyzer));
-        properties.put("full_message", analyzedString(analyzer));
+        properties.put("message", analyzedString());
+        properties.put("full_message", analyzedString());
 
-        // http://joda-time.sourceforge.net/api-release/org/joda/time/format/DateTimeFormat.html
-        // http://www.elasticsearch.org/guide/reference/mapping/date-format.html
-        properties.put("timestamp", typeTimeWithMillis());
+        // Required for the WI to not fail on empty indexes.
+        properties.put("created_at", typeNumberDouble());
+
+        // This is used building histograms. An own field to avoid mapping problems with oder versions.
+        properties.put("histogram_time", typeTimeNoMillis()); // yyyy-MM-dd HH-mm-ss
 
         return properties;
     }
 
-    private static Map<String, String> analyzedString(String analyzer) {
-        final Map<String, String> type = Maps.newHashMap();
+    private static Map analyzedString() {
+        final Map type = new HashMap();
         type.put("index", "analyzed");
         type.put("type", "string");
-        type.put("analyzer", analyzer);
+        type.put("analyzer", "whitespace");
 
         return type;
     }
 
-    private static Map<String, String> typeTimeWithMillis() {
-        final Map<String, String> type = Maps.newHashMap();
+    private static Map typeNumberDouble() {
+        final Map type = new HashMap();
+        type.put("type", "double");
+
+        return type;
+    }
+
+    private static Map typeTimeNoMillis() {
+        final Map type = new HashMap();
         type.put("type", "date");
-        type.put("format", "yyyy-MM-dd HH-mm-ss.SSS");
+        type.put("format", "yyyy-MM-dd HH-mm-ss");
 
         return type;
     }
 
-    private static Map<String, Boolean> enabled() {
-        final Map<String, Boolean> e = Maps.newHashMap();
-        e.put("enabled", true);
-
-        return e;
-    }
-
-    
-    private static Map<String, Boolean> enabledAndCompressed() {
-        final Map<String, Boolean> e = Maps.newHashMap();
+    private static Map enabledAndCompressed() {
+        final Map e = new HashMap();
         e.put("enabled", true);
         e.put("compress", true);
 

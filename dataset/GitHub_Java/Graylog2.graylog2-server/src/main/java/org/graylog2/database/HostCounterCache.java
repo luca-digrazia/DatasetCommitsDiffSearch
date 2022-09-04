@@ -1,5 +1,5 @@
 /**
- * Copyright 2011 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -20,35 +20,19 @@
 
 package org.graylog2.database;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
- * HostCounterCache.java: Feb 21, 2010 4:57:13 PM
- *
  * Acts as cache for count updates in the hosts collection. Written to MongoDB
  * by a periodically running thread.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class HostCounterCache {
-    private static HostCounterCache instance;
 
-    private Map<String, Integer> cache = new HashMap<String, Integer>();
-
-    private HostCounterCache() { }
-
-    /**
-     *
-     * @return
-     */
-    public static synchronized HostCounterCache getInstance() {
-        if (instance == null) {
-            instance = new HostCounterCache();
-        }
-        return instance;
-    }
+    private ConcurrentMap<String, Integer> cache = new ConcurrentHashMap<String, Integer>();
 
     /**
      * Increment counter cache by 1 for a host.
@@ -66,13 +50,13 @@ public class HostCounterCache {
     }
 
     /**
-     * Set counter cache to 0 for a host.
+     * Remove host from counter.
      *
      * @param hostname The host of which the counter to reset.
      */
     public void reset(String hostname) {
         if (this.cache.containsKey(hostname)) {
-            this.cache.put(hostname, 0);
+            this.cache.remove(hostname);
         }
     }
 
@@ -80,7 +64,6 @@ public class HostCounterCache {
      * Get the current count of host.
      *
      * @param hostname The host of which the count to get.
-     * @return
      */
     public int getCount(String hostname) {
         return this.cache.get(hostname) == null ? 0 : this.cache.get(hostname);
@@ -88,8 +71,6 @@ public class HostCounterCache {
 
     /**
      * Get all hostnames that are currently in the cache.
-     * 
-     * @return
      */
     public Set<String> getAllHosts() {
         return this.cache.keySet();

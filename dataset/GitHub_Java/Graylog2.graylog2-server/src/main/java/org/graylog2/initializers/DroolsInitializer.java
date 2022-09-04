@@ -20,23 +20,22 @@
 
 package org.graylog2.initializers;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.graylog2.Configuration;
-import org.graylog2.Core;
-import org.graylog2.RulesEngineImpl;
+import org.graylog2.GraylogServer;
+import org.graylog2.RulesEngine;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class DroolsInitializer implements Initializer {
 
-    private static final Logger LOG = LoggerFactory.getLogger(DroolsInitializer.class);
+    private static final Logger LOG = Logger.getLogger(DroolsInitializer.class);
 
     private final Configuration configuration;
-    private final Core graylogServer;
+    private final GraylogServer graylogServer;
 
-    public DroolsInitializer(Core server, Configuration configuration) {
+    public DroolsInitializer(GraylogServer server, Configuration configuration) {
         this.graylogServer = server;
         this.configuration = configuration;
     }
@@ -46,15 +45,15 @@ public class DroolsInitializer implements Initializer {
         try {
             String rulesFilePath = configuration.getDroolsRulesFile();
             if (rulesFilePath != null && !rulesFilePath.isEmpty()) {
-                RulesEngineImpl drools = new RulesEngineImpl();
+                RulesEngine drools = new RulesEngine();
                 drools.addRules(rulesFilePath);
                 graylogServer.setRulesEngine(drools);
-                LOG.info("Using rules: {}", rulesFilePath);
+                LOG.info("Using rules: " + rulesFilePath);
             } else {
                 LOG.info("Not using rules");
             }
         } catch (Exception e) {
-            LOG.error("Could not load rules engine: " + e.getMessage(), e);
+            LOG.fatal("Could not load rules engine: " + e.getMessage(), e);
             System.exit(1);
         }
     }
