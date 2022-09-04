@@ -70,7 +70,6 @@ import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit.ActionCachedContext;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.ScanningActionEvent;
-import com.google.devtools.build.lib.actions.SpawnResult.MetadataLog;
 import com.google.devtools.build.lib.actions.StoppedScanningActionEvent;
 import com.google.devtools.build.lib.actions.TargetOutOfDateException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
@@ -149,7 +148,6 @@ public final class SkyframeActionExecutor {
   private ExtendedEventHandler progressSuppressingEventHandler;
   private ActionLogBufferPathGenerator actionLogBufferPathGenerator;
   private ActionCacheChecker actionCacheChecker;
-  @Nullable private TopDownActionCache topDownActionCache;
   private final Profiler profiler = Profiler.instance();
 
   // We keep track of actions already executed this build in order to avoid executing a shared
@@ -404,7 +402,6 @@ public final class SkyframeActionExecutor {
       Executor executor,
       OptionsProvider options,
       ActionCacheChecker actionCacheChecker,
-      TopDownActionCache topDownActionCache,
       OutputService outputService) {
     this.reporter = Preconditions.checkNotNull(reporter);
     this.executorEngine = Preconditions.checkNotNull(executor);
@@ -416,7 +413,6 @@ public final class SkyframeActionExecutor {
     this.lostDiscoveredInputsMap = Maps.newConcurrentMap();
     this.hadExecutionError = false;
     this.actionCacheChecker = Preconditions.checkNotNull(actionCacheChecker);
-    this.topDownActionCache = topDownActionCache;
     // Don't cache possibly stale data from the last build.
     this.options = options;
     // Cache some option values for performance, since we consult them on every action.
@@ -483,7 +479,6 @@ public final class SkyframeActionExecutor {
     this.completedAndResetActions = null;
     this.lostDiscoveredInputsMap = null;
     this.actionCacheChecker = null;
-    this.topDownActionCache = null;
   }
 
   /**
@@ -532,7 +527,6 @@ public final class SkyframeActionExecutor {
    *
    * <p>For use from {@link ArtifactFunction} only.
    */
-  @SuppressWarnings("SynchronizeOnNonFinalField")
   ActionExecutionValue executeAction(
       SkyFunction.Environment env,
       Action action,
@@ -587,10 +581,6 @@ public final class SkyframeActionExecutor {
     return progressEventBehavior.equals(ProgressEventBehavior.EMIT)
         ? reporter
         : progressSuppressingEventHandler;
-  }
-
-  TopDownActionCache getTopDownActionCache() {
-    return topDownActionCache;
   }
 
   /**
@@ -728,7 +718,7 @@ public final class SkyframeActionExecutor {
       ProgressEventBehavior progressEventBehavior,
       Environment env,
       @Nullable FileSystem actionFileSystem)
-      throws ActionExecutionException, InterruptedException, IOException {
+      throws ActionExecutionException, InterruptedException {
     ActionExecutionContext actionExecutionContext =
         ActionExecutionContext.forInputDiscovery(
             executorEngine,
@@ -766,7 +756,6 @@ public final class SkyframeActionExecutor {
           ErrorTiming.BEFORE_EXECUTION);
     } finally {
       actionExecutionContext.getEventHandler().post(new StoppedScanningActionEvent(action));
-      actionExecutionContext.close();
     }
   }
 
@@ -1066,20 +1055,13 @@ public final class SkyframeActionExecutor {
 
         // Success in execution but failure in completion.
         reportActionExecution(
-            eventHandler,
-            primaryOutputPath,
-            action,
-            actionResult,
-            null,
-            fileOutErr,
-            ErrorTiming.NO_ERROR);
+            eventHandler, primaryOutputPath, action, null, fileOutErr, ErrorTiming.NO_ERROR);
       } catch (ActionExecutionException actionException) {
         // Success in execution but failure in completion.
         reportActionExecution(
             eventHandler,
             primaryOutputPath,
             action,
-            actionResult,
             actionException,
             fileOutErr,
             ErrorTiming.AFTER_EXECUTION);
@@ -1090,7 +1072,6 @@ public final class SkyframeActionExecutor {
             eventHandler,
             primaryOutputPath,
             action,
-            actionResult,
             new ActionExecutionException(exception, action, true),
             fileOutErr,
             ErrorTiming.AFTER_EXECUTION);
@@ -1283,8 +1264,7 @@ public final class SkyframeActionExecutor {
       return lostInputsException;
     }
 
-    reportActionExecution(
-        eventHandler, primaryOutputPath, action, null, e, outErrBuffer, errorTiming);
+    reportActionExecution(eventHandler, primaryOutputPath, action, e, outErrBuffer, errorTiming);
     boolean reported = reportErrorIfNotAbortingMode(e, outErrBuffer);
 
     ActionExecutionException toThrow = e;
@@ -1399,17 +1379,17 @@ public final class SkyframeActionExecutor {
   }
 
   /**
-   * For the action 'action' that failed due to 'ex' with the output 'actionOutput', notify the user
-   * about the error. To notify the user, the method first displays the output of the action and
-   * then reports an error via the reporter. The method ensures that the two messages appear next to
+   * For the action 'action' that failed due to 'ex' with the output
+   * 'actionOutput', notify the user about the error. To notify the user, the
+   * method first displays the output of the action and then reports an error
+   * via the reporter. The method ensures that the two messages appear next to
    * each other by locking the outErr object where the output is displayed.
    *
    * @param message The reason why the action failed
    * @param action The action that failed, must not be null.
-   * @param actionOutput The output of the failed Action. May be null, if there is no output to
-   *     display
+   * @param actionOutput The output of the failed Action.
+   *     May be null, if there is no output to display
    */
-  @SuppressWarnings("SynchronizeOnNonFinalField")
   private void printError(String message, Action action, FileOutErr actionOutput) {
     synchronized (reporter) {
       if (options.getOptions(KeepGoingOption.class).keepGoing) {
@@ -1475,26 +1455,17 @@ public final class SkyframeActionExecutor {
       ExtendedEventHandler eventHandler,
       Path primaryOutputPath,
       Action action,
-      @Nullable ActionResult actionResult,
       ActionExecutionException exception,
       FileOutErr outErr,
       ErrorTiming errorTiming) {
     Path stdout = null;
     Path stderr = null;
-    ImmutableList<MetadataLog> logs = ImmutableList.of();
 
     if (outErr.hasRecordedStdout()) {
       stdout = outErr.getOutputPath();
     }
     if (outErr.hasRecordedStderr()) {
       stderr = outErr.getErrorPath();
-    }
-    if (actionResult != null) {
-      logs =
-          actionResult.spawnResults().stream()
-              .filter(spawnResult -> spawnResult.getActionMetadataLog().isPresent())
-              .map(spawnResult -> spawnResult.getActionMetadataLog().get())
-              .collect(ImmutableList.toImmutableList());
     }
     eventHandler.post(
         new ActionExecutedEvent(
@@ -1504,7 +1475,6 @@ public final class SkyframeActionExecutor {
             primaryOutputPath,
             stdout,
             stderr,
-            logs,
             errorTiming));
   }
 
@@ -1517,9 +1487,8 @@ public final class SkyframeActionExecutor {
    * ActionExecutionException), we probably do not want to also store the StdErr output, so
    * dumpRecordedOutErr() should still be called here.
    */
-  @SuppressWarnings("SynchronizeOnNonFinalField")
-  private boolean reportErrorIfNotAbortingMode(
-      ActionExecutionException ex, FileOutErr outErrBuffer) {
+  private boolean reportErrorIfNotAbortingMode(ActionExecutionException ex,
+      FileOutErr outErrBuffer) {
     // For some actions (e.g., many local actions) the pollInterruptedStatus()
     // won't notice that we had an interrupted job. It will continue.
     // For that reason we must take care to NOT report errors if we're
