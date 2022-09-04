@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.skylarkbuildapi.android;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
@@ -61,7 +62,7 @@ public interface AndroidAssetsInfoApi<FileT extends FileApi, AssetsT extends Par
   FileApi getValidationResult();
 
   @SkylarkCallable(name = "direct_parsed_assets", structField = true, doc = "", documented = false)
-  SkylarkNestedSet /*<AssetsT>*/ getDirectParsedAssetsForStarlark();
+  NestedSet<AssetsT> getDirectParsedAssets();
 
   /** Returns the local assets for the target. */
   @SkylarkCallable(
@@ -86,16 +87,16 @@ public interface AndroidAssetsInfoApi<FileT extends FileApi, AssetsT extends Par
       structField = true,
       doc = "",
       documented = false)
-  SkylarkNestedSet /*<AssetsT>*/ getTransitiveParsedAssetsForStarlark();
+  NestedSet<AssetsT> getTransitiveParsedAssets();
 
   @SkylarkCallable(name = "assets", structField = true, doc = "", documented = false)
-  SkylarkNestedSet /*<FileT>*/ getAssetsForStarlark();
+  NestedSet<FileT> getAssets();
 
   @SkylarkCallable(name = "symbols", structField = true, doc = "", documented = false)
-  SkylarkNestedSet /*<FileT>*/ getSymbolsForStarlark();
+  NestedSet<FileT> getSymbols();
 
   @SkylarkCallable(name = "compiled_symbols", structField = true, doc = "", documented = false)
-  SkylarkNestedSet /*<FileT>*/ getCompiledSymbolsForStarlark();
+  NestedSet<FileT> getCompiledSymbols();
 
   /** The provider implementing this can construct the AndroidAssetsInfo provider. */
   @SkylarkModule(
