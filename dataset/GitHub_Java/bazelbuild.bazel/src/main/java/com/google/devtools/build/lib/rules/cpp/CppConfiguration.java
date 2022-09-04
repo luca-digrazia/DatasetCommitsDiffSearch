@@ -556,6 +556,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
         + "migration instructions).";
   }
 
+  public boolean disableEmittingStaticLibgcc() {
+    return cppOptions.disableEmittingStaticLibgcc;
+  }
+
   public boolean disableDepsetInUserFlags() {
     return cppOptions.disableDepsetInUserFlags;
   }

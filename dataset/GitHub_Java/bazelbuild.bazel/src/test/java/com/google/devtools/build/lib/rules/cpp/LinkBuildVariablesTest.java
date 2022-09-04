@@ -48,12 +48,6 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
   }
 
   @Test
-  public void testIsUsingFissionIsIdenticalForCompileAndLink() {
-    assertThat(LinkBuildVariables.IS_USING_FISSION.getVariableName())
-        .isEqualTo(CompileBuildVariables.IS_USING_FISSION.getVariableName());
-  }
-
-  @Test
   public void testForcePicBuildVariable() throws Exception {
     useConfiguration("--force_pic");
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['a.cc'])");
@@ -147,7 +141,9 @@ public class LinkBuildVariablesTest extends LinkBuildVariablesTestCase {
   public void testInterfaceLibraryBuildingVariablesWhenGenerationPossible() throws Exception {
     // Make sure the interface shared object generation is enabled in the configuration
     // (which it is not by default for some windows toolchains)
-    AnalysisMock.get().ccSupport().setupCrosstool(mockToolsConfig);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCrosstool(mockToolsConfig, MockCcSupport.SUPPORTS_INTERFACE_SHARED_LIBRARIES);
     useConfiguration();
 
     verifyIfsoVariables();
