@@ -147,7 +147,8 @@ public final class JavaCompileActionBuilder {
   private Artifact manifestProtoOutput;
   private Artifact outputDepsProto;
   private Collection<Artifact> additionalOutputs;
-  private Artifact coverageArtifact;
+  private Artifact metadata;
+  private Artifact artifactForExperimentalCoverage;
   private ImmutableSet<Artifact> sourceFiles = ImmutableSet.of();
   private ImmutableList<Artifact> sourceJars = ImmutableList.of();
   private StrictDepsMode strictJavaDeps = StrictDepsMode.ERROR;
@@ -211,6 +212,7 @@ public final class JavaCompileActionBuilder {
     NestedSetBuilder<Artifact> outputs = NestedSetBuilder.stableOrder();
     Stream.of(
             outputJar,
+            metadata,
             gensrcOutputJar,
             manifestProtoOutput,
             nativeHeaderOutput)
@@ -257,8 +259,8 @@ public final class JavaCompileActionBuilder {
         .addAll(bootclasspathEntries)
         .addAll(sourcePathEntries)
         .addAll(extdirInputs);
-    if (coverageArtifact != null) {
-      mandatoryInputs.add(coverageArtifact);
+    if (artifactForExperimentalCoverage != null) {
+      mandatoryInputs.add(artifactForExperimentalCoverage);
     }
 
     JavaCompileExtraActionInfoSupplier extraActionInfoSupplier =
@@ -372,6 +374,7 @@ public final class JavaCompileActionBuilder {
 
     // Chose what artifact to pass to JavaBuilder, as input to jacoco instrumentation processor.
     // metadata should be null when --experimental_java_coverage is true.
+    Artifact coverageArtifact = metadata != null ? metadata : artifactForExperimentalCoverage;
     if (coverageArtifact != null) {
       result.add("--post_processor");
       result.addExecPath(JACOCO_INSTRUMENTATION_PROCESSOR, coverageArtifact);
@@ -422,6 +425,11 @@ public final class JavaCompileActionBuilder {
 
   public JavaCompileActionBuilder setAdditionalOutputs(Collection<Artifact> outputs) {
     this.additionalOutputs = outputs;
+    return this;
+  }
+
+  public JavaCompileActionBuilder setMetadata(Artifact metadata) {
+    this.metadata = metadata;
     return this;
   }
 
@@ -550,8 +558,9 @@ public final class JavaCompileActionBuilder {
     return this;
   }
 
-  public JavaCompileActionBuilder setCoverageArtifact(Artifact coverageArtifact) {
-    this.coverageArtifact = coverageArtifact;
+  public JavaCompileActionBuilder setArtifactForExperimentalCoverage(
+      Artifact artifactForExperimentalCoverage) {
+    this.artifactForExperimentalCoverage = artifactForExperimentalCoverage;
     return this;
   }
 
