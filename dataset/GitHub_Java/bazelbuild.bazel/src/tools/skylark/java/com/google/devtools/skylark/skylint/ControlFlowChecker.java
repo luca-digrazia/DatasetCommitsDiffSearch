@@ -14,8 +14,6 @@
 
 package com.google.devtools.skylark.skylint;
 
-import com.google.common.base.Equivalence;
-import com.google.common.base.Equivalence.Wrapper;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Expression;
@@ -126,7 +124,7 @@ public class ControlFlowChecker extends SyntaxTreeVisitor {
       cfi.hasReturnWithValue = true;
     } else {
       cfi.hasReturnWithoutValue = true;
-      cfi.returnStatementsWithoutValue.add(wrapReturn(node));
+      cfi.returnStatementsWithoutValue.add(new Return(node));
     }
   }
 
@@ -159,22 +157,40 @@ public class ControlFlowChecker extends SyntaxTreeVisitor {
           new Issue(
               "some but not all execution paths of '" + node.getIdentifier() + "' return a value",
               node.getLocation()));
-      for (Wrapper<ReturnStatement> returnWrapper : cfi.returnStatementsWithoutValue) {
+      for (Return returnWrapper : cfi.returnStatementsWithoutValue) {
         issues.add(
             new Issue(
                 "return value missing (you can `return None` if this is desired)",
-                unwrapReturn(returnWrapper).getLocation()));
+                returnWrapper.node.getLocation()));
       }
     }
     cfi = null;
   }
 
-  private Wrapper<ReturnStatement> wrapReturn(ReturnStatement node) {
-    return Equivalence.identity().wrap(node);
-  }
+  /**
+   * Wrapper around {@code ReturnStatement} that supports hashing and equality based on the
+   * identity of the node it wraps.
+   */
+  private static class Return {
 
-  private ReturnStatement unwrapReturn(Wrapper<ReturnStatement> wrapper) {
-    return wrapper.get();
+    final ReturnStatement node;
+
+    Return(ReturnStatement node) {
+      this.node = node;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (!(other instanceof Return)) {
+        return false;
+      }
+      return this.node == ((Return) other).node;
+    }
+
+    @Override
+    public int hashCode() {
+      return System.identityHashCode(node);
+    }
   }
 
   private static class ControlFlowInfo {
@@ -182,14 +198,14 @@ public class ControlFlowChecker extends SyntaxTreeVisitor {
     private boolean hasReturnWithValue;
     private boolean hasReturnWithoutValue;
     private boolean returnsAlwaysExplicitly;
-    private final LinkedHashSet<Wrapper<ReturnStatement>> returnStatementsWithoutValue;
+    private final LinkedHashSet<Return> returnStatementsWithoutValue;
 
     private ControlFlowInfo(
         boolean reachable,
         boolean hasReturnWithValue,
         boolean hasReturnWithoutValue,
         boolean returnsAlwaysExplicitly,
-        LinkedHashSet<Wrapper<ReturnStatement>> returnStatementsWithoutValue) {
+        LinkedHashSet<Return> returnStatementsWithoutValue) {
       this.reachable = reachable;
       this.hasReturnWithValue = hasReturnWithValue;
       this.hasReturnWithoutValue = hasReturnWithoutValue;
