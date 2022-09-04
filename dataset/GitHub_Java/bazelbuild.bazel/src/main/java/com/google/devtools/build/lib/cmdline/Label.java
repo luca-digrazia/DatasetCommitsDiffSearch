@@ -373,10 +373,11 @@ public final class Label
               + " \"external/repo\"</pre>",
       useStarlarkSemantics = true)
   public String getWorkspaceRoot(StarlarkSemantics semantics) {
-    return packageIdentifier
-        .getRepository()
-        .getExecPath(semantics.experimentalSiblingRepositoryLayout())
-        .toString();
+    if (semantics.experimentalSiblingRepositoryLayout()) {
+      return packageIdentifier.getRepository().getExecPath(true).toString();
+    } else {
+      return packageIdentifier.getRepository().getSourceRoot().toString();
+    }
   }
 
   /**
@@ -647,9 +648,6 @@ public final class Label
    */
   @Override
   public int compareTo(Label other) {
-    if (this == other) {
-      return 0;
-    }
     return ComparisonChain.start()
         .compare(packageIdentifier, other.packageIdentifier)
         .compare(name, other.name)
