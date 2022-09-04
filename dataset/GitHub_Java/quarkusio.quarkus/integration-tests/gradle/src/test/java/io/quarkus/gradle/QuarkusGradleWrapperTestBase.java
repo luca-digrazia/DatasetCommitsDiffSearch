@@ -38,12 +38,9 @@ public class QuarkusGradleWrapperTestBase extends QuarkusGradleTestBase {
                 .start();
 
         p.waitFor(5, TimeUnit.MINUTES);
+
         try (InputStream is = new FileInputStream(logOutput)) {
-            final BuildResult commandResult = BuildResult.of(is);
-            if (p.exitValue() != 0) {
-                printCommandOutput(command, commandResult);
-            }
-            return commandResult;
+            return BuildResult.of(is);
         }
     }
 
@@ -64,10 +61,5 @@ public class QuarkusGradleWrapperTestBase extends QuarkusGradleTestBase {
             systemProperties.add(String.format("-D%s=%s", MAVEN_REPO_LOCAL, System.getProperty(MAVEN_REPO_LOCAL)));
         }
         return systemProperties;
-    }
-
-    private void printCommandOutput(List<String> command, BuildResult commandResult) {
-        System.err.println("Command: " + String.join(" ", command) + " failed with the following output:");
-        System.err.println(commandResult.getOutput());
     }
 }
