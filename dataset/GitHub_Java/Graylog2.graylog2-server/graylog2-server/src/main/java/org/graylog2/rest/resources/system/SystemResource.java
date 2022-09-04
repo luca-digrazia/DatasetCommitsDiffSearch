@@ -20,8 +20,6 @@
 
 package org.graylog2.rest.resources.system;
 
-import com.codahale.metrics.annotation.Timed;
-import com.codahale.metrics.jvm.ThreadDump;
 import com.google.common.collect.Maps;
 import com.sun.jersey.api.core.ResourceConfig;
 import org.graylog2.Core;
@@ -37,9 +35,6 @@ import javax.ws.rs.core.Response;
 
 import org.graylog2.rest.resources.RestResource;
 
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
-import java.lang.management.ManagementFactory;
 import java.util.Map;
 
 /**
@@ -52,7 +47,8 @@ public class SystemResource extends RestResource {
 
     @Context ResourceConfig rc;
 
-    @GET @Timed
+    @GET
+    @Path("/")
     @Produces(MediaType.APPLICATION_JSON)
     public String system(@QueryParam("pretty") boolean prettyPrint) {
         Core core = (Core) rc.getProperty("core");
@@ -67,7 +63,7 @@ public class SystemResource extends RestResource {
         return json(result, prettyPrint);
     }
 
-    @GET @Timed
+    @GET
     @Path("/fields")
     @Produces(MediaType.APPLICATION_JSON)
     public String analyze(@QueryParam("pretty") boolean prettyPrint) {
@@ -79,7 +75,7 @@ public class SystemResource extends RestResource {
         return json(result, prettyPrint);
     }
 
-    @PUT @Timed
+    @PUT
     @Path("/processing/pause")
     public Response pauseProcessing() {
         Core core = (Core) rc.getProperty("core");
@@ -89,7 +85,7 @@ public class SystemResource extends RestResource {
         return Response.ok().build();
     }
 
-    @PUT @Timed
+    @PUT
     @Path("/processing/resume")
     public Response resumeProcessing() {
         Core core = (Core) rc.getProperty("core");
@@ -105,7 +101,7 @@ public class SystemResource extends RestResource {
         return Response.ok().build();
     }
 
-    @PUT @Timed
+    @PUT
     @Path("/processing/pause/unlock")
     public Response unlockProcessingPause() {
 
@@ -122,7 +118,7 @@ public class SystemResource extends RestResource {
     }
 
     @GET
-    @Path("/jvm") @Timed
+    @Path("/jvm")
     @Produces(MediaType.APPLICATION_JSON)
     public String jvm(@QueryParam("pretty") boolean prettyPrint) {
         Core core = (Core) rc.getProperty("core");
@@ -141,20 +137,6 @@ public class SystemResource extends RestResource {
         result.put("is_processing", core.isProcessing());
 
         return json(result, prettyPrint);
-    }
-
-    @GET
-    @Path("/threaddump") @Timed
-    @Produces(MediaType.TEXT_PLAIN)
-    public String threaddump(@QueryParam("pretty") boolean prettyPrint) {
-        Core core = (Core) rc.getProperty("core");
-
-        // The ThreadDump is built by  internal codahale.metrics servlet library we are abusing.
-        ThreadDump threadDump = new ThreadDump(ManagementFactory.getThreadMXBean());
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-
-        threadDump.dump(output);
-        return output.toString();
     }
 
 }
