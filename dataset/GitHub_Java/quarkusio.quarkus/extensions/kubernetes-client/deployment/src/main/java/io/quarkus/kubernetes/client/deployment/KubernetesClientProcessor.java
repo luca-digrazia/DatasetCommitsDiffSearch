@@ -98,8 +98,7 @@ public class KubernetesClientProcessor {
                 .map(c -> c.name().toString())
                 .filter(c -> !watchedClasses.contains(c))
                 .toArray(String[]::new);
-        reflectiveClasses.produce(ReflectiveClassBuildItem
-                .builder(modelClasses).weak(true).methods(true).fields(false).build());
+        reflectiveClasses.produce(ReflectiveClassBuildItem.weakClass(modelClasses));
 
         // we also ignore some classes that are annotated with @JsonDeserialize that would force the registration of the entire model
         ignoredJsonDeserializationClasses.produce(
