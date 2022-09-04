@@ -70,8 +70,7 @@ class NinjaGraphArtifactsHelper {
         Preconditions.checkNotNull(ruleContext.getConfiguration())
             .getDirectories()
             .getExecRoot(ruleContext.getWorkspaceName());
-    this.derivedOutputRoot =
-        ArtifactRoot.asDerivedRoot(execRoot, outputRootPath.getSegments().toArray(new String[0]));
+    this.derivedOutputRoot = ArtifactRoot.asDerivedRoot(execRoot, outputRootPath);
   }
 
   DerivedArtifact createOutputArtifact(PathFragment pathRelativeToWorkingDirectory)

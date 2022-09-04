@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.blackbox.tests;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.devtools.build.lib.blackbox.framework.BuilderRunner;
 import com.google.devtools.build.lib.blackbox.framework.ProcessResult;
@@ -37,7 +37,7 @@ public class NinjaBlackBoxTest extends AbstractBlackBoxTest {
         .write(
             WORKSPACE,
             String.format("workspace(name = '%s')", testName.getMethodName()),
-            "toplevel_output_directories(paths = ['build_dir'])");
+            "dont_symlink_directories_in_execroot(paths = ['build_dir'])");
   }
 
   @Test
@@ -102,7 +102,8 @@ public class NinjaBlackBoxTest extends AbstractBlackBoxTest {
 
     BuilderRunner bazel = context().bazel();
     ProcessResult result = bazel.shouldFail().build("//:ninja_target");
-    assertThat(result.errString()).contains("name 'toplevel_output_directories' is not defined");
+    assertThat(result.errString())
+        .contains("name 'dont_symlink_directories_in_execroot' is not defined");
     assertThat(result.errString()).contains("FAILED: Build did NOT complete successfully");
   }
 
