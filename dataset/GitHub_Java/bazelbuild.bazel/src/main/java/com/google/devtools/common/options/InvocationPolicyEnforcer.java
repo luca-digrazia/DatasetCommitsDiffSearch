@@ -19,6 +19,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.AllowValues;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.DisallowValues;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.FlagPolicy;
@@ -29,9 +30,9 @@ import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.Us
 import com.google.devtools.common.options.OptionsParser.OptionDescription;
 import com.google.devtools.common.options.OptionsParser.OptionValueDescription;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -196,7 +197,7 @@ public final class InvocationPolicyEnforcer {
 
     ImmutableSet<String> commandAndParentCommands =
         command == null
-            ? ImmutableSet.of()
+            ? ImmutableSet.<String>of()
             : CommandNameCache.CommandNameCacheInstance.INSTANCE.get(command);
 
     // Expand all policies to transfer policies on expansion flags to policies on the child flags.
@@ -241,7 +242,8 @@ public final class InvocationPolicyEnforcer {
 
     String expansionFlagName = expansionPolicy.getFlagName();
 
-    ImmutableList.Builder<OptionValueDescription> resultsBuilder = ImmutableList.builder();
+    ImmutableList.Builder<OptionValueDescription> resultsBuilder =
+        ImmutableList.<OptionValueDescription>builder();
     switch (expansionPolicy.getOperationCase()) {
       case SET_VALUE:
         {
@@ -305,7 +307,7 @@ public final class InvocationPolicyEnforcer {
 
     ImmutableList<OptionValueDescription> expansions =
         getExpansionsFromFlagPolicy(originalPolicy, originalOptionDescription, parser);
-    ImmutableList.Builder<OptionValueDescription> subflagBuilder = ImmutableList.builder();
+    ImmutableList.Builder<OptionValueDescription> subflagBuilder = new ImmutableList.Builder<>();
     ImmutableList<OptionValueDescription> subflags =
         subflagBuilder
             .addAll(originalOptionDescription.getImplicitRequirements())
@@ -638,7 +640,7 @@ public final class InvocationPolicyEnforcer {
       // of string comparison. For example, "--foo=0", "--foo=false", "--nofoo", and "-f-"
       // (if the option has an abbreviation) are all equal for boolean flags. Plus converters
       // can be arbitrarily complex.
-      Set<Object> convertedPolicyValues = new HashSet<>();
+      Set<Object> convertedPolicyValues = Sets.newHashSet();
       for (String value : policyValues) {
         Object convertedValue = optionDescription.getConverter().convert(value);
         // Some converters return lists, and if the flag is a repeatable flag, the items in the
@@ -805,7 +807,7 @@ public final class InvocationPolicyEnforcer {
     parser.parseWithSourceFunction(
         OptionPriority.INVOCATION_POLICY,
         INVOCATION_POLICY_SOURCE,
-        ImmutableList.of(String.format("--%s=%s", flagName, flagValue)));
+        Arrays.asList(String.format("--%s=%s", flagName, flagValue)));
   }
 }
 
