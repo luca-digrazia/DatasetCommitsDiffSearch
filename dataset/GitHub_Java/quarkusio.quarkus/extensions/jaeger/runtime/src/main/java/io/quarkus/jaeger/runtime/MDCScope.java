@@ -19,15 +19,11 @@ public class MDCScope implements Scope {
     private static final String SAMPLED = "sampled";
 
     private final Scope wrapped;
-    private final Object originalTraceId;
-    private final Object originalSpanId;
-    private final Object originalSampled;
+    private final Scope toRestore;
 
-    public MDCScope(Scope scope) {
+    public MDCScope(Scope toRestore, Scope scope) {
+        this.toRestore = toRestore;
         this.wrapped = scope;
-        this.originalTraceId = MDC.get(TRACE_ID);
-        this.originalSpanId = MDC.get(SPAN_ID);
-        this.originalSampled = MDC.get(SAMPLED);
         if (scope.span().context() instanceof JaegerSpanContext) {
             putContext((JaegerSpanContext) scope.span().context());
         }
@@ -40,14 +36,8 @@ public class MDCScope implements Scope {
         MDC.remove(SPAN_ID);
         MDC.remove(SAMPLED);
 
-        if (originalTraceId != null) {
-            MDC.put(TRACE_ID, originalTraceId);
-        }
-        if (originalSpanId != null) {
-            MDC.put(SPAN_ID, originalSpanId);
-        }
-        if (originalSampled != null) {
-            MDC.put(SAMPLED, originalSampled);
+        if (toRestore != null && toRestore.span().context() instanceof JaegerSpanContext) {
+            putContext(((JaegerSpanContext) toRestore.span().context()));
         }
     }
 
