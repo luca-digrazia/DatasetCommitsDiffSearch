@@ -15,32 +15,23 @@ import com.example.gsyvideoplayer.utils.CommonUtil;
 import com.example.gsyvideoplayer.utils.JumpUtils;
 import com.example.gsyvideoplayer.video.SampleControlVideo;
 import com.shuyu.gsyvideoplayer.GSYBaseActivityDetail;
-import com.shuyu.gsyvideoplayer.GSYRenderView;
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
-import com.shuyu.gsyvideoplayer.listener.GSYVideoGifSaveListener;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoShotListener;
-import com.shuyu.gsyvideoplayer.listener.GSYVideoShotSaveListener;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
-import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
 /**
- * sampleVideo支持全屏与非全屏切换的清晰度，旋转，镜像等功能.
- * Activity可以继承GSYBaseActivityDetail实现详情模式的页面
- * 或者参考DetailPlayer、DetailListPlayer实现
- * <p>
  * Created by guoshuyu on 2017/6/18.
+ * sampleVideo支持全屏与非全屏切换的清晰度，旋转，镜像等功能.
  */
 
 public class DetailControlActivity extends GSYBaseActivityDetail {
@@ -64,26 +55,9 @@ public class DetailControlActivity extends GSYBaseActivityDetail {
     @BindView(R.id.shot)
     Button shot;
 
-    @BindView(R.id.start_gif)
-    Button startGif;
-
-    @BindView(R.id.stop_gif)
-    Button stopGif;
-
-    @BindView(R.id.loadingView)
-    View loadingView;
-
-    private Timer timer = new Timer();
-
-    private TaskLocal mTimerTask;
-
-    private String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
-
-    private List<String> picList = new ArrayList<>();
-
     private float speed = 1;
 
-    private boolean saveShotBitmapSuccess = true;
+    private String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -127,28 +101,6 @@ public class DetailControlActivity extends GSYBaseActivityDetail {
                 shotImage(v);
             }
         });
-
-
-        startGif.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startGif();
-            }
-        });
-
-        stopGif.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                stopGif();
-            }
-        });
-
-        loadingView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //do nothing
-            }
-        });
     }
 
     @Override
@@ -179,129 +131,34 @@ public class DetailControlActivity extends GSYBaseActivityDetail {
 
     }
 
-    /**
-     * 开始gif截图
-     */
-    private void startGif() {
-        cancelTask();
-        mTimerTask = new TaskLocal();
-        timer.schedule(mTimerTask, 0, 50);
-    }
-
-    /**
-     * 生成gif
-     */
-    private void stopGif() {
-        saveShotBitmapSuccess = false;
-        cancelTask();
-        loadingView.setVisibility(View.VISIBLE);
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                if (picList.size() > 2) {
-                    // 保存的文件路径，请确保文件夹目录已经创建
-                    File file = new File(FileUtils.getPath(), "GSY-" + System.currentTimeMillis() + ".gif");
-                    // inSampleSize  采样率，越大图片越小，越大图片越模糊，需要处理的时长越短
-                    // scaleSize 缩减尺寸比例，对生成的截图进行缩减，越大图片越模糊，需要处理的时长越短
-                    detailPlayer.createGif(file, picList, 0, 1, 5, new GSYVideoGifSaveListener() {
-                        @Override
-                        public void result(boolean success, File file) {
-                            detailPlayer.post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    loadingView.setVisibility(View.GONE);
-                                    Toast.makeText(detailPlayer.getContext(), "创建成功", Toast.LENGTH_LONG).show();
-                                }
-                            });
-                        }
-
-                        @Override
-                        public void process(int curPosition, int total) {
-                            Debuger.printfError(" current " + curPosition + " total " + total);
-                        }
-                    });
-                } else {
-                    detailPlayer.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            loadingView.setVisibility(View.GONE);
-                        }
-                    });
-                }
-            }
-        }).start();
-    }
-
-    /**
-     * 开始保存帧图片
-     */
-    private void startSaveBitmap() {
-        // 保存的文件路径，请确保文件夹目录已经创建
-        File file = new File(FileUtils.getPath(), "GSY-" + System.currentTimeMillis() + ".tmp");
-        detailPlayer.saveFrame(file, new GSYVideoShotSaveListener() {
-            @Override
-            public void result(boolean success, final File file) {
-                saveShotBitmapSuccess = true;
-                if (success) {
-                    Debuger.printfError(" SUCCESS CREATE FILE " + file.getAbsolutePath());
-                    picList.add(file.getAbsolutePath());
-                }
-            }
-        });
-
-    }
-
-    /**
-     * 保存帧图片定时任务
-     */
-    private class TaskLocal extends TimerTask {
-        @Override
-        public void run() {
-            if (saveShotBitmapSuccess) {
-                saveShotBitmapSuccess = false;
-                startSaveBitmap();
-            }
-        }
-    }
-
-    /**
-     * 取消帧图片定时任务
-     */
-    private void cancelTask() {
-        if (mTimerTask != null) {
-            mTimerTask.cancel();
-            mTimerTask = null;
-        }
-    }
-
 
     /**
      * 视频截图
      */
     private void shotImage(final View v) {
-        //每次设置一个监听
-        detailPlayer.setCurrentFrameBitmapListener(new GSYVideoShotListener() {
-            @Override
-            public void getBitmap(Bitmap bitmap) {
-                if (bitmap != null) {
-                    try {
-                        CommonUtil.saveBitmap(bitmap);
-                    } catch (FileNotFoundException e) {
-                        showToast("save fail ");
-                        e.printStackTrace();
-                        return;
+        if (detailPlayer.getCurrentPlayer().getRenderProxy() != null) {
+            //每次设置一个监听
+            detailPlayer.getCurrentPlayer().getRenderProxy().setCurrentFrameBitmapListener(new GSYVideoShotListener() {
+                @Override
+                public void getBitmap(Bitmap bitmap) {
+                    if (bitmap != null) {
+                        try {
+                            CommonUtil.saveBitmap(bitmap);
+                        } catch (FileNotFoundException e) {
+                            showToast("save fail ");
+                            e.printStackTrace();
+                            return;
+                        }
+                        showToast("save success ");
+                    } else {
+                        showToast("get bitmap fail ");
                     }
-                    showToast("save success ");
-                } else {
-                    showToast("get bitmap fail ");
                 }
-            }
-        });
-        //获取截图
-        detailPlayer.taskShotPic();
-
+            });
+            //获取截图
+            detailPlayer.getCurrentPlayer().getRenderProxy().taskShotPic();
+        }
     }
-
 
     private void loadCover(ImageView imageView, String url) {
 

@@ -13,7 +13,6 @@ import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
-import com.example.gsyvideoplayer.effect.GSYVideoGLViewCustomRender;
 import com.example.gsyvideoplayer.effect.PixelationEffect;
 import com.example.gsyvideoplayer.utils.CommonUtil;
 import com.example.gsyvideoplayer.utils.JumpUtils;
@@ -50,7 +49,6 @@ import com.shuyu.gsyvideoplayer.listener.GSYVideoShotListener;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
-import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 
 import java.io.File;
@@ -65,8 +63,6 @@ import butterknife.ButterKnife;
 
 /**
  * 滤镜
- * Activity可以继承GSYBaseActivityDetail实现详情模式的页面
- * 或者参考DetailPlayer、DetailListPlayer实现
  * Created by guoshuyu on 2017/6/18.
  */
 
@@ -116,7 +112,6 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
 
         backupRendType = GSYVideoType.getRenderType();
 
-        //设置为GL播放模式，才能支持滤镜，注意此设置是全局的
         GSYVideoType.setRenderType(GSYVideoType.GLSURFACE);
 
         resolveNormalVideoUI();
@@ -133,21 +128,10 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
             }
         });
 
-        //自定义render需要在播放器设置
-        //detailPlayer.setCustomGLRenderer(new GSYVideoGLViewCustomRender());
-
         changeFilter.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 resolveTypeUI();
-            }
-        });
-
-        //使用GL播放的话，用这种方式可以解决退出全屏黑屏的问题
-        detailPlayer.setBackFromFullScreenListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                DetailFilterActivity.this.onBackPressed();
             }
         });
 
