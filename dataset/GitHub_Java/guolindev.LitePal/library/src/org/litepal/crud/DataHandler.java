@@ -24,7 +24,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
 import java.util.List;
 
 import org.litepal.LitePalBase;
@@ -34,7 +33,6 @@ import org.litepal.exceptions.DatabaseGenerateException;
 import org.litepal.util.BaseUtility;
 import org.litepal.util.Const;
 import org.litepal.util.DBUtility;
-import org.litepal.util.LogUtil;
 
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -146,22 +144,6 @@ abstract class DataHandler extends LitePalBase {
 		}
 	}
 
-	/**
-	 * Handles the math query of the given table.
-	 * 
-	 * @param tableName
-	 *            Which table to query from.
-	 * @param columns
-	 *            A list of which columns to return. Passing null will return
-	 *            all columns, which is discouraged to prevent reading data from
-	 *            storage that isn't going to be used.
-	 * @param conditions
-	 *            A filter declaring which rows to return, formatted as an SQL
-	 *            WHERE clause. Passing null will return all rows.
-	 * @param type
-	 *            The type of the based on column.
-	 * @return The result calculating by SQL.
-	 */
 	@SuppressWarnings("unchecked")
 	protected <T> T mathQuery(String tableName, String[] columns, String[] conditions, Class<T> type) {
 		BaseUtility.checkConditionsCorrect(conditions);
@@ -221,7 +203,7 @@ abstract class DataHandler extends LitePalBase {
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			throw new DataSupportException(e.getMessage());
 		}
 	}
 
@@ -248,10 +230,6 @@ abstract class DataHandler extends LitePalBase {
 			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
 			IllegalAccessException, InvocationTargetException {
 		Object fieldValue = takeGetMethodValueByField(baseObj, field);
-		if ("java.util.Date".equals(field.getType().getName()) && fieldValue != null) {
-			Date date = (Date) fieldValue;
-			fieldValue = date.getTime();
-		}
 		Object[] parameters = new Object[] { changeCase(field.getName()), fieldValue };
 		Class<?>[] parameterTypes = getParameterTypes(field, fieldValue, parameters);
 		DynamicExecutor.send(values, "put", parameters, values.getClass(), parameterTypes);
@@ -685,8 +663,6 @@ abstract class DataHandler extends LitePalBase {
 		} else {
 			if (field.getType().isPrimitive()) {
 				parameterTypes = new Class[] { String.class, getObjectType(field.getType()) };
-			} else if ("java.util.Date".equals(field.getType().getName())) {
-				parameterTypes = new Class[] { String.class, Long.class };
 			} else {
 				parameterTypes = new Class[] { String.class, field.getType() };
 			}

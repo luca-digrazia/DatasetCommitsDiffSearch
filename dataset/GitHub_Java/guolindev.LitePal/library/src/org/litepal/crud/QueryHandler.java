@@ -1,18 +1,25 @@
+/*
+ * Copyright (C)  Tony Green, Litepal Framework Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.litepal.crud;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
-import org.litepal.crud.model.AssociationsInfo;
-import org.litepal.exceptions.DataSupportException;
 import org.litepal.util.BaseUtility;
-import org.litepal.util.Const;
-import org.litepal.util.DBUtility;
 
-import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
 /**
@@ -23,10 +30,6 @@ import android.database.sqlite.SQLiteDatabase;
  * @since 1.1
  */
 class QueryHandler extends DataHandler {
-
-	private List<AssociationsInfo> fkInCurrentModel;
-
-	private List<AssociationsInfo> fkInOtherModel;
 
 	/**
 	 * Initialize {@link DataHandler#mDatabase} for operating database. Do not
@@ -47,21 +50,15 @@ class QueryHandler extends DataHandler {
 	 *            Which table to query and the object type to return.
 	 * @param id
 	 *            Which record to query.
-	 * @return An object with founded data from database, or null.
+	 * @param isEager
+	 *            True to load the associated models, false not.
+	 * @return An object with found data from database, or null.
 	 */
-	@SuppressWarnings("unchecked")
 	<T> T onFind(Class<T> modelClass, long id, boolean isEager) {
-		List<T> dataList = query(modelClass, null, "id = ?", new String[] { String.valueOf(id) },
-				null, null, null, null, getForeignKeyAssociations(modelClass.getName(), isEager));
-		DataSupport baseObj = null;
+		List<T> dataList = query(modelClass, null, "id = ?", new String[] { String.valueOf(id) }, null, null,
+				null, null, getForeignKeyAssociations(modelClass.getName(), isEager));
 		if (dataList.size() > 0) {
-			baseObj = (DataSupport) dataList.get(0);
-		}
-		if (baseObj != null) {
-			if (isEager) {
-				setAssociatedModel(baseObj);
-			}
-			return (T) baseObj;
+			return dataList.get(0);
 		}
 		return null;
 	}
@@ -72,10 +69,13 @@ class QueryHandler extends DataHandler {
 	 * 
 	 * @param modelClass
 	 *            Which table to query and the object type to return.
+	 * @param isEager
+	 *            True to load the associated models, false not.
 	 * @return An object with data of first row, or null.
 	 */
 	<T> T onFindFirst(Class<T> modelClass, boolean isEager) {
-		List<T> dataList = query(modelClass, null, null, null, null, null, "id", "1", null);
+		List<T> dataList = query(modelClass, null, null, null, null, null, "id", "1",
+				getForeignKeyAssociations(modelClass.getName(), isEager));
 		if (dataList.size() > 0) {
 			return dataList.get(0);
 		}
@@ -88,10 +88,13 @@ class QueryHandler extends DataHandler {
 	 * 
 	 * @param modelClass
 	 *            Which table to query and the object type to return.
+	 * @param isEager
+	 *            True to load the associated models, false not.
 	 * @return An object with data of last row, or null.
 	 */
-	<T> T onFindLast(Class<T> modelClass) {
-		List<T> dataList = query(modelClass, null, null, null, null, null, "id desc", "1", null);
+	<T> T onFindLast(Class<T> modelClass, boolean isEager) {
+		List<T> dataList = query(modelClass, null, null, null, null, null, "id desc", "1",
+				getForeignKeyAssociations(modelClass.getName(), isEager));
 		if (dataList.size() > 0) {
 			return dataList.get(0);
 		}
@@ -104,17 +107,20 @@ class QueryHandler extends DataHandler {
 	 * 
 	 * @param modelClass
 	 *            Which table to query and the object type to return as a list.
+	 * @param isEager
+	 *            True to load the associated models, false not.
 	 * @param ids
 	 *            Which records to query. Or do not pass it to find all records.
-	 * @return An object list with founded data from database, or an empty list.
+	 * @return An object list with found data from database, or an empty list.
 	 */
-	<T> List<T> onFindAll(Class<T> modelClass, long... ids) {
+	<T> List<T> onFindAll(Class<T> modelClass, boolean isEager, long... ids) {
 		List<T> dataList;
 		if (isAffectAllLines(ids)) {
-			dataList = query(modelClass, null, null, null, null, null, "id", null, null);
+			dataList = query(modelClass, null, null, null, null, null, "id", null,
+					getForeignKeyAssociations(modelClass.getName(), isEager));
 		} else {
-			dataList = query(modelClass, null, getWhereOfIdsWithOr(ids), null, null, null, "id",
-					null, null);
+			dataList = query(modelClass, null, getWhereOfIdsWithOr(ids), null, null, null, "id", null,
+					getForeignKeyAssociations(modelClass.getName(), isEager));
 		}
 		return dataList;
 	}
@@ -138,113 +144,36 @@ class QueryHandler extends DataHandler {
 	 * @param limit
 	 *            Limits the number of rows returned by the query, formatted as
 	 *            LIMIT clause.
-	 * @return
+	 * @param isEager
+	 *            True to load the associated models, false not.
+	 * @return An object list with found data from database, or an empty list.
 	 */
 	<T> List<T> onFind(Class<T> modelClass, String[] columns, String[] conditions, String orderBy,
 			String limit, boolean isEager) {
 		BaseUtility.checkConditionsCorrect(conditions);
-		if (!isEager) {
-			List<T> dataList = query(modelClass, columns, getWhereClause(conditions),
-					getWhereArgs(conditions), null, null, orderBy, limit, null);
-			return dataList;
-		}
-		return null;
+		List<T> dataList = query(modelClass, columns, getWhereClause(conditions), getWhereArgs(conditions),
+				null, null, orderBy, limit, getForeignKeyAssociations(modelClass.getName(), isEager));
+		return dataList;
 	}
 
-	private List<AssociationsInfo> getForeignKeyAssociations(String className, boolean isEager) {
-		if (isEager) {
-			analyzeAssociations(className);
-			return fkInCurrentModel;
-		}
-		return null;
+	int onCount(String tableName, String[] conditions) {
+		return mathQuery(tableName, new String[] { "count(1)" }, conditions, int.class);
 	}
 
-	private void analyzeAssociations(String className) {
-		Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
-		if (fkInCurrentModel == null) {
-			fkInCurrentModel = new ArrayList<AssociationsInfo>();
-		} else {
-			fkInCurrentModel.clear();
-		}
-		if (fkInOtherModel == null) {
-			fkInOtherModel = new ArrayList<AssociationsInfo>();
-		} else {
-			fkInOtherModel.clear();
-		}
-		for (AssociationsInfo associationInfo : associationInfos) {
-			if (associationInfo.getAssociationType() == Const.Model.MANY_TO_ONE
-					|| associationInfo.getAssociationType() == Const.Model.ONE_TO_ONE) {
-				if (associationInfo.getClassHoldsForeignKey().equals(className)) {
-					fkInCurrentModel.add(associationInfo);
-				} else {
-					fkInOtherModel.add(associationInfo);
-				}
-			} else if (associationInfo.getAssociationType() == Const.Model.MANY_TO_MANY) {
-				fkInOtherModel.add(associationInfo);
-			}
-		}
+	double onAverage(String tableName, String column, String[] conditions) {
+		return mathQuery(tableName, new String[] { "avg(" + column + ")" }, conditions, double.class);
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
-	private void setAssociatedModel(DataSupport baseObj) {
-		if (fkInOtherModel == null) {
-			return;
-		}
-		for (AssociationsInfo info : fkInOtherModel) {
-			Cursor cursor = null;
-			String associatedClassName = info.getAssociatedClassName();
-			boolean isM2M = info.getAssociationType() == Const.Model.MANY_TO_MANY ? true : false;
-			try {
-				List<Field> supportedFields = getSupportedFields(associatedClassName);
-				if (isM2M) {
-					String tableName = baseObj.getTableName();
-					String associatedTableName = DBUtility
-							.getTableNameByClassName(associatedClassName);
-					String intermediateTableName = DBUtility.getIntermediateTableName(tableName,
-							associatedTableName);
-					StringBuilder sql = new StringBuilder();
-					sql.append("select * from ").append(associatedTableName)
-							.append(" a inner join ").append(intermediateTableName)
-							.append(" b on a.id = b.").append(associatedTableName + "_id")
-							.append(" where b.").append(tableName).append("_id = ?");
-					cursor = DataSupport.findBySQL(BaseUtility.changeCase(sql.toString()),
-							String.valueOf(baseObj.getBaseObjId()));
-				} else {
-					String foreignKeyColumn = getForeignKeyColumnName(DBUtility
-							.getTableNameByClassName(info.getSelfClassName()));
-					String associatedTableName = DBUtility
-							.getTableNameByClassName(associatedClassName);
-					cursor = mDatabase.query(BaseUtility.changeCase(associatedTableName), null,
-							foreignKeyColumn + "=?",
-							new String[] { String.valueOf(baseObj.getBaseObjId()) }, null, null,
-							null, null);
-				}
-				if (cursor.moveToFirst()) {
-					do {
-						Constructor<?> constructor = findBestSuitConstructor(Class
-								.forName(associatedClassName));
-						DataSupport modelInstance = (DataSupport) constructor
-								.newInstance(getConstructorParams(constructor));
-						giveBaseObjIdValue(modelInstance,
-								cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-						setValueToModel(modelInstance, supportedFields, null, cursor);
-						if (info.getAssociationType() == Const.Model.MANY_TO_ONE || isM2M) {
-							Collection collection = (Collection) takeGetMethodValueByField(baseObj,
-									info.getAssociateOtherModelFromSelf());
-							collection.add(modelInstance);
-						} else if (info.getAssociationType() == Const.Model.ONE_TO_ONE) {
-							putSetMethodValueByField(baseObj,
-									info.getAssociateOtherModelFromSelf(), modelInstance);
-						}
-					} while (cursor.moveToNext());
-				}
-			} catch (Exception e) {
-				throw new DataSupportException(e.getMessage());
-			} finally {
-				if (cursor != null) {
-					cursor.close();
-				}
-			}
-		}
+	<T> T onMax(String tableName, String column, String[] conditions, Class<T> type) {
+		return mathQuery(tableName, new String[] { "max(" + column + ")" }, conditions, type);
 	}
+
+	<T> T onMin(String tableName, String column, String[] conditions, Class<T> type) {
+		return mathQuery(tableName, new String[] { "min(" + column + ")" }, conditions, type);
+	}
+
+	<T> T onSum(String tableName, String column, String[] conditions, Class<T> type) {
+		return mathQuery(tableName, new String[] { "sum(" + column + ")" }, conditions, type);
+	}
+
 }
