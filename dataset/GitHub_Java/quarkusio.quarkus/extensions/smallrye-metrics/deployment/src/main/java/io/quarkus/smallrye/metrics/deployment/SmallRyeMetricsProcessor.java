@@ -16,6 +16,7 @@
 
 package io.quarkus.smallrye.metrics.deployment;
 
+import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
 import java.util.Arrays;
@@ -138,8 +139,8 @@ public class SmallRyeMetricsProcessor {
     }
 
     @BuildStep
-    @Record(STATIC_INIT)
-    void registerBaseAndVendorMetrics(SmallRyeMetricsTemplate metrics, ShutdownContextBuildItem shutdown) {
+    @Record(RUNTIME_INIT)
+    void register(SmallRyeMetricsTemplate metrics, ShutdownContextBuildItem shutdown) {
         metrics.registerBaseMetrics(shutdown);
         metrics.registerVendorMetrics(shutdown);
     }
