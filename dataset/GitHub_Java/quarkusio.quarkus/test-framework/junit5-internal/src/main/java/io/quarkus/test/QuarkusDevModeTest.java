@@ -310,8 +310,6 @@ public class QuarkusDevModeTest
         Path path = copySourceFilesForClass(projectSourceRoot, deploymentSourcePath, testLocation,
                 testLocation.resolve(sourceFile.getName().replace(".", "/") + ".class"));
         sleepForFileChanges(path);
-        // since this is a new file addition, even wait for the parent dir's last modified timestamp to change
-        sleepForFileChanges(path.getParent());
     }
 
     void modifyFile(String name, Function<String, String> mutator, Path path) {
@@ -386,15 +384,11 @@ public class QuarkusDevModeTest
      * the deployment resources directory
      */
     public void addResourceFile(String path, byte[] data) {
-        final Path resourceFilePath = deploymentResourcePath.resolve(path);
         try {
-            Files.write(resourceFilePath, data);
+            Files.write(deploymentResourcePath.resolve(path), data);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        sleepForFileChanges(resourceFilePath);
-        // since this is a new file addition, even wait for the parent dir's last modified timestamp to change
-        sleepForFileChanges(resourceFilePath.getParent());
     }
 
     /**
@@ -402,14 +396,11 @@ public class QuarkusDevModeTest
      * the deployment resources directory
      */
     public void deleteResourceFile(String path) {
-        final Path resourceFilePath = deploymentResourcePath.resolve(path);
         try {
-            Files.delete(resourceFilePath);
+            Files.delete(deploymentResourcePath.resolve(path));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        // wait for last modified time of the parent to get updated
-        sleepForFileChanges(resourceFilePath.getParent());
     }
 
     /**

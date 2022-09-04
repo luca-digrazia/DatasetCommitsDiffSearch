@@ -3,11 +3,8 @@ package io.quarkus.test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.nio.file.FileVisitResult;
@@ -19,8 +16,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.function.Consumer;
@@ -30,8 +25,6 @@ import java.util.stream.Stream;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.spi.CDI;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.asset.Asset;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -80,7 +73,6 @@ public class QuarkusUnitTest
     private String logFileName;
     private static final Timer timeoutTimer = new Timer("Test thread dump timer");
     private volatile TimerTask timeoutTask;
-    private Properties customApplicationProperties;
 
     private final RestAssuredURLManager restAssuredURLManager;
 
@@ -113,7 +105,6 @@ public class QuarkusUnitTest
     }
 
     public QuarkusUnitTest setArchiveProducer(Supplier<JavaArchive> archiveProducer) {
-        Objects.requireNonNull(archiveProducer);
         this.archiveProducer = archiveProducer;
         return this;
     }
@@ -157,11 +148,8 @@ public class QuarkusUnitTest
 
     private void exportArchive(Path deploymentDir, Class<?> testClass) {
         try {
-            JavaArchive archive = getArchiveProducerOrDefault();
+            JavaArchive archive = archiveProducer.get();
             archive.addClass(testClass);
-            if (customApplicationProperties != null) {
-                archive.add(new PropertiesAsset(customApplicationProperties), "application.properties");
-            }
             archive.as(ExplodedExporter.class).exportExplodedInto(deploymentDir.toFile());
 
             String exportPath = System.getProperty("quarkus.deploymentExportPath");
@@ -186,16 +174,11 @@ public class QuarkusUnitTest
         }
     }
 
-    private JavaArchive getArchiveProducerOrDefault() {
-        if (archiveProducer == null) {
-            return ShrinkWrap.create(JavaArchive.class);
-        } else {
-            return archiveProducer.get();
-        }
-    }
-
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
+        if (archiveProducer == null) {
+            throw new RuntimeException("QuarkusUnitTest does not have archive producer set");
+        }
         timeoutTask = new TimerTask() {
             @Override
             public void run() {
@@ -387,38 +370,5 @@ public class QuarkusUnitTest
     public QuarkusUnitTest setAfterUndeployListener(Runnable afterUndeployListener) {
         this.afterUndeployListener = afterUndeployListener;
         return this;
-    }
-
-    public QuarkusUnitTest withConfigurationResource(String resourceName) {
-        if (customApplicationProperties == null) {
-            customApplicationProperties = new Properties();
-        }
-        try {
-            try (InputStream in = ClassLoader.getSystemResourceAsStream(resourceName)) {
-                customApplicationProperties.load(in);
-            }
-            return this;
-        } catch (IOException e) {
-            throw new RuntimeException("Could not load resource: '" + resourceName + "'");
-        }
-    }
-
-    private static class PropertiesAsset implements Asset {
-        private final Properties props;
-
-        public PropertiesAsset(final Properties props) {
-            this.props = props;
-        }
-
-        @Override
-        public InputStream openStream() {
-            final ByteArrayOutputStream outputStream = new ByteArrayOutputStream(128);
-            try {
-                props.store(outputStream, "Unit test Generated Application properties");
-            } catch (IOException e) {
-                throw new RuntimeException("Could not write application properties resource", e);
-            }
-            return new ByteArrayInputStream(outputStream.toByteArray());
-        }
     }
 }

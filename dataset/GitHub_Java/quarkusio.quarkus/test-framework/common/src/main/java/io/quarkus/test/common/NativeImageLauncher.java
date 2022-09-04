@@ -25,7 +25,6 @@ public class NativeImageLauncher implements Closeable {
     private static final long DEFAULT_IMAGE_WAIT_TIME = 60;
 
     private final Class<?> testClass;
-    private final String profile;
     private Process quarkusProcess;
     private final int port;
     private final long imageWaitTime;
@@ -36,12 +35,10 @@ public class NativeImageLauncher implements Closeable {
         this(testClass,
                 ConfigProvider.getConfig().getOptionalValue("quarkus.http.test-port", Integer.class).orElse(DEFAULT_PORT),
                 ConfigProvider.getConfig().getOptionalValue("quarkus.test.native-image-wait-time", Long.class)
-                        .orElse(DEFAULT_IMAGE_WAIT_TIME),
-                ConfigProvider.getConfig().getOptionalValue("quarkus.test.native-image-profile", String.class)
-                        .orElse(null));
+                        .orElse(DEFAULT_IMAGE_WAIT_TIME));
     }
 
-    public NativeImageLauncher(Class<?> testClass, int port, long imageWaitTime, String profile) {
+    public NativeImageLauncher(Class<?> testClass, int port, long imageWaitTime) {
         this.testClass = testClass;
         this.port = port;
         this.imageWaitTime = imageWaitTime;
@@ -50,7 +47,6 @@ public class NativeImageLauncher implements Closeable {
             startedNotifiers.add(i);
         }
         this.startedNotifiers = startedNotifiers;
-        this.profile = profile;
     }
 
     public void start() throws IOException {
@@ -66,9 +62,6 @@ public class NativeImageLauncher implements Closeable {
         args.add("-Dquarkus.http.port=" + port);
         args.add("-Dtest.url=" + TestHTTPResourceManager.getUri());
         args.add("-Dquarkus.log.file.path=" + PropertyTestUtil.getLogFileLocation());
-        if (profile != null) {
-            args.add("-Dquarkus.profile=" + profile);
-        }
         for (Map.Entry<String, String> e : systemProps.entrySet()) {
             args.add("-D" + e.getKey() + "=" + e.getValue());
         }
@@ -109,40 +102,30 @@ public class NativeImageLauncher implements Closeable {
                             return file.getAbsolutePath();
                         }
                     }
-                } else if (url.getProtocol().equals("file") && url.getPath().contains("/target/surefire/")) {
-                    //this will make mvn failsafe:integration-test work
-                    String path = url.getPath();
-                    int index = path.lastIndexOf("/target/");
-                    File targetDir = new File(path.substring(0, index) + "/target/");
-                    for (File file : targetDir.listFiles()) {
-                        if (file.getName().endsWith("-runner")) {
-                            logGuessedPath(file.getAbsolutePath());
-                            return file.getAbsolutePath();
-                        }
-                    }
-
                 }
             }
         }
 
-        throw new RuntimeException(
-                "Unable to automatically find native image, please set the native.image.path to the native executable you wish to test");
+        throw new RuntimeException("Unable to find native image, make sure native.image.path is set");
     }
 
     private static void logGuessedPath(String guessedPath) {
-        System.err.println("======================================================================================");
-        System.err.println("  native.image.path was not set, making a guess for the correct path of native image");
-        System.err.println("  guessed path: " + guessedPath);
-        System.err.println("======================================================================================");
+        String errorString = "\n=native.image.path was not set, making a guess that  " + guessedPath
+                + " is the correct native image=";
+        for (int i = 0; i < errorString.length(); ++i) {
+            System.err.print("=");
+        }
+        System.err.println(errorString);
+        for (int i = 0; i < errorString.length(); ++i) {
+            System.err.print("=");
+        }
+        System.err.println();
     }
 
     private void waitForQuarkus() {
         long bailout = System.currentTimeMillis() + imageWaitTime * 1000;
 
         while (System.currentTimeMillis() < bailout) {
-            if (!quarkusProcess.isAlive()) {
-                throw new RuntimeException("Failed to start native image, process has exited");
-            }
             try {
                 Thread.sleep(100);
                 for (NativeImageStartedNotifier i : startedNotifiers) {
