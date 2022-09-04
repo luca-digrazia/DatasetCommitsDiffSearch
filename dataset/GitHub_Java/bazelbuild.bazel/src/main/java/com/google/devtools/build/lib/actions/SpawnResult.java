@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.shell.TerminationStatus;
-import java.io.InputStream;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Optional;
@@ -179,22 +178,6 @@ public interface SpawnResult {
   /** Whether the spawn result was a cache hit. */
   boolean isCacheHit();
 
-  /** Returns an optional custom failure message for the result. */
-  default String getFailureMessage() {
-    return "";
-  }
-
-  /**
-   * SpawnResults can optionally support returning outputs in-memory. Such outputs can be obtained
-   * from this method if so.
-   *
-   * @param output
-   */
-  @Nullable
-  default InputStream getInMemoryOutput(ActionInput output) {
-    return null;
-  }
-
   String getDetailMessage(
       String messagePrefix, String message, boolean catastrophe, boolean forciblyRunRemotely);
 
@@ -213,7 +196,6 @@ public interface SpawnResult {
     private final Optional<Long> numBlockInputOperations;
     private final Optional<Long> numInvoluntaryContextSwitches;
     private final boolean cacheHit;
-    private final String failureMessage;
 
     SimpleSpawnResult(Builder builder) {
       this.exitCode = builder.exitCode;
@@ -226,7 +208,6 @@ public interface SpawnResult {
       this.numBlockInputOperations = builder.numBlockInputOperations;
       this.numInvoluntaryContextSwitches = builder.numInvoluntaryContextSwitches;
       this.cacheHit = builder.cacheHit;
-      this.failureMessage = builder.failureMessage;
     }
 
     @Override
@@ -293,11 +274,6 @@ public interface SpawnResult {
     }
 
     @Override
-    public String getFailureMessage() {
-      return failureMessage;
-    }
-
-    @Override
     public String getDetailMessage(
         String messagePrefix, String message, boolean catastrophe, boolean forciblyRunRemotely) {
       TerminationStatus status = new TerminationStatus(
@@ -342,7 +318,6 @@ public interface SpawnResult {
     private Optional<Long> numBlockInputOperations = Optional.empty();
     private Optional<Long> numInvoluntaryContextSwitches = Optional.empty();
     private boolean cacheHit;
-    private String failureMessage = "";
 
     public SpawnResult build() {
       if (status == Status.SUCCESS) {
@@ -418,11 +393,6 @@ public interface SpawnResult {
 
     public Builder setCacheHit(boolean cacheHit) {
       this.cacheHit = cacheHit;
-      return this;
-    }
-
-    public Builder setFailureMessage(String failureMessage) {
-      this.failureMessage = failureMessage;
       return this;
     }
   }

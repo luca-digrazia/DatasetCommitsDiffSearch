@@ -27,7 +27,7 @@ import org.junit.runners.JUnit4;
 public final class ActionResultTest {
 
   @Test
-  public void testCumulativeCommandExecutionTime_noSpawnResults() {
+  public void testCumulativeCommandExecutionTime_NoSpawnResults() {
     List<SpawnResult> spawnResults = ImmutableList.of();
     ActionResult actionResult = ActionResult.create(spawnResults);
     assertThat(actionResult.cumulativeCommandExecutionWallTime()).isEmpty();
@@ -40,7 +40,7 @@ public final class ActionResultTest {
   }
 
   @Test
-  public void testCumulativeCommandExecutionTime_oneSpawnResult() {
+  public void testCumulativeCommandExecutionTime_OneSpawnResult() {
     SpawnResult spawnResult =
         new SpawnResult.Builder()
             .setWallTime(Duration.ofMillis(1984))
@@ -50,7 +50,6 @@ public final class ActionResultTest {
             .setNumBlockInputOperations(20)
             .setNumInvoluntaryContextSwitches(30)
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     List<SpawnResult> spawnResults = ImmutableList.of(spawnResult);
     ActionResult actionResult = ActionResult.create(spawnResults);
@@ -64,7 +63,7 @@ public final class ActionResultTest {
   }
 
   @Test
-  public void testCumulativeCommandExecutionTime_manySpawnResults() {
+  public void testCumulativeCommandExecutionTime_ManySpawnResults() {
     SpawnResult spawnResult1 =
         new SpawnResult.Builder()
             .setWallTime(Duration.ofMillis(1979))
@@ -74,7 +73,6 @@ public final class ActionResultTest {
             .setNumBlockInputOperations(20)
             .setNumInvoluntaryContextSwitches(30)
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     SpawnResult spawnResult2 =
         new SpawnResult.Builder()
@@ -85,7 +83,6 @@ public final class ActionResultTest {
             .setNumBlockInputOperations(200)
             .setNumInvoluntaryContextSwitches(300)
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     SpawnResult spawnResult3 =
         new SpawnResult.Builder()
@@ -96,7 +93,6 @@ public final class ActionResultTest {
             .setNumBlockInputOperations(2000)
             .setNumInvoluntaryContextSwitches(3000)
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     List<SpawnResult> spawnResults = ImmutableList.of(spawnResult1, spawnResult2, spawnResult3);
     ActionResult actionResult = ActionResult.create(spawnResults);
@@ -110,22 +106,13 @@ public final class ActionResultTest {
   }
 
   @Test
-  public void testCumulativeCommandExecutionTime_manyEmptySpawnResults() {
+  public void testCumulativeCommandExecutionTime_ManyEmptySpawnResults() {
     SpawnResult spawnResult1 =
-        new SpawnResult.Builder()
-            .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
-            .build();
+        new SpawnResult.Builder().setStatus(SpawnResult.Status.SUCCESS).build();
     SpawnResult spawnResult2 =
-        new SpawnResult.Builder()
-            .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
-            .build();
+        new SpawnResult.Builder().setStatus(SpawnResult.Status.SUCCESS).build();
     SpawnResult spawnResult3 =
-        new SpawnResult.Builder()
-            .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
-            .build();
+        new SpawnResult.Builder().setStatus(SpawnResult.Status.SUCCESS).build();
     List<SpawnResult> spawnResults = ImmutableList.of(spawnResult1, spawnResult2, spawnResult3);
     ActionResult actionResult = ActionResult.create(spawnResults);
     assertThat(actionResult.cumulativeCommandExecutionWallTime()).isEmpty();
@@ -138,24 +125,21 @@ public final class ActionResultTest {
   }
 
   @Test
-  public void testCumulativeCommandExecutionTime_manySpawnResults_butOnlyUserTime() {
+  public void testCumulativeCommandExecutionTime_ManySpawnResults_ButOnlyUserTime() {
     SpawnResult spawnResult1 =
         new SpawnResult.Builder()
             .setUserTime(Duration.ofMillis(2))
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     SpawnResult spawnResult2 =
         new SpawnResult.Builder()
             .setUserTime(Duration.ofMillis(3))
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     SpawnResult spawnResult3 =
         new SpawnResult.Builder()
             .setUserTime(Duration.ofMillis(4))
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     List<SpawnResult> spawnResults = ImmutableList.of(spawnResult1, spawnResult2, spawnResult3);
     ActionResult actionResult = ActionResult.create(spawnResults);
@@ -164,24 +148,21 @@ public final class ActionResultTest {
   }
 
   @Test
-  public void testCumulativeCommandExecutionTime_manySpawnResults_butOnlySystemTime() {
+  public void testCumulativeCommandExecutionTime_ManySpawnResults_ButOnlySystemTime() {
     SpawnResult spawnResult1 =
         new SpawnResult.Builder()
             .setSystemTime(Duration.ofMillis(33))
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     SpawnResult spawnResult2 =
         new SpawnResult.Builder()
             .setSystemTime(Duration.ofMillis(7))
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     SpawnResult spawnResult3 =
         new SpawnResult.Builder()
             .setSystemTime(Duration.ofMillis(2))
             .setStatus(SpawnResult.Status.SUCCESS)
-            .setRunnerName("test")
             .build();
     List<SpawnResult> spawnResults = ImmutableList.of(spawnResult1, spawnResult2, spawnResult3);
     ActionResult actionResult = ActionResult.create(spawnResults);

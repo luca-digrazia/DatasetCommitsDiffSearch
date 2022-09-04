@@ -31,7 +31,7 @@ public abstract class ActionResult {
   public static final ActionResult EMPTY = ActionResult.create(ImmutableList.of());
 
   /** Returns the SpawnResults for the action. */
-  public abstract ImmutableList<SpawnResult> spawnResults();
+  public abstract List<SpawnResult> spawnResults();
 
   /** Returns a builder that can be used to construct a {@link ActionResult} object. */
   public static Builder builder() {
@@ -153,19 +153,6 @@ public abstract class ActionResult {
   }
 
   /**
-   * Indicates whether all {@link Spawn}s executed locally or not.
-   *
-   * @return true if all spawns of action executed locally
-   */
-  public boolean locallyExecuted() {
-    boolean locallyExecuted = true;
-    for (SpawnResult spawnResult : spawnResults()) {
-      locallyExecuted &= !spawnResult.wasRemote();
-    }
-    return locallyExecuted;
-  }
-
-  /**
    * Returns the cumulative command execution CPU time for the {@link Action}.
    *
    * @return the cumulative measurement, or empty in case of execution errors or when the
@@ -192,7 +179,7 @@ public abstract class ActionResult {
     if (spawnResults == null) {
       return EMPTY;
     } else {
-      return builder().setSpawnResults(ImmutableList.copyOf(spawnResults)).build();
+      return builder().setSpawnResults(spawnResults).build();
     }
   }
 
@@ -201,7 +188,7 @@ public abstract class ActionResult {
   public abstract static class Builder {
 
     /** Sets the SpawnResults for the action. */
-    public abstract Builder setSpawnResults(ImmutableList<SpawnResult> spawnResults);
+    public abstract Builder setSpawnResults(List<SpawnResult> spawnResults);
 
     /** Builds and returns an ActionResult object. */
     public abstract ActionResult build();
