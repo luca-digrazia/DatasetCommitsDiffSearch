@@ -9,9 +9,9 @@ import java.util.List;
 import java.util.Set;
 
 import javax.validation.ConstraintViolation;
+import javax.validation.Validation;
 import javax.validation.Validator;
 
-import io.dropwizard.validation.BaseValidator;
 import org.apache.commons.lang3.SystemUtils;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.junit.Test;
@@ -21,13 +21,11 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assume.assumeFalse;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.Assert.fail;
 
 public class HttpsConnectorFactoryTest {
     private static final String WINDOWS_MY_KEYSTORE_NAME = "Windows-MY";
-    private final Validator validator = BaseValidator.newValidator();
+    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
     public void isDiscoverable() throws Exception {
@@ -77,23 +75,20 @@ public class HttpsConnectorFactoryTest {
     }
 
     @Test
-    public void canBuildContextFactoryWhenWindowsKeyStoreAvailable() throws Exception {
-        // ignore test when Windows Keystore unavailable
-        assumeTrue(canAccessWindowsKeyStore());
-
-        final HttpsConnectorFactory factory = new HttpsConnectorFactory();
+    public void windowsKeyStore() throws Exception {
+        HttpsConnectorFactory factory = new HttpsConnectorFactory();
         factory.setKeyStoreType(WINDOWS_MY_KEYSTORE_NAME);
-
-        assertNotNull(factory.buildSslContextFactory());
-    }
-
-    @Test(expected = IllegalStateException.class)
-    public void windowsKeyStoreUnavailableThrowsException() throws Exception {
-        assumeFalse(canAccessWindowsKeyStore());
-
-        final HttpsConnectorFactory factory = new HttpsConnectorFactory();
-        factory.setKeyStoreType(WINDOWS_MY_KEYSTORE_NAME);
-        factory.buildSslContextFactory();
+        if (canAccessWindowsKeyStore()) {
+            factory.buildSslContextFactory();
+            return;
+        } else {
+            try {
+                factory.buildSslContextFactory();
+                fail("Windows key store should not be supported here");
+            } catch (IllegalStateException ex) {
+                assertThat(ex.getMessage()).containsIgnoringCase("not supported");
+            }
+        }
     }
 
     private boolean canAccessWindowsKeyStore() {
