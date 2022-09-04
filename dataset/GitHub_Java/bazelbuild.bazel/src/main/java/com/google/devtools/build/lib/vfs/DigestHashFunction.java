@@ -67,6 +67,7 @@ public class DigestHashFunction {
     }
   }
 
+  public static final DigestHashFunction MD5 = register(Hashing.md5(), "MD5");
   public static final DigestHashFunction SHA1 = register(Hashing.sha1(), "SHA-1", "SHA1");
   public static final DigestHashFunction SHA256 = register(Hashing.sha256(), "SHA-256", "SHA256");
 
@@ -160,7 +161,7 @@ public class DigestHashFunction {
       // Some tests use this class without calling GoogleUnixFileSystemModule.globalInit().
       Preconditions.checkState(
           System.getenv("TEST_TMPDIR") != null, "Default hash function has not been set");
-      return DigestHashFunction.SHA256;
+      return DigestHashFunction.MD5;
     }
   }
 

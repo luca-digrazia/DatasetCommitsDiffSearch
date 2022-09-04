@@ -17,6 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.hash.Hashing;
+import com.google.devtools.build.lib.vfs.DigestHashFunction.DefaultHashFunctionNotSetException;
 import com.google.devtools.build.lib.vfs.DigestHashFunction.DigestFunctionConverter;
 import java.lang.reflect.Field;
 import org.junit.Before;
@@ -35,11 +36,8 @@ public class DigestHashFunctionGlobalsTest {
   @Before
   public void resetStaticDefault() throws IllegalAccessException, NoSuchFieldException {
     // The default is effectively a Singleton, and it does not allow itself to be set multiple
-    // times. In order to test this reasonably, though, we reset the sentinel boolean to false and
-    // the value to null, which are the values before setDefault is called.
-    Field defaultHasBeenSet = DigestHashFunction.class.getDeclaredField("defaultHasBeenSet");
-    defaultHasBeenSet.setAccessible(true);
-    defaultHasBeenSet.set(null, false);
+    // times. In order to test this reasonably, though, we reset the value to null,
+    // as it is before setDefault is called.
 
     Field defaultValue = DigestHashFunction.class.getDeclaredField("defaultHash");
     defaultValue.setAccessible(true);
@@ -48,48 +46,47 @@ public class DigestHashFunctionGlobalsTest {
 
   @Test
   public void convertReturnsTheSameValueAsTheConstant() throws Exception {
-    assertThat(converter.convert("sha-256")).isSameAs(DigestHashFunction.SHA256);
-    assertThat(converter.convert("SHA-256")).isSameAs(DigestHashFunction.SHA256);
-    assertThat(converter.convert("SHA256")).isSameAs(DigestHashFunction.SHA256);
-    assertThat(converter.convert("sha256")).isSameAs(DigestHashFunction.SHA256);
+    assertThat(converter.convert("sha-256")).isSameInstanceAs(DigestHashFunction.SHA256);
+    assertThat(converter.convert("SHA-256")).isSameInstanceAs(DigestHashFunction.SHA256);
+    assertThat(converter.convert("SHA256")).isSameInstanceAs(DigestHashFunction.SHA256);
+    assertThat(converter.convert("sha256")).isSameInstanceAs(DigestHashFunction.SHA256);
 
-    assertThat(converter.convert("SHA-1")).isSameAs(DigestHashFunction.SHA1);
-    assertThat(converter.convert("sha-1")).isSameAs(DigestHashFunction.SHA1);
-    assertThat(converter.convert("SHA1")).isSameAs(DigestHashFunction.SHA1);
-    assertThat(converter.convert("sha1")).isSameAs(DigestHashFunction.SHA1);
+    assertThat(converter.convert("SHA-1")).isSameInstanceAs(DigestHashFunction.SHA1);
+    assertThat(converter.convert("sha-1")).isSameInstanceAs(DigestHashFunction.SHA1);
+    assertThat(converter.convert("SHA1")).isSameInstanceAs(DigestHashFunction.SHA1);
+    assertThat(converter.convert("sha1")).isSameInstanceAs(DigestHashFunction.SHA1);
 
-    assertThat(converter.convert("MD5")).isSameAs(DigestHashFunction.MD5);
-    assertThat(converter.convert("md5")).isSameAs(DigestHashFunction.MD5);
+    assertThat(converter.convert("MD5")).isSameInstanceAs(DigestHashFunction.MD5);
+    assertThat(converter.convert("md5")).isSameInstanceAs(DigestHashFunction.MD5);
   }
 
   @Test
   public void lateRegistrationGetsPickedUpByConverter() throws Exception {
     DigestHashFunction.register(Hashing.goodFastHash(32), "SHA-512");
 
-    assertThat(converter.convert("SHA-512")).isSameAs(converter.convert("sha-512"));
+    assertThat(converter.convert("SHA-512")).isSameInstanceAs(converter.convert("sha-512"));
   }
 
   @Test
   public void lateRegistrationWithAlternativeNamesGetsPickedUpByConverter() throws Exception {
     DigestHashFunction.register(Hashing.goodFastHash(64), "SHA-384", "SHA384", "SHA_384");
 
-    assertThat(converter.convert("SHA-384")).isSameAs(converter.convert("SHA-384"));
-    assertThat(converter.convert("Sha-384")).isSameAs(converter.convert("SHA-384"));
-    assertThat(converter.convert("sha-384")).isSameAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("SHA-384")).isSameInstanceAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("Sha-384")).isSameInstanceAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("sha-384")).isSameInstanceAs(converter.convert("SHA-384"));
 
-    assertThat(converter.convert("SHA384")).isSameAs(converter.convert("SHA-384"));
-    assertThat(converter.convert("Sha384")).isSameAs(converter.convert("SHA-384"));
-    assertThat(converter.convert("sha384")).isSameAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("SHA384")).isSameInstanceAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("Sha384")).isSameInstanceAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("sha384")).isSameInstanceAs(converter.convert("SHA-384"));
 
-    assertThat(converter.convert("SHA_384")).isSameAs(converter.convert("SHA-384"));
-    assertThat(converter.convert("Sha_384")).isSameAs(converter.convert("SHA-384"));
-    assertThat(converter.convert("sha_384")).isSameAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("SHA_384")).isSameInstanceAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("Sha_384")).isSameInstanceAs(converter.convert("SHA-384"));
+    assertThat(converter.convert("sha_384")).isSameInstanceAs(converter.convert("SHA-384"));
   }
 
   @Test
   public void unsetDefaultThrows() {
-    assertThrows(
-        DigestHashFunction.DefaultNotSetException.class, () -> DigestHashFunction.getDefault());
+    assertThrows(DefaultHashFunctionNotSetException.class, () -> DigestHashFunction.getDefault());
   }
 
   @Test
