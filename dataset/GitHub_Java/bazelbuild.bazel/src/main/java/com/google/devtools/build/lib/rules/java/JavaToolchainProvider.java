@@ -18,7 +18,6 @@ import static com.google.common.base.StandardSystemProperty.JAVA_SPECIFICATION_V
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.ProviderCollection;
@@ -82,7 +81,6 @@ public class JavaToolchainProvider extends ToolchainInfo
       FilesToRunProvider javaBuilder,
       @Nullable FilesToRunProvider headerCompiler,
       @Nullable FilesToRunProvider headerCompilerDirect,
-      ImmutableSet<String> headerCompilerBuiltinProcessors,
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
       @Nullable Artifact oneVersion,
@@ -93,7 +91,6 @@ public class JavaToolchainProvider extends ToolchainInfo
       FilesToRunProvider ijar,
       ImmutableListMultimap<String, String> compatibleJavacOptions,
       ImmutableList<JavaPackageConfigurationProvider> packageConfiguration,
-      FilesToRunProvider jacocoRunner,
       JavaSemantics javaSemantics) {
     return new JavaToolchainProvider(
         label,
@@ -104,7 +101,6 @@ public class JavaToolchainProvider extends ToolchainInfo
         javaBuilder,
         headerCompiler,
         headerCompilerDirect,
-        headerCompilerBuiltinProcessors,
         forciblyDisableHeaderCompilation,
         singleJar,
         oneVersion,
@@ -119,7 +115,6 @@ public class JavaToolchainProvider extends ToolchainInfo
         javabuilderJvmOptions,
         javacSupportsWorkers,
         packageConfiguration,
-        jacocoRunner,
         javaSemantics);
   }
 
@@ -131,7 +126,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   private final FilesToRunProvider javaBuilder;
   @Nullable private final FilesToRunProvider headerCompiler;
   @Nullable private final FilesToRunProvider headerCompilerDirect;
-  private final ImmutableSet<String> headerCompilerBuiltinProcessors;
   private final boolean forciblyDisableHeaderCompilation;
   private final Artifact singleJar;
   @Nullable private final Artifact oneVersion;
@@ -146,7 +140,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   private final ImmutableList<String> javabuilderJvmOptions;
   private final boolean javacSupportsWorkers;
   private final ImmutableList<JavaPackageConfigurationProvider> packageConfiguration;
-  private final FilesToRunProvider jacocoRunner;
   private final JavaSemantics javaSemantics;
 
   @VisibleForSerialization
@@ -159,7 +152,6 @@ public class JavaToolchainProvider extends ToolchainInfo
       FilesToRunProvider javaBuilder,
       @Nullable FilesToRunProvider headerCompiler,
       @Nullable FilesToRunProvider headerCompilerDirect,
-      ImmutableSet<String> headerCompilerBuiltinProcessors,
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
       @Nullable Artifact oneVersion,
@@ -174,7 +166,6 @@ public class JavaToolchainProvider extends ToolchainInfo
       ImmutableList<String> javabuilderJvmOptions,
       boolean javacSupportsWorkers,
       ImmutableList<JavaPackageConfigurationProvider> packageConfiguration,
-      FilesToRunProvider jacocoRunner,
       JavaSemantics javaSemantics) {
     super(ImmutableMap.of(), Location.BUILTIN);
 
@@ -186,7 +177,6 @@ public class JavaToolchainProvider extends ToolchainInfo
     this.javaBuilder = javaBuilder;
     this.headerCompiler = headerCompiler;
     this.headerCompilerDirect = headerCompilerDirect;
-    this.headerCompilerBuiltinProcessors = headerCompilerBuiltinProcessors;
     this.forciblyDisableHeaderCompilation = forciblyDisableHeaderCompilation;
     this.singleJar = singleJar;
     this.oneVersion = oneVersion;
@@ -201,7 +191,6 @@ public class JavaToolchainProvider extends ToolchainInfo
     this.javabuilderJvmOptions = javabuilderJvmOptions;
     this.javacSupportsWorkers = javacSupportsWorkers;
     this.packageConfiguration = packageConfiguration;
-    this.jacocoRunner = jacocoRunner;
     this.javaSemantics = javaSemantics;
   }
 
@@ -249,11 +238,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   @Nullable
   public FilesToRunProvider getHeaderCompilerDirect() {
     return headerCompilerDirect;
-  }
-
-  /** Returns class names of annotation processors that are built in to the header compiler. */
-  public ImmutableSet<String> getHeaderCompilerBuiltinProcessors() {
-    return headerCompilerBuiltinProcessors;
   }
 
   /**
@@ -348,10 +332,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   /** Returns the global {@code java_plugin_configuration} data. */
   public ImmutableList<JavaPackageConfigurationProvider> packageConfiguration() {
     return packageConfiguration;
-  }
-
-  public FilesToRunProvider getJacocoRunner() {
-    return jacocoRunner;
   }
 
   public JavaSemantics getJavaSemantics() {

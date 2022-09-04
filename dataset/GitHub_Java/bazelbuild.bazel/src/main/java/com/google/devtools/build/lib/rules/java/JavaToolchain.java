@@ -53,7 +53,6 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    JavaCommon.checkRuleLoadedThroughMacro(ruleContext);
     ImmutableList<String> javacopts = getJavacOpts(ruleContext);
     NestedSet<Artifact> bootclasspath =
         PrerequisiteArtifacts.nestedSet(ruleContext, "bootclasspath", Mode.HOST);
@@ -107,9 +106,6 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             ruleContext.getPrerequisites(
                 "package_configuration", Mode.HOST, JavaPackageConfigurationProvider.class));
 
-    FilesToRunProvider jacocoRunner =
-        ruleContext.getExecutablePrerequisite("jacocorunner", Mode.HOST);
-
     JavaToolchainProvider provider =
         JavaToolchainProvider.create(
             ruleContext.getLabel(),
@@ -134,7 +130,6 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             ijar,
             compatibleJavacOptions,
             packageConfiguration,
-            jacocoRunner,
             semantics);
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
