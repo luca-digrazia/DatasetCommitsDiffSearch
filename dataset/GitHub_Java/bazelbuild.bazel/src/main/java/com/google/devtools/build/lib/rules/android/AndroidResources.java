@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -132,18 +131,10 @@ public class AndroidResources {
       return empty();
     }
 
-    return from(
-        ruleContext,
-        ruleContext.getPrerequisites(resourcesAttr, Mode.TARGET, FileProvider.class),
-        resourcesAttr);
-  }
+    ImmutableList<Artifact> resources =
+        getResources(ruleContext.getPrerequisites(resourcesAttr, Mode.TARGET, FileProvider.class));
 
-  static AndroidResources from(
-      RuleErrorConsumer errorConsumer,
-      Iterable<FileProvider> resourcesTargets,
-      String resourcesAttr)
-      throws RuleErrorException {
-    return forResources(errorConsumer, getResources(resourcesTargets), resourcesAttr);
+    return forResources(ruleContext, resources, resourcesAttr);
   }
 
   /** Returns an {@link AndroidResources} for a list of resource artifacts. */
@@ -400,14 +391,9 @@ public class AndroidResources {
   }
 
   /** Parses these resources. */
-  public ParsedAndroidResources parse(
-      RuleContext ruleContext,
-      StampedAndroidManifest manifest,
-      boolean enableDataBinding,
-      AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
-    return ParsedAndroidResources.parseFrom(
-        ruleContext, this, manifest, enableDataBinding, aaptVersion);
+  public ParsedAndroidResources parse(RuleContext ruleContext, StampedAndroidManifest manifest)
+      throws InterruptedException, RuleErrorException {
+    return ParsedAndroidResources.parseFrom(ruleContext, this, manifest);
   }
 
   /**
@@ -417,13 +403,7 @@ public class AndroidResources {
   public ValidatedAndroidResources process(
       RuleContext ruleContext, StampedAndroidManifest manifest, boolean neverlink)
       throws RuleErrorException, InterruptedException {
-    boolean enableDataBinding = DataBinding.isEnabled(ruleContext);
-    AndroidAaptVersion aaptVersion = AndroidAaptVersion.chooseTargetAaptVersion(ruleContext);
-    ResourceDependencies resourceDeps = ResourceDependencies.fromRuleDeps(ruleContext, neverlink);
-
-    return parse(ruleContext, manifest, enableDataBinding, aaptVersion)
-        .merge(ruleContext, resourceDeps, enableDataBinding, aaptVersion)
-        .validate(ruleContext, aaptVersion);
+    return parse(ruleContext, manifest).merge(ruleContext, neverlink).validate(ruleContext);
   }
 
   @Override

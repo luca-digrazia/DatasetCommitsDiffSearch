@@ -109,11 +109,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     javaSemantics.checkForProtoLibraryAndJavaProtoLibraryOnSameProto(ruleContext, javaCommon);
 
     AndroidCommon androidCommon =
-        new AndroidCommon(
-            javaCommon,
-            /* asNeverLink= */ true,
-            /* exportDeps= */ !AndroidCommon.getAndroidConfig(ruleContext)
-                .getEnforceStrictDepsForBinariesUnderTest());
+        new AndroidCommon(javaCommon, /* asNeverLink= */ true, /* exportDeps= */ true);
     ResourceDependencies resourceDeps =
         ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink= */ false);
     RuleConfiguredTargetBuilder builder =

@@ -204,8 +204,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
     common.addTransitiveInfoProviders(
         ruleBuilder, javaInfoBuilder, filesToBuild, /*classJar=*/ null);
 
-    resourceApk.addToConfiguredTargetBuilder(
-        ruleBuilder, ruleContext.getLabel(), /* includeSkylarkApiProvider = */ false);
+    resourceApk.addToConfiguredTargetBuilder(ruleBuilder, ruleContext.getLabel());
 
     ruleBuilder
         .setFilesToBuild(filesToBuild)
