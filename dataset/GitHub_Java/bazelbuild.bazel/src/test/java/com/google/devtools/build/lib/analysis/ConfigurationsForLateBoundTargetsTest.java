@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.analysis;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
+import static org.junit.Assert.assertNotNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -25,15 +26,17 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
-import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestSpec;
+import com.google.devtools.build.lib.testutil.UnknownRuleConfiguredTarget;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -66,39 +69,47 @@ public class ConfigurationsForLateBoundTargetsTest extends AnalysisTestCase {
   };
 
   /**
-   * Mock late-bound attribute resolver that returns a fixed label.
-   */
-  private static final Attribute.LateBoundLabel<BuildConfiguration> LATEBOUND_VALUE_RESOLVER =
-      new Attribute.LateBoundLabel<BuildConfiguration>() {
-        @Override
-        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration config) {
-          return Label.parseAbsoluteUnchecked("//foo:latebound_dep");
-        }
-      };
-
-  /**
    * Rule definition with a latebound dependency.
    */
-  private static final RuleDefinition LATE_BOUND_DEP_RULE = (MockRule) () -> MockRule.define(
-      "rule_with_latebound_attr",
-      (builder, env) -> {
-        builder
-            .add(
-                attr(":latebound_attr", LABEL)
-                    .value(LATEBOUND_VALUE_RESOLVER)
-                    .cfg(CHANGE_FOO_FLAG_TRANSITION))
-            .requiresConfigurationFragments(LateBoundSplitUtil.TestFragment.class);
-      });
+  private static class LateBoundDepRule implements RuleDefinition {
+    private static final Attribute.LateBoundLabel<BuildConfiguration> LATEBOUND_VALUE_RESOLVER =
+        new Attribute.LateBoundLabel<BuildConfiguration>() {
+          @Override
+          public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration config) {
+            return Label.parseAbsoluteUnchecked("//foo:latebound_dep");
+          }
+        };
+
+    @Override
+    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+      return builder
+          .add(
+              attr(":latebound_attr", LABEL)
+                  .value(LATEBOUND_VALUE_RESOLVER)
+                  .cfg(CHANGE_FOO_FLAG_TRANSITION))
+          .requiresConfigurationFragments(LateBoundSplitUtil.TestFragment.class)
+          .build();
+    }
+
+    @Override
+    public Metadata getMetadata() {
+      return RuleDefinition.Metadata.builder()
+          .name("rule_with_latebound_attr")
+          .ancestors(BaseRuleClasses.RuleBase.class)
+          .factoryClass(UnknownRuleConfiguredTarget.class)
+          .build();
+    }
+  }
 
   @Before
   public void setupCustomLateBoundRules() throws Exception {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
-    builder.addRuleDefinition(LateBoundSplitUtil.RULE_WITH_LATEBOUND_SPLIT_ATTR);
-    builder.addRuleDefinition(LateBoundSplitUtil.RULE_WITH_TEST_FRAGMENT);
+    builder.addRuleDefinition(new LateBoundSplitUtil.RuleWithLateBoundSplitAttribute());
+    builder.addRuleDefinition(new LateBoundSplitUtil.RuleWithTestFragment());
     builder.addConfigurationFragment(new LateBoundSplitUtil.FragmentLoader());
     builder.addConfigurationOptions(LateBoundSplitUtil.TestOptions.class);
-    builder.addRuleDefinition(LATE_BOUND_DEP_RULE);
+    builder.addRuleDefinition(new LateBoundDepRule());
     useRuleClassProvider(builder.build());
 
     // Register the latebound split fragment with the config creation environment.
@@ -115,7 +126,7 @@ public class ConfigurationsForLateBoundTargetsTest extends AnalysisTestCase {
         "rule_with_test_fragment(",
         "    name = 'latebound_dep')");
     update("//foo:foo");
-    assertThat(getConfiguredTarget("//foo:foo", getTargetConfiguration())).isNotNull();
+    assertNotNull(getConfiguredTarget("//foo:foo", getTargetConfiguration()));
     ConfiguredTarget dep = Iterables.getOnlyElement(
         SkyframeExecutorTestUtils.getExistingConfiguredTargets(
             skyframeExecutor, Label.parseAbsolute("//foo:latebound_dep")));
@@ -137,7 +148,7 @@ public class ConfigurationsForLateBoundTargetsTest extends AnalysisTestCase {
         "rule_with_test_fragment(",
         "    name = 'latebound_dep')");
     update("//foo:gen");
-    assertThat(getConfiguredTarget("//foo:foo", getHostConfiguration())).isNotNull();
+    assertNotNull(getConfiguredTarget("//foo:foo", getHostConfiguration()));
     ConfiguredTarget dep = Iterables.getOnlyElement(
         SkyframeExecutorTestUtils.getExistingConfiguredTargets(
             skyframeExecutor, Label.parseAbsolute("//foo:latebound_dep")));
@@ -155,7 +166,7 @@ public class ConfigurationsForLateBoundTargetsTest extends AnalysisTestCase {
         "rule_with_test_fragment(",
         "    name = 'latebound_dep')");
     update("//foo:foo");
-    assertThat(getConfiguredTarget("//foo:foo")).isNotNull();
+    assertNotNull(getConfiguredTarget("//foo:foo"));
     Iterable<ConfiguredTarget> deps = SkyframeExecutorTestUtils.getExistingConfiguredTargets(
         skyframeExecutor, Label.parseAbsolute("//foo:latebound_dep"));
     assertThat(deps).hasSize(2);
@@ -180,7 +191,7 @@ public class ConfigurationsForLateBoundTargetsTest extends AnalysisTestCase {
         "rule_with_test_fragment(",
         "    name = 'latebound_dep')");
     update("//foo:gen");
-    assertThat(getConfiguredTarget("//foo:foo", getHostConfiguration())).isNotNull();
+    assertNotNull(getConfiguredTarget("//foo:foo", getHostConfiguration()));
     ConfiguredTarget dep = Iterables.getOnlyElement(
         SkyframeExecutorTestUtils.getExistingConfiguredTargets(
             skyframeExecutor, Label.parseAbsolute("//foo:latebound_dep")));
