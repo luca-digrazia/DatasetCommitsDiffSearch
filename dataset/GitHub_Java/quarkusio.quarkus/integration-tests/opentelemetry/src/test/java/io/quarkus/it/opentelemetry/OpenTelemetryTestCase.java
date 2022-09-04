@@ -266,105 +266,84 @@ public class OpenTelemetryTestCase {
 
         Awaitility.await().atMost(Duration.ofMinutes(2)).until(() -> getSpans().size() == 3);
 
-        boolean outsideServerFound = false;
-        boolean clientFound = false;
-        boolean clientServerFound = false;
+        List<Map<String, Object>> spans = getSpans();
 
-        String serverSpanId = null;
-        String serverTraceId = null;
-        String clientSpanId = null;
+        // Server Span
+        Map<String, Object> spanData = spans.get(2);
+        Assertions.assertNotNull(spanData);
+        Assertions.assertNotNull(spanData.get("spanId"));
 
-        for (Map<String, Object> spanData : getSpans()) {
-            Assertions.assertNotNull(spanData);
-            Assertions.assertNotNull(spanData.get("spanId"));
+        String parentSpanId = (String) spanData.get("spanId");
+        String parentTraceId = (String) spanData.get("traceId");
 
-            if (spanData.get("kind").equals(SpanKind.SERVER.toString())
-                    && spanData.get("name").equals("client/ping/{message}")) {
-                outsideServerFound = true;
-                // Server Span
-                serverSpanId = (String) spanData.get("spanId");
-                serverTraceId = (String) spanData.get("traceId");
+        verifyResource(spanData);
 
-                verifyResource(spanData);
+        Assertions.assertEquals("client/ping/{message}", spanData.get("name"));
+        Assertions.assertEquals(SpanKind.SERVER.toString(), spanData.get("kind"));
+        Assertions.assertTrue((Boolean) spanData.get("ended"));
 
-                Assertions.assertEquals("client/ping/{message}", spanData.get("name"));
-                Assertions.assertEquals(SpanKind.SERVER.toString(), spanData.get("kind"));
-                Assertions.assertTrue((Boolean) spanData.get("ended"));
+        Assertions.assertEquals(SpanId.getInvalid(), spanData.get("parent_spanId"));
+        Assertions.assertEquals(TraceId.getInvalid(), spanData.get("parent_traceId"));
+        Assertions.assertFalse((Boolean) spanData.get("parent_valid"));
+        Assertions.assertFalse((Boolean) spanData.get("parent_remote"));
 
-                Assertions.assertEquals(SpanId.getInvalid(), spanData.get("parent_spanId"));
-                Assertions.assertEquals(TraceId.getInvalid(), spanData.get("parent_traceId"));
-                Assertions.assertFalse((Boolean) spanData.get("parent_valid"));
-                Assertions.assertFalse((Boolean) spanData.get("parent_remote"));
+        Assertions.assertEquals("GET", spanData.get("attr_http.method"));
+        Assertions.assertEquals("1.1", spanData.get("attr_http.flavor"));
+        Assertions.assertEquals("/client/ping/one", spanData.get("attr_http.target"));
+        Assertions.assertEquals(pathParamUrl.getAuthority(), spanData.get("attr_http.host"));
+        Assertions.assertEquals("http", spanData.get("attr_http.scheme"));
+        Assertions.assertEquals("/client/ping/{message}", spanData.get("attr_http.route"));
+        Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
+        Assertions.assertNotNull(spanData.get("attr_http.client_ip"));
+        Assertions.assertNotNull(spanData.get("attr_http.user_agent"));
 
-                Assertions.assertEquals("GET", spanData.get("attr_http.method"));
-                Assertions.assertEquals("1.1", spanData.get("attr_http.flavor"));
-                Assertions.assertEquals("/client/ping/one", spanData.get("attr_http.target"));
-                Assertions.assertEquals(pathParamUrl.getAuthority(), spanData.get("attr_http.host"));
-                Assertions.assertEquals("http", spanData.get("attr_http.scheme"));
-                Assertions.assertEquals("/client/ping/{message}", spanData.get("attr_http.route"));
-                Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
-                Assertions.assertNotNull(spanData.get("attr_http.client_ip"));
-                Assertions.assertNotNull(spanData.get("attr_http.user_agent"));
-            } else if (spanData.get("kind").equals(SpanKind.CLIENT.toString())
-                    && spanData.get("name").equals("client/pong/{message}")) {
-                clientFound = true;
-                // Client span
-                verifyResource(spanData);
+        // Client span
+        spanData = spans.get(1);
+        Assertions.assertNotNull(spanData);
+        Assertions.assertNotNull(spanData.get("spanId"));
 
-                Assertions.assertEquals("client/pong/{message}", spanData.get("name"));
-                Assertions.assertEquals(SpanKind.CLIENT.toString(), spanData.get("kind"));
-                Assertions.assertTrue((Boolean) spanData.get("ended"));
+        verifyResource(spanData);
 
-                if (serverSpanId != null) {
-                    Assertions.assertEquals(serverSpanId, spanData.get("parent_spanId"));
-                }
-                if (serverTraceId != null) {
-                    Assertions.assertEquals(serverTraceId, spanData.get("parent_traceId"));
-                }
-                Assertions.assertTrue((Boolean) spanData.get("parent_valid"));
-                Assertions.assertFalse((Boolean) spanData.get("parent_remote"));
+        Assertions.assertEquals("client/pong/{message}", spanData.get("name"));
+        Assertions.assertEquals(SpanKind.CLIENT.toString(), spanData.get("kind"));
+        Assertions.assertTrue((Boolean) spanData.get("ended"));
 
-                Assertions.assertEquals("GET", spanData.get("attr_http.method"));
-                Assertions.assertEquals("http://localhost:8081/client/pong/one", spanData.get("attr_http.url"));
-                Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
+        Assertions.assertEquals(parentSpanId, spanData.get("parent_spanId"));
+        Assertions.assertEquals(parentTraceId, spanData.get("parent_traceId"));
+        Assertions.assertTrue((Boolean) spanData.get("parent_valid"));
+        Assertions.assertFalse((Boolean) spanData.get("parent_remote"));
 
-                clientSpanId = (String) spanData.get("spanId");
-            } else if (spanData.get("kind").equals(SpanKind.SERVER.toString())
-                    && spanData.get("name").equals("client/pong/{message}")) {
-                clientServerFound = true;
-                // Server span of client
-                verifyResource(spanData);
+        Assertions.assertEquals("GET", spanData.get("attr_http.method"));
+        Assertions.assertEquals("http://localhost:8081/client/pong/one", spanData.get("attr_http.url"));
+        Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
 
-                Assertions.assertEquals("client/pong/{message}", spanData.get("name"));
-                Assertions.assertEquals(SpanKind.SERVER.toString(), spanData.get("kind"));
-                Assertions.assertTrue((Boolean) spanData.get("ended"));
+        parentSpanId = (String) spanData.get("spanId");
 
-                if (clientSpanId != null) {
-                    Assertions.assertEquals(clientSpanId, spanData.get("parent_spanId"));
-                }
-                if (serverTraceId != null) {
-                    Assertions.assertEquals(serverTraceId, spanData.get("parent_traceId"));
-                }
-                Assertions.assertTrue((Boolean) spanData.get("parent_valid"));
-                Assertions.assertTrue((Boolean) spanData.get("parent_remote"));
+        // Server span of client
+        spanData = spans.get(0);
+        Assertions.assertNotNull(spanData);
+        Assertions.assertNotNull(spanData.get("spanId"));
 
-                Assertions.assertEquals("GET", spanData.get("attr_http.method"));
-                Assertions.assertEquals("1.1", spanData.get("attr_http.flavor"));
-                Assertions.assertEquals("/client/pong/one", spanData.get("attr_http.target"));
-                Assertions.assertEquals(pathParamUrl.getAuthority(), spanData.get("attr_http.host"));
-                Assertions.assertEquals("http", spanData.get("attr_http.scheme"));
-                Assertions.assertEquals("/client/pong/{message}", spanData.get("attr_http.route"));
-                Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
-                Assertions.assertNotNull(spanData.get("attr_http.client_ip"));
-                Assertions.assertNotNull(spanData.get("attr_http.user_agent"));
-            } else {
-                Assertions.fail("Received an unknown Span - " + spanData.get("name"));
-            }
-        }
+        verifyResource(spanData);
 
-        Assertions.assertTrue(outsideServerFound);
-        Assertions.assertTrue(clientFound);
-        Assertions.assertTrue(clientServerFound);
+        Assertions.assertEquals("client/pong/{message}", spanData.get("name"));
+        Assertions.assertEquals(SpanKind.SERVER.toString(), spanData.get("kind"));
+        Assertions.assertTrue((Boolean) spanData.get("ended"));
+
+        Assertions.assertEquals(parentSpanId, spanData.get("parent_spanId"));
+        Assertions.assertEquals(parentTraceId, spanData.get("parent_traceId"));
+        Assertions.assertTrue((Boolean) spanData.get("parent_valid"));
+        Assertions.assertTrue((Boolean) spanData.get("parent_remote"));
+
+        Assertions.assertEquals("GET", spanData.get("attr_http.method"));
+        Assertions.assertEquals("1.1", spanData.get("attr_http.flavor"));
+        Assertions.assertEquals("/client/pong/one", spanData.get("attr_http.target"));
+        Assertions.assertEquals(pathParamUrl.getAuthority(), spanData.get("attr_http.host"));
+        Assertions.assertEquals("http", spanData.get("attr_http.scheme"));
+        Assertions.assertEquals("/client/pong/{message}", spanData.get("attr_http.route"));
+        Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
+        Assertions.assertNotNull(spanData.get("attr_http.client_ip"));
+        Assertions.assertNotNull(spanData.get("attr_http.user_agent"));
     }
 
     @Test
@@ -379,105 +358,84 @@ public class OpenTelemetryTestCase {
 
         Awaitility.await().atMost(Duration.ofMinutes(2)).until(() -> getSpans().size() == 3);
 
-        boolean outsideServerFound = false;
-        boolean clientFound = false;
-        boolean clientServerFound = false;
+        List<Map<String, Object>> spans = getSpans();
 
-        String serverSpanId = null;
-        String serverTraceId = null;
-        String clientSpanId = null;
+        // Server Span
+        Map<String, Object> spanData = spans.get(2);
+        Assertions.assertNotNull(spanData);
+        Assertions.assertNotNull(spanData.get("spanId"));
 
-        for (Map<String, Object> spanData : getSpans()) {
-            Assertions.assertNotNull(spanData);
-            Assertions.assertNotNull(spanData.get("spanId"));
+        String parentSpanId = (String) spanData.get("spanId");
+        String parentTraceId = (String) spanData.get("traceId");
 
-            if (spanData.get("kind").equals(SpanKind.SERVER.toString())
-                    && spanData.get("name").equals("client/async-ping/{message}")) {
-                outsideServerFound = true;
-                // Server Span
-                serverSpanId = (String) spanData.get("spanId");
-                serverTraceId = (String) spanData.get("traceId");
+        verifyResource(spanData);
 
-                verifyResource(spanData);
+        Assertions.assertEquals("client/async-ping/{message}", spanData.get("name"));
+        Assertions.assertEquals(SpanKind.SERVER.toString(), spanData.get("kind"));
+        Assertions.assertTrue((Boolean) spanData.get("ended"));
 
-                Assertions.assertEquals("client/async-ping/{message}", spanData.get("name"));
-                Assertions.assertEquals(SpanKind.SERVER.toString(), spanData.get("kind"));
-                Assertions.assertTrue((Boolean) spanData.get("ended"));
+        Assertions.assertEquals(SpanId.getInvalid(), spanData.get("parent_spanId"));
+        Assertions.assertEquals(TraceId.getInvalid(), spanData.get("parent_traceId"));
+        Assertions.assertFalse((Boolean) spanData.get("parent_valid"));
+        Assertions.assertFalse((Boolean) spanData.get("parent_remote"));
 
-                Assertions.assertEquals(SpanId.getInvalid(), spanData.get("parent_spanId"));
-                Assertions.assertEquals(TraceId.getInvalid(), spanData.get("parent_traceId"));
-                Assertions.assertFalse((Boolean) spanData.get("parent_valid"));
-                Assertions.assertFalse((Boolean) spanData.get("parent_remote"));
+        Assertions.assertEquals("GET", spanData.get("attr_http.method"));
+        Assertions.assertEquals("1.1", spanData.get("attr_http.flavor"));
+        Assertions.assertEquals("/client/async-ping/one", spanData.get("attr_http.target"));
+        Assertions.assertEquals(pathParamUrl.getAuthority(), spanData.get("attr_http.host"));
+        Assertions.assertEquals("http", spanData.get("attr_http.scheme"));
+        Assertions.assertEquals("/client/async-ping/{message}", spanData.get("attr_http.route"));
+        Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
+        Assertions.assertNotNull(spanData.get("attr_http.client_ip"));
+        Assertions.assertNotNull(spanData.get("attr_http.user_agent"));
 
-                Assertions.assertEquals("GET", spanData.get("attr_http.method"));
-                Assertions.assertEquals("1.1", spanData.get("attr_http.flavor"));
-                Assertions.assertEquals("/client/async-ping/one", spanData.get("attr_http.target"));
-                Assertions.assertEquals(pathParamUrl.getAuthority(), spanData.get("attr_http.host"));
-                Assertions.assertEquals("http", spanData.get("attr_http.scheme"));
-                Assertions.assertEquals("/client/async-ping/{message}", spanData.get("attr_http.route"));
-                Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
-                Assertions.assertNotNull(spanData.get("attr_http.client_ip"));
-                Assertions.assertNotNull(spanData.get("attr_http.user_agent"));
-            } else if (spanData.get("kind").equals(SpanKind.CLIENT.toString())
-                    && spanData.get("name").equals("client/pong/{message}")) {
-                clientFound = true;
-                // Client span
-                verifyResource(spanData);
+        // Client span
+        spanData = spans.get(1);
+        Assertions.assertNotNull(spanData);
+        Assertions.assertNotNull(spanData.get("spanId"));
 
-                Assertions.assertEquals("client/pong/{message}", spanData.get("name"));
-                Assertions.assertEquals(SpanKind.CLIENT.toString(), spanData.get("kind"));
-                Assertions.assertTrue((Boolean) spanData.get("ended"));
+        verifyResource(spanData);
 
-                if (serverSpanId != null) {
-                    Assertions.assertEquals(serverSpanId, spanData.get("parent_spanId"));
-                }
-                if (serverTraceId != null) {
-                    Assertions.assertEquals(serverTraceId, spanData.get("parent_traceId"));
-                }
-                Assertions.assertTrue((Boolean) spanData.get("parent_valid"));
-                Assertions.assertFalse((Boolean) spanData.get("parent_remote"));
+        Assertions.assertEquals("client/pong/{message}", spanData.get("name"));
+        Assertions.assertEquals(SpanKind.CLIENT.toString(), spanData.get("kind"));
+        Assertions.assertTrue((Boolean) spanData.get("ended"));
 
-                Assertions.assertEquals("GET", spanData.get("attr_http.method"));
-                Assertions.assertEquals("http://localhost:8081/client/pong/one", spanData.get("attr_http.url"));
-                Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
+        Assertions.assertEquals(parentSpanId, spanData.get("parent_spanId"));
+        Assertions.assertEquals(parentTraceId, spanData.get("parent_traceId"));
+        Assertions.assertTrue((Boolean) spanData.get("parent_valid"));
+        Assertions.assertFalse((Boolean) spanData.get("parent_remote"));
 
-                clientSpanId = (String) spanData.get("spanId");
-            } else if (spanData.get("kind").equals(SpanKind.SERVER.toString())
-                    && spanData.get("name").equals("client/pong/{message}")) {
-                clientServerFound = true;
-                // Server span of client
-                verifyResource(spanData);
+        Assertions.assertEquals("GET", spanData.get("attr_http.method"));
+        Assertions.assertEquals("http://localhost:8081/client/pong/one", spanData.get("attr_http.url"));
+        Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
 
-                Assertions.assertEquals("client/pong/{message}", spanData.get("name"));
-                Assertions.assertEquals(SpanKind.SERVER.toString(), spanData.get("kind"));
-                Assertions.assertTrue((Boolean) spanData.get("ended"));
+        parentSpanId = (String) spanData.get("spanId");
 
-                if (clientSpanId != null) {
-                    Assertions.assertEquals(clientSpanId, spanData.get("parent_spanId"));
-                }
-                if (serverTraceId != null) {
-                    Assertions.assertEquals(serverTraceId, spanData.get("parent_traceId"));
-                }
-                Assertions.assertTrue((Boolean) spanData.get("parent_valid"));
-                Assertions.assertTrue((Boolean) spanData.get("parent_remote"));
+        // Server span of client
+        spanData = spans.get(0);
+        Assertions.assertNotNull(spanData);
+        Assertions.assertNotNull(spanData.get("spanId"));
 
-                Assertions.assertEquals("GET", spanData.get("attr_http.method"));
-                Assertions.assertEquals("1.1", spanData.get("attr_http.flavor"));
-                Assertions.assertEquals("/client/pong/one", spanData.get("attr_http.target"));
-                Assertions.assertEquals(pathParamUrl.getAuthority(), spanData.get("attr_http.host"));
-                Assertions.assertEquals("http", spanData.get("attr_http.scheme"));
-                Assertions.assertEquals("/client/pong/{message}", spanData.get("attr_http.route"));
-                Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
-                Assertions.assertNotNull(spanData.get("attr_http.client_ip"));
-                Assertions.assertNotNull(spanData.get("attr_http.user_agent"));
-            } else {
-                Assertions.fail("Received an unknown Span - " + spanData.get("name"));
-            }
-        }
+        verifyResource(spanData);
 
-        Assertions.assertTrue(outsideServerFound);
-        Assertions.assertTrue(clientFound);
-        Assertions.assertTrue(clientServerFound);
+        Assertions.assertEquals("client/pong/{message}", spanData.get("name"));
+        Assertions.assertEquals(SpanKind.SERVER.toString(), spanData.get("kind"));
+        Assertions.assertTrue((Boolean) spanData.get("ended"));
+
+        Assertions.assertEquals(parentSpanId, spanData.get("parent_spanId"));
+        Assertions.assertEquals(parentTraceId, spanData.get("parent_traceId"));
+        Assertions.assertTrue((Boolean) spanData.get("parent_valid"));
+        Assertions.assertTrue((Boolean) spanData.get("parent_remote"));
+
+        Assertions.assertEquals("GET", spanData.get("attr_http.method"));
+        Assertions.assertEquals("1.1", spanData.get("attr_http.flavor"));
+        Assertions.assertEquals("/client/pong/one", spanData.get("attr_http.target"));
+        Assertions.assertEquals(pathParamUrl.getAuthority(), spanData.get("attr_http.host"));
+        Assertions.assertEquals("http", spanData.get("attr_http.scheme"));
+        Assertions.assertEquals("/client/pong/{message}", spanData.get("attr_http.route"));
+        Assertions.assertEquals("200", spanData.get("attr_http.status_code"));
+        Assertions.assertNotNull(spanData.get("attr_http.client_ip"));
+        Assertions.assertNotNull(spanData.get("attr_http.user_agent"));
     }
 
     private void verifyResource(Map<String, Object> spanData) {
