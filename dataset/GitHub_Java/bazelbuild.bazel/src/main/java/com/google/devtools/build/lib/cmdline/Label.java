@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.cmdline;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
@@ -27,6 +26,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -35,7 +35,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
-import java.util.Arrays;
 import javax.annotation.Nullable;
 
 /**
@@ -55,23 +54,22 @@ import javax.annotation.Nullable;
 @ThreadSafe
 public final class Label implements Comparable<Label>, Serializable, SkylarkValue, SkyKey {
   public static final PathFragment EXTERNAL_PACKAGE_NAME = PathFragment.create("external");
-  public static final PathFragment WORKSPACE_FILE_NAME = PathFragment.create("WORKSPACE");
+  public static final PathFragment EXTERNAL_PACKAGE_FILE_NAME = PathFragment.create("WORKSPACE");
   public static final String DEFAULT_REPOSITORY_DIRECTORY = "__main__";
 
   /**
    * Package names that aren't made relative to the current repository because they mean special
    * things to Bazel.
    */
-  public static final ImmutableSet<PathFragment> ABSOLUTE_PACKAGE_NAMES =
-      ImmutableSet.of(
-          // Used for select
-          PathFragment.create("conditions"),
-          // dependencies that are a function of the configuration
-          PathFragment.create("tools/defaults"),
-          // Visibility is labels aren't actually targets
-          PathFragment.create("visibility"),
-          // There is only one //external package
-          Label.EXTERNAL_PACKAGE_NAME);
+  public static final ImmutableSet<PathFragment> ABSOLUTE_PACKAGE_NAMES = ImmutableSet.of(
+      // Used for select
+      PathFragment.create("conditions"),
+      // dependencies that are a function of the configuration
+      PathFragment.create("tools/defaults"),
+      // Visibility is labels aren't actually targets
+      PathFragment.create("visibility"),
+      // There is only one //external package
+      Label.EXTERNAL_PACKAGE_NAME);
 
   public static final PackageIdentifier EXTERNAL_PACKAGE_IDENTIFIER =
       PackageIdentifier.createInMainRepo(EXTERNAL_PACKAGE_NAME);
@@ -80,13 +78,10 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   public static final SkyFunctionName TRANSITIVE_TRAVERSAL =
       SkyFunctionName.create("TRANSITIVE_TRAVERSAL");
 
-  public static final LabelCodec CODEC = LabelCodec.INSTANCE;
-
   private static final Interner<Label> LABEL_INTERNER = BlazeInterners.newWeakInterner();
 
   /**
    * Factory for Labels from absolute string form. e.g.
-   *
    * <pre>
    * //foo/bar
    * //foo/bar:quux
@@ -103,7 +98,6 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
 
   /**
    * Factory for Labels from absolute string form. e.g.
-   *
    * <pre>
    * //foo/bar
    * //foo/bar:quux
@@ -112,7 +106,8 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
    * {@literal @}foo//bar:baz
    * </pre>
    *
-   * @param defaultToMain Treat labels in the default repository as being in the main one instead.
+   * @param defaultToMain Treat labels in the default repository as being in the main
+   *   one instead.
    */
   public static Label parseAbsolute(String absName, boolean defaultToMain)
       throws LabelSyntaxException {
@@ -161,10 +156,11 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   /**
    * Factory for Labels from separate components.
    *
-   * @param packageName The name of the package. The package name does <b>not</b> include {@code
-   *     //}. Must be valid according to {@link LabelValidator#validatePackageName}.
-   * @param targetName The name of the target within the package. Must be valid according to {@link
-   *     LabelValidator#validateTargetName}.
+   * @param packageName The name of the package.  The package name does
+   *   <b>not</b> include {@code //}.  Must be valid according to
+   *   {@link LabelValidator#validatePackageName}.
+   * @param targetName The name of the target within the package.  Must be
+   *   valid according to {@link LabelValidator#validateTargetName}.
    * @throws LabelSyntaxException if either of the arguments was invalid.
    */
   public static Label create(String packageName, String targetName) throws LabelSyntaxException {
@@ -172,8 +168,8 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   }
 
   /**
-   * Similar factory to above, but takes a package identifier to allow external repository labels to
-   * be created.
+   * Similar factory to above, but takes a package identifier to allow external repository labels
+   * to be created.
    */
   public static Label create(PackageIdentifier packageId, String targetName)
       throws LabelSyntaxException {
@@ -186,6 +182,7 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
    * <p>Only call this method if you know what you're doing; in particular, don't call it on
    * arbitrary {@code targetName} inputs
    */
+
   public static Label createUnvalidated(PackageIdentifier packageId, String targetName) {
     return LABEL_INTERNER.intern(new Label(packageId, StringCanonicalizer.intern(targetName)));
   }
@@ -193,7 +190,6 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   /**
    * Resolves a relative label using a workspace-relative path to the current working directory. The
    * method handles these cases:
-   *
    * <ul>
    *   <li>The label is absolute.
    *   <li>The label starts with a colon.
@@ -250,8 +246,8 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   }
 
   /**
-   * Validates the given package name and returns a canonical {@link PackageIdentifier} instance if
-   * it is valid. Otherwise it throws a SyntaxException.
+   * Validates the given package name and returns a canonical {@link PackageIdentifier} instance
+   * if it is valid. Otherwise it throws a SyntaxException.
    */
   private static PackageIdentifier validatePackageName(String packageIdentifier, String name)
       throws LabelSyntaxException {
@@ -277,12 +273,24 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   /** The name of the target within the package. Canonical. */
   private final String name;
 
+  /** Precomputed hash code. */
+  private final int hashCode;
+
   private Label(PackageIdentifier packageIdentifier, String name) {
     Preconditions.checkNotNull(packageIdentifier);
     Preconditions.checkNotNull(name);
 
     this.packageIdentifier = packageIdentifier;
     this.name = name;
+    this.hashCode = hashCode(this.name, this.packageIdentifier);
+  }
+
+  /**
+   * A specialization of Arrays.HashCode() that does not require constructing a 2-element array.
+   */
+  private static final int hashCode(Object obj1, Object obj2) {
+    int result = 31 + (obj1 == null ? 0 : obj1.hashCode());
+    return 31 * result + (obj2 == null ? 0 : obj2.hashCode());
   }
 
   private Object writeReplace() {
@@ -301,14 +309,10 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
    * Returns the name of the package in which this rule was declared (e.g. {@code
    * //file/base:fileutils_test} returns {@code file/base}).
    */
-  @SkylarkCallable(
-    name = "package",
-    structField = true,
-    doc =
-        "The package part of this label. "
-            + "For instance:<br>"
-            + "<pre class=language-python>Label(\"//pkg/foo:abc\").package == \"pkg/foo\"</pre>"
-  )
+  @SkylarkCallable(name = "package", structField = true,
+      doc = "The package part of this label. "
+      + "For instance:<br>"
+      + "<pre class=language-python>Label(\"//pkg/foo:abc\").package == \"pkg/foo\"</pre>")
   public String getPackageName() {
     return packageIdentifier.getPackageFragment().getPathString();
   }
@@ -318,15 +322,11 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
    * {@code @repo//pkg:b}, it will returns {@code external/repo/pkg} and for label {@code //pkg:a},
    * it will returns an empty string.
    */
-  @SkylarkCallable(
-    name = "workspace_root",
-    structField = true,
-    doc =
-        "Returns the execution root for the workspace of this label, relative to the execroot. "
-            + "For instance:<br>"
-            + "<pre class=language-python>Label(\"@repo//pkg/foo:abc\").workspace_root =="
-            + " \"external/repo\"</pre>"
-  )
+  @SkylarkCallable(name = "workspace_root", structField = true,
+      doc = "Returns the execution root for the workspace of this label, relative to the execroot. "
+      + "For instance:<br>"
+      + "<pre class=language-python>Label(\"@repo//pkg/foo:abc\").workspace_root =="
+      + " \"external/repo\"</pre>")
   public String getWorkspaceRoot() {
     return packageIdentifier.getRepository().getSourceRoot().toString();
   }
@@ -343,23 +343,21 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
     return packageIdentifier.getPackageFragment();
   }
 
-  /** Returns the label as a path fragment, using the package and the label name. */
+  /**
+   * Returns the label as a path fragment, using the package and the label name.
+   */
   public PathFragment toPathFragment() {
     return packageIdentifier.getPackageFragment().getRelative(name);
   }
 
   /**
-   * Returns the name by which this rule was declared (e.g. {@code //foo/bar:baz} returns {@code
-   * baz}).
+   * Returns the name by which this rule was declared (e.g. {@code //foo/bar:baz}
+   * returns {@code baz}).
    */
-  @SkylarkCallable(
-    name = "name",
-    structField = true,
-    doc =
-        "The name of this label within the package. "
-            + "For instance:<br>"
-            + "<pre class=language-python>Label(\"//pkg/foo:abc\").name == \"abc\"</pre>"
-  )
+  @SkylarkCallable(name = "name", structField = true,
+      doc = "The name of this label within the package. "
+      + "For instance:<br>"
+      + "<pre class=language-python>Label(\"//pkg/foo:abc\").name == \"abc\"</pre>")
   public String getName() {
     return name;
   }
@@ -384,16 +382,13 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   }
 
   public String getUnambiguousCanonicalForm() {
-    return packageIdentifier.getRepository()
-        + "//"
-        + packageIdentifier.getPackageFragment()
-        + ":"
-        + name;
+    return packageIdentifier.getRepository() + "//" + packageIdentifier.getPackageFragment()
+        + ":" + name;
   }
 
   /**
-   * Renders this label in canonical form, except with labels in the main and default repositories
-   * conflated.
+   * Renders this label in canonical form, except with labels in the main and default
+   * repositories conflated.
    */
   public String getDefaultCanonicalForm() {
     String repository;
@@ -402,7 +397,8 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
     } else {
       repository = packageIdentifier.getRepository().getName();
     }
-    return repository + "//" + packageIdentifier.getPackageFragment() + ":" + name;
+    return repository + "//" + packageIdentifier.getPackageFragment()
+        + ":" + name;
   }
 
   /**
@@ -518,10 +514,12 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
 
   @Override
   public int hashCode() {
-    return hashCode(name, packageIdentifier);
+    return hashCode;
   }
 
-  /** Two labels are equal iff both their name and their package name are equal. */
+  /**
+   * Two labels are equal iff both their name and their package name are equal.
+   */
   @Override
   public boolean equals(Object other) {
     if (!(other instanceof Label)) {
@@ -529,7 +527,7 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
     }
     Label otherLabel = (Label) other;
     // Perform the equality comparisons in order from least likely to most likely.
-    return name.equals(otherLabel.name)
+    return hashCode == otherLabel.hashCode && name.equals(otherLabel.name)
         && packageIdentifier.equals(otherLabel.packageIdentifier);
   }
 
@@ -562,6 +560,11 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   }
 
   @Override
+  public void reprLegacy(SkylarkPrinter printer) {
+    printer.repr(getCanonicalForm());
+  }
+
+  @Override
   public void repr(SkylarkPrinter printer) {
     printer.append("Label(");
     printer.repr(getCanonicalForm());
@@ -569,16 +572,12 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   }
 
   @Override
-  public void str(SkylarkPrinter printer) {
+  public void strLegacy(SkylarkPrinter printer) {
     printer.append(getCanonicalForm());
   }
 
-  /**
-   * Specialization of {@link Arrays#hashCode()} that does not require constructing a 2-element
-   * array.
-   */
-  private static final int hashCode(Object obj1, Object obj2) {
-    int result = 31 + (obj1 == null ? 0 : obj1.hashCode());
-    return 31 * result + (obj2 == null ? 0 : obj2.hashCode());
+  @Override
+  public void str(SkylarkPrinter printer) {
+    printer.append(getCanonicalForm());
   }
 }

@@ -47,7 +47,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -1168,7 +1167,7 @@ public class Package {
       }
       if (!((InputFile) cacheInstance).isVisibilitySpecified()
           || cacheInstance.getVisibility() != visibility
-          || !Objects.equals(cacheInstance.getLicense(), license)) {
+          || cacheInstance.getLicense() != license) {
         targets.put(filename, new InputFile(
             pkg, cacheInstance.getLabel(), cacheInstance.getLocation(), visibility, license));
       }

@@ -127,14 +127,6 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
-  public Collection<Target> getSiblingTargetsInPackage(Target target) {
-    Collection<Target> siblings = target.getPackage().getTargets().values();
-    // Ensure that the sibling targets are in the graph being built-up.
-    siblings.forEach(this::getNode);
-    return siblings;
-  }
-
-  @Override
   public QueryTaskFuture<Void> getTargetsMatchingPattern(
       QueryExpression owner, String pattern, Callback<Target> callback) {
     try {
@@ -441,7 +433,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   private Node<Target> getSubincludeTarget(final Label label, Package pkg) {
-    return getNode(new FakeLoadTarget(label, pkg));
+    return getNode(new FakeSubincludeTarget(label, pkg));
   }
 
   @Override
