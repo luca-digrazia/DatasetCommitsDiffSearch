@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
@@ -30,8 +29,6 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.SpellChecker;
 import com.google.devtools.common.options.Options;
 import java.io.Serializable;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -80,141 +77,70 @@ public final class Environment implements Freezable {
   public enum Phase { WORKSPACE, LOADING, ANALYSIS }
 
   /**
-   * A mapping of bindings, along with a {@link Mutability} and a parent {@code Frame} from which to
-   * inherit bindings. The order of the bindings within a single {@code Frame} is deterministic but
-   * unspecified.
+   * A Frame is a Map of bindings, plus a {@link Mutability} and a parent Frame
+   * from which to inherit bindings.
    *
-   * <p>Each {@code Frame} can be thought of as either a lexical scope or a scope containing
-   * predefined variables. Bindings in a {@code Frame} may shadow those inherited from its parents.
-   * Thus, the chain of {@code Frame}s can represent a hierarchy of enclosing scopes, or a
-   * collection of builtin modules with a linear precedence ordering.
+   * <p>A Frame contains bindings mapping variable name to variable value in a given scope.
+   * It may also inherit bindings from a parent Frame corresponding to a parent scope,
+   * which in turn may inherit bindings from its own parent, etc., transitively.
+   * Bindings may shadow bindings from the parent. In Skylark, you may only mutate
+   * bindings from the current Frame, which always got its {@link Mutability} with the
+   * current {@link Environment}; but future extensions may make it more like Python
+   * and allow mutation of bindings in outer Frame-s (or then again may not).
    *
-   * <p>Any non-frozen {@code Frame} must have the same {@code Mutability} as the current {@link
-   * Environment}, to avoid interference from other evaluation contexts. For example, a {@link
-   * UserDefinedFunction} will close over the global frame of the {@code Environment} in which it
-   * was defined. When the function is called from other {@code Environment}s (possibly
-   * simultaneously), that global frame must already be frozen; a new local {@code Frame} is created
-   * to represent the lexical scope of the function.
+   * <p>A Frame inherits the {@link Mutability} from the {@link Environment} in which it was
+   * originally created. When that {@link Environment} is finalized and its {@link Mutability}
+   * is closed, it becomes immutable, including the Frame, which can be shared in other
+   * {@link Environment}-s. Indeed, a {@link UserDefinedFunction} will close over the global
+   * Frame of its definition {@link Environment}, which will thus be reused (immutably)
+   * in any {@link Environment} in which this function is called, so it's important to
+   * preserve the {@link Mutability} to make sure no Frame is modified after it's been finalized.
    */
   public static final class Frame implements Freezable {
 
     private final Mutability mutability;
-
     @Nullable
-    private final Frame parent;
-
-    // If this frame is a global frame, the label for the corresponding target, e.g. //foo:bar.bzl.
+    final Frame parent;
+    final Map<String, Object> bindings = new LinkedHashMap<>();
+    // The label for the target this frame is defined in (e.g., //foo:bar.bzl).
     @Nullable
-    private final Label label;
+    private Label label;
 
-    private final Map<String, Object> bindings;
-
-    public Frame(Mutability mutability) {
-      this(mutability, null, null);
-    }
-
-    public Frame(Mutability mutability, Frame parent) {
-      this(mutability, parent, null);
-    }
-
-    public Frame(Mutability mutability, Frame parent, Label label) {
+    private Frame(Mutability mutability, Frame parent) {
       this.mutability = mutability;
       this.parent = parent;
-      this.label = label;
-      this.bindings = new LinkedHashMap<>();
+      this.label = parent == null ? null : parent.label;
     }
 
-    public Frame(Mutability mutability, Frame parent, Label label, Map<String, Object> bindings) {
-      this(mutability, parent, label);
-      this.bindings.putAll(bindings);
-    }
-
-    /**
-     * Returns a new {@code Frame} that is a copy of this one, but with {@code label} set to the
-     * given value.
-     */
-    public Frame withLabel(Label label) {
-      return new Frame(mutability, this, label);
-    }
-
-    /**
-     * Returns the {@link Mutability} of this {@code Frame}, which may be different from its
-     * parent's.
-     */
     @Override
-    public Mutability mutability() {
+    public final Mutability mutability() {
       return mutability;
     }
 
-    /** Returns the parent {@code Frame}, if it exists. */
-    @Nullable
-    public Frame getParent() {
-      return parent;
+    /**
+     * Attaches a label to an existing frame. This is used to get the repository a Skylark
+     * extension is actually defined in.
+     * @param label the label to attach.
+     * @return a new Frame with the existing frame's properties plus the label.
+     */
+    public Frame setLabel(Label label) {
+      Frame result = new Frame(mutability, this);
+      result.label = label;
+      return result;
     }
 
     /**
-     * Returns the label of this {@code Frame}, which may be null. Parent labels are not consulted.
-     *
-     * <p>Usually you want to use {@link #getTransitiveLabel}; this is just an accessor for
-     * completeness.
+     * Returns the label for this frame.
      */
     @Nullable
-    public Label getLabel() {
+    public final Label label() {
       return label;
     }
 
     /**
-     * Walks from this {@code Frame} up through transitive parents, and returns the first non-null
-     * label found, or null if all labels are null.
-     */
-    @Nullable
-    public Label getTransitiveLabel() {
-      if (label != null) {
-        return label;
-      } else if (parent != null) {
-        return parent.getTransitiveLabel();
-      } else {
-        return null;
-      }
-    }
-
-    /**
-     * Returns a map of direct bindings of this {@code Frame}, ignoring parents.
-     *
-     * <p>For efficiency an unmodifiable view is returned. Callers should assume that the view is
-     * invalidated by any subsequent modification to the {@code Frame}'s bindings.
-     */
-    public Map<String, Object> getBindings() {
-      return Collections.unmodifiableMap(bindings);
-    }
-
-    /**
-     * Returns a map containing all bindings of this {@code Frame} and of its transitive parents,
-     * taking into account shadowing precedence.
-     */
-    public Map<String, Object> getTransitiveBindings() {
-      // Can't use ImmutableMap.Builder because it doesn't allow duplicates.
-      HashMap<String, Object> collectedBindings = new HashMap<>();
-      accumulateTransitiveBindings(collectedBindings);
-      return collectedBindings;
-    }
-
-    private void accumulateTransitiveBindings(Map<String, Object> accumulator) {
-      // Put parents first, so child bindings take precedence.
-      if (parent != null) {
-        parent.accumulateTransitiveBindings(accumulator);
-      }
-      accumulator.putAll(bindings);
-    }
-
-    /**
-     * Gets a binding from the current {@code Frame} or one of its transitive parents.
-     *
-     * <p>In case of conflicts, the binding found in the {@code Frame} closest to the current one is
-     * used; the remaining bindings are shadowed.
-     *
+     * Gets a binding from the current frame or if not found its parent.
      * @param varname the name of the variable to be bound
-     * @return the value bound to the variable, or null if no binding is found
+     * @return the value bound to variable
      */
     public Object get(String varname) {
       if (bindings.containsKey(varname)) {
@@ -227,12 +153,11 @@ public final class Environment implements Freezable {
     }
 
     /**
-     * Assigns or reassigns a binding in the current {@code Frame}.
-     *
-     * <p>If the binding has the same name as one in a transitive parent, the parent binding is
-     * shadowed (i.e., the parent is unaffected).
-     *
-     * @param env the {@link Environment} attempting the mutation
+     * Modifies a binding in the current Frame.
+     * Does not try to modify an inherited binding.
+     * This will shadow any inherited binding, which may be an error
+     * that you want to guard against before calling this function.
+     * @param env the Environment attempting the mutation
      * @param varname the name of the variable to be bound
      * @param value the value to bind to the variable
      */
@@ -240,6 +165,22 @@ public final class Environment implements Freezable {
         throws MutabilityException {
       Mutability.checkMutable(this, env);
       bindings.put(varname, value);
+    }
+
+    /**
+     * Adds the variable names of this Frame and its transitive parents to the given set.
+     * This provides a O(n) way of extracting the list of all variables visible in an Environment.
+     * @param vars the set of visible variables in the Environment, being computed.
+     */
+    void addVariableNamesTo(Set<String> vars) {
+      vars.addAll(bindings.keySet());
+      if (parent != null) {
+        parent.addVariableNamesTo(vars);
+      }
+    }
+
+    public Set<String> getDirectVariableNames() {
+      return bindings.keySet();
     }
 
     @Override
@@ -286,56 +227,62 @@ public final class Environment implements Freezable {
     }
   }
 
-  // TODO(bazel-team): Eliminate this hack around Java serialization. The bindings are currently
-  // factored out into BaseExtension, which is non-Serializable, and which has a default constructor
-  // that does not initialize any bindings. This means that when Extension is Java-serialized, all
-  // the bindings are simply lost.
+  // TODO(bazel-team): Fix this scary failure of serializability.
+  // skyframe.SkylarkImportLookupFunction processes a .bzl and returns an Extension,
+  // for use by whoever imports the .bzl file. Skyframe may subsequently serialize the results.
+  // And it will fail to process these bindings, because they are inherited from a non-serializable
+  // class (in previous versions of the code the serializable SkylarkEnvironment was inheriting
+  // from the non-serializable Environment and being returned by said Function).
+  // If we try to merge this otherwise redundant superclass into Extension, though,
+  // skyframe experiences a massive failure to serialize things, and it's unclear how far
+  // reaching the need to make things Serializable goes, though clearly we'll need to make
+  // a whole lot of things Serializable, and for efficiency, we'll want to implement sharing
+  // of imported values rather than a code explosion.
   private static class BaseExtension {
-
-    protected final ImmutableMap<String, Object> bindings;
-
-    BaseExtension(Map<String, Object> bindings) {
-      this.bindings = ImmutableMap.copyOf(bindings);
+    final ImmutableMap<String, Object> bindings;
+    BaseExtension(Environment env) {
+      this.bindings = ImmutableMap.copyOf(env.globalFrame.bindings);
     }
 
-    // Hack to "allow" java serialization.
+    // Hack to allow serialization.
     BaseExtension() {
       this.bindings = ImmutableMap.of();
     }
   }
 
-  /** An Extension to be imported with load() into a BUILD or .bzl file. */
-  @Immutable
+  /**
+   * An Extension to be imported with load() into a BUILD or .bzl file.
+   */
   public static final class Extension extends BaseExtension implements Serializable {
 
-    /**
-     * Cached hash code for the transitive content of this {@code Extension} and its dependencies.
-     */
     private final String transitiveContentHashCode;
 
     /**
-     * Constructs with the given hash code and bindings.
-     */
-    public Extension(Map<String, Object> bindings, String transitiveContentHashCode) {
-      super(bindings);
-      this.transitiveContentHashCode = transitiveContentHashCode;
-    }
-
-    /**
-     * Constructs using the bindings from the global definitions of the given {@link Environment},
-     * and that {@code Environment}'s transitive hash code.
+     * Constructs an Extension by extracting the new global definitions from an Environment.
+     * Also caches a hash code for the transitive content of the file and its dependencies.
+     * @param env the Environment from which to extract an Extension.
      */
     public Extension(Environment env) {
-      super(env.globalFrame.bindings);
+      super(env);
       this.transitiveContentHashCode = env.getTransitiveContentHashCode();
     }
 
-    public String getTransitiveContentHashCode() {
+    String getTransitiveContentHashCode() {
       return transitiveContentHashCode;
     }
 
-    public ImmutableMap<String, Object> getBindings() {
-      return bindings;
+    /** get the value bound to a variable in this Extension */
+    public Object get(String varname) {
+      return bindings.get(varname);
+    }
+
+    /** does this Extension contain a binding for the named variable? */
+    public boolean containsKey(String varname) {
+      return bindings.containsKey(varname);
+    }
+
+    public Set<String> allKeys() {
+      return bindings.keySet();
     }
   }
 
@@ -416,9 +363,6 @@ public final class Environment implements Freezable {
     continuation =
         new Continuation(
             continuation, function, caller, lexicalFrame, globalFrame, knownGlobalVariables);
-    // TODO(bazel-team): What if instead of tracking both the lexical and global frames from the
-    // Environment, we instead just tracked the current lexical frame, and made the global frame its
-    // parent?
     lexicalFrame = new Frame(mutability(), null);
     globalFrame = globals;
     knownGlobalVariables = new HashSet<>();
@@ -769,7 +713,7 @@ public final class Environment implements Freezable {
    * @return the value from the environment whose name is "varname" if it exists, otherwise null.
    */
   public Object lookup(String varname) {
-    // Lexical frame takes precedence, then globals, then dynamics.
+    // Which Frame to lookup first doesn't matter because update prevents clashes.
     if (lexicalFrame != null) {
       Object lexicalValue = lexicalFrame.get(varname);
       if (lexicalValue != null) {
@@ -806,14 +750,14 @@ public final class Environment implements Freezable {
     eventHandler.handle(event);
   }
 
-  /** Returns a set of all names of variables that are accessible in this {@code Environment}. */
+  /** @return the (immutable) set of names of all variables defined in this Environment. */
   public Set<String> getVariableNames() {
     Set<String> vars = new HashSet<>();
     if (lexicalFrame != null) {
-      vars.addAll(lexicalFrame.getTransitiveBindings().keySet());
+      lexicalFrame.addVariableNamesTo(vars);
     }
-    vars.addAll(globalFrame.getTransitiveBindings().keySet());
-    vars.addAll(dynamicFrame.getTransitiveBindings().keySet());
+    globalFrame.addVariableNamesTo(vars);
+    dynamicFrame.addVariableNamesTo(vars);
     return vars;
   }
 
@@ -861,12 +805,11 @@ public final class Environment implements Freezable {
 
     Extension ext = importedExtensions.get(importString);
 
-    Map<String, Object> bindings = ext.getBindings();
-    if (!bindings.containsKey(nameInLoadedFile)) {
-      throw new LoadFailedException(importString, nameInLoadedFile, bindings.keySet());
+    if (!ext.containsKey(nameInLoadedFile)) {
+      throw new LoadFailedException(importString, nameInLoadedFile, ext.allKeys());
     }
 
-    Object value = bindings.get(nameInLoadedFile);
+    Object value = ext.get(nameInLoadedFile);
 
     try {
       update(symbol.getName(), value);
