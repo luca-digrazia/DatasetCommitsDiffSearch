@@ -29,6 +29,7 @@ import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
@@ -193,8 +194,6 @@ public class BaseRuleClasses {
                   .taggable()
                   .nonconfigurable("policy decision: should be consistent across configurations"))
           .add(attr("args", STRING_LIST))
-          .add(attr("env", STRING_DICT))
-          .add(attr("env_inherit", STRING_LIST))
           // Input files for every test action
           .add(
               attr("$test_wrapper", LABEL)
@@ -247,7 +246,7 @@ public class BaseRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$test_base_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(MakeVariableExpandingRule.class)
+          .ancestors(RootRule.class, MakeVariableExpandingRule.class)
           .build();
     }
   }
@@ -274,9 +273,6 @@ public class BaseRuleClasses {
   public static final String TAGGED_TRIMMING_ATTR = "transitive_configs";
 
   /** Share common attributes across both base and Starlark base rules. */
-  // TODO(bazel-team): replace this with a common RuleDefinition ancestor of NativeBuildRule
-  // and StarlarkRuleClassFunctions.baseRule. This requires refactoring StarlarkRuleClassFunctions
-  // to instantiate its RuleClasses through RuleDefinition.
   public static RuleClass.Builder commonCoreAndStarlarkAttributes(RuleClass.Builder builder) {
     return builder
         // The visibility attribute is special: it is a nodep label, and loading the
@@ -351,6 +347,10 @@ public class BaseRuleClasses {
                 .nonconfigurable("applicable_licenses is not configurable"));
   }
 
+  public static RuleClass.Builder nameAttribute(RuleClass.Builder builder) {
+    return builder.add(attr("name", STRING).nonconfigurable("Rule name"));
+  }
+
   public static RuleClass.Builder execPropertiesAttribute(RuleClass.Builder builder)
       throws ConversionException {
     return builder.add(
@@ -358,17 +358,30 @@ public class BaseRuleClasses {
   }
 
   /**
-   * Ancestor of every native rule in BUILD files (not WORKSPACE files).
+   * Ancestor of every rule.
    *
-   * <p>This includes:
-   *
-   * <ul>
-   *   <li>rules that create actions ({@link NativeActionCreatingRule})
-   *   <li>rules that encapsulate toolchain and build environment context
-   *   <li>rules that aggregate other rules (like file groups, test suites, or aliases)
-   * </ul>
+   * <p>Adds the name attribute to every rule.
    */
-  public static final class NativeBuildRule implements RuleDefinition {
+  public static final class RootRule implements RuleDefinition {
+
+    @Override
+    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+        return nameAttribute(builder).build();
+    }
+
+    @Override
+    public Metadata getMetadata() {
+      return RuleDefinition.Metadata.builder()
+          .name("$root_rule")
+          .type(RuleClassType.ABSTRACT)
+          .build();
+    }
+  }
+
+  /**
+   * Common parts of some rules.
+   */
+  public static final class BaseRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return commonCoreAndStarlarkAttributes(builder)
@@ -384,8 +397,9 @@ public class BaseRuleClasses {
     @Override
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
-          .name("$native_build_rule")
+          .name("$base_rule")
           .type(RuleClassType.ABSTRACT)
+          .ancestors(RootRule.class)
           .build();
     }
   }
@@ -417,13 +431,9 @@ public class BaseRuleClasses {
   }
 
   /**
-   * Ancestor of every native BUILD rule that creates actions.
-   *
-   * <p>This is a subset of all BUILD rules. Filegroups and aliases, for example, simply encapsulate
-   * other rules. Toolchain rules provide metadata for actions of other rules. See {@link
-   * NativeBuildRule} for these.
+   * Common ancestor class for some rules.
    */
-  public static final class NativeActionCreatingRule implements RuleDefinition {
+  public static final class RuleBase implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
@@ -449,12 +459,15 @@ public class BaseRuleClasses {
     @Override
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
-          .name("$native_buildable_rule")
+          .name("$rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(BaseRuleClasses.NativeBuildRule.class)
+          .ancestors(BaseRule.class)
           .build();
     }
   }
+
+  public static final ImmutableSet<String> ALLOWED_RULE_CLASSES =
+      ImmutableSet.of("filegroup", "genrule", "Fileset");
 
   /** A base rule for all binary rules. */
   public static final class BinaryBaseRule implements RuleDefinition {
@@ -462,7 +475,6 @@ public class BaseRuleClasses {
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(attr("args", STRING_LIST))
-          .add(attr("env", STRING_DICT))
           .add(attr("output_licenses", LICENSE))
           .add(
               attr("$is_executable", BOOLEAN)
@@ -476,7 +488,7 @@ public class BaseRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$binary_base_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(MakeVariableExpandingRule.class)
+          .ancestors(RootRule.class, MakeVariableExpandingRule.class)
           .build();
     }
   }
