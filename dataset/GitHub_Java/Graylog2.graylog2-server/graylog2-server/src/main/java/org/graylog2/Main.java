@@ -24,7 +24,6 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.ParameterException;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
-import com.github.joschi.jadconfig.jodatime.JodaTimeConverterFactory;
 import com.github.joschi.jadconfig.repositories.EnvironmentRepository;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
 import com.github.joschi.jadconfig.repositories.SystemPropertiesRepository;
@@ -37,7 +36,13 @@ import com.google.inject.ProvisionException;
 import com.google.inject.spi.Message;
 import com.mongodb.MongoException;
 import org.apache.log4j.Level;
-import org.graylog2.bindings.*;
+import org.graylog2.bindings.AlarmCallbackBindings;
+import org.graylog2.bindings.InitializerBindings;
+import org.graylog2.bindings.MessageFilterBindings;
+import org.graylog2.bindings.MessageOutputBindings;
+import org.graylog2.bindings.PersistenceServicesBindings;
+import org.graylog2.bindings.ServerBindings;
+import org.graylog2.bindings.ServerMessageInputBindings;
 import org.graylog2.cluster.NodeService;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
@@ -104,14 +109,12 @@ public final class Main extends NodeRunner {
 
         if(commandLineArguments.isDumpDefaultConfig()) {
             final JadConfig jadConfig = new JadConfig();
-            jadConfig.addConverterFactory(new JodaTimeConverterFactory());
             jadConfig.addConfigurationBean(new Configuration());
             System.out.println(dumpConfiguration(jadConfig.dump()));
             System.exit(0);
         }
 
         final JadConfig jadConfig = new JadConfig();
-        jadConfig.addConverterFactory(new JodaTimeConverterFactory());
         final Configuration configuration = readConfiguration(jadConfig, commandLineArguments.getConfigFile());
 
         if(commandLineArguments.isDumpConfig()) {
@@ -152,12 +155,19 @@ public final class Main extends NodeRunner {
 
         LOG.debug("Loaded modules: " + pluginModules);
 
-        final Injector injector = setupInjector(configuration, pluginModules);
-
-        if (injector == null) {
-            LOG.error("Injector could not be created, exiting! (Please include the previous stacktraces in bug reports.)");
-            System.exit(1);
-        }
+        GuiceInstantiationService instantiationService = new GuiceInstantiationService();
+        List<Module> bindingsModules = getBindingsModules(instantiationService,
+                new ServerBindings(configuration),
+                new PersistenceServicesBindings(),
+                new ServerMessageInputBindings(),
+                new MessageFilterBindings(),
+                new AlarmCallbackBindings(),
+                new InitializerBindings(),
+                new MessageOutputBindings());
+        LOG.debug("Adding plugin modules: " + pluginModules);
+        bindingsModules.addAll(pluginModules);
+        final Injector injector = GuiceInjectorHolder.createInjector(bindingsModules);
+        instantiationService.setInjector(injector);
 
         // This is holding all our metrics.
         final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
@@ -192,7 +202,7 @@ public final class Main extends NodeRunner {
         } catch (ProvisionException e) {
             for (Message message : e.getErrorMessages()) {
                 if (message.getCause() instanceof MongoException) {
-                    LOG.error(UI.wallString("Unable to connect to MongoDB. Is it running and the configuration correct?"));
+                    LOG.error(UI.wallString("Unable to connect to MongoDB. Is it running and the configuration correct?", null));
                     System.exit(-1);
                 }
             }
@@ -297,30 +307,6 @@ public final class Main extends NodeRunner {
             }
         } catch (InterruptedException e) {
             return;
-        }
-    }
-
-    private static Injector setupInjector(Configuration configuration, List<PluginModule> pluginModules) {
-        try {
-            GuiceInstantiationService instantiationService = new GuiceInstantiationService();
-            List<Module> bindingsModules = getBindingsModules(instantiationService,
-                    new ServerBindings(configuration),
-                    new PersistenceServicesBindings(),
-                    new ServerMessageInputBindings(),
-                    new MessageFilterBindings(),
-                    new AlarmCallbackBindings(),
-                    new InitializerBindings(),
-                    new MessageOutputBindings(),
-                    new RotationStrategyBindings());
-            LOG.debug("Adding plugin modules: " + pluginModules);
-            bindingsModules.addAll(pluginModules);
-            final Injector injector = GuiceInjectorHolder.createInjector(bindingsModules);
-            instantiationService.setInjector(injector);
-
-            return injector;
-        } catch (Exception e) {
-            LOG.error("Injector creation failed!", e);
-            return null;
         }
     }
 

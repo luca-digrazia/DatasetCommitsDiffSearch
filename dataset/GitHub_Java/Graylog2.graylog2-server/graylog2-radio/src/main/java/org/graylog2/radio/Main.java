@@ -24,7 +24,6 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.ParameterException;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
-import com.github.joschi.jadconfig.jodatime.JodaTimeConverterFactory;
 import com.github.joschi.jadconfig.repositories.EnvironmentRepository;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
 import com.github.joschi.jadconfig.repositories.SystemPropertiesRepository;
@@ -47,7 +46,6 @@ import org.graylog2.shared.bindings.GuiceInstantiationService;
 import org.graylog2.shared.initializers.ServiceManagerListener;
 import org.graylog2.shared.plugins.PluginLoader;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
@@ -90,14 +88,12 @@ public class Main extends NodeRunner {
 
         if(commandLineArguments.isDumpDefaultConfig()) {
             final JadConfig jadConfig = new JadConfig();
-            jadConfig.addConverterFactory(new JodaTimeConverterFactory());
             jadConfig.addConfigurationBean(new Configuration());
             System.out.println(dumpConfiguration(jadConfig.dump()));
             System.exit(0);
         }
 
         final JadConfig jadConfig = new JadConfig();
-        jadConfig.addConverterFactory(new JodaTimeConverterFactory());
         final Configuration configuration = readConfiguration(jadConfig, commandLineArguments.getConfigFile());
 
         if (commandLineArguments.isDumpConfig()) {
@@ -202,7 +198,7 @@ public class Main extends NodeRunner {
     private static String dumpConfiguration(final Map<String, String> configMap) {
         final StringBuilder sb = new StringBuilder();
         sb.append("# Configuration of graylog2-radio ").append(RadioVersion.VERSION).append(System.lineSeparator());
-        sb.append("# Generated on ").append(Tools.iso8601()).append(System.lineSeparator());
+        sb.append("# Generated on ").append(DateTime.now()).append(System.lineSeparator());
 
         for (Map.Entry<String, String> entry : configMap.entrySet()) {
             sb.append(entry.getKey()).append('=').append(nullToEmpty(entry.getValue())).append(System.lineSeparator());
