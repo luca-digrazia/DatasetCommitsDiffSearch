@@ -128,7 +128,7 @@ public class AlarmCallbackResource extends RestResource {
 
         final AlarmCallbackConfiguration result = alarmCallbackConfigurationService.load(alarmCallbackId);
         if (result == null || !result.getStreamId().equals(stream.getId())) {
-            throw new javax.ws.rs.NotFoundException("Couldn't find alarm callback " + alarmCallbackId + " in for steam " + streamid);
+            throw new javax.ws.rs.NotFoundException();
         }
 
         return AlarmCallbackSummary.create(result.getId(), result.getStreamId(), result.getType(), result.getConfiguration(), result.getCreatedAt(), result.getCreatorUserId());
@@ -206,13 +206,12 @@ public class AlarmCallbackResource extends RestResource {
 
         final AlarmCallbackConfiguration result = alarmCallbackConfigurationService.load(alarmCallbackId);
         if (result == null || !result.getStreamId().equals(stream.getId())) {
-            throw new javax.ws.rs.NotFoundException("Couldn't find alarm callback " + alarmCallbackId + " in for steam " + streamid);
+            throw new javax.ws.rs.NotFoundException();
         }
 
         if (alarmCallbackConfigurationService.destroy(result) == 0) {
-            final String msg = "Couldn't remove alarm callback with ID " + result.getId();
-            LOG.error(msg);
-            throw new InternalServerErrorException(msg);
+            LOG.error("Couldn't remove alarm callback with id {}", result.getId());
+            throw new InternalServerErrorException();
         }
     }
 

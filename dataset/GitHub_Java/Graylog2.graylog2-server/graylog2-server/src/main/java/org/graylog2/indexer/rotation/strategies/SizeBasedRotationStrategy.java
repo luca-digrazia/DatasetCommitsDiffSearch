@@ -17,12 +17,12 @@
 
 package org.graylog2.indexer.rotation.strategies;
 
-import org.graylog2.audit.AuditEventSender;
+import org.graylog2.auditlog.AuditLogger;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.indices.IndexStatistics;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.rotation.RotationStrategyConfig;
-import org.graylog2.plugin.system.NodeId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,10 +39,10 @@ public class SizeBasedRotationStrategy extends AbstractRotationStrategy {
 
     @Inject
     public SizeBasedRotationStrategy(Indices indices,
+                                     Deflector deflector,
                                      ClusterConfigService clusterConfigService,
-                                     NodeId nodeId,
-                                     AuditEventSender auditEventSender) {
-        super(auditEventSender, nodeId);
+                                     AuditLogger auditLogger) {
+        super(deflector, auditLogger);
         this.indices = indices;
         this.clusterConfigService = clusterConfigService;
     }
@@ -60,7 +60,6 @@ public class SizeBasedRotationStrategy extends AbstractRotationStrategy {
     @Nullable
     @Override
     protected Result shouldRotate(final String index) {
-        // TODO 2.2: Rotation strategy config is per write target, not global.
         final SizeBasedRotationStrategyConfig config = clusterConfigService.get(SizeBasedRotationStrategyConfig.class);
 
         if (config == null) {

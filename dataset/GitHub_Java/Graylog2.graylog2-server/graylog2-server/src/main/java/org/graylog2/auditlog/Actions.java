@@ -16,13 +16,19 @@
  */
 package org.graylog2.auditlog;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.multibindings.Multibinder;
-
-public class AuditLogModule extends AbstractModule {
-    @Override
-    protected void configure() {
-        final Multibinder<AuditLogAppender> appenders = Multibinder.newSetBinder(binder(), AuditLogAppender.class);
-        appenders.addBinding().to(StdOutAppender.class);
+public class Actions {
+    private Actions() {
+        // Prevent instantiation
     }
+
+    public static final String CREATE = "created";
+    public static final String READ = "read";
+    public static final String UPDATE = "updated";
+    public static final String DELETE = "deleted";
+    public static final String START = "started";
+    public static final String STOP = "stopped";
+    public static final String CANCEL = "cancelled";
+    public static final String APPLY = "applied";
+    public static final String EXPORT = "exported";
+    public static final String SHUTDOWN = "shutdown";
 }

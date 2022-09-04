@@ -26,7 +26,6 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.events.ClusterEventBus;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Output;
@@ -38,7 +37,6 @@ import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.streams.OutputService;
 import org.graylog2.streams.StreamService;
-import org.graylog2.streams.events.StreamsChangedEvent;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,17 +66,12 @@ public class StreamOutputResource extends RestResource {
     private final OutputService outputService;
     private final StreamService streamService;
     private final OutputRegistry outputRegistry;
-    private final ClusterEventBus clusterEventBus;
 
     @Inject
-    public StreamOutputResource(OutputService outputService,
-                                StreamService streamService,
-                                OutputRegistry outputRegistry,
-                                ClusterEventBus clusterEventBus) {
+    public StreamOutputResource(OutputService outputService, StreamService streamService, OutputRegistry outputRegistry) {
         this.outputService = outputService;
         this.streamService = streamService;
         this.outputRegistry = outputRegistry;
-        this.clusterEventBus = clusterEventBus;
     }
 
     @GET
@@ -150,7 +143,6 @@ public class StreamOutputResource extends RestResource {
         for (String outputId : aor.outputs()) {
             final Output output = outputService.load(outputId);
             streamService.addOutput(stream, output);
-            clusterEventBus.post(StreamsChangedEvent.create(stream.getId()));
         }
 
         return Response.accepted().build();
@@ -175,6 +167,5 @@ public class StreamOutputResource extends RestResource {
 
         streamService.removeOutput(stream, output);
         outputRegistry.removeOutput(output);
-        clusterEventBus.post(StreamsChangedEvent.create(stream.getId()));
     }
 }

@@ -24,22 +24,24 @@ import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.outputs.MessageOutputFactory;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Output;
-import org.graylog2.rest.models.streams.outputs.OutputListResponse;
-import org.graylog2.rest.models.streams.outputs.requests.CreateOutputRequest;
 import org.graylog2.rest.models.system.outputs.responses.OutputSummary;
 import org.graylog2.rest.resources.streams.outputs.AvailableOutputSummary;
+import org.graylog2.rest.models.streams.outputs.OutputListResponse;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.streams.OutputService;
+import org.graylog2.rest.models.streams.outputs.requests.CreateOutputRequest;
 import org.graylog2.utilities.ConfigurationMapConverter;
 import org.joda.time.DateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.ws.rs.Consumes;
@@ -62,6 +64,8 @@ import java.util.Set;
 @Api(value = "System/Outputs", description = "Manage outputs")
 @Path("/system/outputs")
 public class OutputResource extends RestResource {
+    private static final Logger LOG = LoggerFactory.getLogger(OutputResource.class);
+
     private final OutputService outputService;
     private final MessageOutputFactory messageOutputFactory;
     private final OutputRegistry outputRegistry;
@@ -78,6 +82,7 @@ public class OutputResource extends RestResource {
     @GET
     @Timed
     @ApiOperation(value = "Get a list of all outputs")
+    @RequiresPermissions(RestPermissions.STREAM_OUTPUTS_CREATE)
     @Produces(MediaType.APPLICATION_JSON)
     public OutputListResponse get() {
         checkPermission(RestPermissions.OUTPUTS_READ);
@@ -101,6 +106,7 @@ public class OutputResource extends RestResource {
     @Path("/{outputId}")
     @Timed
     @ApiOperation(value = "Get specific output")
+    @RequiresPermissions(RestPermissions.OUTPUTS_CREATE)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "No such output on this node.")
@@ -119,7 +125,7 @@ public class OutputResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "Invalid output specification in input.", response = OutputSummary.class)
     })
-    @AuditEvent(type = AuditEventTypes.MESSAGE_OUTPUT_CREATE)
+    @AuditLog(object = "message output", captureRequestEntity = true, captureResponseEntity = true)
     public Response create(@ApiParam(name = "JSON body", required = true) CreateOutputRequest csor) throws ValidationException {
         checkPermission(RestPermissions.OUTPUTS_CREATE);
         final AvailableOutputSummary outputSummary = messageOutputFactory.getAvailableOutputs().get(csor.type());
@@ -158,11 +164,12 @@ public class OutputResource extends RestResource {
     @Path("/{outputId}")
     @Timed
     @ApiOperation(value = "Delete output")
+    @RequiresPermissions(RestPermissions.OUTPUTS_TERMINATE)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "No such stream/output on this node.")
     })
-    @AuditEvent(type = AuditEventTypes.MESSAGE_OUTPUT_DELETE)
+    @AuditLog(object = "message output")
     public void delete(@ApiParam(name = "outputId", value = "The id of the output that should be deleted", required = true)
                        @PathParam("outputId") String outputId) throws org.graylog2.database.NotFoundException {
         checkPermission(RestPermissions.OUTPUTS_TERMINATE);
@@ -174,9 +181,9 @@ public class OutputResource extends RestResource {
     @Path("/available")
     @Timed
     @ApiOperation(value = "Get all available output modules")
+    @RequiresPermissions(RestPermissions.STREAMS_READ)
     @Produces(MediaType.APPLICATION_JSON)
     public Map<String, Map<String, AvailableOutputSummary>> available() {
-        checkPermission(RestPermissions.OUTPUTS_READ);
         return ImmutableMap.of("types", messageOutputFactory.getAvailableOutputs());
     }
 
@@ -184,11 +191,12 @@ public class OutputResource extends RestResource {
     @Path("/{outputId}")
     @Timed
     @ApiOperation(value = "Update output")
+    @RequiresPermissions(RestPermissions.OUTPUTS_EDIT)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "No such output on this node.")
     })
-    @AuditEvent(type = AuditEventTypes.MESSAGE_OUTPUT_UPDATE)
+    @AuditLog(object = "message output", captureRequestEntity = true, captureResponseEntity = true)
     public Output update(@ApiParam(name = "outputId", value = "The id of the output that should be deleted", required = true)
                            @PathParam("outputId") String outputId,
                            @ApiParam(name = "JSON body", required = true) Map<String, Object> deltas) throws ValidationException, NotFoundException {
@@ -202,8 +210,7 @@ public class OutputResource extends RestResource {
 
         deltas.remove("streams");
         if (deltas.containsKey("configuration")) {
-            @SuppressWarnings("unchecked")
-            final Map<String, Object> configuration = (Map<String, Object>) deltas.get("configuration");
+            final Map<String, Object> configuration = (Map<String, Object>)deltas.get("configuration");
             deltas.put("configuration", ConfigurationMapConverter.convertValues(configuration, outputSummary.requestedConfiguration()));
         }
 

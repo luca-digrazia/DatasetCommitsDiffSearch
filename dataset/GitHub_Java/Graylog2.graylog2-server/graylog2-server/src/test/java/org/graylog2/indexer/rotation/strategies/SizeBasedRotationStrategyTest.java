@@ -20,12 +20,11 @@ package org.graylog2.indexer.rotation.strategies;
 import org.elasticsearch.action.admin.indices.stats.CommonStats;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.index.store.StoreStats;
-import org.graylog2.audit.AuditEventSender;
-import org.graylog2.indexer.IndexSet;
+import org.graylog2.auditlog.AuditLogger;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.indices.IndexStatistics;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.cluster.ClusterConfigService;
-import org.graylog2.plugin.system.NodeId;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -45,16 +44,13 @@ public class SizeBasedRotationStrategyTest {
     private ClusterConfigService clusterConfigService;
 
     @Mock
-    private IndexSet indexSet;
+    private Deflector deflector;
 
     @Mock
     private Indices indices;
 
     @Mock
-    private NodeId nodeId;
-
-    @Mock
-    private AuditEventSender auditEventSender;
+    private AuditLogger auditLogger;
 
     @Test
     public void testRotate() throws Exception {
@@ -63,14 +59,14 @@ public class SizeBasedRotationStrategyTest {
         final IndexStatistics stats = IndexStatistics.create("name", commonStats, commonStats, Collections.<ShardRouting>emptyList());
 
         when(indices.getIndexStats("name")).thenReturn(stats);
-        when(indexSet.getNewestTargetName()).thenReturn("name");
+        when(deflector.getNewestTargetName()).thenReturn("name");
         when(clusterConfigService.get(SizeBasedRotationStrategyConfig.class)).thenReturn(SizeBasedRotationStrategyConfig.create(100L));
 
-        final SizeBasedRotationStrategy strategy = new SizeBasedRotationStrategy(indices, clusterConfigService, nodeId, auditEventSender);
+        final SizeBasedRotationStrategy strategy = new SizeBasedRotationStrategy(indices, deflector, clusterConfigService, auditLogger);
 
-        strategy.rotate(indexSet);
-        verify(indexSet, times(1)).cycle();
-        reset(indexSet);
+        strategy.rotate();
+        verify(deflector, times(1)).cycle();
+        reset(deflector);
     }
 
 
@@ -81,27 +77,27 @@ public class SizeBasedRotationStrategyTest {
         final IndexStatistics stats = IndexStatistics.create("name", commonStats, commonStats, Collections.<ShardRouting>emptyList());
 
         when(indices.getIndexStats("name")).thenReturn(stats);
-        when(indexSet.getNewestTargetName()).thenReturn("name");
+        when(deflector.getNewestTargetName()).thenReturn("name");
         when(clusterConfigService.get(SizeBasedRotationStrategyConfig.class)).thenReturn(SizeBasedRotationStrategyConfig.create(100000L));
 
-        final SizeBasedRotationStrategy strategy = new SizeBasedRotationStrategy(indices, clusterConfigService, nodeId, auditEventSender);
+        final SizeBasedRotationStrategy strategy = new SizeBasedRotationStrategy(indices, deflector, clusterConfigService, auditLogger);
 
-        strategy.rotate(indexSet);
-        verify(indexSet, never()).cycle();
-        reset(indexSet);
+        strategy.rotate();
+        verify(deflector, never()).cycle();
+        reset(deflector);
     }
 
 
     @Test
     public void testRotateFailed() throws Exception {
         when(indices.getIndexStats("name")).thenReturn(null);
-        when(indexSet.getNewestTargetName()).thenReturn("name");
+        when(deflector.getNewestTargetName()).thenReturn("name");
         when(clusterConfigService.get(SizeBasedRotationStrategyConfig.class)).thenReturn(SizeBasedRotationStrategyConfig.create(100));
 
-        final SizeBasedRotationStrategy strategy = new SizeBasedRotationStrategy(indices, clusterConfigService, nodeId, auditEventSender);
+        final SizeBasedRotationStrategy strategy = new SizeBasedRotationStrategy(indices, deflector, clusterConfigService, auditLogger);
 
-        strategy.rotate(indexSet);
-        verify(indexSet, never()).cycle();
-        reset(indexSet);
+        strategy.rotate();
+        verify(deflector, never()).cycle();
+        reset(deflector);
     }
 }

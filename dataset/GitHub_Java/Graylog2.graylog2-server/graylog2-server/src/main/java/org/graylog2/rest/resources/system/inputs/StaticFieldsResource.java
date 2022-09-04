@@ -88,9 +88,8 @@ public class StaticFieldsResource extends RestResource {
         final MessageInput input = inputs.getRunningInput(inputId);
 
         if (input == null) {
-            final String msg = "Input <" + inputId + "> not found.";
-            LOG.error(msg);
-            throw new javax.ws.rs.NotFoundException(msg);
+            LOG.error("Input <{}> not found.", inputId);
+            throw new javax.ws.rs.NotFoundException();
         }
 
         // Check if key is a valid message key.
@@ -142,15 +141,13 @@ public class StaticFieldsResource extends RestResource {
         MessageInput input = inputs.getRunningInput(inputId);
 
         if (input == null) {
-            final String msg = "Input <" + inputId + "> not found.";
-            LOG.error(msg);
-            throw new javax.ws.rs.NotFoundException(msg);
+            LOG.error("Input <{}> not found.", inputId);
+            throw new javax.ws.rs.NotFoundException();
         }
 
         if (!input.getStaticFields().containsKey(key)) {
-            final String msg = "No such static field [" + key + "] on input <" + inputId + ">.";
-            LOG.error(msg);
-            throw new javax.ws.rs.NotFoundException(msg);
+            LOG.error("No such static field [{}] on input <{}>.", key, inputId);
+            throw new javax.ws.rs.NotFoundException();
         }
 
         input.getStaticFields().remove(key);

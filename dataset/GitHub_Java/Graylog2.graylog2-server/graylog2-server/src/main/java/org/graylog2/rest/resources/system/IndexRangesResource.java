@@ -178,9 +178,8 @@ public class IndexRangesResource extends RestResource {
         try {
             this.systemJobManager.submit(rebuildJob);
         } catch (SystemJobConcurrencyException e) {
-            final String msg = "Concurrency level of this job reached: " + e.getMessage();
-            LOG.error(msg);
-            throw new ForbiddenException(msg, e);
+            LOG.error("Concurrency level of this job reached: " + e.getMessage());
+            throw new ForbiddenException();
         }
 
         return Response.accepted().build();

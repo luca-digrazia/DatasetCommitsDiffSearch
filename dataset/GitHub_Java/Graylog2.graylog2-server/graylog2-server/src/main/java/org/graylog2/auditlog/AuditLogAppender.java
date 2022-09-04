@@ -16,13 +16,10 @@
  */
 package org.graylog2.auditlog;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.multibindings.Multibinder;
+import java.util.Map;
 
-public class AuditLogModule extends AbstractModule {
-    @Override
-    protected void configure() {
-        final Multibinder<AuditLogAppender> appenders = Multibinder.newSetBinder(binder(), AuditLogAppender.class);
-        appenders.addBinding().to(StdOutAppender.class);
-    }
+public interface AuditLogAppender {
+    boolean enabled();
+
+    void write(SuccessStatus successStatus, String subject, String action, String object, Map<String, Object> context);
 }

@@ -118,23 +118,20 @@ public class SessionsResource extends RestResource {
         if (sessionId != null && !sessionId.isEmpty()) {
             id = sessionId;
         }
-
-        final String remoteAddrFromRequest = RestTools.getRemoteAddrFromRequest(grizzlyRequest, trustedSubnets);
-        final Subject subject = new Subject.Builder().sessionId(id).host(remoteAddrFromRequest).buildSubject();
+        final Subject subject = new Subject.Builder().sessionId(id).buildSubject();
         ThreadContext.bind(subject);
-        final Session s = subject.getSession();
-        try {
 
+        try {
             subject.login(new UsernamePasswordToken(createRequest.username(), createRequest.password()));
             final User user = userService.load(createRequest.username());
             if (user != null) {
                 long timeoutInMillis = user.getSessionTimeoutMs();
-                s.setTimeout(timeoutInMillis);
+                subject.getSession().setTimeout(timeoutInMillis);
             } else {
                 // set a sane default. really we should be able to load the user from above.
-                s.setTimeout(TimeUnit.HOURS.toMillis(8));
+                subject.getSession().setTimeout(TimeUnit.HOURS.toMillis(8));
             }
-            s.touch();
+            subject.getSession().touch();
 
             // save subject in session, otherwise we can't get the username back in subsequent requests.
             ((DefaultSecurityManager) SecurityUtils.getSecurityManager()).getSubjectDAO().save(subject);
@@ -146,20 +143,21 @@ public class SessionsResource extends RestResource {
         }
 
         if (subject.isAuthenticated()) {
-            id = s.getId();
+            final Session session = subject.getSession();
+            id = session.getId();
 
             final Map<String, Object> auditLogContext = ImmutableMap.of(
-                    "session_id", id,
-                    "remote_address", remoteAddrFromRequest
+                "session_id", id,
+                "remote_address", RestTools.getRemoteAddrFromRequest(grizzlyRequest, trustedSubnets)
             );
             auditLogger.success(createRequest.username(), "create", "session", auditLogContext);
 
             // TODO is the validUntil attribute even used by anyone yet?
-            return SessionResponse.create(new DateTime(s.getLastAccessTime(), DateTimeZone.UTC).plus(s.getTimeout()).toDate(),
+            return SessionResponse.create(new DateTime(session.getLastAccessTime(), DateTimeZone.UTC).plus(session.getTimeout()).toDate(),
                     id.toString());
         } else {
             final Map<String, Object> auditLogContext = ImmutableMap.of(
-                    "remote_address", remoteAddrFromRequest
+                "remote_address", RestTools.getRemoteAddrFromRequest(grizzlyRequest, trustedSubnets)
             );
             auditLogger.failure(createRequest.username(), "create", "session", auditLogContext);
 
@@ -183,17 +181,6 @@ public class SessionsResource extends RestResource {
             return SessionValidationResponse.invalid();
         }
 
-        // there's no valid session, but the authenticator would like us to create one
-        if (subject.getSession(false) == null && ShiroSecurityContext.isSessionCreationRequested()) {
-            final Session session = subject.getSession();
-            LOG.debug("Session created {}", session.getId());
-            session.touch();
-            // save subject in session, otherwise we can't get the username back in subsequent requests.
-            ((DefaultSecurityManager) SecurityUtils.getSecurityManager()).getSubjectDAO().save(subject);
-
-            return SessionValidationResponse.validWithNewSession(String.valueOf(session.getId()),
-                                                                 String.valueOf(subject.getPrincipal()));
-        }
         return SessionValidationResponse.valid();
     }
 

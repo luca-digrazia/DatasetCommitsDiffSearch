@@ -18,7 +18,6 @@ package org.graylog2.bindings;
 
 import com.google.inject.Scopes;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
-import com.google.inject.multibindings.MapBinder;
 import com.google.inject.multibindings.Multibinder;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.elasticsearch.client.Client;
@@ -62,7 +61,6 @@ import org.graylog2.inputs.PersistedInputsImpl;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.RulesEngine;
 import org.graylog2.plugin.cluster.ClusterConfigService;
-import org.graylog2.plugin.decorators.MessageDecorator;
 import org.graylog2.plugin.inject.Graylog2Module;
 import org.graylog2.rest.NotFoundExceptionMapper;
 import org.graylog2.rest.ScrollChunkWriter;
@@ -113,7 +111,6 @@ public class ServerBindings extends Graylog2Module {
         bindExceptionMappers();
         bindAdditionalJerseyComponents();
         bindEventBusListeners();
-        bindMessageDecorators();
     }
 
     private void bindProviders() {
@@ -139,6 +136,9 @@ public class ServerBindings extends Graylog2Module {
     }
 
     private void bindSingletons() {
+        bind(Configuration.class).toInstance(configuration);
+        bind(BaseConfiguration.class).toInstance(configuration);
+
         bind(MongoConnection.class).toProvider(MongoConnectionProvider.class);
 
         if (configuration.isMessageJournalEnabled()) {
@@ -204,10 +204,5 @@ public class ServerBindings extends Graylog2Module {
         bind(InputEventListener.class).asEagerSingleton();
         bind(LocalDebugEventListener.class).asEagerSingleton();
         bind(ClusterDebugEventListener.class).asEagerSingleton();
-    }
-
-    private void bindMessageDecorators() {
-        // only triggering an initialize to make sure that the binding exists
-        final MapBinder<String, MessageDecorator.Factory> messageDecoratorBinder = messageDecoratorBinder();
     }
 }

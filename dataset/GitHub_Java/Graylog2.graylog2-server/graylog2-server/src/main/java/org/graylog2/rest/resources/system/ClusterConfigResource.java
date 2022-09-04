@@ -33,13 +33,10 @@ import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.hibernate.validator.constraints.NotBlank;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.validation.constraints.NotNull;
-import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -62,8 +59,6 @@ import static java.util.Objects.requireNonNull;
 @Path("/system/cluster_config")
 @Produces(MediaType.APPLICATION_JSON)
 public class ClusterConfigResource extends RestResource {
-    private static final Logger LOG = LoggerFactory.getLogger(ClusterConfigResource.class);
-    
     private final ClusterConfigService clusterConfigService;
     private final ChainingClassLoader chainingClassLoader;
 
@@ -114,22 +109,8 @@ public class ClusterConfigResource extends RestResource {
             throw new NotFoundException("Couldn't find configuration class \"" + configClass + "\"");
         }
 
-        final Object o;
-        try {
-            o = objectMapper.readValue(body, cls);
-        } catch (Exception e) {
-            final String msg = "Couldn't parse cluster configuration \"" + configClass + "\".";
-            LOG.error(msg, e);
-            throw new BadRequestException(msg);
-        }
-
-        try {
-            clusterConfigService.write(o);
-        } catch (Exception e) {
-            final String msg = "Couldn't write cluster config \"" + configClass + "\".";
-            LOG.error(msg, e);
-            throw new InternalServerErrorException(msg, e);
-        }
+        final Object o = objectMapper.readValue(body, cls);
+        clusterConfigService.write(o);
 
         return Response.accepted(o).build();
     }

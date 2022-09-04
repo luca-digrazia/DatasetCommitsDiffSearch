@@ -17,15 +17,17 @@
 package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.messageprocessors.MessageProcessorsConfig;
 import org.graylog2.messageprocessors.MessageProcessorsConfigWithDescriptors;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.messageprocessors.MessageProcessor;
 import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.shared.security.RestPermissions;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
@@ -61,6 +63,7 @@ public class MessageProcessorsResource extends RestResource {
     @ApiOperation(value = "Get message processor configuration")
     @Path("config")
     public MessageProcessorsConfigWithDescriptors config() {
+        checkPermission(RestPermissions.CLUSTER_CONFIG_ENTRY_READ);
         final MessageProcessorsConfig config = clusterConfigService.getOrDefault(MessageProcessorsConfig.class,
                 MessageProcessorsConfig.defaultConfig());
 
@@ -71,7 +74,9 @@ public class MessageProcessorsResource extends RestResource {
     @Timed
     @ApiOperation(value = "Update message processor configuration")
     @Path("config")
+    @AuditLog(object = "message processor", captureRequestEntity = true, captureResponseEntity = true)
     public MessageProcessorsConfigWithDescriptors updateConfig(@ApiParam(name = "config", required = true) final MessageProcessorsConfigWithDescriptors configWithDescriptors) {
+        checkPermission(RestPermissions.CLUSTER_CONFIG_ENTRY_EDIT);
         final MessageProcessorsConfig config = configWithDescriptors.toConfig();
 
         clusterConfigService.write(config.withProcessors(processorClassNames));

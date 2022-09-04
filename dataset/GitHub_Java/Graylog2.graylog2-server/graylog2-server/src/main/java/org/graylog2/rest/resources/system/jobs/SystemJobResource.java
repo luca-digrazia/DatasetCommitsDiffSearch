@@ -25,8 +25,8 @@ import io.swagger.annotations.ApiParam;
 import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.auditlog.Actions;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.plugin.system.NodeId;
 import org.graylog2.rest.models.system.SystemJobSummary;
 import org.graylog2.rest.models.system.jobs.requests.TriggerRequest;
@@ -149,7 +149,7 @@ public class SystemJobResource extends RestResource {
             @ApiResponse(code = 400, message = "There is no such systemjob type."),
             @ApiResponse(code = 403, message = "Maximum concurrency level of this systemjob type reached.")
     })
-    @AuditEvent(type = AuditEventTypes.SYSTEM_JOB_START)
+    @AuditLog(action = Actions.START, object = "system job", captureRequestEntity = true, captureResponseEntity = true)
     public Response trigger(@ApiParam(name = "JSON body", required = true)
                             @Valid @NotNull TriggerRequest tr) {
         // TODO cleanup jobId vs jobName checking in permissions
@@ -170,7 +170,7 @@ public class SystemJobResource extends RestResource {
             throw new ForbiddenException("Maximum concurrency level of this job reached", e);
         }
 
-        return Response.accepted().entity(ImmutableMap.of("system_job_id", job.getId())).build();
+        return Response.accepted().build();
     }
 
     @DELETE
@@ -178,7 +178,7 @@ public class SystemJobResource extends RestResource {
     @Path("/{jobId}")
     @ApiOperation(value = "Cancel running job")
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditEvent(type = AuditEventTypes.SYSTEM_JOB_STOP)
+    @AuditLog(action = Actions.CANCEL, object = "system job")
     public SystemJobSummary cancel(@ApiParam(name = "jobId", required = true) @PathParam("jobId") @NotEmpty String jobId) {
         SystemJob systemJob = systemJobManager.getRunningJobs().get(jobId);
         if (systemJob == null) {

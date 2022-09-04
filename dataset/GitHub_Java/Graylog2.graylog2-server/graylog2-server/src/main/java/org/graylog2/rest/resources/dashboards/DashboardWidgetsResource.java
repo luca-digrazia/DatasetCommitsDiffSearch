@@ -202,9 +202,8 @@ public class DashboardWidgetsResource extends RestResource {
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
         if (widget == null) {
-            final String msg = "Widget " + widgetId + " on dashboard " + dashboardId + " not found.";
-            LOG.error(msg);
-            throw new javax.ws.rs.NotFoundException(msg);
+            LOG.error("Widget not found.");
+            throw new javax.ws.rs.NotFoundException();
         }
 
         return widgetResultCache.getComputationResultForDashboardWidget(widget).asMap();
@@ -232,9 +231,8 @@ public class DashboardWidgetsResource extends RestResource {
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
         if (widget == null) {
-            final String msg = "Widget " + widgetId + " on dashboard " + dashboardId + " not found.";
-            LOG.error(msg);
-            throw new javax.ws.rs.NotFoundException(msg);
+            LOG.error("Widget not found.");
+            throw new javax.ws.rs.NotFoundException();
         }
 
         try {
@@ -281,9 +279,8 @@ public class DashboardWidgetsResource extends RestResource {
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
         if (widget == null) {
-            final String msg = "Widget " + widgetId + " on dashboard " + dashboardId + " not found.";
-            LOG.error(msg);
-            throw new javax.ws.rs.NotFoundException(msg);
+            LOG.error("Widget not found.");
+            throw new javax.ws.rs.NotFoundException();
         }
 
         dashboardService.updateWidgetDescription(dashboard, widget, uwr.description());
@@ -314,9 +311,8 @@ public class DashboardWidgetsResource extends RestResource {
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
         if (widget == null) {
-            final String msg = "Widget " + widgetId + " on dashboard " + dashboardId + " not found.";
-            LOG.error(msg);
-            throw new javax.ws.rs.NotFoundException(msg);
+            LOG.error("Widget not found.");
+            throw new javax.ws.rs.NotFoundException();
         }
 
         dashboardService.updateWidgetCacheTime(dashboard, widget, uwr.cacheTime());

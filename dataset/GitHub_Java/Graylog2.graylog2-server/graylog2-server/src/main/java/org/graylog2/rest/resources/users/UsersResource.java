@@ -117,7 +117,7 @@ public class UsersResource extends RestResource {
                            @PathParam("username") String username) {
         final org.graylog2.plugin.database.users.User user = userService.load(username);
         if (user == null) {
-            throw new NotFoundException("Couldn't find user " + username);
+            throw new NotFoundException();
         }
         // if the requested username does not match the authenticated user, then we don't return permission information
         final boolean allowedToSeePermissions = isPermitted(RestPermissions.USERS_PERMISSIONSEDIT, username);
@@ -217,7 +217,7 @@ public class UsersResource extends RestResource {
 
         final org.graylog2.plugin.database.users.User user = userService.load(username);
         if (user == null) {
-            throw new NotFoundException("Couldn't find user " + username);
+            throw new NotFoundException();
         }
 
         if (user.isReadOnly()) {
@@ -278,7 +278,7 @@ public class UsersResource extends RestResource {
     public void deleteUser(@ApiParam(name = "username", value = "The name of the user to delete.", required = true)
                            @PathParam("username") String username) {
         if (userService.delete(username) == 0) {
-            throw new NotFoundException("Couldn't find user " + username);
+            throw new NotFoundException();
         }
     }
 
@@ -296,7 +296,7 @@ public class UsersResource extends RestResource {
                                 @Valid @NotNull PermissionEditRequest permissionRequest) throws ValidationException {
         final org.graylog2.plugin.database.users.User user = userService.load(username);
         if (user == null) {
-            throw new NotFoundException("Couldn't find user " + username);
+            throw new NotFoundException();
         }
 
         user.setPermissions(getEffectiveUserPermissions(user, permissionRequest.permissions()));
@@ -318,7 +318,7 @@ public class UsersResource extends RestResource {
         checkPermission(RestPermissions.USERS_EDIT, username);
 
         if (user == null) {
-            throw new NotFoundException("Couldn't find user " + username);
+            throw new NotFoundException();
         }
 
         user.setPreferences(preferencesRequest.preferences());
@@ -337,7 +337,7 @@ public class UsersResource extends RestResource {
                                   @PathParam("username") String username) throws ValidationException {
         final org.graylog2.plugin.database.users.User user = userService.load(username);
         if (user == null) {
-            throw new NotFoundException("Couldn't find user " + username);
+            throw new NotFoundException();
         }
         user.setPermissions(Collections.<String>emptyList());
         userService.save(user);
@@ -361,11 +361,11 @@ public class UsersResource extends RestResource {
 
         final org.graylog2.plugin.database.users.User user = userService.load(username);
         if (user == null) {
-            throw new NotFoundException("Couldn't find user " + username);
+            throw new NotFoundException();
         }
 
         if (!getSubject().isPermitted(RestPermissions.USERS_PASSWORDCHANGE + ":" + user.getName())) {
-            throw new ForbiddenException("Not allowed to change password for user " + username);
+            throw new ForbiddenException();
         }
         if (user.isExternalUser()) {
             final String msg = "Cannot change password for LDAP user.";
@@ -447,7 +447,7 @@ public class UsersResource extends RestResource {
         if (accessToken != null) {
             accessTokenService.destroy(accessToken);
         } else {
-            throw new NotFoundException("Couldn't find access token for user " + username);
+            throw new NotFoundException();
         }
     }
 

@@ -26,8 +26,7 @@ import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.alerts.AbstractAlertCondition;
 import org.graylog2.alerts.AlertService;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.database.ValidationException;
@@ -57,7 +56,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.net.URI;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -85,7 +83,7 @@ public class StreamAlertConditionResource extends RestResource {
         @ApiResponse(code = 404, message = "Stream not found."),
         @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    @AuditEvent(type = AuditEventTypes.ALERT_CONDITION_CREATE)
+    @AuditLog(object = "alert condition", captureRequestEntity = true, captureResponseEntity = true)
     public Response create(@ApiParam(name = "streamId", value = "The stream id this new alert condition belongs to.", required = true)
                            @PathParam("streamId") String streamid,
                            @ApiParam(name = "JSON body", required = true)
@@ -93,7 +91,13 @@ public class StreamAlertConditionResource extends RestResource {
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
         final Stream stream = streamService.load(streamid);
-        final AlertCondition alertCondition = alertService.fromRequest(ccr, stream, getCurrentUser().getName());
+        final AlertCondition alertCondition;
+        try {
+            alertCondition = alertService.fromRequest(ccr, stream, getCurrentUser().getName());
+        } catch (AbstractAlertCondition.NoSuchAlertConditionTypeException e) {
+            LOG.error("Invalid alarm condition type.", e);
+            throw new BadRequestException(e);
+        }
 
         streamService.addAlertCondition(stream, alertCondition);
 
@@ -113,7 +117,7 @@ public class StreamAlertConditionResource extends RestResource {
         @ApiResponse(code = 404, message = "Stream not found."),
         @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    @AuditEvent(type = AuditEventTypes.ALERT_CONDITION_UPDATE)
+    @AuditLog(object = "alert condition", captureRequestEntity = true, captureResponseEntity = true)
     public void update(@ApiParam(name = "streamId", value = "The stream id the alert condition belongs to.", required = true)
                        @PathParam("streamId") String streamid,
                        @ApiParam(name = "conditionId", value = "The alert condition id.", required = true)
@@ -125,7 +129,13 @@ public class StreamAlertConditionResource extends RestResource {
         final Stream stream = streamService.load(streamid);
         AlertCondition alertCondition = streamService.getAlertCondition(stream, conditionid);
 
-        final AlertCondition updatedCondition = alertService.updateFromRequest(alertCondition, ccr);
+        final AlertCondition updatedCondition;
+        try {
+            updatedCondition = alertService.updateFromRequest(alertCondition, ccr);
+        } catch (AbstractAlertCondition.NoSuchAlertConditionTypeException e) {
+            LOG.error("Invalid alarm condition type.", e);
+            throw new BadRequestException(e);
+        }
 
         streamService.updateAlertCondition(stream, updatedCondition);
     }
@@ -147,7 +157,7 @@ public class StreamAlertConditionResource extends RestResource {
         final List<AlertConditionSummary> conditionSummaries = alertConditions
             .stream()
             .map((condition) -> AlertConditionSummary.create(condition.getId(),
-                condition.getTypeString().toLowerCase(Locale.ENGLISH),
+                condition.getTypeString().toLowerCase(),
                 condition.getCreatorUserId(),
                 condition.getCreatedAt().toDate(),
                 condition.getParameters(),
@@ -166,7 +176,7 @@ public class StreamAlertConditionResource extends RestResource {
         @ApiResponse(code = 404, message = "Stream not found."),
         @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    @AuditEvent(type = AuditEventTypes.ALERT_CONDITION_DELETE)
+    @AuditLog(object = "alert condition")
     public void delete(@ApiParam(name = "streamId", value = "The stream id this new alert condition belongs to.", required = true)
                        @PathParam("streamId") String streamid,
                        @ApiParam(name = "conditionId", value = "The stream id this new alert condition belongs to.", required = true)

@@ -17,6 +17,8 @@
 
 package org.graylog2.indexer.retention.strategies;
 
+import com.google.common.collect.ImmutableMap;
+import org.graylog2.auditlog.AuditLogger;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.indices.Indices;
@@ -39,12 +41,14 @@ public abstract class AbstractIndexCountBasedRetentionStrategy implements Retent
     private final Deflector deflector;
     private final Indices indices;
     private final ActivityWriter activityWriter;
+    private final AuditLogger auditLogger;
 
     public AbstractIndexCountBasedRetentionStrategy(Deflector deflector, Indices indices,
-                                                    ActivityWriter activityWriter) {
+                                                    ActivityWriter activityWriter, AuditLogger auditLogger) {
         this.deflector = requireNonNull(deflector);
         this.indices = requireNonNull(indices);
         this.activityWriter = requireNonNull(activityWriter);
+        this.auditLogger = requireNonNull(auditLogger);
     }
 
     protected abstract Optional<Integer> getMaxNumberOfIndices();
@@ -75,6 +79,9 @@ public abstract class AbstractIndexCountBasedRetentionStrategy implements Retent
         LOG.info(msg);
         activityWriter.write(new Activity(msg, IndexRetentionThread.class));
 
+        final ImmutableMap<String, Object> auditLogContext = ImmutableMap.of("retention_strategy", this.getClass().getCanonicalName());
+        auditLogger.success("<system>", "initiated", "index retention", auditLogContext);
+
         runRetention(deflectorIndices, removeCount);
     }
 
@@ -102,6 +109,11 @@ public abstract class AbstractIndexCountBasedRetentionStrategy implements Retent
 
             // Sorry if this should ever go mad. Run retention strategy!
             retain(indexName);
+
+            final ImmutableMap<String, Object> auditLogContext = ImmutableMap.of(
+                "index_name", indexName,
+                "retention_strategy", strategyName);
+            auditLogger.success("<system>", "completed", "index retention", auditLogContext);
         }
     }
 }

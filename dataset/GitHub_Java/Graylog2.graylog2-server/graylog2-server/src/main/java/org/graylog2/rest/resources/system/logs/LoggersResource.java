@@ -174,9 +174,8 @@ public class LoggersResource extends RestResource {
         @ApiParam(name = "subsystem", required = true) @PathParam("subsystem") @NotEmpty String subsystemTitle,
         @ApiParam(name = "level", required = true) @PathParam("level") @NotEmpty String level) {
         if (!SUBSYSTEMS.containsKey(subsystemTitle)) {
-            final String msg = "No such logging subsystem: [" + subsystemTitle + "]";
-            LOG.warn(msg);
-            throw new NotFoundException(msg);
+            LOG.warn("No such subsystem: [{}]. Returning 404.", subsystemTitle);
+            throw new NotFoundException();
         }
         checkPermission(RestPermissions.LOGGERS_EDITSUBSYSTEM, subsystemTitle);
 

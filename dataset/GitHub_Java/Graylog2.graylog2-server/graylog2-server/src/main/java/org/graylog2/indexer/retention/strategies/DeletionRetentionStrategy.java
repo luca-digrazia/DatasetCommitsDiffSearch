@@ -17,14 +17,11 @@
 package org.graylog2.indexer.retention.strategies;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.ImmutableMap;
-import org.graylog2.audit.AuditActor;
-import org.graylog2.audit.AuditEventSender;
+import org.graylog2.auditlog.AuditLogger;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.retention.RetentionStrategyConfig;
-import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,28 +30,21 @@ import javax.inject.Inject;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import static org.graylog2.audit.AuditEventTypes.ES_INDEX_RETENTION_DELETE;
-
 public class DeletionRetentionStrategy extends AbstractIndexCountBasedRetentionStrategy {
     private static final Logger LOG = LoggerFactory.getLogger(DeletionRetentionStrategy.class);
 
     private final Indices indices;
     private final ClusterConfigService clusterConfigService;
-    private final NodeId nodeId;
-    private final AuditEventSender auditEventSender;
 
     @Inject
     public DeletionRetentionStrategy(Deflector deflector,
                                      Indices indices,
                                      ActivityWriter activityWriter,
                                      ClusterConfigService clusterConfigService,
-                                     NodeId nodeId,
-                                     AuditEventSender auditEventSender) {
-        super(deflector, indices, activityWriter);
+                                     AuditLogger auditLogger) {
+        super(deflector, indices, activityWriter, auditLogger);
         this.indices = indices;
         this.clusterConfigService = clusterConfigService;
-        this.nodeId = nodeId;
-        this.auditEventSender = auditEventSender;
     }
 
     @Override
@@ -73,10 +63,6 @@ public class DeletionRetentionStrategy extends AbstractIndexCountBasedRetentionS
         final Stopwatch sw = Stopwatch.createStarted();
 
         indices.delete(indexName);
-        auditEventSender.success(AuditActor.system(nodeId), ES_INDEX_RETENTION_DELETE, ImmutableMap.of(
-                "index_name", indexName,
-                "retention_strategy", this.getClass().getCanonicalName()
-        ));
 
         LOG.info("Finished index retention strategy [delete] for index <{}> in {}ms.", indexName,
                 sw.stop().elapsed(TimeUnit.MILLISECONDS));

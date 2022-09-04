@@ -14,15 +14,25 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog2.auditlog;
+package org.graylog2.auditlog.jersey;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.multibindings.Multibinder;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-public class AuditLogModule extends AbstractModule {
-    @Override
-    protected void configure() {
-        final Multibinder<AuditLogAppender> appenders = Multibinder.newSetBinder(binder(), AuditLogAppender.class);
-        appenders.addBinding().to(StdOutAppender.class);
-    }
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+public @interface AuditLog {
+    String subject() default "";
+
+    String action() default "";
+
+    String object();
+
+    boolean captureRequestContext() default true;
+
+    boolean captureRequestEntity() default false;
+
+    boolean captureResponseEntity() default false;
 }
