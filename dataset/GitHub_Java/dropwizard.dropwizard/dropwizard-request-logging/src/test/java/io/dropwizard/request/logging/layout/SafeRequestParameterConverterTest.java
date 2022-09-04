@@ -3,7 +3,6 @@ package io.dropwizard.request.logging.layout;
 import ch.qos.logback.access.spi.AccessEvent;
 import ch.qos.logback.access.spi.ServerAdapter;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterators;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -11,7 +10,7 @@ import org.mockito.Mockito;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.util.ArrayList;
+import java.util.Vector;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -38,10 +37,9 @@ public class SafeRequestParameterConverterTest {
     @Test
     public void testConvertOneParameter() throws Exception {
         Mockito.when(httpServletRequest.getParameterValues("name")).thenReturn(new String[]{"Alice"});
-        final ArrayList<String> parameterNames = new ArrayList<>();
+        final Vector<String> parameterNames = new Vector<>();
         parameterNames.add("name");
-        Mockito.when(httpServletRequest.getParameterNames())
-            .thenReturn(Iterators.asEnumeration(parameterNames.iterator()));
+        Mockito.when(httpServletRequest.getParameterNames()).thenReturn(parameterNames.elements());
 
         // Invoked by AccessEvent#prepareForDeferredProcessing
         accessEvent.buildRequestParameterMap();
@@ -55,10 +53,9 @@ public class SafeRequestParameterConverterTest {
     @Test
     public void testConvertSeveralParameters() throws Exception {
         Mockito.when(httpServletRequest.getParameterValues("name")).thenReturn(new String[]{"Alice", "Bob"});
-        final ArrayList<String> parameterNames = new ArrayList<>();
+        final Vector<String> parameterNames = new Vector<>();
         parameterNames.add("name");
-        Mockito.when(httpServletRequest.getParameterNames())
-            .thenReturn(Iterators.asEnumeration(parameterNames.iterator()));
+        Mockito.when(httpServletRequest.getParameterNames()).thenReturn(parameterNames.elements());
 
         // Invoked by AccessEvent#prepareForDeferredProcessing
         accessEvent.buildRequestParameterMap();
