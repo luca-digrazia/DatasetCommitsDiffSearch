@@ -26,12 +26,12 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.StarlarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.FileType;
@@ -322,12 +322,13 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     Sequence<Artifact> sourceJars = ((Sequence<Artifact>) info.getValue("source_jars"));
     JavaRuleOutputJarsProvider outputs = ((JavaRuleOutputJarsProvider) info.getValue("outputs"));
 
-    assertThat(artifactFilesNames(transitiveRuntimeJars.toList(Artifact.class)))
+    assertThat(artifactFilesNames(transitiveRuntimeJars.toCollection(Artifact.class)))
         .containsExactly("libdep.jar");
-    assertThat(artifactFilesNames(transitiveCompileTimeJars.toList(Artifact.class)))
+    assertThat(artifactFilesNames(transitiveCompileTimeJars.toCollection(Artifact.class)))
         .containsExactly("libdep-hjar.jar");
-    assertThat(transitiveCompileTimeJars.toList()).containsExactlyElementsIn(compileJars.toList());
-    assertThat(artifactFilesNames(fullCompileJars.toList(Artifact.class)))
+    assertThat(transitiveCompileTimeJars.toCollection())
+        .containsExactlyElementsIn(compileJars.toCollection());
+    assertThat(artifactFilesNames(fullCompileJars.toCollection(Artifact.class)))
         .containsExactly("libdep.jar");
     assertThat(artifactFilesNames(sourceJars)).containsExactly("libdep-src.jar");
 
@@ -525,10 +526,12 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     JavaInfo info = configuredTarget.get(JavaInfo.PROVIDER);
     JavaCompilationInfoProvider compilationInfo = info.getCompilationInfoProvider();
     assertThat(
-            prettyArtifactNames(compilationInfo.getCompilationClasspath().toList(Artifact.class)))
+            prettyArtifactNames(
+                compilationInfo.getCompilationClasspath().toCollection(Artifact.class)))
         .containsExactly("java/test/libdep-hjar.jar");
 
-    assertThat(prettyArtifactNames(compilationInfo.getRuntimeClasspath().toList(Artifact.class)))
+    assertThat(
+            prettyArtifactNames(compilationInfo.getRuntimeClasspath().toCollection(Artifact.class)))
         .containsExactly("java/test/libdep.jar", "java/test/libcustom.jar");
 
     assertThat(compilationInfo.getJavacOpts()).contains("-XDone");
@@ -1066,16 +1069,16 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         .containsExactly("com.google.process.stuff");
     assertThat(
             Iterables.transform(
-                ((Depset) info.getValue("processor_classpath")).toList(Artifact.class),
-                Artifact::getFilename))
+                ((Depset) info.getValue("processor_classpath")).toCollection(),
+                o -> ((Artifact) o).getFilename()))
         .containsExactly("libplugin.jar", "libplugin_dep.jar");
-    assertThat(((Depset) info.getValue("transitive_class_jars")).toList())
+    assertThat(((Depset) info.getValue("transitive_class_jars")).toCollection())
         .hasSize(3); // from to_be_processed, dep, and export
-    assertThat(((Depset) info.getValue("transitive_class_jars")).toList())
+    assertThat(((Depset) info.getValue("transitive_class_jars")).toCollection())
         .contains(info.getValue("class_jar"));
-    assertThat(((Depset) info.getValue("transitive_source_jars")).toList())
+    assertThat(((Depset) info.getValue("transitive_source_jars")).toCollection())
         .hasSize(3); // from to_be_processed, dep, and export
-    assertThat(((Depset) info.getValue("transitive_source_jars")).toList())
+    assertThat(((Depset) info.getValue("transitive_source_jars")).toCollection())
         .contains(info.getValue("source_jar"));
   }
 
@@ -2008,11 +2011,11 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:a");
     JavaInfo info = configuredTarget.get(JavaInfo.PROVIDER);
-    assertThat(artifactFilesNames(info.getTransitiveRuntimeJars().toList(Artifact.class)))
+    assertThat(artifactFilesNames(info.getTransitiveRuntimeJars().toCollection(Artifact.class)))
         .containsExactly("liba.jar");
     assertThat(artifactFilesNames(info.getTransitiveSourceJars().getSet(Artifact.class)))
         .containsExactly("liba-src.jar", "libb-src.jar");
-    assertThat(artifactFilesNames(info.getTransitiveCompileTimeJars().toList(Artifact.class)))
+    assertThat(artifactFilesNames(info.getTransitiveCompileTimeJars().toCollection(Artifact.class)))
         .containsExactly("liba-hjar.jar", "libb-hjar.jar");
   }
 
@@ -2052,9 +2055,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:c");
     JavaInfo info = configuredTarget.get(JavaInfo.PROVIDER);
-    assertThat(artifactFilesNames(info.getTransitiveRuntimeJars().toList(Artifact.class)))
+    assertThat(artifactFilesNames(info.getTransitiveRuntimeJars().toCollection(Artifact.class)))
         .containsExactly("libb.jar");
-    assertThat(artifactFilesNames(info.getTransitiveCompileTimeJars().toList(Artifact.class)))
+    assertThat(artifactFilesNames(info.getTransitiveCompileTimeJars().toCollection(Artifact.class)))
         .containsExactly("libb-hjar.jar");
     JavaRuleOutputJarsProvider outputs = info.getOutputJars();
     assertThat(outputs.getOutputJars()).hasSize(1);
@@ -2274,6 +2277,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     Depset files = (Depset) ct.get("files");
-    assertThat(prettyArtifactNames(files.toList(Artifact.class))).containsExactly("a/a.txt");
+    assertThat(prettyArtifactNames(files.toCollection(Artifact.class))).containsExactly("a/a.txt");
   }
 }

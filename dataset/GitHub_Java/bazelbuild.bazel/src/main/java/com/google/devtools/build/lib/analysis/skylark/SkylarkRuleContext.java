@@ -140,8 +140,8 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
   private final StarlarkSemantics starlarkSemantics;
 
   private Dict<String, String> makeVariables;
-  private StarlarkAttributesCollection attributesCollection;
-  private StarlarkAttributesCollection ruleAttributesCollection;
+  private SkylarkAttributesCollection attributesCollection;
+  private SkylarkAttributesCollection ruleAttributesCollection;
   private StructImpl splitAttributes;
 
   // TODO(bazel-team): we only need this because of the css_binary rule.
@@ -222,7 +222,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       this.artifactsLabelMap = artifactLabelMapBuilder.build();
       this.outputsObject = outputs;
 
-      StarlarkAttributesCollection.Builder builder = StarlarkAttributesCollection.builder(this);
+      SkylarkAttributesCollection.Builder builder = SkylarkAttributesCollection.builder(this);
       for (Attribute attribute : ruleContext.getRule().getAttributes()) {
         Object value = ruleContext.attributes().get(attribute.getName(), attribute.getType());
         builder.addAttribute(attribute, value);
@@ -238,15 +238,14 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
 
       ImmutableCollection<Attribute> attributes =
           ruleContext.getMainAspect().getDefinition().getAttributes().values();
-      StarlarkAttributesCollection.Builder aspectBuilder =
-          StarlarkAttributesCollection.builder(this);
+      SkylarkAttributesCollection.Builder aspectBuilder = SkylarkAttributesCollection.builder(this);
       for (Attribute attribute : attributes) {
         aspectBuilder.addAttribute(attribute, attribute.getDefaultValue(null));
       }
       this.attributesCollection = aspectBuilder.build();
 
       this.splitAttributes = null;
-      StarlarkAttributesCollection.Builder ruleBuilder = StarlarkAttributesCollection.builder(this);
+      SkylarkAttributesCollection.Builder ruleBuilder = SkylarkAttributesCollection.builder(this);
 
       for (Attribute attribute : ruleContext.getRule().getAttributes()) {
         Object value = ruleContext.attributes().get(attribute.getName(), attribute.getType());
@@ -658,7 +657,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
   }
 
   @Override
-  public StarlarkAttributesCollection rule() throws EvalException {
+  public SkylarkAttributesCollection rule() throws EvalException {
     checkMutable("rule");
     if (!isForAspect) {
       throw new EvalException(
@@ -1129,7 +1128,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
       } else {
         throw Starlark.errorf(
             "invalid value %s in 'label_dict': expected iterable, but got '%s'",
-            Starlark.repr(val), Starlark.type(val));
+            Starlark.repr(val), EvalUtils.getDataTypeName(val));
       }
       for (Object file : valIter) {
         if (!(file instanceof Artifact)) {

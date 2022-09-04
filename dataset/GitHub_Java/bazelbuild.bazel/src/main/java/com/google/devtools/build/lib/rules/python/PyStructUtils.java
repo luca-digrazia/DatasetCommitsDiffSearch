@@ -17,13 +17,14 @@ package com.google.devtools.build.lib.rules.python;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Starlark;
 
 /** Static helper class for creating and accessing instances of the legacy "py" struct provider. */
@@ -75,8 +76,7 @@ public class PyStructUtils {
     builder.put(USES_SHARED_LIBRARIES, false);
     builder.put(
         IMPORTS,
-        Depset.of(
-            Depset.ElementType.STRING, NestedSetBuilder.<String>emptySet(Order.COMPILE_ORDER)));
+        Depset.of(SkylarkType.STRING, NestedSetBuilder.<String>emptySet(Order.COMPILE_ORDER)));
     builder.put(HAS_PY2_ONLY_SOURCES, false);
     builder.put(HAS_PY3_ONLY_SOURCES, false);
     DEFAULTS = builder.build();
@@ -109,7 +109,7 @@ public class PyStructUtils {
     if (!set.getOrder().isCompatible(Order.COMPILE_ORDER)) {
       throw Starlark.errorf(
           "Incompatible depset order for '%s': expected 'default' or 'postorder', but got '%s'",
-          TRANSITIVE_SOURCES, set.getOrder().getStarlarkName());
+          TRANSITIVE_SOURCES, set.getOrder().getSkylarkName());
     }
     return set;
   }
@@ -199,7 +199,7 @@ public class PyStructUtils {
     }
 
     public Builder setImports(NestedSet<String> imports) {
-      this.imports = Depset.of(Depset.ElementType.STRING, imports);
+      this.imports = Depset.of(SkylarkType.STRING, imports);
       return this;
     }
 

@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -405,7 +406,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     // framework search path, so the best we can do is to append a fake ".framework" directory.
     // This at least preserves the behavior when the field is used for its intended purpose.
     return Depset.of(
-        Depset.ElementType.STRING,
+        SkylarkType.STRING,
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
             frameworkInclude().stream()
@@ -444,7 +445,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   @Override
   public Depset /*<String>*/ includeForStarlark() {
     return Depset.of(
-        Depset.ElementType.STRING,
+        SkylarkType.STRING,
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
             include().stream()
@@ -463,7 +464,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   @Override
   public Depset /*<String>*/ strictIncludeForStarlark() {
     return Depset.of(
-        Depset.ElementType.STRING,
+        SkylarkType.STRING,
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
             getStrictDependencyIncludes().stream()
@@ -521,7 +522,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
 
   @Override
   public Depset /*<String>*/ linkopt() {
-    return Depset.of(Depset.ElementType.STRING, get(LINKOPT));
+    return Depset.of(SkylarkType.STRING, get(LINKOPT));
   }
 
   @Override
@@ -556,7 +557,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
 
   @Override
   public Depset /*<String>*/ sdkDylib() {
-    return Depset.of(Depset.ElementType.STRING, get(SDK_DYLIB));
+    return Depset.of(SkylarkType.STRING, get(SDK_DYLIB));
   }
 
   @Override
@@ -767,15 +768,15 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     for (CcLinkingContext ccLinkingContext : avoidCcProviders) {
       List<Artifact> libraries = ccLinkingContext.getStaticModeParamsForExecutableLibraries();
       for (Artifact library : libraries) {
-        avoidLibrariesSet.add(library.getRootRelativePath());
+        avoidLibrariesSet.add(library.getRunfilesPath());
       }
     }
     for (ObjcProvider avoidProvider : avoidObjcProviders) {
       for (Artifact ccLibrary : avoidProvider.getCcLibraries()) {
-        avoidLibrariesSet.add(ccLibrary.getRootRelativePath());
+        avoidLibrariesSet.add(ccLibrary.getRunfilesPath());
       }
       for (Artifact libraryToAvoid : avoidProvider.getPropagable(LIBRARY).toList()) {
-        avoidLibrariesSet.add(libraryToAvoid.getRootRelativePath());
+        avoidLibrariesSet.add(libraryToAvoid.getRunfilesPath());
       }
     }
     ObjcProvider.NativeBuilder objcProviderBuilder = new ObjcProvider.NativeBuilder(semantics);
@@ -808,7 +809,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
    */
   private static Predicate<Artifact> notContainedIn(
       final HashSet<PathFragment> runfilesPaths) {
-    return libraryToLink -> !runfilesPaths.contains(libraryToLink.getRootRelativePath());
+    return libraryToLink -> !runfilesPaths.contains(libraryToLink.getRunfilesPath());
   }
 
   /**
@@ -827,24 +828,23 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
       LibraryToLink libraryToLink, HashSet<PathFragment> runfilesPaths) {
     ImmutableList.Builder<PathFragment> libraryRunfilesPaths = ImmutableList.builder();
     if (libraryToLink.getStaticLibrary() != null) {
-      libraryRunfilesPaths.add(libraryToLink.getStaticLibrary().getRootRelativePath());
+      libraryRunfilesPaths.add(libraryToLink.getStaticLibrary().getRunfilesPath());
     }
     if (libraryToLink.getPicStaticLibrary() != null) {
-      libraryRunfilesPaths.add(libraryToLink.getPicStaticLibrary().getRootRelativePath());
+      libraryRunfilesPaths.add(libraryToLink.getPicStaticLibrary().getRunfilesPath());
     }
     if (libraryToLink.getDynamicLibrary() != null) {
-      libraryRunfilesPaths.add(libraryToLink.getDynamicLibrary().getRootRelativePath());
+      libraryRunfilesPaths.add(libraryToLink.getDynamicLibrary().getRunfilesPath());
     }
     if (libraryToLink.getResolvedSymlinkDynamicLibrary() != null) {
-      libraryRunfilesPaths.add(
-          libraryToLink.getResolvedSymlinkDynamicLibrary().getRootRelativePath());
+      libraryRunfilesPaths.add(libraryToLink.getResolvedSymlinkDynamicLibrary().getRunfilesPath());
     }
     if (libraryToLink.getInterfaceLibrary() != null) {
-      libraryRunfilesPaths.add(libraryToLink.getInterfaceLibrary().getRootRelativePath());
+      libraryRunfilesPaths.add(libraryToLink.getInterfaceLibrary().getRunfilesPath());
     }
     if (libraryToLink.getResolvedSymlinkInterfaceLibrary() != null) {
       libraryRunfilesPaths.add(
-          libraryToLink.getResolvedSymlinkInterfaceLibrary().getRootRelativePath());
+          libraryToLink.getResolvedSymlinkInterfaceLibrary().getRunfilesPath());
     }
 
     return !Collections.disjoint(libraryRunfilesPaths.build(), runfilesPaths);
@@ -867,7 +867,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     HashSet<PathFragment> avoidPathsSet = new HashSet<>();
     for (ObjcProvider avoidProvider : avoidProviders) {
       for (Artifact artifact : avoidProvider.getPropagable(key).toList()) {
-        avoidPathsSet.add(artifact.getRootRelativePath());
+        avoidPathsSet.add(artifact.getRunfilesPath());
       }
     }
     addTransitiveAndFilter(objcProviderBuilder, key, notContainedIn(avoidPathsSet));
@@ -932,7 +932,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
 
   @Override
   public Depset /*<String>*/ dynamicFrameworkNamesForStarlark() {
-    return Depset.of(Depset.ElementType.STRING, dynamicFrameworkNames());
+    return Depset.of(SkylarkType.STRING, dynamicFrameworkNames());
   }
 
   NestedSet<String> dynamicFrameworkNames() {
@@ -941,7 +941,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
 
   @Override
   public Depset /*<String>*/ dynamicFrameworkPathsForStarlark() {
-    return Depset.of(Depset.ElementType.STRING, dynamicFrameworkPaths());
+    return Depset.of(SkylarkType.STRING, dynamicFrameworkPaths());
   }
 
   NestedSet<String> dynamicFrameworkPaths() {
@@ -950,7 +950,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
 
   @Override
   public Depset /*<String>*/ staticFrameworkNamesForStarlark() {
-    return Depset.of(Depset.ElementType.STRING, staticFrameworkNames());
+    return Depset.of(SkylarkType.STRING, staticFrameworkNames());
   }
 
   NestedSet<String> staticFrameworkNames() {
@@ -959,7 +959,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
 
   @Override
   public Depset /*<String>*/ staticFrameworkPathsForStarlark() {
-    return Depset.of(Depset.ElementType.STRING, staticFrameworkPaths());
+    return Depset.of(SkylarkType.STRING, staticFrameworkPaths());
   }
 
   NestedSet<String> staticFrameworkPaths() {

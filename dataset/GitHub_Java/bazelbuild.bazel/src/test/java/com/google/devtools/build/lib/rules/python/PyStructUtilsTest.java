@@ -15,29 +15,43 @@
 package com.google.devtools.build.lib.rules.python;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.packages.SkylarkInfo;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.testutil.MoreAsserts.ThrowingRunnable;
-import java.io.IOException;
+import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.vfs.Root;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /** Tests for {@link PyStructUtils}. */
 @RunWith(JUnit4.class)
-public class PyStructUtilsTest extends BuildViewTestCase {
+public class PyStructUtilsTest extends FoundationTestCase {
+
+  private Artifact dummyArtifact;
+
+  @Before
+  public void setUp() {
+    this.dummyArtifact =
+        ActionsTestUtil.createArtifact(
+            ArtifactRoot.asSourceRoot(Root.fromPath(rootDirectory)), "dummy");
+  }
 
   /**
    * Constructs a py provider struct with the given field values and with default values for any
@@ -52,131 +66,15 @@ public class PyStructUtilsTest extends BuildViewTestCase {
     Map<String, Object> fields = new LinkedHashMap<>();
     fields.put(
         PyStructUtils.TRANSITIVE_SOURCES,
-        SkylarkNestedSet.of(Artifact.class, NestedSetBuilder.emptySet(Order.COMPILE_ORDER)));
+        Depset.of(Artifact.TYPE, NestedSetBuilder.emptySet(Order.COMPILE_ORDER)));
     fields.put(PyStructUtils.USES_SHARED_LIBRARIES, false);
     fields.put(
         PyStructUtils.IMPORTS,
-        SkylarkNestedSet.of(String.class, NestedSetBuilder.emptySet(Order.COMPILE_ORDER)));
+        Depset.of(SkylarkType.STRING, NestedSetBuilder.emptySet(Order.COMPILE_ORDER)));
     fields.put(PyStructUtils.HAS_PY2_ONLY_SOURCES, false);
     fields.put(PyStructUtils.HAS_PY3_ONLY_SOURCES, false);
     fields.putAll(overrides);
     return StructProvider.STRUCT.create(fields, "No such attribute '%s'");
-  }
-
-  /** Defines //pytarget, a target that returns a py provider with some arbitrary field values. */
-  private void definePyTarget() throws IOException {
-    scratch.file("rules/BUILD");
-    scratch.file(
-        "rules/pyrule.bzl",
-        "def _pyrule_impl(ctx):",
-        "    info = struct(",
-        "        transitive_sources = depset(direct=ctx.files.transitive_sources),",
-        "        uses_shared_libraries = ctx.attr.uses_shared_libraries,",
-        "        imports = depset(direct=ctx.attr.imports),",
-        "        has_py2_only_sources = ctx.attr.has_py2_only_sources,",
-        "        has_py3_only_sources = ctx.attr.has_py3_only_sources,",
-        "    )",
-        "    return struct(py=info)",
-        "",
-        "pyrule = rule(",
-        "    implementation = _pyrule_impl,",
-        "    attrs = {",
-        "        'transitive_sources': attr.label_list(allow_files=True),",
-        "        'uses_shared_libraries': attr.bool(default=False),",
-        "        'imports': attr.string_list(),",
-        "        'has_py2_only_sources': attr.bool(),",
-        "        'has_py3_only_sources': attr.bool(),",
-        "    },",
-        ")");
-    scratch.file(
-        "pytarget/BUILD",
-        "load('//rules:pyrule.bzl', 'pyrule')",
-        "",
-        "pyrule(",
-        "    name = 'pytarget',",
-        "    transitive_sources = ['a.py'],",
-        "    uses_shared_libraries = True,",
-        "    imports = ['b'],",
-        "    has_py2_only_sources = True,",
-        "    has_py3_only_sources = True,",
-        ")");
-    scratch.file("pytarget/a.py");
-  }
-
-  /** Defines //dummytarget, a target that returns no py provider. */
-  private void defineDummyTarget() throws IOException {
-    scratch.file("rules/BUILD");
-    scratch.file(
-        "rules/dummytarget.bzl",
-        "def _dummyrule_impl(ctx):",
-        "    pass",
-        "",
-        "dummyrule = rule(",
-        "    implementation = _dummyrule_impl,",
-        ")");
-    scratch.file(
-        "dummytarget/BUILD",
-        "load('//rules:dummytarget.bzl', 'dummyrule')",
-        "",
-        "dummyrule(",
-        "    name = 'dummytarget',",
-        ")");
-  }
-
-  @Test
-  public void hasProvider_True() throws Exception {
-    definePyTarget();
-    assertThat(PyStructUtils.hasProvider(getConfiguredTarget("//pytarget"))).isTrue();
-  }
-
-  @Test
-  public void hasProvider_False() throws Exception {
-    defineDummyTarget();
-    assertThat(PyStructUtils.hasProvider(getConfiguredTarget("//dummytarget"))).isFalse();
-  }
-
-  @Test
-  public void getProvider_Present() throws Exception {
-    definePyTarget();
-    StructImpl info = PyStructUtils.getProvider(getConfiguredTarget("//pytarget"));
-    // If we got this far, it's present. getProvider() should never be null, but check just in case.
-    assertThat(info).isNotNull();
-  }
-
-  @Test
-  public void getProvider_Absent() throws Exception {
-    defineDummyTarget();
-    EvalException ex =
-        assertThrows(
-            EvalException.class,
-            () -> PyStructUtils.getProvider(getConfiguredTarget("//dummytarget")));
-    assertThat(ex).hasMessageThat().contains("Target does not have 'py' provider");
-  }
-
-  @Test
-  public void getProvider_WrongType() throws Exception {
-    // badtyperule() returns a "py" provider that has the wrong type.
-    scratch.file("rules/BUILD");
-    scratch.file(
-        "rules/badtyperule.bzl",
-        "def _badtyperule_impl(ctx):",
-        "    return struct(py='abc')",
-        "",
-        "badtyperule = rule(",
-        "    implementation = _badtyperule_impl",
-        ")");
-    scratch.file(
-        "badtypetarget/BUILD",
-        "load('//rules:badtyperule.bzl', 'badtyperule')",
-        "",
-        "badtyperule(",
-        "    name = 'badtypetarget',",
-        ")");
-    EvalException ex =
-        assertThrows(
-            EvalException.class,
-            () -> PyStructUtils.getProvider(getConfiguredTarget("//badtypetarget")));
-    assertThat(ex).hasMessageThat().contains("'py' provider should be a struct");
   }
 
   private static void assertThrowsEvalExceptionContaining(
@@ -193,77 +91,52 @@ public class PyStructUtilsTest extends BuildViewTestCase {
       ThrowingRunnable access, String fieldName, String expectedType) {
     assertThrowsEvalExceptionContaining(
         access,
-        String.format(
-            "\'py' provider's '%s' field should be a %s (got a 'int')", fieldName, expectedType));
+        String.format("\'py' provider's '%s' field was int, want %s", fieldName, expectedType));
   }
 
   /** We need this because {@code NestedSet}s don't have value equality. */
   private static void assertHasOrderAndContainsExactly(
       NestedSet<?> set, Order order, Object... values) {
     assertThat(set.getOrder()).isEqualTo(order);
-    assertThat(set).containsExactly(values);
+    assertThat(set.toList()).containsExactly(values);
   }
 
   @Test
   public void getTransitiveSources_Good() throws Exception {
-    NestedSet<Artifact> sources =
-        NestedSetBuilder.create(Order.COMPILE_ORDER, getSourceArtifact("dummy"));
+    NestedSet<Artifact> sources = NestedSetBuilder.create(Order.COMPILE_ORDER, dummyArtifact);
     StructImpl info =
         makeStruct(
-            ImmutableMap.of(
-                PyStructUtils.TRANSITIVE_SOURCES, SkylarkNestedSet.of(Artifact.class, sources)));
-    assertThat(PyStructUtils.getTransitiveSources(info)).isSameAs(sources);
+            ImmutableMap.of(PyStructUtils.TRANSITIVE_SOURCES, Depset.of(Artifact.TYPE, sources)));
+    assertThat(PyStructUtils.getTransitiveSources(info)).isSameInstanceAs(sources);
   }
+
+  private static final StructImpl emptyInfo =
+      SkylarkInfo.create(StructProvider.STRUCT, ImmutableMap.of(), /* loc= */ null);
 
   @Test
   public void getTransitiveSources_Missing() {
-    StructImpl info = StructProvider.STRUCT.createEmpty(null);
     assertHasMissingFieldMessage(
-        () -> PyStructUtils.getTransitiveSources(info), "transitive_sources");
+        () -> PyStructUtils.getTransitiveSources(emptyInfo), "transitive_sources");
   }
 
   @Test
   public void getTransitiveSources_WrongType() {
     StructImpl info = makeStruct(ImmutableMap.of(PyStructUtils.TRANSITIVE_SOURCES, 123));
-    assertHasWrongTypeMessage(
-        () -> PyStructUtils.getTransitiveSources(info), "transitive_sources", "depset of Files");
+    assertThrowsEvalExceptionContaining(
+        () -> PyStructUtils.getTransitiveSources(info),
+        "for transitive_sources, got int, want a depset of File");
   }
 
   @Test
   public void getTransitiveSources_OrderMismatch() throws Exception {
-    reporter.removeHandler(failFastHandler);
-    // Depset order mismatches should be caught as rule errors.
-    scratch.file("rules/BUILD");
-    scratch.file(
-        "rules/badorderrule.bzl",
-        "def _badorderrule_impl(ctx):",
-        // Native rules use "compile" / "postorder", so using "preorder" here creates a conflict.
-        "    info = struct(transitive_sources=depset(direct=[], order='preorder'))",
-        "    return struct(py=info)",
-        "",
-        "badorderrule = rule(",
-        "    implementation = _badorderrule_impl",
-        ")");
-    scratch.file(
-        "badordertarget/BUILD",
-        "load('//rules:badorderrule.bzl', 'badorderrule')",
-        "",
-        "badorderrule(",
-        "    name = 'badorderdep',",
-        ")",
-        "py_library(",
-        "    name = 'pylib',",
-        "    srcs = ['pylib.py'],",
-        ")",
-        "py_binary(",
-        "    name = 'pybin',",
-        "    srcs = ['pybin.py'],",
-        "    deps = [':pylib', ':badorderdep'],",
-        ")");
-    getConfiguredTarget("//badordertarget:pybin");
-    assertContainsEvent(
-        "Incompatible order for transitive_sources: expected 'default' or 'postorder', got "
-            + "'preorder'");
+    NestedSet<Artifact> sources = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
+    StructImpl info =
+        makeStruct(
+            ImmutableMap.of(PyStructUtils.TRANSITIVE_SOURCES, Depset.of(Artifact.TYPE, sources)));
+    assertThrowsEvalExceptionContaining(
+        () -> PyStructUtils.getTransitiveSources(info),
+        "Incompatible depset order for 'transitive_sources': expected 'default' or 'postorder', "
+            + "but got 'preorder'");
   }
 
   @Test
@@ -274,36 +147,34 @@ public class PyStructUtilsTest extends BuildViewTestCase {
 
   @Test
   public void getUsesSharedLibraries_Missing() throws Exception {
-    StructImpl info = StructProvider.STRUCT.createEmpty(null);
-    assertThat(PyStructUtils.getUsesSharedLibraries(info)).isFalse();
+    assertThat(PyStructUtils.getUsesSharedLibraries(emptyInfo)).isFalse();
   }
 
   @Test
   public void getUsesSharedLibraries_WrongType() {
     StructImpl info = makeStruct(ImmutableMap.of(PyStructUtils.USES_SHARED_LIBRARIES, 123));
     assertHasWrongTypeMessage(
-        () -> PyStructUtils.getUsesSharedLibraries(info), "uses_shared_libraries", "boolean");
+        () -> PyStructUtils.getUsesSharedLibraries(info), "uses_shared_libraries", "bool");
   }
 
   @Test
   public void getImports_Good() throws Exception {
     NestedSet<String> imports = NestedSetBuilder.create(Order.COMPILE_ORDER, "abc");
     StructImpl info =
-        makeStruct(
-            ImmutableMap.of(PyStructUtils.IMPORTS, SkylarkNestedSet.of(String.class, imports)));
-    assertThat(PyStructUtils.getImports(info)).isSameAs(imports);
+        makeStruct(ImmutableMap.of(PyStructUtils.IMPORTS, Depset.of(SkylarkType.STRING, imports)));
+    assertThat(PyStructUtils.getImports(info)).isSameInstanceAs(imports);
   }
 
   @Test
   public void getImports_Missing() throws Exception {
-    StructImpl info = StructProvider.STRUCT.createEmpty(null);
-    assertHasOrderAndContainsExactly(PyStructUtils.getImports(info), Order.COMPILE_ORDER);
+    assertHasOrderAndContainsExactly(PyStructUtils.getImports(emptyInfo), Order.COMPILE_ORDER);
   }
 
   @Test
   public void getImports_WrongType() {
     StructImpl info = makeStruct(ImmutableMap.of(PyStructUtils.IMPORTS, 123));
-    assertHasWrongTypeMessage(() -> PyStructUtils.getImports(info), "imports", "depset of strings");
+    assertThrowsEvalExceptionContaining(
+        () -> PyStructUtils.getImports(info), "for imports, got int, want a depset of string");
   }
 
   @Test
@@ -314,15 +185,14 @@ public class PyStructUtilsTest extends BuildViewTestCase {
 
   @Test
   public void getHasPy2OnlySources_Missing() throws Exception {
-    StructImpl info = StructProvider.STRUCT.createEmpty(null);
-    assertThat(PyStructUtils.getHasPy2OnlySources(info)).isFalse();
+    assertThat(PyStructUtils.getHasPy2OnlySources(emptyInfo)).isFalse();
   }
 
   @Test
   public void getHasPy2OnlySources_WrongType() {
     StructImpl info = makeStruct(ImmutableMap.of(PyStructUtils.HAS_PY2_ONLY_SOURCES, 123));
     assertHasWrongTypeMessage(
-        () -> PyStructUtils.getHasPy2OnlySources(info), "has_py2_only_sources", "boolean");
+        () -> PyStructUtils.getHasPy2OnlySources(info), "has_py2_only_sources", "bool");
   }
 
   @Test
@@ -333,22 +203,20 @@ public class PyStructUtilsTest extends BuildViewTestCase {
 
   @Test
   public void getHasPy3OnlySources_Missing() throws Exception {
-    StructImpl info = StructProvider.STRUCT.createEmpty(null);
-    assertThat(PyStructUtils.getHasPy3OnlySources(info)).isFalse();
+    assertThat(PyStructUtils.getHasPy3OnlySources(emptyInfo)).isFalse();
   }
 
   @Test
   public void getHasPy3OnlySources_WrongType() {
     StructImpl info = makeStruct(ImmutableMap.of(PyStructUtils.HAS_PY3_ONLY_SOURCES, 123));
     assertHasWrongTypeMessage(
-        () -> PyStructUtils.getHasPy3OnlySources(info), "has_py3_only_sources", "boolean");
+        () -> PyStructUtils.getHasPy3OnlySources(info), "has_py3_only_sources", "bool");
   }
 
   /** Checks values set by the builder. */
   @Test
   public void builder() throws Exception {
-    NestedSet<Artifact> sources =
-        NestedSetBuilder.create(Order.COMPILE_ORDER, getSourceArtifact("dummy"));
+    NestedSet<Artifact> sources = NestedSetBuilder.create(Order.COMPILE_ORDER, dummyArtifact);
     NestedSet<String> imports = NestedSetBuilder.create(Order.COMPILE_ORDER, "abc");
     StructImpl info =
         PyStructUtils.builder()
@@ -361,12 +229,12 @@ public class PyStructUtilsTest extends BuildViewTestCase {
     // Assert using struct operations, not PyStructUtils accessors, which aren't necessarily trusted
     // to be correct.
     assertHasOrderAndContainsExactly(
-        ((SkylarkNestedSet) info.getValue(PyStructUtils.TRANSITIVE_SOURCES)).getSet(Artifact.class),
+        ((Depset) info.getValue(PyStructUtils.TRANSITIVE_SOURCES)).getSet(Artifact.class),
         Order.COMPILE_ORDER,
-        getSourceArtifact("dummy"));
+        dummyArtifact);
     assertThat((Boolean) info.getValue(PyStructUtils.USES_SHARED_LIBRARIES)).isTrue();
     assertHasOrderAndContainsExactly(
-        ((SkylarkNestedSet) info.getValue(PyStructUtils.IMPORTS)).getSet(String.class),
+        ((Depset) info.getValue(PyStructUtils.IMPORTS)).getSet(String.class),
         Order.COMPILE_ORDER,
         "abc");
     assertThat((Boolean) info.getValue(PyStructUtils.HAS_PY2_ONLY_SOURCES)).isTrue();
@@ -377,15 +245,13 @@ public class PyStructUtilsTest extends BuildViewTestCase {
   @Test
   public void builderDefaults() throws Exception {
     // transitive_sources is mandatory, so create a dummy value but no need to assert on it.
-    NestedSet<Artifact> sources =
-        NestedSetBuilder.create(Order.COMPILE_ORDER, getSourceArtifact("dummy"));
+    NestedSet<Artifact> sources = NestedSetBuilder.create(Order.COMPILE_ORDER, dummyArtifact);
     StructImpl info = PyStructUtils.builder().setTransitiveSources(sources).build();
     // Assert using struct operations, not PyStructUtils accessors, which aren't necessarily trusted
     // to be correct.
     assertThat((Boolean) info.getValue(PyStructUtils.USES_SHARED_LIBRARIES)).isFalse();
     assertHasOrderAndContainsExactly(
-        ((SkylarkNestedSet) info.getValue(PyStructUtils.IMPORTS)).getSet(String.class),
-        Order.COMPILE_ORDER);
+        ((Depset) info.getValue(PyStructUtils.IMPORTS)).getSet(String.class), Order.COMPILE_ORDER);
     assertThat((Boolean) info.getValue(PyStructUtils.HAS_PY2_ONLY_SOURCES)).isFalse();
     assertThat((Boolean) info.getValue(PyStructUtils.HAS_PY3_ONLY_SOURCES)).isFalse();
   }

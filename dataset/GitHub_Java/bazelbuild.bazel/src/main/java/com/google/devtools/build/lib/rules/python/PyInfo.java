@@ -25,7 +25,9 @@ import com.google.devtools.build.lib.skylarkbuildapi.python.PyInfoApi;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Depset.TypeException;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Objects;
@@ -43,9 +45,9 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
    * order.
    */
   private static boolean depsetHasTypeAndCompatibleOrder(
-      Depset depset, Depset.ElementType type, Order order) {
+      Depset depset, SkylarkType type, Order order) {
     // Work around #7266 by special-casing the empty set in the type check.
-    boolean typeOk = depset.isEmpty() || depset.getElementType().equals(type);
+    boolean typeOk = depset.isEmpty() || depset.getContentType().equals(type);
     boolean orderOk = depset.getOrder().isCompatible(order);
     return typeOk && orderOk;
   }
@@ -56,14 +58,12 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
    * <p>For depsets, this includes its content type and order.
    */
   private static String describeType(Object value) {
+    String typeName = EvalUtils.getDataTypeName(value, /*fullDetails=*/ true);
     if (value instanceof Depset) {
-      Depset depset = (Depset) value;
-      return depset.getOrder().getSkylarkName()
-          + "-ordered depset of "
-          + depset.getElementType()
-          + "s";
+      return ((Depset) value).getOrder().getSkylarkName() + "-ordered " + typeName;
+    } else {
+      return typeName;
     }
-    return Starlark.type(value);
   }
 
   private final Location location;
@@ -88,7 +88,7 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
     // that to NAIVE_LINK (preorder). In the meantime, order isn't an invariant of the provider
     // itself, so we use STABLE here to accept any order.
     Preconditions.checkArgument(
-        depsetHasTypeAndCompatibleOrder(imports, Depset.ElementType.STRING, Order.STABLE_ORDER));
+        depsetHasTypeAndCompatibleOrder(imports, SkylarkType.STRING, Order.STABLE_ORDER));
     this.location = location != null ? location : Location.BUILTIN;
     this.transitiveSources = transitiveSources;
     this.usesSharedLibraries = usesSharedLibraries;
@@ -143,7 +143,7 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
       return transitiveSources.getSet(Artifact.class);
     } catch (TypeException e) {
       throw new IllegalStateException(
-          "'transitiveSources' depset was found to be invalid type " + imports.getElementType(), e);
+          "'transitiveSources' depset was found to be invalid type " + imports.getContentType(), e);
     }
   }
 
@@ -162,7 +162,7 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
       return imports.getSet(String.class);
     } catch (TypeException e) {
       throw new IllegalStateException(
-          "'imports' depset was found to be invalid type " + imports.getElementType(), e);
+          "'imports' depset was found to be invalid type " + imports.getContentType(), e);
     }
   }
 
@@ -195,7 +195,7 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
         throws EvalException {
       Depset imports =
           importsUncast.equals(Starlark.UNBOUND)
-              ? Depset.of(Depset.ElementType.STRING, NestedSetBuilder.emptySet(Order.COMPILE_ORDER))
+              ? Depset.of(SkylarkType.STRING, NestedSetBuilder.emptySet(Order.COMPILE_ORDER))
               : (Depset) importsUncast;
 
       if (!depsetHasTypeAndCompatibleOrder(transitiveSources, Artifact.TYPE, Order.COMPILE_ORDER)) {
@@ -204,8 +204,7 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
                 + " '%s')",
             describeType(transitiveSources));
       }
-      if (!depsetHasTypeAndCompatibleOrder(
-          imports, Depset.ElementType.STRING, Order.STABLE_ORDER)) {
+      if (!depsetHasTypeAndCompatibleOrder(imports, SkylarkType.STRING, Order.STABLE_ORDER)) {
         throw Starlark.errorf(
             "'imports' field should be a depset of strings (got a '%s')", describeType(imports));
       }
@@ -275,7 +274,7 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
           location,
           Depset.of(Artifact.TYPE, transitiveSources),
           usesSharedLibraries,
-          Depset.of(Depset.ElementType.STRING, imports),
+          Depset.of(SkylarkType.STRING, imports),
           hasPy2OnlySources,
           hasPy3OnlySources);
     }
