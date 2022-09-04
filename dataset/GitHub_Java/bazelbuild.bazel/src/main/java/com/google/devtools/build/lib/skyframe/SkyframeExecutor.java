@@ -99,7 +99,6 @@ import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition;
 import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
@@ -160,6 +159,8 @@ import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossReposit
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.skyframe.trimming.TrimmedConfigurationCache;
+import com.google.devtools.build.lib.syntax.StarlarkFile;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -225,8 +226,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.syntax.StarlarkFile;
 
 /**
  * A helper object to support Skyframe-driven execution.
@@ -280,9 +279,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   private final Cache<PackageIdentifier, StarlarkFile> buildFileSyntaxCache =
       newBuildFileSyntaxCache();
 
-  // Cache of parsed bzl files, for use when we're inlining BzlCompileFunction in
+  // Cache of parsed bzl files, for use when we're inlining ASTFileLookupFunction in
   // BzlLoadFunction. See the comments in BzlLoadFunction for motivations and details.
-  private final Cache<BzlCompileValue.Key, BzlCompileValue> bzlCompileCache =
+  private final Cache<ASTFileLookupValue.Key, ASTFileLookupValue> astFileLookupValueCache =
       CacheBuilder.newBuilder().build();
 
   private final AtomicInteger numPackagesLoaded = new AtomicInteger(0);
@@ -490,9 +489,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
             buildFilesByPriority,
             externalPackageHelper));
     map.put(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, new ContainingPackageLookupFunction());
-    map.put(
-        SkyFunctions.BZL_COMPILE, // TODO rename
-        new BzlCompileFunction(pkgFactory, getHashFunction()));
+    map.put(SkyFunctions.AST_FILE_LOOKUP, new ASTFileLookupFunction(pkgFactory, getHashFunction()));
     map.put(SkyFunctions.STARLARK_BUILTINS, new StarlarkBuiltinsFunction(pkgFactory));
     map.put(SkyFunctions.BZL_LOAD, newBzlLoadFunction(ruleClassProvider, pkgFactory));
     map.put(SkyFunctions.GLOB, newGlobFunction());
@@ -652,7 +649,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
 
   protected SkyFunction newBzlLoadFunction(
       RuleClassProvider ruleClassProvider, PackageFactory pkgFactory) {
-    return BzlLoadFunction.create(this.pkgFactory, getHashFunction(), bzlCompileCache);
+    return BzlLoadFunction.create(this.pkgFactory, getHashFunction(), astFileLookupValueCache);
   }
 
   protected PerBuildSyscallCache newPerBuildSyscallCache(int concurrencyLevel) {
@@ -964,7 +961,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
    */
   private static final ImmutableSet<SkyFunctionName> LOADING_TYPES =
       ImmutableSet.of(
-          SkyFunctions.PACKAGE, SkyFunctions.BZL_LOAD, SkyFunctions.BZL_COMPILE, SkyFunctions.GLOB);
+          SkyFunctions.PACKAGE,
+          SkyFunctions.BZL_LOAD,
+          SkyFunctions.AST_FILE_LOOKUP,
+          SkyFunctions.GLOB);
 
   /** Data that should be discarded in {@link #discardPreExecutionCache}. */
   protected enum DiscardType {
@@ -1383,7 +1383,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     // build), these may have stale entries.
     packageFunctionCache.invalidateAll();
     buildFileSyntaxCache.invalidateAll();
-    bzlCompileCache.invalidateAll();
+    astFileLookupValueCache.invalidateAll();
 
     numPackagesLoaded.set(0);
     if (packageProgress != null) {
@@ -1425,16 +1425,16 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
 
   protected ImmutableMap<Root, ArtifactRoot> createSourceArtifactRootMapOnNewPkgLocator(
       PathPackageLocator oldLocator, PathPackageLocator pkgLocator) {
-    ImmutableMap.Builder<Root, ArtifactRoot> builder = ImmutableMap.builder();
-    Stream.concat(pkgLocator.getPathEntries().stream(), Stream.of(Root.absoluteRoot(fileSystem)))
+    // TODO(bazel-team): The output base is a legitimate "source root" because external repositories
+    // stage their sources under output_base/external. The root here should really be
+    // output_base/external, but for some reason it isn't.
+    return Stream.concat(
+            pkgLocator.getPathEntries().stream(),
+            Stream.of(Root.absoluteRoot(fileSystem), Root.fromPath(directories.getOutputBase())))
         .distinct()
-        .forEach(r -> builder.put(r, ArtifactRoot.asSourceRoot(r)));
-    Root externalRoot =
-        Root.fromPath(
-            directories.getOutputBase().getRelative(LabelConstants.EXTERNAL_REPOSITORY_LOCATION));
-    builder.put(externalRoot, ArtifactRoot.asExternalSourceRoot(externalRoot));
-
-    return builder.build();
+        .collect(
+            ImmutableMap.toImmutableMap(
+                java.util.function.Function.identity(), ArtifactRoot::asSourceRoot));
   }
 
   public SkyframeBuildView getSkyframeBuildView() {
