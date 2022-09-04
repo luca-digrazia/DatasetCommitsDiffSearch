@@ -48,8 +48,7 @@ public abstract class Extractor implements EmbeddedPersistable {
     public enum Type {
         SUBSTRING,
         REGEX,
-        SPLIT_AND_INDEX,
-        COPY_INPUT
+        SPLIT_AND_INDEX
     }
 
     public enum CursorStrategy {
@@ -192,26 +191,12 @@ public abstract class Extractor implements EmbeddedPersistable {
                     msg.removeField(targetField);
                     msg.addField(targetField, converted);
                 } else {
-                    @SuppressWarnings("unchecked")
-                    final Map<String, Object> convert = (Map<String, Object>) converter.convert((String) msg.getFields().get(
-                            targetField));
-                    for (String reservedField : Message.RESERVED_FIELDS) {
-                        if (convert.containsKey(reservedField)) {
-                            if (LOG.isDebugEnabled()) {
-                                LOG.debug(
-                                        "Not setting reserved field {} from converter {} on message {}, rest of the message is being processed",
-                                        new Object[]{reservedField, converter.getType(), msg.getId()});
-                            }
-                            converterExceptions.incrementAndGet();
-                            convert.remove(reservedField);
-                        }
-                    }
-
-                    msg.addFields(convert);
+                    msg.addFields((Map<String, Object>) converter.convert((String) msg.getFields().get(targetField)));
                 }
             } catch (Exception e) {
                 this.converterExceptions.incrementAndGet();
                 LOG.error("Could not apply converter [" + converter.getType() + "] of extractor [" + getId() + "].", e);
+                continue;
             }
         }
 
@@ -286,7 +271,7 @@ public abstract class Extractor implements EmbeddedPersistable {
         for (Converter converter : converters) {
             Map<String, Object> config = Maps.newHashMap();
 
-            config.put("type", converter.getType().toLowerCase());
+            config.put("type", converter.getType().toString().toLowerCase());
             config.put("config", converter.getConfig());
 
             converterConfig.add(config);
