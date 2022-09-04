@@ -1,22 +1,3 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.graylog2;
 
 import com.beust.jcommander.Parameter;
@@ -33,22 +14,22 @@ public class CommandLineArguments {
     private static final String FILE_SEPARATOR = System.getProperty("file.separator");
     private static final String TMPDIR = System.getProperty("java.io.tmpdir", "/tmp");
 
-    @Parameter(names = {"-f", "--configfile"}, description = "Configuration file for Graylog2")
+    @Parameter(names = {"-f", "--configfile"}, description = "Configuration file for graylog2")
     private String configFile = "/etc/graylog2.conf";
 
-    @Parameter(names = {"-p", "--pidfile"}, description = "File containing the PID of Graylog2")
+    @Parameter(names = {"-p", "--pidfile"}, description = "File containing the PID of graylog2")
     private String pidFile = TMPDIR + FILE_SEPARATOR + "graylog2.pid";
 
     @Parameter(names = {"-np", "--no-pid-file"}, description = "Do not write a PID file (overrides -p/--pidfile)")
     private boolean noPidFile = false;
 
-    @Parameter(names = {"-t", "--configtest"}, description = "Validate Graylog2 configuration and exit")
+    @Parameter(names = {"-t", "--configtest"}, description = "Validate graylog2 configuration and exit")
     private boolean configTest = false;
 
-    @Parameter(names = {"-d", "--debug"}, description = "Run Graylog2 in debug mode")
+    @Parameter(names = {"-d", "--debug"}, description = "Run graylog2 in debug mode")
     private boolean debug = false;
     
-    @Parameter(names = {"-l", "--local"}, description = "Run Graylog2 in local mode. Only interesting for Graylog2 developers.")
+    @Parameter(names = {"-l", "--local"}, description = "Run graylog2 in local mode. Only interesting for Graylog2 developers.")
     private boolean local = false;
     
     @Parameter(names = {"-s", "--statistics"}, description = "Print utilization statistics to STDOUT")
@@ -61,7 +42,7 @@ public class CommandLineArguments {
     private String pluginShortname;
     
     @Parameter(names = {"-v", "--plugin-version"}, description = "Install plugin with this version")
-    private String pluginVersion = ServerVersion.VERSION.toString();
+    private String pluginVersion = Core.GRAYLOG2_VERSION.toString();
 
     @Parameter(names = {"-m", "--force-plugin"}, description = "Force plugin installation even if this version of graylog2-server is not officially supported.")
     private boolean forcePlugin = false;
@@ -71,12 +52,6 @@ public class CommandLineArguments {
 
     @Parameter(names = {"-h", "--help"}, description = "Show usage information and exit")
     private boolean showHelp = false;
-
-    @Parameter(names = "--dump-config", description = "Show the effective Graylog2 configuration and exit")
-    private boolean dumpConfig = false;
-
-    @Parameter(names = "--dump-default-config", description = "Show the default configuration and exit")
-    private boolean dumpDefaultConfig = false;
 
     public String getConfigFile() {
         return configFile;
@@ -161,20 +136,5 @@ public class CommandLineArguments {
     public boolean isForcePlugin() {
         return forcePlugin;
     }
-
-    public boolean isDumpDefaultConfig() {
-        return dumpDefaultConfig;
-    }
-
-    public void setDumpDefaultConfig(boolean dumpDefaultConfig) {
-        this.dumpDefaultConfig = dumpDefaultConfig;
-    }
-
-    public boolean isDumpConfig() {
-        return dumpConfig;
-    }
-
-    public void setDumpConfig(boolean dumpConfig) {
-        this.dumpConfig = dumpConfig;
-    }
+    
 }
