@@ -20,10 +20,12 @@
 
 package graylog2;
 
-
+import graylog2.database.MongoConnection;
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Properties;
+
+// TODO: indizes richtig setzen
 
 /**
  *
@@ -56,7 +58,7 @@ public class Main {
         }
 
         // Define required configuration fields.
-        ArrayList requiredConfigFields = new ArrayList();
+        ArrayList<String> requiredConfigFields = new ArrayList<String>();
         requiredConfigFields.add("syslog_listen_port");
         requiredConfigFields.add("mongodb_user");
         requiredConfigFields.add("mongodb_password");
@@ -85,6 +87,29 @@ public class Main {
             System.out.println("[x] Not in Debug mode.");
         }
 
+        try {
+            MongoConnection.getInstance().connect(
+                    Main.masterConfig.getProperty("mongodb_user"),
+                    Main.masterConfig.getProperty("mongodb_password"),
+                    Main.masterConfig.getProperty("mongodb_host"),
+                    Main.masterConfig.getProperty("mongodb_database"),
+                    Integer.valueOf(Main.masterConfig.getProperty("mongodb_port"))
+            );
+        } catch (Exception e) {
+            System.out.println("Could not create MongoDB connection: " + e.toString());
+            e.printStackTrace();
+            System.exit(1); // Exit with error.
+        }
+
+        // Clear systemstatistics collection.
+        try {
+            SystemStatistics.getInstance().clearCollection();
+        } catch (Exception e) {
+            System.out.println("Could not clear system statistic collection: " + e.toString());
+            e.printStackTrace();
+            System.exit(1); // Exit with error.
+        }
+
         // Start the Syslog thread that accepts syslog packages.
         SyslogServerThread syslogServerThread = new SyslogServerThread(Integer.parseInt(Main.masterConfig.getProperty("syslog_listen_port")));
         syslogServerThread.start();
@@ -95,6 +120,11 @@ public class Main {
             System.out.println("Could not start syslog server core thread. Do you have permissions to listen on UDP port " + Main.masterConfig.getProperty("syslog_listen_port") + "?");
             System.exit(1); // Exit with error.
         }
+
+        // Start the thread that distincts hosts.
+        HostDistinctThread hostDistinctThread = new HostDistinctThread();
+        hostDistinctThread.start();
+        System.out.println("[x] Host distinction thread is up.");
 
         // Start the thread that continously collects system information.
         SystemStatisticThread systemStatisticThread = new SystemStatisticThread();
