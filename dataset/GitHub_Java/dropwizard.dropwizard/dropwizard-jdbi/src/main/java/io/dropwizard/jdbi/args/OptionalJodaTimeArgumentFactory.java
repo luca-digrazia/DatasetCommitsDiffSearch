@@ -1,5 +1,7 @@
 package io.dropwizard.jdbi.args;
 
+import com.google.common.base.Function;
+import com.google.common.base.Optional;
 import org.joda.time.DateTime;
 import org.skife.jdbi.v2.StatementContext;
 import org.skife.jdbi.v2.tweak.Argument;
@@ -7,22 +9,26 @@ import org.skife.jdbi.v2.tweak.ArgumentFactory;
 
 import java.util.Calendar;
 import java.util.GregorianCalendar;
-import java.util.Optional;
 import java.util.TimeZone;
 
 /**
- * An {@link ArgumentFactory} for Joda's {@link DateTime} arguments wrapped by {@link Optional}.
+ * An {@link ArgumentFactory} for Joda's {@link DateTime} arguments wrapped by Guava's {@link Optional}.
  */
 public class OptionalJodaTimeArgumentFactory implements ArgumentFactory<Optional<DateTime>> {
 
     private final Optional<Calendar> calendar;
 
     public OptionalJodaTimeArgumentFactory() {
-        calendar = Optional.empty();
+        calendar = Optional.absent();
     }
 
     public OptionalJodaTimeArgumentFactory(Optional<TimeZone> timeZone) {
-        calendar = timeZone.map(GregorianCalendar::new);
+        calendar = timeZone.transform(new Function<TimeZone, Calendar>() {
+            @Override
+            public Calendar apply(TimeZone tz) {
+                return new GregorianCalendar(tz);
+            }
+        });
     }
 
     @Override
@@ -39,6 +45,6 @@ public class OptionalJodaTimeArgumentFactory implements ArgumentFactory<Optional
     @Override
     public Argument build(Class<?> expectedType, Optional<DateTime> value, StatementContext ctx) {
         // accepts guarantees that the value is present
-        return new JodaDateTimeArgument(value.orElse(null), calendar);
+        return new JodaDateTimeArgument(value.get(), calendar);
     }
 }
