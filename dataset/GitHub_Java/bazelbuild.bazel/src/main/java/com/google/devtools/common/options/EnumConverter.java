@@ -14,7 +14,6 @@
 
 package com.google.devtools.common.options;
 
-import com.google.common.base.Ascii;
 import java.util.Arrays;
 
 /**
@@ -54,7 +53,7 @@ public abstract class EnumConverter<T extends Enum<T>>
   @Override
   public T convert(String input) throws OptionsParsingException {
     for (T value : enumType.getEnumConstants()) {
-      if (Ascii.equalsIgnoreCase(value.toString(), input)) {
+      if (value.toString().equalsIgnoreCase(input)) {
         return value;
       }
     }
@@ -68,7 +67,8 @@ public abstract class EnumConverter<T extends Enum<T>>
    */
   @Override
   public final String getTypeDescription() {
-    return Ascii.toLowerCase(
-        Converters.joinEnglishList(Arrays.asList(enumType.getEnumConstants())));
+    return Converters.joinEnglishList(
+        Arrays.asList(enumType.getEnumConstants())).toLowerCase();
   }
+
 }
