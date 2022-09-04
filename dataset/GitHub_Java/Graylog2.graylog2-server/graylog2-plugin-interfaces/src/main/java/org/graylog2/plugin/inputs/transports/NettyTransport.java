@@ -32,7 +32,7 @@ import org.graylog2.plugin.MetricSets;
 import org.graylog2.plugin.collections.Pair;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.inputs.MisfireException;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.graylog2.plugin.inputs.util.PacketInformationDumper;
@@ -88,7 +88,7 @@ public abstract class NettyTransport implements Transport {
         }
         this.recvBufferSize = configuration.intIsSet(CK_RECV_BUFFER_SIZE)
                 ? configuration.getInt(CK_RECV_BUFFER_SIZE)
-                : MessageInput.getDefaultRecvBufferSize();
+                : DEFAULT_RECV_BUFFER_SIZE;
 
         this.localRegistry = localRegistry;
         localRegistry.registerAll(MetricSets.of(throughputCounter.gauges()));
@@ -113,7 +113,7 @@ public abstract class NettyTransport implements Transport {
     }
 
     @Override
-    public void launch(final MessageInput input) throws MisfireException {
+    public void launch(final MessageInput2 input) throws MisfireException {
         final List<Pair<String, ? extends ChannelHandler>> handlerList = getBaseChannelHandlers(input);
         final List<Pair<String, ? extends ChannelHandler>> finalChannelHandlers = getFinalChannelHandlers(input);
 
@@ -163,7 +163,7 @@ public abstract class NettyTransport implements Transport {
      * Construct a {@link org.jboss.netty.bootstrap.ServerBootstrap} to use with this transport.
      * <p/>
      * Set all the options on it you need to have, but do not set a {@link org.jboss.netty.channel.ChannelPipelineFactory}, it will be replaced with the
-     * augmented list of handlers returned by {@link #getBaseChannelHandlers(org.graylog2.plugin.inputs.MessageInput)}
+     * augmented list of handlers returned by {@link #getBaseChannelHandlers(MessageInput2)}
      *
      * @return a configured ServerBootstrap for this transport
      */
@@ -177,7 +177,7 @@ public abstract class NettyTransport implements Transport {
      * @return the list of initial channelhandlers to add to the {@link org.jboss.netty.channel.ChannelPipelineFactory}
      * @param input
      */
-    protected List<Pair<String, ? extends ChannelHandler>> getBaseChannelHandlers(MessageInput input) {
+    protected List<Pair<String, ? extends ChannelHandler>> getBaseChannelHandlers(MessageInput2 input) {
         List<Pair<String, ? extends ChannelHandler>> handlerList = Lists.newArrayList();
 
         handlerList.add(Pair.of("packet-meta-dumper", new PacketInformationDumper(input)));
@@ -199,7 +199,7 @@ public abstract class NettyTransport implements Transport {
      * @return the list of channel handlers at the end of the pipeline
      * @param input
      */
-    protected List<Pair<String, ? extends ChannelHandler>> getFinalChannelHandlers(MessageInput input) {
+    protected List<Pair<String, ? extends ChannelHandler>> getFinalChannelHandlers(MessageInput2 input) {
         List<Pair<String, ? extends ChannelHandler>> handlerList = Lists.newArrayList();
 
         if (aggregator != null) {
@@ -221,12 +221,12 @@ public abstract class NettyTransport implements Transport {
     }
 
     private class MessageAggregationHandler extends SimpleChannelHandler {
-        private final MessageInput input;
+        private final MessageInput2 input;
         private final CodecAggregator aggregator;
         private final Timer aggregationTimer;
         private final Meter invalidChunksMeter;
 
-        public MessageAggregationHandler(MessageInput input, CodecAggregator aggregator) {
+        public MessageAggregationHandler(MessageInput2 input, CodecAggregator aggregator) {
             this.input = input;
             this.aggregator = aggregator;
             aggregationTimer = localRegistry.timer("aggregationTime");
@@ -261,9 +261,9 @@ public abstract class NettyTransport implements Transport {
     }
 
     private class RawMessageHandler extends SimpleChannelHandler {
-        private final MessageInput input;
+        private final MessageInput2 input;
 
-        public RawMessageHandler(MessageInput input) {
+        public RawMessageHandler(MessageInput2 input) {
             this.input = input;
         }
 

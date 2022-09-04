@@ -28,7 +28,7 @@ import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.configuration.fields.TextField;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.inputs.MisfireException;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.graylog2.plugin.inputs.transports.ThrottleableTransport;
@@ -98,18 +98,7 @@ public class AmqpTransport extends ThrottleableTransport {
         try {
             LOG.debug("Lifecycle changed to {}", lifecycle);
             switch (lifecycle) {
-                case PAUSED:
-                case FAILED:
-                case HALTING:
-                    try {
-                        if (consumer != null) {
-                            consumer.stop();
-                        }
-                    } catch (IOException e) {
-                        LOG.warn("Unable to stop consumer", e);
-                    }
-                    break;
-                default:
+                case RUNNING:
                     if (consumer.isConnected()) {
                         LOG.debug("Consumer is already connected, not running it a second time.");
                         break;
@@ -118,6 +107,15 @@ public class AmqpTransport extends ThrottleableTransport {
                         consumer.run();
                     } catch (IOException e) {
                         LOG.warn("Unable to resume consumer", e);
+                    }
+                    break;
+                default:
+                    try {
+                        if (consumer != null) {
+                            consumer.stop();
+                        }
+                    } catch (IOException e) {
+                        LOG.warn("Unable to stop consumer", e);
                     }
                     break;
             }
@@ -132,7 +130,7 @@ public class AmqpTransport extends ThrottleableTransport {
     }
 
     @Override
-    public void launch(MessageInput input) throws MisfireException {
+    public void launch(MessageInput2 input) throws MisfireException {
         consumer = new AmqpConsumer(
                 configuration.getString(CK_HOSTNAME),
                 (int) configuration.getInt(CK_PORT),

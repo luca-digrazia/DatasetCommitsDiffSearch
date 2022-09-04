@@ -19,16 +19,14 @@ package org.graylog2.inputs.transports;
 import com.google.common.collect.Lists;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.plugin.ConfigClass;
-import org.graylog2.plugin.FactoryClass;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.collections.Pair;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.BooleanField;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.inputs.transports.AbstractTcpTransport;
-import org.graylog2.plugin.inputs.transports.Transport;
+import org.graylog2.plugin.inputs.transports.TransportFactory;
 import org.graylog2.plugin.inputs.util.ConnectionCounter;
 import org.graylog2.plugin.inputs.util.ThroughputCounter;
 import org.jboss.netty.buffer.ChannelBuffer;
@@ -71,7 +69,7 @@ public class HttpTransport extends AbstractTcpTransport {
     }
 
     @Override
-    protected List<Pair<String, ? extends ChannelHandler>> getBaseChannelHandlers(MessageInput input) {
+    protected List<Pair<String, ? extends ChannelHandler>> getBaseChannelHandlers(MessageInput2 input) {
         final List<Pair<String, ? extends ChannelHandler>> baseChannelHandlers = super.getBaseChannelHandlers(input);
 
         baseChannelHandlers.add(Pair.of("decoder", new HttpRequestDecoder()));
@@ -82,7 +80,7 @@ public class HttpTransport extends AbstractTcpTransport {
     }
 
     @Override
-    protected List<Pair<String, ? extends ChannelHandler>> getFinalChannelHandlers(MessageInput input) {
+    protected List<Pair<String, ? extends ChannelHandler>> getFinalChannelHandlers(MessageInput2 input) {
         final List<Pair<String, ? extends ChannelHandler>> handlers = Lists.newArrayList();
 
         handlers.add(Pair.of("http-handler", new Handler(enableCors)));
@@ -101,28 +99,12 @@ public class HttpTransport extends AbstractTcpTransport {
         return r;
     }
 
-    @FactoryClass
-    public interface Factory extends Transport.Factory<HttpTransport> {
+    public interface Factory extends TransportFactory<HttpTransport> {
         @Override
         HttpTransport create(Configuration configuration);
-
-        @Override
-        Config getConfig();
     }
 
-    @ConfigClass
-    public static class Config extends AbstractTcpTransport.Config {
-        @Override
-        public ConfigurationRequest getRequestedConfiguration() {
-            final ConfigurationRequest r = super.getRequestedConfiguration();
-            r.addField(new BooleanField(CK_ENABLE_CORS,
-                                        "Enable CORS",
-                                        true,
-                                        "Input sends CORS headers to satisfy browser security policies"));
-            return r;
-        }
-    }
-    public static class Handler extends SimpleChannelHandler {
+    private class Handler extends SimpleChannelHandler {
 
         private final boolean enableCors;
 

@@ -29,25 +29,34 @@ import org.graylog2.plugin.inputs.transports.Transport;
 
 public class AMQPInput extends MessageInput {
 
-    private static final String NAME = "AMQP Input";
-
-    // solely for assistedinject subclass
-    protected AMQPInput(MetricRegistry metricRegistry,
-                        Transport transport,
-                        Codec codec,
-                        LocalMetricRegistry localRegistry,
-                        MessageInput.Config config,
-                        MessageInput.Descriptor descriptor) {
-        super(metricRegistry, transport, localRegistry, codec, config, descriptor);
+    @AssistedInject
+    public AMQPInput(@Assisted Configuration configuration,
+                     MetricRegistry metricRegistry,
+                     @Assisted Transport transport,
+                     @Assisted Codec codec, LocalMetricRegistry localRegistry) {
+        super(metricRegistry, transport, localRegistry, codec);
     }
 
     @AssistedInject
     public AMQPInput(@Assisted Configuration configuration,
                      MetricRegistry metricRegistry,
                      AmqpTransport.Factory transport,
-                     RadioMessageCodec.Factory codec, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor) {
-        super(metricRegistry, transport.create(configuration), localRegistry, codec.create(configuration), config,
-              descriptor);
+                     RadioMessageCodec.Factory codec, LocalMetricRegistry localRegistry) {
+        super(metricRegistry, transport.create(configuration), localRegistry, codec.create(configuration));
+    }
+    @Override
+    public boolean isExclusive() {
+        return false;
+    }
+
+    @Override
+    public String getName() {
+        return "AMQP Input";
+    }
+
+    @Override
+    public String linkToDocs() {
+        return "";
     }
 
     public interface Factory extends MessageInput.Factory<AMQPInput> {
@@ -55,24 +64,6 @@ public class AMQPInput extends MessageInput {
         AMQPInput create(Configuration configuration);
 
         @Override
-        Config getConfig();
-
-        @Override
-        Descriptor getDescriptor();
-    }
-
-    public static class Descriptor extends MessageInput.Descriptor {
-        @AssistedInject
-        public Descriptor() {
-            super(NAME, false, "");
-        }
-    }
-
-    public static class Config extends MessageInput.Config {
-        public Config() { /* required by guice */ }
-        @AssistedInject
-        public Config(AmqpTransport.Factory transport, RadioMessageCodec.Factory codec) {
-            super(transport.getConfig(), codec.getConfig());
-        }
+        AMQPInput create(Configuration configuration, Transport transport, Codec codec);
     }
 }
