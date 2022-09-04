@@ -30,7 +30,7 @@ import javax.lang.model.util.ElementFilter;
 import com.googlecode.androidannotations.annotations.rest.Rest;
 import com.googlecode.androidannotations.helper.ModelConstants;
 import com.googlecode.androidannotations.processing.EBeansHolder;
-import com.googlecode.androidannotations.processing.GeneratingElementProcessor;
+import com.googlecode.androidannotations.processing.ElementProcessor;
 import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -39,7 +39,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
-public class RestProcessor implements GeneratingElementProcessor {
+public class RestProcessor implements ElementProcessor {
 
 	private static final String SPRING_REST_TEMPLATE_QUALIFIED_NAME = "org.springframework.web.client.RestTemplate";
 	private static final String JAVA_STRING_QUALIFIED_NAME = "java.lang.String";
@@ -55,7 +55,7 @@ public class RestProcessor implements GeneratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
 
 		RestImplementationHolder holder = restImplementationHolder.create(element);
 
@@ -64,18 +64,18 @@ public class RestProcessor implements GeneratingElementProcessor {
 
 		String implementationName = interfaceName + ModelConstants.GENERATION_SUFFIX;
 
+		// holder.restImplementationClass = codeModel._class(JMod.PUBLIC |
+		// JMod.ABSTRACT, implementationName, ClassType.CLASS);
 		holder.restImplementationClass = codeModel._class(JMod.PUBLIC, implementationName, ClassType.CLASS);
-		eBeansHolder.create(element, getTarget(), holder.restImplementationClass);
-
-		JClass interfaceClass = eBeansHolder.refClass(interfaceName);
+		JClass interfaceClass = activitiesHolder.refClass(interfaceName);
 		holder.restImplementationClass._implements(interfaceClass);
 
 		// RestTemplate field
-		JClass restTemplateClass = eBeansHolder.refClass(SPRING_REST_TEMPLATE_QUALIFIED_NAME);
+		JClass restTemplateClass = activitiesHolder.refClass(SPRING_REST_TEMPLATE_QUALIFIED_NAME);
 		holder.restTemplateField = holder.restImplementationClass.field(JMod.PRIVATE, restTemplateClass, "restTemplate");
 
 		// RootUrl field
-		JClass stringClass = eBeansHolder.refClass(JAVA_STRING_QUALIFIED_NAME);
+		JClass stringClass = activitiesHolder.refClass(JAVA_STRING_QUALIFIED_NAME);
 		holder.rootUrlField = holder.restImplementationClass.field(JMod.PRIVATE, stringClass, "rootUrl");
 
 		// Default constructor
