@@ -189,8 +189,7 @@ class PlaceholderIdFieldInitializerBuilder {
   private final Map<ResourceType, SortedMap<String, Optional<Integer>>> publicIds =
       new EnumMap<>(ResourceType.class);
 
-  private final Map<String, Map<String, /*inlineable=*/ Boolean>> styleableAttrs =
-      new LinkedHashMap<>();
+  private final Map<String, Map<String, Boolean>> styleableAttrs = new LinkedHashMap<>();
 
   private PlaceholderIdFieldInitializerBuilder(AndroidFrameworkAttrIdProvider androidIdProvider) {
     this.androidIdProvider = androidIdProvider;
