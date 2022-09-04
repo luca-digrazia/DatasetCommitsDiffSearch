@@ -47,8 +47,7 @@ public class Notification extends Persisted {
 
     public enum Type {
         DEFLECTOR_EXISTS_AS_INDEX,
-        MULTI_MASTER,
-        ES_OPEN_FILES
+        MULTI_MASTER
     }
 
     public enum Severity {
