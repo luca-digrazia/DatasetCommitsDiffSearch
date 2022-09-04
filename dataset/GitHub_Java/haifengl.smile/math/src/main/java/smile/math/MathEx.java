@@ -1,38 +1,47 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.math;
 
+import java.security.SecureRandom;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ForkJoinPool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
+
+import smile.math.blas.UPLO;
+import smile.math.distance.Distance;
+import smile.math.matrix.Matrix;
 import smile.sort.QuickSelect;
 import smile.sort.QuickSort;
-import smile.sort.SortUtils;
+import smile.sort.Sort;
+import smile.util.IntPair;
+import smile.util.SparseArray;
+
+import static java.lang.Math.abs;
+import static java.lang.Math.exp;
+import static java.lang.Math.floor;
+import static java.lang.Math.sqrt;
 
 /**
  * Extra basic numeric functions. The following functions are
  * included:
  * <ul>
- * <li> scalar functions: sqr, factorial, logFractorial, choose, logChoose, log2 are
+ * <li> scalar functions: sqr, factorial, lfactorial, choose, lchoose, log2 are
  * provided.
  * <li> vector functions: min, max, mean, sum, var, sd, cov, L<sub>1</sub> norm,
  * L<sub>2</sub> norm, L<sub>&infin;</sub> norm, normalize, unitize, cor, Spearman
@@ -47,21 +56,35 @@ import smile.sort.SortUtils;
  * @author Haifeng Li
  */
 public class MathEx {
-    private static final Logger logger = LoggerFactory.getLogger(MathEx.class);
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MathEx.class);
 
+    /**
+     * Dynamically determines the machine parameters of the floating-point arithmetic.
+     */
+    private static final FPU fpu = new FPU();
     /**
      * The machine precision for the double type, which is the difference between 1
      * and the smallest value greater than 1 that is representable for the double type.
      */
-    public static double EPSILON = Math.pow(2.0, -52.0);
+    public static final double EPSILON = fpu.EPSILON;
+    /**
+     * The machine precision for the float type, which is the difference between 1
+     * and the smallest value greater than 1 that is representable for the float type.
+     */
+    public static final float FLOAT_EPSILON = fpu.FLOAT_EPSILON;
     /**
      * The base of the exponent of the double type.
      */
-    public static int RADIX = 2;
+    public static final int RADIX = fpu.RADIX;
     /**
      * The number of digits (in radix base) in the mantissa.
      */
-    public static int DIGITS = 53;
+    public static final int DIGITS = fpu.DIGITS;
+    /**
+     * The number of digits (in radix base) in the mantissa.
+     */
+    public static final int FLOAT_DIGITS = fpu.FLOAT_DIGITS;
+
     /**
      * Rounding style.
      * <ul>
@@ -73,47 +96,94 @@ public class MathEx {
      * <li> 5 if floating-point addition rounds in the IEEEE style, and there is partial underflow
      * </ul>
      */
-    public static int ROUND_STYLE = 2;
+    public static final int ROUND_STYLE = fpu.ROUND_STYLE;
     /**
      * The largest negative integer such that 1.0 + RADIX<sup>MACHEP</sup> &ne; 1.0,
      * except that machep is bounded below by -(DIGITS+3)
      */
-    public static int MACHEP = -52;
+    public static final int MACHEP = fpu.MACHEP;
+    /**
+     * The largest negative integer such that 1.0 + RADIX<sup>MACHEP</sup> &ne; 1.0,
+     * except that machep is bounded below by -(DIGITS+3)
+     */
+    public static final int FLOAT_MACHEP = fpu.FLOAT_MACHEP;
     /**
      * The largest negative integer such that 1.0 - RADIX<sup>NEGEP</sup> &ne; 1.0,
      * except that negeps is bounded below by -(DIGITS+3)
      */
-    public static int NEGEP = -53;
+    public static final int NEGEP = fpu.NEGEP;
     /**
-     * True when we create the first random number generator.
+     * The largest negative integer such that 1.0 - RADIX<sup>NEGEP</sup> &ne; 1.0,
+     * except that negeps is bounded below by -(DIGITS+3)
      */
-    private static boolean firstRNG = true;
+    public static final int FLOAT_NEGEP = fpu.FLOAT_NEGEP;
+
+    /**
+     * This RNG is to generate the seeds for multi-threads.
+     * Each thread will use different seed and unlikely generates
+     * the correlated sequences with other threads.
+     */
+    private static final SecureRandom seedRNG = new SecureRandom();
+
+    /**
+     * The default seeds for thread-local RNGs for reproducible results.
+     */
+    private static final long[] DEFAULT_SEEDS = {
+            -4106602711295138952L,  7872020634117869514L, -1722503517109829138L, -3386820675908254116L,
+            -1736715870046201019L,  3854590623768163340L,  4984519038350406438L,   831971085876758331L,
+             7131773007627236777L, -3609561992173376238L, -8759399602515137276L,  6192158663294695439L,
+            -5656470009161653116L, -7984826214821970800L, -9113192788977418232L, -8979910231410580019L,
+            -4619021025191354324L, -5082417586190057466L, -6554946940783144090L, -3610462176018822900L,
+             8959796931768911980L, -4251632352234989839L,  4922191169088134258L, -7282805902317830669L,
+             3869302430595840919L,  2517690626940415460L,  4056663221614950174L,  6429856319379397738L,
+             7298845553914383313L,  8179510284261677971L,  4282994537597585253L,  7300184601511783348L,
+             2596703774884172704L,  1089838915342514714L,  4323657609714862439L,   777826126579190548L,
+            -1902743089794461140L, -2460431043688989882L, -3261708534465890932L,  4007861469505443778L,
+             8067600139237526646L,  5717273542173905853L,  2938568334013652889L, -2972203304739218305L,
+             6544901794394958069L,  7013723936758841449L, -4215598453287525312L, -1454689091401951913L,
+            -5699280845313829011L, -9147984414924288540L,  5211986845656222459L, -1287642354429721659L,
+            -1509334943513011620L, -9000043616528857326L, -2902817511399216571L,  -742823064588229527L,
+            -4937222449957498789L,  -455679889440396397L, -6109470266907575296L,  5515435653880394376L,
+             5557224587324997029L,  8904139390487005840L,  6560726276686488510L,  6959949429287621625L,
+            -6055733513105375650L,  5762016937143172332L, -9186652929482643329L, -1105816448554330895L,
+            -8200377873547841359L,  9107473159863354619L,  3239950546973836199L, -8104429975176305012L,
+             3822949195131885242L, -5261390396129824777L,  9176101422921943895L, -5102541493993205418L,
+            -1254710019595692814L, -6668066200971989826L, -2118519708589929546L,  5428466612765068681L,
+            -6528627776941116598L, -5945449163896244174L, -3293290115918281076L,  6370347300411991230L,
+            -7043881693953271167L,  8078993941165238212L,  6894961504641498099L, -8798276497942360228L,
+             2276271091333773917L, -7184141741385833013L, -4787502691178107481L,  1255068205351917608L,
+            -8644146770023935609L,  5124094110137147339L,  4917075344795488880L,  3423242822219783102L,
+             1588924456880980404L,  8515495360312448868L, -5563691320675461929L, -2352238951654504517L,
+            -7416919543420127888L,   631412478604690114L,   689144891258712875L, -9001615284848119152L,
+            -6275065758899203088L,  8164387857252400515L, -4122060123604826739L, -2016541034210046261L,
+            -7178335877193796678L,  3354303106860129181L,  5731595363486898779L, -2874315602397298018L,
+             5386746429707619069L,  9036622191596156315L, -7950190733284789459L, -5741691593792426169L,
+            -8600462258998065159L,  5460142111961227035L,   276738899508534641L,  2358776514903881139L,
+             -837649704945720257L, -3608906204977108245L,  2960825464614526243L,  7339056324843827739L,
+            -5709958573878745135L, -5885403829221945248L,  6611935345917126768L,  2588814037559904539L
+    };
+
+    /**
+     * The index of next RNG seed.
+     */
+    private static int nextSeed = -1;
+
     /**
      * High quality random number generator.
      */
-    private static ThreadLocal<smile.math.Random> random = new ThreadLocal<smile.math.Random>() {
-        protected synchronized smile.math.Random initialValue() {
-            if (firstRNG) {
-                // For the first RNG, we use the default seed so that we can
-                // get repeatable results for random algorithms.
-                // Note that this may or may not be the main thread.
-                firstRNG = false;
-                return new smile.math.Random();
-
-            } else {
-                // Make sure other threads not to use the same seed.
-                // This is very important for some algorithms such as random forest.
-                // Otherwise, all trees of random forest are same except the main thread one.
-
-                java.security.SecureRandom sr = new java.security.SecureRandom();
-                byte[] bytes = sr.generateSeed(Long.BYTES);
-                long seed = 0;
-                for (int i = 0; i < Long.BYTES; i++) {
-                    seed <<= 8;
-                    seed |= (bytes[i] & 0xFF);
+    private static final ThreadLocal<Random> random = new ThreadLocal<smile.math.Random>() {
+        protected Random initialValue() {
+            synchronized(DEFAULT_SEEDS) {
+                // For the first RNG instance, we use the default seed of RNG algorithms.
+                if (nextSeed < 0) {
+                    nextSeed = 0;
+                    return new Random();
                 }
-
-                return new smile.math.Random(seed);
+                if (nextSeed < DEFAULT_SEEDS.length) {
+                    return new Random(DEFAULT_SEEDS[nextSeed++]);
+                } else {
+                    return new Random(generateSeed());
+                }
             }
         }
     };
@@ -121,82 +191,96 @@ public class MathEx {
     /**
      * Dynamically determines the machine parameters of the floating-point arithmetic.
      */
-    static {
-        double beta, betain, betah, a, b, ZERO, ONE, TWO, temp, tempa, temp1;
-        int i, itemp;
+    private static class FPU {
+        int RADIX;
+        int DIGITS;
+        int FLOAT_DIGITS = 24;
+        int ROUND_STYLE;
+        int MACHEP;
+        int FLOAT_MACHEP = -23;
+        int NEGEP;
+        int FLOAT_NEGEP = -24;
+        float FLOAT_EPSILON = (float) Math.pow(2.0, FLOAT_MACHEP);
+        double EPSILON;
 
-        ONE = (double) 1;
-        TWO = ONE + ONE;
-        ZERO = ONE - ONE;
+        FPU() {
+            double beta, betain, betah, a, b, ZERO, ONE, TWO, temp, tempa, temp1;
+            int i, itemp;
 
-        a = ONE;
-        temp1 = ONE;
-        while (temp1 - ONE == ZERO) {
-            a = a + a;
-            temp = a + ONE;
-            temp1 = temp - a;
-        }
-        b = ONE;
-        itemp = 0;
-        while (itemp == 0) {
-            b = b + b;
-            temp = a + b;
-            itemp = (int) (temp - a);
-        }
-        RADIX = itemp;
-        beta = (double) RADIX;
+            ONE = 1;
+            TWO = ONE + ONE;
+            ZERO = ONE - ONE;
 
-        DIGITS = 0;
-        b = ONE;
-        temp1 = ONE;
-        while (temp1 - ONE == ZERO) {
-            DIGITS = DIGITS + 1;
-            b = b * beta;
-            temp = b + ONE;
-            temp1 = temp - b;
-        }
-        ROUND_STYLE = 0;
-        betah = beta / TWO;
-        temp = a + betah;
-        if (temp - a != ZERO) {
-            ROUND_STYLE = 1;
-        }
-        tempa = a + beta;
-        temp = tempa + betah;
-        if ((ROUND_STYLE == 0) && (temp - tempa != ZERO)) {
-            ROUND_STYLE = 2;
-        }
+            a = ONE;
+            temp1 = ONE;
+            while (temp1 - ONE == ZERO) {
+                a = a + a;
+                temp = a + ONE;
+                temp1 = temp - a;
+            }
+            b = ONE;
+            itemp = 0;
+            while (itemp == 0) {
+                b = b + b;
+                temp = a + b;
+                itemp = (int) (temp - a);
+            }
+            RADIX = itemp;
+            beta = RADIX;
 
-        NEGEP = DIGITS + 3;
-        betain = ONE / beta;
-        a = ONE;
-        for (i = 0; i < NEGEP; i++) {
-            a = a * betain;
-        }
-        b = a;
-        temp = ONE - a;
-        while (temp - ONE == ZERO) {
-            a = a * beta;
-            NEGEP = NEGEP - 1;
+            DIGITS = 0;
+            b = ONE;
+            temp1 = ONE;
+            while (temp1 - ONE == ZERO) {
+                DIGITS = DIGITS + 1;
+                b = b * beta;
+                temp = b + ONE;
+                temp1 = temp - b;
+            }
+            ROUND_STYLE = 0;
+            betah = beta / TWO;
+            temp = a + betah;
+            if (temp - a != ZERO) {
+                ROUND_STYLE = 1;
+            }
+            tempa = a + beta;
+            temp = tempa + betah;
+            if ((ROUND_STYLE == 0) && (temp - tempa != ZERO)) {
+                ROUND_STYLE = 2;
+            }
+
+            NEGEP = DIGITS + 3;
+            betain = ONE / beta;
+            a = ONE;
+            for (i = 0; i < NEGEP; i++) {
+                a = a * betain;
+            }
+            b = a;
             temp = ONE - a;
-        }
-        NEGEP = -(NEGEP);
+            while (temp - ONE == ZERO) {
+                a = a * beta;
+                NEGEP = NEGEP - 1;
+                temp = ONE - a;
+            }
+            NEGEP = -(NEGEP);
 
-        MACHEP = -(DIGITS) - 3;
-        a = b;
-        temp = ONE + a;
-        while (temp - ONE == ZERO) {
-            a = a * beta;
-            MACHEP = MACHEP + 1;
+            MACHEP = -(DIGITS) - 3;
+            a = b;
             temp = ONE + a;
+            while (temp - ONE == ZERO) {
+                a = a * beta;
+                MACHEP = MACHEP + 1;
+                temp = ONE + a;
+            }
+            EPSILON = a;
         }
-        EPSILON = a;
     }
     
     /**
-     * Private constructor.
+     * Private constructor to prevent instance creation.
      */
     private MathEx() {
+
     }
 
     /**
@@ -206,9 +290,56 @@ public class MathEx {
 
     /**
      * Log of base 2.
+     * @param x a real number.
+     * @return the value <code>log2(x)</code>.
      */
     public static double log2(double x) {
         return Math.log(x) / LOG2;
+    }
+
+    /**
+     * Returns natural log without underflow.
+     * @param x a real number.
+     * @return the value <code>log(x)</code>.
+     */
+    public static double log(double x) {
+        double y = -690.7755;
+        if (x > 1E-300) {
+            y = Math.log(x);
+        }
+        return y;
+    }
+
+    /**
+     * Returns natural log(1+exp(x)) without overflow.
+     * @param x a real number.
+     * @return the value <code>log(1+exp(x))</code>.
+     */
+    public static double log1pe(double x) {
+        double y = x;
+        if (x <= 15) {
+            y = Math.log1p(Math.exp(x));
+        }
+
+        return y;
+    }
+
+    /**
+     * Returns true if x is an integer.
+     * @param x a real number.
+     * @return true if x is an integer.
+     */
+    public static boolean isInt(float x) {
+        return (x == (float) Math.floor(x)) && !Float.isInfinite(x);
+    }
+
+    /**
+     * Returns true if x is an integer.
+     * @param x a real number.
+     * @return true if x is an integer.
+     */
+    public static boolean isInt(double x) {
+        return (x == Math.floor(x)) && !Double.isInfinite(x);
     }
 
     /**
@@ -222,44 +353,125 @@ public class MathEx {
             return true;
         }
         
-        double absa = Math.abs(a);
-        double absb = Math.abs(b);
-        return Math.abs(a - b) <= Math.min(absa, absb) * 2.2204460492503131e-16;
+        double absa = abs(a);
+        double absb = abs(b);
+        return abs(a - b) <= Math.min(absa, absb) * 2.2204460492503131e-16;
     }
         
     /**
-     * Logistic sigmoid function.
+     * Logistic sigmoid function <code>1 / (1 + exp(-x))</code>.
+     * @param x a real number.
+     * @return the sigmoid function.
      */
-    public static double logistic(double x) {
-        double y = 0.0;
-        if (x < -40) {
-            y = 2.353853e+17;
-        } else if (x > 40) {
-            y = 1.0 + 4.248354e-18;
-        } else {
-            y = 1.0 + Math.exp(-x);
-        }
-
-        return 1.0 / y;
+    public static double sigmoid(double x) {
+        // clip x in [-36, 36] to prevent overflow/underflow.
+        x = Math.max(-36, Math.min(x, 36));
+        return 1.0 / (1.0 + exp(-x));
     }
 
     /**
      * Returns x * x.
+     * @param x a real number.
+     * @return the square of x.
      */
-    public static double sqr(double x) {
+    public static double pow2(double x) {
         return x * x;
     }
 
     /**
      * Returns true if x is a power of 2.
+     * @param x a real number.
+     * @return true if x is a power of 2.
      */
     public static boolean isPower2(int x) {
         return x > 0 && (x & (x - 1)) == 0;
     }
 
     /**
+     * Returns true if n is probably prime, false if it's definitely composite.
+     * This implements Miller-Rabin primality test.
+     * @param n an odd integer to be tested for primality
+     * @param k the number of rounds of primality test to perform.
+     *          With larger number of rounds, the test is more
+     *          accurate but also takes longer time.
+     * @return true if n is probably prime, false if it's definitely composite.
+     */
+    public static boolean isProbablePrime(long n, int k) {
+        return isProbablePrime(n, k, random.get());
+    }
+
+    /**
+     * Returns true if n is probably prime, false if it's definitely composite.
+     * This implements Miller-Rabin primality test.
+     * @param n an odd integer to be tested for primality
+     * @param k the number of rounds of primality test to perform.
+     *          With larger number of rounds, the test is more
+     *          accurate but also takes longer time.
+     * @param rng random number generator
+     * @return true if n is probably prime, false if it's definitely composite.
+     */
+    private static boolean isProbablePrime(long n, int k, Random rng) {
+        if (n <= 1 || n == 4)
+            return false;
+        if (n <= 3)
+            return true;
+
+        // Find r such that n = 2^d * r + 1 for some r >= 1
+        int s = 0;
+        long d = n - 1;
+        while (d % 2 == 0) {
+            s++;
+            d = d / 2;
+        }
+
+        for (int i = 0; i < k; i++) {
+            long a = 2 + rng.nextLong() % (n-4);
+            long x = power(a, d, n);
+            if (x == 1 || x == n -1)
+                continue;
+
+            int r = 0;
+            for (; r < s; r++) {
+                x = (x * x) % n;
+                if (x == 1) return false;
+                if (x == n - 1) break;
+            }
+
+            // None of the steps made x equal n-1.
+            if (r == s) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Modular exponentiation <code>x<sup>y</sup> % p</code>.
+     * @param x the base.
+     * @param y the exponent.
+     * @param p the modular.
+     * @return the modular exponentation.
+     */
+    private static long power(long x, long y, long p)
+    {
+        long res = 1;      // Initialize result
+        x = x % p;  // Update x if it is more than or
+        // equal to p
+        while (y > 0) {
+            // If y is odd, multiply x with result
+            if ((y & 1) == 1) res = (res*x) % p;
+
+            // y must be even now
+            y = y>>1; // y = y/2
+            x = (x*x) % p;
+        }
+        return res;
+    }
+
+    /**
      * Round a double vale to given digits such as 10^n, where n is a positive
      * or negative integer.
+     * @param x a real number.
+     * @param decimal the number of digits to round to.
+     * @return the rounded value.
      */
     public static double round(double x, int decimal) {
         if (decimal < 0) {
@@ -270,14 +482,15 @@ public class MathEx {
     }
 
     /**
-     * factorial of n
+     * The factorial of n.
      *
-     * @return factorial returned as double but is, numerically, an integer.
-     * Numerical rounding may makes this an approximation after n = 21
+     * @param n a positive integer.
+     * @return the factorial returned as double but is, numerically, an integer.
+     * Numerical rounding may make this an approximation after n = 21.
      */
     public static double factorial(int n) {
         if (n < 0) {
-            throw new IllegalArgumentException("n has to be nonnegative.");
+            throw new IllegalArgumentException("n has to be non-negative.");
         }
 
         double f = 1.0;
@@ -289,11 +502,14 @@ public class MathEx {
     }
 
     /**
-     * log of factorial of n
+     * The log of factorial of n.
+     *
+     * @param n a positive integer.
+     * @return the log of factorial .
      */
-    public static double logFactorial(int n) {
+    public static double lfactorial(int n) {
         if (n < 0) {
-            throw new IllegalArgumentException(String.format("n has to be nonnegative: %d", n));
+            throw new IllegalArgumentException(String.format("n has to be non-negative: %d", n));
         }
 
         double f = 0.0;
@@ -305,7 +521,10 @@ public class MathEx {
     }
 
     /**
-     * n choose k. Returns 0 if n is less than k.
+     * The n choose k. Returns 0 if n is less than k.
+     * @param n the total number of objects in the set.
+     * @param k the number of choosing objects from the set.
+     * @return the number of combinations.
      */
     public static double choose(int n, int k) {
         if (n < 0 || k < 0) {
@@ -316,32 +535,102 @@ public class MathEx {
             return 0.0;
         }
 
-        return Math.floor(0.5 + Math.exp(logChoose(n, k)));
+        return floor(0.5 + exp(lchoose(n, k)));
     }
 
     /**
-     * log of n choose k
+     * The log of n choose k.
+     * @param n the total number of objects in the set.
+     * @param k the number of choosing objects from the set.
+     * @return the log of the number of combinations.
      */
-    public static double logChoose(int n, int k) {
-        if (n < 0 || k < 0 || k > n) {
+    public static double lchoose(int n, int k) {
+        if (k < 0 || k > n) {
             throw new IllegalArgumentException(String.format("Invalid n = %d, k = %d", n, k));
         }
 
-        return logFactorial(n) - logFactorial(k) - logFactorial(n - k);
+        return lfactorial(n) - lfactorial(k) - lfactorial(n - k);
     }
 
     /**
-     * Initialize the random generator with a seed.
+     * Returns a random number to seed other random number generators.
+     * @return a random number to seed other random number generators.
+     */
+    public static long generateSeed() {
+        byte[] bytes = generateSeed(Long.BYTES);
+        long seed = 0;
+        for (int i = 0; i < Long.BYTES; i++) {
+            seed <<= 8;
+            seed |= (bytes[i] & 0xFF);
+        }
+        return seed;
+    }
+
+    /**
+     * Returns the given number of random bytes to seed other random number
+     * generators.
+     * @param numBytes the number of seed bytes to generate.
+     * @return the seed bytes.
+     */
+    public static byte[] generateSeed(int numBytes) {
+        synchronized(seedRNG) {
+            return seedRNG.generateSeed(numBytes);
+        }
+    }
+
+    /**
+     * Returns a stream of random numbers to be used as RNG seeds.
+     * @return a stream of random numbers to be used as RNG seeds.
+     */
+    public static LongStream seeds() {
+        return LongStream.generate(MathEx::generateSeed).sequential();
+    }
+
+    /**
+     * Initialize the random number generator with a seed.
+     * @param seed the RNG seed.
      */
     public static void setSeed(long seed) {
         random.get().setSeed(seed);
     }
 
     /**
+     * Returns a probably prime number greater than n.
+     * @param n the returned value should be greater than n.
+     * @param k the number of rounds of primality test to perform.
+     *          With larger number of rounds, the test is more
+     *          accurate but also takes longer time.
+     * @return a probably prime number greater than n.
+     */
+    public static long probablePrime(long n, int k) {
+        return probablePrime(n, k, random.get());
+    }
+
+    /**
+     * Returns a probably prime number.
+     * @param n the returned value should be greater than n.
+     * @param k the number of rounds of primality test to perform.
+     *          With larger number of rounds, the test is more
+     *          accurate but also takes longer time.
+     * @param rng the random number generator.
+     * @return a probably prime number greater than n.
+     */
+    private static long probablePrime(long n, int k, Random rng) {
+        long seed = n + rng.nextInt(899999963); // The largest prime less than 9*10^8
+        for (int i = 0; i < 4096; i++) {
+            if (isProbablePrime(seed, k, rng)) break;
+            seed = n + rng.nextInt(899999963);
+        }
+
+        return seed;
+    }
+
+    /**
      * Given a set of n probabilities, generate a random number in [0, n).
+     *
      * @param prob probabilities of size n. The prob argument can be used to
      * give a vector of weights for obtaining the elements of the vector being
-     * sampled. They need not sum to one, but they should be nonnegative and
+     * sampled. They need not sum to one, but they should be non-negative and
      * not all zero.
      * @return a random integer in [0, n).
      */
@@ -353,11 +642,13 @@ public class MathEx {
     /**
      * Given a set of m probabilities, draw with replacement a set of n random
      * number in [0, m).
+     *
      * @param prob probabilities of size n. The prob argument can be used to
      * give a vector of weights for obtaining the elements of the vector being
-     * sampled. They need not sum to one, but they should be nonnegative and
+     * sampled. They need not sum to one, but they should be non-negative and
      * not all zero.
-     * @return an random array of length n in range of [0, m).
+     * @param n the number of random numbers.
+     * @return random numbers in range of [0, m).
      */
     public static int[] random(double[] prob, int n) {
         // set up alias table
@@ -416,6 +707,7 @@ public class MathEx {
 
     /**
      * Generate a random number in [0, 1).
+     * @return a random number.
      */
     public static double random() {
         return random.get().nextDouble();
@@ -423,6 +715,8 @@ public class MathEx {
 
     /**
      * Generate n random numbers in [0, 1).
+     * @param n the number of random numbers.
+     * @return the random numbers.
      */
     public static double[] random(int n) {
         double[] x = new double[n];
@@ -432,20 +726,22 @@ public class MathEx {
 
     /**
      * Generate a uniform random number in the range [lo, hi).
+     *
      * @param lo lower limit of range
      * @param hi upper limit of range
-     * @return a uniform random real in the range [lo, hi)
+     * @return a uniform random number in the range [lo, hi)
      */
     public static double random(double lo, double hi) {
         return random.get().nextDouble(lo, hi);
     }
 
     /**
-     * Generate n uniform random numbers in the range [lo, hi).
-     * @param n size of the array
+     * Generate uniform random numbers in the range [lo, hi).
+     *
      * @param lo lower limit of range
      * @param hi upper limit of range
-     * @return a uniform random real in the range [lo, hi)
+     * @param n the number of random numbers.
+     * @return uniform random numbers in the range [lo, hi)
      */
     public static double[] random(double lo, double hi, int n) {
         double[] x = new double[n];
@@ -454,7 +750,17 @@ public class MathEx {
     }
 
     /**
+     * Returns a random long integer.
+     * @return a random long integer.
+     */
+    public static long randomLong() {
+        return random.get().nextLong();
+    }
+
+    /**
      * Returns a random integer in [0, n).
+     * @param n the upper bound of random number.
+     * @return a random integer.
      */
     public static int randomInt(int n) {
         return random.get().nextInt(n);
@@ -462,6 +768,10 @@ public class MathEx {
 
     /**
      * Returns a random integer in [lo, hi).
+     *
+     * @param lo lower limit of range
+     * @param hi upper limit of range
+     * @return a uniform random number in the range [lo, hi)
      */
     public static int randomInt(int lo, int hi) {
         int w = hi - lo;
@@ -469,167 +779,288 @@ public class MathEx {
     }
 
     /**
-     * Generates a permutation of 0, 1, 2, ..., n-1, which is useful for
-     * sampling without replacement.
+     * Returns a permutation of <code>(0, 1, 2, ..., n-1)</code>.
+     *
+     * @param n the upper bound.
+     * @return the permutation of <code>(0, 1, 2, ..., n-1)</code>.
      */
     public static int[] permutate(int n) {
         return random.get().permutate(n);
     }
-    
+
     /**
-     * Generates a permutation of given array.
+     * Permutates an array.
+     * @param x the array.
      */
     public static void permutate(int[] x) {
         random.get().permutate(x);
     }
 
     /**
-     * Generates a permutation of given array.
+     * Permutates an array.
+     * @param x the array.
      */
     public static void permutate(float[] x) {
         random.get().permutate(x);
     }
 
     /**
-     * Generates a permutation of given array.
+     * Permutates an array.
+     * @param x the array.
      */
     public static void permutate(double[] x) {
         random.get().permutate(x);
     }
 
     /**
-     * Generates a permutation of given array.
+     * Permutates an array.
+     * @param x the array.
      */
     public static void permutate(Object[] x) {
         random.get().permutate(x);
     }
 
-    /** Combines the arguments to form a vector. */
+    /**
+     * The softmax function without overflow. The function takes as
+     * an input vector of K real numbers, and normalizes it into a
+     * probability distribution consisting of K probabilities
+     * proportional to the exponentials of the input numbers.
+     * That is, prior to applying softmax, some vector components
+     * could be negative, or greater than one; and might not sum
+     * to 1; but after applying softmax, each component will be
+     * in the interval (0,1), and the components will add up to 1,
+     * so that they can be interpreted as probabilities. Furthermore,
+     * the larger input components will correspond to larger probabilities.
+     *
+     * @param posteriori the input/output vector.
+     * @return the index of largest posteriori probability.
+     */
+    public static int softmax(double[] posteriori) {
+        return softmax(posteriori, posteriori.length);
+    }
+
+    /**
+     * The softmax function without overflow. The function takes as
+     * an input vector of K real numbers, and normalizes it into a
+     * probability distribution consisting of K probabilities
+     * proportional to the exponentials of the input numbers.
+     * That is, prior to applying softmax, some vector components
+     * could be negative, or greater than one; and might not sum
+     * to 1; but after applying softmax, each component will be
+     * in the interval (0,1), and the components will add up to 1,
+     * so that they can be interpreted as probabilities. Furthermore,
+     * the larger input components will correspond to larger probabilities.
+     *
+     * @param x the input/output vector.
+     * @param k uses only first k components of input vector.
+     * @return the index of largest posteriori probability.
+     */
+    public static int softmax(double[] x, int k) {
+        int y = -1;
+        double max = Double.NEGATIVE_INFINITY;
+        for (int i = 0; i < k; i++) {
+            if (x[i] > max) {
+                max = x[i];
+                y = i;
+            }
+        }
+
+        double Z = 0.0;
+        for (int i = 0; i < k; i++) {
+            double out = exp(x[i] - max);
+            x[i] = out;
+            Z += out;
+        }
+
+        for (int i = 0; i < k; i++) {
+            x[i] /= Z;
+        }
+
+        return y;
+    }
+
+    /**
+     * Combines the arguments to form a vector.
+     * @param x the vector elements.
+     * @return the vector.
+     */
     public static int[] c(int... x) {
         return x;
     }
 
-    /** Combines the arguments to form a vector. */
+    /**
+     * Combines the arguments to form a vector.
+     * @param x the vector elements.
+     * @return the vector.
+     */
     public static float[] c(float... x) {
         return x;
     }
 
-    /** Combines the arguments to form a vector. */
+    /**
+     * Combines the arguments to form a vector.
+     * @param x the vector elements.
+     * @return the vector.
+     */
     public static double[] c(double... x) {
         return x;
     }
 
-    /** Combines the arguments to form a vector. */
+    /**
+     * Combines the arguments to form a vector.
+     * @param x the vector elements.
+     * @return the vector.
+     */
     public static String[] c(String... x) {
         return x;
     }
 
-    /** Merges multiple vectors into one. */
-    public static int[] c(int[]... x) {
+    /**
+     * Concatenates multiple vectors into one.
+     * @param list the vectors.
+     * @return the concatenated vector.
+     */
+    public static int[] c(int[]... list) {
         int n = 0;
-        for (int i = 0; i < x.length; i++) {
-            n += x.length;
-        }
-
+        for (int[] x : list) n += x.length;
         int[] y = new int[n];
-        for (int i = 0, k = 0; i < x.length; i++) {
-            for (int xi : x[i]) {
-                y[k++] = xi;
-            }
+        int pos = 0;
+        for (int[] x: list) {
+            System.arraycopy(x, 0, y, pos, x.length);
+            pos += x.length;
         }
         return y;
     }
 
-    /** Merges multiple vectors into one. */
-    public static float[] c(float[]... x) {
+    /**
+     * Concatenates multiple vectors into one.
+     * @param list the vectors.
+     * @return the concatenated vector.
+     */
+    public static float[] c(float[]... list) {
         int n = 0;
-        for (int i = 0; i < x.length; i++) {
-            n += x.length;
-        }
-
+        for (float[] x : list) n += x.length;
         float[] y = new float[n];
-        for (int i = 0, k = 0; i < x.length; i++) {
-            for (float xi : x[i]) {
-                y[k++] = xi;
-            }
+        int pos = 0;
+        for (float[] x: list) {
+            System.arraycopy(x, 0, y, pos, x.length);
+            pos += x.length;
         }
         return y;
     }
 
-    /** Merges multiple vectors into one. */
-    public static double[] c(double[]... x) {
+    /**
+     * Concatenates multiple vectors into one.
+     * @param list the vectors.
+     * @return the concatenated vector.
+     */
+    public static double[] c(double[]... list) {
         int n = 0;
-        for (int i = 0; i < x.length; i++) {
-            n += x.length;
-        }
-
+        for (double[] x : list) n += x.length;
         double[] y = new double[n];
-        for (int i = 0, k = 0; i < x.length; i++) {
-            for (double xi : x[i]) {
-                y[k++] = xi;
-            }
+        int pos = 0;
+        for (double[] x: list) {
+            System.arraycopy(x, 0, y, pos, x.length);
+            pos += x.length;
         }
         return y;
     }
 
-    /** Merges multiple vectors into one. */
-    public static String[] c(String[]... x) {
+    /**
+     * Concatenates multiple vectors into one array of strings.
+     * @param list the vectors.
+     * @return the concatenated vector.
+     */
+    public static String[] c(String[]... list) {
         int n = 0;
-        for (int i = 0; i < x.length; i++) {
-            n += x.length;
-        }
-
+        for (String[] x : list) n += x.length;
         String[] y = new String[n];
-        for (int i = 0, k = 0; i < x.length; i++) {
-            for (String xi : x[i]) {
-                y[k++] = xi;
-            }
+        int pos = 0;
+        for (String[] x: list) {
+            System.arraycopy(x, 0, y, pos, x.length);
+            pos += x.length;
         }
         return y;
     }
 
-    /** Take a sequence of vector arguments and combine by columns. */
+    /**
+     * Concatenates vectors by columns.
+     * @param x the vectors.
+     * @return the concatenated vector.
+     */
     public static int[] cbind(int[]... x) {
         return c(x);
     }
 
-    /** Take a sequence of vector arguments and combine by columns. */
+    /**
+     * Concatenates vectors by columns.
+     * @param x the vectors.
+     * @return the concatenated vector.
+     */
     public static float[] cbind(float[]... x) {
         return c(x);
     }
 
-    /** Take a sequence of vector arguments and combine by columns. */
+    /**
+     * Concatenates vectors by columns.
+     * @param x the vectors.
+     * @return the concatenated vector.
+     */
     public static double[] cbind(double[]... x) {
         return c(x);
     }
 
-    /** Take a sequence of vector arguments and combine by columns. */
+    /**
+     * Concatenates vectors by columns.
+     * @param x the vectors.
+     * @return the concatenated vector.
+     */
     public static String[] cbind(String[]... x) {
         return c(x);
     }
 
-    /** Take a sequence of vector arguments and combine by rows. */
+    /**
+     * Concatenates vectors by rows.
+     * @param x the vectors.
+     * @return the matrix.
+     */
     public static int[][] rbind(int[]... x) {
         return x;
     }
 
-    /** Take a sequence of vector arguments and combine by rows. */
+    /**
+     * Concatenates vectors by rows.
+     * @param x the vectors.
+     * @return the matrix.
+     */
     public static float[][] rbind(float[]... x) {
         return x;
     }
 
-    /** Take a sequence of vector arguments and combine by rows. */
+    /**
+     * Concatenates vectors by rows.
+     * @param x the vectors.
+     * @return the matrix.
+     */
     public static double[][] rbind(double[]... x) {
         return x;
     }
 
-    /** Take a sequence of vector arguments and combine by rows. */
+    /**
+     * Concatenates vectors by rows.
+     * @param x the vectors.
+     * @return the matrix.
+     */
     public static String[][] rbind(String[]... x) {
         return x;
     }
 
     /**
      * Returns a slice of data for given indices.
+     * @param data the array.
+     * @param index the indices of selected elements.
+     * @param <E> the data type of elements.
+     * @return the selected elements.
      */
     public static <E> E[] slice(E[] data, int[] index) {
         int n = index.length;
@@ -646,6 +1077,9 @@ public class MathEx {
 
     /**
      * Returns a slice of data for given indices.
+     * @param data the array.
+     * @param index the indices of selected elements.
+     * @return the selected elements.
      */
     public static int[] slice(int[] data, int[] index) {
         int n = index.length;
@@ -659,6 +1093,9 @@ public class MathEx {
 
     /**
      * Returns a slice of data for given indices.
+     * @param data the array.
+     * @param index the indices of selected elements.
+     * @return the selected elements.
      */
     public static float[] slice(float[] data, int[] index) {
         int n = index.length;
@@ -672,6 +1109,9 @@ public class MathEx {
 
     /**
      * Returns a slice of data for given indices.
+     * @param data the array.
+     * @param index the indices of selected elements.
+     * @return the selected elements.
      */
     public static double[] slice(double[] data, int[] index) {
         int n = index.length;
@@ -684,21 +1124,23 @@ public class MathEx {
     }
 
     /**
-     * Determines if the polygon contains the specified coordinates.
-     * 
-     * @param point the coordinates of specified point to be tested.
-     * @return true if the Polygon contains the specified coordinates; false otherwise.
+     * Determines if the polygon contains the point.
+     *
+     * @param polygon the vertices of polygon.
+     * @param point the point.
+     * @return true if the Polygon contains the point.
      */
     public static boolean contains(double[][] polygon, double[] point) {
         return contains(polygon, point[0], point[1]);
     }
     
     /**
-     * Determines if the polygon contains the specified coordinates.
-     * 
-     * @param x the specified x coordinate.
-     * @param y the specified y coordinate.
-     * @return true if the Polygon contains the specified coordinates; false otherwise.
+     * Determines if the polygon contains the point.
+     *
+     * @param polygon the vertices of polygon.
+     * @param x the x coordinate of point.
+     * @param y the y coordinate of point.
+     * @return true if the Polygon contains the point.
      */
     public static boolean contains(double[][] polygon, double x, double y) {
         if (polygon.length <= 2) {
@@ -772,140 +1214,282 @@ public class MathEx {
     public static void reverse(int[] a) {
         int i = 0, j = a.length - 1;
         while (i < j) {
-            SortUtils.swap(a, i++, j--);  // code for swap not shown, but easy enough
+            Sort.swap(a, i++, j--);  // code for swap not shown, but easy enough
         }
     }
 
     /**
      * Reverses the order of the elements in the specified array.
-     * @param a an array to reverse.
+     * @param a the array to reverse.
      */
     public static void reverse(float[] a) {
         int i = 0, j = a.length - 1;
         while (i < j) {
-            SortUtils.swap(a, i++, j--);  // code for swap not shown, but easy enough
+            Sort.swap(a, i++, j--);  // code for swap not shown, but easy enough
         }
     }
 
     /**
      * Reverses the order of the elements in the specified array.
-     * @param a an array to reverse.
+     * @param a the array to reverse.
      */
     public static void reverse(double[] a) {
         int i = 0, j = a.length - 1;
         while (i < j) {
-            SortUtils.swap(a, i++, j--);  // code for swap not shown, but easy enough
+            Sort.swap(a, i++, j--);  // code for swap not shown, but easy enough
         }
     }
 
     /**
      * Reverses the order of the elements in the specified array.
-     * @param a an array to reverse.
+     * @param a the array to reverse.
+     * @param <T> the data type of array elements.
      */
     public static <T> void reverse(T[] a) {
         int i = 0, j = a.length - 1;
         while (i < j) {
-            SortUtils.swap(a, i++, j--);
+            Sort.swap(a, i++, j--);
         }
     }
 
     /**
-     * minimum of 3 integers
+     * Returns the mode of the array, which is the most frequent element.
+     * If there are multiple modes, one of them will be returned.
+     *
+     * @param a the array. The order of elements will be changed on output.
+     * @return the mode.
+     */
+    public static int mode(int[] a) {
+        Arrays.sort(a);
+
+        int mode = -1;
+        int count = 0;
+
+        int currentValue = a[0];
+        int currentCount = 1;
+
+        for (int i = 1; i < a.length; i++) {
+            if (a[i] != currentValue) {
+                if (currentCount > count) {
+                    mode = currentValue;
+                    count = currentCount;
+                }
+
+                currentValue = a[i];
+                currentCount = 1;
+            } else {
+                currentCount++;
+            }
+        }
+
+        if (currentCount > count) {
+            mode = currentValue;
+        }
+
+        return mode;
+    }
+
+    /**
+     * Returns the minimum of 3 integer numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @return the minimum.
      */
     public static int min(int a, int b, int c) {
         return Math.min(Math.min(a, b), c);
     }
 
     /**
-     * minimum of 3 floats
+     * Returns the minimum of 3 float numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @return the minimum.
      */
-    public static double min(float a, float b, float c) {
+    public static float min(float a, float b, float c) {
         return Math.min(Math.min(a, b), c);
     }
 
     /**
-     * minimum of 3 doubles
+     * Returns the minimum of 3 double numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @return the minimum.
      */
     public static double min(double a, double b, double c) {
         return Math.min(Math.min(a, b), c);
     }
 
     /**
-     * maximum of 3 integers
+     * Returns the minimum of 4 integer numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @param d a number.
+     * @return the minimum.
+     */
+    public static int min(int a, int b, int c, int d) {
+        return Math.min(Math.min(Math.min(a, b), c), d);
+    }
+
+    /**
+     * Returns the minimum of 4 float numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @param d a number.
+     * @return the minimum.
+     */
+    public static float min(float a, float b, float c, float d) {
+        return Math.min(Math.min(Math.min(a, b), c), d);
+    }
+
+    /**
+     * Returns the minimum of 4 double numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @param d a number.
+     * @return the minimum.
+     */
+    public static double min(double a, double b, double c, double d) {
+        return Math.min(Math.min(Math.min(a, b), c), d);
+    }
+
+    /**
+     * Returns the maximum of 3 integer numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @return the maximum.
      */
     public static int max(int a, int b, int c) {
         return Math.max(Math.max(a, b), c);
     }
 
     /**
-     * maximum of 3 floats
+     * Returns the maximum of 4 float numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @return the maximum.
      */
     public static float max(float a, float b, float c) {
         return Math.max(Math.max(a, b), c);
     }
 
     /**
-     * maximum of 3 doubles
+     * Returns the maximum of 4 double numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @return the maximum.
      */
     public static double max(double a, double b, double c) {
         return Math.max(Math.max(a, b), c);
     }
 
     /**
+     * Returns the maximum of 4 integer numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @param d a number.
+     * @return the maximum.
+     */
+    public static int max(int a, int b, int c, int d) {
+        return Math.max(Math.max(Math.max(a, b), c), d);
+    }
+
+    /**
+     * Returns the maximum of 4 float numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @param d a number.
+     * @return the maximum.
+     */
+    public static float max(float a, float b, float c, float d) {
+        return Math.max(Math.max(Math.max(a, b), c), d);
+    }
+
+    /**
+     * Returns the maximum of 4 double numbers.
+     * @param a a number.
+     * @param b a number.
+     * @param c a number.
+     * @param d a number.
+     * @return the maximum.
+     */
+    public static double max(double a, double b, double c, double d) {
+        return Math.max(Math.max(Math.max(a, b), c), d);
+    }
+
+    /**
      * Returns the minimum value of an array.
+     * @param x the array.
+     * @return the minimum.
      */
     public static int min(int[] x) {
-        int m = x[0];
+        int min = x[0];
 
         for (int n : x) {
-            if (n < m) {
-                m = n;
+            if (n < min) {
+                min = n;
             }
         }
 
-        return m;
+        return min;
     }
 
     /**
      * Returns the minimum value of an array.
+     * @param x the array.
+     * @return the minimum.
      */
     public static float min(float[] x) {
-        float m = Float.POSITIVE_INFINITY;
+        float min = Float.POSITIVE_INFINITY;
 
         for (float n : x) {
-            if (n < m) {
-                m = n;
+            if (n < min) {
+                min = n;
             }
         }
 
-        return m;
+        return min;
     }
 
     /**
      * Returns the minimum value of an array.
+     * @param x the array.
+     * @return the minimum.
      */
     public static double min(double[] x) {
-        double m = Double.POSITIVE_INFINITY;
+        double min = Double.POSITIVE_INFINITY;
 
         for (double n : x) {
-            if (n < m) {
-                m = n;
+            if (n < min) {
+                min = n;
             }
         }
 
-        return m;
+        return min;
     }
 
     /**
      * Returns the index of minimum value of an array.
+     * @param x the array.
+     * @return the index of minimum.
      */
     public static int whichMin(int[] x) {
-        int m = x[0];
+        int min = x[0];
         int which = 0;
 
         for (int i = 1; i < x.length; i++) {
-            if (x[i] < m) {
-                m = x[i];
+            if (x[i] < min) {
+                min = x[i];
                 which = i;
             }
         }
@@ -915,14 +1499,16 @@ public class MathEx {
 
     /**
      * Returns the index of minimum value of an array.
+     * @param x the array.
+     * @return the index of minimum.
      */
     public static int whichMin(float[] x) {
-        float m = Float.POSITIVE_INFINITY;
+        float min = Float.POSITIVE_INFINITY;
         int which = 0;
 
         for (int i = 0; i < x.length; i++) {
-            if (x[i] < m) {
-                m = x[i];
+            if (x[i] < min) {
+                min = x[i];
                 which = i;
             }
         }
@@ -932,14 +1518,16 @@ public class MathEx {
 
     /**
      * Returns the index of minimum value of an array.
+     * @param x the array.
+     * @return the index of minimum.
      */
     public static int whichMin(double[] x) {
-        double m = Double.POSITIVE_INFINITY;
+        double min = Double.POSITIVE_INFINITY;
         int which = 0;
 
         for (int i = 0; i < x.length; i++) {
-            if (x[i] < m) {
-                m = x[i];
+            if (x[i] < min) {
+                min = x[i];
                 which = i;
             }
         }
@@ -949,59 +1537,67 @@ public class MathEx {
 
     /**
      * Returns the maximum value of an array.
+     * @param x the array.
+     * @return the index of maximum.
      */
     public static int max(int[] x) {
-        int m = x[0];
+        int max = x[0];
 
         for (int n : x) {
-            if (n > m) {
-                m = n;
+            if (n > max) {
+                max = n;
             }
         }
 
-        return m;
+        return max;
     }
 
     /**
      * Returns the maximum value of an array.
+     * @param x the array.
+     * @return the index of maximum.
      */
     public static float max(float[] x) {
-        float m = Float.NEGATIVE_INFINITY;
+        float max = Float.NEGATIVE_INFINITY;
 
         for (float n : x) {
-            if (n > m) {
-                m = n;
+            if (n > max) {
+                max = n;
             }
         }
 
-        return m;
+        return max;
     }
 
     /**
      * Returns the maximum value of an array.
+     * @param x the array.
+     * @return the index of maximum.
      */
     public static double max(double[] x) {
-        double m = Double.NEGATIVE_INFINITY;
+        double max = Double.NEGATIVE_INFINITY;
 
         for (double n : x) {
-            if (n > m) {
-                m = n;
+            if (n > max) {
+                max = n;
             }
         }
 
-        return m;
+        return max;
     }
 
     /**
      * Returns the index of maximum value of an array.
+     * @param x the array.
+     * @return the index of maximum.
      */
     public static int whichMax(int[] x) {
-        int m = x[0];
+        int max = x[0];
         int which = 0;
 
         for (int i = 1; i < x.length; i++) {
-            if (x[i] > m) {
-                m = x[i];
+            if (x[i] > max) {
+                max = x[i];
                 which = i;
             }
         }
@@ -1011,14 +1607,16 @@ public class MathEx {
 
     /**
      * Returns the index of maximum value of an array.
+     * @param x the array.
+     * @return the index of maximum.
      */
     public static int whichMax(float[] x) {
-        float m = Float.NEGATIVE_INFINITY;
+        float max = Float.NEGATIVE_INFINITY;
         int which = 0;
 
         for (int i = 0; i < x.length; i++) {
-            if (x[i] > m) {
-                m = x[i];
+            if (x[i] > max) {
+                max = x[i];
                 which = i;
             }
         }
@@ -1028,14 +1626,16 @@ public class MathEx {
 
     /**
      * Returns the index of maximum value of an array.
+     * @param x the array.
+     * @return the index of maximum.
      */
     public static int whichMax(double[] x) {
-        double m = Double.NEGATIVE_INFINITY;
+        double max = Double.NEGATIVE_INFINITY;
         int which = 0;
 
         for (int i = 0; i < x.length; i++) {
-            if (x[i] > m) {
-                m = x[i];
+            if (x[i] > max) {
+                max = x[i];
                 which = i;
             }
         }
@@ -1045,167 +1645,278 @@ public class MathEx {
 
     /**
      * Returns the minimum of a matrix.
+     * @param matrix the matrix.
+     * @return the minimum.
      */
     public static int min(int[][] matrix) {
-        int m = matrix[0][0];
+        int min = matrix[0][0];
 
         for (int[] x : matrix) {
             for (int y : x) {
-                if (m > y) {
-                    m = y;
+                if (min > y) {
+                    min = y;
                 }
             }
         }
 
-        return m;
+        return min;
     }
 
     /**
      * Returns the minimum of a matrix.
+     * @param matrix the matrix.
+     * @return the minimum.
      */
     public static double min(double[][] matrix) {
-        double m = Double.POSITIVE_INFINITY;
+        double min = Double.POSITIVE_INFINITY;
 
         for (double[] x : matrix) {
             for (double y : x) {
-                if (m > y) {
-                    m = y;
+                if (min > y) {
+                    min = y;
                 }
             }
         }
 
-        return m;
+        return min;
     }
 
     /**
      * Returns the maximum of a matrix.
+     * @param matrix the matrix.
+     * @return the maximum.
      */
     public static int max(int[][] matrix) {
-        int m = matrix[0][0];
+        int max = matrix[0][0];
 
         for (int[] x : matrix) {
             for (int y : x) {
-                if (m < y) {
-                    m = y;
+                if (max < y) {
+                    max = y;
                 }
             }
         }
 
-        return m;
+        return max;
     }
 
     /**
      * Returns the maximum of a matrix.
+     * @param matrix the matrix.
+     * @return the maximum.
      */
     public static double max(double[][] matrix) {
-        double m = Double.NEGATIVE_INFINITY;
+        double max = Double.NEGATIVE_INFINITY;
 
         for (double[] x : matrix) {
             for (double y : x) {
-                if (m < y) {
-                    m = y;
+                if (max < y) {
+                    max = y;
                 }
             }
         }
 
-        return m;
+        return max;
+    }
+
+    /**
+     * Returns the index of minimum value of an matrix.
+     * @param matrix the matrix.
+     * @return the index of minimum.
+     */
+    public static IntPair whichMin(double[][] matrix) {
+        double min = Double.POSITIVE_INFINITY;
+        int whichRow = 0;
+        int whichCol = 0;
+
+        for (int i = 0; i < matrix.length; i++) {
+            for (int j = 0; j < matrix[i].length; j++) {
+                if (matrix[i][j] < min) {
+                    min = matrix[i][j];
+                    whichRow = i;
+                    whichCol = j;
+                }
+            }
+        }
+
+        return new IntPair(whichRow, whichCol);
+    }
+
+    /**
+     * Returns the index of maximum value of a matrix.
+     * @param matrix the matrix.
+     * @return the index of maximum.
+     */
+    public static IntPair whichMax(double[][] matrix) {
+        double max = Double.NEGATIVE_INFINITY;
+        int whichRow = 0;
+        int whichCol = 0;
+
+        for (int i = 0; i < matrix.length; i++) {
+            for (int j = 0; j < matrix[i].length; j++) {
+                if (matrix[i][j] > max) {
+                    max = matrix[i][j];
+                    whichRow = i;
+                    whichCol = j;
+                }
+            }
+        }
+
+        return new IntPair(whichRow, whichCol);
     }
 
     /**
      * Returns the matrix transpose.
+     * @param matrix the matrix.
+     * @return the transpose.
      */
-    public static double[][] transpose(double[][] A) {
-        int m = A.length;
-        int n = A[0].length;
+    public static double[][] transpose(double[][] matrix) {
+        int m = matrix.length;
+        int n = matrix[0].length;
 
-        double[][] matrix = new double[n][m];
+        double[][] t = new double[n][m];
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {
-                matrix[j][i] = A[i][j];
+                t[j][i] = matrix[i][j];
             }
         }
 
-        return matrix;
+        return t;
     }
 
     /**
-     * Returns the row minimum for a matrix.
+     * Returns the row minimum of a matrix.
+     * @param matrix the matrix.
+     * @return the row minimums.
      */
-    public static double[] rowMin(double[][] data) {
-        double[] x = new double[data.length];
+    public static int[] rowMin(int[][] matrix) {
+        int[] x = new int[matrix.length];
 
         for (int i = 0; i < x.length; i++) {
-            x[i] = min(data[i]);
+            x[i] = min(matrix[i]);
         }
 
         return x;
     }
 
     /**
-     * Returns the row maximum for a matrix.
+     * Returns the row maximum of a matrix.
+     * @param matrix the matrix.
+     * @return the row maximums.
      */
-    public static double[] rowMax(double[][] data) {
-        double[] x = new double[data.length];
+    public static int[] rowMax(int[][] matrix) {
+        int[] x = new int[matrix.length];
 
         for (int i = 0; i < x.length; i++) {
-            x[i] = max(data[i]);
+            x[i] = max(matrix[i]);
         }
 
         return x;
     }
 
     /**
-     * Returns the row sums for a matrix.
+     * Returns the row sums of a matrix.
+     * @param matrix the matrix.
+     * @return the row sums.
      */
-    public static double[] rowSums(double[][] data) {
-        double[] x = new double[data.length];
+    public static long[] rowSums(int[][] matrix) {
+        long[] x = new long[matrix.length];
 
         for (int i = 0; i < x.length; i++) {
-            x[i] = sum(data[i]);
+            x[i] = sum(matrix[i]);
         }
 
         return x;
     }
 
     /**
-     * Returns the row means for a matrix.
+     * Returns the row minimum of a matrix.
+     * @param matrix the matrix.
+     * @return the row minimums.
      */
-    public static double[] rowMeans(double[][] data) {
-        double[] x = new double[data.length];
+    public static double[] rowMin(double[][] matrix) {
+        double[] x = new double[matrix.length];
 
         for (int i = 0; i < x.length; i++) {
-            x[i] = mean(data[i]);
+            x[i] = min(matrix[i]);
         }
 
         return x;
     }
 
     /**
-     * Returns the row standard deviations for a matrix.
+     * Returns the row maximum of a matrix.
+     * @param matrix the matrix.
+     * @return the row maximums.
      */
-    public static double[] rowSds(double[][] data) {
-        double[] x = new double[data.length];
+    public static double[] rowMax(double[][] matrix) {
+        double[] x = new double[matrix.length];
 
         for (int i = 0; i < x.length; i++) {
-            x[i] = sd(data[i]);
+            x[i] = max(matrix[i]);
         }
 
         return x;
     }
 
     /**
-     * Returns the column minimum for a matrix.
+     * Returns the row sums of a matrix.
+     * @param matrix the matrix.
+     * @return the row sums.
      */
-    public static double[] colMin(double[][] data) {
-        double[] x = new double[data[0].length];
+    public static double[] rowSums(double[][] matrix) {
+        double[] x = new double[matrix.length];
+
         for (int i = 0; i < x.length; i++) {
-            x[i] = Double.POSITIVE_INFINITY;
+            x[i] = sum(matrix[i]);
         }
 
-        for (int i = 0; i < data.length; i++) {
+        return x;
+    }
+
+    /**
+     * Returns the row means of a matrix.
+     * @param matrix the matrix.
+     * @return the row means.
+     */
+    public static double[] rowMeans(double[][] matrix) {
+        double[] x = new double[matrix.length];
+
+        for (int i = 0; i < x.length; i++) {
+            x[i] = mean(matrix[i]);
+        }
+
+        return x;
+    }
+
+    /**
+     * Returns the row standard deviations of a matrix.
+     * @param matrix the matrix.
+     * @return the row standard deviations.
+     */
+    public static double[] rowSds(double[][] matrix) {
+        double[] x = new double[matrix.length];
+
+        for (int i = 0; i < x.length; i++) {
+            x[i] = sd(matrix[i]);
+        }
+
+        return x;
+    }
+
+    /**
+     * Returns the column minimum of a matrix.
+     * @param matrix the matrix.
+     * @return the column minimums.
+     */
+    public static int[] colMin(int[][] matrix) {
+        int[] x = new int[matrix[0].length];
+        Arrays.fill(x, Integer.MAX_VALUE);
+
+        for (int[] row : matrix) {
             for (int j = 0; j < x.length; j++) {
-                if (x[j] > data[i][j]) {
-                    x[j] = data[i][j];
+                if (x[j] > row[j]) {
+                    x[j] = row[j];
                 }
             }
         }
@@ -1214,18 +1925,18 @@ public class MathEx {
     }
 
     /**
-     * Returns the column maximum for a matrix.
+     * Returns the column maximum of a matrix.
+     * @param matrix the matrix.
+     * @return the column maximums.
      */
-    public static double[] colMax(double[][] data) {
-        double[] x = new double[data[0].length];
-        for (int i = 0; i < x.length; i++) {
-            x[i] = Double.NEGATIVE_INFINITY;
-        }
+    public static int[] colMax(int[][] matrix) {
+        int[] x = new int[matrix[0].length];
+        Arrays.fill(x, Integer.MIN_VALUE);
 
-        for (int i = 0; i < data.length; i++) {
+        for (int[] row : matrix) {
             for (int j = 0; j < x.length; j++) {
-                if (x[j] < data[i][j]) {
-                    x[j] = data[i][j];
+                if (x[j] < row[j]) {
+                    x[j] = row[j];
                 }
             }
         }
@@ -1234,14 +1945,16 @@ public class MathEx {
     }
 
     /**
-     * Returns the column sums for a matrix.
+     * Returns the column sums of a matrix.
+     * @param matrix the matrix.
+     * @return the column sums.
      */
-    public static double[] colSums(double[][] data) {
-        double[] x = data[0].clone();
+    public static long[] colSums(int[][] matrix) {
+        long[] x = new long[matrix[0].length];
 
-        for (int i = 1; i < data.length; i++) {
+        for (int[] row : matrix) {
             for (int j = 0; j < x.length; j++) {
-                x[j] += data[i][j];
+                x[j] += row[j];
             }
         }
 
@@ -1249,43 +1962,104 @@ public class MathEx {
     }
 
     /**
-     * Returns the column means for a matrix.
+     * Returns the column minimum of a matrix.
+     * @param matrix the matrix.
+     * @return the column minimums.
      */
-    public static double[] colMeans(double[][] data) {
-        double[] x = data[0].clone();
+    public static double[] colMin(double[][] matrix) {
+        double[] x = new double[matrix[0].length];
+        Arrays.fill(x, Double.POSITIVE_INFINITY);
 
-        for (int i = 1; i < data.length; i++) {
+        for (double[] row : matrix) {
             for (int j = 0; j < x.length; j++) {
-                x[j] += data[i][j];
+                if (x[j] > row[j]) {
+                    x[j] = row[j];
+                }
             }
         }
-
-        scale(1.0 / data.length, x);
 
         return x;
     }
 
     /**
-     * Returns the column deviations for a matrix.
+     * Returns the column maximum of a matrix.
+     * @param matrix the matrix.
+     * @return the column maximums.
      */
-    public static double[] colSds(double[][] data) {
-        if (data.length < 2) {
-            throw new IllegalArgumentException("Array length is less than 2.");
+    public static double[] colMax(double[][] matrix) {
+        double[] x = new double[matrix[0].length];
+        Arrays.fill(x, Double.NEGATIVE_INFINITY);
+
+        for (double[] row : matrix) {
+            for (int j = 0; j < x.length; j++) {
+                if (x[j] < row[j]) {
+                    x[j] = row[j];
+                }
+            }
         }
 
-        int p = data[0].length;
+        return x;
+    }
+
+    /**
+     * Returns the column sums of a matrix.
+     * @param matrix the matrix.
+     * @return the column sums.
+     */
+    public static double[] colSums(double[][] matrix) {
+        double[] x = matrix[0].clone();
+
+        for (int i = 1; i < matrix.length; i++) {
+            for (int j = 0; j < x.length; j++) {
+                x[j] += matrix[i][j];
+            }
+        }
+
+        return x;
+    }
+
+    /**
+     * Returns the column means of a matrix.
+     * @param matrix the matrix.
+     * @return the column means.
+     */
+    public static double[] colMeans(double[][] matrix) {
+        double[] x = matrix[0].clone();
+
+        for (int i = 1; i < matrix.length; i++) {
+            for (int j = 0; j < x.length; j++) {
+                x[j] += matrix[i][j];
+            }
+        }
+
+        scale(1.0 / matrix.length, x);
+
+        return x;
+    }
+
+    /**
+     * Returns the column standard deviations of a matrix.
+     * @param matrix the matrix.
+     * @return the column standard deviations.
+     */
+    public static double[] colSds(double[][] matrix) {
+        if (matrix.length < 2) {
+            throw new IllegalArgumentException("matrix length is less than 2.");
+        }
+
+        int p = matrix[0].length;
         double[] sum = new double[p];
         double[] sumsq = new double[p];
-        for (double[] x : data) {
+        for (double[] row : matrix) {
             for (int i = 0; i < p; i++) {
-                sum[i] += x[i];
-                sumsq[i] += x[i] * x[i];
+                sum[i] += row[i];
+                sumsq[i] += row[i] * row[i];
             }
         }
 
-        int n = data.length - 1;
+        int n = matrix.length - 1;
         for (int i = 0; i < p; i++) {
-            sumsq[i] = Math.sqrt(sumsq[i] / n - (sum[i] / data.length) * (sum[i] / n));
+            sumsq[i] = sqrt(sumsq[i] / n - (sum[i] / matrix.length) * (sum[i] / n));
         }
 
         return sumsq;
@@ -1293,23 +2067,38 @@ public class MathEx {
 
     /**
      * Returns the sum of an array.
+     * @param x the array.
+     * @return the sum.
      */
-    public static int sum(int[] x) {
-        double sum = 0.0;
+    public static int sum(byte[] x) {
+        int sum = 0;
 
         for (int n : x) {
             sum += n;
         }
 
-        if (sum > Integer.MAX_VALUE || sum < -Integer.MAX_VALUE) {
-            throw new ArithmeticException("Sum overflow: " + sum);
+        return sum;
+    }
+
+    /**
+     * Returns the sum of an array.
+     * @param x the array.
+     * @return the sum.
+     */
+    public static long sum(int[] x) {
+        long sum = 0;
+
+        for (int n : x) {
+            sum += n;
         }
-        
+
         return (int) sum;
     }
 
     /**
      * Returns the sum of an array.
+     * @param x the array.
+     * @return the sum.
      */
     public static double sum(float[] x) {
         double sum = 0.0;
@@ -1323,6 +2112,8 @@ public class MathEx {
 
     /**
      * Returns the sum of an array.
+     * @param x the array.
+     * @return the sum.
      */
     public static double sum(double[] x) {
         double sum = 0.0;
@@ -1335,103 +2126,132 @@ public class MathEx {
     }
 
     /**
-     * Find the median of an array of type int. The input array will
-     * be rearranged.
+     * Find the median of an array of type int.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the median.
      */
-    public static int median(int[] a) {
-        return QuickSelect.median(a);
+    public static int median(int[] x) {
+        return QuickSelect.median(x);
     }
 
     /**
-     * Find the median of an array of type float. The input array will
-     * be rearranged.
+     * Find the median of an array of type float.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the median.
      */
-    public static float median(float[] a) {
-        return QuickSelect.median(a);
+    public static float median(float[] x) {
+        return QuickSelect.median(x);
     }
 
     /**
-     * Find the median of an array of type double. The input array will
-     * be rearranged.
+     * Find the median of an array of type double.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the median.
      */
-    public static double median(double[] a) {
-        return QuickSelect.median(a);
+    public static double median(double[] x) {
+        return QuickSelect.median(x);
     }
 
     /**
-     * Find the median of an array of type double. The input array will
-     * be rearranged.
+     * Find the median of an array of type double.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @param <T> the data type of array elements.
+     * @return the median.
      */
-    public static <T extends Comparable<? super T>> T median(T[] a) {
-        return QuickSelect.median(a);
+    public static <T extends Comparable<? super T>> T median(T[] x) {
+        return QuickSelect.median(x);
     }
 
     /**
-     * Find the first quantile (p = 1/4) of an array of type int. The input array will
-     * be rearranged.
+     * Find the first quantile (p = 1/4) of an array of type int.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the first quantile.
      */
-    public static int q1(int[] a) {
-        return QuickSelect.q1(a);
+    public static int q1(int[] x) {
+        return QuickSelect.q1(x);
     }
 
     /**
-     * Find the first quantile (p = 1/4) of an array of type float. The input array will
-     * be rearranged.
+     * Find the first quantile (p = 1/4) of an array of type float.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the first quantile.
      */
-    public static float q1(float[] a) {
-        return QuickSelect.q1(a);
+    public static float q1(float[] x) {
+        return QuickSelect.q1(x);
     }
 
     /**
-     * Find the first quantile (p = 1/4) of an array of type double. The input array will
-     * be rearranged.
+     * Find the first quantile (p = 1/4) of an array of type double.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the first quantile.
      */
-    public static double q1(double[] a) {
-        return QuickSelect.q1(a);
+    public static double q1(double[] x) {
+        return QuickSelect.q1(x);
     }
 
     /**
-     * Find the first quantile (p = 1/4) of an array of type double. The input array will
-     * be rearranged.
+     * Find the first quantile (p = 1/4) of an array of type double.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @param <T> the data type of array elements.
+     * @return the first quantile.
      */
-    public static <T extends Comparable<? super T>> T q1(T[] a) {
-        return QuickSelect.q1(a);
+    public static <T extends Comparable<? super T>> T q1(T[] x) {
+        return QuickSelect.q1(x);
     }
 
     /**
-     * Find the third quantile (p = 3/4) of an array of type int. The input array will
-     * be rearranged.
+     * Find the third quantile (p = 3/4) of an array of type int.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the third quantile.
      */
-    public static int q3(int[] a) {
-        return QuickSelect.q3(a);
+    public static int q3(int[] x) {
+        return QuickSelect.q3(x);
     }
 
     /**
-     * Find the third quantile (p = 3/4) of an array of type float. The input array will
-     * be rearranged.
+     * Find the third quantile (p = 3/4) of an array of type float.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the third quantile.
      */
-    public static float q3(float[] a) {
-        return QuickSelect.q3(a);
+    public static float q3(float[] x) {
+        return QuickSelect.q3(x);
     }
 
     /**
-     * Find the third quantile (p = 3/4) of an array of type double. The input array will
-     * be rearranged.
+     * Find the third quantile (p = 3/4) of an array of type double.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @return the third quantile.
      */
-    public static double q3(double[] a) {
-        return QuickSelect.q3(a);
+    public static double q3(double[] x) {
+        return QuickSelect.q3(x);
     }
 
     /**
-     * Find the third quantile (p = 3/4) of an array of type double. The input array will
-     * be rearranged.
+     * Find the third quantile (p = 3/4) of an array of type double.
+     * The input array will be rearranged.
+     * @param x the array.
+     * @param <T> the data type of array elements.
+     * @return the third quantile.
      */
-    public static <T extends Comparable<? super T>> T q3(T[] a) {
-        return QuickSelect.q3(a);
+    public static <T extends Comparable<? super T>> T q3(T[] x) {
+        return QuickSelect.q3(x);
     }
 
     /**
      * Returns the mean of an array.
+     * @param x the array.
+     * @return the mean.
      */
     public static double mean(int[] x) {
         return (double) sum(x) / x.length;
@@ -1439,6 +2259,8 @@ public class MathEx {
 
     /**
      * Returns the mean of an array.
+     * @param x the array.
+     * @return the mean.
      */
     public static double mean(float[] x) {
         return sum(x) / x.length;
@@ -1446,6 +2268,8 @@ public class MathEx {
 
     /**
      * Returns the mean of an array.
+     * @param x the array.
+     * @return the mean.
      */
     public static double mean(double[] x) {
         return sum(x) / x.length;
@@ -1453,6 +2277,8 @@ public class MathEx {
 
     /**
      * Returns the variance of an array.
+     * @param x the array.
+     * @return the variance.
      */
     public static double var(int[] x) {
         if (x.length < 2) {
@@ -1472,6 +2298,8 @@ public class MathEx {
 
     /**
      * Returns the variance of an array.
+     * @param x the array.
+     * @return the variance.
      */
     public static double var(float[] x) {
         if (x.length < 2) {
@@ -1491,6 +2319,8 @@ public class MathEx {
 
     /**
      * Returns the variance of an array.
+     * @param x the array.
+     * @return the variance.
      */
     public static double var(double[] x) {
         if (x.length < 2) {
@@ -1510,23 +2340,29 @@ public class MathEx {
 
     /**
      * Returns the standard deviation of an array.
+     * @param x the array.
+     * @return the standard deviation.
      */
     public static double sd(int[] x) {
-        return Math.sqrt(var(x));
+        return sqrt(var(x));
     }
 
     /**
      * Returns the standard deviation of an array.
+     * @param x the array.
+     * @return the standard deviation.
      */
     public static double sd(float[] x) {
-        return Math.sqrt(var(x));
+        return sqrt(var(x));
     }
 
     /**
      * Returns the standard deviation of an array.
+     * @param x the array.
+     * @return the standard deviation.
      */
     public static double sd(double[] x) {
-        return Math.sqrt(var(x));
+        return sqrt(var(x));
     }
 
     /**
@@ -1552,11 +2388,14 @@ public class MathEx {
      * distributed data K is taken to be 1.4826. Other distributions behave
      * differently: for example for large samples from a uniform continuous
      * distribution, this factor is about 1.1547.
+     *
+     * @param x the array.
+     * @return the median abolute deviation.
      */
     public static double mad(int[] x) {
         int m = median(x);
         for (int i = 0; i < x.length; i++) {
-            x[i] = Math.abs(x[i] - m);
+            x[i] = abs(x[i] - m);
         }
 
         return median(x);
@@ -1585,11 +2424,14 @@ public class MathEx {
      * distributed data K is taken to be 1.4826. Other distributions behave
      * differently: for example for large samples from a uniform continuous
      * distribution, this factor is about 1.1547.
+     *
+     * @param x the array.
+     * @return the median abolute deviation.
      */
     public static double mad(float[] x) {
         float m = median(x);
         for (int i = 0; i < x.length; i++) {
-            x[i] = Math.abs(x[i] - m);
+            x[i] = abs(x[i] - m);
         }
 
         return median(x);
@@ -1618,170 +2460,137 @@ public class MathEx {
      * distributed data K is taken to be 1.4826. Other distributions behave
      * differently: for example for large samples from a uniform continuous
      * distribution, this factor is about 1.1547.
+     *
+     * @param x the array.
+     * @return the median abolute deviation.
      */
     public static double mad(double[] x) {
         double m = median(x);
         for (int i = 0; i < x.length; i++) {
-            x[i] = Math.abs(x[i] - m);
+            x[i] = abs(x[i] - m);
         }
 
         return median(x);
     }
 
     /**
-     * Given a set of boolean values, are all of the values true? 
-     */
-    public static boolean all(boolean[] x) {
-        for (boolean b : x) {
-            if (!b) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Given a set of boolean values, is at least one of the values true?
-     */
-    public static boolean any(boolean[] x) {
-        for (boolean b : x) {
-            if (b) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * The Euclidean distance.
+     * The Euclidean distance on binary sparse arrays,
+     * which are the indices of nonzero elements in ascending order.
+     *
+     * @param x a binary sparse vector.
+     * @param y a binary sparse vector.
+     * @return the Euclidean distance.
      */
     public static double distance(int[] x, int[] y) {
-        return Math.sqrt(squaredDistance(x, y));
+        return sqrt(squaredDistance(x, y));
     }
 
     /**
      * The Euclidean distance.
+     *
+     * @param x a vector.
+     * @param y a vector.
+     * @return the Euclidean distance.
      */
     public static double distance(float[] x, float[] y) {
-        return Math.sqrt(squaredDistance(x, y));
+        return sqrt(squaredDistance(x, y));
     }
 
     /**
      * The Euclidean distance.
+     *
+     * @param x a vector.
+     * @param y a vector.
+     * @return the Euclidean distance.
      */
     public static double distance(double[] x, double[] y) {
-        return Math.sqrt(squaredDistance(x, y));
+        return sqrt(squaredDistance(x, y));
     }
 
     /**
      * The Euclidean distance.
+     *
+     * @param x a sparse vector.
+     * @param y a sparse vector.
+     * @return the Euclidean distance.
      */
     public static double distance(SparseArray x, SparseArray y) {
-        return Math.sqrt(squaredDistance(x, y));
-    }
-
-    private static class PdistTask implements Callable<Void> {
-        double[][] x;
-        double[][] dist;
-        int nprocs;
-        int pid;
-        boolean half;
-        boolean squared;
-
-        PdistTask(double[][] x, double[][] dist, int nprocs, int pid, boolean squared, boolean half) {
-            this.x = x;
-            this.dist = dist;
-            this.nprocs = nprocs;
-            this.pid = pid;
-            this.squared = squared;
-            this.half = half;
-        }
-
-        @Override
-        public Void call() {
-            int n = x.length;
-            for (int i = pid; i < n; i += nprocs) {
-                for (int j = 0; j < i; j++) {
-                    double d = squared ? squaredDistance(x[i], x[j]) : distance(x[i], x[j]);
-                    dist[i][j] = d;
-                    if (!half) dist[j][i] = d;
-                }
-            }
-            return null;
-        }
-    }
-    /**
-     * Pairwise distance between pairs of objects.
-     * @param x Rows of x correspond to observations, and columns correspond to variables.
-     * @return a full pairwise distance matrix.
-     */
-    public static double[][] pdist(double[][] x) {
-        int n = x.length;
-
-        double[][] dist = new double[n][n];
-        pdist(x, dist, false, false);
-
-        return dist;
+        return sqrt(squaredDistance(x, y));
     }
 
     /**
-     * Pairwise distance between pairs of objects.
-     * @param x Rows of x correspond to observations, and columns correspond to variables.
-     * @param squared If true, compute the squared Euclidean distance.
-     * @param half If true, only the lower half of dist will be referenced.
-     * @param dist The distance matrix.
-     */
-    public static void pdist(double[][] x, double[][] dist, boolean squared, boolean half) {
-        int n = x.length;
-
-        if (n < 100) {
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < i; j++) {
-                    double d = distance(x[i], x[j]);
-                    dist[i][j] = d;
-                    dist[j][i] = d;
-                }
-            }
-        } else {
-            int nprocs = Runtime.getRuntime().availableProcessors();
-            List<PdistTask> tasks = new ArrayList<>();
-            for (int i = 0; i < nprocs; i++) {
-                PdistTask task = new PdistTask(x, dist, nprocs, i, squared, half);
-                tasks.add(task);
-            }
-            ForkJoinPool.commonPool().invokeAll(tasks);
-        }
-    }
-
-    /**
-     * The squared Euclidean distance.
+     * The squared Euclidean distance on binary sparse arrays,
+     * which are the indices of nonzero elements in ascending order.
+     *
+     * @param x a binary sparse vector.
+     * @param y a binary sparse vector.
+     * @return the square of Euclidean distance.
      */
     public static double squaredDistance(int[] x, int[] y) {
-        if (x.length != y.length) {
-            throw new IllegalArgumentException("Input vector sizes are different.");
+        double d = 0.0;
+
+        int p1 = 0, p2 = 0;
+        while (p1 < x.length && p2 < y.length) {
+            int i1 = x[p1];
+            int i2 = y[p2];
+            if (i1 == i2) {
+                p1++;
+                p2++;
+            } else if (i1 > i2) {
+                d++;
+                p2++;
+            } else {
+                d++;
+                p1++;
+            }
         }
 
-        double sum = 0.0;
-        for (int i = 0; i < x.length; i++) {
-            sum += sqr(x[i] - y[i]);
-        }
+        d += x.length - p1;
+        d += y.length - p2;
 
-        return sum;
+        return d;
     }
 
     /**
      * The squared Euclidean distance.
+     *
+     * @param x a vector.
+     * @param y a vector.
+     * @return the square of Euclidean distance.
      */
     public static double squaredDistance(float[] x, float[] y) {
         if (x.length != y.length) {
             throw new IllegalArgumentException("Input vector sizes are different.");
         }
 
+        switch (x.length) {
+            case 2: {
+                double d0 = (double) x[0] - (double) y[0];
+                double d1 = (double) x[1] - (double) y[1];
+                return d0 * d0 + d1 * d1;
+            }
+
+            case 3: {
+                double d0 = (double) x[0] - (double) y[0];
+                double d1 = (double) x[1] - (double) y[1];
+                double d2 = (double) x[2] - (double) y[2];
+                return d0 * d0 + d1 * d1 + d2 * d2;
+            }
+
+            case 4: {
+                double d0 = (double) x[0] - (double) y[0];
+                double d1 = (double) x[1] - (double) y[1];
+                double d2 = (double) x[2] - (double) y[2];
+                double d3 = (double) x[3] - (double) y[3];
+                return d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
+            }
+        }
+
         double sum = 0.0;
         for (int i = 0; i < x.length; i++) {
-            sum += sqr(x[i] - y[i]);
+            // covert x and y for better precision
+            double d = (double) x[i] - (double) y[i];
+            sum += d * d;
         }
 
         return sum;
@@ -1789,22 +2598,54 @@ public class MathEx {
 
     /**
      * The squared Euclidean distance.
+     *
+     * @param x a vector.
+     * @param y a vector.
+     * @return the square of Euclidean distance.
      */
     public static double squaredDistance(double[] x, double[] y) {
         if (x.length != y.length) {
             throw new IllegalArgumentException("Input vector sizes are different.");
         }
 
+        switch (x.length) {
+            case 2: {
+                double d0 = x[0] - y[0];
+                double d1 = x[1] - y[1];
+                return d0 * d0 + d1 * d1;
+            }
+
+            case 3: {
+                double d0 = x[0] - y[0];
+                double d1 = x[1] - y[1];
+                double d2 = x[2] - y[2];
+                return d0 * d0 + d1 * d1 + d2 * d2;
+            }
+
+            case 4: {
+                double d0 = x[0] - y[0];
+                double d1 = x[1] - y[1];
+                double d2 = x[2] - y[2];
+                double d3 = x[3] - y[3];
+                return d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
+            }
+        }
+
         double sum = 0.0;
         for (int i = 0; i < x.length; i++) {
-            sum += sqr(x[i] - y[i]);
+            double d = x[i] - y[i];
+            sum += d * d;
         }
 
         return sum;
     }
 
     /**
-     * The Euclidean distance.
+     * The Euclidean distance on sparse arrays.
+     *
+     * @param x a sparse vector.
+     * @param y a sparse vector.
+     * @return the square of Euclidean distance.
      */
     public static double squaredDistance(SparseArray x, SparseArray y) {
         Iterator<SparseArray.Entry> it1 = x.iterator();
@@ -1815,30 +2656,199 @@ public class MathEx {
         double sum = 0.0;
         while (e1 != null && e2 != null) {
             if (e1.i == e2.i) {
-                sum += sqr(e1.x - e2.x);
+                sum += pow2(e1.x - e2.x);
                 e1 = it1.hasNext() ? it1.next() : null;
                 e2 = it2.hasNext() ? it2.next() : null;
             } else if (e1.i > e2.i) {
-                sum += sqr(e2.x);
+                sum += pow2(e2.x);
                 e2 = it2.hasNext() ? it2.next() : null;
             } else {
-                sum += sqr(e1.x);
+                sum += pow2(e1.x);
                 e1 = it1.hasNext() ? it1.next() : null;
             }
         }
         
         while (it1.hasNext()) {
-            sum += sqr(it1.next().x);
+            double d = it1.next().x;
+            sum += d * d;
         }
 
         while (it2.hasNext()) {
-            sum += sqr(it2.next().x);
+            double d = it2.next().x;
+            sum += d * d;
         }
         
         return sum;
     }
 
     /**
+     * The squared Euclidean distance with handling missing values (represented as NaN).
+     *
+     * @param x a vector.
+     * @param y a vector.
+     * @return the square of Euclidean distance.
+     */
+    public static double squaredDistanceWithMissingValues(double[] x, double[] y) {
+        int n = x.length;
+        int m = 0;
+        double dist = 0.0;
+
+        for (int i = 0; i < n; i++) {
+            if (!Double.isNaN(x[i]) && !Double.isNaN(y[i])) {
+                m++;
+                double d = x[i] - y[i];
+                dist += d * d;
+            }
+        }
+
+        if (m == 0) {
+            dist = Double.MAX_VALUE;
+        } else {
+            dist = n * dist / m;
+        }
+
+        return dist;
+    }
+
+    /**
+     * Returns the pairwise distance matrix of multiple binary sparse vectors.
+     * @param x binary sparse vectors, which are the indices of
+     *          nonzero elements in ascending order.
+     * @return the full pairwise distance matrix.
+     */
+    public static Matrix pdist(int[][] x) {
+        return pdist(x, false);
+    }
+
+    /**
+     * Returns the pairwise distance matrix of multiple binary sparse vectors.
+     * @param x binary sparse vectors, which are the indices of
+     *          nonzero elements in ascending order.
+     * @param squared If true, compute the squared Euclidean distance.
+     * @return the pairwise distance matrix.
+     */
+    public static Matrix pdist(int[][] x, boolean squared) {
+        int n = x.length;
+        double[][] dist = new double[n][n];
+
+        pdist(x, dist, squared ? MathEx::squaredDistance : MathEx::distance);
+        return new Matrix(dist);
+    }
+
+    /**
+     * Returns the pairwise distance matrix of multiple vectors.
+     * @param x the vectors.
+     * @return the full pairwise distance matrix.
+     */
+    public static Matrix pdist(float[][] x) {
+        return pdist(x, false);
+    }
+
+    /**
+     * Returns the pairwise distance matrix of multiple vectors.
+     * @param x the vectors.
+     * @param squared If true, compute the squared Euclidean distance.
+     * @return the pairwise distance matrix.
+     */
+    public static Matrix pdist(float[][] x, boolean squared) {
+        int n = x.length;
+        double[][] dist = new double[n][n];
+
+        pdist(x, dist, squared ? MathEx::squaredDistance : MathEx::distance);
+        return new Matrix(dist);
+    }
+
+    /**
+     * Returns the pairwise distance matrix of multiple vectors.
+     * @param x the vectors.
+     * @return the full pairwise distance matrix.
+     */
+    public static Matrix pdist(double[][] x) {
+        return pdist(x, false);
+    }
+
+    /**
+     * Returns the pairwise distance matrix of multiple vectors.
+     * @param x the vectors.
+     * @param squared If true, compute the squared Euclidean distance.
+     * @return the pairwise distance matrix.
+     */
+    public static Matrix pdist(double[][] x, boolean squared) {
+        int n = x.length;
+        double[][] dist = new double[n][n];
+
+        pdist(x, dist, squared ? MathEx::squaredDistance : MathEx::distance);
+        return new Matrix(dist);
+    }
+
+    /**
+     * Returns the pairwise distance matrix of multiple vectors.
+     * @param x the vectors.
+     * @return the full pairwise distance matrix.
+     */
+    public static Matrix pdist(SparseArray[] x) {
+        return pdist(x, false);
+    }
+
+    /**
+     * Returns the pairwise distance matrix of multiple vectors.
+     * @param x the vectors.
+     * @param squared If true, compute the squared Euclidean distance.
+     * @return the pairwise distance matrix.
+     */
+    public static Matrix pdist(SparseArray[] x, boolean squared) {
+        int n = x.length;
+        double[][] dist = new double[n][n];
+
+        pdist(x, dist, squared ? MathEx::squaredDistance : MathEx::distance);
+        return new Matrix(dist);
+    }
+
+    /**
+     * Computes the pairwise distance matrix of multiple vectors.
+     * @param x the vectors.
+     * @param d The output distance matrix. It may be only the lower half.
+     * @param distance the distance lambda.
+     * @param <T> the data type of vectors.
+     */
+    public static <T> void pdist(T[] x, double[][] d, Distance<T> distance) {
+        int n = x.length;
+
+        if (d[0].length < n) {
+            IntStream.range(0, n).parallel().forEach(i -> {
+                T xi = x[i];
+                double[] di = d[i];
+                for (int j = 0; j < i; j++) {
+                    di[j] = distance.d(xi, x[j]);
+                }
+            });
+        } else {
+            IntStream.range(0, n).parallel().forEach(i -> {
+                T xi = x[i];
+                double[] di = d[i];
+                for (int j = 0; j < n; j++) {
+                    di[j] = distance.d(xi, x[j]);
+                }
+            });
+        }
+    }
+
+    /**
+     * Shannon's entropy.
+     * @param p the probabilities.
+     * @return Shannon's entropy.
+     */
+    public static double entropy(double[] p) {
+        double h = 0.0;
+        for (double pi : p) {
+            if (pi > 0) {
+                h -= pi * Math.log(pi);
+            }
+        }
+        return h;
+    }
+
+    /**
      * Kullback-Leibler divergence. The Kullback-Leibler divergence (also
      * information divergence, information gain, relative entropy, or KLIC)
      * is a non-symmetric measure of the difference between two probability
@@ -1852,15 +2862,19 @@ public class MathEx {
      * Although it is often intuited as a distance metric, the KL divergence is
      * not a true metric - for example, the KL from P to Q is not necessarily
      * the same as the KL from Q to P.
+     *
+     * @param p a probability distribution.
+     * @param q a probability distribution.
+     * @return Kullback-Leibler divergence
      */
-    public static double KullbackLeiblerDivergence(double[] x, double[] y) {
+    public static double KullbackLeiblerDivergence(double[] p, double[] q) {
         boolean intersection = false;
         double kl = 0.0;
 
-        for (int i = 0; i < x.length; i++) {
-            if (x[i] != 0.0 && y[i] != 0.0) {
+        for (int i = 0; i < p.length; i++) {
+            if (p[i] != 0.0 && q[i] != 0.0) {
                 intersection = true;
-                kl += x[i] * Math.log(x[i] / y[i]);
+                kl += p[i] * Math.log(p[i] / q[i]);
             }
         }
 
@@ -1885,36 +2899,40 @@ public class MathEx {
      * Although it is often intuited as a distance metric, the KL divergence is
      * not a true metric - for example, the KL from P to Q is not necessarily
      * the same as the KL from Q to P.
+     *
+     * @param p a probability distribution.
+     * @param q a probability distribution.
+     * @return Kullback-Leibler divergence
      */
-    public static double KullbackLeiblerDivergence(SparseArray x, SparseArray y) {
-        if (x.isEmpty()) {
-            throw new IllegalArgumentException("List x is empty.");
+    public static double KullbackLeiblerDivergence(SparseArray p, SparseArray q) {
+        if (p.isEmpty()) {
+            throw new IllegalArgumentException("p is empty.");
         }
 
-        if (y.isEmpty()) {
-            throw new IllegalArgumentException("List y is empty.");
+        if (q.isEmpty()) {
+            throw new IllegalArgumentException("q is empty.");
         }
 
-        Iterator<SparseArray.Entry> iterX = x.iterator();
-        Iterator<SparseArray.Entry> iterY = y.iterator();
+        Iterator<SparseArray.Entry> pIter = p.iterator();
+        Iterator<SparseArray.Entry> qIter = q.iterator();
 
-        SparseArray.Entry a = iterX.hasNext() ? iterX.next() : null;
-        SparseArray.Entry b = iterY.hasNext() ? iterY.next() : null;
+        SparseArray.Entry a = pIter.hasNext() ? pIter.next() : null;
+        SparseArray.Entry b = qIter.hasNext() ? qIter.next() : null;
 
         boolean intersection = false;
         double kl = 0.0;
 
         while (a != null && b != null) {
             if (a.i < b.i) {
-                a = iterX.hasNext() ? iterX.next() : null;
+                a = pIter.hasNext() ? pIter.next() : null;
             } else if (a.i > b.i) {
-                b = iterY.hasNext() ? iterY.next() : null;
+                b = qIter.hasNext() ? qIter.next() : null;
             } else {
                 intersection = true;
                 kl += a.x * Math.log(a.x / b.x);
 
-                a = iterX.hasNext() ? iterX.next() : null;
-                b = iterY.hasNext() ? iterY.next() : null;
+                a = pIter.hasNext() ? pIter.next() : null;
+                b = qIter.hasNext() ? qIter.next() : null;
             }
         }
 
@@ -1939,9 +2957,13 @@ public class MathEx {
      * Although it is often intuited as a distance metric, the KL divergence is
      * not a true metric - for example, the KL from P to Q is not necessarily
      * the same as the KL from Q to P.
+     *
+     * @param p a probability distribution.
+     * @param q a probability distribution.
+     * @return Kullback-Leibler divergence
      */
-    public static double KullbackLeiblerDivergence(double[] x, SparseArray y) {
-        return KullbackLeiblerDivergence(y, x);
+    public static double KullbackLeiblerDivergence(double[] p, SparseArray q) {
+        return KullbackLeiblerDivergence(q, p);
     }
 
     /**
@@ -1958,22 +2980,26 @@ public class MathEx {
      * Although it is often intuited as a distance metric, the KL divergence is
      * not a true metric - for example, the KL from P to Q is not necessarily
      * the same as the KL from Q to P.
+     *
+     * @param p a probability distribution.
+     * @param q a probability distribution.
+     * @return Kullback-Leibler divergence
      */
-    public static double KullbackLeiblerDivergence(SparseArray x, double[] y) {
-        if (x.isEmpty()) {
-            throw new IllegalArgumentException("List x is empty.");
+    public static double KullbackLeiblerDivergence(SparseArray p, double[] q) {
+        if (p.isEmpty()) {
+            throw new IllegalArgumentException("p is empty.");
         }
 
-        Iterator<SparseArray.Entry> iter = x.iterator();
+        Iterator<SparseArray.Entry> iter = p.iterator();
 
         boolean intersection = false;
         double kl = 0.0;
         while (iter.hasNext()) {
             SparseArray.Entry b = iter.next();
             int i = b.i;
-            if (y[i] > 0) {
+            if (q[i] > 0) {
                 intersection = true;
-                kl += b.x * Math.log(b.x / y[i]);
+                kl += b.x * Math.log(b.x / q[i]);
             }
         }
 
@@ -1992,14 +3018,18 @@ public class MathEx {
      * It is based on the Kullback-Leibler divergence, with the difference that
      * it is always a finite value. The square root of the Jensen-Shannon divergence
      * is a metric.
+     *
+     * @param p a probability distribution.
+     * @param q a probability distribution.
+     * @return Jensen-Shannon divergence
      */
-    public static double JensenShannonDivergence(double[] x, double[] y) {
-        double[] m = new double[x.length];
+    public static double JensenShannonDivergence(double[] p, double[] q) {
+        double[] m = new double[p.length];
         for (int i = 0; i < m.length; i++) {
-            m[i] = (x[i] + y[i]) / 2;
+            m[i] = (p[i] + q[i]) / 2;
         }
 
-        return (KullbackLeiblerDivergence(x, m) + KullbackLeiblerDivergence(y, m)) / 2;
+        return (KullbackLeiblerDivergence(p, m) + KullbackLeiblerDivergence(q, m)) / 2;
     }
 
     /**
@@ -2010,21 +3040,25 @@ public class MathEx {
      * It is based on the Kullback-Leibler divergence, with the difference that
      * it is always a finite value. The square root of the Jensen-Shannon divergence
      * is a metric.
+     *
+     * @param p a probability distribution.
+     * @param q a probability distribution.
+     * @return Jensen-Shannon divergence
      */
-    public static double JensenShannonDivergence(SparseArray x, SparseArray y) {
-        if (x.isEmpty()) {
-            throw new IllegalArgumentException("List x is empty.");
+    public static double JensenShannonDivergence(SparseArray p, SparseArray q) {
+        if (p.isEmpty()) {
+            throw new IllegalArgumentException("p is empty.");
         }
 
-        if (y.isEmpty()) {
-            throw new IllegalArgumentException("List y is empty.");
+        if (q.isEmpty()) {
+            throw new IllegalArgumentException("q is empty.");
         }
 
-        Iterator<SparseArray.Entry> iterX = x.iterator();
-        Iterator<SparseArray.Entry> iterY = y.iterator();
+        Iterator<SparseArray.Entry> pIter = p.iterator();
+        Iterator<SparseArray.Entry> qIter = q.iterator();
 
-        SparseArray.Entry a = iterX.hasNext() ? iterX.next() : null;
-        SparseArray.Entry b = iterY.hasNext() ? iterY.next() : null;
+        SparseArray.Entry a = pIter.hasNext() ? pIter.next() : null;
+        SparseArray.Entry b = qIter.hasNext() ? qIter.next() : null;
 
         double js = 0.0;
 
@@ -2032,17 +3066,17 @@ public class MathEx {
             if (a.i < b.i) {
                 double mi = a.x / 2;
                 js += a.x * Math.log(a.x / mi);
-                a = iterX.hasNext() ? iterX.next() : null;
+                a = pIter.hasNext() ? pIter.next() : null;
             } else if (a.i > b.i) {
                 double mi = b.x / 2;
                 js += b.x * Math.log(b.x / mi);
-                b = iterY.hasNext() ? iterY.next() : null;
+                b = qIter.hasNext() ? qIter.next() : null;
             } else {
                 double mi = (a.x + b.x) / 2;
                 js += a.x * Math.log(a.x / mi) + b.x * Math.log(b.x / mi);
 
-                a = iterX.hasNext() ? iterX.next() : null;
-                b = iterY.hasNext() ? iterY.next() : null;
+                a = pIter.hasNext() ? pIter.next() : null;
+                b = qIter.hasNext() ? qIter.next() : null;
             }
         }
 
@@ -2057,9 +3091,13 @@ public class MathEx {
      * It is based on the Kullback-Leibler divergence, with the difference that
      * it is always a finite value. The square root of the Jensen-Shannon divergence
      * is a metric.
+     *
+     * @param p a probability distribution.
+     * @param q a probability distribution.
+     * @return Jensen-Shannon divergence
      */
-    public static double JensenShannonDivergence(double[] x, SparseArray y) {
-        return JensenShannonDivergence(y, x);
+    public static double JensenShannonDivergence(double[] p, SparseArray q) {
+        return JensenShannonDivergence(q, p);
     }
 
     /**
@@ -2070,22 +3108,26 @@ public class MathEx {
      * It is based on the Kullback-Leibler divergence, with the difference that
      * it is always a finite value. The square root of the Jensen-Shannon divergence
      * is a metric.
+     *
+     * @param p a probability distribution.
+     * @param q a probability distribution.
+     * @return Jensen-Shannon divergence
      */
-    public static double JensenShannonDivergence(SparseArray x, double[] y) {
-        if (x.isEmpty()) {
-            throw new IllegalArgumentException("List x is empty.");
+    public static double JensenShannonDivergence(SparseArray p, double[] q) {
+        if (p.isEmpty()) {
+            throw new IllegalArgumentException("p is empty.");
         }
 
-        Iterator<SparseArray.Entry> iter = x.iterator();
+        Iterator<SparseArray.Entry> iter = p.iterator();
 
         double js = 0.0;
         while (iter.hasNext()) {
             SparseArray.Entry b = iter.next();
             int i = b.i;
-            double mi = (b.x + y[i]) / 2;
+            double mi = (b.x + q[i]) / 2;
             js += b.x * Math.log(b.x / mi);
-            if (y[i] > 0) {
-                js += y[i] * Math.log(y[i] / mi);
+            if (q[i] > 0) {
+                js += q[i] * Math.log(q[i] / mi);
             }
         }
 
@@ -2093,55 +3135,75 @@ public class MathEx {
     }
 
     /**
-     * Returns the dot product between two vectors.
+     * Returns the dot product between two binary sparse arrays,
+     * which are the indices of nonzero elements in ascending order.
+     * @param x a binary sparse vector.
+     * @param y a binary sparse vector.
+     * @return the dot product.
      */
-    public static double dot(int[] x, int[] y) {
-        if (x.length != y.length) {
-            throw new IllegalArgumentException("Arrays have different length.");
+    public static int dot(int[] x, int[] y) {
+        int sum = 0;
+
+        for (int p1 = 0, p2 = 0; p1 < x.length && p2 < y.length; ) {
+            int i1 = x[p1];
+            int i2 = y[p2];
+            if (i1 == i2) {
+                sum++;
+                p1++;
+                p2++;
+            } else if (i1 > i2) {
+                p2++;
+            } else {
+                p1++;
+            }
         }
 
-        double p = 0.0;
-        for (int i = 0; i < x.length; i++) {
-            p += x[i] * y[i];
-        }
-
-        return p;
+        return sum;
     }
 
     /**
      * Returns the dot product between two vectors.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the dot product.
      */
-    public static double dot(float[] x, float[] y) {
+    public static float dot(float[] x, float[] y) {
         if (x.length != y.length) {
             throw new IllegalArgumentException("Arrays have different length.");
         }
 
-        double p = 0.0;
+        float sum = 0.0F;
         for (int i = 0; i < x.length; i++) {
-            p += x[i] * y[i];
+            sum += x[i] * y[i];
         }
 
-        return p;
+        return sum;
     }
 
     /**
      * Returns the dot product between two vectors.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the dot product.
      */
     public static double dot(double[] x, double[] y) {
         if (x.length != y.length) {
             throw new IllegalArgumentException("Arrays have different length.");
         }
 
-        double p = 0.0;
+        double sum = 0.0;
         for (int i = 0; i < x.length; i++) {
-            p += x[i] * y[i];
+            sum += x[i] * y[i];
         }
 
-        return p;
+        return sum;
     }
 
     /**
      * Returns the dot product between two sparse arrays.
+     * @param x a sparse vector.
+     * @param y a sparse vector.
+     * @return the dot product.
      */
     public static double dot(SparseArray x, SparseArray y) {
         Iterator<SparseArray.Entry> it1 = x.iterator();
@@ -2149,10 +3211,10 @@ public class MathEx {
         SparseArray.Entry e1 = it1.hasNext() ? it1.next() : null;
         SparseArray.Entry e2 = it2.hasNext() ? it2.next() : null;
 
-        double s = 0.0;
+        double sum = 0.0;
         while (e1 != null && e2 != null) {
             if (e1.i == e2.i) {
-                s += e1.x * e2.x;
+                sum += e1.x * e2.x;
                 e1 = it1.hasNext() ? it1.next() : null;
                 e2 = it2.hasNext() ? it2.next() : null;
             } else if (e1.i > e2.i) {
@@ -2162,11 +3224,95 @@ public class MathEx {
             }
         }
         
-        return s;
+        return sum;
+    }
+
+    /**
+     * Returns the pairwise dot product matrix of binary sparse vectors.
+     * @param x the binary sparse vectors, which are the indices of
+     *          nonzero elements in ascending order.
+     * @return the dot product matrix.
+     */
+    public static Matrix pdot(int[][] x) {
+        int n = x.length;
+
+        Matrix matrix = new Matrix(n, n);
+        matrix.uplo(UPLO.LOWER);
+        IntStream.range(0, n).parallel().forEach(j -> {
+            int[] xj = x[j];
+            for (int i = 0; i < n; i++) {
+                matrix.set(i, j, dot(x[i], xj));
+            }
+        });
+
+        return matrix;
+    }
+
+    /**
+     * Returns the pairwise dot product matrix of float vectors.
+     * @param x the vectors.
+     * @return the dot product matrix.
+     */
+    public static Matrix pdot(float[][] x) {
+        int n = x.length;
+
+        Matrix matrix = new Matrix(n, n);
+        matrix.uplo(UPLO.LOWER);
+        IntStream.range(0, n).parallel().forEach(j -> {
+            float[] xj = x[j];
+            for (int i = 0; i < n; i++) {
+                matrix.set(i, j, dot(x[i], xj));
+            }
+        });
+
+        return matrix;
+    }
+
+    /**
+     * Returns the pairwise dot product matrix of double vectors.
+     * @param x the vectors.
+     * @return the dot product matrix.
+     */
+    public static Matrix pdot(double[][] x) {
+        int n = x.length;
+
+        Matrix matrix = new Matrix(n, n);
+        matrix.uplo(UPLO.LOWER);
+        IntStream.range(0, n).parallel().forEach(j -> {
+            double[] xj = x[j];
+            for (int i = 0; i < n; i++) {
+                matrix.set(i, j, dot(x[i], xj));
+            }
+        });
+
+        return matrix;
+    }
+
+    /**
+     * Returns the pairwise dot product matrix of multiple vectors.
+     * @param x the sparse vectors.
+     * @return the dot product matrix.
+     */
+    public static Matrix pdot(SparseArray[] x) {
+        int n = x.length;
+
+        Matrix matrix = new Matrix(n, n);
+        matrix.uplo(UPLO.LOWER);
+        IntStream.range(0, n).parallel().forEach(j -> {
+            SparseArray xj = x[j];
+            for (int i = 0; i < n; i++) {
+                matrix.set(i, j, dot(x[i], xj));
+            }
+        });
+
+        return matrix;
     }
 
     /**
      * Returns the covariance between two vectors.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the covariance.
      */
     public static double cov(int[] x, int[] y) {
         if (x.length != y.length) {
@@ -2192,6 +3338,9 @@ public class MathEx {
 
     /**
      * Returns the covariance between two vectors.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the covariance.
      */
     public static double cov(float[] x, float[] y) {
         if (x.length != y.length) {
@@ -2217,6 +3366,9 @@ public class MathEx {
 
     /**
      * Returns the covariance between two vectors.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the covariance.
      */
     public static double cov(double[] x, double[] y) {
         if (x.length != y.length) {
@@ -2242,6 +3394,8 @@ public class MathEx {
 
     /**
      * Returns the sample covariance matrix.
+     * @param data the samples
+     * @return the covariance matrix.
      */
     public static double[][] cov(double[][] data) {
         return cov(data, colMeans(data));
@@ -2249,14 +3403,16 @@ public class MathEx {
 
     /**
      * Returns the sample covariance matrix.
+     * @param data the samples
      * @param mu the known mean of data.
+     * @return the covariance matrix.
      */
     public static double[][] cov(double[][] data, double[] mu) {
         double[][] sigma = new double[data[0].length][data[0].length];
-        for (int i = 0; i < data.length; i++) {
+        for (double[] datum : data) {
             for (int j = 0; j < mu.length; j++) {
                 for (int k = 0; k <= j; k++) {
-                    sigma[j][k] += (data[i][j] - mu[j]) * (data[i][k] - mu[k]);
+                    sigma[j][k] += (datum[j] - mu[j]) * (datum[k] - mu[k]);
                 }
             }
         }
@@ -2274,6 +3430,9 @@ public class MathEx {
 
     /**
      * Returns the correlation coefficient between two vectors.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the correlation coefficient.
      */
     public static double cor(int[] x, int[] y) {
         if (x.length != y.length) {
@@ -2292,11 +3451,14 @@ public class MathEx {
             return Double.NaN;
         }
 
-        return Sxy / Math.sqrt(Sxx * Syy);
+        return Sxy / sqrt(Sxx * Syy);
     }
 
     /**
      * Returns the correlation coefficient between two vectors.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the correlation coefficient.
      */
     public static double cor(float[] x, float[] y) {
         if (x.length != y.length) {
@@ -2315,11 +3477,14 @@ public class MathEx {
             return Double.NaN;
         }
 
-        return Sxy / Math.sqrt(Sxx * Syy);
+        return Sxy / sqrt(Sxx * Syy);
     }
 
     /**
      * Returns the correlation coefficient between two vectors.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the correlation coefficient.
      */
     public static double cor(double[] x, double[] y) {
         if (x.length != y.length) {
@@ -2338,11 +3503,13 @@ public class MathEx {
             return Double.NaN;
         }
 
-        return Sxy / Math.sqrt(Sxx * Syy);
+        return Sxy / sqrt(Sxx * Syy);
     }
 
     /**
      * Returns the sample correlation matrix.
+     * @param data the samples
+     * @return the correlation matrix.
      */
     public static double[][] cor(double[][] data) {
         return cor(data, colMeans(data));
@@ -2350,7 +3517,9 @@ public class MathEx {
 
     /**
      * Returns the sample correlation matrix.
+     * @param data the samples
      * @param mu the known mean of data.
+     * @return the correlation matrix.
      */
     public static double[][] cor(double[][] data, double[] mu) {
         double[][] sigma = cov(data, mu);
@@ -2358,7 +3527,7 @@ public class MathEx {
         int n = data[0].length;
         double[] sd = new double[n];
         for (int i = 0; i < n; i++) {
-            sd[i] = Math.sqrt(sigma[i][i]);
+            sd[i] = sqrt(sigma[i][i]);
         }
 
         for (int i = 0; i < n; i++) {
@@ -2413,6 +3582,9 @@ public class MathEx {
      * coefficient with the data converted to rankings (ie. when variables
      * are ordinal). It can be used when there is non-parametric data and hence
      * Pearson cannot be used.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the Spearman rank correlation coefficient.
      */
     public static double spearman(int[] x, int[] y) {
         if (x.length != y.length) {
@@ -2428,20 +3600,11 @@ public class MathEx {
         }
 
         QuickSort.sort(wksp1, wksp2);
-        double sf = crank(wksp1);
+        crank(wksp1);
         QuickSort.sort(wksp2, wksp1);
-        double sg = crank(wksp2);
+        crank(wksp2);
 
-        double d = 0.0;
-        for (int j = 0; j < n; j++) {
-            d += sqr(wksp1[j] - wksp2[j]);
-        }
-
-        int en = n;
-        double en3n = en * en * en - en;
-        double fac = (1.0 - sf / en3n) * (1.0 - sg / en3n);
-        double rs = (1.0 - (6.0 / en3n) * (d + (sf + sg) / 12.0)) / Math.sqrt(fac);
-        return rs;
+        return cor(wksp1, wksp2);
     }
 
     /**
@@ -2449,6 +3612,9 @@ public class MathEx {
      * coefficient with the data converted to rankings (ie. when variables
      * are ordinal). It can be used when there is non-parametric data and hence
      * Pearson cannot be used.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the Spearman rank correlation coefficient.
      */
     public static double spearman(float[] x, float[] y) {
         if (x.length != y.length) {
@@ -2464,20 +3630,11 @@ public class MathEx {
         }
 
         QuickSort.sort(wksp1, wksp2);
-        double sf = crank(wksp1);
+        crank(wksp1);
         QuickSort.sort(wksp2, wksp1);
-        double sg = crank(wksp2);
+        crank(wksp2);
 
-        double d = 0.0;
-        for (int j = 0; j < n; j++) {
-            d += sqr(wksp1[j] - wksp2[j]);
-        }
-
-        int en = n;
-        double en3n = en * en * en - en;
-        double fac = (1.0 - sf / en3n) * (1.0 - sg / en3n);
-        double rs = (1.0 - (6.0 / en3n) * (d + (sf + sg) / 12.0)) / Math.sqrt(fac);
-        return rs;
+        return cor(wksp1, wksp2);
     }
 
     /**
@@ -2485,41 +3642,33 @@ public class MathEx {
      * coefficient with the data converted to rankings (ie. when variables
      * are ordinal). It can be used when there is non-parametric data and hence
      * Pearson cannot be used.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the Spearman rank correlation coefficient.
      */
     public static double spearman(double[] x, double[] y) {
         if (x.length != y.length) {
             throw new IllegalArgumentException("Input vector sizes are different.");
         }
 
-        int n = x.length;
-        double[] wksp1 = new double[n];
-        double[] wksp2 = new double[n];
-        for (int j = 0; j < n; j++) {
-            wksp1[j] = x[j];
-            wksp2[j] = y[j];
-        }
+        double[] wksp1 = x.clone();
+        double[] wksp2 = y.clone();
 
         QuickSort.sort(wksp1, wksp2);
-        double sf = crank(wksp1);
+        crank(wksp1);
         QuickSort.sort(wksp2, wksp1);
-        double sg = crank(wksp2);
+        crank(wksp2);
 
-        double d = 0.0;
-        for (int j = 0; j < n; j++) {
-            d += sqr(wksp1[j] - wksp2[j]);
-        }
-
-        int en = n;
-        double en3n = en * en * en - en;
-        double fac = (1.0 - sf / en3n) * (1.0 - sg / en3n);
-        double rs = (1.0 - (6.0 / en3n) * (d + (sf + sg) / 12.0)) / Math.sqrt(fac);
-        return rs;
+        return cor(wksp1, wksp2);
     }
 
     /**
      * The Kendall Tau Rank Correlation Coefficient is used to measure the
      * degree of correspondence between sets of rankings where the measures
      * are not equidistant. It is used with non-parametric data.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the Kendall rank correlation coefficient.
      */
     public static double kendall(int[] x, int[] y) {
         if (x.length != y.length) {
@@ -2553,14 +3702,16 @@ public class MathEx {
             }
         }
 
-        double tau = is / (Math.sqrt(n1) * Math.sqrt(n2));
-        return tau;
+        return is / (sqrt(n1) * sqrt(n2));
     }
 
     /**
      * The Kendall Tau Rank Correlation Coefficient is used to measure the
      * degree of correspondence between sets of rankings where the measures
      * are not equidistant. It is used with non-parametric data.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the Kendall rank correlation coefficient.
      */
     public static double kendall(float[] x, float[] y) {
         if (x.length != y.length) {
@@ -2594,14 +3745,16 @@ public class MathEx {
             }
         }
 
-        double tau = is / (Math.sqrt(n1) * Math.sqrt(n2));
-        return tau;
+        return is / (sqrt(n1) * sqrt(n2));
     }
 
     /**
      * The Kendall Tau Rank Correlation Coefficient is used to measure the
      * degree of correspondence between sets of rankings where the measures
      * are not equidistant. It is used with non-parametric data.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the Kendall rank correlation coefficient.
      */
     public static double kendall(double[] x, double[] y) {
         if (x.length != y.length) {
@@ -2635,25 +3788,60 @@ public class MathEx {
             }
         }
 
-        double tau = is / (Math.sqrt(n1) * Math.sqrt(n2));
-        return tau;
+        return is / (sqrt(n1) * sqrt(n2));
     }
 
     /**
-     * L1 vector norm.
+     * L<sub>1</sub> vector norm.
+     * @param x a vector.
+     * @return L<sub>1</sub> norm.
      */
-    public static double norm1(double[] x) {
-        double norm = 0.0;
+    public static float norm1(float[] x) {
+        float norm = 0.0F;
 
-        for (double n : x) {
-            norm += Math.abs(n);
+        for (float n : x) {
+            norm += abs(n);
         }
 
         return norm;
     }
 
     /**
-     * L2 vector norm.
+     * L<sub>1</sub> vector norm.
+     * @param x a vector.
+     * @return L<sub>1</sub> norm.
+     */
+    public static double norm1(double[] x) {
+        double norm = 0.0;
+
+        for (double n : x) {
+            norm += abs(n);
+        }
+
+        return norm;
+    }
+
+    /**
+     * L<sub>2</sub> vector norm.
+     * @param x a vector.
+     * @return L<sub>2</sub> norm.
+     */
+    public static float norm2(float[] x) {
+        float norm = 0.0F;
+
+        for (float n : x) {
+            norm += n * n;
+        }
+
+        norm = (float) sqrt(norm);
+
+        return norm;
+    }
+
+    /**
+     * L<sub>2</sub> vector norm.
+     * @param x a vector.
+     * @return L<sub>2</sub> norm.
      */
     public static double norm2(double[] x) {
         double norm = 0.0;
@@ -2662,34 +3850,84 @@ public class MathEx {
             norm += n * n;
         }
 
-        norm = Math.sqrt(norm);
+        norm = sqrt(norm);
 
         return norm;
     }
 
     /**
-     * L-infinity vector norm. Maximum absolute value.
+     * L<sub>&infin;</sub> vector norm that is the maximum absolute value.
+     * @param x a vector.
+     * @return L<sub>&infin;</sub> norm.
      */
-    public static double normInf(double[] x) {
+    public static float normInf(float[] x) {
         int n = x.length;
 
-        double f = Math.abs(x[0]);
+        float f = abs(x[0]);
         for (int i = 1; i < n; i++) {
-            f = Math.max(f, Math.abs(x[i]));
+            f = Math.max(f, abs(x[i]));
         }
 
         return f;
     }
 
     /**
-     * L2 vector norm.
+     * L<sub>&infin;</sub> vector norm. Maximum absolute value.
+     * @param x a vector.
+     * @return L<sub>&infin;</sub> norm.
+     */
+    public static double normInf(double[] x) {
+        int n = x.length;
+
+        double f = abs(x[0]);
+        for (int i = 1; i < n; i++) {
+            f = Math.max(f, abs(x[i]));
+        }
+
+        return f;
+    }
+
+    /**
+     * L<sub>2</sub> vector norm.
+     * @param x a vector.
+     * @return L<sub>2</sub> norm.
+     */
+    public static float norm(float[] x) {
+        return norm2(x);
+    }
+
+    /**
+     * L<sub>2</sub> vector norm.
+     * @param x a vector.
+     * @return L<sub>2</sub> norm.
      */
     public static double norm(double[] x) {
         return norm2(x);
     }
 
     /**
+     * Returns the cosine similarity.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the cosine similarity.
+     */
+    public static float cos(float[] x, float[] y) {
+        return dot(x, y) / (norm2(x) * norm2(y));
+    }
+
+    /**
+     * Returns the cosine similarity.
+     * @param x a vector.
+     * @param y a vector.
+     * @return the cosine similarity.
+     */
+    public static double cos(double[] x, double[] y) {
+        return dot(x, y) / (norm2(x) * norm2(y));
+    }
+
+    /**
      * Standardizes an array to mean 0 and variance 1.
+     * @param x the matrix.
      */
     public static void standardize(double[] x) {
         double mu = mean(x);
@@ -2707,17 +3945,9 @@ public class MathEx {
 
     /**
      * Scales each column of a matrix to range [0, 1].
+     * @param x the matrix.
      */
     public static void scale(double[][] x) {
-        scale(x, 0.0, 1.0);
-    }
-
-    /**
-     * Scales each column of a matrix to range [lo, hi].
-     * @param lo lower limit of range
-     * @param hi upper limit of range
-     */
-    public static void scale(double[][] x, double lo, double hi) {
         int n = x.length;
         int p = x[0].length;
 
@@ -2740,6 +3970,7 @@ public class MathEx {
 
     /**
      * Standardizes each column of a matrix to 0 mean and unit variance.
+     * @param x the matrix.
      */
     public static void standardize(double[][] x) {
         int n = x.length;
@@ -2754,10 +3985,10 @@ public class MathEx {
 
         double[] scale = new double[p];
         for (int j = 0; j < p; j++) {
-            for (int i = 0; i < n; i++) {
-                scale[j] += sqr(x[i][j]);
+            for (double[] xi : x) {
+                scale[j] += pow2(xi[j]);
             }
-            scale[j] = Math.sqrt(scale[j] / (n-1));
+            scale[j] = sqrt(scale[j] / (n-1));
 
             if (!isZero(scale[j])) {
                 for (int i = 0; i < n; i++) {
@@ -2769,6 +4000,7 @@ public class MathEx {
 
     /**
      * Unitizes each column of a matrix to unit length (L_2 norm).
+     * @param x the matrix.
      */
     public static void normalize(double[][] x) {
         normalize(x, false);
@@ -2776,6 +4008,7 @@ public class MathEx {
 
     /**
      * Unitizes each column of a matrix to unit length (L_2 norm).
+     * @param x the matrix.
      * @param centerizing If true, centerize each column to 0 mean.
      */
     public static void normalize(double[][] x, boolean centerizing) {
@@ -2793,10 +4026,10 @@ public class MathEx {
 
         double[] scale = new double[p];
         for (int j = 0; j < p; j++) {
-            for (int i = 0; i < n; i++) {
-                scale[j] += sqr(x[i][j]);
+            for (double[] xi : x) {
+                scale[j] += pow2(xi[j]);
             }
-            scale[j] = Math.sqrt(scale[j]);
+            scale[j] = sqrt(scale[j]);
         }
 
         for (int i = 0; i < n; i++) {
@@ -2809,18 +4042,18 @@ public class MathEx {
     }
 
     /**
-     * Unitize an array so that L2 norm of x = 1.
+     * Unitize an array so that L<sub>2</sub> norm of x = 1.
      *
-     * @param x the array of double
+     * @param x the vector.
      */
     public static void unitize(double[] x) {
         unitize2(x);
     }
 
     /**
-     * Unitize an array so that L1 norm of x is 1.
+     * Unitize an array so that L<sub>1</sub> norm of x is 1.
      *
-     * @param x an array of nonnegative double
+     * @param x the vector.
      */
     public static void unitize1(double[] x) {
         double n = norm1(x);
@@ -2831,9 +4064,9 @@ public class MathEx {
     }
 
     /**
-     * Unitize an array so that L2 norm of x = 1.
+     * Unitize an array so that L<sub>2</sub> norm of x = 1.
      *
-     * @param x the array of double
+     * @param x the vector.
      */
     public static void unitize2(double[] x) {
         double n = norm(x);
@@ -2844,143 +4077,21 @@ public class MathEx {
     }
 
     /**
-     * Returns the fitted linear function value y = intercept + slope * log(x).
-     */
-    private static double smoothed(int x, double slope, double intercept) {
-        return Math.exp(intercept + slope * Math.log(x));
-    }
-
-    /**
-     * Returns the index of given frequency.
-     * @param r the frequency list.
-     * @param f the given frequency.
-     * @return the index of given frequency or -1 if it doesn't exist in the list.
-     */
-    private static int row(int[] r, int f) {
-        int i = 0;
-
-        while (i < r.length && r[i] < f) {
-            ++i;
-        }
-
-        return ((i < r.length && r[i] == f) ? i : -1);
-    }
-
-    /**
-     * Takes a set of (frequency, frequency-of-frequency) pairs, and applies
-     * the "Simple Good-Turing" technique for estimating the probabilities
-     * corresponding to the observed frequencies, and P<sub>0</sub>, the joint
-     * probability of all unobserved species.
-     * @param r the frequency in ascending order.
-     * @param Nr the frequency of frequencies.
-     * @param p on output, it is the estimated probabilities.
-     * @return P<sub>0</sub> for all unobserved species.
-     */
-    public static double GoodTuring(int[] r, int[] Nr, double[] p) {
-        final double CONFID_FACTOR = 1.96;
-
-        if (r.length != Nr.length) {
-            throw new IllegalArgumentException("The sizes of r and Nr are not same.");
-        }
-
-        int len = r.length;
-        double[] logR = new double[len];
-        double[] logZ = new double[len];
-        double[] Z = new double[len];
-
-        int N = 0;
-        for (int j = 0; j < len; ++j) {
-            N += r[j] * Nr[j];
-        }
-
-        int n1 = (r[0] != 1) ? 0 : Nr[0];
-        double p0 = n1 / (double) N;
-
-        for (int j = 0; j < len; ++j) {
-            int q = j == 0     ?  0           : r[j - 1];
-            int t = j == len - 1 ? 2 * r[j] - q : r[j + 1];
-            Z[j] = 2.0 * Nr[j] / (t - q);
-            logR[j] = Math.log(r[j]);
-            logZ[j] = Math.log(Z[j]);
-        }
-
-        // Simple linear regression.
-        double XYs = 0.0, Xsquares = 0.0, meanX = 0.0, meanY = 0.0;
-        for (int i = 0; i < len; ++i) {
-            meanX += logR[i];
-            meanY += logZ[i];
-        }
-        meanX /= len;
-        meanY /= len;
-        for (int i = 0; i < len; ++i) {
-            XYs += (logR[i] - meanX) * (logZ[i] - meanY);
-            Xsquares += sqr(logR[i] - meanX);
-        }
-
-        double slope = XYs / Xsquares;
-        double intercept = meanY - slope * meanX;
-
-        boolean indiffValsSeen = false;
-        for (int j = 0; j < len; ++j) {
-            double y = (r[j] + 1) * smoothed(r[j] + 1, slope, intercept) / smoothed(r[j], slope, intercept);
-
-            if (row(r, r[j] + 1) < 0) {
-                indiffValsSeen = true;
-            }
-
-            if (!indiffValsSeen) {
-                int n = Nr[row(r, r[j] + 1)];
-                double x = (r[j] + 1) * n / (double) Nr[j];
-                if (Math.abs(x - y) <= CONFID_FACTOR * Math.sqrt(sqr(r[j] + 1.0) * n / sqr(Nr[j]) * (1 + n / (double) Nr[j]))) {
-                    indiffValsSeen = true;
-                } else {
-                    p[j] = x;
-                }
-            }
-
-            if (indiffValsSeen) {
-                p[j] = y;
-            }
-        }
-
-        double Nprime = 0.0;
-        for (int j = 0; j < len; ++j) {
-            Nprime += Nr[j] * p[j];
-        }
-
-        for (int j = 0; j < len; ++j) {
-            p[j] = (1 - p0) * p[j] / Nprime;
-        }
-
-        return p0;
-    }
-
-    /**
-     * Check if x element-wisely equals y.
-     */
-    public static boolean equals(int[] x, int[] y) {
-        if (x.length != y.length) {
-            throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
-
-        for (int i = 0; i < x.length; i++) {
-            if (x[i] != y[i]) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
      * Check if x element-wisely equals y with default epsilon 1E-7.
+     * @param x an array.
+     * @param y an array.
+     * @return true if x element-wisely equals y.
      */
     public static boolean equals(float[] x, float[] y) {
         return equals(x, y, 1.0E-7f);
     }
 
     /**
-     * Check if x element-wisely equals y.
+     * Check if x element-wisely equals y in given precision.
+     * @param x an array.
+     * @param y an array.
+     * @param epsilon a number close to zero.
+     * @return true if x element-wisely equals y.
      */
     public static boolean equals(float[] x, float[] y, float epsilon) {
         if (x.length != y.length) {
@@ -2988,7 +4099,7 @@ public class MathEx {
         }
 
         for (int i = 0; i < x.length; i++) {
-            if (Math.abs(x[i] - y[i]) > epsilon) {
+            if (abs(x[i] - y[i]) > epsilon) {
                 return false;
             }
         }
@@ -2998,76 +4109,55 @@ public class MathEx {
 
     /**
      * Check if x element-wisely equals y with default epsilon 1E-10.
+     * @param x an array.
+     * @param y an array.
+     * @return true if x element-wisely equals y.
      */
     public static boolean equals(double[] x, double[] y) {
         return equals(x, y, 1.0E-10);
     }
 
     /**
-     * Check if x element-wisely equals y.
+     * Check if x element-wisely equals y in given precision.
+     * @param x an array.
+     * @param y an array.
+     * @param epsilon a number close to zero.
+     * @return true if x element-wisely equals y.
      */
-    public static boolean equals(double[] x, double[] y, double eps) {
+    public static boolean equals(double[] x, double[] y, double epsilon) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
         }
 
-        if (eps <= 0.0) {
-            throw new IllegalArgumentException("Invalid epsilon: " + eps);            
+        if (epsilon <= 0.0) {
+            throw new IllegalArgumentException("Invalid epsilon: " + epsilon);
         }
         
         for (int i = 0; i < x.length; i++) {
-            if (Math.abs(x[i] - y[i]) > eps) {
+            if (abs(x[i] - y[i]) > epsilon) {
                 return false;
             }
         }
 
-        return true;
-    }
-
-    /**
-     * Check if x element-wisely equals y.
-     */
-    public static <T extends Comparable<? super T>>  boolean equals(T[] x, T[] y) {
-        if (x.length != y.length) {
-            throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
-
-        for (int i = 0; i < x.length; i++) {
-            if (x[i].compareTo(y[i]) != 0) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Check if x element-wisely equals y.
-     */
-    public static boolean equals(int[][] x, int[][] y) {
-        if (x.length != y.length || x[0].length != y[0].length) {
-            throw new IllegalArgumentException(String.format("Matrices have different rows: %d x %d vs %d x %d", x.length, x[0].length, y.length, y[0].length));
-        }
-
-        for (int i = 0; i < x.length; i++) {
-            for (int j = 0; j < x[i].length; j++) {
-                if (x[i][j] != y[i][j]) {
-                    return false;
-                }
-            }
-        }
         return true;
     }
 
     /**
      * Check if x element-wisely equals y with default epsilon 1E-7.
+     * @param x a two-dimensional array.
+     * @param y a two-dimensional array.
+     * @return true if x element-wisely equals y.
      */
     public static boolean equals(float[][] x, float[][] y) {
         return equals(x, y, 1.0E-7f);
     }
 
     /**
-     * Check if x element-wisely equals y.
+     * Check if x element-wisely equals y in given precision.
+     * @param x a two-dimensional array.
+     * @param y a two-dimensional array.
+     * @param epsilon a number close to zero.
+     * @return true if x element-wisely equals y.
      */
     public static boolean equals(float[][] x, float[][] y, float epsilon) {
         if (x.length != y.length || x[0].length != y[0].length) {
@@ -3076,7 +4166,7 @@ public class MathEx {
 
         for (int i = 0; i < x.length; i++) {
             for (int j = 0; j < x[i].length; j++) {
-                if (Math.abs(x[i][j] - y[i][j]) > epsilon) {
+                if (abs(x[i][j] - y[i][j]) > epsilon) {
                     return false;
                 }
             }
@@ -3086,26 +4176,33 @@ public class MathEx {
 
     /**
      * Check if x element-wisely equals y with default epsilon 1E-10.
+     * @param x a two-dimensional array.
+     * @param y a two-dimensional array.
+     * @return true if x element-wisely equals y.
      */
     public static boolean equals(double[][] x, double[][] y) {
         return equals(x, y, 1.0E-10);
     }
 
     /**
-     * Check if x element-wisely equals y.
+     * Check if x element-wisely equals y in given precision.
+     * @param x a two-dimensional array.
+     * @param y a two-dimensional array.
+     * @param epsilon a number close to zero.
+     * @return true if x element-wisely equals y.
      */
-    public static boolean equals(double[][] x, double[][] y, double eps) {
+    public static boolean equals(double[][] x, double[][] y, double epsilon) {
         if (x.length != y.length || x[0].length != y[0].length) {
             throw new IllegalArgumentException(String.format("Matrices have different rows: %d x %d vs %d x %d", x.length, x[0].length, y.length, y[0].length));
         }
 
-        if (eps <= 0.0) {
-            throw new IllegalArgumentException("Invalid epsilon: " + eps);            
+        if (epsilon <= 0.0) {
+            throw new IllegalArgumentException("Invalid epsilon: " + epsilon);
         }
         
         for (int i = 0; i < x.length; i++) {
             for (int j = 0; j < x[i].length; j++) {
-                if (Math.abs(x[i][j] - y[i][j]) > eps) {
+                if (abs(x[i][j] - y[i][j]) > epsilon) {
                     return false;
                 }
             }
@@ -3113,46 +4210,48 @@ public class MathEx {
         return true;
     }
 
-    /** Tests if a floating number is zero. */
+    /**
+     * Tests if a floating number is zero in machine precision.
+     * @param x a real number.
+     * @return true if x is zero in machine precision.
+     */
     public static boolean isZero(float x) {
-        return isZero(x, EPSILON);
+        return isZero(x, FLOAT_EPSILON);
     }
 
-    /** Tests if a floating number is zero with given epsilon. */
+    /**
+     * Tests if a floating number is zero in given precision.
+     * @param x a real number.
+     * @param epsilon a number close to zero.
+     * @return true if x is zero in <code>epsilon</code> precision.
+     */
     public static boolean isZero(float x, float epsilon) {
-        return Math.abs(x) < epsilon;
+        return abs(x) < epsilon;
     }
 
-    /** Tests if a floating number is zero. */
+    /**
+     * Tests if a floating number is zero in machine precision.
+     * @param x a real number.
+     * @return true if x is zero in machine precision.
+     */
     public static boolean isZero(double x) {
         return isZero(x, EPSILON);
     }
 
-    /** Tests if a floating number is zero with given epsilon. */
-    public static boolean isZero(double x, double epsilon) {
-        return Math.abs(x) < epsilon;
-    }
-
     /**
-     * Check if x element-wisely equals y.
+     * Tests if a floating number is zero in given precision.
+     * @param x a real number.
+     * @param epsilon a number close to zero.
+     * @return true if x is zero in <code>epsilon</code> precision.
      */
-    public static <T extends Comparable<? super T>>  boolean equals(T[][] x, T[][] y) {
-        if (x.length != y.length || x[0].length != y[0].length) {
-            throw new IllegalArgumentException(String.format("Matrices have different rows: %d x %d vs %d x %d", x.length, x[0].length, y.length, y[0].length));
-        }
-
-        for (int i = 0; i < x.length; i++) {
-            for (int j = 0; j < x[i].length; j++) {
-                if (x[i][j].compareTo(y[i][j]) != 0) {
-                    return false;
-                }
-            }
-        }
-        return true;
+    public static boolean isZero(double x, double epsilon) {
+        return abs(x) < epsilon;
     }
 
     /**
      * Deep clone a two-dimensional array.
+     * @param x a two-dimensional array.
+     * @return the deep clone.
      */
     public static int[][] clone(int[][] x) {
         int[][] matrix = new int[x.length][];
@@ -3165,6 +4264,8 @@ public class MathEx {
 
     /**
      * Deep clone a two-dimensional array.
+     * @param x a two-dimensional array.
+     * @return the deep clone.
      */
     public static float[][] clone(float[][] x) {
         float[][] matrix = new float[x.length][];
@@ -3177,6 +4278,8 @@ public class MathEx {
 
     /**
      * Deep clone a two-dimensional array.
+     * @param x a two-dimensional array.
+     * @return the deep clone.
      */
     public static double[][] clone(double[][] x) {
         double[][] matrix = new double[x.length][];
@@ -3189,6 +4292,9 @@ public class MathEx {
 
     /**
      * Swap two elements of an array.
+     * @param x an array.
+     * @param i the index of first element.
+     * @param j the index of second element.
      */
     public static void swap(int[] x, int i, int j) {
         int s = x[i];
@@ -3198,6 +4304,9 @@ public class MathEx {
 
     /**
      * Swap two elements of an array.
+     * @param x an array.
+     * @param i the index of first element.
+     * @param j the index of second element.
      */
     public static void swap(float[] x, int i, int j) {
         float s = x[i];
@@ -3207,6 +4316,9 @@ public class MathEx {
 
     /**
      * Swap two elements of an array.
+     * @param x an array.
+     * @param i the index of first element.
+     * @param j the index of second element.
      */
     public static void swap(double[] x, int i, int j) {
         double s = x[i];
@@ -3216,6 +4328,9 @@ public class MathEx {
 
     /**
      * Swap two elements of an array.
+     * @param x an array.
+     * @param i the index of first element.
+     * @param j the index of second element.
      */
     public static void swap(Object[] x, int i, int j) {
         Object s = x[i];
@@ -3225,6 +4340,8 @@ public class MathEx {
 
     /**
      * Swap two arrays.
+     * @param x an array.
+     * @param y the other array.
      */
     public static void swap(int[] x, int[] y) {
         if (x.length != y.length) {
@@ -3240,6 +4357,8 @@ public class MathEx {
 
     /**
      * Swap two arrays.
+     * @param x an array.
+     * @param y the other array.
      */
     public static void swap(float[] x, float[] y) {
         if (x.length != y.length) {
@@ -3255,6 +4374,8 @@ public class MathEx {
 
     /**
      * Swap two arrays.
+     * @param x an array.
+     * @param y the other array.
      */
     public static void swap(double[] x, double[] y) {
         if (x.length != y.length) {
@@ -3270,6 +4391,9 @@ public class MathEx {
 
     /**
      * Swap two arrays.
+     * @param x an array.
+     * @param y the other array.
+     * @param <E> the data type of array elements.
      */
     public static <E> void swap(E[] x, E[] y) {
         if (x.length != y.length) {
@@ -3285,39 +4409,8 @@ public class MathEx {
 
     /**
      * Copy x into y.
-     */
-    public static void copy(int[] x, int[] y) {
-        if (x.length != y.length) {
-            throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
-
-        System.arraycopy(x, 0, y, 0, x.length);
-    }
-
-    /**
-     * Copy x into y.
-     */
-    public static void copy(float[] x, float[] y) {
-        if (x.length != y.length) {
-            throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
-
-        System.arraycopy(x, 0, y, 0, x.length);
-    }
-
-    /**
-     * Copy x into y.
-     */
-    public static void copy(double[] x, double[] y) {
-        if (x.length != y.length) {
-            throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
-
-        System.arraycopy(x, 0, y, 0, x.length);
-    }
-
-    /**
-     * Copy x into y.
+     * @param x the input matrix.
+     * @param y the output matrix.
      */
     public static void copy(int[][] x, int[][] y) {
         if (x.length != y.length || x[0].length != y[0].length) {
@@ -3330,7 +4423,9 @@ public class MathEx {
     }
 
     /**
-     * Copy x into y.
+     * Deep copy x into y.
+     * @param x the input matrix.
+     * @param y the output matrix.
      */
     public static void copy(float[][] x, float[][] y) {
         if (x.length != y.length || x[0].length != y[0].length) {
@@ -3343,7 +4438,9 @@ public class MathEx {
     }
 
     /**
-     * Copy x into y.
+     * Deep copy x into y.
+     * @param x the input matrix.
+     * @param y the output matrix.
      */
     public static void copy(double[][] x, double[][] y) {
         if (x.length != y.length || x[0].length != y[0].length) {
@@ -3357,8 +4454,10 @@ public class MathEx {
 
     /**
      * Element-wise sum of two arrays y = x + y.
+     * @param x a vector.
+     * @param y avector.
      */
-    public static void plus(double[] y, double[] x) {
+    public static void add(double[] y, double[] x) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
         }
@@ -3370,10 +4469,10 @@ public class MathEx {
 
     /**
      * Element-wise subtraction of two arrays y = y - x.
-     * @param y minuend matrix
-     * @param x subtrahend matrix
+     * @param y the minuend array.
+     * @param x the subtrahend array.
      */
-    public static void minus(double[] y, double[] x) {
+    public static void sub(double[] y, double[] x) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
         }
@@ -3385,6 +4484,8 @@ public class MathEx {
 
     /**
      * Scale each element of an array by a constant x = a * x.
+     * @param a the scale factor.
+     * @param x the input and output vector.
      */
     public static void scale(double a, double[] x) {
         for (int i = 0; i < x.length; i++) {
@@ -3394,6 +4495,9 @@ public class MathEx {
 
     /**
      * Scale each element of an array by a constant y = a * x.
+     * @param a the scale factor.
+     * @param x a vector.
+     * @param y the output vector.
      */
     public static void scale(double a, double[] x, double[] y) {
         for (int i = 0; i < x.length; i++) {
@@ -3403,6 +4507,10 @@ public class MathEx {
 
     /**
      * Update an array by adding a multiple of another array y = a * x + y.
+     * @param a the scale factor.
+     * @param x a vector.
+     * @param y the input and output vector.
+     * @return the vector y.
      */
     public static double[] axpy(double a, double[] x, double[] y) {
         if (x.length != y.length) {
@@ -3418,16 +4526,14 @@ public class MathEx {
 
     /**
      * Raise each element of an array to a scalar power.
-     * @param x array
-     * @param n scalar exponent
+     * @param x the base array.
+     * @param n the scalar exponent.
      * @return x<sup>n</sup>
      */
     public static double[] pow(double[] x, double n) {
-        double[] array = new double[x.length];
-        for (int i = 0; i < x.length; i++) {
-            array[i] = Math.pow(x[i], n);
-        }
-        return array;
+        double[] y = new double[x.length];
+        for (int i = 0; i < x.length; i++) y[i] = Math.pow(x[i], n);
+        return y;
     }
 
     /**
@@ -3436,19 +4542,7 @@ public class MathEx {
      * @return the same values as in x but with no repetitions.
      */
     public static int[] unique(int[] x) {
-        HashSet<Integer> hash = new HashSet<>();
-        for (int i = 0; i < x.length; i++) {
-            hash.add(x[i]);
-        }
-
-        int[] y = new int[hash.size()];
-
-        Iterator<Integer> keys = hash.iterator();
-        for (int i = 0; i < y.length; i++) {
-            y[i] = keys.next();
-        }
-
-        return y;
+        return Arrays.stream(x).distinct().toArray();
     }
 
     /**
@@ -3457,19 +4551,9 @@ public class MathEx {
      * @return the same values as in x but with no repetitions.
      */
     public static String[] unique(String[] x) {
-        HashSet<String> hash = new HashSet<>(Arrays.asList(x));
-
-        String[] y = new String[hash.size()];
-
-        Iterator<String> keys = hash.iterator();
-        for (int i = 0; i < y.length; i++) {
-            y[i] = keys.next();
-        }
-
-        return y;
+        return Arrays.stream(x).distinct().toArray(String[]::new);
     }
 
-    
     /**
      * Sorts each variable and returns the index of values in ascending order.
      * Note that the order of original array is NOT altered.
@@ -3497,15 +4581,16 @@ public class MathEx {
 
     /**
      * Solve the tridiagonal linear set which is of diagonal dominance
-     * |b<sub>i</sub>| &gt; |a<sub>i</sub>| + |c<sub>i</sub>|.
+     *     |b<sub>i</sub>| {@code >} |a<sub>i</sub>| + |c<sub>i</sub>|.
      * <pre>
-     * | b0 c0  0  0  0 ...                        |
-     * | a1 b1 c1  0  0 ...                        |
-     * |  0 a2 b2 c2  0 ...                        |
-     * |                ...                        |
-     * |                ... a(n-2)  b(n-2)  c(n-2) |
-     * |                ... 0       a(n-1)  b(n-1) |
+     *     | b0 c0  0  0  0 ...                        |
+     *     | a1 b1 c1  0  0 ...                        |
+     *     |  0 a2 b2 c2  0 ...                        |
+     *     |                ...                        |
+     *     |                ... a(n-2)  b(n-2)  c(n-2) |
+     *     |                ... 0       a(n-1)  b(n-1) |
      * </pre>
+     *
      * @param a the lower part of tridiagonal matrix. a[0] is undefined and not
      * referenced by the method.
      * @param b the diagonal of tridiagonal matrix.
@@ -3540,743 +4625,5 @@ public class MathEx {
         }
 
         return u;
-    }
-
-    /**
-     * Returns the root of a function known to lie between x1 and x2 by
-     * Brent's method. The root will be refined until its accuracy is tol.
-     * The method is guaranteed to converge as long as the function can be
-     * evaluated within the initial interval known to contain a root.
-     * @param func the function to be evaluated.
-     * @param x1 the left end of search interval.
-     * @param x2 the right end of search interval.
-     * @param tol the accuracy tolerance.
-     * @return the root.
-     */
-    public static double root(Function func, double x1, double x2, double tol) {
-        return root(func, x1, x2, tol, 100);
-    }
-
-    /**
-     * Returns the root of a function known to lie between x1 and x2 by
-     * Brent's method. The root will be refined until its accuracy is tol.
-     * The method is guaranteed to converge as long as the function can be
-     * evaluated within the initial interval known to contain a root.
-     * @param func the function to be evaluated.
-     * @param x1 the left end of search interval.
-     * @param x2 the right end of search interval.
-     * @param tol the accuracy tolerance.
-     * @param maxIter the maximum number of allowed iterations.
-     * @return the root.
-     */
-    public static double root(Function func, double x1, double x2, double tol, int maxIter) {
-        if (tol <= 0.0) {
-            throw new IllegalArgumentException("Invalid tolerance: " + tol);            
-        }
-        
-        if (maxIter <= 0) {
-            throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);            
-        }
-        
-        double a = x1, b = x2, c = x2, d = 0, e = 0, fa = func.f(a), fb = func.f(b), fc, p, q, r, s, xm;
-        if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) {
-            throw new IllegalArgumentException("Root must be bracketed.");
-        }
-
-        fc = fb;
-        for (int iter = 1; iter <= maxIter; iter++) {
-            if ((fb > 0.0 && fc > 0.0) || (fb < 0.0 && fc < 0.0)) {
-                c = a;
-                fc = fa;
-                e = d = b - a;
-            }
-
-            if (Math.abs(fc) < Math.abs(fb)) {
-                a = b;
-                b = c;
-                c = a;
-                fa = fb;
-                fb = fc;
-                fc = fa;
-            }
-
-            tol = 2.0 * EPSILON * Math.abs(b) + 0.5 * tol;
-            xm = 0.5 * (c - b);
-
-            if (iter % 10 == 0) {
-                logger.info(String.format("Brent: the root after %3d iterations: %.5g, error = %.5g", iter, b, xm));
-            }
-
-            if (Math.abs(xm) <= tol || fb == 0.0) {
-                logger.info(String.format("Brent: the root after %3d iterations: %.5g, error = %.5g", iter, b, xm));
-                return b;
-            }
-
-            if (Math.abs(e) >= tol && Math.abs(fa) > Math.abs(fb)) {
-                s = fb / fa;
-                if (a == c) {
-                    p = 2.0 * xm * s;
-                    q = 1.0 - s;
-                } else {
-                    q = fa / fc;
-                    r = fb / fc;
-                    p = s * (2.0 * xm * q * (q - r) - (b - a) * (r - 1.0));
-                    q = (q - 1.0) * (r - 1.0) * (s - 1.0);
-                }
-
-                if (p > 0.0) {
-                    q = -q;
-                }
-
-                p = Math.abs(p);
-                double min1 = 3.0 * xm * q - Math.abs(tol * q);
-                double min2 = Math.abs(e * q);
-                if (2.0 * p < (min1 < min2 ? min1 : min2)) {
-                    e = d;
-                    d = p / q;
-                } else {
-                    d = xm;
-                    e = d;
-                }
-            } else {
-                d = xm;
-                e = d;
-            }
-
-            a = b;
-            fa = fb;
-            if (Math.abs(d) > tol) {
-                b += d;
-            } else {
-                b += Math.copySign(tol, xm);
-            }
-            fb = func.f(b);
-        }
-
-        logger.error("Brent's method exceeded the maximum number of iterations.");
-        return b;
-    }
-
-    /**
-     * Returns the root of a function whose derivative is available known
-     * to lie between x1 and x2 by Newton-Raphson method. The root will be
-     * refined until its accuracy is within xacc.
-     * @param func the function to be evaluated.
-     * @param x1 the left end of search interval.
-     * @param x2 the right end of search interval.
-     * @param tol the accuracy tolerance.
-     * @return the root.
-     */
-    public static double root(DifferentiableFunction func, double x1, double x2, double tol) {
-        return root(func, x1, x2, tol, 100);
-    }
-
-    /**
-     * Returns the root of a function whose derivative is available known
-     * to lie between x1 and x2 by Newton-Raphson method. The root will be
-     * refined until its accuracy is within xacc.
-     * @param func the function to be evaluated.
-     * @param x1 the left end of search interval.
-     * @param x2 the right end of search interval.
-     * @param tol the accuracy tolerance.
-     * @param maxIter the maximum number of allowed iterations.
-     * @return the root.
-     */
-    public static double root(DifferentiableFunction func, double x1, double x2, double tol, int maxIter) {
-        if (tol <= 0.0) {
-            throw new IllegalArgumentException("Invalid tolerance: " + tol);            
-        }
-        
-        if (maxIter <= 0) {
-            throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);            
-        }
-        
-        double fl = func.f(x1);
-        double fh = func.f(x2);
-        if ((fl > 0.0 && fh > 0.0) || (fl < 0.0 && fh < 0.0)) {
-            throw new IllegalArgumentException("Root must be bracketed in rtsafe");
-        }
-
-        if (fl == 0.0) {
-            return x1;
-        }
-        if (fh == 0.0) {
-            return x2;
-        }
-
-        double xh, xl;
-        if (fl < 0.0) {
-            xl = x1;
-            xh = x2;
-        } else {
-            xh = x1;
-            xl = x2;
-        }
-        double rts = 0.5 * (x1 + x2);
-        double dxold = Math.abs(x2 - x1);
-        double dx = dxold;
-        double f = func.f(rts);
-        double df = func.df(rts);
-        for (int iter = 1; iter <= maxIter; iter++) {
-            if ((((rts - xh) * df - f) * ((rts - xl) * df - f) > 0.0) || (Math.abs(2.0 * f) > Math.abs(dxold * df))) {
-                dxold = dx;
-                dx = 0.5 * (xh - xl);
-                rts = xl + dx;
-                if (xl == rts) {
-                    logger.info(String.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
-                    return rts;
-                }
-            } else {
-                dxold = dx;
-                dx = f / df;
-                double temp = rts;
-                rts -= dx;
-                if (temp == rts) {
-                    logger.info(String.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
-                    return rts;
-                }
-            }
-
-            if (iter % 10 == 0) {
-                logger.info(String.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
-            }
-
-            if (Math.abs(dx) < tol) {
-                logger.info(String.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
-                return rts;
-            }
-
-            f = func.f(rts);
-            df = func.df(rts);
-            if (f < 0.0) {
-                xl = rts;
-            } else {
-                xh = rts;
-            }
-        }
-
-        logger.error("Newton-Raphson method exceeded the maximum number of iterations.");
-        return rts;
-    }
-
-    /**
-     * Minimize a function along a search direction by find a step which satisfies
-     * a sufficient decrease condition and a curvature condition.
-     * <p>
-     * At each stage this function updates an interval of uncertainty with
-     * endpoints <code>stx</code> and <code>sty</code>. The interval of
-     * uncertainty is initially chosen so that it contains a
-     * minimizer of the modified function
-     * <pre>
-     *      f(x+stp*s) - f(x) - ftol*stp*(gradf(x)'s).
-     * </pre>
-     * If a step is obtained for which the modified function
-     * has a nonpositive function value and nonnegative derivative,
-     * then the interval of uncertainty is chosen so that it
-     * contains a minimizer of <code>f(x+stp*s)</code>.
-     * <p>
-     * The algorithm is designed to find a step which satisfies
-     * the sufficient decrease condition
-     * <pre>
-     *       f(x+stp*s) &lt;= f(X) + ftol*stp*(gradf(x)'s),
-     * </pre>
-     * and the curvature condition
-     * <pre>
-     *       abs(gradf(x+stp*s)'s)) &lt;= gtol*abs(gradf(x)'s).
-     * </pre>
-     * If <code>ftol</code> is less than <code>gtol</code> and if, for example,
-     * the function is bounded below, then there is always a step which
-     * satisfies both conditions. If no step can be found which satisfies both
-     * conditions, then the algorithm usually stops when rounding
-     * errors prevent further progress. In this case <code>stp</code> only
-     * satisfies the sufficient decrease condition.
-     * <p>
-     *
-     * @param xold on input this contains the base point for the line search.
-     *
-     * @param fold on input this contains the value of the objective function
-     *		at <code>x</code>.
-     *
-     * @param g on input this contains the gradient of the objective function
-     *		at <code>x</code>.
-     *
-     * @param p the search direction.
-     *
-     * @param x on output, it contains <code>xold + alam*p</code>.
-     *
-     * @param stpmax specify upper bound for the step in the line search so that
-     *          we do not try to evaluate the function in regions where it is
-     *          undefined or subject to overflow.
-     *
-     * @return the new function value.
-     */
-    static double linesearch(MultivariateFunction func, double[] xold, double fold, double[] g, double[] p, double[] x, double stpmax) {
-        if (stpmax <= 0) {
-            throw new IllegalArgumentException("Invalid upper bound of linear search step: " + stpmax);
-        }
-
-        // Termination occurs when the relative width of the interval
-        // of uncertainty is at most xtol.
-        final double xtol = EPSILON;
-        // Tolerance for the sufficient decrease condition.
-        final double ftol = 1.0E-4;
-
-        int n = xold.length;
-
-        // Scale if attempted step is too big
-        double pnorm = norm(p);
-        if (pnorm > stpmax) {
-            double r = stpmax / pnorm;
-            for (int i = 0; i < n; i++) {
-                p[i] *= r;
-            }
-        }
-
-        // Check if s is a descent direction.
-        double slope = 0.0;
-        for (int i = 0; i < n; i++) {
-            slope += g[i] * p[i];
-        }
-
-        if (slope >= 0) {
-            throw new IllegalArgumentException("Line Search: the search direction is not a descent direction, which may be caused by roundoff problem.");
-        }
-
-        // Calculate minimum step.
-        double test = 0.0;
-        for (int i = 0; i < n; i++) {
-            double temp = Math.abs(p[i]) / Math.max(xold[i], 1.0);
-            if (temp > test) {
-                test = temp;
-            }
-        }
-
-        double alammin = xtol / test;
-        double alam = 1.0;
-
-        double alam2 = 0.0, f2 = 0.0;
-        double a, b, disc, rhs1, rhs2, tmpalam;
-        while (true) {
-            // Evaluate the function and gradient at stp
-            // and compute the directional derivative.
-            for (int i = 0; i < n; i++) {
-                x[i] = xold[i] + alam * p[i];
-            }
-
-            double f = func.f(x);
-
-            // Convergence on &Delta; x.
-            if (alam < alammin) {
-                System.arraycopy(xold, 0, x, 0, n);
-                return f;
-            } else if (f <= fold + ftol * alam * slope) {
-                // Sufficient function decrease.
-                return f;
-            } else {
-                // Backtrack
-                if (alam == 1.0) {
-                    // First time
-                    tmpalam = -slope / (2.0 * (f - fold - slope));
-                } else {
-                    // Subsequent backtracks.
-                    rhs1 = f - fold - alam * slope;
-                    rhs2 = f2 - fold - alam2 * slope;
-                    a = (rhs1 / (alam * alam) - rhs2 / (alam2 * alam2)) / (alam - alam2);
-                    b = (-alam2 * rhs1 / (alam * alam) + alam * rhs2 / (alam2 * alam2)) / (alam - alam2);
-                    if (a == 0.0) {
-                        tmpalam = -slope / (2.0 * b);
-                    } else {
-                        disc = b * b - 3.0 * a * slope;
-                        if (disc < 0.0) {
-                            tmpalam = 0.5 * alam;
-                        } else if (b <= 0.0) {
-                            tmpalam = (-b + Math.sqrt(disc)) / (3.0 * a);
-                        } else {
-                            tmpalam = -slope / (b + Math.sqrt(disc));
-                        }
-                    }
-                    if (tmpalam > 0.5 * alam) {
-                        tmpalam = 0.5 * alam;
-                    }
-                }
-            }
-            alam2 = alam;
-            f2 = f;
-            alam = Math.max(tmpalam, 0.1 * alam);
-        }
-    }
-
-    /**
-     * This method solves the unconstrained minimization problem
-     * <pre>
-     *     min f(x),    x = (x1,x2,...,x_n),
-     * </pre>
-     * using the limited-memory BFGS method. The method is especially
-     * effective on problems involving a large number of variables. In
-     * a typical iteration of this method an approximation <code>Hk</code> to the
-     * inverse of the Hessian is obtained by applying <code>m</code> BFGS updates to
-     * a diagonal matrix <code>Hk0</code>, using information from the previous M steps.
-     * The user specifies the number <code>m</code>, which determines the amount of
-     * storage required by the routine. The algorithm is described in "On the
-     * limited memory BFGS method for large scale optimization", by D. Liu and J. Nocedal,
-     * Mathematical Programming B 45 (1989) 503-528.
-     *
-     * @param func the function to be minimized.
-     *
-     * @param m the number of corrections used in the L-BFGS update.
-     *		Values of <code>m</code> less than 3 are not recommended;
-     *		large values of <code>m</code> will result in excessive
-     *		computing time. <code>3 &lt;= m &lt;= 7</code> is recommended.
-     *
-     * @param x on initial entry this must be set by the user to the values
-     *		of the initial estimate of the solution vector. On exit with
-     *		<code>iflag = 0</code>, it contains the values of the variables
-     *		at the best point found (usually a solution).
-     *
-     * @param gtol the convergence requirement on zeroing the gradient.
-     *
-     * @return the minimum value of the function.
-     */
-    public static double min(DifferentiableMultivariateFunction func, int m, double[] x, double gtol) {
-        return min(func, m, x, gtol, 200);
-    }
-
-    /**
-     * This method solves the unconstrained minimization problem
-     * <pre>
-     *     min f(x),    x = (x1,x2,...,x_n),
-     * </pre>
-     * using the limited-memory BFGS method. The method is especially
-     * effective on problems involving a large number of variables. In
-     * a typical iteration of this method an approximation <code>Hk</code> to the
-     * inverse of the Hessian is obtained by applying <code>m</code> BFGS updates to
-     * a diagonal matrix <code>Hk0</code>, using information from the previous M steps.
-     * The user specifies the number <code>m</code>, which determines the amount of
-     * storage required by the routine. The algorithm is described in "On the
-     * limited memory BFGS method for large scale optimization", by D. Liu and J. Nocedal,
-     * Mathematical Programming B 45 (1989) 503-528.
-     *
-     * @param func the function to be minimized.
-     *
-     * @param m the number of corrections used in the L-BFGS update.
-     *		Values of <code>m</code> less than 3 are not recommended;
-     *		large values of <code>m</code> will result in excessive
-     *		computing time. <code>3 &lt;= m &lt;= 7</code> is recommended.
-     *          A common choice for m is m = 5.
-     *
-     * @param x on initial entry this must be set by the user to the values
-     *		of the initial estimate of the solution vector. On exit with
-     *		<code>iflag = 0</code>, it contains the values of the variables
-     *		at the best point found (usually a solution).
-     *
-     * @param gtol the convergence requirement on zeroing the gradient.
-     *
-     * @param maxIter the maximum allowed number of iterations.
-     *
-     * @return the minimum value of the function.
-     */
-    public static double min(DifferentiableMultivariateFunction func, int m, double[] x, double gtol, int maxIter) {
-        // Initialize.
-        if (m <= 0) {
-            throw new IllegalArgumentException("Invalid m: " + m);
-        }
-
-        // The convergence criterion on x values.
-        final double TOLX = 4 * EPSILON;
-        // The scaled maximum step length allowed in line searches.
-        final double STPMX = 100.0;
-
-        int n = x.length;
-
-        // The solution vector of line search.
-        double[] xnew = new double[n];
-        // The gradient vector of line search.
-        double[] gnew = new double[n];
-        // Line search direction.
-        double[] xi = new double[n];
-
-        // difference of x from previous step.
-        double[][] s = new double[m][n];
-        // difference of g from previous step.
-        double[][] y = new double[m][n];
-
-        // buffer for 1 / (y' * s)
-        double[] rho = new double[m];
-        double[] a = new double[m];
-
-        // Diagonal of initial H0.
-        double diag = 1.0;
-
-        // Current gradient.
-        double[] g = new double[n];
-        // Current function value.
-        double f = func.f(x, g);
-
-        logger.info(String.format("L-BFGS: initial function value: %.5g", f));
-
-        double sum = 0.0;
-        // Initial line search direction.
-        for (int i = 0; i < n; i++) {
-            xi[i] = -g[i];
-            sum += x[i] * x[i];
-        }
-
-        // Upper limit for line search step.
-        double stpmax = STPMX * Math.max(Math.sqrt(sum), n);
-
-        for (int iter = 1, k = 0; iter <= maxIter; iter++) {
-            linesearch(func, x, f, g, xi, xnew, stpmax);
-
-            f = func.f(xnew, gnew);
-            for (int i = 0; i < n; i++) {
-                s[k][i] = xnew[i] - x[i];
-                y[k][i] = gnew[i] - g[i];
-                x[i] = xnew[i];
-                g[i] = gnew[i];
-            }
-
-            // Test for convergence on x.
-            double test = 0.0;
-            for (int i = 0; i < n; i++) {
-                double temp = Math.abs(s[k][i]) / Math.max(Math.abs(x[i]), 1.0);
-                if (temp > test) {
-                    test = temp;
-                }
-            }
-
-            if (test < TOLX) {
-                logger.info(String.format("L-BFGS: the function value after %3d iterations: %.5g", iter, f));
-                return f;
-            }
-
-            // Test for convergence on zero gradient.
-            test = 0.0;
-            double den = Math.max(f, 1.0);
-
-            for (int i = 0; i < n; i++) {
-                double temp = Math.abs(g[i]) * Math.max(Math.abs(x[i]), 1.0) / den;
-                if (temp > test) {
-                    test = temp;
-                }
-            }
-
-            if (test < gtol) {
-                logger.info(String.format("L-BFGS: the function value after %3d iterations: %.5g", iter, f));
-                return f;
-            }
-
-            if (iter % 10 == 0) {
-                logger.info(String.format("L-BFGS: the function value after %3d iterations: %.5g", iter, f));
-            }
-
-            double ys = dot(y[k], s[k]);
-            double yy = dot(y[k], y[k]);
-
-            diag = ys / yy;
-
-            rho[k] = 1.0 / ys;
-
-            for (int i = 0; i < n; i++) {
-                xi[i] = -g[i];
-            }
-
-            int cp = k;
-            int bound = iter > m ? m : iter;
-            for (int i = 0; i < bound; i++) {
-                a[cp] = rho[cp] * dot(s[cp], xi);
-                axpy(-a[cp], y[cp], xi);
-                if (--cp == - 1) {
-                    cp = m - 1;
-                }
-            }
-
-            for (int i = 0; i < n; i++) {
-                xi[i] *= diag;
-            }
-
-            for (int i = 0; i < bound; i++) {
-                if (++cp == m) {
-                    cp = 0;
-                }
-                double b = rho[cp] * dot(y[cp], xi);
-                axpy(a[cp]-b, s[cp], xi);
-            }
-
-            if (++k == m) {
-                k = 0;
-            }
-        }
-
-        throw new IllegalStateException("L-BFGS: Too many iterations.");
-    }
-
-    /**
-     * This method solves the unconstrained minimization problem
-     * <pre>
-     *     min f(x),    x = (x1,x2,...,x_n),
-     * </pre>
-     * using the BFGS method.
-     *
-     * @param func the function to be minimized.
-     *
-     * @param x on initial entry this must be set by the user to the values
-     *		of the initial estimate of the solution vector. On exit, it
-     *          contains the values of the variables at the best point found
-     *          (usually a solution).
-     *
-     * @param gtol the convergence requirement on zeroing the gradient.
-     *
-     * @return the minimum value of the function.
-     */
-    public static double min(DifferentiableMultivariateFunction func, double[] x, double gtol) {
-        return min(func, x, gtol, 200);
-    }
-
-    /**
-     * This method solves the unconstrained minimization problem
-     * <pre>
-     *     min f(x),    x = (x1,x2,...,x_n),
-     * </pre>
-     * using the BFGS method.
-     *
-     * @param func the function to be minimized.
-     *
-     * @param x on initial entry this must be set by the user to the values
-     *		of the initial estimate of the solution vector. On exit, it
-     *          contains the values of the variables at the best point found
-     *          (usually a solution).
-     *
-     * @param gtol the convergence requirement on zeroing the gradient.
-     *
-     * @param maxIter the maximum allowed number of iterations.
-     *
-     * @return the minimum value of the function.
-     */
-    public static double min(DifferentiableMultivariateFunction func, double[] x, double gtol, int maxIter) {
-        // The convergence criterion on x values.
-        final double TOLX = 4 * EPSILON;
-        // The scaled maximum step length allowed in line searches.
-        final double STPMX = 100.0;
-
-        double den, fac, fad, fae, sumdg, sumxi, temp, test;
-
-        int n = x.length;
-        double[] dg = new double[n];
-        double[] g = new double[n];
-        double[] hdg = new double[n];
-        double[] xnew = new double[n];
-        double[] xi = new double[n];
-        double[][] hessin = new double[n][n];
-
-        // Calculate starting function value and gradient and initialize the
-        // inverse Hessian to the unit matrix.
-        double f = func.f(x, g);
-        logger.info(String.format("BFGS: initial function value: %.5g", f));
-
-        double sum = 0.0;
-        for (int i = 0; i < n; i++) {
-            hessin[i][i] = 1.0;
-            // Initialize line direction.
-            xi[i] = -g[i];
-            sum += x[i] * x[i];
-        }
-
-        double stpmax = STPMX * Math.max(Math.sqrt(sum), n);
-
-        for (int iter = 1; iter <= maxIter; iter++) {
-            // The new function evaluation occurs in line search.
-            f = linesearch(func, x, f, g, xi, xnew, stpmax);
-
-            if (iter % 10 == 0) {
-                logger.info(String.format("BFGS: the function value after %3d iterations: %.5g", iter, f));
-            }
-
-            // update the line direction and current point.
-            for (int i = 0; i < n; i++) {
-                xi[i] = xnew[i] - x[i];
-                x[i] = xnew[i];
-            }
-
-            // Test for convergence on x.
-            test = 0.0;
-            for (int i = 0; i < n; i++) {
-                temp = Math.abs(xi[i]) / Math.max(Math.abs(x[i]), 1.0);
-                if (temp > test) {
-                    test = temp;
-                }
-            }
-
-            if (test < TOLX) {
-                logger.info(String.format("BFGS: the function value after %3d iterations: %.5g", iter, f));
-                return f;
-            }
-            
-            System.arraycopy(g, 0, dg, 0, n);
-
-            func.f(x, g);
-
-            // Test for convergence on zero gradient.
-            den = Math.max(f, 1.0);
-            test = 0.0;
-            for (int i = 0; i < n; i++) {
-                temp = Math.abs(g[i]) * Math.max(Math.abs(x[i]), 1.0) / den;
-                if (temp > test) {
-                    test = temp;
-                }
-            }
-
-            if (test < gtol) {
-                logger.info(String.format("BFGS: the function value after %3d iterations: %.5g", iter, f));
-                return f;
-            }
-
-            for (int i = 0; i < n; i++) {
-                dg[i] = g[i] - dg[i];
-            }
-
-            for (int i = 0; i < n; i++) {
-                hdg[i] = 0.0;
-                for (int j = 0; j < n; j++) {
-                    hdg[i] += hessin[i][j] * dg[j];
-                }
-            }
-
-            fac = fae = sumdg = sumxi = 0.0;
-            for (int i = 0; i < n; i++) {
-                fac += dg[i] * xi[i];
-                fae += dg[i] * hdg[i];
-                sumdg += dg[i] * dg[i];
-                sumxi += xi[i] * xi[i];
-            }
-
-            // Skip upudate if fac is not sufficiently positive.
-            if (fac > Math.sqrt(EPSILON * sumdg * sumxi)) {
-                fac = 1.0 / fac;
-                fad = 1.0 / fae;
-
-                // The vector that makes BFGS different from DFP.
-                for (int i = 0; i < n; i++) {
-                    dg[i] = fac * xi[i] - fad * hdg[i];
-                }
-
-                // BFGS updating formula.
-                for (int i = 0; i < n; i++) {
-                    for (int j = i; j < n; j++) {
-                        hessin[i][j] += fac * xi[i] * xi[j] - fad * hdg[i] * hdg[j] + fae * dg[i] * dg[j];
-                        hessin[j][i] = hessin[i][j];
-                    }
-                }
-            }
-
-            // Calculate the next direction to go.
-            Arrays.fill(xi, 0.0);
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < n; j++) {
-                    xi[i] -= hessin[i][j] * g[j];
-                }
-            }
-        }
-
-        throw new IllegalStateException("BFGS: Too many iterations.");
     }
 }
