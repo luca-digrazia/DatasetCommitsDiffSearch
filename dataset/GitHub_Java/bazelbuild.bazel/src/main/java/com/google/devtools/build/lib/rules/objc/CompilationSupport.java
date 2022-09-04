@@ -310,9 +310,6 @@ public class CompilationSupport {
     CcCompilationHelper result =
         new CcCompilationHelper(
                 ruleContext,
-                ruleContext,
-                ruleContext.getLabel(),
-                CppHelper.getGrepIncludes(ruleContext),
                 semantics,
                 getFeatureConfiguration(ruleContext, ccToolchain, buildConfiguration, objcProvider),
                 CcCompilationHelper.SourceCategory.CC_AND_OBJC,

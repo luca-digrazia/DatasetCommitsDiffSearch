@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory;
@@ -584,12 +583,10 @@ public class CcModule
       Object skylarkAdditionalCompilationInputs,
       Object skylarkAdditionalIncludeScanningRoots,
       SkylarkList<CcCompilationContext> ccCompilationContexts,
-      Object purpose,
-      Location location)
+      Object purpose)
       throws EvalException, InterruptedException {
     CcCommon.checkRuleWhitelisted(skylarkRuleContext);
     RuleContext ruleContext = skylarkRuleContext.getRuleContext();
-    SkylarkActionFactory actions = skylarkRuleContext.actions();
     CcToolchainProvider ccToolchainProvider = convertFromNoneable(skylarkCcToolchainProvider, null);
     FeatureConfiguration featureConfiguration =
         convertFromNoneable(skylarkFeatureConfiguration, null);
@@ -602,14 +599,10 @@ public class CcModule
     List<String> includeDirs = convertSkylarkListOrNestedSetToList(skylarkIncludes, String.class);
     CcCompilationHelper helper =
         new CcCompilationHelper(
-                actions.asActionRegistry(location, actions),
-                actions.getActionConstructionContext(),
-                ruleContext.getLabel(),
-                /* grepIncludes= */ ruleContext.attributes().has("$grep_includes")
-                    ? ruleContext.getPrerequisiteArtifact("$grep_includes", Mode.HOST)
-                    : null,
+                ruleContext,
                 cppSemantics,
                 featureConfiguration,
+                CcCompilationHelper.SourceCategory.CC,
                 ccToolchainProvider,
                 fdoContext)
             .addPublicHeaders(headers)
@@ -646,6 +639,7 @@ public class CcModule
       helper.setCopts(copts.getSet(String.class));
     }
 
+    Location location = ruleContext.getRule().getLocation();
     RegisterActions generateNoPicOption =
         RegisterActions.fromString(generateNoPicOutputs, location, "generate_no_pic_outputs");
     if (!generateNoPicOption.equals(RegisterActions.CONDITIONALLY)) {

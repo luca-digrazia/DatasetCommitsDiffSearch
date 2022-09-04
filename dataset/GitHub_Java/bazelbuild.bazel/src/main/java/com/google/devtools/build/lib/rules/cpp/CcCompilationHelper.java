@@ -220,6 +220,7 @@ public final class CcCompilationHelper {
     }
   }
 
+  private final RuleContext ruleContext;
   private final CppSemantics semantics;
   private final BuildConfiguration configuration;
   private final CppConfiguration cppConfiguration;
@@ -269,7 +270,6 @@ public final class CcCompilationHelper {
   private final ActionRegistry actionRegistry;
   private final ActionConstructionContext actionConstructionContext;
   private final Label label;
-  private final Artifact grepIncludes;
 
   /**
    * Creates a CcCompilationHelper.
@@ -317,6 +317,7 @@ public final class CcCompilationHelper {
       CcToolchainProvider ccToolchain,
       FdoContext fdoContext,
       BuildConfiguration configuration) {
+    this.ruleContext = Preconditions.checkNotNull(ruleContext);
     this.semantics = Preconditions.checkNotNull(semantics);
     this.featureConfiguration = Preconditions.checkNotNull(featureConfiguration);
     this.sourceCategory = Preconditions.checkNotNull(sourceCatagory);
@@ -335,10 +336,6 @@ public final class CcCompilationHelper {
     actionRegistry = ruleContext;
     actionConstructionContext = ruleContext;
     label = ruleContext.getLabel();
-    grepIncludes =
-        ruleContext.attributes().has("$grep_includes")
-            ? ruleContext.getPrerequisiteArtifact("$grep_includes", Mode.HOST)
-            : null;
   }
 
   /**
@@ -1373,8 +1370,7 @@ public final class CcCompilationHelper {
       boolean usePic) {
     SpecialArtifact sourceArtifact = (SpecialArtifact) source.getSource();
     SpecialArtifact outputFiles =
-        CppHelper.getCompileOutputTreeArtifact(
-            actionConstructionContext, label, sourceArtifact, outputName, usePic);
+        CppHelper.getCompileOutputTreeArtifact(ruleContext, sourceArtifact, outputName, usePic);
     // TODO(rduan): Dotd file output is not supported yet.
     builder.setOutputs(outputFiles, /* dotdFile= */ null);
     builder.setVariables(
@@ -1497,8 +1493,7 @@ public final class CcCompilationHelper {
    */
   private CppCompileActionBuilder initializeCompileAction(Artifact sourceArtifact) {
     CppCompileActionBuilder builder =
-        new CppCompileActionBuilder(
-            actionConstructionContext, grepIncludes, ccToolchain, configuration);
+        new CppCompileActionBuilder(ruleContext, ccToolchain, configuration);
     builder.setSourceFile(sourceArtifact);
     builder.setCcCompilationContext(ccCompilationContext);
     builder.setCoptsFilter(coptsFilter);
