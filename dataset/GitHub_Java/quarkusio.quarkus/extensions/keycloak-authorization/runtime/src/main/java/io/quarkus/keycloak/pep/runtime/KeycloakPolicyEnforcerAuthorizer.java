@@ -34,7 +34,7 @@ public class KeycloakPolicyEnforcerAuthorizer
     private volatile long readTimeout;
 
     @Override
-    public Uni<CheckResult> checkPermission(RoutingContext request, Uni<SecurityIdentity> identity,
+    public Uni<CheckResult> checkPermission(RoutingContext request, SecurityIdentity identity,
             AuthorizationRequestContext requestContext) {
         return requestContext.runBlocking(request, identity, this);
     }
@@ -71,7 +71,7 @@ public class KeycloakPolicyEnforcerAuthorizer
                         if (context != null) {
                             String scopes = permission.getActions();
 
-                            if (scopes == null || scopes.isEmpty()) {
+                            if (scopes == null) {
                                 return Uni.createFrom().item(context.hasResourcePermission(permission.getName()));
                             }
 
@@ -147,7 +147,8 @@ public class KeycloakPolicyEnforcerAuthorizer
             PolicyEnforcerConfig enforcerConfig = new PolicyEnforcerConfig();
 
             enforcerConfig.setLazyLoadPaths(config.policyEnforcer.lazyLoadPaths);
-            enforcerConfig.setEnforcementMode(config.policyEnforcer.enforcementMode);
+            enforcerConfig.setEnforcementMode(
+                    PolicyEnforcerConfig.EnforcementMode.valueOf(config.policyEnforcer.enforcementMode));
             enforcerConfig.setHttpMethodAsScope(config.policyEnforcer.httpMethodAsScope);
 
             KeycloakPolicyEnforcerConfig.KeycloakConfigPolicyEnforcer.PathCacheConfig pathCache = config.policyEnforcer.pathCache;
