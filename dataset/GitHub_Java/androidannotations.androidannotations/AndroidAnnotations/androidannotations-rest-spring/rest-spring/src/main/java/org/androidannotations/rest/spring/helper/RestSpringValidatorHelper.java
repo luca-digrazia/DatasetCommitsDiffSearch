@@ -54,7 +54,6 @@ import org.androidannotations.rest.spring.annotations.Field;
 import org.androidannotations.rest.spring.annotations.Get;
 import org.androidannotations.rest.spring.annotations.Head;
 import org.androidannotations.rest.spring.annotations.Options;
-import org.androidannotations.rest.spring.annotations.Part;
 import org.androidannotations.rest.spring.annotations.Path;
 import org.androidannotations.rest.spring.annotations.Post;
 import org.androidannotations.rest.spring.annotations.Put;
@@ -365,7 +364,7 @@ public class RestSpringValidatorHelper extends ValidatorHelper {
 
 		Set<String> parametersName = new HashSet<>();
 		for (VariableElement parameter : parameters) {
-			if (restAnnotationHelper.hasPostParameterAnnotation(parameter)) {
+			if (parameter.getAnnotation(Field.class) != null) {
 				continue;
 			}
 
@@ -445,28 +444,6 @@ public class RestSpringValidatorHelper extends ValidatorHelper {
 		}
 	}
 
-	public void doesNotMixPartAndFieldAnnotations(ExecutableElement element, ElementValidation validation) {
-		boolean partFound = false;
-		boolean fieldFound = false;
-
-		for (VariableElement parameter : element.getParameters()) {
-			Part part = parameter.getAnnotation(Part.class);
-			if (part != null) {
-				partFound = true;
-			}
-
-			Field field = parameter.getAnnotation(Field.class);
-			if (field != null) {
-				fieldFound = true;
-			}
-		}
-
-		if (partFound && fieldFound) {
-			validation.addError(element, "Only one of @Part and @Field annotations can be used on the same method's parameters, not both.");
-		}
-	}
-
-
 	public void urlVariableNameExistsInEnclosingAnnotation(Element element, ElementValidation validation) {
 		Set<String> validRestMethodAnnotationNames = new HashSet<>();
 
@@ -532,10 +509,6 @@ public class RestSpringValidatorHelper extends ValidatorHelper {
 
 	public void doesNotHaveFieldAnnotation(Element element, ElementValidation validation) {
 		doesNotHaveAnnotation(element, Field.class, validation);
-	}
-
-	public void doesNotHavePartAnnotation(Element element, ElementValidation validation) {
-		doesNotHaveAnnotation(element, Part.class, validation);
 	}
 
 	public void restInterfaceHasFormConverter(Element element, ElementValidation validation) {
