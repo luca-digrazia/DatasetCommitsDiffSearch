@@ -396,11 +396,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   @Override
   @VisibleForTesting // productionVisibility = Visibility.PRIVATE
-  public NestedSet<Artifact> getPossibleInputsForTesting() {
-    return NestedSetBuilder.fromNestedSet(getInputs())
-        .addTransitive(ccCompilationContext.getDeclaredIncludeSrcs())
-        .addTransitive(additionalPrunableHeaders)
-        .build();
+  public Iterable<Artifact> getPossibleInputsForTesting() {
+    return Iterables.concat(
+        getInputs(), ccCompilationContext.getDeclaredIncludeSrcs(), additionalPrunableHeaders);
   }
 
   /**
