@@ -81,9 +81,8 @@ public class SammonMapping {
 
     /**
      * Fits Sammon's mapping with default k = 2, lambda = 0.2, tolerance = 1E-4 and maxIter = 100.
-     * @param proximity the non-negative proximity matrix of dissimilarities. The
+     * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
-     * @return the model.
      */
     public static SammonMapping of(double[][] proximity) {
         return of(proximity, new Properties());
@@ -91,10 +90,9 @@ public class SammonMapping {
 
     /**
      * Fits Sammon's mapping.
-     * @param proximity the non-negative proximity matrix of dissimilarities. The
+     * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      * @param k the dimension of the projection.
-     * @return the model.
      */
     public static SammonMapping of(double[][] proximity, int k) {
         return of(proximity, k, 0.2, 1E-4, 1E-3, 100);
@@ -103,35 +101,36 @@ public class SammonMapping {
     /**
      * Fits Sammon's mapping.
      *
-     * @param proximity the non-negative proximity matrix of dissimilarities. The
+     * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and
      * symmetric. For pairwise distances matrix, it should be just the plain
      * distance, not squared.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @return the model.
      */
-    public static SammonMapping of(double[][] proximity, Properties params) {
-        int k = Integer.parseInt(params.getProperty("smile.sammon.k", "2"));
-        double lambda = Double.parseDouble(params.getProperty("smile.sammon.lambda", "0.2"));
-        double tol = Double.parseDouble(params.getProperty("smile.sammon.tolerance", "1E-4"));
-        double stepTol = Double.parseDouble(params.getProperty("smile.sammon.step_tolerance", "1E-3"));
-        int maxIter = Integer.parseInt(params.getProperty("smile.sammon.max_iterations", "100"));
+    public static SammonMapping of(double[][] proximity, Properties prop) {
+        int k = Integer.parseInt(prop.getProperty("smile.sammon.k", "2"));
+        double lambda = Double.parseDouble(prop.getProperty("smile.sammon.lambda", "0.2"));
+        double tol = Double.parseDouble(prop.getProperty("smile.sammon.tolerance", "1E-4"));
+        double stepTol = Double.parseDouble(prop.getProperty("smile.sammon.step.tolerance", "1E-3"));
+        int maxIter = Integer.parseInt(prop.getProperty("smile.sammon.max.iterations", "100"));
         return of(proximity, k, lambda, tol, stepTol, maxIter);
     }
 
     /**
      * Fits Sammon's mapping.
-     * @param proximity the non-negative proximity matrix of dissimilarities. The
+     * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      * @param k the dimension of the projection.
      * @param lambda initial value of the step size constant in diagonal Newton method.
      * @param tol the tolerance on objective function for stopping iterations.
      * @param stepTol the tolerance on step size.
      * @param maxIter maximum number of iterations.
-     * @return the model.
      */
     public static SammonMapping of(double[][] proximity, int k, double lambda, double tol, double stepTol, int maxIter) {
-        return of(proximity, MDS.of(proximity, k).coordinates, lambda, tol, stepTol, maxIter);
+        Properties prop = new Properties();
+        prop.setProperty("smile.mds.k", String.valueOf(k));
+        return of(proximity, MDS.of(proximity, prop).coordinates, lambda, tol, stepTol, maxIter);
     }
 
     /**
@@ -145,7 +144,6 @@ public class SammonMapping {
      * @param tol the tolerance for stopping iterations.
      * @param stepTol the tolerance on step size.
      * @param maxIter maximum number of iterations.
-     * @return the model.
      */
     public static SammonMapping of(double[][] proximity, double[][] init, double lambda, double tol, double stepTol, int maxIter) {
         if (proximity.length != proximity[0].length) {

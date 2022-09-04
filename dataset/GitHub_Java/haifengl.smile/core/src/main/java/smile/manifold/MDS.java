@@ -68,11 +68,10 @@ public class MDS {
     /**
      * Fits the classical multidimensional scaling.
      * Map original data into 2-dimensional Euclidean space.
-     * @param proximity the non-negative proximity matrix of dissimilarities. The
+     * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and
      * symmetric. For pairwise distances matrix, it should be just the plain
      * distance, not squared.
-     * @return the model.
      */
     public static MDS of(double[][] proximity) {
         return of(proximity, new Properties());
@@ -80,12 +79,11 @@ public class MDS {
 
     /**
      * Fits the classical multidimensional scaling.
-     * @param proximity the non-negative proximity matrix of dissimilarities. The
+     * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and
      * symmetric. For pairwise distances matrix, it should be just the plain
      * distance, not squared.
      * @param k the dimension of the projection.
-     * @return the model.
      */
     public static MDS of(double[][] proximity, int k) {
         return of(proximity, k, false);
@@ -94,22 +92,22 @@ public class MDS {
     /**
      * Fits the classical multidimensional scaling.
      *
-     * @param proximity the non-negative proximity matrix of dissimilarities. The
+     * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and
      * symmetric. For pairwise distances matrix, it should be just the plain
      * distance, not squared.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @return the model.
      */
-    public static MDS of(double[][] proximity, Properties params) {
-        int k = Integer.parseInt(params.getProperty("smile.mds.k", "2"));
-        boolean positive = Boolean.parseBoolean(params.getProperty("smile.mds.positive", "false"));
+    public static MDS of(double[][] proximity, Properties prop) {
+        int k = Integer.parseInt(prop.getProperty("smile.mds.k", "2"));
+        boolean positive = Boolean.parseBoolean(prop.getProperty("smile.mds.positive.semidefinite", "false"));
         return of(proximity, k, positive);
     }
 
     /**
      * Fits the classical multidimensional scaling.
-     * @param proximity the non-negative proximity matrix of dissimilarities. The
+     * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and
      * symmetric. For pairwise distances matrix, it should be just the plain
      * distance, not squared.
@@ -124,7 +122,6 @@ public class MDS {
      * such that proximity + c may be taken as ratio data, and also possibly
      * to minimize the dimensionality of the Euclidean space required for
      * representing the objects.
-     * @return the model.
      */
     public static MDS of(double[][] proximity, int k, boolean positive) {
         int m = proximity.length;

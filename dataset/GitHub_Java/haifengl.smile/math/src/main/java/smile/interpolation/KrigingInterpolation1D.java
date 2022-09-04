@@ -31,20 +31,15 @@ import smile.math.matrix.Matrix;
  */
 public class KrigingInterpolation1D implements Interpolation {
 
-    /** The control points. */
     private final double[] x;
-    /** The linear weights. */
     private final double[] yvi;
-    /** The parameter of power variogram. */
     private final double alpha;
-    /** The parameter of power variogram. */
     private final double beta;
 
     /**
      * Constructor. The power variogram is employed for interpolation.
-     *
-     * @param x the tabulated points.
-     * @param y the function values at <code>x</code>.
+     * @param x the point set.
+     * @param y the function values at given points.
      */
     public KrigingInterpolation1D(double[] x, double[] y) {
         this(x, y, 1.5);
@@ -52,9 +47,8 @@ public class KrigingInterpolation1D implements Interpolation {
 
     /**
      * Constructor. The power variogram is employed for interpolation.
-     *
-     * @param x the tabulated points.
-     * @param y the function values at <code>x</code>.
+     * @param x the point set.
+     * @param y the function values at given points.
      * @param beta the parameter of power variogram. The value of &beta;
      *             should be in the range {@code 1 <=} &beta; {@code < 2}.
      *             A good general choice is 1.5, but for functions with

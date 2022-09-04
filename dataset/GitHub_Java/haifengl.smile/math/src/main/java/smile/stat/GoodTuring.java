@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.stat;
 
@@ -29,7 +29,7 @@ import smile.math.MathEx;
  * balls and , R_green green balls, we would ask what is the probability
  * of drawing a red ball, a black ball, a green ball or one of a
  * previously unseen color.
- *
+ * <p>
  * This method takes a set of (frequency, frequency-of-frequency) pairs and
  * estimate the probabilities corresponding to the observed frequencies,
  * and P<sub>0</sub>, the joint probability of all unobserved species.
@@ -119,7 +119,7 @@ public class GoodTuring {
         meanY /= len;
         for (int i = 0; i < len; ++i) {
             XYs += (logR[i] - meanX) * (logZ[i] - meanY);
-            Xsquares += MathEx.sqr(logR[i] - meanX);
+            Xsquares += MathEx.pow2(logR[i] - meanX);
         }
 
         double slope = XYs / Xsquares;
@@ -136,7 +136,7 @@ public class GoodTuring {
             if (!indiffValsSeen) {
                 int n = Nr[row(r, r[j] + 1)];
                 double x = (r[j] + 1) * n / (double) Nr[j];
-                if (Math.abs(x - y) <= CONFID_FACTOR * Math.sqrt(MathEx.sqr(r[j] + 1.0) * n / MathEx.sqr(Nr[j]) * (1 + n / (double) Nr[j]))) {
+                if (Math.abs(x - y) <= CONFID_FACTOR * Math.sqrt(MathEx.pow2(r[j] + 1.0) * n / MathEx.pow2(Nr[j]) * (1 + n / (double) Nr[j]))) {
                     indiffValsSeen = true;
                 } else {
                     p[j] = x;

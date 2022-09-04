@@ -119,12 +119,6 @@ public class SVR<T> {
          */
         double k;
 
-        /**
-         * Constructor.
-         * @param i the index of support vector.
-         * @param x the support vector.
-         * @param y the response variable.
-         */
         SupportVector(int i, T x, double y) {
             this.i = i;
             this.x = x;
@@ -137,9 +131,6 @@ public class SVR<T> {
     /**
      * Constructor.
      * @param kernel the kernel function.
-     * @param eps the loss function error threshold.
-     * @param C the soft margin penalty parameter.
-     * @param tol the tolerance of convergence test.
      */
     public SVR(MercerKernel<T> kernel, double eps, double C, double tol) {
         if (eps <= 0) {
@@ -164,7 +155,6 @@ public class SVR<T> {
      * Fits a epsilon support vector regression model.
      * @param x training instances.
      * @param y response variable.
-     * @return the model.
      */
     public KernelMachine<T> fit(T[] x, double[] y) {
         if (x.length != y.length) {

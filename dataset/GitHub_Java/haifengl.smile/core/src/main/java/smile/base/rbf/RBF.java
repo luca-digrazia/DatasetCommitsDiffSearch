@@ -28,9 +28,9 @@ import smile.math.rbf.RadialBasisFunction;
 import smile.math.rbf.GaussianRadialBasis;
 
 /**
- * A neuron in radial basis function network. A radial basis function network
- * is an artificial neural network that uses radial basis functions as
- * activation functions. It is a linear combination of radial basis functions.
+ * A neuron in radial basis function network. A radial basis function network is an
+ * artificial neural network that uses radial basis functions as activation
+ * functions. It is a linear combination of radial basis functions.
  * <p>
  * In its basic form, radial basis function network is in the form
  * <code>
@@ -49,8 +49,6 @@ import smile.math.rbf.GaussianRadialBasis;
  * from training data, or learned by some clustering method (e.g. k-means),
  * or learned together with weight parameters undergo a supervised
  * learning processing (e.g. error-correction learning).
- *
- * @param <T> the data type of samples.
  *
  * @author Haifeng Li
  */
@@ -79,22 +77,12 @@ public class RBF<T> implements Serializable {
 
     /**
      * The activation function.
-     * @param x the sample.
-     * @return the activation function value.
      */
     public double f(T x) {
         return rbf.f(distance.d(x, center));
     }
 
-    /**
-     * Makes a set of RBF neurons.
-     *
-     * @param centers the neuron centers.
-     * @param basis the radial basis functions.
-     * @param distance the distance metric functor.
-     * @param <T> the data type of samples.
-     * @return the RBF neurons.
-     */
+    /** Makes a set of RBF neurons. */
     public static <T> RBF<T>[] of(T[] centers, RadialBasisFunction basis, Metric<T> distance) {
         int k = centers.length;
         @SuppressWarnings("unchecked")
@@ -105,15 +93,7 @@ public class RBF<T> implements Serializable {
         return rbf;
     }
 
-    /**
-     * Makes a set of RBF neurons.
-     *
-     * @param centers the neuron centers.
-     * @param basis the radial basis functions.
-     * @param distance the distance metric functor.
-     * @param <T> the data type of samples.
-     * @return the RBF neurons.
-     */
+    /** Makes a set of RBF neurons. */
     public static <T> RBF<T>[] of(T[] centers, RadialBasisFunction[] basis, Metric<T> distance) {
         int k = centers.length;
         @SuppressWarnings("unchecked")
@@ -221,7 +201,7 @@ public class RBF<T> implements Serializable {
     }
 
     /**
-     * Fits Gaussian RBF function and centers on data. The centers are
+     * Learns Gaussian RBF function and centers from data. The centers are
      * chosen as the centroids of K-Means. Let d<sub>max</sub> be the maximum
      * distance between the chosen centers, the standard deviation (i.e. width)
      * of Gaussian radial basis function is d<sub>max</sub> / sqrt(2*k), where
@@ -242,7 +222,7 @@ public class RBF<T> implements Serializable {
     }
 
     /**
-     * Fits Gaussian RBF function and centers on data. The centers are
+     * Learns Gaussian RBF function and centers from data. The centers are
      * chosen as the centroids of K-Means. The standard deviation (i.e. width)
      * of Gaussian radial basis function is estimated by the p-nearest neighbors
      * (among centers, not all samples) heuristic. A suggested value for
@@ -268,7 +248,7 @@ public class RBF<T> implements Serializable {
     }
 
     /**
-     * Fits Gaussian RBF function and centers on data. The centers are
+     * Learns Gaussian RBF function and centers from data. The centers are
      * chosen as the centroids of K-Means. The width
      * of Gaussian radial basis function is estimated as the width of each
      * cluster multiplied with a given scaling parameter r.
@@ -293,7 +273,7 @@ public class RBF<T> implements Serializable {
     }
 
     /**
-     * Fits Gaussian RBF function and centers on data. The centers are
+     * Learns Gaussian RBF function and centers from data. The centers are
      * chosen as the medoids of CLARANS. Let d<sub>max</sub> be the maximum
      * distance between the chosen centers, the standard deviation (i.e. width)
      * of Gaussian radial basis function is d<sub>max</sub> / sqrt(2*k), where
@@ -304,7 +284,6 @@ public class RBF<T> implements Serializable {
      * @param x the training dataset.
      * @param k the number of RBF neurons to learn.
      * @param distance the distance functor.
-     * @param <T> the data type of samples.
      * @return a Gaussian RBF function with parameter learned from data.
      */
     public static <T> RBF<T>[] fit(T[] x, Metric<T> distance, int k) {
@@ -316,17 +295,16 @@ public class RBF<T> implements Serializable {
     }
 
     /**
-     * Fits Gaussian RBF function and centers on data. The centers are
+     * Learns Gaussian RBF function and centers from data. The centers are
      * chosen as the medoids of CLARANS. The standard deviation (i.e. width)
      * of Gaussian radial basis function is estimated by the p-nearest neighbors
      * (among centers, not all samples) heuristic. A suggested value for
      * p is 2.
      * @param x the training dataset.
-     * @param distance the distance functor.
      * @param k the number of RBF neurons to learn.
+     * @param distance the distance functor.
      * @param p the number of nearest neighbors of centers to estimate the width
      * of Gaussian RBF functions.
-     * @param <T> the data type of samples.
      * @return Gaussian RBF functions with parameter learned from data.
      */
     public static <T> RBF<T>[] fit(T[] x, Metric<T> distance, int k, int p) {
@@ -344,7 +322,7 @@ public class RBF<T> implements Serializable {
     }
 
     /**
-     * Fits Gaussian RBF function and centers on data. The centers are
+     * Learns Gaussian RBF function and centers from data. The centers are
      * chosen as the medoids of CLARANS. The standard deviation (i.e. width)
      * of Gaussian radial basis function is estimated as the width of each
      * cluster multiplied with a given scaling parameter r.
@@ -352,7 +330,6 @@ public class RBF<T> implements Serializable {
      * @param k the number of RBF neurons to learn.
      * @param distance the distance functor.
      * @param r the scaling parameter.
-     * @param <T> the data type of samples.
      * @return Gaussian RBF functions with parameter learned from data.
      */
     public static <T> RBF<T>[] fit(T[] x, Metric<T> distance, int k, double r) {
