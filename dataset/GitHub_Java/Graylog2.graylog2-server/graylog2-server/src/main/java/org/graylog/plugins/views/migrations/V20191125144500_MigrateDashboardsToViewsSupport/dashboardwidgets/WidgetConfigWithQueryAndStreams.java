@@ -1,6 +1,7 @@
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.dashboardwidgets;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ElasticsearchQueryString;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
 
 import java.util.Collections;
@@ -16,7 +17,7 @@ public interface WidgetConfigWithQueryAndStreams extends WidgetConfig {
     default ViewWidget.Builder createViewWidget(String id) {
         final ViewWidget.Builder viewWidgetBuilder = ViewWidget.builder()
                 .id(id)
-                .query(query())
+                .query(ElasticsearchQueryString.create(query()))
                 .timerange(timerange());
         return streamId().map(streamId -> viewWidgetBuilder.streams(Collections.singleton(streamId))).orElse(viewWidgetBuilder);
     }

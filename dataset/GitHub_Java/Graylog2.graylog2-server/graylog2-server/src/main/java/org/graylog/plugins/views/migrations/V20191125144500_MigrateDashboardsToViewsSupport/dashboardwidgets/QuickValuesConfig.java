@@ -20,6 +20,7 @@ import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToV
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Series;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.SeriesSortConfig;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.SortConfig;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.ValueConfig;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -62,7 +63,10 @@ public abstract class QuickValuesConfig extends WidgetConfigBase implements Widg
     }
 
     private Pivot dataTablePivot() {
-        return valuesPivotForField(field(), dataTableLimit());
+        return Pivot.valuesBuilder()
+                .field(field())
+                .config(ValueConfig.ofLimit(dataTableLimit()))
+                .build();
     }
 
     private SortConfig.Direction order() {

@@ -37,22 +37,21 @@ public abstract class SearchResultCountConfig extends WidgetConfigBase implement
 
     @Override
     public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
-        return Collections.singleton(
-                createViewWidget(randomUUIDProvider.get())
-                        .config(
-                                AggregationConfig.builder()
-                                        .series(Collections.singletonList(series()))
-                                        .visualization(visualization())
-                                        .visualizationConfig(
-                                                NumberVisualizationConfig.builder()
-                                                        .trend(true)
-                                                        .trendPreference(lowerIsBetter()
-                                                                ? NumberVisualizationConfig.TrendPreference.LOWER
-                                                                : NumberVisualizationConfig.TrendPreference.HIGHER)
-                                                        .build()
-                                        )
-                                        .build()
-                        ).build()
+        return Collections.singleton(createViewWidget(randomUUIDProvider.get())
+                .config(
+                        AggregationConfig.builder()
+                                .series(Collections.singletonList(series()))
+                                .visualization(visualization())
+                                .visualizationConfig(
+                                        NumberVisualizationConfig.builder()
+                                                .trend(true)
+                                                .trendPreference(lowerIsBetter()
+                                                        ? NumberVisualizationConfig.TrendPreference.LOWER
+                                                        : NumberVisualizationConfig.TrendPreference.HIGHER)
+                                                .build()
+                                )
+                                .build()
+                ).build()
         );
     }
 

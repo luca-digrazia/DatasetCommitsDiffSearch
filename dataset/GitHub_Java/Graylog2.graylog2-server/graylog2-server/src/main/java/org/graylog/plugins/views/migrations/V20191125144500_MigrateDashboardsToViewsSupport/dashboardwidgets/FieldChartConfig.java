@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ElasticsearchQueryString;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
@@ -12,7 +13,6 @@ import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToV
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Pivot;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Series;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.TimeHistogramConfig;
-import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.VisualizationConfig;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -42,27 +42,25 @@ public abstract class FieldChartConfig extends WidgetConfigBase implements Widge
     }
 
     public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
-        final AggregationConfig.Builder configBuilder = AggregationConfig.builder()
-                .rowPivots(Collections.singletonList(
-                        Pivot.timeBuilder()
-                                .field(TIMESTAMP_FIELD)
-                                .config(TimeHistogramConfig.builder().interval(timestampInterval(interval())).build())
-                                .build()
-                ))
-                .series(Collections.singletonList(series()))
-                .visualization(visualization());
         return Collections.singleton(
                 ViewWidget.builder()
                         .id(randomUUIDProvider.get())
-                        .query(query())
+                        .query(ElasticsearchQueryString.create(query()))
                         .timerange(timerange())
-                        .config(visualizationConfig().map(configBuilder::visualizationConfig).orElse(configBuilder).build())
+                        .config(
+                                AggregationConfig.builder()
+                                        .rowPivots(Collections.singletonList(
+                                                Pivot.timeBuilder()
+                                                .field(TIMESTAMP_FIELD)
+                                                .config(TimeHistogramConfig.builder().interval(timestampInterval(interval())).build())
+                                                .build()
+                                        ))
+                                        .series(Collections.singletonList(series()))
+                                        .visualization(visualization())
+                                        .build()
+                        )
                         .build()
         );
-    }
-
-    private Optional<VisualizationConfig> visualizationConfig() {
-        return createVisualizationConfig(renderer(), interpolation());
     }
 
     @JsonCreator
