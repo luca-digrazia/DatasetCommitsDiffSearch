@@ -528,7 +528,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
 
             process = idPB.start();
             try (InputStream inputStream = process.getInputStream()) {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
                     while ((line = reader.readLine()) != null) {
                         responseBuilder.append(line);
                     }
