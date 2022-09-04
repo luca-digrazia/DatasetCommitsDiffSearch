@@ -14,6 +14,7 @@ import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.IsTest;
+import io.quarkus.deployment.TestConfig;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Produce;
@@ -36,6 +37,7 @@ import io.quarkus.gizmo.Gizmo;
  */
 public class TestTracingProcessor {
 
+    private static TestConfig.Mode lastEnabledValue;
     private static boolean consoleInstalled = false;
 
     @BuildStep(onlyIfNot = IsNormal.class)
@@ -44,7 +46,6 @@ public class TestTracingProcessor {
     }
 
     @BuildStep(onlyIf = IsDevelopment.class)
-    @Produce(TestSetupBuildItem.class)
     void setupConsole(TestConfig config, BuildProducer<TestListenerBuildItem> testListenerBuildItemBuildProducer) {
         if (!TestSupport.instance().isPresent() || config.continuousTesting == TestConfig.Mode.DISABLED
                 || config.flatClassPath) {
@@ -64,7 +65,6 @@ public class TestTracingProcessor {
 
     @BuildStep(onlyIfNot = IsNormal.class)
     @Produce(LogHandlerBuildItem.class)
-    @Produce(TestSetupBuildItem.class)
     ServiceStartBuildItem startTesting(TestConfig config, LiveReloadBuildItem liveReloadBuildItem,
             LaunchModeBuildItem launchModeBuildItem, List<TestListenerBuildItem> testListenerBuildItems) {
         if (!TestSupport.instance().isPresent() || config.continuousTesting == TestConfig.Mode.DISABLED
@@ -83,22 +83,14 @@ public class TestTracingProcessor {
         testSupport.setPatterns(config.includePattern.orElse(null),
                 config.excludePattern.orElse(null));
         testSupport.setConfiguredDisplayTestOutput(config.displayTestOutput);
-        testSupport.setTestType(config.type);
         if (!liveReloadBuildItem.isLiveReload()) {
             if (config.continuousTesting == TestConfig.Mode.ENABLED) {
                 testSupport.start();
             } else if (config.continuousTesting == TestConfig.Mode.PAUSED) {
+                testSupport.init();
                 testSupport.stop();
             }
         }
-
-        QuarkusClassLoader cl = (QuarkusClassLoader) Thread.currentThread().getContextClassLoader();
-        ((QuarkusClassLoader) cl.parent()).addCloseTask(new Runnable() {
-            @Override
-            public void run() {
-                testSupport.stop();
-            }
-        });
         return null;
     }
 
