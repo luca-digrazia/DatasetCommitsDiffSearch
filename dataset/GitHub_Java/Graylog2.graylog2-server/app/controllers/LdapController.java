@@ -20,13 +20,13 @@ package controllers;
 
 import com.google.gson.Gson;
 import com.google.inject.Inject;
-import org.graylog2.restclient.lib.APIException;
+import lib.APIException;
 import lib.BreadcrumbList;
-import org.graylog2.restclient.models.accounts.LdapSettings;
-import org.graylog2.restclient.models.accounts.LdapSettingsService;
-import org.graylog2.restclient.models.api.requests.accounts.LdapSettingsRequest;
-import org.graylog2.restclient.models.api.requests.accounts.LdapTestConnectionRequest;
-import org.graylog2.restclient.models.api.responses.accounts.LdapConnectionTestResponse;
+import models.accounts.LdapSettings;
+import models.accounts.LdapSettingsService;
+import models.api.requests.accounts.LdapSettingsRequest;
+import models.api.requests.accounts.LdapTestConnectionRequest;
+import models.api.responses.accounts.LdapConnectionTestResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.data.DynamicForm;
@@ -70,7 +70,7 @@ public class LdapController extends AuthenticatedController {
         try {
             final LdapTestConnectionRequest request = getLdapTestConnectionRequest(formData);
             request.testConnectOnly = true;
-            result = ldapSettingsService.testLdapConfiguration(request);
+            result = api().post(LdapConnectionTestResponse.class).path("/system/ldap/test").body(request).execute();
         } catch (APIException e) {
             // couldn't connect
             log.error("Unable to test connection: {}", e.getMessage());
@@ -98,7 +98,7 @@ public class LdapController extends AuthenticatedController {
             request.searchPattern = formData.get("searchPattern");
             request.principal = formData.get("principal");
             request.password = formData.get("password");
-            result = ldapSettingsService.testLdapConfiguration(request);
+            result = api().post(LdapConnectionTestResponse.class).path("/system/ldap/test").body(request).execute();
         } catch (APIException e) {
             log.error("Unable to test login: {}", e.getMessage());
             return internalServerError();
