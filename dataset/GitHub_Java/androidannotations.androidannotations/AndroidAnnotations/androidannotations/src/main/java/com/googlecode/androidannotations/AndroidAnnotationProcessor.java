@@ -65,15 +65,12 @@ import com.googlecode.androidannotations.annotations.NonConfigurationInstance;
 import com.googlecode.androidannotations.annotations.OptionsItem;
 import com.googlecode.androidannotations.annotations.OptionsMenu;
 import com.googlecode.androidannotations.annotations.OrmLiteDao;
-import com.googlecode.androidannotations.annotations.ProgressChange;
 import com.googlecode.androidannotations.annotations.RoboGuice;
 import com.googlecode.androidannotations.annotations.RootContext;
 import com.googlecode.androidannotations.annotations.SystemService;
 import com.googlecode.androidannotations.annotations.TextChange;
 import com.googlecode.androidannotations.annotations.Touch;
 import com.googlecode.androidannotations.annotations.Trace;
-import com.googlecode.androidannotations.annotations.TrackingTouchStart;
-import com.googlecode.androidannotations.annotations.TrackingTouchStop;
 import com.googlecode.androidannotations.annotations.Transactional;
 import com.googlecode.androidannotations.annotations.UiThread;
 import com.googlecode.androidannotations.annotations.ViewById;
@@ -149,7 +146,6 @@ import com.googlecode.androidannotations.processing.OptionsItemProcessor;
 import com.googlecode.androidannotations.processing.OptionsMenuProcessor;
 import com.googlecode.androidannotations.processing.OrmLiteDaoProcessor;
 import com.googlecode.androidannotations.processing.PrefProcessor;
-import com.googlecode.androidannotations.processing.ProgressChangeProcessor;
 import com.googlecode.androidannotations.processing.ResProcessor;
 import com.googlecode.androidannotations.processing.RestServiceProcessor;
 import com.googlecode.androidannotations.processing.RoboGuiceProcessor;
@@ -159,8 +155,6 @@ import com.googlecode.androidannotations.processing.SystemServiceProcessor;
 import com.googlecode.androidannotations.processing.TextChangeProcessor;
 import com.googlecode.androidannotations.processing.TouchProcessor;
 import com.googlecode.androidannotations.processing.TraceProcessor;
-import com.googlecode.androidannotations.processing.TrackingTouchStartProcessor;
-import com.googlecode.androidannotations.processing.TrackingTouchStopProcessor;
 import com.googlecode.androidannotations.processing.TransactionalProcessor;
 import com.googlecode.androidannotations.processing.UiThreadProcessor;
 import com.googlecode.androidannotations.processing.ViewByIdProcessor;
@@ -210,7 +204,6 @@ import com.googlecode.androidannotations.validation.OptionsItemValidator;
 import com.googlecode.androidannotations.validation.OptionsMenuValidator;
 import com.googlecode.androidannotations.validation.OrmLiteDaoValidator;
 import com.googlecode.androidannotations.validation.PrefValidator;
-import com.googlecode.androidannotations.validation.ProgressChangeValidator;
 import com.googlecode.androidannotations.validation.ResValidator;
 import com.googlecode.androidannotations.validation.RestServiceValidator;
 import com.googlecode.androidannotations.validation.RoboGuiceValidator;
@@ -221,8 +214,6 @@ import com.googlecode.androidannotations.validation.SystemServiceValidator;
 import com.googlecode.androidannotations.validation.TextChangeValidator;
 import com.googlecode.androidannotations.validation.TouchValidator;
 import com.googlecode.androidannotations.validation.TraceValidator;
-import com.googlecode.androidannotations.validation.TrackingTouchStartValidator;
-import com.googlecode.androidannotations.validation.TrackingTouchStopValidator;
 import com.googlecode.androidannotations.validation.TransactionalValidator;
 import com.googlecode.androidannotations.validation.ViewByIdValidator;
 import com.googlecode.androidannotations.validation.rest.AcceptValidator;
@@ -302,9 +293,6 @@ import com.sun.codemodel.JCodeModel;
 		FragmentByTag.class, //
 		BeforeTextChange.class, //
 		TextChange.class, //
-		ProgressChange.class, //
-		TrackingTouchStart.class, //
-		TrackingTouchStop.class, //
 		AfterTextChange.class, //
 		OrmLiteDao.class, //
 		HttpsClient.class //
@@ -461,13 +449,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new BeforeTextChangeValidator(processingEnv, rClass));
 		modelValidator.register(new TextChangeValidator(processingEnv, rClass));
 		modelValidator.register(new AfterTextChangeValidator(processingEnv, rClass));
-		modelValidator.register(new ProgressChangeValidator(processingEnv, rClass));
-		modelValidator.register(new TrackingTouchStartValidator(processingEnv, rClass));
-		modelValidator.register(new TrackingTouchStopValidator(processingEnv, rClass));
-		/*
-		 * Any view injection or listener binding should occur before
-		 * AfterViewsValidator
-		 */
 		modelValidator.register(new AfterViewsValidator(processingEnv));
 		modelValidator.register(new TraceValidator(processingEnv));
 		modelValidator.register(new RunnableValidator(UiThread.class, processingEnv));
@@ -547,13 +528,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new BeforeTextChangeProcessor(processingEnv, rClass));
 		modelProcessor.register(new TextChangeProcessor(processingEnv, rClass));
 		modelProcessor.register(new AfterTextChangeProcessor(processingEnv, rClass));
-		modelProcessor.register(new ProgressChangeProcessor(processingEnv, rClass));
-		modelProcessor.register(new TrackingTouchStartProcessor(processingEnv, rClass));
-		modelProcessor.register(new TrackingTouchStopProcessor(processingEnv, rClass));
-		/*
-		 * Any view injection or listener binding should occur before
-		 * AfterViewsProcessor
-		 */
 		modelProcessor.register(new AfterViewsProcessor());
 		if (traceActivated()) {
 			modelProcessor.register(new TraceProcessor());
