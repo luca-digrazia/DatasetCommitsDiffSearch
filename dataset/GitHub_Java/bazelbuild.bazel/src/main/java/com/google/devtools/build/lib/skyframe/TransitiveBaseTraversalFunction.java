@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -83,7 +84,7 @@ abstract class TransitiveBaseTraversalFunction<TProcessedTargets> implements Sky
       TProcessedTargets processedTargets,
       EventHandler eventHandler,
       TargetAndErrorIfAny targetAndErrorIfAny,
-      Iterable<Map.Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>>>
+      Iterable<Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>>>
           depEntries)
       throws InterruptedException;
 
@@ -139,11 +140,9 @@ abstract class TransitiveBaseTraversalFunction<TProcessedTargets> implements Sky
     // made to skyframe for building this node was for the corresponding PackageValue.
     Iterable<SkyKey> labelAspectKeys =
         getStrictLabelAspectDepKeys(env, depMap, targetAndErrorIfAny);
-    Set<Map.Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>>>
-        labelAspectEntries =
-            env.getValuesOrThrow(
-                    labelAspectKeys, NoSuchPackageException.class, NoSuchTargetException.class)
-                .entrySet();
+    Set<Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>>>
+        labelAspectEntries = env.getValuesOrThrow(labelAspectKeys, NoSuchPackageException.class,
+        NoSuchTargetException.class).entrySet();
     if (env.valuesMissing()) {
       return null;
     }
@@ -189,14 +188,14 @@ abstract class TransitiveBaseTraversalFunction<TProcessedTargets> implements Sky
     if (target instanceof Rule) {
       Map<Label, ValueOrException2<NoSuchPackageException, NoSuchTargetException>> labelDepMap =
           new HashMap<>(depMap.size());
-      for (Map.Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>>
-          entry : depMap.entrySet()) {
+      for (Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>> entry :
+          depMap.entrySet()) {
         labelDepMap.put(argumentFromKey(entry.getKey()), entry.getValue());
       }
 
       Multimap<Attribute, Label> transitions =
           ((Rule) target).getTransitions(DependencyFilter.NO_NODEP_ATTRIBUTES);
-      for (Map.Entry<Attribute, Label> entry : transitions.entries()) {
+      for (Entry<Attribute, Label> entry : transitions.entries()) {
         ValueOrException2<NoSuchPackageException, NoSuchTargetException> value =
             labelDepMap.get(entry.getValue());
         for (Label label :

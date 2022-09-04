@@ -20,6 +20,8 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -149,26 +151,20 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       boolean assertDone,
       SkyKey keyForDebugging)
       throws InterruptedException {
-    Set<SkyKey> depKeysAsSet = null;
+    Iterable<SkyKey> depKeysAsIterable = Iterables.concat(depKeys);
+    Iterable<SkyKey> keysToPrefetch = depKeysAsIterable;
     if (PREFETCH_OLD_DEPS) {
-      if (!oldDeps.isEmpty()) {
-        // Create a set here so that filtering the old deps below is fast. Once we create this set,
-        // we may as well use it for the call to evaluatorContext#getBatchValues since we've
-        // precomputed the size.
-        depKeysAsSet = depKeys.toSet();
-        evaluatorContext
-            .getGraph()
-            .prefetchBatch(
-                requestor,
-                Reason.PREFETCH,
-                Iterables.filter(oldDeps, Predicates.not(Predicates.in(depKeysAsSet))));
-      }
+      ImmutableSet.Builder<SkyKey> keysToPrefetchBuilder = ImmutableSet.builder();
+      keysToPrefetchBuilder.addAll(depKeysAsIterable).addAll(oldDeps);
+      keysToPrefetch = keysToPrefetchBuilder.build();
     }
     Map<SkyKey, ? extends NodeEntry> batchMap =
-        evaluatorContext.getBatchValues(
-            requestor,
-            Reason.PREFETCH,
-            depKeysAsSet == null ? depKeys.getAllElementsAsIterable() : depKeysAsSet);
+        evaluatorContext.getBatchValues(requestor, Reason.PREFETCH, keysToPrefetch);
+    if (PREFETCH_OLD_DEPS) {
+      batchMap =
+          ImmutableMap.<SkyKey, NodeEntry>copyOf(
+              Maps.filterKeys(batchMap, Predicates.in(ImmutableSet.copyOf(depKeysAsIterable))));
+    }
     if (batchMap.size() != depKeys.numElements()) {
       throw new IllegalStateException(
           "Missing keys for "
@@ -320,7 +316,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
             keySize - directDeps.size() - (bubbleErrorInfo == null ? 0 : bubbleErrorInfo.size()),
             0);
     ArrayList<SkyKey> missingKeys = new ArrayList<>(expectedMissingKeySize);
-    for (SkyKey key : depKeys.getAllElementsAsIterable()) {
+    for (SkyKey key : Iterables.concat(depKeys)) {
       SkyValue value = maybeGetValueFromErrorOrDeps(key);
       if (value == null) {
         missingKeys.add(key);
