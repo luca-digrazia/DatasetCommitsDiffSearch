@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ApkSigningMethod;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
@@ -103,7 +102,8 @@ public class ApkActionsBuilder {
    * Adds an individual resource file to the root directory of the APK.
    *
    * <p>This provides the same functionality as {@code javaResourceZip}, except much more hacky.
-   * Will most probably won't work if there is an input artifact in the same directory as this file.
+   * Will most probably won't work if there is an input artifact in the same directory as this
+   * file.
    */
   public ApkActionsBuilder setJavaResourceFile(Artifact javaResourceFile) {
     this.javaResourceFile = javaResourceFile;
@@ -141,10 +141,9 @@ public class ApkActionsBuilder {
 
     // If the caller did not request an unsigned APK, we still need to construct one so that
     // we can sign it. So we make up an intermediate artifact.
-    Artifact intermediateUnsignedApk =
-        unsignedApk != null
-            ? unsignedApk
-            : AndroidBinary.getDxArtifact(ruleContext, "unsigned_" + signedApk.getFilename());
+    Artifact intermediateUnsignedApk = unsignedApk != null
+        ? unsignedApk
+        : AndroidBinary.getDxArtifact(ruleContext, "unsigned_" + signedApk.getFilename());
     if (useSingleJarApkBuilder) {
       buildApk(ruleContext, intermediateUnsignedApk);
     } else {
@@ -176,12 +175,12 @@ public class ApkActionsBuilder {
             .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getApkBuilder())
             .setProgressMessage("Generating unsigned %s", apkName)
             .setMnemonic("AndroidApkBuilder")
-            .addOutput(outApk);
-    CustomCommandLine.Builder commandLine = CustomCommandLine.builder().addExecPath(outApk);
+            .addOutputArgument(outApk);
 
     if (javaResourceZip != null) {
-      actionBuilder.addInput(javaResourceZip);
-      commandLine.add("-rj").addExecPath(javaResourceZip);
+      actionBuilder
+          .addArgument("-rj")
+          .addInputArgument(javaResourceZip);
     }
 
     Pair<Artifact, Runfiles> nativeSymlinksManifestAndRunfiles =
@@ -193,43 +192,42 @@ public class ApkActionsBuilder {
       actionBuilder
           .addRunfilesSupplier(
               new RunfilesSupplierImpl(
-                  nativeSymlinksDir, nativeSymlinksRunfiles, nativeSymlinksManifest))
+                  nativeSymlinksDir,
+                  nativeSymlinksRunfiles,
+                  nativeSymlinksManifest))
           .addInput(nativeSymlinksManifest)
-          .addInputs(nativeLibs.getAllNativeLibs());
-      commandLine
-          .add("-nf")
+          .addInputs(nativeLibs.getAllNativeLibs())
+          .addArgument("-nf")
           // If the native libs are "foo/bar/x86/foo.so", we need to pass "foo/bar" here
-          .addPath(nativeSymlinksDir);
+          .addArgument(nativeSymlinksDir.getPathString());
     }
 
     if (nativeLibs.getName() != null) {
-      actionBuilder.addInput(nativeLibs.getName());
-      commandLine.add("-rf").addPath(nativeLibs.getName().getExecPath().getParentDirectory());
+      actionBuilder
+          .addArgument("-rf")
+          .addArgument(nativeLibs.getName().getExecPath().getParentDirectory().getPathString())
+          .addInput(nativeLibs.getName());
     }
 
     if (javaResourceFile != null) {
-      actionBuilder.addInput(javaResourceFile);
-      commandLine.add("-rf").addPath(javaResourceFile.getExecPath().getParentDirectory());
+      actionBuilder
+          .addArgument("-rf")
+          .addArgument((javaResourceFile.getExecPath().getParentDirectory().getPathString()))
+          .addInput(javaResourceFile);
     }
 
-    commandLine.add("-u");
+    actionBuilder.addArgument("-u");
 
     for (Artifact inputZip : inputZips.build()) {
-      actionBuilder.addInput(inputZip);
-      commandLine.addExecPath("-z", inputZip);
+      actionBuilder.addArgument("-z").addInputArgument(inputZip);
     }
 
     if (classesDex != null) {
-      actionBuilder.addInput(classesDex);
-      if (classesDex.getFilename().endsWith(".dex")) {
-        commandLine.add("-f");
-      } else {
-        commandLine.add("-z");
-      }
-      commandLine.addExecPath(classesDex);
+      actionBuilder
+          .addArgument(classesDex.getFilename().endsWith(".dex") ? "-f" : "-z")
+          .addInputArgument(classesDex);
     }
 
-    actionBuilder.setCommandLine(commandLine.build());
     ruleContext.registerAction(actionBuilder.build(ruleContext));
   }
 
@@ -241,39 +239,48 @@ public class ApkActionsBuilder {
         new SpawnAction.Builder()
             .setMnemonic("ApkBuilder")
             .setProgressMessage("Generating unsigned %s", apkName)
-            .addOutput(compressedApk);
-    CustomCommandLine.Builder compressedApkCommandLine =
-        CustomCommandLine.builder()
-            .add("--exclude_build_data")
-            .add("--compression")
-            .add("--normalize")
-            .addExecPath("--output", compressedApk);
+            .addArgument("--exclude_build_data")
+            .addArgument("--compression")
+            .addArgument("--normalize")
+            .addArgument("--output")
+            .addOutputArgument(compressedApk);
     setSingleJarAsExecutable(ruleContext, compressedApkActionBuilder);
 
     if (classesDex != null) {
-      compressedApkActionBuilder.addInput(classesDex);
       if (classesDex.getFilename().endsWith(".zip")) {
-        compressedApkCommandLine.addExecPath("--sources", classesDex);
+        compressedApkActionBuilder
+            .addArgument("--sources")
+            .addInputArgument(classesDex);
       } else {
-        compressedApkCommandLine
-            .add("--resources")
-            .addFormatted("%s:%s", classesDex, classesDex.getFilename());
+        compressedApkActionBuilder
+            .addInput(classesDex)
+            .addArgument("--resources")
+            .addArgument(
+                singleJarResourcesArgument(
+                    classesDex.getExecPathString(),
+                    classesDex.getFilename()));
       }
     }
 
     if (javaResourceFile != null) {
-      compressedApkActionBuilder.addInput(javaResourceFile);
-      compressedApkCommandLine
-          .add("--resources")
-          .addFormatted("%s:%s", javaResourceFile, javaResourceFile.getFilename());
+      compressedApkActionBuilder
+          .addInput(javaResourceFile)
+          .addArgument("--resources")
+          .addArgument(
+              singleJarResourcesArgument(
+                  javaResourceFile.getExecPathString(),
+                  javaResourceFile.getFilename()));
     }
 
     for (String architecture : nativeLibs.getMap().keySet()) {
       for (Artifact nativeLib : nativeLibs.getMap().get(architecture)) {
-        compressedApkActionBuilder.addInput(nativeLib);
-        compressedApkCommandLine
-            .add("--resources")
-            .addFormatted("%s:lib/%s/%s", nativeLib, architecture, nativeLib.getFilename());
+        compressedApkActionBuilder
+            .addArgument("--resources")
+            .addArgument(
+                singleJarResourcesArgument(
+                    nativeLib.getExecPathString(),
+                    "lib/" + architecture + "/" + nativeLib.getFilename()))
+            .addInput(nativeLib);
       }
     }
 
@@ -281,15 +288,13 @@ public class ApkActionsBuilder {
         new SpawnAction.Builder()
             .setMnemonic("ApkBuilder")
             .setProgressMessage("Generating unsigned %s", apkName)
-            .addInput(compressedApk)
-            .addOutput(outApk);
-    CustomCommandLine.Builder singleJarCommandLine = CustomCommandLine.builder();
-    singleJarCommandLine
-        .add("--exclude_build_data")
-        .add("--dont_change_compression")
-        .add("--normalize")
-        .addExecPath("--sources", compressedApk)
-        .addExecPath("--output", outApk);
+            .addArgument("--exclude_build_data")
+            .addArgument("--dont_change_compression")
+            .addArgument("--normalize")
+            .addArgument("--sources")
+            .addInputArgument(compressedApk)
+            .addArgument("--output")
+            .addOutputArgument(outApk);
     setSingleJarAsExecutable(ruleContext, singleJarActionBuilder);
 
     if (javaResourceZip != null) {
@@ -301,48 +306,62 @@ public class ApkActionsBuilder {
               .setExecutable(resourceExtractor)
               .setMnemonic("ResourceExtractor")
               .setProgressMessage("Extracting Java resources from deploy jar for %s", apkName)
-              .addInput(javaResourceZip)
-              .addOutput(extractedJavaResourceZip)
-              .setCommandLine(
-                  CustomCommandLine.builder()
-                      .addExecPath(javaResourceZip)
-                      .addExecPath(extractedJavaResourceZip)
-                      .build())
+              .addInputArgument(javaResourceZip)
+              .addOutputArgument(extractedJavaResourceZip)
               .build(ruleContext));
 
       if (ruleContext.getFragment(AndroidConfiguration.class).compressJavaResources()) {
-        compressedApkActionBuilder.addInput(extractedJavaResourceZip);
-        compressedApkCommandLine.addExecPath("--sources", extractedJavaResourceZip);
+        compressedApkActionBuilder
+            .addArgument("--sources")
+            .addInputArgument(extractedJavaResourceZip);
       } else {
-        singleJarActionBuilder.addInput(extractedJavaResourceZip);
-        singleJarCommandLine.addExecPath("--sources", extractedJavaResourceZip);
+        singleJarActionBuilder
+            .addArgument("--sources")
+            .addInputArgument(extractedJavaResourceZip);
       }
     }
 
     if (nativeLibs.getName() != null) {
-      singleJarActionBuilder.addInput(nativeLibs.getName());
-      singleJarCommandLine
-          .add("--resources")
-          .addFormatted("%s:%s", nativeLibs.getName(), nativeLibs.getName().getFilename());
+      singleJarActionBuilder
+          .addArgument("--resources")
+          .addArgument(
+              singleJarResourcesArgument(
+                  nativeLibs.getName().getExecPathString(),
+                  nativeLibs.getName().getFilename()))
+          .addInput(nativeLibs.getName());
     }
 
     for (Artifact inputZip : inputZips.build()) {
-      singleJarActionBuilder.addInput(inputZip);
-      singleJarCommandLine.addExecPath("--sources", inputZip);
+      singleJarActionBuilder.addArgument("--sources").addInputArgument(inputZip);
     }
 
     ImmutableList<String> noCompressExtensions =
         ruleContext.getTokenizedStringListAttr("nocompress_extensions");
     if (ruleContext.getFragment(AndroidConfiguration.class).useNocompressExtensionsOnApk()
         && !noCompressExtensions.isEmpty()) {
-      compressedApkCommandLine.addAll("--nocompress_suffixes", noCompressExtensions);
-      singleJarCommandLine.addAll("--nocompress_suffixes", noCompressExtensions);
+      compressedApkActionBuilder
+          .addArgument("--nocompress_suffixes")
+          .addArguments(noCompressExtensions);
+      singleJarActionBuilder
+          .addArgument("--nocompress_suffixes")
+          .addArguments(noCompressExtensions);
     }
 
-    compressedApkActionBuilder.setCommandLine(compressedApkCommandLine.build());
     ruleContext.registerAction(compressedApkActionBuilder.build(ruleContext));
-    singleJarActionBuilder.setCommandLine(singleJarCommandLine.build());
     ruleContext.registerAction(singleJarActionBuilder.build(ruleContext));
+  }
+
+  /**
+   * The --resources flag to singlejar can have either of the following forms:
+   * <ul>
+   * <li>The path to the input file. In this case the file is placed at the same path in the APK.
+   * <li>{@code from}:{@code to} where {@code from} is that path to the input file and {@code to} is
+   * the location in the APK to put it.
+   * </ul>
+   * This method creates the syntax for the second form.
+   */
+  private static String singleJarResourcesArgument(String from, String to) {
+    return from + ":" + to;
   }
 
   /** Uses the zipalign tool to align the zip boundaries for uncompressed resources by 4 bytes. */
@@ -352,16 +371,11 @@ public class ApkActionsBuilder {
             .addInput(inputApk)
             .addOutput(zipAlignedApk)
             .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getZipalign())
+            .addArgument("4")
+            .addInputArgument(inputApk)
+            .addOutputArgument(zipAlignedApk)
             .setProgressMessage("Zipaligning %s", apkName)
             .setMnemonic("AndroidZipAlign")
-            .addInput(inputApk)
-            .addOutput(zipAlignedApk)
-            .setCommandLine(
-                CustomCommandLine.builder()
-                    .add("4")
-                    .addExecPath(inputApk)
-                    .addExecPath(zipAlignedApk)
-                    .build())
             .build(ruleContext));
   }
 
@@ -379,22 +393,16 @@ public class ApkActionsBuilder {
             .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getApkSigner())
             .setProgressMessage("Signing %s", apkName)
             .setMnemonic("ApkSignerTool")
-            .addInput(signingKey)
-            .addOutput(signedAndZipalignedApk)
-            .addInput(unsignedApk)
-            .setCommandLine(
-                CustomCommandLine.builder()
-                    .add("sign")
-                    .add("--ks")
-                    .addExecPath(signingKey)
-                    .add("--ks-pass", "pass:android")
-                    .add("--v1-signing-enabled", Boolean.toString(signingMethod.signV1()))
-                    .add("--v1-signer-name", "CERT")
-                    .add("--v2-signing-enabled", Boolean.toString(signingMethod.signV2()))
-                    .add("--out")
-                    .addExecPath(signedAndZipalignedApk)
-                    .addExecPath(unsignedApk)
-                    .build())
+            .addArgument("sign")
+            .addArgument("--ks")
+            .addInputArgument(signingKey)
+            .addArguments("--ks-pass", "pass:android")
+            .addArguments("--v1-signing-enabled", Boolean.toString(signingMethod.signV1()))
+            .addArguments("--v1-signer-name", "CERT")
+            .addArguments("--v2-signing-enabled", Boolean.toString(signingMethod.signV2()))
+            .addArgument("--out")
+            .addOutputArgument(signedAndZipalignedApk)
+            .addInputArgument(unsignedApk)
             .build(ruleContext));
   }
 

@@ -32,11 +32,8 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.StaticallyLinkedMarkerProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -86,11 +83,6 @@ public class CppHelper {
 
   private static final ImmutableList<String> LINKOPTS_PREREQUISITE_LABEL_KINDS =
       ImmutableList.of("deps", "srcs");
-
-  /** Returns label used to select resolved cc_toolchain instances based on platform. */
-  public static Label getCcToolchainType(String toolsRepository) {
-    return Label.parseAbsoluteUnchecked(toolsRepository + "//tools/cpp:toolchain_type");
-  }
 
   private CppHelper() {
     // prevents construction
@@ -326,11 +318,11 @@ public class CppHelper {
   public static CcToolchainProvider getToolchain(RuleContext ruleContext,
       TransitiveInfoCollection dep) {
     // TODO(bazel-team): Consider checking this generally at the attribute level.
-    if ((dep == null) || (dep.get(ToolchainInfo.PROVIDER) == null)) {
+    if ((dep == null) || (dep.get(CcToolchainProvider.SKYLARK_CONSTRUCTOR) == null)) {
       ruleContext.ruleError("The selected C++ toolchain is not a cc_toolchain rule");
       return CcToolchainProvider.EMPTY_TOOLCHAIN_IS_ERROR;
     }
-    return (CcToolchainProvider) dep.get(ToolchainInfo.PROVIDER);
+    return dep.get(CcToolchainProvider.SKYLARK_CONSTRUCTOR);
   }
 
   /**
@@ -622,16 +614,6 @@ public class CppHelper {
       Artifact input,
       Artifact output,
       FeatureConfiguration featureConfiguration) {
-    if (featureConfiguration.isEnabled(CppRuleClasses.NO_STRIPPING)) {
-      context.registerAction(
-          new SymlinkAction(
-              context.getActionOwner(),
-              input,
-              output,
-              "Symlinking original binary as stripped binary"));
-      return;
-    }
-
     if (!featureConfiguration.actionIsConfigured(CppCompileAction.STRIP_ACTION_NAME)) {
       context.ruleError("Expected action_config for 'strip' to be configured.");
       return;
@@ -661,10 +643,10 @@ public class CppHelper {
             .addOutput(output)
             .useDefaultShellEnvironment()
             .setExecutable(stripTool.getToolPath(cppConfiguration.getCrosstoolTopPathFragment()))
+            .addArguments(commandLine)
             .setExecutionInfo(executionInfoBuilder.build())
             .setProgressMessage("Stripping %s for %s", output.prettyPrint(), context.getLabel())
             .setMnemonic("CcStrip")
-            .setCommandLine(CustomCommandLine.builder().addAll(commandLine).build())
             .build(context);
     context.registerAction(stripAction);
   }
