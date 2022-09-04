@@ -1,9 +1,26 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.dashboardwidgets;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.AggregationWidget;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
@@ -17,7 +34,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +53,7 @@ public abstract class StackedChartConfig extends WidgetConfigBase implements Wid
     public abstract Optional<String> streamId();
 
     @Override
-    public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
+    public Set<ViewWidget> toViewWidgets(Widget widget, RandomUUIDProvider randomUUIDProvider) {
         final Map<String, List<StackedSeries>> seriesByQuery = series().stream()
                 .collect(Collectors.groupingBy(StackedSeries::query));
         final AggregationConfig.Builder configBuilderTemplate = AggregationConfig.builder()
@@ -45,8 +61,9 @@ public abstract class StackedChartConfig extends WidgetConfigBase implements Wid
                 .visualization(mapRendererToVisualization(renderer()));
 
         if (seriesByQuery.size() > 1) {
-            // TODO: Insert URL to changelog/upgrade notes with helpful advice
-            LOG.warn("Migrating dashboards to views: Encountered a stacked chart widget containing multiple distinct queries, splitting up into separate widgets");
+            LOG.warn("Migrating dashboards to views: Encountered a stacked chart widget containing multiple distinct " +
+                    "queries, splitting up into separate widgets. Read more about it here: " +
+                    "https://github.com/Graylog2/graylog2-server/blob/master/UPGRADING.rst#upgrading-to-graylog-32x");
         }
 
         return seriesByQuery.entrySet().stream()
@@ -58,7 +75,7 @@ public abstract class StackedChartConfig extends WidgetConfigBase implements Wid
 
                     final AggregationConfig.Builder configBuilder = configBuilderTemplate.series(series);
 
-                    final ViewWidget.Builder viewWidgetBuilder = ViewWidget.builder()
+                    final AggregationWidget.Builder viewWidgetBuilder = AggregationWidget.builder()
                             .id(randomUUIDProvider.get())
                             .timerange(timerange())
                             .query(query)
@@ -68,13 +85,16 @@ public abstract class StackedChartConfig extends WidgetConfigBase implements Wid
     }
 
     @Override
-    public Map<String, ViewWidgetPosition> toViewWidgetPositions(Set<ViewWidget> viewWidgets, Widget oldWidget, WidgetPosition widgetPosition) {
+    public Map<String, ViewWidgetPosition> toViewWidgetPositions(Set<ViewWidget> viewWidgets, WidgetPosition widgetPosition) {
         if (viewWidgets.size() == 1) {
-            return super.toViewWidgetPositions(viewWidgets, oldWidget, widgetPosition);
+            return super.toViewWidgetPositions(viewWidgets, widgetPosition);
         }
 
-        final List<ViewWidget> widgetList = new ArrayList<>(viewWidgets);
-        final ViewWidget first = widgetList.get(0);
+        final List<AggregationWidget> widgetList = viewWidgets.stream()
+                .filter(viewWidget -> viewWidget instanceof AggregationWidget)
+                .map(viewWidget -> (AggregationWidget)viewWidget)
+                .collect(Collectors.toList());
+        final AggregationWidget first = widgetList.get(0);
 
         final ViewWidgetPosition firstPosition = ViewWidgetPosition.builder()
                 .col(widgetPosition.col())
