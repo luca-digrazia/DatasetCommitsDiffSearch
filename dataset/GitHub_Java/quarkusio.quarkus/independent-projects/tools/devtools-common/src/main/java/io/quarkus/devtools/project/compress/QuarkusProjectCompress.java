@@ -28,21 +28,21 @@ public final class QuarkusProjectCompress {
     private QuarkusProjectCompress() {
     }
 
-    public static void zip(final Path quarkusProjectDirPath, final Path targetZipPath, final boolean includeProjectDirectory)
+    public static void zip(final Path quarkusProjectFolderPath, final Path targetZipPath, final boolean includeProjectFolder)
             throws IOException {
-        zip(quarkusProjectDirPath, targetZipPath, includeProjectDirectory, null);
+        zip(quarkusProjectFolderPath, targetZipPath, includeProjectFolder, null);
     }
 
-    public static void zip(final Path quarkusProjectDirPath, final Path targetZipPath, final boolean includeProjectDirectory,
+    public static void zip(final Path quarkusProjectFolderPath, final Path targetZipPath, final boolean includeProjectFolder,
             final Long withSpecificFilesTime) throws IOException {
         try (final ZipArchiveOutputStream zaos = new ZipArchiveOutputStream(Files.newOutputStream(targetZipPath))) {
-            Files.walk(quarkusProjectDirPath)
-                    .filter((path) -> includeProjectDirectory || !quarkusProjectDirPath.equals(path))
+            Files.walk(quarkusProjectFolderPath)
+                    .filter((path) -> includeProjectFolder || !quarkusProjectFolderPath.equals(path))
                     .forEach((path) -> {
                         try {
-                            String entryName = quarkusProjectDirPath.relativize(path).toString().replace('\\', '/');
-                            if (includeProjectDirectory) {
-                                entryName = quarkusProjectDirPath.getFileName()
+                            String entryName = quarkusProjectFolderPath.relativize(path).toString().replace('\\', '/');
+                            if (includeProjectFolder) {
+                                entryName = quarkusProjectFolderPath.getFileName()
                                         + (entryName.length() == 0 ? "" : "/" + entryName);
                             }
                             int unixMode;
