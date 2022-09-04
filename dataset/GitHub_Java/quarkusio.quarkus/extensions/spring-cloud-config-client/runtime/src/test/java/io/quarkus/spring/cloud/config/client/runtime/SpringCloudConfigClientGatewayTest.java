@@ -17,16 +17,14 @@ import org.junit.jupiter.api.Test;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 
-import io.quarkus.runtime.TlsConfig;
-
 class SpringCloudConfigClientGatewayTest {
 
     private static final int MOCK_SERVER_PORT = 9300;
     private static final WireMockServer wireMockServer = new WireMockServer(MOCK_SERVER_PORT);
 
     private static final SpringCloudConfigClientConfig springCloudConfigClientConfig = configForTesting();
-    private final SpringCloudConfigClientGateway sut = new VertxSpringCloudConfigGateway(
-            springCloudConfigClientConfig, new TlsConfig());
+    private final SpringCloudConfigClientGateway sut = new DefaultSpringCloudConfigClientGateway(
+            springCloudConfigClientConfig);
 
     @BeforeAll
     static void start() {
@@ -47,7 +45,7 @@ class SpringCloudConfigClientGatewayTest {
         wireMockServer.stubFor(WireMock.get(springCloudConfigUrl).willReturn(WireMock
                 .okJson(getJsonStringForApplicationAndProfile(applicationName, profile))));
 
-        Response response = sut.exchange(applicationName, profile).await().indefinitely();
+        final Response response = sut.exchange(applicationName, profile);
 
         assertThat(response).isNotNull().satisfies(r -> {
             assertThat(r.getName()).isEqualTo("foo");
