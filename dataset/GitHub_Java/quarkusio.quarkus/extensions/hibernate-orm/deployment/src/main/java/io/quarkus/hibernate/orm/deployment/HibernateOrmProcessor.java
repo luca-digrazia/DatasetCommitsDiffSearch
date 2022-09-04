@@ -45,7 +45,6 @@ import org.jboss.jandex.Indexer;
 
 import io.quarkus.agroal.deployment.DataSourceDriverBuildItem;
 import io.quarkus.agroal.deployment.DataSourceInitializedBuildItem;
-import io.quarkus.agroal.deployment.DataSourceSchemaReadyBuildItem;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
@@ -336,8 +335,7 @@ public final class HibernateOrmProcessor {
     public void startPersistenceUnits(HibernateOrmRecorder recorder, BeanContainerBuildItem beanContainer,
             Optional<DataSourceInitializedBuildItem> dataSourceInitialized,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
-            List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationsRuntimeConfigured,
-            Optional<DataSourceSchemaReadyBuildItem> schemaReadyBuildItem) throws Exception {
+            List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationsRuntimeConfigured) throws Exception {
         if (!hasEntities(jpaEntities, nonJpaModels)) {
             return;
         }
@@ -407,10 +405,6 @@ public final class HibernateOrmProcessor {
                     systemProperty.produce(new SystemPropertyBuildItem(AvailableSettings.STORAGE_ENGINE,
                             hibernateConfig.dialectStorageEngine.get()));
                 }
-                // Physical Naming Strategy
-                hibernateConfig.physicalNamingStrategy.ifPresent(
-                        namingStrategy -> desc.getProperties()
-                                .setProperty(AvailableSettings.PHYSICAL_NAMING_STRATEGY, namingStrategy));
 
                 // Database
                 desc.getProperties().setProperty(AvailableSettings.HBM2DDL_DATABASE_ACTION,
