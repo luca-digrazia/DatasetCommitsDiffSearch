@@ -121,7 +121,7 @@ import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetParsingPhaseTimeEvent;
-import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
+import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
@@ -144,6 +144,7 @@ import com.google.devtools.build.lib.skyframe.PackageFunction.LoadedPackageCache
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
+import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.skyframe.trimming.TrimmedConfigurationCache;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -1604,12 +1605,11 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
     skyframeActionExecutor.prepareForExecution(reporter, executor, options, checker, outputService);
   }
 
-  EvaluationResult<SkyValue> targetPatterns(
-      Iterable<? extends SkyKey> patternSkyKeys,
+  EvaluationResult<TargetPatternValue> targetPatterns(
+      Iterable<TargetPatternKey> patternSkyKeys,
       int numThreads,
       boolean keepGoing,
-      ExtendedEventHandler eventHandler,
-      boolean useForkJoinPool)
+      ExtendedEventHandler eventHandler)
       throws InterruptedException {
     checkActive();
     EvaluationContext evaluationContext =
@@ -1617,7 +1617,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
             .setKeepGoing(keepGoing)
             .setNumThreads(numThreads)
             .setEventHander(eventHandler)
-            .setUseForkJoinPool(useForkJoinPool)
             .build();
     return buildDriver.evaluate(patternSkyKeys, evaluationContext);
   }
@@ -2328,8 +2327,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
         ExtendedEventHandler eventHandler,
         Iterable<Label> labelsToVisit,
         boolean keepGoing,
-        int parallelThreads,
-        boolean useForkJoinPool)
+        int parallelThreads)
         throws InterruptedException {
       List<SkyKey> valueNames = new ArrayList<>();
       for (Label label : labelsToVisit) {
@@ -2340,7 +2338,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
               .setKeepGoing(keepGoing)
               .setNumThreads(parallelThreads)
               .setEventHander(eventHandler)
-              .setUseForkJoinPool(useForkJoinPool)
               .build();
       return buildDriver.evaluate(valueNames, evaluationContext);
     }
@@ -2444,7 +2441,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   }
 
   @VisibleForTesting
-  public TargetPatternPreloader newTargetPatternPreloader() {
+  public TargetPatternEvaluator newTargetPatternEvaluator() {
     return new SkyframeTargetPatternEvaluator(this);
   }
 
