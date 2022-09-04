@@ -45,8 +45,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
-import javax.tools.Diagnostic;
-import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
 /** Performs a javac-based turbine compilation given a {@link JavacTurbineCompileRequest}. */
@@ -57,8 +55,6 @@ public class JavacTurbineCompiler {
     Map<String, byte[]> files = new LinkedHashMap<>();
     Status status;
     StringWriter sw = new StringWriter();
-    ImmutableList.Builder<Diagnostic<? extends JavaFileObject>> diagnostics =
-        ImmutableList.builder();
     Context context = new Context();
 
     try (PrintWriter pw = new PrintWriter(sw)) {
@@ -71,7 +67,7 @@ public class JavacTurbineCompiler {
                 .getTask(
                     pw,
                     fm,
-                    diagnostics::add,
+                    null /*diagnostics*/,
                     request.javacOptions(),
                     ImmutableList.of() /*classes*/,
                     fm.getJavaFileObjectsFromPaths(request.sources()),
@@ -111,8 +107,7 @@ public class JavacTurbineCompiler {
       }
     }
 
-    return new JavacTurbineCompileResult(
-        ImmutableMap.copyOf(files), status, sw.toString(), diagnostics.build(), context);
+    return new JavacTurbineCompileResult(ImmutableMap.copyOf(files), status, sw, context);
   }
 
   /** Mask the annotation processor classpath to avoid version skew. */
