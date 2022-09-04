@@ -14,9 +14,11 @@
 
 package com.google.devtools.build.lib.rules.python;
 
+import static com.google.common.collect.Iterables.transform;
+
 import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
-import java.util.List;
+import java.util.Arrays;
 
 /**
  * An enum representing Python major versions.
@@ -69,59 +71,97 @@ public enum PythonVersion {
    */
   PY3ONLY;
 
-  private static ImmutableList<String> convertToStrings(List<PythonVersion> values) {
-    return values.stream()
-        .map(Functions.toStringFunction())
-        .collect(ImmutableList.toImmutableList());
+  private static Iterable<String> convertToStrings(PythonVersion[] values) {
+    return transform(ImmutableList.copyOf(values), Functions.toStringFunction());
   }
 
-  /** All enum values. */
-  public static final ImmutableList<PythonVersion> ALL_VALUES =
-      ImmutableList.of(PY2, PY3, PY2AND3, PY2ONLY, PY3ONLY);
+  private static final PythonVersion[] allValues =
+      new PythonVersion[] {PY2, PY3, PY2AND3, PY2ONLY, PY3ONLY};
 
-  /** String names of all enum values. */
-  public static final ImmutableList<String> ALL_STRINGS = convertToStrings(ALL_VALUES);
+  private static final Iterable<String> allStrings = convertToStrings(allValues);
 
-  /** Enum values representing a distinct Python version. */
-  public static final ImmutableList<PythonVersion> TARGET_VALUES = ImmutableList.of(PY2, PY3);
+  private static final PythonVersion[] targetValues = new PythonVersion[] {PY2, PY3};
 
-  /** String names of enum values representing a distinct Python version. */
-  public static final ImmutableList<String> TARGET_STRINGS = convertToStrings(TARGET_VALUES);
+  private static final Iterable<String> targetStrings = convertToStrings(targetValues);
 
-  /** Enum values that do not imply running a transpiler to convert between versions. */
-  public static final ImmutableList<PythonVersion> NON_CONVERSION_VALUES =
-      ImmutableList.of(PY2AND3, PY2ONLY, PY3ONLY);
+  private static final PythonVersion[] nonConversionValues =
+      new PythonVersion[] {PY2AND3, PY2ONLY, PY3ONLY};
+
+  private static final Iterable<String> nonConversionStrings =
+      convertToStrings(nonConversionValues);
+
+  private static final PythonVersion DEFAULT_TARGET_VALUE = PY2;
+
+  private static final PythonVersion DEFAULT_SRCS_VALUE = PY2AND3;
+
+  /** Returns all values as a new array. */
+  public static PythonVersion[] getAllValues() {
+    return Arrays.copyOf(allValues, allValues.length);
+  }
+
+  /** Returns an iterable of all values as strings. */
+  public static Iterable<String> getAllStrings() {
+    return allStrings;
+  }
+
+  /** Returns all values representing a specific version, as a new array. */
+  public static PythonVersion[] getTargetValues() {
+    return Arrays.copyOf(targetValues, targetValues.length);
+  }
+
+  /** Returns an iterable of all values representing a specific version, as strings. */
+  public static Iterable<String> getTargetStrings() {
+    return targetStrings;
+  }
 
   /**
-   * String names of enum values that do not imply running a transpiler to convert between versions.
+   * Returns all values that do not imply running a transpiler to convert between versions, as a new
+   * array.
    */
-  public static final ImmutableList<String> NON_CONVERSION_STRINGS =
-      convertToStrings(NON_CONVERSION_VALUES);
-
-  public static final PythonVersion DEFAULT_TARGET_VALUE = PY2;
-
-  public static final PythonVersion DEFAULT_SRCS_VALUE = PY2AND3;
+  public static PythonVersion[] getNonConversionValues() {
+    return Arrays.copyOf(nonConversionValues, nonConversionValues.length);
+  }
 
   /**
-   * Converts the string to a target {@code PythonVersion} value (case-sensitive).
-   *
-   * @throws IllegalArgumentException if the string is not "PY2" or "PY3".
+   * Returns all values that do not imply running a transpiler to convert between versions, as
+   * strings.
    */
-  public static PythonVersion parseTargetValue(String str) {
-    if (!TARGET_STRINGS.contains(str)) {
-      throw new IllegalArgumentException(
-          String.format("'%s' is not a valid Python major version. Expected 'PY2' or 'PY3'.", str));
+  public static Iterable<String> getNonConversionStrings() {
+    return nonConversionStrings;
+  }
+
+  /** Returns the Python version to use if not otherwise specified by a flag or attribute. */
+  public static PythonVersion getDefaultTargetValue() {
+    return DEFAULT_TARGET_VALUE;
+  }
+
+  /**
+   * Returns the level of source compatibility assumed if not otherwise specified by an attribute.
+   */
+  public static PythonVersion getDefaultSrcsValue() {
+    return DEFAULT_SRCS_VALUE;
+  }
+
+  // TODO(brandjon): Refactor this into parseTargetValue and parseSourcesValue methods. Throw
+  // IllegalArgumentException on bad values instead of returning null, and modify callers to
+  // tolerate the exception.
+  /**
+   * Converts the string to PythonVersion, if it is one of the allowed values. Returns null if the
+   * input is not valid.
+   */
+  public static PythonVersion parse(String str, PythonVersion... allowed) {
+    if (str == null) {
+      return null;
     }
-    return PythonVersion.valueOf(str);
-  }
-
-  /**
-   * Converts the string to a sources {@code PythonVersion} value (case-sensitive).
-   *
-   * @throws IllegalArgumentException if the string is not an enum name.
-   */
-  public static PythonVersion parseSrcsValue(String str) {
-    return PythonVersion.valueOf(str);
+    try {
+      PythonVersion version = PythonVersion.valueOf(str);
+      if (Arrays.asList(allowed).contains(version)) {
+        return version;
+      }
+      return null;
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
   }
 }
 

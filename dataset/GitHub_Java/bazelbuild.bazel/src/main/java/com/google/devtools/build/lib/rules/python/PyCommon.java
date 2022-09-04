@@ -95,10 +95,14 @@ public final class PyCommon {
   }
 
   public void initCommon(PythonVersion defaultVersion) {
-    this.sourcesVersion = getSrcsVersionAttr(ruleContext);
+    this.sourcesVersion =
+        getPythonVersionAttr(ruleContext, "srcs_version", PythonVersion.getAllValues());
+
     this.version = ruleContext.getFragment(PythonConfiguration.class)
         .getPythonVersion(defaultVersion);
-    this.transitivePythonSources = collectTransitivePythonSources();
+
+    transitivePythonSources = collectTransitivePythonSources();
+
     checkSourceIsCompatible(this.version, this.sourcesVersion, ruleContext.getLabel());
   }
 
@@ -195,41 +199,25 @@ public final class PyCommon {
   }
 
   public PythonVersion getDefaultPythonVersion() {
-    return ruleContext.getRule().isAttrDefined("default_python_version", Type.STRING)
-        ? getPythonVersionAttr(ruleContext)
-        : null;
+    return ruleContext.getRule()
+        .isAttrDefined("default_python_version", Type.STRING)
+            ? getPythonVersionAttr(
+                ruleContext, "default_python_version", PythonVersion.PY2, PythonVersion.PY3)
+            : null;
   }
 
-  /** Returns the parsed value of the "srcs_version" attribute. */
-  private static PythonVersion getSrcsVersionAttr(RuleContext ruleContext) {
-    String attrValue = ruleContext.attributes().get("srcs_version", Type.STRING);
-    try {
-      return PythonVersion.parseSrcsValue(attrValue);
-    } catch (IllegalArgumentException ex) {
-      // Should already have been disallowed in the rule.
-      ruleContext.attributeError(
-          "srcs_version",
-          String.format(
-              "'%s' is not a valid value. Expected one of: %s",
-              attrValue, Joiner.on(", ").join(PythonVersion.ALL_STRINGS)));
-      return PythonVersion.DEFAULT_SRCS_VALUE;
+  public static PythonVersion getPythonVersionAttr(RuleContext ruleContext,
+      String attrName, PythonVersion... allowed) {
+    String stringAttr = ruleContext.attributes().get(attrName, Type.STRING);
+    PythonVersion version = PythonVersion.parse(stringAttr, allowed);
+    if (version != null) {
+      return version;
     }
-  }
-
-  /** Returns the parsed value of the "default_python_version" attribute. */
-  private static PythonVersion getPythonVersionAttr(RuleContext ruleContext) {
-    String attrValue = ruleContext.attributes().get("default_python_version", Type.STRING);
-    try {
-      return PythonVersion.parseTargetValue(attrValue);
-    } catch (IllegalArgumentException ex) {
-      // Should already have been disallowed in the rule.
-      ruleContext.attributeError(
-          "default_python_version",
-          String.format(
-              "'%s' is not a valid value. Expected one of: %s",
-              attrValue, Joiner.on(", ").join(PythonVersion.TARGET_STRINGS)));
-      return PythonVersion.DEFAULT_TARGET_VALUE;
-    }
+    // Should already have been disallowed in the rule.
+    ruleContext.attributeError(attrName,
+        "'" + stringAttr + "' is not a valid value. Expected one of: " + Joiner.on(", ")
+            .join(allowed));
+    return PythonVersion.getDefaultTargetValue();
   }
 
   /**
