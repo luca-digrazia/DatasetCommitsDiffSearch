@@ -170,9 +170,6 @@ public class NativeImageMojo extends AbstractMojo {
             if (enableJni) {
                 command.add("-H:+JNI");
             }
-            else {
-                command.add("-H:-JNI");
-            }
             if(!enableServer) {
                 command.add("--no-server");
             }
