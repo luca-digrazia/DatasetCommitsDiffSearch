@@ -21,7 +21,7 @@ import io.quarkus.QuarkusTemplate;
 import io.quarkus.SourceType;
 import io.quarkus.maven.utilities.MojoUtils;
 
-public class BasicRest implements QuarkusTemplate {
+public class BasicRest extends QuarkusTemplate {
 
     public static final String TEMPLATE_NAME = "basic-rest";
 
@@ -33,7 +33,11 @@ public class BasicRest implements QuarkusTemplate {
     private File testMain;
     private SourceType type;
 
-    public BasicRest() {
+    public static boolean register() {
+        return QuarkusTemplate.registerTemplate(new BasicRest());
+    }
+
+    protected BasicRest() {
     }
 
     @Override
