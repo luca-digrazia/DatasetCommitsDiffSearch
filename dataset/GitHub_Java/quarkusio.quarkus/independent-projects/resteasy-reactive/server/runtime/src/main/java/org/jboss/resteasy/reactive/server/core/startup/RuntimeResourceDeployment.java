@@ -31,6 +31,7 @@ import org.jboss.resteasy.reactive.common.util.QuarkusMultivaluedHashMap;
 import org.jboss.resteasy.reactive.common.util.ServerMediaType;
 import org.jboss.resteasy.reactive.common.util.types.TypeSignatureParser;
 import org.jboss.resteasy.reactive.server.core.DeploymentInfo;
+import org.jboss.resteasy.reactive.server.core.ParamConverterProviders;
 import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
 import org.jboss.resteasy.reactive.server.core.parameters.AsyncResponseExtractor;
 import org.jboss.resteasy.reactive.server.core.parameters.BeanParamExtractor;
@@ -70,7 +71,6 @@ import org.jboss.resteasy.reactive.server.handlers.UniResponseHandler;
 import org.jboss.resteasy.reactive.server.handlers.VariableProducesHandler;
 import org.jboss.resteasy.reactive.server.mapping.RuntimeResource;
 import org.jboss.resteasy.reactive.server.mapping.URITemplate;
-import org.jboss.resteasy.reactive.server.model.ParamConverterProviders;
 import org.jboss.resteasy.reactive.server.model.ServerMethodParameter;
 import org.jboss.resteasy.reactive.server.model.ServerResourceMethod;
 import org.jboss.resteasy.reactive.server.spi.EndpointInvoker;
@@ -138,6 +138,10 @@ public class RuntimeResourceDeployment {
 
         handlers.addAll(interceptorDeployment.setupRequestFilterHandler());
 
+        Class<?>[] parameterTypes = new Class[method.getParameters().length];
+        for (int i = 0; i < method.getParameters().length; ++i) {
+            parameterTypes[i] = loadClass(method.getParameters()[i].declaredType);
+        }
         // some parameters need the body to be read
         MethodParameter[] parameters = method.getParameters();
         // body can only be in a parameter
@@ -161,13 +165,7 @@ public class RuntimeResourceDeployment {
         }
         // if we need the body, let's deserialise it
         if (bodyParameter != null) {
-            Class<Object> typeClass = loadClass(bodyParameter.type);
-            Type genericType = typeClass;
-            if ((bodyParameter.declaredType != null) && !bodyParameter.type.equals(bodyParameter.declaredType)) {
-                // we only need to parse the signature and create generic type when the declared type differs from the type
-                genericType = TypeSignatureParser.parse(bodyParameter.signature);
-            }
-            handlers.add(new RequestDeserializeHandler(typeClass, genericType,
+            handlers.add(new RequestDeserializeHandler(loadClass(bodyParameter.type),
                     consumesMediaTypes.isEmpty() ? null : consumesMediaTypes.get(0), serialisers, bodyParameterIndex));
         }
 
@@ -185,12 +183,8 @@ public class RuntimeResourceDeployment {
         }
 
         Class<Object> resourceClass = loadClass(clazz.getClassName());
-        Class<?>[] parameterClasses = new Class[method.getParameters().length];
-        for (int i = 0; i < method.getParameters().length; ++i) {
-            parameterClasses[i] = loadClass(method.getParameters()[i].declaredType);
-        }
         ResteasyReactiveResourceInfo lazyMethod = new ResteasyReactiveResourceInfo(method.getName(), resourceClass,
-                parameterClasses, method.getMethodAnnotationNames());
+                parameterTypes, method.getMethodAnnotationNames());
 
         for (int i = 0; i < parameters.length; i++) {
             ServerMethodParameter param = (ServerMethodParameter) parameters[i];
@@ -336,7 +330,7 @@ public class RuntimeResourceDeployment {
                 classPathTemplate,
                 method.getProduces() == null ? null : serverMediaType,
                 consumesMediaTypes, invoker,
-                clazz.getFactory(), handlers.toArray(EMPTY_REST_HANDLER_ARRAY), method.getName(), parameterClasses,
+                clazz.getFactory(), handlers.toArray(EMPTY_REST_HANDLER_ARRAY), method.getName(), parameterTypes,
                 nonAsyncReturnType, method.isBlocking(), resourceClass,
                 lazyMethod,
                 pathParameterIndexes, score, sseElementType, clazz.resourceExceptionMapper());
