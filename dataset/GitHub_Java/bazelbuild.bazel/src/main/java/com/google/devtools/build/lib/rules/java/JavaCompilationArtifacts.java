@@ -14,9 +14,8 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.base.Preconditions.checkState;
-
 import com.google.auto.value.AutoValue;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -79,20 +78,12 @@ public abstract class JavaCompilationArtifacts {
     private Artifact compileTimeDependencies;
 
     public JavaCompilationArtifacts build() {
-      validate();
+      Preconditions.checkState(fullCompileTimeJars.size() == compileTimeJars.size());
       return create(
           ImmutableList.copyOf(runtimeJars),
           ImmutableList.copyOf(compileTimeJars),
           ImmutableList.copyOf(fullCompileTimeJars),
           compileTimeDependencies);
-    }
-
-    private void validate() {
-      checkState(
-          fullCompileTimeJars.size() == compileTimeJars.size(),
-          "Expected the same number of interface and implementation jars:\n%s\n%s\n",
-          compileTimeJars,
-          fullCompileTimeJars);
     }
 
     public Builder addRuntimeJar(Artifact jar) {
@@ -117,11 +108,13 @@ public abstract class JavaCompilationArtifacts {
       return this;
     }
 
-    Builder addInterfaceJarsWithFullJars(
-        Iterable<Artifact> compileTimeJars, Iterable<Artifact> fullCompileTimeJars) {
-      Iterables.addAll(this.compileTimeJars, compileTimeJars);
-      Iterables.addAll(this.fullCompileTimeJars, fullCompileTimeJars);
-      validate();
+    public Builder addInterfaceJars(Iterable<Artifact> jars) {
+      Iterables.addAll(this.compileTimeJars, jars);
+      return this;
+    }
+
+    Builder addFullCompileTimeJars(Iterable<Artifact> jars) {
+      Iterables.addAll(this.fullCompileTimeJars, jars);
       return this;
     }
 

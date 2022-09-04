@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
 import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
@@ -66,6 +65,7 @@ import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.OneVersionCheckActionBuilder;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -76,20 +76,15 @@ import javax.annotation.Nullable;
 /** A base implementation for the "android_local_test" rule. */
 public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactory {
 
-  private final AndroidSemantics androidSemantics;
-
-  protected AndroidLocalTestBase(AndroidSemantics androidSemantics) {
-    this.androidSemantics = androidSemantics;
-  }
-
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    androidSemantics.checkForMigrationTag(ruleContext);
+
     ruleContext.checkSrcsSamePackage(true);
 
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
+    createAndroidMigrationSemantics().validateRuleContext(ruleContext);
     AndroidLocalTestConfiguration androidLocalTestConfiguration =
         ruleContext.getFragment(AndroidLocalTestConfiguration.class);
 
@@ -242,6 +237,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     if (helper.usesAnnotationProcessing()) {
       genClassJar = helper.createGenJar(classJar);
       genSourceJar = helper.createGensrcJar(classJar);
+      helper.createGenJarAction(classJar, manifestProtoOutput, genClassJar);
     }
 
     JavaCompileAction javaCompileAction =
@@ -249,7 +245,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
             classJar,
             manifestProtoOutput,
             genSourceJar,
-            genClassJar,
             /* nativeHeaderOutput= */ null);
     helper.createSourceJarAction(srcJar, genSourceJar);
     javaRuleOutputJarsProviderBuilder.setJdeps(javaCompileAction.getOutputDepsProto());
@@ -547,6 +542,9 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
   protected abstract JavaSemantics createJavaSemantics();
 
   protected abstract AndroidSemantics createAndroidSemantics();
+
+  /** Get AndroidMigrationSemantics */
+  protected abstract AndroidMigrationSemantics createAndroidMigrationSemantics();
 
   /** Set test and robolectric specific jvm flags */
   protected abstract ImmutableList<String> getJvmFlags(RuleContext ruleContext, String testClass)
