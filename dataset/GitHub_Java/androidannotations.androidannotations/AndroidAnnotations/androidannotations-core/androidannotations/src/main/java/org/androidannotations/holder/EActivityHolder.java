@@ -71,7 +71,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	private JBlock injectExtrasBlock;
 	private JVar injectExtras;
 	private JBlock onCreateOptionsMenuMethodBody;
-	private JBlock onCreateOptionsMenuMethodInflateBody;
 	private JVar onCreateOptionsMenuMenuInflaterVar;
 	private JVar onCreateOptionsMenuMenuParam;
 	private JVar onOptionsItemSelectedItem;
@@ -307,7 +306,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		JBlock methodBody = method.body();
 		onCreateOptionsMenuMenuParam = method.param(getClasses().MENU, "menu");
 		onCreateOptionsMenuMenuInflaterVar = methodBody.decl(getClasses().MENU_INFLATER, "menuInflater", invoke("getMenuInflater"));
-		onCreateOptionsMenuMethodInflateBody = methodBody.blockSimple();
 		onCreateOptionsMenuMethodBody = methodBody.blockSimple();
 		methodBody._return(_super().invoke(method).arg(onCreateOptionsMenuMenuParam));
 	}
@@ -487,14 +485,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 			setOnCreateOptionsMenu();
 		}
 		return onCreateOptionsMenuMethodBody;
-	}
-
-	@Override
-	public JBlock getOnCreateOptionsMenuMethodInflateBody() {
-		if (onCreateOptionsMenuMethodInflateBody == null) {
-			setOnCreateOptionsMenu();
-		}
-		return onCreateOptionsMenuMethodInflateBody;
 	}
 
 	@Override
