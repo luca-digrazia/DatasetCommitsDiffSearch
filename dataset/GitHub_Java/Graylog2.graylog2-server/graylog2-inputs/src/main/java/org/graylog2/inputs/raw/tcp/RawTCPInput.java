@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -40,11 +42,12 @@ import java.util.concurrent.Executors;
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class RawTCPInput extends RawInputBase {
+
+    private final Logger LOG = LoggerFactory.getLogger(this.getClass());
+
     public static final String NAME = "Raw/Plaintext TCP";
+
     public static final String CK_USE_NULL_DELIMITER = "use_null_delimiter";
-
-    private static final Logger LOG = LoggerFactory.getLogger(RawTCPInput.class);
-
     private final MetricRegistry metricRegistry;
 
     @Inject
