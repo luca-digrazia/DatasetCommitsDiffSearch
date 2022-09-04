@@ -42,7 +42,7 @@ public class GreaterMatcher implements StreamRuleMatcher {
             return false;
         }
 
-        return rule.getInverted() ^ (msgVal > ruleVal);
+        return msgVal > ruleVal;
 	}
 
 }

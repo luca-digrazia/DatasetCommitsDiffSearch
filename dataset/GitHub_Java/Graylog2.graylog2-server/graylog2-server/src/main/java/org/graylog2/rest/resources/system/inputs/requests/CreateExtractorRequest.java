@@ -50,10 +50,4 @@ public class CreateExtractorRequest {
 
     public Map<String, Map<String, Object>> converters;
 
-    @JsonProperty("condition_type")
-    public String conditionType;
-
-    @JsonProperty("condition_value")
-    public String conditionValue;
-
 }

@@ -112,11 +112,7 @@ public class Input extends Persisted {
     }
 
     public void addExtractor(Extractor extractor) throws ValidationException {
-        embed(EMBEDDED_EXTRACTORS, extractor);
-    }
-
-    public void removeExtractor(String extractorId) {
-        removeEmbedded(EMBEDDED_EXTRACTORS, extractorId);
+        embed("extractors", extractor);
     }
 
     public String getTitle() {

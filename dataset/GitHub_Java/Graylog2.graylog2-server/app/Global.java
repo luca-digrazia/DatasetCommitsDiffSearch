@@ -1,28 +1,19 @@
 import com.google.common.collect.Lists;
-import lib.ApiClient;
-import lib.ServerNodes;
-import lib.security.LocalAdminUserRealm;
-import lib.security.PlayAuthenticationListener;
-import lib.security.RethrowingFirstSuccessfulStrategy;
 import lib.security.ServerRestInterfaceRealm;
-import models.Node;
-import models.User;
-import models.api.responses.NodeSummaryResponse;
 import org.apache.shiro.SecurityUtils;
-import org.apache.shiro.authc.AuthenticationListener;
-import org.apache.shiro.authc.Authenticator;
+import org.apache.shiro.authc.*;
 import org.apache.shiro.authc.credential.HashedCredentialsMatcher;
-import org.apache.shiro.authc.pam.ModularRealmAuthenticator;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.realm.Realm;
 import org.apache.shiro.realm.SimpleAccountRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.apache.shiro.util.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.Application;
 import play.Configuration;
 import play.GlobalSettings;
-
-import java.io.File;
+import play.mvc.Http;
 
 /**
  *
@@ -31,71 +22,53 @@ import java.io.File;
 public class Global extends GlobalSettings {
 	private static final Logger log = LoggerFactory.getLogger(Global.class);
 
-    @Override
-    public Configuration onLoadConfig(Configuration configuration, File file, ClassLoader classLoader) {
-        // TODO implement dynamic work area to override configuration settings
-        return super.onLoadConfig(configuration, file, classLoader);
-    }
-
-    @Override
+	@Override
 	public void onStart(Application app) {
-        LocalAdminUserRealm localAdminRealm = new LocalAdminUserRealm("local-accounts");
-		localAdminRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA1"));
-		setupLocalUser(localAdminRealm, app);
+		SimpleAccountRealm webInterfaceLocalRealm = new SimpleAccountRealm("local-accounts");
+		webInterfaceLocalRealm.setCredentialsMatcher(new HashedCredentialsMatcher("MD5"));
+		setupLocalUsers(webInterfaceLocalRealm, app);
 
 		Realm serverRestInterfaceRealm = new ServerRestInterfaceRealm();
 		final DefaultSecurityManager securityManager =
 				new DefaultSecurityManager(
-						Lists.newArrayList(localAdminRealm, serverRestInterfaceRealm)
+						Lists.newArrayList(serverRestInterfaceRealm, webInterfaceLocalRealm)
 				);
 		final Authenticator authenticator = securityManager.getAuthenticator();
-		if (authenticator instanceof ModularRealmAuthenticator) {
-            ModularRealmAuthenticator a = (ModularRealmAuthenticator) authenticator;
-            a.setAuthenticationStrategy(new RethrowingFirstSuccessfulStrategy());
-			a.setAuthenticationListeners(
-                Lists.<AuthenticationListener>newArrayList(new PlayAuthenticationListener())
-            );
+		// TODO refactor this to somewhere it makes sense
+		if (authenticator instanceof AbstractAuthenticator) {
+			((AbstractAuthenticator) authenticator).setAuthenticationListeners(CollectionUtils.<AuthenticationListener>asList(new AuthenticationListener() {
+				@Override
+				public void onSuccess(AuthenticationToken token, AuthenticationInfo info) {
+					final Http.Session session = Http.Context.current().session();
+					session.put("username", token.getPrincipal().toString());
+				}
+
+				@Override
+				public void onFailure(AuthenticationToken token, AuthenticationException ae) {
+				}
+
+				@Override
+				public void onLogout(PrincipalCollection principals) {
+					final Http.Session session = Http.Context.current().session();
+					session.remove("username");
+				}
+			}));
 		}
 		SecurityUtils.setSecurityManager(securityManager);
-
-        final String graylog2ServerUris = app.configuration().getString("graylog2-server.uris", "");
-        if (graylog2ServerUris.isEmpty()) {
-            log.error("graylog2-server.uris is not set!");
-            throw new IllegalStateException("graylog2-server.uris is empty");
-        }
-        final String[] uris = graylog2ServerUris.split(",");
-        if (uris.length == 0) {
-            log.error("graylog2-server.uris is empty!");
-            throw new IllegalStateException("graylog2-server.uris is empty");
-        }
-        final Node[] initialNodes = new Node[uris.length];
-        int i = 0;
-        for (String uri : uris) {
-            final NodeSummaryResponse r = new NodeSummaryResponse();
-            r.transportAddress =  uri;
-            initialNodes[i++] = new Node(r);
-        }
-
-        ApiClient.initialize();
-        ServerNodes.initialize(initialNodes);
 	}
 
-	private void setupLocalUser(SimpleAccountRealm realm, Application app) {
+	private void setupLocalUsers(SimpleAccountRealm realm, Application app) {
 		final Configuration config = app.configuration();
-        final String username = config.getString("local-user.name", "localadmin");
-        final String passwordHash = config.getString("local-user.password-sha1");
-        if (passwordHash == null) {
+		if (config.getString("local-user.password-md5") == null) {
 			log.warn("No password hash for local user {} set. " +
 					"If you lose connection to the graylog2-server at {}, you will be unable to log in!",
-                    username, config.getString("graylog2-server"));
+					config.getString("local-user.name", "localadmin"), config.getString("graylog2-server"));
 			return;
 		}
 		realm.addAccount(
-                username,
-                passwordHash,
+				config.getString("local-user.name", "localadmin"),
+				config.getString("local-user.password-md5"),
 				"local-admin"
 		);
-        User.LocalAdminUser.createSharedInstance(username, passwordHash);
-    }
-
+	}
 }

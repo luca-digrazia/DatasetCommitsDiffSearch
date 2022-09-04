@@ -184,10 +184,6 @@ public class ExtractorsResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        // Remove from Mongo.
-        Input mongoInput = Input.find(core, input.getPersistId());
-        mongoInput.removeExtractor(extractorId);
-
         input.getExtractors().remove(extractorId);
 
         String msg = "Deleted extractor <" + extractorId + ">. Reason: REST request.";
@@ -208,7 +204,6 @@ public class ExtractorsResource extends RestResource {
         map.put("target_field", extractor.getTargetField());
         map.put("extractor_config", extractor.getExtractorConfig());
         map.put("creator_user_id", extractor.getCreatorUserId());
-        map.put("converters", extractor.converterConfigMap());
 
         return map;
     }
