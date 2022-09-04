@@ -157,6 +157,7 @@ public class InputFacade implements EntityFacade<InputWithExtractors> {
     }
 
     private Set<Constraint> versionConstraints(Input input) {
+        final Set<Constraint> result = EntityFacade.super.versionConstraints();
         // TODO: Find more robust method of identifying the providing plugin
         final MessageInput.Factory<? extends MessageInput> inputFactory = inputFactories.get(input.getType());
         if (inputFactory == null) {
@@ -167,7 +168,7 @@ public class InputFacade implements EntityFacade<InputWithExtractors> {
         return pluginMetaData.stream()
                 .filter(metaData -> packageName.startsWith(metaData.getClass().getPackage().getName()))
                 .map(PluginVersionConstraint::of)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(() -> result));
     }
 
     private ExtractorEntity encodeExtractor(Extractor extractor) {
