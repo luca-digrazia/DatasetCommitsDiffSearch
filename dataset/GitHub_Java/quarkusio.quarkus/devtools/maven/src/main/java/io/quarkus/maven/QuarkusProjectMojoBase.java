@@ -2,7 +2,6 @@ package io.quarkus.maven;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,18 +19,18 @@ import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.repository.RemoteRepository;
-import org.eclipse.aether.resolution.ArtifactResult;
+import org.eclipse.aether.resolution.ArtifactDescriptorResult;
 
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.BootstrapMavenException;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.maven.workspace.ModelUtils;
-import io.quarkus.devtools.messagewriter.MessageWriter;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
 import io.quarkus.platform.descriptor.CombinedQuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.resolver.json.QuarkusJsonPlatformDescriptorResolver;
+import io.quarkus.platform.tools.MessageWriter;
 import io.quarkus.platform.tools.ToolsConstants;
 import io.quarkus.platform.tools.maven.MojoMessageWriter;
 
@@ -65,20 +64,11 @@ public abstract class QuarkusProjectMojoBase extends AbstractMojo {
         validateParameters();
 
         final MessageWriter log = new MojoMessageWriter(getLog());
-        final Path projectDirPath = baseDir();
-        BuildTool buildTool = QuarkusProject.resolveExistingProjectBuildTool(projectDirPath);
-        if (buildTool == null) {
-            // it's not Gradle and the pom.xml not found, so we assume there is not project at all
-            buildTool = BuildTool.MAVEN;
-        }
+        final Path projectDirPath = project.getBasedir().toPath();
+        final BuildTool buildTool = QuarkusProject.resolveExistingProjectBuildTool(projectDirPath);
         final QuarkusPlatformDescriptor platformDescriptor = resolvePlatformDescriptor(log);
 
-        doExecute(QuarkusProject.of(baseDir(), platformDescriptor, buildTool), log);
-    }
-
-    protected Path baseDir() {
-        return project == null || project.getBasedir() == null ? Paths.get("").normalize().toAbsolutePath()
-                : project.getBasedir().toPath();
+        doExecute(QuarkusProject.of(project.getBasedir().toPath(), platformDescriptor, buildTool), log);
     }
 
     private QuarkusPlatformDescriptor resolvePlatformDescriptor(final MessageWriter log) throws MojoExecutionException {
@@ -188,7 +178,7 @@ public abstract class QuarkusProjectMojoBase extends AbstractMojo {
         Parent parent;
         while ((parent = model.getParent()) != null) {
             try {
-                ArtifactResult result = resolver.resolve(new DefaultArtifact(
+                ArtifactDescriptorResult result = resolver.resolveDescriptor(new DefaultArtifact(
                         parent.getGroupId(),
                         parent.getArtifactId(),
                         "pom",
