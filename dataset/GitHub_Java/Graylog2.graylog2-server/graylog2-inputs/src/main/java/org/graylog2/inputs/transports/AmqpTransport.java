@@ -53,7 +53,6 @@ public class AmqpTransport extends ThrottleableTransport {
     public static final String CK_EXCHANGE = "exchange";
     public static final String CK_QUEUE = "queue";
     public static final String CK_ROUTING_KEY = "routing_key";
-    public static final String CK_PARALLEL_QUEUES = "parallel_queues";
 
     private static final Logger LOG = LoggerFactory.getLogger(AmqpTransport.class);
 
@@ -146,7 +145,6 @@ public class AmqpTransport extends ThrottleableTransport {
                 configuration.getString(CK_QUEUE),
                 configuration.getString(CK_EXCHANGE),
                 configuration.getString(CK_ROUTING_KEY),
-                configuration.getInt(CK_PARALLEL_QUEUES),
                 input,
                 scheduler
         );
@@ -255,7 +253,7 @@ public class AmqpTransport extends ThrottleableTransport {
                     new TextField(
                             CK_QUEUE,
                             "Queue",
-                            defaultQueueName(),
+                            "log-messages",
                             "Name of queue that is created.",
                             ConfigurationField.Optional.NOT_OPTIONAL
                     )
@@ -265,7 +263,7 @@ public class AmqpTransport extends ThrottleableTransport {
                     new TextField(
                             CK_EXCHANGE,
                             "Exchange",
-                            defaultExchangeName(),
+                            "log-messages",
                             "Name of exchange to bind to.",
                             ConfigurationField.Optional.NOT_OPTIONAL
                     )
@@ -275,35 +273,13 @@ public class AmqpTransport extends ThrottleableTransport {
                     new TextField(
                             CK_ROUTING_KEY,
                             "Routing key",
-                            defaultRouttingKey(),
+                            "#",
                             "Routing key to listen for.",
                             ConfigurationField.Optional.NOT_OPTIONAL
                     )
             );
 
-            cr.addField(
-                    new NumberField(
-                            CK_PARALLEL_QUEUES,
-                            "Number of Queues",
-                            1,
-                            "Number of parallel QUeues",
-                            ConfigurationField.Optional.NOT_OPTIONAL
-                    )
-            );
-
             return cr;
-        }
-
-        protected String defaultRouttingKey() {
-            return "#";
-        }
-
-        protected String defaultExchangeName() {
-            return "log-messages";
-        }
-
-        protected String defaultQueueName() {
-            return "log-messages";
         }
     }
 }

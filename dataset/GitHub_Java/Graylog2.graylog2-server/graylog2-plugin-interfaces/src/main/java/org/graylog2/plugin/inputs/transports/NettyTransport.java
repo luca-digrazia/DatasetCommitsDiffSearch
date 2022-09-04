@@ -202,7 +202,7 @@ public abstract class NettyTransport implements Transport {
             handlerList.put("codec-aggregator", new Callable<ChannelHandler>() {
                 @Override
                 public ChannelHandler call() throws Exception {
-                    return new MessageAggregationHandler(aggregator);
+                    return new MessageAggregationHandler(input, aggregator);
                 }
             });
         }
@@ -226,11 +226,13 @@ public abstract class NettyTransport implements Transport {
     }
 
     private class MessageAggregationHandler extends SimpleChannelHandler {
+        private final MessageInput input;
         private final CodecAggregator aggregator;
         private final Timer aggregationTimer;
         private final Meter invalidChunksMeter;
 
-        public MessageAggregationHandler(CodecAggregator aggregator) {
+        public MessageAggregationHandler(MessageInput input, CodecAggregator aggregator) {
+            this.input = input;
             this.aggregator = aggregator;
             aggregationTimer = localRegistry.timer("aggregationTime");
             invalidChunksMeter = localRegistry.meter("invalidMessages");
@@ -285,7 +287,8 @@ public abstract class NettyTransport implements Transport {
             final byte[] payload = new byte[buffer.readableBytes()];
             buffer.toByteBuffer().get(payload, buffer.readerIndex(), buffer.readableBytes());
 
-            final RawMessage raw = new RawMessage(payload, (InetSocketAddress) e.getRemoteAddress());
+            final RawMessage raw = new RawMessage(input.getCodec().getName(), input.getId(),
+                                                  (InetSocketAddress) e.getRemoteAddress(), payload);
             input.processRawMessage(raw);
         }
 
