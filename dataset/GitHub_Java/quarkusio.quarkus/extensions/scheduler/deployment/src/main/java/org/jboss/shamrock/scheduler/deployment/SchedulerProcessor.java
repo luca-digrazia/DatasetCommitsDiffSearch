@@ -17,10 +17,14 @@ package org.jboss.shamrock.scheduler.deployment;
 
 import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -63,7 +67,6 @@ import org.jboss.shamrock.deployment.annotations.Record;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
-import org.jboss.shamrock.deployment.util.HashUtil;
 import org.jboss.shamrock.scheduler.api.Scheduled;
 import org.jboss.shamrock.scheduler.api.ScheduledExecution;
 import org.jboss.shamrock.scheduler.api.Scheduleds;
@@ -133,7 +136,7 @@ public class SchedulerProcessor {
 
     @BuildStep
     BeanDeploymentValidatorBuildItem beanDeploymentValidator(BuildProducer<ScheduledBusinessMethodItem> scheduledBusinessMethods) {
-
+        
         return new BeanDeploymentValidatorBuildItem(new BeanDeploymentValidator() {
 
             @Override
@@ -188,7 +191,7 @@ public class SchedulerProcessor {
             }
         });
     }
-
+    
     @BuildStep
     public List<UnremovableBeanBuildItem> unremovableBeans() {
         return Arrays.asList(new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(SCHEDULED_NAME)),
@@ -198,21 +201,16 @@ public class SchedulerProcessor {
     @BuildStep
     @Record(STATIC_INIT)
     public void build(SchedulerDeploymentTemplate template, BeanContainerBuildItem beanContainer, List<ScheduledBusinessMethodItem> scheduledBusinessMethods,
-            BuildProducer<GeneratedClassBuildItem> generatedClass, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<GeneratedClassBuildItem> generatedResource, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<FeatureBuildItem> feature) {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SCHEDULER));
         List<Map<String, Object>> scheduleConfigurations = new ArrayList<>();
-        ClassOutput classOutput = new ClassOutput() {
-            @Override
-            public void write(String name, byte[] data) {
-                generatedClass.produce(new GeneratedClassBuildItem(true, name, data));
-            }
-        };
+        ProcessorClassOutput processorClassOutput = new ProcessorClassOutput(generatedResource);
 
         for (ScheduledBusinessMethodItem businessMethod : scheduledBusinessMethods) {
             Map<String, Object> config = new HashMap<>();
-            String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(), classOutput);
+            String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(), processorClassOutput);
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, invokerClass));
             config.put(SchedulerDeploymentTemplate.INVOKER_KEY, invokerClass);
             List<Map<String, Object>> schedules = new ArrayList<>();
@@ -230,7 +228,7 @@ public class SchedulerProcessor {
         template.registerSchedules(scheduleConfigurations, beanContainer.getValue());
     }
 
-    private String generateInvoker(BeanInfo bean, MethodInfo method, ClassOutput classOutput) {
+    private String generateInvoker(BeanInfo bean, MethodInfo method, ProcessorClassOutput processorClassOutput) {
 
         String baseName;
         if (bean.getImplClazz().enclosingClass() != null) {
@@ -244,9 +242,9 @@ public class SchedulerProcessor {
             sigBuilder.append(i.name().toString());
         }
         String targetPackage = DotNames.packageName(bean.getImplClazz().name());
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + INVOKER_SUFFIX + "_" + method.name() + "_" + HashUtil.sha1(sigBuilder.toString());
+        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + INVOKER_SUFFIX + "_" + method.name() + "_" + sha1(sigBuilder.toString());
 
-        ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(ScheduledInvoker.class)
+        ClassCreator invokerCreator = ClassCreator.builder().classOutput(processorClassOutput).className(generatedName).interfaces(ScheduledInvoker.class)
                 .build();
 
         MethodCreator invoke = invokerCreator.getMethodCreator("invoke", void.class, ScheduledExecution.class);
@@ -273,6 +271,16 @@ public class SchedulerProcessor {
 
         invokerCreator.close();
         return generatedName.replace('/', '.');
+    }
+    
+    static String sha1(String value) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            return Base64.getUrlEncoder()
+                    .encodeToString(md.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private Object getValue(AnnotationValue annotationValue) {
@@ -320,6 +328,20 @@ public class SchedulerProcessor {
                 validationContext.addDeploymentProblem(new IllegalStateException("@Scheduled must declare either cron() or every(): " + schedule));
             }
         }
+    }
+
+    static final class ProcessorClassOutput implements ClassOutput {
+        private final BuildProducer<GeneratedClassBuildItem> producer;
+
+        ProcessorClassOutput(BuildProducer<GeneratedClassBuildItem> producer) {
+            this.producer = producer;
+        }
+
+        @Override
+        public void write(final String name, final byte[] data) {
+            producer.produce(new GeneratedClassBuildItem(true, name, data));
+        }
+
     }
 
 }
