@@ -25,7 +25,7 @@ public class QuarkusRestSseEventSink implements SseEventSink {
 
     @Override
     public boolean isClosed() {
-        return context.getHttpServerResponse().closed();
+        return context.getContext().response().closed();
     }
 
     @Override
@@ -48,9 +48,8 @@ public class QuarkusRestSseEventSink implements SseEventSink {
         if (isClosed())
             return;
         // FIXME: do we need a state flag?
-        HttpServerResponse response = context.getHttpServerResponse();
-        response.end();
-        response.close();
+        context.getContext().response().end();
+        context.getContext().response().close();
         context.close();
         if (broadcaster != null)
             broadcaster.fireClose(this);
