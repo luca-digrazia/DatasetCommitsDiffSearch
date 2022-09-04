@@ -8,6 +8,8 @@ import java.util.List;
 
 import org.junit.Test;
 
+import io.quarkus.deployment.TestClassLoader;
+
 public class SimpleClassProxyTest {
 
     @Test
@@ -15,8 +17,9 @@ public class SimpleClassProxyTest {
         SimpleInvocationHandler invocationHandler = new SimpleInvocationHandler();
         ProxyConfiguration<SimpleClass> proxyConfiguration = new ProxyConfiguration<SimpleClass>()
                 .setSuperClass(SimpleClass.class)
-                .setProxyName(SimpleClass.class.getPackage(), "SimpleClass$$Proxy3")
-                .setClassLoader(SimpleClass.class.getClassLoader());
+                .setAnchorClass(SimpleClass.class)
+                .setProxyNameSuffix("$$Proxy1")
+                .setClassLoader(new TestClassLoader(SimpleClass.class.getClassLoader()));
         SimpleClass instance = new ProxyFactory<>(proxyConfiguration).newInstance(invocationHandler);
 
         assertMethod1(instance);
@@ -51,23 +54,6 @@ public class SimpleClassProxyTest {
 
     private void assertMethod4(SimpleClass instance) {
         assertThatCode(() -> instance.method4(4)).doesNotThrowAnyException();
-    }
-
-    @Test
-    public void testMultipleClassLoaders() throws InstantiationException, IllegalAccessException {
-        ClassLoader cl1 = new ClassLoader() {
-
-        };
-        ClassLoader cl2 = new ClassLoader() {
-
-        };
-        ProxyConfiguration<SimpleClass> proxyConfiguration = new ProxyConfiguration<SimpleClass>()
-                .setSuperClass(SimpleClass.class)
-                .setProxyName(SimpleClass.class.getPackage(), "SimpleClass$$Proxy")
-                .setClassLoader(cl1);
-        ProxyFactory<SimpleClass> proxyFactory = new ProxyFactory<>(proxyConfiguration);
-        SimpleClass instance = proxyFactory.newInstance(new SimpleInvocationHandler());
-        assertThat(instance).isNotNull();
     }
 
 }

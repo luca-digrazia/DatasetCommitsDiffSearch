@@ -7,11 +7,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.FieldDescriptor;
@@ -42,12 +39,7 @@ public class ProxyFactory<T> {
 
         Class<T> superClass = configuration.getSuperClass() != null ? configuration.getSuperClass() : (Class<T>) Object.class;
         this.superClassName = superClass.getName();
-
-        if (!configuration.isAllowPackagePrivate() && !Modifier.isPublic(superClass.getModifiers())) {
-            throw new IllegalArgumentException(
-                    "A proxy cannot be created for class " + this.superClassName + " because the it is not public");
-        }
-        if (!hasNoArgsConstructor(superClass, configuration.isAllowPackagePrivate())) {
+        if (!hasNoArgsConstructor(superClass)) {
             throw new IllegalArgumentException(
                     "A proxy cannot be created for class " + this.superClassName
                             + " because it does contain a no-arg constructor");
@@ -55,6 +47,10 @@ public class ProxyFactory<T> {
         if (Modifier.isFinal(superClass.getModifiers())) {
             throw new IllegalArgumentException(
                     "A proxy cannot be created for class " + this.superClassName + " because it is a final class");
+        }
+        if (!Modifier.isPublic(superClass.getModifiers())) {
+            throw new IllegalArgumentException(
+                    "A proxy cannot be created for class " + this.superClassName + " because the it is not public");
         }
 
         Objects.requireNonNull(configuration.getClassLoader(), "classLoader must be set");
@@ -67,8 +63,7 @@ public class ProxyFactory<T> {
         }
 
         this.classBuilder = ClassCreator.builder()
-                .classOutput(configuration.getClassOutput() != null ? configuration.getClassOutput()
-                        : new InjectIntoClassloaderClassOutput(configuration.getClassLoader()))
+                .classOutput(new InjectIntoClassloaderClassOutput(configuration.getClassLoader()))
                 .className(this.proxyName)
                 .superClass(this.superClassName);
         if (!configuration.getAdditionalInterfaces().isEmpty()) {
@@ -76,37 +71,22 @@ public class ProxyFactory<T> {
         }
     }
 
-    private boolean hasNoArgsConstructor(Class<?> clazz, boolean allowPackagePrivate) {
-        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+    private boolean hasNoArgsConstructor(Class<?> clazz) {
+        for (Constructor<?> constructor : clazz.getConstructors()) {
             if (constructor.getParameterCount() == 0) {
-                if (allowPackagePrivate) {
-                    return !Modifier.isPrivate(constructor.getModifiers());
-                }
-                return Modifier.isPublic(constructor.getModifiers()) || Modifier.isProtected(constructor.getModifiers());
+                return true;
             }
         }
         return false;
     }
 
     private void addMethodsOfClass(Class<?> clazz) {
-        addMethodsOfClass(clazz, new HashSet<>());
-    }
-
-    private void addMethodsOfClass(Class<?> clazz, Set<MethodKey> seen) {
-        for (Method methodInfo : clazz.getDeclaredMethods()) {
-            MethodKey key = new MethodKey(methodInfo.getReturnType(), methodInfo.getName(), methodInfo.getParameterTypes());
-            if (seen.contains(key)) {
-                continue;
-            }
-            seen.add(key);
+        for (Method methodInfo : clazz.getMethods()) {
             if (!Modifier.isStatic(methodInfo.getModifiers()) &&
                     !Modifier.isFinal(methodInfo.getModifiers()) &&
                     !methodInfo.getName().equals("<init>")) {
                 methods.add(methodInfo);
             }
-        }
-        if (clazz.getSuperclass() != null) {
-            addMethodsOfClass(clazz.getSuperclass(), seen);
         }
     }
 
@@ -145,7 +125,7 @@ public class ProxyFactory<T> {
                     // method = clazz.getDeclaredMethod(...)
 
                     ResultHandle getDeclaredMethodParamsArray = mc.newArray(Class.class,
-                            methodInfo.getParameterCount());
+                            mc.load(methodInfo.getParameterCount()));
                     for (int i = 0; i < methodInfo.getParameterCount(); i++) {
                         ResultHandle paramClass = mc.loadClass(methodInfo.getParameters()[i].getType());
                         mc.writeArrayValue(getDeclaredMethodParamsArray, i, paramClass);
@@ -158,7 +138,7 @@ public class ProxyFactory<T> {
 
                     // result = invocationHandler.invoke(...)
 
-                    ResultHandle invokeParamsArray = mc.newArray(Object.class, methodInfo.getParameterCount());
+                    ResultHandle invokeParamsArray = mc.newArray(Object.class, mc.load(methodInfo.getParameterCount()));
                     for (int i = 0; i < methodInfo.getParameterCount(); i++) {
                         mc.writeArrayValue(invokeParamsArray, i, mc.getMethodParam(i));
                     }
@@ -210,34 +190,4 @@ public class ProxyFactory<T> {
         }
     }
 
-    static class MethodKey {
-        final Class<?> returnType;
-        final String name;
-        final Class<?>[] params;
-
-        MethodKey(Class<?> returnType, String name, Class<?>[] params) {
-            this.returnType = returnType;
-            this.name = name;
-            this.params = params;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o)
-                return true;
-            if (o == null || getClass() != o.getClass())
-                return false;
-            MethodKey methodKey = (MethodKey) o;
-            return Objects.equals(returnType, methodKey.returnType) &&
-                    Objects.equals(name, methodKey.name) &&
-                    Arrays.equals(params, methodKey.params);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = Objects.hash(returnType, name);
-            result = 31 * result + Arrays.hashCode(params);
-            return result;
-        }
-    }
 }
