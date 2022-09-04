@@ -43,6 +43,15 @@ public class QuarkusRestHttpHeaders implements HttpHeaders {
         return requestHeaders;
     }
 
+    public void testParsing() {
+        // test parsing should throw an exception on error
+        getAcceptableMediaTypes();
+        getMediaType();
+        getLanguage();
+        getAcceptableLanguages();
+
+    }
+
     @Override
     public List<String> getRequestHeader(String name) {
         List<String> vals = unmodifiableRequestHeaders.get(name);
@@ -51,10 +60,18 @@ public class QuarkusRestHttpHeaders implements HttpHeaders {
 
     @Override
     public Map<String, Cookie> getCookies() {
+        return Collections.unmodifiableMap(getMutableCookies());
+    }
+
+    public Map<String, Cookie> getMutableCookies() {
         if (cookies == null) {
-            cookies = Collections.unmodifiableMap(HeaderUtil.getCookies(requestHeaders));
+            cookies = HeaderUtil.getCookies(requestHeaders);
         }
         return cookies;
+    }
+
+    public void setCookies(Map<String, Cookie> cookies) {
+        this.cookies = cookies;
     }
 
     @Override

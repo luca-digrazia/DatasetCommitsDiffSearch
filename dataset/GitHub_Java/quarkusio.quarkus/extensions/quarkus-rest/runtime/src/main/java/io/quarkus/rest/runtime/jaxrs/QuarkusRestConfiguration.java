@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Priority;
+import javax.ws.rs.ConstrainedTo;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.Priorities;
 import javax.ws.rs.Produces;
@@ -20,12 +21,11 @@ import javax.ws.rs.client.ClientRequestFilter;
 import javax.ws.rs.client.ClientResponseFilter;
 import javax.ws.rs.core.Configuration;
 import javax.ws.rs.core.Feature;
-import javax.ws.rs.core.MultivaluedHashMap;
+import javax.ws.rs.core.FeatureContext;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.ReaderInterceptor;
-import javax.ws.rs.ext.RuntimeDelegate;
 import javax.ws.rs.ext.WriterInterceptor;
 
 import io.quarkus.rest.runtime.core.Serialisers;
@@ -33,6 +33,7 @@ import io.quarkus.rest.runtime.core.UnmanagedBeanFactory;
 import io.quarkus.rest.runtime.model.ResourceReader;
 import io.quarkus.rest.runtime.model.ResourceWriter;
 import io.quarkus.rest.runtime.util.MultivaluedTreeMap;
+import io.quarkus.rest.runtime.util.QuarkusMultivaluedHashMap;
 import io.quarkus.rest.runtime.util.Types;
 
 public class QuarkusRestConfiguration implements Configuration {
@@ -57,8 +58,8 @@ public class QuarkusRestConfiguration implements Configuration {
         this.responseFilters = new MultivaluedTreeMap<>(Collections.reverseOrder());
         this.readerInterceptors = new MultivaluedTreeMap<>();
         this.writerInterceptors = new MultivaluedTreeMap<>(Collections.reverseOrder());
-        this.resourceReaders = new MultivaluedHashMap<>();
-        this.resourceWriters = new MultivaluedHashMap<>();
+        this.resourceReaders = new QuarkusMultivaluedHashMap<>();
+        this.resourceWriters = new QuarkusMultivaluedHashMap<>();
     }
 
     public QuarkusRestConfiguration(Configuration configuration) {
@@ -77,9 +78,9 @@ public class QuarkusRestConfiguration implements Configuration {
             this.readerInterceptors.putAll(quarkusRestConfiguration.readerInterceptors);
             this.writerInterceptors = new MultivaluedTreeMap<>(Collections.reverseOrder());
             this.writerInterceptors.putAll(quarkusRestConfiguration.writerInterceptors);
-            this.resourceReaders = new MultivaluedHashMap<>();
+            this.resourceReaders = new QuarkusMultivaluedHashMap<>();
             this.resourceReaders.putAll(quarkusRestConfiguration.resourceReaders);
-            this.resourceWriters = new MultivaluedHashMap<>();
+            this.resourceWriters = new QuarkusMultivaluedHashMap<>();
             this.resourceWriters.putAll(quarkusRestConfiguration.resourceWriters);
         } else {
             this.allInstances = new HashMap<>();
@@ -89,8 +90,8 @@ public class QuarkusRestConfiguration implements Configuration {
                     Collections.reverseOrder());
             this.readerInterceptors = new MultivaluedTreeMap<>();
             this.writerInterceptors = new MultivaluedTreeMap<>(Collections.reverseOrder());
-            this.resourceReaders = new MultivaluedHashMap<>();
-            this.resourceWriters = new MultivaluedHashMap<>();
+            this.resourceReaders = new QuarkusMultivaluedHashMap<>();
+            this.resourceWriters = new QuarkusMultivaluedHashMap<>();
             // this is the best we can do - we don't have any of the metadata associated with the registration
             for (Object i : configuration.getInstances()) {
                 register(i);
@@ -163,17 +164,8 @@ public class QuarkusRestConfiguration implements Configuration {
     }
 
     public String toString(Object value) {
+        // FIXME: this is weird
         return value.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    public String toHeaderString(Object obj) {
-        if (obj instanceof String) {
-            return (String) obj;
-        } else {
-            // TODO: we probably want a more direct way to get the delegate instead of going through all the indirection
-            return RuntimeDelegate.getInstance().createHeaderDelegate((Class<Object>) obj.getClass()).toString(obj);
-        }
     }
 
     public void property(String name, Object value) {
@@ -198,7 +190,7 @@ public class QuarkusRestConfiguration implements Configuration {
 
     public void register(Class<?> componentClass, Class<?>... contracts) {
         try {
-            register(componentClass.getDeclaredConstructor().newInstance());
+            register(componentClass.getDeclaredConstructor().newInstance(), contracts);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -209,52 +201,158 @@ public class QuarkusRestConfiguration implements Configuration {
     }
 
     private void register(Object component, Integer priority) {
-        allInstances.put(component.getClass(), component);
+        if (allInstances.containsKey(component.getClass())) {
+            return;
+        }
+        boolean added = false;
         if (component instanceof Feature) {
-            enabledFeatures.add((Feature) component);
+            Feature thisFeature = (Feature) component;
+            added = true;
+            if (thisFeature.configure(new ConfigFeatureContext())) {
+                enabledFeatures.add(thisFeature);
+            }
         }
         if (component instanceof ClientRequestFilter) {
+            added = true;
             int effectivePriority = priority != null ? priority : determinePriority(component);
             requestFilters.add(effectivePriority, (ClientRequestFilter) component);
         }
         if (component instanceof ClientResponseFilter) {
+            added = true;
             int effectivePriority = priority != null ? priority : determinePriority(component);
             responseFilters.add(effectivePriority, (ClientResponseFilter) component);
         }
         if (component instanceof WriterInterceptor) {
+            added = true;
             int effectivePriority = priority != null ? priority : determinePriority(component);
             writerInterceptors.add(effectivePriority, (WriterInterceptor) component);
         }
         if (component instanceof ReaderInterceptor) {
+            added = true;
             int effectivePriority = priority != null ? priority : determinePriority(component);
             readerInterceptors.add(effectivePriority, (ReaderInterceptor) component);
         }
         if (component instanceof MessageBodyReader) {
-            ResourceReader resourceReader = new ResourceReader();
-            resourceReader.setFactory(new UnmanagedBeanFactory(component));
-            Consumes consumes = component.getClass().getAnnotation(Consumes.class);
-            resourceReader
-                    .setMediaTypeStrings(consumes != null ? Arrays.asList(consumes.value()) : Serialisers.WILDCARD_STRING_LIST);
-            Type[] args = Types.findParameterizedTypes(component.getClass(), MessageBodyReader.class);
-            resourceReaders.add(args != null && args.length == 1 ? Types.getRawType(args[0]) : Object.class, resourceReader);
+            added = true;
+            Class<?> componentClass = component.getClass();
+            ConstrainedTo constrainedTo = componentClass.getAnnotation(ConstrainedTo.class);
+            if ((constrainedTo == null) || (constrainedTo.value() == runtimeType)) {
+                ResourceReader resourceReader = new ResourceReader();
+                resourceReader.setFactory(new UnmanagedBeanFactory(component));
+                Consumes consumes = componentClass.getAnnotation(Consumes.class);
+                resourceReader
+                        .setMediaTypeStrings(
+                                consumes != null ? Arrays.asList(consumes.value()) : Serialisers.WILDCARD_STRING_LIST);
+                Type[] args = Types.findParameterizedTypes(componentClass, MessageBodyReader.class);
+                resourceReaders.add(args != null && args.length == 1 ? Types.getRawType(args[0]) : Object.class,
+                        resourceReader);
+            }
         }
         if (component instanceof MessageBodyWriter) {
-            ResourceWriter resourceWriter = new ResourceWriter();
-            resourceWriter.setFactory(new UnmanagedBeanFactory(component));
-            Produces produces = component.getClass().getAnnotation(Produces.class);
-            resourceWriter
-                    .setMediaTypeStrings(produces != null ? Arrays.asList(produces.value()) : Serialisers.WILDCARD_STRING_LIST);
-            Type[] args = Types.findParameterizedTypes(component.getClass(), MessageBodyWriter.class);
-            resourceWriters.add(args != null && args.length == 1 ? Types.getRawType(args[0]) : Object.class, resourceWriter);
+            added = true;
+            Class<?> componentClass = component.getClass();
+            ConstrainedTo constrainedTo = componentClass.getAnnotation(ConstrainedTo.class);
+            if ((constrainedTo == null) || (constrainedTo.value() == runtimeType)) {
+                ResourceWriter resourceWriter = new ResourceWriter();
+                resourceWriter.setFactory(new UnmanagedBeanFactory(component));
+                Produces produces = componentClass.getAnnotation(Produces.class);
+                resourceWriter
+                        .setMediaTypeStrings(
+                                produces != null ? Arrays.asList(produces.value()) : Serialisers.WILDCARD_STRING_LIST);
+                Type[] args = Types.findParameterizedTypes(componentClass, MessageBodyWriter.class);
+                resourceWriters.add(args != null && args.length == 1 ? Types.getRawType(args[0]) : Object.class,
+                        resourceWriter);
+            }
+        }
+        if (added) {
+            allInstances.put(component.getClass(), component);
         }
     }
 
     public void register(Object component, Class<?>[] contracts) {
-        register(component);
+        if (contracts == null || contracts.length == 0) {
+            return;
+        }
+        Map<Class<?>, Integer> priorities = new HashMap<>();
+        for (Class<?> i : contracts) {
+            priorities.put(i, determinePriority(i));
+        }
+        register(component, priorities);
     }
 
     public void register(Object component, Map<Class<?>, Integer> contracts) {
-        register(component);
+        if (contracts == null || contracts.isEmpty()) {
+            return;
+        }
+        if (allInstances.containsKey(component.getClass())) {
+            return;
+        }
+        boolean added = false;
+        Integer priority = contracts.get(Feature.class);
+        if (component instanceof Feature && priority != null) {
+            Feature thisFeature = (Feature) component;
+            added = true;
+            if (thisFeature.configure(new ConfigFeatureContext())) {
+                enabledFeatures.add(priority, (Feature) component);
+            }
+        }
+        priority = contracts.get(ClientRequestFilter.class);
+        if (component instanceof ClientRequestFilter && priority != null) {
+            added = true;
+            requestFilters.add(priority, (ClientRequestFilter) component);
+        }
+        priority = contracts.get(ClientResponseFilter.class);
+        if (component instanceof ClientResponseFilter && priority != null) {
+            added = true;
+            responseFilters.add(priority, (ClientResponseFilter) component);
+        }
+        priority = contracts.get(WriterInterceptor.class);
+        if (component instanceof WriterInterceptor && priority != null) {
+            added = true;
+            writerInterceptors.add(priority, (WriterInterceptor) component);
+        }
+        priority = contracts.get(ReaderInterceptor.class);
+        if (component instanceof ReaderInterceptor && priority != null) {
+            added = true;
+            readerInterceptors.add(priority, (ReaderInterceptor) component);
+        }
+        priority = contracts.get(MessageBodyReader.class);
+        if (component instanceof MessageBodyReader && priority != null) {
+            added = true;
+            Class<?> componentClass = component.getClass();
+            ConstrainedTo constrainedTo = componentClass.getAnnotation(ConstrainedTo.class);
+            if ((constrainedTo == null) || (constrainedTo.value() == runtimeType)) {
+                ResourceReader resourceReader = new ResourceReader();
+                resourceReader.setFactory(new UnmanagedBeanFactory(component));
+                Consumes consumes = componentClass.getAnnotation(Consumes.class);
+                resourceReader
+                        .setMediaTypeStrings(
+                                consumes != null ? Arrays.asList(consumes.value()) : Serialisers.WILDCARD_STRING_LIST);
+                Type[] args = Types.findParameterizedTypes(componentClass, MessageBodyReader.class);
+                resourceReaders.add(args != null && args.length == 1 ? Types.getRawType(args[0]) : Object.class,
+                        resourceReader);
+            }
+        }
+        priority = contracts.get(MessageBodyWriter.class);
+        if (component instanceof MessageBodyWriter && priority != null) {
+            added = true;
+            Class<?> componentClass = component.getClass();
+            ConstrainedTo constrainedTo = componentClass.getAnnotation(ConstrainedTo.class);
+            if ((constrainedTo == null) || (constrainedTo.value() == runtimeType)) {
+                ResourceWriter resourceWriter = new ResourceWriter();
+                resourceWriter.setFactory(new UnmanagedBeanFactory(component));
+                Produces produces = componentClass.getAnnotation(Produces.class);
+                resourceWriter
+                        .setMediaTypeStrings(
+                                produces != null ? Arrays.asList(produces.value()) : Serialisers.WILDCARD_STRING_LIST);
+                Type[] args = Types.findParameterizedTypes(componentClass, MessageBodyWriter.class);
+                resourceWriters.add(args != null && args.length == 1 ? Types.getRawType(args[0]) : Object.class,
+                        resourceWriter);
+            }
+        }
+        if (added) {
+            allInstances.put(component.getClass(), component);
+        }
 
     }
 
@@ -308,7 +406,11 @@ public class QuarkusRestConfiguration implements Configuration {
 
     // TODO: we could generate some kind of index at build time in order to obtain these values without using the annotation
     private int determinePriority(Object object) {
-        Priority priority = object.getClass().getDeclaredAnnotation(Priority.class);
+        return determinePriority(object.getClass());
+    }
+
+    private int determinePriority(Class<?> object) {
+        Priority priority = object.getDeclaredAnnotation(Priority.class);
         if (priority == null) {
             return Priorities.USER;
         }
@@ -321,5 +423,66 @@ public class QuarkusRestConfiguration implements Configuration {
 
     public MultivaluedMap<Class<?>, ResourceWriter> getResourceWriters() {
         return resourceWriters;
+    }
+
+    private class ConfigFeatureContext implements FeatureContext {
+        @Override
+        public Configuration getConfiguration() {
+            return QuarkusRestConfiguration.this;
+        }
+
+        @Override
+        public FeatureContext property(String name, Object value) {
+            QuarkusRestConfiguration.this.property(name, value);
+            return this;
+        }
+
+        @Override
+        public FeatureContext register(Class<?> componentClass) {
+            QuarkusRestConfiguration.this.register(componentClass);
+            return this;
+        }
+
+        @Override
+        public FeatureContext register(Class<?> componentClass, int priority) {
+            QuarkusRestConfiguration.this.register(componentClass, priority);
+            return this;
+        }
+
+        @Override
+        public FeatureContext register(Class<?> componentClass, Class<?>... contracts) {
+            QuarkusRestConfiguration.this.register(componentClass, contracts);
+            return this;
+        }
+
+        @Override
+        public FeatureContext register(Class<?> componentClass, Map<Class<?>, Integer> contracts) {
+            QuarkusRestConfiguration.this.register(componentClass, contracts);
+            return this;
+        }
+
+        @Override
+        public FeatureContext register(Object component) {
+            QuarkusRestConfiguration.this.register(component);
+            return this;
+        }
+
+        @Override
+        public FeatureContext register(Object component, int priority) {
+            QuarkusRestConfiguration.this.register(component, priority);
+            return this;
+        }
+
+        @Override
+        public FeatureContext register(Object component, Class<?>... contracts) {
+            QuarkusRestConfiguration.this.register(component, contracts);
+            return this;
+        }
+
+        @Override
+        public FeatureContext register(Object component, Map<Class<?>, Integer> contracts) {
+            QuarkusRestConfiguration.this.register(component, contracts);
+            return this;
+        }
     }
 }

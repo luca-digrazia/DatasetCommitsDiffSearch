@@ -28,7 +28,6 @@ import javax.ws.rs.RuntimeType;
 import javax.ws.rs.client.Invocation;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 
@@ -50,7 +49,6 @@ import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
@@ -64,7 +62,6 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.JandexUtil;
 import io.quarkus.gizmo.ClassCreator;
@@ -108,9 +105,6 @@ import io.quarkus.rest.runtime.model.ResourceResponseInterceptor;
 import io.quarkus.rest.runtime.model.ResourceWriter;
 import io.quarkus.rest.runtime.model.ResourceWriterInterceptor;
 import io.quarkus.rest.runtime.model.RestClientInterface;
-import io.quarkus.rest.runtime.providers.serialisers.VertxJsonMessageBodyWriter;
-import io.quarkus.rest.runtime.providers.serialisers.jsonb.JsonbMessageBodyReader;
-import io.quarkus.rest.runtime.providers.serialisers.jsonb.JsonbMessageBodyWriter;
 import io.quarkus.rest.runtime.spi.BeanFactory;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.vertx.http.deployment.FilterBuildItem;
@@ -257,22 +251,6 @@ public class QuarkusRestProcessor {
     }
 
     @BuildStep
-    void additionalBeans(Capabilities capabilities, BuildProducer<AdditionalBeanBuildItem> additionalBean) {
-        if (capabilities.isPresent(Capability.JACKSON)) {
-            additionalBean.produce(AdditionalBeanBuildItem.builder()
-                    .addBeanClass(VertxJsonMessageBodyWriter.class.getName())
-                    .setUnremovable().build());
-        }
-        // make these beans to they can get instantiated with the Quarkus CDI configured Jsonb object
-        if (capabilities.isPresent(Capability.JSONB)) {
-            additionalBean.produce(AdditionalBeanBuildItem.builder()
-                    .addBeanClass(JsonbMessageBodyReader.class.getName())
-                    .addBeanClass(JsonbMessageBodyWriter.class.getName())
-                    .setUnremovable().build());
-        }
-    }
-
-    @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     public FilterBuildItem setupEndpoints(BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             BeanContainerBuildItem beanContainerBuildItem,
@@ -283,9 +261,7 @@ public class QuarkusRestProcessor {
             QuarkusRestRecorder recorder,
             RecorderContext recorderContext,
             ShutdownContextBuildItem shutdownContext,
-            HttpBuildTimeConfig vertxConfig,
-            Capabilities capabilities,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+            HttpBuildTimeConfig vertxConfig) {
 
         if (!resourceScanningResultBuildItem.isPresent()) {
             // no detected @Path, bail out
@@ -564,18 +540,6 @@ public class QuarkusRestProcessor {
                 }
             }
 
-            GenericTypeMapping genericTypeMapping = new GenericTypeMapping();
-            for (ClassInfo invocationCallback : invocationCallbacks) {
-                try {
-                    List<Type> typeParameters = JandexUtil.resolveTypeParameters(invocationCallback.name(),
-                            QuarkusRestDotNames.INVOCATION_CALLBACK, index);
-                    recorder.registerInvocationHandlerGenericType(genericTypeMapping, invocationCallback.name().toString(),
-                            typeParameters.get(0).name().toString());
-                } catch (Exception ignored) {
-
-                }
-            }
-
             Serialisers serialisers = new Serialisers();
             for (ClassInfo writerClass : writers) {
                 if (writerClass.classAnnotation(QuarkusRestDotNames.PROVIDER) != null) {
@@ -588,14 +552,13 @@ public class QuarkusRestProcessor {
                     List<Type> typeParameters = JandexUtil.resolveTypeParameters(writerClass.name(),
                             QuarkusRestDotNames.MESSAGE_BODY_WRITER,
                             index);
-                    String writerClassName = writerClass.name().toString();
-                    writer.setFactory(recorder.factory(writerClassName, beanContainerBuildItem.getValue()));
+                    writer.setFactory(recorder.factory(writerClass.name().toString(),
+                            beanContainerBuildItem.getValue()));
                     AnnotationInstance constrainedToInstance = writerClass.classAnnotation(QuarkusRestDotNames.CONSTRAINED_TO);
                     if (constrainedToInstance != null) {
                         writer.setConstraint(RuntimeType.valueOf(constrainedToInstance.value().asEnum()));
                     }
                     recorder.registerWriter(serialisers, typeParameters.get(0).name().toString(), writer);
-                    reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, writerClassName));
                 }
             }
             for (ClassInfo readerClass : readers) {
@@ -605,8 +568,7 @@ public class QuarkusRestProcessor {
                             index);
                     ResourceReader reader = new ResourceReader();
                     reader.setBuiltin(false);
-                    String readerClassName = readerClass.name().toString();
-                    reader.setFactory(recorder.factory(readerClassName,
+                    reader.setFactory(recorder.factory(readerClass.name().toString(),
                             beanContainerBuildItem.getValue()));
                     AnnotationInstance consumesAnnotation = readerClass.classAnnotation(QuarkusRestDotNames.CONSUMES);
                     if (consumesAnnotation != null) {
@@ -617,22 +579,19 @@ public class QuarkusRestProcessor {
                         reader.setConstraint(RuntimeType.valueOf(constrainedToInstance.value().asEnum()));
                     }
                     recorder.registerReader(serialisers, typeParameters.get(0).name().toString(), reader);
-                    reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, readerClassName));
                 }
             }
 
-            // additional readers / writers based on capabilities
+            GenericTypeMapping genericTypeMapping = new GenericTypeMapping();
+            for (ClassInfo invocationCallback : invocationCallbacks) {
+                try {
+                    List<Type> typeParameters = JandexUtil.resolveTypeParameters(invocationCallback.name(),
+                            QuarkusRestDotNames.INVOCATION_CALLBACK, index);
+                    recorder.registerInvocationHandlerGenericType(genericTypeMapping, invocationCallback.name().toString(),
+                            typeParameters.get(0).name().toString());
+                } catch (Exception ignored) {
 
-            if (capabilities.isPresent(Capability.JACKSON)) {
-                // TODO: this is probably not the right thing to do as Vertx doesn't the Quarkus CDI configured ObjectMapper here
-                registerWriter(recorder, serialisers, Object.class, VertxJsonMessageBodyWriter.class,
-                        beanContainerBuildItem.getValue(), MediaType.APPLICATION_JSON);
-            }
-            if (capabilities.isPresent(Capability.JSONB)) {
-                registerReader(recorder, serialisers, Object.class, JsonbMessageBodyReader.class,
-                        beanContainerBuildItem.getValue(), MediaType.APPLICATION_JSON, null);
-                registerWriter(recorder, serialisers, Object.class, JsonbMessageBodyWriter.class,
-                        beanContainerBuildItem.getValue(), MediaType.APPLICATION_JSON);
+                }
             }
 
             // built-ins
@@ -641,27 +600,21 @@ public class QuarkusRestProcessor {
                 registerWriter(recorder, serialisers, builtinWriter.entityClass, builtinWriter.writerClass,
                         beanContainerBuildItem.getValue(),
                         builtinWriter.mediaType);
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, builtinWriter.writerClass.getName()));
             }
             for (BuiltinReader builtinReader : Serialisers.BUILTIN_READERS) {
                 registerReader(recorder, serialisers, builtinReader.entityClass, builtinReader.readerClass,
                         beanContainerBuildItem.getValue(),
                         builtinReader.mediaType, builtinReader.constraint);
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, builtinReader.readerClass.getName()));
             }
 
             for (AdditionalReaders.Entry additionalReader : additionalReaders.get()) {
-                Class readerClass = additionalReader.getReaderClass();
-                registerReader(recorder, serialisers, additionalReader.getEntityClass(), readerClass,
+                registerReader(recorder, serialisers, additionalReader.getEntityClass(), additionalReader.getReaderClass(),
                         beanContainerBuildItem.getValue(), additionalReader.getMediaType(), additionalReader.getConstraint());
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, readerClass.getName()));
             }
 
             for (AdditionalWriters.Entry<?> entry : additionalWriters.get()) {
-                Class<? extends MessageBodyWriter<?>> writerClass = entry.getWriterClass();
-                registerWriter(recorder, serialisers, entry.getEntityClass(), writerClass,
+                registerWriter(recorder, serialisers, entry.getEntityClass(), entry.getWriterClass(),
                         beanContainerBuildItem.getValue(), entry.getMediaType());
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, writerClass.getName()));
             }
 
             initConverters.returnValue(null);

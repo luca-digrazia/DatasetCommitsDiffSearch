@@ -23,7 +23,6 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
-import javax.ws.rs.core.Application;
 import javax.ws.rs.core.Feature;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -57,6 +56,7 @@ import io.quarkus.rest.runtime.core.parameters.NullParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.ParameterExtractor;
 import io.quarkus.rest.runtime.core.parameters.PathParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.QueryParamExtractor;
+import io.quarkus.rest.runtime.core.parameters.converters.NoopParameterConverter;
 import io.quarkus.rest.runtime.core.parameters.converters.ParameterConverter;
 import io.quarkus.rest.runtime.core.parameters.converters.RuntimeResolvedConverter;
 import io.quarkus.rest.runtime.core.serialization.DynamicEntityWriter;
@@ -187,8 +187,7 @@ public class QuarkusRestRecorder {
             ShutdownContext shutdownContext, QuarkusRestConfig quarkusRestConfig, HttpBuildTimeConfig vertxConfig,
             String applicationPath, Map<String, RuntimeValue<Function<WebTarget, ?>>> clientImplementations,
             GenericTypeMapping genericTypeMapping,
-            ParamConverterProviders paramConverterProviders, BeanFactory<QuarkusRestInitialiser> initClassFactory,
-            Application application) {
+            ParamConverterProviders paramConverterProviders, BeanFactory<QuarkusRestInitialiser> initClassFactory) {
         DynamicEntityWriter dynamicEntityWriter = new DynamicEntityWriter(serialisers);
 
         QuarkusRestConfiguration quarkusRestConfiguration = configureFeatures(features, interceptors, exceptionMapping,
@@ -390,7 +389,7 @@ public class QuarkusRestRecorder {
         QuarkusRestDeployment deployment = new QuarkusRestDeployment(exceptionMapping, ctxResolvers, serialisers,
                 abortHandlingChain.toArray(EMPTY_REST_HANDLER_ARRAY), dynamicEntityWriter,
                 createClientImpls(clientImplementations),
-                prefix, genericTypeMapping, paramConverterProviders, quarkusRestConfiguration, application);
+                prefix, genericTypeMapping, paramConverterProviders, quarkusRestConfiguration);
 
         initClassFactory.createInstance().getInstance().init(deployment);
 
@@ -716,6 +715,13 @@ public class QuarkusRestRecorder {
                             javaMethod.getGenericParameterTypes()[i],
                             javaMethod.getParameterAnnotations()[i]);
                 }
+            } else if (userProviderConvertersExist) {
+                // make sure we give the user provided resolvers the chance to convert
+                converter = new RuntimeResolvedConverter(new NoopParameterConverter());
+                Method javaMethod = lazyMethod.getMethod();
+                converter.init(paramConverterProviders, javaMethod.getParameterTypes()[i],
+                        javaMethod.getGenericParameterTypes()[i],
+                        javaMethod.getParameterAnnotations()[i]);
             }
 
             handlers.add(new ParameterHandler(i, param.getDefaultValue(), extractor,
