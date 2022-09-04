@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.Files;
 import com.google.common.io.Resources;
 import io.dropwizard.configuration.FileConfigurationSourceProvider;
 import io.dropwizard.configuration.SubstitutingSourceProvider;
@@ -19,7 +20,7 @@ import io.dropwizard.jackson.Jackson;
 import io.dropwizard.logging.filter.FilterFactory;
 import io.dropwizard.validation.BaseValidator;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.text.StrSubstitutor;
+import org.apache.commons.lang3.text.StrSubstitutor;
 import org.assertj.core.data.MapEntry;
 import org.junit.Before;
 import org.junit.Rule;
@@ -29,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -120,18 +120,18 @@ public class DefaultLoggingFactoryTest {
 
         config.stop();
 
-        assertThat(Files.readAllLines(defaultLog.toPath())).containsOnly(
+        assertThat(Files.readLines(defaultLog, StandardCharsets.UTF_8)).containsOnly(
                 "INFO  com.example.app: Application log",
                 "DEBUG com.example.newApp: New application debug log",
                 "INFO  com.example.newApp: New application info log",
                 "DEBUG com.example.legacyApp: Legacy application debug log",
                 "INFO  com.example.legacyApp: Legacy application info log");
 
-        assertThat(Files.readAllLines(newAppLog.toPath())).containsOnly(
+        assertThat(Files.readLines(newAppLog, StandardCharsets.UTF_8)).containsOnly(
                 "DEBUG com.example.newApp: New application debug log",
                 "INFO  com.example.newApp: New application info log");
 
-        assertThat(Files.readAllLines(newAppNotAdditiveLog.toPath())).containsOnly(
+        assertThat(Files.readLines(newAppNotAdditiveLog, StandardCharsets.UTF_8)).containsOnly(
             "DEBUG com.example.notAdditive: Not additive application debug log",
             "INFO  com.example.notAdditive: Not additive application info log");
     }
@@ -151,11 +151,5 @@ public class DefaultLoggingFactoryTest {
         assertThat(appenders).as("context").allMatch((Appender<?> a) -> a.getContext() != null);
         assertThat(appenders).as("started").allMatch(LifeCycle::isStarted);
         assertThat(appenders).hasSize(1);
-    }
-
-    @Test
-    public void testToStringIsImplented() {
-        assertThat(config.toString()).startsWith(
-            "DefaultLoggingFactory{level=INFO, loggers={com.example.app=\"DEBUG\"}, appenders=");
     }
 }
