@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -151,11 +150,11 @@ public class SkylarkImports {
 
   @VisibleForTesting
   static final String EXTERNAL_PKG_NOT_ALLOWED_MSG =
-      "Starlark files may not be loaded from the //external package";
+      "Skylark files may not be loaded from the //external package";
 
   @VisibleForTesting
   static final String INVALID_PATH_SYNTAX =
-      "First argument of 'load' must be a label and start with either '//', ':', or '@'";
+      "First argument of 'load' must be a label and start with either '//', ':', or '@'.";
 
   @VisibleForTesting
   static final String INVALID_TARGET_PREFIX = "Invalid target: ";
@@ -199,7 +198,7 @@ public class SkylarkImports {
         throw new SkylarkImportSyntaxException(MUST_HAVE_BZL_EXT_MSG);
       }
       PackageIdentifier packageId = importLabel.getPackageIdentifier();
-      if (packageId.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER)) {
+      if (packageId.equals(Label.EXTERNAL_PACKAGE_IDENTIFIER)) {
         throw new SkylarkImportSyntaxException(EXTERNAL_PKG_NOT_ALLOWED_MSG);
       }
       return new AbsoluteLabelImport(importString, importLabel);

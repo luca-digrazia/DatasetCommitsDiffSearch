@@ -690,12 +690,10 @@ public class PackageFunction implements SkyFunction {
       targetToKey.put(target, key);
       containingPkgLookupKeys.add(key);
     }
-    Map<SkyKey, ValueOrException2<BuildFileNotFoundException, InconsistentFilesystemException>>
-        containingPkgLookupValues =
-            env.getValuesOrThrow(
-                containingPkgLookupKeys,
-                BuildFileNotFoundException.class,
-                InconsistentFilesystemException.class);
+    Map<SkyKey, ValueOrException3<BuildFileNotFoundException, InconsistentFilesystemException,
+        FileSymlinkException>> containingPkgLookupValues = env.getValuesOrThrow(
+            containingPkgLookupKeys, BuildFileNotFoundException.class,
+            InconsistentFilesystemException.class, FileSymlinkException.class);
     if (env.valuesMissing()) {
       return;
     }
@@ -707,7 +705,7 @@ public class PackageFunction implements SkyFunction {
       ContainingPackageLookupValue containingPackageLookupValue =
           getContainingPkgLookupValueAndPropagateInconsistentFilesystemExceptions(
               pkgId, containingPkgLookupValues.get(key), env);
-        if (maybeAddEventAboutLabelCrossingSubpackage(pkgBuilder, pkgRoot, target.getLabel(),
+      if (maybeAddEventAboutLabelCrossingSubpackage(pkgBuilder, pkgRoot, target.getLabel(),
           target.getLocation(), containingPackageLookupValue)) {
         pkgBuilder.removeTarget(target);
         pkgBuilder.setContainsErrors();
@@ -730,15 +728,14 @@ public class PackageFunction implements SkyFunction {
 
   @Nullable
   private static ContainingPackageLookupValue
-      getContainingPkgLookupValueAndPropagateInconsistentFilesystemExceptions(
-          PackageIdentifier packageIdentifier,
-          ValueOrException2<BuildFileNotFoundException, InconsistentFilesystemException>
-              containingPkgLookupValueOrException,
-          Environment env)
+  getContainingPkgLookupValueAndPropagateInconsistentFilesystemExceptions(
+      PackageIdentifier packageIdentifier,
+      ValueOrException3<BuildFileNotFoundException, InconsistentFilesystemException,
+      FileSymlinkException> containingPkgLookupValueOrException, Environment env)
           throws InternalInconsistentFilesystemException {
     try {
       return (ContainingPackageLookupValue) containingPkgLookupValueOrException.get();
-    } catch (BuildFileNotFoundException e) {
+    } catch (BuildFileNotFoundException | FileSymlinkException e) {
       env.getListener().handle(Event.error(null, e.getMessage()));
       return null;
     } catch (InconsistentFilesystemException e) {
