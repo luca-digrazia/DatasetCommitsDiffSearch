@@ -98,14 +98,14 @@ public class SkylarkSemanticsConsistencyTest {
   @Test
   public void checkDefaultsMatch() {
     StarlarkSemanticsOptions defaultOptions = Options.getDefaults(StarlarkSemanticsOptions.class);
-    StarlarkSemantics defaultSemantics = StarlarkSemantics.DEFAULT;
+    StarlarkSemantics defaultSemantics = StarlarkSemantics.DEFAULT_SEMANTICS;
     StarlarkSemantics semanticsFromOptions = defaultOptions.toSkylarkSemantics();
     assertThat(semanticsFromOptions).isEqualTo(defaultSemantics);
   }
 
   @Test
   public void canGetBuilderFromInstance() {
-    StarlarkSemantics original = StarlarkSemantics.DEFAULT;
+    StarlarkSemantics original = StarlarkSemantics.DEFAULT_SEMANTICS;
     assertThat(original.internalSkylarkFlagTestCanary()).isFalse();
     StarlarkSemantics modified = original.toBuilder().internalSkylarkFlagTestCanary(true).build();
     assertThat(modified.internalSkylarkFlagTestCanary()).isTrue();
@@ -156,7 +156,6 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_no_rule_outputs_param=" + rand.nextBoolean(),
         "--incompatible_no_support_tools_in_action_inputs=" + rand.nextBoolean(),
         "--incompatible_run_shell_command_string=" + rand.nextBoolean(),
-        "--incompatible_string_replace_count=" + rand.nextBoolean(),
         "--incompatible_visibility_private_attributes_at_definition=" + rand.nextBoolean(),
         "--incompatible_require_linker_input_cc_api=" + rand.nextBoolean(),
         "--incompatible_restrict_string_escapes=" + rand.nextBoolean(),
@@ -208,7 +207,6 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleNoRuleOutputsParam(rand.nextBoolean())
         .incompatibleNoSupportToolsInActionInputs(rand.nextBoolean())
         .incompatibleRunShellCommandString(rand.nextBoolean())
-        .incompatibleStringReplaceCount(rand.nextBoolean())
         .incompatibleVisibilityPrivateAttributesAtDefinition(rand.nextBoolean())
         .incompatibleRequireLinkerInputCcApi(rand.nextBoolean())
         .incompatibleRestrictStringEscapes(rand.nextBoolean())
