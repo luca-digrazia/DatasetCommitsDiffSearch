@@ -25,7 +25,6 @@ import java.util.EventListener;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 import javax.net.ssl.SSLContext;
@@ -89,10 +88,10 @@ public class UndertowDeploymentTemplate {
             currentRoot.handleRequest(exchange);
         }
     };
-    private static final String RESOURCES_PROP = "quarkus-internal.undertow.resources";
+    private static final String RESOURCES_PROP = "quarkus.undertow.resources";
 
     private static volatile Undertow undertow;
-    private static final List<HandlerWrapper> hotDeploymentWrappers = new CopyOnWriteArrayList<>();
+    private static volatile HandlerWrapper hotDeploymentWrapper;
     private static volatile HttpHandler currentRoot = ResponseCodeHandler.HANDLE_404;
 
     public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories,
@@ -304,8 +303,8 @@ public class UndertowDeploymentTemplate {
         return new RuntimeValue<>(undertow);
     }
 
-    public static void addHotDeploymentWrapper(HandlerWrapper handlerWrapper) {
-        hotDeploymentWrappers.add(handlerWrapper);
+    public static void setHotDeployment(HandlerWrapper handlerWrapper) {
+        hotDeploymentWrapper = handlerWrapper;
     }
 
     /**
@@ -322,8 +321,8 @@ public class UndertowDeploymentTemplate {
             int sslPort = config.determineSslPort(launchMode);
             log.debugf("Starting Undertow on port %d", port);
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
-            for (HandlerWrapper i : hotDeploymentWrappers) {
-                rootHandler = i.wrap(rootHandler);
+            if (hotDeploymentWrapper != null) {
+                rootHandler = hotDeploymentWrapper.wrap(rootHandler);
             }
 
             Undertow.Builder builder = Undertow.builder()
