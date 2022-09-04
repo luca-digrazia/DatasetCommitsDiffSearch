@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.StructApi;
-import javax.annotation.Nullable;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
@@ -62,7 +61,6 @@ public interface DebugPackageInfoApi<FileT extends FileApi> extends StructApi {
       doc = "Returns the .dwp file (for fission builds) or null if --fission=no.",
       structField = true,
       allowReturnNones = true)
-  @Nullable
   FileT getDwpArtifact();
 
   /** The provider implementing this can construct DebugPackageInfo objects. */
@@ -77,31 +75,36 @@ public interface DebugPackageInfoApi<FileT extends FileApi> extends StructApi {
               name = "target_label",
               doc = "The label for the *_binary target",
               positional = false,
-              named = true),
+              named = true,
+              noneable = false,
+              allowedTypes = {@ParamType(type = Label.class)}),
           @Param(
               name = "stripped_file",
               doc = "The stripped file (the explicit \".stripped\" target)",
               positional = false,
               named = true,
-              defaultValue = "None",
-              allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)}),
+              noneable = false,
+              allowedTypes = {@ParamType(type = FileApi.class)}),
           @Param(
               name = "unstripped_file",
               doc = "The unstripped file (the default executable target).",
               positional = false,
-              named = true),
+              named = true,
+              noneable = false,
+              allowedTypes = {@ParamType(type = FileApi.class)}),
           @Param(
               name = "dwp_file",
               doc = "The .dwp file (for fission builds) or null if --fission=no.",
               positional = false,
               named = true,
+              noneable = true,
               defaultValue = "None",
               allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)})
         },
         selfCall = true)
     @StarlarkConstructor
     DebugPackageInfoApi<FileT> createDebugPackageInfo(
-        Label targetLabel, Object strippedFile, FileT unstrippedFile, Object dwpFile)
+        Label targetLabel, FileT strippedFile, FileT unstrippedFile, Object dwpFile)
         throws EvalException;
   }
 }

@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth8.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.baseArtifactNames;
 import static org.junit.Assert.assertThrows;
 
@@ -71,6 +70,7 @@ import java.util.Map;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
+import net.starlark.java.eval.StarlarkList;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -1255,9 +1255,6 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testCcLinkingContextOnWindows() throws Exception {
-    if (!AnalysisMock.get().isThisBazel()) {
-      return;
-    }
     AnalysisMock.get()
         .ccSupport()
         .setupCcToolchainConfig(
@@ -1270,9 +1267,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
     doTestCcLinkingContext(
         ImmutableList.of("a.a", "libdep2.a", "b.a", "c.a", "d.a", "libdep1.a"),
         ImmutableList.of("a.pic.a", "b.pic.a", "c.pic.a", "e.pic.a"),
-        // The suffix of dynamic library is caculated based on repository name and package path
-        // to avoid conflicts with dynamic library from other packages.
-        ImmutableList.of("a.so", "libdep2_6b43f83676.so", "b.so", "e.so", "libdep1_6b43f83676.so"));
+        ImmutableList.of("a.so", "libdep2.so", "b.so", "e.so", "libdep1.so"));
   }
 
   @Test
@@ -5834,7 +5829,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
 
     Object picObjects = fooInfoForPic.getValue("pic_objects");
     assertThat(picObjects).isNotEqualTo(Starlark.NONE);
-    assertThat((List) picObjects).isEmpty();
+    assertThat((StarlarkList) picObjects).isEmpty();
 
     // With PIC and the default compilation_mode which is fastbuild C++ rules only produce PIC
     // objects.
@@ -5850,7 +5845,7 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
 
     Object objects = fooInfoForNoPic.getValue("objects");
     assertThat(objects).isNotEqualTo(Starlark.NONE);
-    assertThat((List) objects).isEmpty();
+    assertThat((StarlarkList) objects).isEmpty();
   }
 
   @Test
@@ -5910,11 +5905,11 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
 
     Object picLtoBitcodeFiles = fooInfo.getValue("pic_lto_bitcode_files");
     assertThat(picLtoBitcodeFiles).isNotEqualTo(Starlark.NONE);
-    assertThat((List) picLtoBitcodeFiles).isEmpty();
+    assertThat((StarlarkList) picLtoBitcodeFiles).isEmpty();
 
     Object ltoBitcodeFiles = fooInfo.getValue("lto_bitcode_files");
     assertThat(ltoBitcodeFiles).isNotEqualTo(Starlark.NONE);
-    assertThat((List) ltoBitcodeFiles).isEmpty();
+    assertThat((StarlarkList) ltoBitcodeFiles).isEmpty();
   }
 
   private void scratchObjectsProvidingRule() throws IOException {
@@ -6665,85 +6660,5 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
     assertThat(debugPackageProvider.getStrippedArtifact().getFilename()).isEqualTo("w.stripped");
     assertThat(debugPackageProvider.getUnstrippedArtifact().getFilename()).isEqualTo("w");
     assertThat(debugPackageProvider.getDwpArtifact().getFilename()).isEqualTo("w.dwp");
-  }
-
-  @Test
-  public void testCcDebugContextDisabled() throws Exception {
-    scratch.file(
-        "b/BUILD",
-        "load('//my_rules:rule.bzl', 'cc_compile_rule')",
-        "cc_compile_rule(",
-        "  name='b_lib',",
-        "  srcs = ['b_lib.cc'],",
-        ")");
-    scratch.file("my_rules/BUILD");
-    scratch.file(
-        "my_rules/rule.bzl",
-        "def _impl(ctx):",
-        "  comp_context = cc_common.create_compilation_context()",
-        "  comp_outputs = cc_common.create_compilation_outputs()",
-        "  debug_info = cc_common.create_debug_context(comp_outputs)",
-        "  return [CcInfo(compilation_context = comp_context, debug_info = debug_info)]",
-        "cc_compile_rule = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    'srcs': attr.label_list(allow_files = ['.cc']),",
-        "  },",
-        ")");
-    AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//b:b_lib"));
-    assertThat(e).hasMessageThat().contains("Rule in 'my_rules' cannot use CcDebugInfo");
-  }
-
-  @Test
-  public void testCcDebugContext() throws Exception {
-    useConfiguration("--fission=yes");
-    scratch.file(
-        "b/BUILD",
-        "load('//bazel_internal/test_rules/cc:rule.bzl', 'cc_compile_rule')",
-        "cc_toolchain_alias(name='alias')",
-        "cc_compile_rule(",
-        "  name='b_lib',",
-        "  srcs = ['b_lib.cc'],",
-        ")");
-    scratch.file("bazel_internal/test_rules/cc/BUILD");
-    scratch.file(
-        "bazel_internal/test_rules/cc/rule.bzl",
-        "def _impl(ctx):",
-        "  toolchain = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo]",
-        "  feature_configuration = cc_common.configure_features(",
-        "    ctx=ctx,",
-        "    cc_toolchain=toolchain,",
-        "    requested_features=ctx.features + ['per_object_debug_info'],",
-        "    unsupported_features=ctx.disabled_features)",
-        "  (comp_context, comp_outputs) = cc_common.compile(",
-        "    name = ctx.label.name,",
-        "    actions = ctx.actions,",
-        "    feature_configuration = feature_configuration,",
-        "    cc_toolchain = toolchain,",
-        "    srcs = ctx.files.srcs,",
-        "  )",
-        "  debug_info = cc_common.create_debug_context(comp_outputs)",
-        "  return [CcInfo(compilation_context = comp_context, debug_context = debug_info)]",
-        "cc_compile_rule = rule(",
-        "  implementation = _impl,",
-        "  attrs = {",
-        "    '_cc_toolchain': attr.label(default=Label('//b:alias')),",
-        "    'srcs': attr.label_list(allow_files = ['.cc']),",
-        "  },",
-        "  fragments = ['cpp'],",
-        ")");
-    ConfiguredTarget target = getConfiguredTarget("//b:b_lib");
-    assertThat(
-            target
-                .get(CcInfo.PROVIDER)
-                .getCcDebugInfoContext()
-                .getTransitiveDwoFiles()
-                .toList()
-                .stream()
-                .map(Artifact::getFilename))
-        .containsExactly("b_lib.dwo");
-    assertThat(
-            target.get(CcInfo.PROVIDER).getCcDebugInfoContext().getTransitivePicDwoFiles().toList())
-        .isEmpty();
   }
 }
