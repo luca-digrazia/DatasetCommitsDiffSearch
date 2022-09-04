@@ -390,8 +390,7 @@ public class ObjectCodecRegistry {
       CodecDescriptor descriptor = supplier.get();
       if (descriptor == null) {
         throw new SerializationException.NoCodecException(
-            "There was a problem creating a codec for " + className + ". Check logs for details",
-            type);
+            "There was a problem creating a codec for " + className + ". Check logs for details");
       }
       return descriptor;
     }
@@ -406,11 +405,10 @@ public class ObjectCodecRegistry {
             "No default codec available for "
                 + className
                 + ". If this is a lambda, try casting it to (type & Serializable), like "
-                + "(Supplier<String> & Serializable)",
-            type);
+                + "(Supplier<String> & Serializable)");
       }
     }
     throw new SerializationException.NoCodecException(
-        "No default codec available for " + className, type);
+        "No default codec available for " + className);
   }
 }

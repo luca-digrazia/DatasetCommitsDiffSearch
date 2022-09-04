@@ -49,12 +49,7 @@ public class AutoRegistry {
       ImmutableList.of(
           "java.io.FileNotFoundException",
           "java.io.IOException",
-          "java.lang.invoke.SerializedLambda",
-          "com.google.common.base.Predicates$InPredicate",
-          // Sadly, these builders are serialized as part of SkylarkCustomCommandLine$Builder, which
-          // apparently can be preserved through analysis. We may investigate if this actually has
-          // performance/correctness implications.
-          "com.google.common.collect.ImmutableList$Builder");
+          "java.lang.invoke.SerializedLambda");
 
   private static final ImmutableList<Object> REFERENCE_CONSTANTS_TO_REGISTER =
       ImmutableList.of(
