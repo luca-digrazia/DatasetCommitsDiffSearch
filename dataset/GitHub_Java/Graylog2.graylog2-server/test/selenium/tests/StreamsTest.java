@@ -26,8 +26,6 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.remote.RemoteWebDriver;
-import play.libs.F;
-import play.test.TestBrowser;
 import selenium.LoggedIn;
 import selenium.serverstub.ServerStub;
 
@@ -42,27 +40,29 @@ import static play.test.Helpers.*;
  */
 public class StreamsTest extends LoggedIn {
 
-    private static final int STUB_PORT = 9005;
+    private static final int SERVER_STUB_PORT = 9005;
+    private static final int WEB_PORT = 3333;
     private ServerStub serverStub;
 
     private WebDriver driver;
 
     @Before
     public void setUp() throws MalformedURLException {
-        System.out.println("Launching graylog2-server stub on :" + STUB_PORT);
-        serverStub = new ServerStub(STUB_PORT);
+        System.out.println("Launching graylog2-server stub on :" + SERVER_STUB_PORT);
+        serverStub = new ServerStub(SERVER_STUB_PORT);
         serverStub.initialize();
 
         String sauceUser = System.getenv("SAUCE_USERNAME");
-        String saucePassword = System.getenv("SAUCE_USERNAME");
+        String saucePassword = System.getenv("SAUCE_ACCESS_KEY");
 
         if (sauceUser != null && saucePassword != null && !sauceUser.isEmpty() && !saucePassword.isEmpty()) {
             URL saucelabs = new URL("http://" + sauceUser + ":" + saucePassword + "@localhost:4445/wd/hub");
 
             // https://saucelabs.com/docs/platforms
-            DesiredCapabilities capabilities = DesiredCapabilities.chrome();
-            capabilities.setCapability("platform", "OS X 10.8");
-            capabilities.setCapability("version", "26");
+            DesiredCapabilities capabilities = DesiredCapabilities.firefox();
+            capabilities.setCapability("platform", "Windows 8");
+            capabilities.setCapability("version", "21");
+            capabilities.setCapability("tunnel-identifier", System.getenv("TRAVIS_JOB_NUMBER"));
 
             driver = new RemoteWebDriver(saucelabs, capabilities);
         } else {
@@ -79,16 +79,10 @@ public class StreamsTest extends LoggedIn {
 
     @Test
     public void addingStreamRulesWorks() {
-        running(testServer(3333), new Runnable() {
+        running(testServer(9999), new Runnable() {
             public void run() {
-                Result r = login(testBrowser(driver), serverStub, "lennart", "123123123");
+                Result r = login(testBrowser(driver, 9999), serverStub, "lennart", "123123123");
                 assertTrue("Login failed", r.isSuccess());
-
-                try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
-                }
             }
         });
     }
