@@ -40,7 +40,7 @@ public class Sort {
         Descending;
     }
 
-    public static class Column {
+    public class Column {
         private String name;
         private Direction direction;
 
@@ -217,5 +217,25 @@ public class Sort {
      */
     public List<Column> getColumns() {
         return columns;
+    }
+
+    /**
+     * Returns an SQL "order by" clause for the current sort columns and directions.
+     * 
+     * @return an SQL "order by" clause for the current sort columns and directions.
+     * @deprecated panache-common should be agnostic from the database implementation
+     */
+    @Deprecated
+    public String toOrderBy() {
+        StringBuilder sb = new StringBuilder(" ORDER BY ");
+        for (int i = 0; i < columns.size(); i++) {
+            Column column = columns.get(i);
+            if (i > 0)
+                sb.append(" , ");
+            sb.append(column.name);
+            if (column.direction != Direction.Ascending)
+                sb.append(" DESC");
+        }
+        return sb.toString();
     }
 }

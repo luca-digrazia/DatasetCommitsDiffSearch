@@ -6,7 +6,6 @@ import java.util.Map.Entry;
 import java.util.stream.Stream;
 
 import javax.persistence.EntityManager;
-import javax.persistence.PersistenceException;
 import javax.persistence.Query;
 import javax.transaction.SystemException;
 import javax.transaction.TransactionManager;
@@ -69,11 +68,7 @@ public class JpaOperations {
     // Private stuff
 
     public static EntityManager getEntityManager() {
-        EntityManager entityManager = Arc.container().instance(EntityManager.class).get();
-        if (entityManager == null) {
-            throw new PersistenceException("No EntityManager found. Do you have any JPA entities defined?");
-        }
-        return entityManager;
+        return Arc.container().instance(EntityManager.class).get();
     }
 
     public static TransactionManager getTransactionManager() {
@@ -371,5 +366,4 @@ public class JpaOperations {
             throw new IllegalStateException(e);
         }
     }
-
 }
