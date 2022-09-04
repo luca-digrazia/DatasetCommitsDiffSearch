@@ -42,7 +42,7 @@ public class HibernateSearchElasticsearchRecorder {
 
     private static final class HibernateSearchIntegrationListener implements HibernateOrmIntegrationListener {
 
-        private final HibernateSearchElasticsearchBuildTimeConfig buildTimeConfig;
+        private HibernateSearchElasticsearchBuildTimeConfig buildTimeConfig;
 
         private HibernateSearchIntegrationListener(HibernateSearchElasticsearchBuildTimeConfig buildTimeConfig) {
             this.buildTimeConfig = buildTimeConfig;

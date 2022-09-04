@@ -128,15 +128,15 @@ public class HibernateSearchElasticsearchRuntimeConfig {
         /**
          * The default configuration for the Elasticsearch indexes.
          */
-        @ConfigItem(name = ConfigItem.PARENT)
-        ElasticsearchIndexRuntimeConfig indexDefaults;
+        @ConfigItem
+        ElasticsearchIndexConfig indexDefaults;
 
         /**
          * Per-index specific configuration.
          */
         @ConfigItem
         @ConfigDocMapKey("index-name")
-        Map<String, ElasticsearchIndexRuntimeConfig> indexes;
+        Map<String, ElasticsearchIndexConfig> indexes;
     }
 
     public enum ElasticsearchClientProtocol {
@@ -174,7 +174,7 @@ public class HibernateSearchElasticsearchRuntimeConfig {
     }
 
     @ConfigGroup
-    public static class ElasticsearchIndexRuntimeConfig {
+    public static class ElasticsearchIndexConfig {
         /**
          * Configuration for the schema management of the indexes.
          */
@@ -374,7 +374,7 @@ public class HibernateSearchElasticsearchRuntimeConfig {
          * which may lead to higher indexing throughput,
          * but incurs a risk of overloading Elasticsearch,
          * i.e. of overflowing its HTTP request buffers and tripping
-         * <a href="https://www.elastic.co/guide/en/elasticsearch/reference/7.9/circuit-breaker.html">circuit breakers</a>,
+         * <a href="https://www.elastic.co/guide/en/elasticsearch/reference/7.8/circuit-breaker.html">circuit breakers</a>,
          * leading to Elasticsearch giving up on some request and resulting in indexing failures.
          */
         // We can't set an actual default value here: see comment on this class.
@@ -400,7 +400,7 @@ public class HibernateSearchElasticsearchRuntimeConfig {
          * which may lead to higher indexing throughput,
          * but incurs a risk of overloading Elasticsearch,
          * i.e. of overflowing its HTTP request buffers and tripping
-         * <a href="https://www.elastic.co/guide/en/elasticsearch/reference/7.9/circuit-breaker.html">circuit breakers</a>,
+         * <a href="https://www.elastic.co/guide/en/elasticsearch/reference/7.8/circuit-breaker.html">circuit breakers</a>,
          * leading to Elasticsearch giving up on some request and resulting in indexing failures.
          * <p>
          * Note that raising this number above the queue size has no effect,
