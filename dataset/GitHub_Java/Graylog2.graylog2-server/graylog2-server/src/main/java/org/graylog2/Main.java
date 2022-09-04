@@ -274,15 +274,14 @@ public final class Main {
         server.getActivityWriter().write(new Activity("Started up.", Main.class));
         LOG.info("Graylog2 up and running.");
 
-        // Block forever.
-        try {
-            while (true) {
+        while (true) {
+            try {
                 Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                return;
+            } finally {
+                LOG.info("Graylog2 {} exiting.", Core.GRAYLOG2_VERSION);
             }
-        } catch (InterruptedException e) {
-            return;
-        } finally {
-            LOG.info("Graylog2 {} exiting.", Core.GRAYLOG2_VERSION);
         }
     }
 
