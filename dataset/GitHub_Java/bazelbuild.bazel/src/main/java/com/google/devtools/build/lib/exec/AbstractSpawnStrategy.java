@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.exec;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -104,7 +103,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
           spawnResult = Preconditions.checkNotNull(cacheHandle.getResult());
         } else {
           // Actual execution.
-          spawnResult = spawnRunner.execAsync(spawn, context).get();
+          spawnResult = spawnRunner.exec(spawn, context);
           if (cacheHandle.willStore()) {
             cacheHandle.store(spawnResult);
           }
@@ -142,14 +141,13 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
       String cwd = actionExecutionContext.getExecRoot().getPathString();
       String resultMessage = spawnResult.getFailureMessage();
       String message =
-          !Strings.isNullOrEmpty(resultMessage)
+          resultMessage != ""
               ? resultMessage
               : CommandFailureUtils.describeCommandFailure(
                   actionExecutionContext.getVerboseFailures(),
                   spawn.getArguments(),
                   spawn.getEnvironment(),
-                  cwd,
-                  spawn.getExecutionPlatform());
+                  cwd);
       throw new SpawnExecException(message, spawnResult, /*forciblyRunRemotely=*/false);
     }
     return ImmutableList.of(spawnResult);
