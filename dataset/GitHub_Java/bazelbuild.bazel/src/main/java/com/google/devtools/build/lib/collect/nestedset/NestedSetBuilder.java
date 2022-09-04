@@ -15,11 +15,11 @@ package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.MapMaker;
-import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
+import com.google.devtools.build.lib.collect.CompactHashSet;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.errorprone.annotations.DoNotCall;
 import java.util.concurrent.ConcurrentMap;
 
@@ -39,16 +39,6 @@ public final class NestedSetBuilder<E> {
 
   public NestedSetBuilder(Order order) {
     this.order = order;
-  }
-
-  /**
-   * Returns the order used by this builder.
-   *
-   * <p>This is useful for testing for incompatibilities (via {@link Order#isCompatible}) without
-   * catching an unchecked exception from {@link #addTransitive}.
-   */
-  public Order getOrder() {
-    return order;
   }
 
   /** Returns whether the set to be built is empty. */
@@ -103,8 +93,8 @@ public final class NestedSetBuilder<E> {
    *
    * <p>The relative left-to-right order of transitive members is preserved from the sequence of
    * calls to {@link #addTransitive}. Since the traversal {@link Order} controls whether direct
-   * members appear before or after transitive ones, the interleaving of {@link #add}/{@link
-   * #addAll} with {@link #addTransitive} does not matter.
+   * members appear before or after transitive ones, the interleaving of
+   * {@link #add}/{@link #addAll} with {@link #addTransitive} does not matter.
    *
    * <p>The {@link Order} of the added set must be compatible with the order of this builder (see
    * {@link Order#isCompatible}). This is true even if the added set is empty. Strictly speaking, it
@@ -119,7 +109,7 @@ public final class NestedSetBuilder<E> {
    *
    * @param subset the set to add as a transitive member; must not be null
    * @return the builder
-   * @throws IllegalArgumentException if the order of {@code subset} is not compatible with the
+   * @throws IllegalStateException if the order of {@code subset} is not compatible with the
    *     order of this builder
    */
   public NestedSetBuilder<E> addTransitive(NestedSet<? extends E> subset) {
@@ -169,21 +159,21 @@ public final class NestedSetBuilder<E> {
    */
   @SuppressWarnings("unchecked")
   public static <E> NestedSet<E> wrap(Order order, Iterable<E> wrappedItems) {
-    if (Iterables.isEmpty(wrappedItems)) {
+    ImmutableList<E> wrappedList = ImmutableList.copyOf(wrappedItems);
+    if (wrappedList.isEmpty()) {
       return order.emptySet();
-    } else if (order == Order.STABLE_ORDER && wrappedItems instanceof ImmutableList) {
-      ImmutableList<E> wrappedList = (ImmutableList) wrappedItems;
-      if (wrappedList.size() > 1) {
-        NestedSet<?> cached = immutableListCache.get(wrappedList);
-        if (cached != null) {
-          return (NestedSet<E>) cached;
-        }
-        NestedSet<E> built = new NestedSetBuilder<E>(order).addAll(wrappedList).build();
-        immutableListCache.putIfAbsent(wrappedList, built);
-        return built;
+    } else if (order == Order.STABLE_ORDER
+               && wrappedList == wrappedItems && wrappedList.size() > 1) {
+      NestedSet<?> cached = immutableListCache.get(wrappedList);
+      if (cached != null) {
+        return (NestedSet<E>) cached;
       }
+      NestedSet<E> built = new NestedSetBuilder<E>(order).addAll(wrappedList).build();
+      immutableListCache.putIfAbsent(wrappedList, built);
+      return built;
+    } else {
+      return new NestedSetBuilder<E>(order).addAll(wrappedList).build();
     }
-    return new NestedSetBuilder<E>(order).addAll(wrappedItems).build();
   }
 
   /**

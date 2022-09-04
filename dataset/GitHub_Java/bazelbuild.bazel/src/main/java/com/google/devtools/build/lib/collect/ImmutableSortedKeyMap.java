@@ -16,9 +16,10 @@ package com.google.devtools.build.lib.collect;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.util.stream.Collectors.joining;
 
-import com.google.common.base.Preconditions;
+import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.AbstractCollection;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
@@ -27,7 +28,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -153,18 +153,13 @@ public final class ImmutableSortedKeyMap<K extends Comparable<K>, V> implements 
       if (isEmpty()) {
         return Collections.emptyIterator();
       }
-      return new Iterator<V>() {
+      return new AbstractIterator<V>() {
         private int currentIndex = 0;
 
         @Override
-        public boolean hasNext() {
-          return currentIndex < values.length;
-        }
-
-        @Override
-        public V next() {
+        protected V computeNext() {
           if (currentIndex >= values.length) {
-            throw new NoSuchElementException();
+            return endOfData();
           }
           return values[currentIndex++];
         }
