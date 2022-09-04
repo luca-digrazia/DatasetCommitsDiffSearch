@@ -173,7 +173,7 @@ public class StreamAlertResource extends RestResource {
 
                     return ImmutableMap.of(
                             "results", results,
-                            "calculated_at", Tools.getISO8601String(Tools.nowUTC()),
+                            "calculated_at", Tools.getISO8601String(Tools.iso8601()),
                             "total_triggered", triggered);
                 }
             });
