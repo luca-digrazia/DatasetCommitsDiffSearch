@@ -18,14 +18,17 @@ package io.quarkus.arc.test.clientproxy;
 
 import static org.junit.Assert.assertEquals;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.InstanceHandle;
-import io.quarkus.arc.test.ArcTestContainer;
 import java.io.IOException;
 import java.util.function.Function;
+
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
 import javax.inject.Singleton;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.InstanceHandle;
+import io.quarkus.arc.test.ArcTestContainer;
+
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -43,6 +46,7 @@ public class ProducerClientProxyTest {
         InstanceHandle<Product2> instance2 = Arc.container().instance(Product2.class);
         assertEquals(Long.valueOf(1), instance2.get().get(Long.valueOf(1)));
         assertEquals(Long.valueOf(1), instance2.get().getDefault(Long.valueOf(1)));
+
 
         InstanceHandle<FunctionChild> supInstance = Arc.container().instance(FunctionChild.class);
         assertEquals("hi stu", supInstance.get().apply("stu"));
@@ -70,7 +74,6 @@ public class ProducerClientProxyTest {
         Product2 produce2() {
             return new MyProduct2();
         };
-
         @Produces
         @ApplicationScoped
         FunctionChild produceSupplier() {
@@ -78,7 +81,7 @@ public class ProducerClientProxyTest {
 
             };
         }
-    }
+}
 
     static class MyProduct implements Product {
         @Override
@@ -97,8 +100,7 @@ public class ProducerClientProxyTest {
     interface Product {
 
         <T extends Number> T get(T number) throws IOException;
-
-        default <T extends Number> T getDefault(T number) throws IOException {
+        default <T extends Number> T getDefault(T number) throws IOException{
             return number;
         }
     }
@@ -109,8 +111,7 @@ public class ProducerClientProxyTest {
 
     interface Product2Interface {
         <T extends Number> T get(T number) throws IOException;
-
-        default <T extends Number> T getDefault(T number) throws IOException {
+        default <T extends Number> T getDefault(T number) throws IOException{
             return number;
         }
     }
