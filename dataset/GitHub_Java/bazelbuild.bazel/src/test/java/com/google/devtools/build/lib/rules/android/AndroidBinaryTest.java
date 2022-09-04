@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RequiredConfigFragmentsProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -1068,26 +1067,21 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testV1SigningMethod() throws Exception {
-    actualSignerToolTests("v1", "true", "false", null);
+    actualSignerToolTests("v1", "true", "false");
   }
 
   @Test
   public void testV2SigningMethod() throws Exception {
-    actualSignerToolTests("v2", "false", "true", null);
+    actualSignerToolTests("v2", "false", "true");
   }
 
   @Test
   public void testV1V2SigningMethod() throws Exception {
-    actualSignerToolTests("v1_v2", "true", "true", null);
+    actualSignerToolTests("v1_v2", "true", "true");
   }
 
-  @Test
-  public void testV4SigningMethod() throws Exception {
-    actualSignerToolTests("v4", "false", "false", "true");
-  }
-
-  private void actualSignerToolTests(
-      String apkSigningMethod, String signV1, String signV2, String signV4) throws Exception {
+  private void actualSignerToolTests(String apkSigningMethod, String signV1, String signV2)
+      throws Exception {
     scratch.file(
         "java/com/google/android/hello/BUILD",
         "android_binary(name = 'hello',",
@@ -1125,14 +1119,6 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     assertThat(flagValue("--v1-signing-enabled", args)).isEqualTo(signV1);
     assertThat(flagValue("--v2-signing-enabled", args)).isEqualTo(signV2);
-    if (signV4 != null) {
-      assertThat(flagValue("--v4-signing-enabled", args)).isEqualTo(signV4);
-      if (signV4.equals("true")) {
-        assertThat(getFirstArtifactEndingWith(artifacts, "hello.apk.idsig")).isNotNull();
-      }
-    } else {
-      assertThat(args).doesNotContain("--v4-signing-enabled");
-    }
   }
 
   @Test
@@ -4488,22 +4474,15 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    exports_manifest = 1,",
         "    resource_files = ['theme/res/values/values.xml'],",
         ")");
-    ConfiguredTarget application = getConfiguredTarget("//java/binary:application");
-    BuildConfiguration appConfiguration = getConfiguration(application);
-    Artifact androidCoreManifest =
-        getLibraryManifest(getConfiguredTarget("//java/android:core", appConfiguration));
+    Artifact androidCoreManifest = getLibraryManifest(getConfiguredTarget("//java/android:core"));
     Artifact androidUtilityManifest =
-        getLibraryManifest(getConfiguredTarget("//java/android:utility", appConfiguration));
+        getLibraryManifest(getConfiguredTarget("//java/android:utility"));
     Artifact binaryLibraryManifest =
-        getLibraryManifest(getConfiguredTarget("//java/binary:library", appConfiguration));
-    Artifact commonManifest =
-        getLibraryManifest(getConfiguredTarget("//java/common:common", appConfiguration));
-    Artifact commonThemeManifest =
-        getLibraryManifest(getConfiguredTarget("//java/common:theme", appConfiguration));
+        getLibraryManifest(getConfiguredTarget("//java/binary:library"));
+    Artifact commonManifest = getLibraryManifest(getConfiguredTarget("//java/common:common"));
+    Artifact commonThemeManifest = getLibraryManifest(getConfiguredTarget("//java/common:theme"));
 
-    assertThat(
-            getBinaryMergeeManifests(
-                getConfiguredTarget("//java/binary:application", appConfiguration)))
+    assertThat(getBinaryMergeeManifests(getConfiguredTarget("//java/binary:application")))
         .containsExactlyEntriesIn(
             ImmutableMap.of(
                 androidCoreManifest.getExecPath().toString(), "//java/android:core",
