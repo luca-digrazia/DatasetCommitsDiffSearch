@@ -32,7 +32,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
@@ -220,8 +219,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                                 classTransformers.apply(name, bytes));
                     }
                     Index current = indexer.complete();
-                    boolean ok = instrumentationEnabled()
-                            && !containsStartupCode(current);
+                    boolean ok = containsStartupCode(current);
                     if (ok) {
                         for (ClassInfo clazz : current.getKnownClasses()) {
                             ClassInfo old = lastStartIndex.getClassByName(clazz.name());
@@ -272,20 +270,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
         return false;
     }
 
-    private Boolean instrumentationEnabled() {
-        ClassLoader old = Thread.currentThread().getContextClassLoader();
-        try {
-            Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-            return ConfigProvider.getConfig()
-                    .getOptionalValue("quarkus.dev.instrumentation", boolean.class).orElse(true);
-        } finally {
-            Thread.currentThread().setContextClassLoader(old);
-        }
-    }
-
     private boolean containsStartupCode(Index index) {
         if (!index.getAnnotations(STARTUP_NAME).isEmpty()) {
-            return true;
+            return false;
         }
         List<AnnotationInstance> observesInstances = index.getAnnotations(OBSERVES_NAME);
         if (!observesInstances.isEmpty()) {
@@ -294,12 +281,12 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                     MethodParameterInfo methodParameterInfo = observesInstance.target().asMethodParameter();
                     short paramPos = methodParameterInfo.position();
                     if (STARTUP_EVENT_NAME.equals(methodParameterInfo.method().parameters().get(paramPos).name())) {
-                        return true;
+                        return false;
                     }
                 }
             }
         }
-        return false;
+        return true;
     }
 
     @Override
