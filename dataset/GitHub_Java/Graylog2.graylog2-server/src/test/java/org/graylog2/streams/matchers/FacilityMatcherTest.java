@@ -32,17 +32,17 @@ public class FacilityMatcherTest {
 
     @Test
     public void testSuccessfulMatch() {
-        String facility = "foobar";
+        int facility = 1;
 
         BasicDBObject mongoRule = new BasicDBObject();
         mongoRule.put("_id", new ObjectId());
         mongoRule.put("rule_type", StreamRule.TYPE_FACILITY);
-        mongoRule.put("value", facility);
+        mongoRule.put("value", String.valueOf(facility));
 
         StreamRule rule = new StreamRule(mongoRule);
 
         GELFMessage msg = new GELFMessage();
-        msg.setFacility(facility);
+        msg.setFacility(Tools.syslogFacilityToReadable(facility));
 
         FacilityMatcher matcher = new FacilityMatcher();
 
@@ -51,15 +51,17 @@ public class FacilityMatcherTest {
 
     @Test
     public void testMissedMatch() {
+        int facility = 1;
+
         BasicDBObject mongoRule = new BasicDBObject();
         mongoRule.put("_id", new ObjectId());
         mongoRule.put("rule_type", StreamRule.TYPE_FACILITY);
-        mongoRule.put("value", "foobar");
+        mongoRule.put("value", String.valueOf(facility));
 
         StreamRule rule = new StreamRule(mongoRule);
 
         GELFMessage msg = new GELFMessage();
-        msg.setFacility("barfoo");
+        msg.setFacility(Tools.syslogFacilityToReadable(facility+1));
 
         FacilityMatcher matcher = new FacilityMatcher();
 

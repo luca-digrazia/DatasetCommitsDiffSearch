@@ -21,6 +21,7 @@
 package org.graylog2.streams;
 
 import org.graylog2.streams.matchers.*;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 /**
  * StreamRuleMatcherFactory.java: Mar 27, 2011 4:49:32 PM
@@ -48,11 +49,10 @@ public class StreamRuleMatcherFactory {
             case StreamRule.TYPE_FACILITY:
                 matcher = new FacilityMatcher();
                 break;
+            case StreamRule.TYPE_TIMEFRAME:
+                throw new NotImplementedException();
             case StreamRule.TYPE_ADDITIONAL:
                 matcher = new AdditionalFieldMatcher();
-                break;
-            case StreamRule.TYPE_HOSTGROUP:
-                matcher = new HostgroupMatcher();
                 break;
             default:
                 throw new InvalidStreamRuleTypeException();
