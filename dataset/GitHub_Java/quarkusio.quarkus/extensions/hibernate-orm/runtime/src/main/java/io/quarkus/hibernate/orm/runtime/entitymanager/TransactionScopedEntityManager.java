@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.hibernate.orm.runtime.entitymanager;
 
 import java.util.List;
@@ -25,7 +41,6 @@ import javax.transaction.TransactionManager;
 import javax.transaction.TransactionSynchronizationRegistry;
 
 import io.quarkus.hibernate.orm.runtime.RequestScopedEntityManagerHolder;
-import io.quarkus.runtime.BlockingOperationControl;
 
 public class TransactionScopedEntityManager implements EntityManager {
 
@@ -79,13 +94,6 @@ public class TransactionScopedEntityManager implements EntityManager {
         }
     }
 
-    private void checkBlocking() {
-        if (!BlockingOperationControl.isBlockingAllowed()) {
-            throw new IllegalStateException(
-                    "You have attempted to perform a blocking operation on a IO thread. This is not allowed, as blocking the IO thread will cause major performance issues with your application. If you want to perform blocking EntityManager operations make sure you are doing it from a worker thread.");
-        }
-    }
-
     private boolean isInTransaction() {
         try {
             switch (transactionManager.getStatus()) {
@@ -105,7 +113,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void persist(Object entity) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -116,7 +123,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> T merge(T entity) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -127,7 +133,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void remove(Object entity) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -138,7 +143,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> T find(Class<T> entityClass, Object primaryKey) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.find(entityClass, primaryKey);
         }
@@ -146,7 +150,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> T find(Class<T> entityClass, Object primaryKey, Map<String, Object> properties) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.find(entityClass, primaryKey, properties);
         }
@@ -154,7 +157,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> T find(Class<T> entityClass, Object primaryKey, LockModeType lockMode) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.find(entityClass, primaryKey, lockMode);
         }
@@ -162,7 +164,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> T find(Class<T> entityClass, Object primaryKey, LockModeType lockMode, Map<String, Object> properties) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.find(entityClass, primaryKey, lockMode, properties);
         }
@@ -170,7 +171,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> T getReference(Class<T> entityClass, Object primaryKey) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.getReference(entityClass, primaryKey);
         }
@@ -178,7 +178,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void flush() {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -203,7 +202,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void lock(Object entity, LockModeType lockMode) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -214,7 +212,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void lock(Object entity, LockModeType lockMode, Map<String, Object> properties) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -225,7 +222,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void refresh(Object entity) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -236,7 +232,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void refresh(Object entity, Map<String, Object> properties) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -247,7 +242,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void refresh(Object entity, LockModeType lockMode) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -258,7 +252,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public void refresh(Object entity, LockModeType lockMode, Map<String, Object> properties) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
@@ -290,7 +283,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public LockModeType getLockMode(Object entity) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.getLockMode(entity);
         }
@@ -312,7 +304,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public Query createQuery(String qlString) {
-        checkBlocking();
         //TODO: this needs some thought for how it works outside a tx
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createQuery(qlString);
@@ -321,7 +312,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> TypedQuery<T> createQuery(CriteriaQuery<T> criteriaQuery) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createQuery(criteriaQuery);
         }
@@ -329,7 +319,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public Query createQuery(CriteriaUpdate updateQuery) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createQuery(updateQuery);
         }
@@ -337,7 +326,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public Query createQuery(CriteriaDelete deleteQuery) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createQuery(deleteQuery);
         }
@@ -345,7 +333,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> TypedQuery<T> createQuery(String qlString, Class<T> resultClass) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createQuery(qlString, resultClass);
         }
@@ -353,7 +340,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public Query createNamedQuery(String name) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createNamedQuery(name);
         }
@@ -361,7 +347,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> TypedQuery<T> createNamedQuery(String name, Class<T> resultClass) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createNamedQuery(name, resultClass);
         }
@@ -369,7 +354,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public Query createNativeQuery(String sqlString) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createNativeQuery(sqlString);
         }
@@ -377,7 +361,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public Query createNativeQuery(String sqlString, Class resultClass) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createNativeQuery(sqlString, resultClass);
         }
@@ -385,7 +368,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public Query createNativeQuery(String sqlString, String resultSetMapping) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createNativeQuery(sqlString, resultSetMapping);
         }
@@ -393,7 +375,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public StoredProcedureQuery createNamedStoredProcedureQuery(String name) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createNamedStoredProcedureQuery(name);
         }
@@ -401,7 +382,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public StoredProcedureQuery createStoredProcedureQuery(String procedureName) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createStoredProcedureQuery(procedureName);
         }
@@ -409,7 +389,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public StoredProcedureQuery createStoredProcedureQuery(String procedureName, Class... resultClasses) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createStoredProcedureQuery(procedureName, resultClasses);
         }
@@ -417,7 +396,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public StoredProcedureQuery createStoredProcedureQuery(String procedureName, String... resultSetMappings) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.createStoredProcedureQuery(procedureName, resultSetMappings);
         }
@@ -439,7 +417,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public <T> T unwrap(Class<T> cls) {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.unwrap(cls);
         }
@@ -476,7 +453,6 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     @Override
     public CriteriaBuilder getCriteriaBuilder() {
-        checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
             return emr.em.getCriteriaBuilder();
         }
