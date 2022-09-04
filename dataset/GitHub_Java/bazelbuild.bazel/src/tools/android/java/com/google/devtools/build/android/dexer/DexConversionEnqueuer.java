@@ -20,7 +20,6 @@ import static com.google.common.util.concurrent.Futures.immediateFuture;
 import com.google.common.cache.Cache;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.android.dexer.Dexing.DexingKey;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Enumeration;
@@ -29,9 +28,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-
 import javax.annotation.Nullable;
 
 /**
@@ -110,7 +109,7 @@ class DexConversionEnqueuer implements Callable<Void> {
   private Future<ZipEntryContent> toDex(ZipEntry entry, byte[] content) {
     byte[] cached = dexCache != null ? dexCache.getIfPresent(dexer.getDexingKey(content)) : null;
     return cached != null
-        ? immediateFuture(newDexEntry(entry, cached))
+        ? immediateFuture(storedDexEntry(entry, cached))
         : executor.submit(new ClassToDex(entry, content, dexer, dexCache));
   }
 
@@ -128,13 +127,25 @@ class DexConversionEnqueuer implements Callable<Void> {
     return files;
   }
 
-  private static ZipEntryContent newDexEntry(ZipEntry classfile, byte[] dexed) {
-    return new ZipEntryContent(withFileName(classfile, classfile.getName() + ".dex"), dexed);
+  private static ZipEntryContent storedDexEntry(ZipEntry classfile, byte[] dexed) {
+    return new ZipEntryContent(
+        storedEntry(classfile.getName() + ".dex", classfile.getTime(), dexed),
+        dexed);
   }
 
-  private static ZipEntry withFileName(ZipEntry orig, String filename) {
+  private static ZipEntry storedEntry(String filename, long time, byte[] content) {
+    // Need to pre-compute checksum for STORED (uncompressed) entries)
+    CRC32 checksum = new CRC32();
+    checksum.update(content);
+
     ZipEntry result = new ZipEntry(filename);
-    result.setTime(orig.getTime());
+    result.setTime(time);
+    result.setCrc(checksum.getValue());
+    result.setSize(content.length);
+    result.setCompressedSize(content.length);
+    // Write uncompressed, since this is just an intermediary artifact that
+    // we will convert to .dex
+    result.setMethod(ZipEntry.STORED);
     return result;
   }
 
@@ -164,7 +175,7 @@ class DexConversionEnqueuer implements Callable<Void> {
         dexCache.put(dexer.getDexingKey(content), dexed);
       }
       // Use .class.dex suffix expected by SplitZip
-      return newDexEntry(entry, dexed);
+      return storedDexEntry(entry, dexed);
     }
   }
 }
