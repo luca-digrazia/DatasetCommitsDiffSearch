@@ -396,6 +396,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.legacyWholeArchive;
   }
 
+  public boolean getSymbolCounts() {
+    return cppOptions.symbolCounts;
+  }
+
   public boolean getInmemoryDotdFiles() {
     return cppOptions.inmemoryDotdFiles;
   }
@@ -544,10 +548,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.disableLegacyCrosstoolFields;
   }
 
-  public boolean disableExpandIfAllAvailableInFlagSet() {
-    return cppOptions.disableExpandIfAllAvailableInFlagSet;
-  }
-
   public static String getLegacyCrosstoolFieldErrorMessage(String field) {
     Preconditions.checkNotNull(field);
     return field
@@ -568,10 +568,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.disableDepsetInUserFlags;
   }
 
-  public boolean removeCpuCompilerCcToolchainAttributes() {
-    return cppOptions.removeCpuCompilerCcToolchainAttributes;
-  }
-
   public static PathFragment computeDefaultSysroot(String builtInSysroot) {
     if (builtInSysroot.isEmpty()) {
       return null;
@@ -581,6 +577,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
           "The built-in sysroot '" + builtInSysroot + "' is not normalized.");
     }
     return PathFragment.create(builtInSysroot);
+  }
+
+  boolean enableCcToolchainConfigInfoFromSkylark() {
+    return cppOptions.enableCcToolchainConfigInfoFromSkylark;
   }
 
   boolean disableRuntimesFilegroups() {
@@ -596,13 +596,5 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean disableGenruleCcToolchainDependency() {
     return cppOptions.disableGenruleCcToolchainDependency;
-  }
-
-  public boolean enableLegacyCcProvider() {
-    return !cppOptions.disableLegacyCcProvider;
-  }
-
-  public boolean disableCrosstool() {
-    return cppOptions.disableCrosstool;
   }
 }

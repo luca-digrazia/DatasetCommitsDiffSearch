@@ -105,6 +105,7 @@ public final class CppToolchainInfo {
   private final boolean supportsEmbeddedRuntimes;
   private final boolean supportsDynamicLinker;
   private final boolean supportsInterfaceSharedLibraries;
+  private final boolean supportsGoldLinker;
   private final boolean toolchainNeedsPic;
 
   /**
@@ -254,6 +255,7 @@ public final class CppToolchainInfo {
           disableLegacyCrosstoolFields
               ? false
               : ccToolchainConfigInfo.supportsInterfaceSharedLibraries(),
+          disableLegacyCrosstoolFields ? false : ccToolchainConfigInfo.supportsGoldLinker(),
           disableLegacyCrosstoolFields ? false : ccToolchainConfigInfo.needsPic());
     } catch (LabelSyntaxException e) {
       // All of the above label.getRelativeWithRemapping() calls are valid labels, and the
@@ -301,6 +303,7 @@ public final class CppToolchainInfo {
       boolean supportsEmbeddedRuntimes,
       boolean supportsDynamicLinker,
       boolean supportsInterfaceSharedLibraries,
+      boolean supportsGoldLinker,
       boolean toolchainNeedsPic)
       throws EvalException {
     this.toolchainIdentifier = toolchainIdentifier;
@@ -341,6 +344,7 @@ public final class CppToolchainInfo {
     this.supportsEmbeddedRuntimes = supportsEmbeddedRuntimes;
     this.supportsDynamicLinker = supportsDynamicLinker;
     this.supportsInterfaceSharedLibraries = supportsInterfaceSharedLibraries;
+    this.supportsGoldLinker = supportsGoldLinker;
     this.toolchainNeedsPic = toolchainNeedsPic;
   }
 
@@ -367,8 +371,7 @@ public final class CppToolchainInfo {
     }
 
     for (ArtifactCategory category : ArtifactCategory.values()) {
-      if (!definedCategories.contains(category)
-          && category.getDefaultPrefix() != null
+      if (!definedCategories.contains(category) && category.getDefaultPrefix() != null
           && category.getDefaultExtension() != null) {
         toolchainBuilder.addArtifactNamePattern(
             ArtifactNamePattern.newBuilder()
@@ -380,61 +383,51 @@ public final class CppToolchainInfo {
     }
 
     ImmutableSet<String> featureNames =
-        toolchain.getFeatureList().stream()
+        toolchain
+            .getFeatureList()
+            .stream()
             .map(feature -> feature.getName())
             .collect(ImmutableSet.toImmutableSet());
     if (!featureNames.contains(CppRuleClasses.NO_LEGACY_FEATURES)) {
-      String gccToolPath = "DUMMY_GCC_TOOL";
-      String linkerToolPath = "DUMMY_LINKER_TOOL";
-      String arToolPath = "DUMMY_AR_TOOL";
-      String stripToolPath = "DUMMY_STRIP_TOOL";
-      for (ToolPath tool : toolchain.getToolPathList()) {
-        if (tool.getName().equals(CppConfiguration.Tool.GCC.getNamePart())) {
-          gccToolPath = tool.getPath();
-          linkerToolPath =
-              crosstoolTopPathFragment
-                  .getRelative(PathFragment.create(tool.getPath()))
-                  .getPathString();
+        String gccToolPath = "DUMMY_GCC_TOOL";
+        String linkerToolPath = "DUMMY_LINKER_TOOL";
+        String arToolPath = "DUMMY_AR_TOOL";
+        String stripToolPath = "DUMMY_STRIP_TOOL";
+        for (ToolPath tool : toolchain.getToolPathList()) {
+          if (tool.getName().equals(CppConfiguration.Tool.GCC.getNamePart())) {
+            gccToolPath = tool.getPath();
+            linkerToolPath =
+                crosstoolTopPathFragment
+                    .getRelative(PathFragment.create(tool.getPath()))
+                    .getPathString();
+          }
+          if (tool.getName().equals(CppConfiguration.Tool.AR.getNamePart())) {
+            arToolPath = tool.getPath();
+          }
+          if (tool.getName().equals(CppConfiguration.Tool.STRIP.getNamePart())) {
+            stripToolPath = tool.getPath();
+          }
         }
-        if (tool.getName().equals(CppConfiguration.Tool.AR.getNamePart())) {
-          arToolPath = tool.getPath();
-        }
-        if (tool.getName().equals(CppConfiguration.Tool.STRIP.getNamePart())) {
-          stripToolPath = tool.getPath();
-        }
-      }
 
-      // TODO(b/30109612): Remove fragile legacyCompileFlags shuffle once there are no legacy
-      // crosstools.
-      // Existing projects depend on flags from legacy toolchain fields appearing first on the
-      // compile command line. 'legacy_compile_flags' feature contains all these flags, and so it
-      // needs to appear before other features from {@link CppActionConfigs}.
-      if (featureNames.contains(CppRuleClasses.LEGACY_COMPILE_FLAGS)) {
-        CToolchain.Feature legacyCompileFlags =
-            toolchain.getFeatureList().stream()
+        // TODO(b/30109612): Remove fragile legacyCompileFlags shuffle once there are no legacy
+        // crosstools.
+        // Existing projects depend on flags from legacy toolchain fields appearing first on the
+        // compile command line. 'legacy_compile_flags' feature contains all these flags, and so it
+        // needs to appear before other features from {@link CppActionConfigs}.
+        CToolchain.Feature legacyCompileFlagsFeature =
+            toolchain
+                .getFeatureList()
+                .stream()
                 .filter(feature -> feature.getName().equals(CppRuleClasses.LEGACY_COMPILE_FLAGS))
                 .findFirst()
-                .get();
-        if (legacyCompileFlags != null) {
-          toolchainBuilder.addFeature(legacyCompileFlags);
+                .orElse(null);
+        if (legacyCompileFlagsFeature != null) {
+          toolchainBuilder.addFeature(legacyCompileFlagsFeature);
+          toolchain = removeLegacyCompileFlagsFeatureFromToolchain(toolchain);
         }
-      }
-      if (featureNames.contains(CppRuleClasses.DEFAULT_COMPILE_FLAGS)) {
-        CToolchain.Feature defaultCompileFlags =
-            toolchain.getFeatureList().stream()
-                .filter(feature -> feature.getName().equals(CppRuleClasses.DEFAULT_COMPILE_FLAGS))
-                .findFirst()
-                .get();
-        if (defaultCompileFlags != null) {
-          toolchainBuilder.addFeature(defaultCompileFlags);
-        }
-      }
-      toolchain = removeSpecialFeatureFromToolchain(toolchain);
 
       CppPlatform platform =
-          toolchain.getTargetLibc().equals(CppActionConfigs.MACOS_TARGET_LIBC)
-              ? CppPlatform.MAC
-              : CppPlatform.LINUX;
+          toolchain.getTargetLibc().equals("macosx") ? CppPlatform.MAC : CppPlatform.LINUX;
 
       toolchainBuilder.addAllActionConfig(
           CppActionConfigs.getLegacyActionConfigs(
@@ -463,15 +456,16 @@ public final class CppToolchainInfo {
     return toolchainBuilder.build();
   }
 
-  private static CToolchain removeSpecialFeatureFromToolchain(CToolchain toolchain) {
+  private static CToolchain removeLegacyCompileFlagsFeatureFromToolchain(CToolchain toolchain) {
     FieldDescriptor featuresFieldDescriptor = CToolchain.getDescriptor().findFieldByName("feature");
     return toolchain
         .toBuilder()
         .setField(
             featuresFieldDescriptor,
-            toolchain.getFeatureList().stream()
+            toolchain
+                .getFeatureList()
+                .stream()
                 .filter(feature -> !feature.getName().equals(CppRuleClasses.LEGACY_COMPILE_FLAGS))
-                .filter(feature -> !feature.getName().equals(CppRuleClasses.DEFAULT_COMPILE_FLAGS))
                 .collect(ImmutableList.toImmutableList()))
         .build();
   }
@@ -590,6 +584,11 @@ public final class CppToolchainInfo {
    */
   public CcToolchainFeatures getFeatures() {
     return toolchainFeatures;
+  }
+
+  /** Returns whether the toolchain supports the gold linker. */
+  public boolean supportsGoldLinker() {
+    return supportsGoldLinker;
   }
 
   /** Returns whether the toolchain supports the --start-lib/--end-lib options. */

@@ -49,15 +49,12 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
         "test/rule.bzl",
         "def _impl(ctx):",
         "  provider = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo]",
-        "  feature_configuration = cc_common.configure_features(cc_toolchain = provider)",
         "  return struct(",
         "    dirs = provider.built_in_include_directories,",
         "    sysroot = provider.sysroot,",
         "    cpu = provider.cpu,",
         "    ar_executable = provider.ar_executable,",
-        "    use_pic_for_dynamic_libraries = provider.needs_pic_for_dynamic_libraries(",
-        "      feature_configuration = feature_configuration,",
-        "    ),",
+        "    use_pic_for_dynamic_libraries = provider.use_pic_for_dynamic_libraries,",
         "  )",
         "",
         "my_rule = rule(",
@@ -81,115 +78,6 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
     @SuppressWarnings("unchecked")
     boolean usePicForDynamicLibraries = (boolean) ct.get("use_pic_for_dynamic_libraries");
     assertThat(usePicForDynamicLibraries).isTrue();
-  }
-
-  @Test
-  public void testRemoveCpuAndCompiler() throws Exception {
-    scratch.file(
-        "a/BUILD",
-        "filegroup(name = 'empty')",
-        "cc_toolchain_suite(",
-        "    name = 'a_suite',",
-        "    toolchains = { 'k8': ':a' },",
-        ")",
-        "cc_toolchain_suite(",
-        "    name = 'b_suite',",
-        "    toolchains = { 'k9': ':b', },",
-        ")",
-        "cc_toolchain_suite(",
-        "    name = 'c_suite',",
-        "    toolchains = { 'k10': ':c', },",
-        ")",
-        "cc_toolchain(",
-        "    name = 'a',",
-        "    cpu = 'banana',",
-        "    all_files = ':empty',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
-        "    compiler_files = ':empty',",
-        "    dwp_files = ':empty',",
-        "    linker_files = ':empty',",
-        "    strip_files = ':empty',",
-        "    objcopy_files = ':empty',",
-        "    proto = \"\"\"",
-        "      toolchain_identifier: \"a\"",
-        "      host_system_name: \"a\"",
-        "      target_system_name: \"a\"",
-        "      target_cpu: \"a\"",
-        "      target_libc: \"a\"",
-        "      compiler: \"a\"",
-        "      abi_version: \"a\"",
-        "      abi_libc_version: \"a\"",
-        "\"\"\")",
-        "cc_toolchain(",
-        "    name = 'b',",
-        "    compiler = 'banana',",
-        "    all_files = ':empty',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
-        "    compiler_files = ':empty',",
-        "    dwp_files = ':empty',",
-        "    linker_files = ':empty',",
-        "    strip_files = ':empty',",
-        "    objcopy_files = ':empty',",
-        "    proto = \"\"\"",
-        "      toolchain_identifier: \"a\"",
-        "      host_system_name: \"a\"",
-        "      target_system_name: \"a\"",
-        "      target_cpu: \"a\"",
-        "      target_libc: \"a\"",
-        "      compiler: \"a\"",
-        "      abi_version: \"a\"",
-        "      abi_libc_version: \"a\"",
-        "\"\"\")",
-        "cc_toolchain(",
-        "    name = 'c',",
-        "    all_files = ':empty',",
-        "    ar_files = ':empty',",
-        "    as_files = ':empty',",
-        "    compiler_files = ':empty',",
-        "    dwp_files = ':empty',",
-        "    linker_files = ':empty',",
-        "    strip_files = ':empty',",
-        "    objcopy_files = ':empty',",
-        "    proto = \"\"\"",
-        "      toolchain_identifier: \"a\"",
-        "      host_system_name: \"a\"",
-        "      target_system_name: \"a\"",
-        "      target_cpu: \"a\"",
-        "      target_libc: \"a\"",
-        "      compiler: \"a\"",
-        "      abi_version: \"a\"",
-        "      abi_libc_version: \"a\"",
-        "\"\"\")");
-    reporter.removeHandler(failFastHandler);
-    useConfiguration(
-        "--crosstool_top=//a:a_suite",
-        "--cpu=k8",
-        "--host_cpu=k8",
-        "--incompatible_remove_cpu_and_compiler_attributes_from_cc_toolchain");
-    assertThat(getConfiguredTarget("//a:a_suite")).isNull();
-    assertContainsEvent(
-        "attributes 'cpu' and 'compiler' have been deprecated, please remove them.");
-    eventCollector.clear();
-
-    useConfiguration(
-        "--crosstool_top=//a:b_suite",
-        "--cpu=k9",
-        "--host_cpu=k9",
-        "--incompatible_remove_cpu_and_compiler_attributes_from_cc_toolchain");
-    assertThat(getConfiguredTarget("//a:b_suite")).isNull();
-    assertContainsEvent(
-        "attributes 'cpu' and 'compiler' have been deprecated, please remove them.");
-    eventCollector.clear();
-
-    useConfiguration(
-        "--crosstool_top=//a:c_suite",
-        "--cpu=k10",
-        "--host_cpu=k10",
-        "--incompatible_remove_cpu_and_compiler_attributes_from_cc_toolchain");
-    getConfiguredTarget("//a:c_suite");
-    assertNoEvents();
   }
 
   @Test
@@ -265,32 +153,6 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
     assertContainsEvent(
         "compiler_flag is disabled by --incompatible_disable_legacy_crosstool_fields, please "
             + "migrate your CROSSTOOL");
-  }
-
-  @Test
-  public void testDisablingExpandIfAllAvailable() throws Exception {
-    reporter.removeHandler(failFastHandler);
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            "feature { ",
-            "  name: 'foo'",
-            "  flag_set { expand_if_all_available: 'bar' }",
-            "}");
-
-    scratch.file("a/BUILD", "cc_library(name='a', srcs=['a.cc'])");
-
-    useConfiguration("--noincompatible_disable_expand_if_all_available_in_flag_set");
-    getConfiguredTarget("//a");
-    assertNoEvents();
-
-    useConfiguration("--incompatible_disable_expand_if_all_available_in_flag_set");
-    getConfiguredTarget("//a");
-
-    assertContainsEvent(
-        "defines a flag_set with expand_if_all_available set. This is disabled by "
-            + "--incompatible_disable_expand_if_all_available_in_flag_set");
   }
 
   /*

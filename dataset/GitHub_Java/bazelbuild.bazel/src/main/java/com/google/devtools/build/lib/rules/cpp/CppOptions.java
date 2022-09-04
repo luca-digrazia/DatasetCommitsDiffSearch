@@ -597,6 +597,17 @@ public class CppOptions extends FragmentOptions {
   public Label hostLibcTopLabel;
 
   @Option(
+    name = "output_symbol_counts",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
+    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+    help =
+        "If enabled, for every C++ binary linked with gold, the number of defined symbols "
+            + "and the number of used symbols per input file is stored in a .sc file."
+  )
+  public boolean symbolCounts;
+
+  @Option(
     name = "experimental_inmemory_dotd_files",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
@@ -689,35 +700,6 @@ public class CppOptions extends FragmentOptions {
   public boolean disableLegacyCrosstoolFields;
 
   @Option(
-      name = "incompatible_remove_cpu_and_compiler_attributes_from_cc_toolchain",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If true, Bazel will complain when cc_toolchain.cpu and cc_toolchain.compiler attribtues "
-              + "are set "
-              + "(see https://github.com/bazelbuild/bazel/issues/7075 for migration instructions).")
-  public boolean removeCpuCompilerCcToolchainAttributes;
-
-  @Option(
-      name = "incompatible_disable_expand_if_all_available_in_flag_set",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If true, Bazel will not allow specifying expand_if_all_available in flag_sets"
-              + "(see https://github.com/bazelbuild/bazel/issues/7008 for migration instructions).")
-  public boolean disableExpandIfAllAvailableInFlagSet;
-
-  @Option(
       name = "incompatible_linkopts_in_user_link_flags",
       oldName = "experimental_linkopts_in_user_link_flags",
       defaultValue = "false",
@@ -735,7 +717,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
       name = "incompatible_dont_emit_static_libgcc",
       oldName = "experimental_dont_emit_static_libgcc",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {
@@ -822,19 +804,6 @@ public class CppOptions extends FragmentOptions {
               + "the new cc_flags_supplier rule.")
   public boolean disableGenruleCcToolchainDependency;
 
-  @Option(
-      name = "incompatible_disable_legacy_cc_provider",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If true, the legacy provider accessible by 'dep.cc.' is removed. See #7036.")
-  // TODO(b/122328491): Document migration steps. See #7036.
-  public boolean disableLegacyCcProvider;
-
   @Override
   public FragmentOptions getHost() {
     CppOptions host = (CppOptions) getDefault();
@@ -878,12 +847,6 @@ public class CppOptions extends FragmentOptions {
     host.doNotUseCpuTransformer = doNotUseCpuTransformer;
     host.enableCcToolchainConfigInfoFromSkylark = enableCcToolchainConfigInfoFromSkylark;
     host.disableGenruleCcToolchainDependency = disableGenruleCcToolchainDependency;
-    host.disableEmittingStaticLibgcc = disableEmittingStaticLibgcc;
-    host.disableDepsetInUserFlags = disableDepsetInUserFlags;
-    host.disableRuntimesFilegroups = disableRuntimesFilegroups;
-    host.disableExpandIfAllAvailableInFlagSet = disableExpandIfAllAvailableInFlagSet;
-    host.disableLegacyCcProvider = disableLegacyCcProvider;
-    host.removeCpuCompilerCcToolchainAttributes = removeCpuCompilerCcToolchainAttributes;
 
     return host;
   }

@@ -206,15 +206,15 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         getSharedArtifact("_solib_" + cpu + "/libhello_Slibhello.ifso", hello);
     assertThat(getFilesToBuild(hello)).containsExactly(archive, implSharedObject,
         implInterfaceSharedObject);
-    assertThat(
-            LibraryToLinkWrapper.getDynamicLibrariesForLinking(
-                hello.getProvider(CcNativeLibraryProvider.class).getTransitiveCcNativeLibraries()))
+    assertThat(LinkerInputs.toLibraryArtifacts(
+        hello.getProvider(CcNativeLibraryProvider.class).getTransitiveCcNativeLibraries()))
         .containsExactly(implInterfaceSharedObjectLink);
     assertThat(
             hello
                 .get(CcInfo.PROVIDER)
-                .getCcLinkingContext()
-                .getDynamicLibrariesForRuntime(/* linkingStatically= */ false))
+                .getCcLinkingInfo()
+                .getDynamicModeParamsForExecutable()
+                .getDynamicLibrariesForRuntime())
         .containsExactly(implSharedObjectLink);
   }
 
@@ -272,22 +272,28 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Artifact implSharedObjectLink =
         getSharedArtifact("_solib_" + cpu + "/libhello_Slibhello.so", hello);
     assertThat(getFilesToBuild(hello)).containsExactly(archive, sharedObject, implSharedObject);
-    assertThat(
-            LibraryToLinkWrapper.getDynamicLibrariesForLinking(
-                hello.getProvider(CcNativeLibraryProvider.class).getTransitiveCcNativeLibraries()))
+    assertThat(LinkerInputs.toLibraryArtifacts(
+        hello.getProvider(CcNativeLibraryProvider.class).getTransitiveCcNativeLibraries()))
         .containsExactly(sharedObjectLink);
     assertThat(
             hello
                 .get(CcInfo.PROVIDER)
-                .getCcLinkingContext()
-                .getDynamicLibrariesForRuntime(/* linkingStatically= */ false))
+                .getCcLinkingInfo()
+                .getDynamicModeParamsForExecutable()
+                .getDynamicLibrariesForRuntime())
         .containsExactly(implSharedObjectLink);
   }
 
   @Test
   public void testEmptyLinkopts() throws Exception {
     ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
-    assertThat(hello.get(CcInfo.PROVIDER).getCcLinkingContext().getUserLinkFlags().isEmpty())
+    assertThat(
+            hello
+                .get(CcInfo.PROVIDER)
+                .getCcLinkingInfo()
+                .getDynamicModeParamsForExecutable()
+                .getLinkopts()
+                .isEmpty())
         .isTrue();
   }
 
@@ -1378,15 +1384,14 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget target =
         scratchConfiguredTarget("a", "foo", "cc_library(name = 'foo', srcs = ['foo.cc'])");
 
-    LibraryToLinkWrapper library =
-        Iterables.getOnlyElement(target.get(CcInfo.PROVIDER).getCcLinkingContext().getLibraries());
-    Artifact libraryToUse = library.getPicStaticLibrary();
-    if (libraryToUse == null) {
-      // We may get either a static library or pic static library depending on platform.
-      libraryToUse = library.getStaticLibrary();
-    }
-    assertThat(libraryToUse).isNotNull();
-    assertThat(artifactsToStrings(ImmutableList.of(libraryToUse))).contains("bin a/libfoo.a");
+    Iterable<Artifact> libraries =
+        LinkerInputs.toNonSolibArtifacts(
+            target
+                .get(CcInfo.PROVIDER)
+                .getCcLinkingInfo()
+                .getStaticModeParamsForDynamicLibrary()
+                .getLibraries());
+    assertThat(artifactsToStrings(libraries)).contains("bin a/libfoo.a");
   }
 
   @Test
@@ -1395,21 +1400,32 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget target =
         scratchConfiguredTarget("a", "foo", "cc_library(name = 'foo', srcs = ['libfoo.so'])");
 
-    LibraryToLinkWrapper library =
-        Iterables.getOnlyElement(target.get(CcInfo.PROVIDER).getCcLinkingContext().getLibraries());
-    assertThat(library.getStaticLibrary()).isNull();
-    assertThat(artifactsToStrings(ImmutableList.of(library.getResolvedSymlinkDynamicLibrary())))
-        .contains("src a/libfoo.so");
+    Iterable<Artifact> libraries =
+        LinkerInputs.toNonSolibArtifacts(
+            target
+                .get(CcInfo.PROVIDER)
+                .getCcLinkingInfo()
+                .getStaticModeParamsForDynamicLibrary()
+                .getLibraries());
+    assertThat(artifactsToStrings(libraries)).doesNotContain("bin a/libfoo.a");
+    assertThat(artifactsToStrings(libraries)).contains("src a/libfoo.so");
   }
 
   @Test
-  public void onlyAddOneWrappedLibraryWithSameLibraryIdentifierToLibraries() throws Exception {
+  public void onlyAddOneWrappedLibraryWithSameLibraryIdentifierToLinkParams() throws Exception {
     ConfiguredTarget target =
         scratchConfiguredTarget(
             "a", "foo", "cc_library(name = 'foo', srcs = ['libfoo.lo', 'libfoo.so'])");
 
-    assertThat(target.get(CcInfo.PROVIDER).getCcLinkingContext().getLibraries().toList())
-        .hasSize(1);
+    Iterable<Artifact> libraries =
+        LinkerInputs.toNonSolibArtifacts(
+            target
+                .get(CcInfo.PROVIDER)
+                .getCcLinkingInfo()
+                .getStaticModeParamsForDynamicLibrary()
+                .getLibraries());
+    assertThat(artifactsToStrings(libraries)).doesNotContain("src a/libfoo.so");
+    assertThat(artifactsToStrings(libraries)).contains("src a/libfoo.lo");
   }
 
   @Test
@@ -1424,8 +1440,9 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         target
             .get(CcInfo.PROVIDER)
-            .getCcLinkingContext()
-            .getDynamicLibrariesForRuntime(/* linkingStatically= */ false);
+            .getCcLinkingInfo()
+            .getDynamicModeParamsForDynamicLibrary()
+            .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin a/libfoo.ifso");
     assertThat(artifactsToStrings(libraries)).contains("bin a/libfoo.so");
   }
@@ -1438,8 +1455,9 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         target
             .get(CcInfo.PROVIDER)
-            .getCcLinkingContext()
-            .getDynamicLibrariesForRuntime(/* linkingStatically= */ false);
+            .getCcLinkingInfo()
+            .getDynamicModeParamsForDynamicLibrary()
+            .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin _solib_k8/liba_Slibfoo.ifso");
     assertThat(artifactsToStrings(libraries)).contains("bin _solib_k8/liba_Slibfoo.so");
   }
@@ -1453,8 +1471,9 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         target
             .get(CcInfo.PROVIDER)
-            .getCcLinkingContext()
-            .getDynamicLibrariesForRuntime(/* linkingStatically= */ false);
+            .getCcLinkingInfo()
+            .getDynamicModeParamsForDynamicLibrary()
+            .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).isEmpty();
   }
 
@@ -1464,9 +1483,10 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     checkError(
         "a",
         "foo",
-        "in cc_library rule //a:foo: Can't put library with "
-            + "identifier 'a/libfoo' into the srcs of a cc_library with the same name (foo) which "
-            + "also contains other code or objects to link",
+        "in cc_library rule //a:foo: Can't put libfoo.lo into the srcs of a cc_library with the "
+            + "same name (foo) which also contains other code or objects to link; it shares a name "
+            + "with libfoo.a, libfoo.ifso, libfoo.so (output compiled and linked from the "
+            + "non-library sources of this rule), which could cause confusion",
         "cc_library(name = 'foo', srcs = ['foo.cc', 'libfoo.lo'])");
   }
 

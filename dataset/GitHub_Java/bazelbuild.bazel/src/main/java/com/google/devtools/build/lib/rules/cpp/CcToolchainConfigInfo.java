@@ -64,6 +64,7 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
   private final String compiler;
   private final String abiVersion;
   private final String abiLibcVersion;
+  private final boolean supportsGoldLinker;
   private final boolean supportsStartEndLib;
   private final boolean supportsInterfaceSharedLibraries;
   private final boolean supportsEmbeddedRuntimes;
@@ -108,6 +109,7 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
       String compiler,
       String abiVersion,
       String abiLibcVersion,
+      boolean supportsGoldLinker,
       boolean supportsStartEndLib,
       boolean supportsInterfaceSharedLibraries,
       boolean supportsEmbeddedRuntimes,
@@ -150,6 +152,7 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
     this.compiler = compiler;
     this.abiVersion = abiVersion;
     this.abiLibcVersion = abiLibcVersion;
+    this.supportsGoldLinker = supportsGoldLinker;
     this.supportsStartEndLib = supportsStartEndLib;
     this.supportsInterfaceSharedLibraries = supportsInterfaceSharedLibraries;
     this.supportsEmbeddedRuntimes = supportsEmbeddedRuntimes;
@@ -183,10 +186,8 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
 
   public static CcToolchainConfigInfo fromToolchain(RuleContext ruleContext, CToolchain toolchain)
       throws EvalException {
-    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    boolean disableLegacyCrosstoolFields = cppConfiguration.disableLegacyCrosstoolFields();
-    boolean disableExpandIfAllAvailableInFlagSet =
-        cppConfiguration.disableExpandIfAllAvailableInFlagSet();
+    boolean disableLegacyCrosstoolFields =
+        ruleContext.getFragment(CppConfiguration.class).disableLegacyCrosstoolFields();
     ImmutableList.Builder<ActionConfig> actionConfigBuilder = ImmutableList.builder();
     for (CToolchain.ActionConfig actionConfig : toolchain.getActionConfigList()) {
       actionConfigBuilder.add(new ActionConfig(actionConfig));
@@ -315,26 +316,6 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
       }
     }
 
-    if (disableExpandIfAllAvailableInFlagSet) {
-      toolchain
-          .getFeatureList()
-          .forEach(
-              (f) -> {
-                if (f.getFlagSetList().stream()
-                    .anyMatch((s) -> s.getExpandIfAllAvailableCount() != 0)) {
-                  ruleContext.ruleError(
-                      String.format(
-                          "Feature '%s' defines a flag_set with expand_if_all_available set. "
-                              + "This is disabled by "
-                              + "--incompatible_disable_expand_if_all_available_in_flag_set, "
-                              + "please migrate your CROSSTOOL (see "
-                              + "https://github.com/bazelbuild/bazel/issues/7008 "
-                              + "for migration instructions).",
-                          f.getName()));
-                }
-              });
-    }
-
     for (CompilationModeFlags flag : toolchain.getCompilationModeFlagsList()) {
       switch (flag.getMode()) {
         case OPT:
@@ -410,6 +391,7 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
         toolchain.getCompiler(),
         toolchain.getAbiVersion(),
         toolchain.getAbiLibcVersion(),
+        toolchain.getSupportsGoldLinker(),
         toolchain.getSupportsStartEndLib(),
         toolchain.getSupportsInterfaceSharedObjects(),
         toolchain.getSupportsEmbeddedRuntimes(),
@@ -507,6 +489,12 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
   @Deprecated
   public String getAbiLibcVersion() {
     return abiLibcVersion;
+  }
+
+  // TODO(b/65151735): Remove once this field is migrated to features.
+  @Deprecated
+  public boolean supportsGoldLinker() {
+    return supportsGoldLinker;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
@@ -806,7 +794,7 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
         .setEnabled(feature.isEnabled())
         .addAllFlagSet(
             feature.getFlagSets().stream()
-                .map(flagSet -> flagSetToProto(flagSet, /* forActionConfig= */ false))
+                .map(flagSet -> flagSetToProto(flagSet))
                 .collect(ImmutableList.toImmutableList()))
         .addAllEnvSet(
             feature.getEnvSets().stream()
@@ -821,22 +809,19 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
         .build();
   }
 
-  private static CToolchain.FlagSet flagSetToProto(FlagSet flagSet, boolean forActionConfig) {
-    CToolchain.FlagSet.Builder flagSetBuilder =
-        CToolchain.FlagSet.newBuilder()
-            .addAllFlagGroup(
-                flagSet.getFlagGroups().stream()
-                    .map(flagGroup -> flagGroupToProto(flagGroup))
-                    .collect(ImmutableList.toImmutableList()))
-            .addAllWithFeature(
-                flagSet.getWithFeatureSets().stream()
-                    .map(withFeatureSet -> withFeatureSetToProto(withFeatureSet))
-                    .collect(ImmutableList.toImmutableList()))
-            .addAllExpandIfAllAvailable(flagSet.getExpandIfAllAvailable());
-    if (!forActionConfig) {
-      flagSetBuilder.addAllAction(flagSet.getActions());
-    }
-    return flagSetBuilder.build();
+  private static CToolchain.FlagSet flagSetToProto(FlagSet flagSet) {
+    return CToolchain.FlagSet.newBuilder()
+        .addAllAction(flagSet.getActions())
+        .addAllFlagGroup(
+            flagSet.getFlagGroups().stream()
+                .map(flagGroup -> flagGroupToProto(flagGroup))
+                .collect(ImmutableList.toImmutableList()))
+        .addAllWithFeature(
+            flagSet.getWithFeatureSets().stream()
+                .map(withFeatureSet -> withFeatureSetToProto(withFeatureSet))
+                .collect(ImmutableList.toImmutableList()))
+        .addAllExpandIfAllAvailable(flagSet.getExpandIfAllAvailable())
+        .build();
   }
 
   private static CToolchain.FeatureSet featureSetToProto(ImmutableSet<String> features) {
@@ -865,7 +850,7 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
                 .collect(ImmutableList.toImmutableList()))
         .addAllFlagSet(
             actionConfig.getFlagSets().stream()
-                .map(flagSet -> flagSetToProto(flagSet, /* forActionConfig= */ true))
+                .map(flagSet -> flagSetToProto(flagSet))
                 .collect(ImmutableList.toImmutableList()))
         .addAllImplies(actionConfig.getImplies())
         .build();

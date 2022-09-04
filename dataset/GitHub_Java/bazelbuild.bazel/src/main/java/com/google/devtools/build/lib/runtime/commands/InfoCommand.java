@@ -34,6 +34,7 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -64,7 +65,6 @@ import java.util.TreeMap;
          inherits = { BuildCommand.class })
 public class InfoCommand implements BlazeCommand {
 
-  /** Options for the info command. */
   public static class Options extends OptionsBase {
     @Option(
       name = "show_make_env",
@@ -108,6 +108,9 @@ public class InfoCommand implements BlazeCommand {
   }
 
   @Override
+  public void editOptions(OptionsParser optionsParser) { }
+
+  @Override
   public BlazeCommandResult exec(
       final CommandEnvironment env, final OptionsParsingResult optionsParsingResult) {
     final BlazeRuntime runtime = env.getRuntime();
@@ -124,7 +127,8 @@ public class InfoCommand implements BlazeCommand {
                 // In order to be able to answer configuration-specific queries, we need to set up
                 // the package path. Since info inherits all the build options, all the necessary
                 // information is available here.
-                env.setupPackageCache(optionsParsingResult);
+                env.setupPackageCache(
+                    optionsParsingResult, runtime.getDefaultsPackageContent(optionsParsingResult));
                 // TODO(bazel-team): What if there are multiple configurations? [multi-config]
                 return env.getSkyframeExecutor()
                     .getConfiguration(
@@ -200,8 +204,8 @@ public class InfoCommand implements BlazeCommand {
     return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 
-  private static Map<String, InfoItem> getHardwiredInfoItemMap(
-      OptionsParsingResult commandOptions, String productName) {
+  static Map<String, InfoItem> getHardwiredInfoItemMap(OptionsParsingResult commandOptions,
+      String productName) {
     List<InfoItem> hardwiredInfoItems =
         ImmutableList.<InfoItem>of(
             new InfoItem.WorkspaceInfoItem(),
@@ -229,8 +233,7 @@ public class InfoCommand implements BlazeCommand {
             new InfoItem.CharacterEncodingInfoItem(),
             new InfoItem.DefaultsPackageInfoItem(),
             new InfoItem.BuildLanguageInfoItem(),
-            new InfoItem.DefaultPackagePathInfoItem(commandOptions),
-            new InfoItem.StarlarkSemanticsInfoItem(commandOptions));
+            new InfoItem.DefaultPackagePathInfoItem(commandOptions));
     ImmutableMap.Builder<String, InfoItem> result = new ImmutableMap.Builder<>();
     for (InfoItem item : hardwiredInfoItems) {
       result.put(item.getName(), item);

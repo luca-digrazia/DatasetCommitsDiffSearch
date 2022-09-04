@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.util.List;
@@ -150,6 +151,6 @@ public class CompileCommandLineTest extends BuildViewTestCase {
         scratchArtifact("a/FakeInput"),
         CoptsFilter.alwaysPasses(),
         "c++-compile",
-        scratchArtifact("a/dotD"));
+        new DotdFile(scratchArtifact("a/dotD")));
   }
 }
