@@ -821,6 +821,11 @@ public class RemoteSpawnRunnerTest {
     testParamFilesAreMaterializedForFlag("--subcommands");
   }
 
+  @Test
+  public void testMaterializeParamFilesIsImpliedByVerboseFailures() throws Exception {
+    testParamFilesAreMaterializedForFlag("--verbose_failures");
+  }
+
   private void testParamFilesAreMaterializedForFlag(String flag) throws Exception {
     ExecutionOptions executionOptions = Options.parse(ExecutionOptions.class, flag).getOptions();
     executionOptions.materializeParamFiles = true;
