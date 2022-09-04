@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.rules.test;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -112,7 +112,7 @@ public final class TestSuiteRule implements RuleDefinition {
   }
 }
 
-/*<!-- #BLAZE_RULE (NAME = test_suite, FAMILY = General)[GENERIC_RULE] -->
+/*<!-- #BLAZE_RULE (NAME = test_suite, TYPE = TEST, FAMILY = General)[GENERIC_RULE] -->
 
 <p>
 A <code>test_suite</code> defines a set of tests that are considered "useful" to humans. This
