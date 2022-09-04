@@ -10,9 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.logging.ErrorManager;
-import java.util.logging.Formatter;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 
@@ -31,7 +29,6 @@ import org.jboss.logmanager.handlers.PeriodicSizeRotatingFileHandler;
 import org.jboss.logmanager.handlers.SizeRotatingFileHandler;
 import org.jboss.logmanager.handlers.SyslogHandler;
 
-import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
 
 /**
@@ -65,9 +62,7 @@ public class LoggingSetupRecorder {
     public LoggingSetupRecorder() {
     }
 
-    public void initializeLogging(LogConfig config, final List<RuntimeValue<Optional<Handler>>> additionalHandlers,
-            final List<RuntimeValue<Optional<Formatter>>> possibleFormatters) {
-
+    public void initializeLogging(LogConfig config) {
         final Map<String, CategoryConfig> categories = config.categories;
         final LogContext logContext = LogContext.getLogContext();
         final Logger rootLogger = logContext.getLogger("");
@@ -86,9 +81,9 @@ public class LoggingSetupRecorder {
         for (Entry<String, CleanupFilterConfig> entry : filters.entrySet()) {
             filterElements.add(new LogCleanupFilterElement(entry.getKey(), entry.getValue().ifStartsWith));
         }
-        ArrayList<Handler> handlers = new ArrayList<>(3 + additionalHandlers.size());
+        ArrayList<Handler> handlers = new ArrayList<>(3);
         if (config.console.enable) {
-            errorManager = configureConsoleHandler(config.console, errorManager, filterElements, handlers, possibleFormatters);
+            errorManager = configureConsoleHandler(config.console, errorManager, filterElements, handlers);
         }
 
         if (config.file.enable) {
@@ -97,16 +92,6 @@ public class LoggingSetupRecorder {
 
         if (config.syslog.enable) {
             configureSyslogHandler(config.syslog, errorManager, filterElements, handlers);
-        }
-
-        for (RuntimeValue<Optional<Handler>> additionalHandler : additionalHandlers) {
-            final Optional<Handler> optional = additionalHandler.getValue();
-            if (optional.isPresent()) {
-                final Handler handler = optional.get();
-                handler.setErrorManager(errorManager);
-                handler.setFilter(new LogCleanupFilter(filterElements));
-                handlers.add(handler);
-            }
         }
 
         InitialConfigurator.DELAYED_HANDLER.setHandlers(handlers.toArray(EmbeddedConfigurator.NO_HANDLERS));
@@ -135,25 +120,12 @@ public class LoggingSetupRecorder {
     }
 
     private ErrorManager configureConsoleHandler(ConsoleConfig config, ErrorManager errorManager,
-            List<LogCleanupFilterElement> filterElements, ArrayList<Handler> handlers,
-            List<RuntimeValue<Optional<Formatter>>> possibleFormatters) {
-        Formatter formatter = null;
-        boolean formatterWarning = false;
-        for (RuntimeValue<Optional<Formatter>> value : possibleFormatters) {
-            if (formatter != null) {
-                formatterWarning = true;
-            }
-            final Optional<Formatter> val = value.getValue();
-            if (val.isPresent()) {
-                formatter = val.get();
-            }
-        }
-        if (formatter == null) {
-            if (config.color.orElse(Boolean.valueOf(hasColorSupport())).booleanValue()) {
-                formatter = new ColorPatternFormatter(config.darken, config.format);
-            } else {
-                formatter = new PatternFormatter(config.format);
-            }
+            List<LogCleanupFilterElement> filterElements, ArrayList<Handler> handlers) {
+        final PatternFormatter formatter;
+        if (config.color.orElse(hasColorSupport())) {
+            formatter = new ColorPatternFormatter(config.darken, config.format);
+        } else {
+            formatter = new PatternFormatter(config.format);
         }
         final ConsoleHandler handler = new ConsoleHandler(formatter);
         handler.setLevel(config.level);
@@ -169,9 +141,6 @@ public class LoggingSetupRecorder {
             handlers.add(handler);
         }
         errorManager = handler.getLocalErrorManager();
-        if (formatterWarning) {
-            errorManager.error("Multiple formatters were activated", null, ErrorManager.GENERIC_FAILURE);
-        }
         return errorManager;
     }
 
