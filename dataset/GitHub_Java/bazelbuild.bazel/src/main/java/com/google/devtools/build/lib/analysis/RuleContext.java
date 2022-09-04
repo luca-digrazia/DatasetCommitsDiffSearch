@@ -199,7 +199,7 @@ public final class RuleContext extends TargetContext
   private final ConfigurationFragmentPolicy configurationFragmentPolicy;
   private final ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments;
   private final RuleErrorConsumer reporter;
-  @Nullable private final ToolchainCollection<ResolvedToolchainContext> toolchainContexts;
+  @Nullable private final ResolvedToolchainContext toolchainContext;
   private final ConstraintSemantics constraintSemantics;
   private final ImmutableSet<String> requiredConfigFragments;
 
@@ -219,7 +219,7 @@ public final class RuleContext extends TargetContext
       String ruleClassNameForLogging,
       ActionLookupValue.ActionLookupKey actionLookupKey,
       ImmutableMap<String, Attribute> aspectAttributes,
-      @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts,
+      @Nullable ResolvedToolchainContext toolchainContext,
       ConstraintSemantics constraintSemantics,
       ImmutableSet<String> requiredConfigFragments) {
     super(
@@ -251,7 +251,7 @@ public final class RuleContext extends TargetContext
     this.hostConfiguration = builder.hostConfiguration;
     this.actionOwnerSymbolGenerator = new SymbolGenerator<>(actionLookupKey);
     reporter = builder.reporter;
-    this.toolchainContexts = toolchainContexts;
+    this.toolchainContext = toolchainContext;
     this.constraintSemantics = constraintSemantics;
     this.requiredConfigFragments = requiredConfigFragments;
   }
@@ -1224,28 +1224,16 @@ public final class RuleContext extends TargetContext
     return configurationMakeVariableContext;
   }
 
-  // TODO(b/151742236): provide access to other non-default toolchain contexts.
   @Nullable
   public ResolvedToolchainContext getToolchainContext() {
-    return toolchainContexts == null ? null : toolchainContexts.getDefaultToolchainContext();
-  }
-
-  @Nullable
-  public ToolchainCollection<ResolvedToolchainContext> getToolchainContextsForTesting() {
-    return toolchainContexts;
+    return toolchainContext;
   }
 
   public boolean targetPlatformHasConstraint(ConstraintValueInfo constraintValue) {
-    if (toolchainContexts == null
-        || toolchainContexts.getDefaultToolchainContext().targetPlatform() == null) {
+    if (toolchainContext == null || toolchainContext.targetPlatform() == null) {
       return false;
     }
-    // All toolchain contexts should have the same target platform so we access via the default.
-    return toolchainContexts
-        .getDefaultToolchainContext()
-        .targetPlatform()
-        .constraints()
-        .hasConstraintValue(constraintValue);
+    return toolchainContext.targetPlatform().constraints().hasConstraintValue(constraintValue);
   }
 
   public ConstraintSemantics getConstraintSemantics() {
@@ -1627,7 +1615,7 @@ public final class RuleContext extends TargetContext
     private NestedSet<PackageGroupContents> visibility;
     private ImmutableMap<String, Attribute> aspectAttributes;
     private ImmutableList<Aspect> aspects;
-    private ToolchainCollection<ResolvedToolchainContext> toolchainContexts;
+    private ResolvedToolchainContext toolchainContext;
     private ConstraintSemantics constraintSemantics;
     private ImmutableSet<String> requiredConfigFragments = ImmutableSet.of();
 
@@ -1680,7 +1668,7 @@ public final class RuleContext extends TargetContext
           getRuleClassNameForLogging(),
           actionOwnerSymbol,
           aspectAttributes != null ? aspectAttributes : ImmutableMap.<String, Attribute>of(),
-          toolchainContexts,
+          toolchainContext,
           constraintSemantics,
           requiredConfigFragments);
     }
@@ -1740,24 +1728,7 @@ public final class RuleContext extends TargetContext
 
     /** Sets the {@link ResolvedToolchainContext} used to access toolchains used by this rule. */
     public Builder setToolchainContext(ResolvedToolchainContext toolchainContext) {
-      Preconditions.checkState(
-          this.toolchainContexts == null,
-          "toolchainContexts has already been set for this Builder");
-      this.toolchainContexts =
-          new ToolchainCollection.Builder<ResolvedToolchainContext>()
-              .addDefaultContext(toolchainContext)
-              .build();
-      return this;
-    }
-
-    /** Sets the collection of {@link ResolvedToolchainContext}s available to this rule. */
-    @VisibleForTesting
-    public Builder setToolchainContexts(
-        ToolchainCollection<ResolvedToolchainContext> toolchainContexts) {
-      Preconditions.checkState(
-          this.toolchainContexts == null,
-          "toolchainContexts has already been set for this Builder");
-      this.toolchainContexts = toolchainContexts;
+      this.toolchainContext = toolchainContext;
       return this;
     }
 
