@@ -15,7 +15,6 @@
  */
 package org.androidannotations.validation;
 
-import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -23,10 +22,15 @@ import java.util.Set;
 
 import javax.lang.model.element.Element;
 
+import org.androidannotations.exception.ProcessingException;
+import org.androidannotations.logger.Logger;
+import org.androidannotations.logger.LoggerFactory;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.model.AnnotationElementsHolder;
 
 public class ModelValidator {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(ModelValidator.class);
 
 	private List<ElementValidator> validators = new ArrayList<ElementValidator>();
 
@@ -34,7 +38,9 @@ public class ModelValidator {
 		validators.add(validator);
 	}
 
-	public AnnotationElements validate(AnnotationElementsHolder extractedModel) {
+	public AnnotationElements validate(AnnotationElementsHolder extractedModel) throws ProcessingException, Exception {
+
+		LOGGER.info("Validating elements");
 
 		/*
 		 * We currently do not validate the elements on the ancestors, assuming
@@ -44,21 +50,38 @@ public class ModelValidator {
 		AnnotationElementsHolder validatedElements = extractedModel.validatingHolder();
 
 		for (ElementValidator validator : validators) {
-			Class<? extends Annotation> target = validator.getTarget();
+			String validatorSimpleName = validator.getClass().getSimpleName();
 
-			Set<? extends Element> annotatedElements = extractedModel.getRootAnnotatedElements(target.getName());
+			String annotationName = validator.getTarget();
+
+			Set<? extends Element> annotatedElements = extractedModel.getRootAnnotatedElements(annotationName);
 
 			Set<Element> validatedAnnotatedElements = new HashSet<Element>();
 
-			validatedElements.putRootAnnotatedElements(target.getName(), validatedAnnotatedElements);
+			validatedElements.putRootAnnotatedElements(annotationName, validatedAnnotatedElements);
+
+			if (!annotatedElements.isEmpty()) {
+				LOGGER.debug("Validating with {}: {}", validatorSimpleName, annotatedElements);
+			}
 
 			for (Element annotatedElement : annotatedElements) {
-				if (validator.validate(annotatedElement, validatedElements)) {
+				if (validateThrowing(validator, annotatedElement, validatedElements)) {
 					validatedAnnotatedElements.add(annotatedElement);
+				} else {
+					LOGGER.warn("Element {} unvalidated by {}", annotatedElement, validatorSimpleName);
 				}
 			}
 		}
+
 		return validatedElements;
+	}
+
+	private boolean validateThrowing(ElementValidator validator, Element element, AnnotationElements validatedElements) throws Exception, ProcessingException {
+		try {
+			return validator.validate(element, validatedElements);
+		} catch (Exception e) {
+			throw new ProcessingException(e, element);
+		}
 	}
 
 }

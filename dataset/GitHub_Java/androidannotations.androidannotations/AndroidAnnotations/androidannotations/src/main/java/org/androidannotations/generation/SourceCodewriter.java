@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,26 +17,25 @@ package org.androidannotations.generation;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.List;
-import java.util.Map;
 
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.FilerException;
-import javax.annotation.processing.Messager;
 import javax.lang.model.element.Element;
-import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
+
+import org.androidannotations.logger.Logger;
+import org.androidannotations.logger.LoggerFactory;
+import org.androidannotations.processing.OriginatingElements;
 
 import com.sun.codemodel.CodeWriter;
 import com.sun.codemodel.JPackage;
 
 public class SourceCodewriter extends CodeWriter {
 
-	private final Filer filer;
-	private final Messager message;
-
 	private static final VoidOutputStream VOID_OUTPUT_STREAM = new VoidOutputStream();
-	private Map<String, List<Element>> originatingElementsByGeneratedClassQualifiedName;
+	private static final Logger LOGGER = LoggerFactory.getLogger(SourceCodewriter.class);
+	private final Filer filer;
+	private OriginatingElements originatingElements;
 
 	private static class VoidOutputStream extends OutputStream {
 		@Override
@@ -45,31 +44,30 @@ public class SourceCodewriter extends CodeWriter {
 		}
 	}
 
-	public SourceCodewriter(Filer filer, Messager message, Map<String, List<Element>> originatingElementsByGeneratedClassQualifiedName) {
+	public SourceCodewriter(Filer filer, OriginatingElements originatingElements) {
 		this.filer = filer;
-		this.message = message;
-		this.originatingElementsByGeneratedClassQualifiedName = originatingElementsByGeneratedClassQualifiedName;
+		this.originatingElements = originatingElements;
 	}
 
 	@Override
 	public OutputStream openBinary(JPackage pkg, String fileName) throws IOException {
 		String qualifiedClassName = toQualifiedClassName(pkg, fileName);
-		message.printMessage(Kind.NOTE, "Generating source file: " + qualifiedClassName);
+		LOGGER.debug("Generating class: {}", qualifiedClassName);
 
-		List<Element> originatingElements = originatingElementsByGeneratedClassQualifiedName.get(qualifiedClassName);
+		Element[] classOriginatingElements = originatingElements.getClassOriginatingElements(qualifiedClassName);
 
 		try {
 			JavaFileObject sourceFile;
-			if (originatingElements != null) {
-				sourceFile = filer.createSourceFile(qualifiedClassName, originatingElements.toArray(new Element[originatingElements.size()]));
-			} else {
-				message.printMessage(Kind.NOTE, "Generating class with no originating element: " + qualifiedClassName);
-				sourceFile = filer.createSourceFile(qualifiedClassName);
+
+			if (classOriginatingElements.length == 0) {
+				LOGGER.info("Generating class with no originating element: {}", qualifiedClassName);
 			}
+
+			sourceFile = filer.createSourceFile(qualifiedClassName, classOriginatingElements);
 
 			return sourceFile.openOutputStream();
 		} catch (FilerException e) {
-			message.printMessage(Kind.NOTE, "Could not generate source file for " + qualifiedClassName + ", message: " + e.getMessage());
+			LOGGER.error("Could not generate source file for {}", qualifiedClassName, e.getMessage());
 			/*
 			 * This exception is expected, when some files are created twice. We
 			 * cannot delete existing files, unless using a dirty hack. Files a

@@ -1,75 +1,100 @@
+/**
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed To in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 package org.androidannotations.generation;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.processing.Filer;
-import javax.annotation.processing.Messager;
+import javax.annotation.processing.FilerException;
 import javax.lang.model.element.Element;
-import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
+
+import org.androidannotations.logger.Logger;
+import org.androidannotations.logger.LoggerFactory;
+import org.androidannotations.processing.OriginatingElements;
 
 public class ApiCodeGenerator {
 
-	private final static byte[] BUFFER = new byte[4096];
+	private static final Logger LOGGER = LoggerFactory.getLogger(ApiCodeGenerator.class);
+	private static final byte[] BUFFER = new byte[4096];
 
-	private final Filer filer;
-	private final Messager messager;
-
-	public ApiCodeGenerator(Filer filer, Messager messager) {
-		this.filer = filer;
-		this.messager = messager;
-	}
-
-	public void writeApiClasses(Set<Class<?>> apiClassesToGenerate, Map<String, List<Element>> originatingElementsByGeneratedClassQualifiedName) {
-
-		for (Class<?> apiClassToGenerate : apiClassesToGenerate) {
-
-			String cannonicalApiClassName = apiClassToGenerate.getCanonicalName();
-
-			String apiClassFileName = cannonicalApiClassName.replace(".", "/") + ".java";
-
-			InputStream apiClassStream = getClass().getClassLoader().getResourceAsStream(apiClassFileName);
-			try {
-
-				if (apiClassStream == null) {
-					// The processor is not executed from a Jar. In this case,
-					// we have to add a magic '/'
-					apiClassStream = getClass().getClassLoader().getResourceAsStream('/' + apiClassFileName);
-				}
-
-				List<Element> originatingElements = originatingElementsByGeneratedClassQualifiedName.get(cannonicalApiClassName);
-
-				JavaFileObject targetedClassFile;
-				if (originatingElements == null) {
-					targetedClassFile = filer.createSourceFile(cannonicalApiClassName);
-				} else {
-					targetedClassFile = filer.createSourceFile(cannonicalApiClassName, originatingElements.toArray(new Element[originatingElements.size()]));
-				}
-
-				OutputStream classFileOutputStream = targetedClassFile.openOutputStream();
-				copyStream(apiClassStream, classFileOutputStream);
-				classFileOutputStream.close();
-
-			} catch (IOException e) {
-				throw new RuntimeException(e);
-			}
-		}
-	}
-
-	public static void copyStream(InputStream input, OutputStream output) throws IOException {
+	private static void copyStream(InputStream input, OutputStream output) throws IOException {
 		int read;
 		while ((read = input.read(BUFFER)) != -1) {
 			output.write(BUFFER, 0, read);
 		}
 	}
 
-	private void printError(String message) {
-		messager.printMessage(Diagnostic.Kind.ERROR, message);
+	private final Filer filer;
+
+	public ApiCodeGenerator(Filer filer) {
+		this.filer = filer;
+	}
+
+	public void writeApiClasses(Set<Class<?>> apiClassesToGenerate, OriginatingElements originatingElements) {
+
+		LOGGER.info("Writting following API classes in project: {}", apiClassesToGenerate);
+
+		for (Class<?> apiClassToGenerate : apiClassesToGenerate) {
+
+			String canonicalApiClassName = apiClassToGenerate.getCanonicalName();
+
+			String apiClassFileName = canonicalApiClassName.replace(".", "/") + ".java";
+
+			InputStream apiClassStream = getClass().getClassLoader().getResourceAsStream(apiClassFileName);
+			try {
+
+				if (apiClassStream == null) {
+					/*
+					 * This happens when in AA dev environment, when the
+					 * processor classes are not coming from a jar
+					 */
+					apiClassStream = getClass().getClassLoader().getResourceAsStream('/' + apiClassFileName);
+				}
+
+				Element[] apiClassOriginatingElements = originatingElements.getClassOriginatingElements(canonicalApiClassName);
+
+				JavaFileObject targetedClassFile;
+
+				try {
+					if (apiClassOriginatingElements == null) {
+						targetedClassFile = filer.createSourceFile(canonicalApiClassName);
+					} else {
+						targetedClassFile = filer.createSourceFile(canonicalApiClassName, apiClassOriginatingElements);
+					}
+
+					OutputStream classFileOutputStream = targetedClassFile.openOutputStream();
+					copyStream(apiClassStream, classFileOutputStream);
+					classFileOutputStream.close();
+
+				} catch (FilerException e) {
+					// This exception is thrown when we are trying to generate
+					// an already generated file. This is happening on an
+					// incremental build.
+					// Unfortunately there is no way to check if a file has
+					// already been generated.
+				}
+
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
 	}
 
 }

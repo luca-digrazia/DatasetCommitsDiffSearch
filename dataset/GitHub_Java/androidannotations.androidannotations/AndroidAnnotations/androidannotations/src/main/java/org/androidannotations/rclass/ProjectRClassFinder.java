@@ -21,20 +21,18 @@ import javax.lang.model.util.Elements;
 
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.Option;
-import org.androidannotations.helper.OptionsHelper;
 import org.androidannotations.logger.Logger;
 import org.androidannotations.logger.LoggerFactory;
 
 public class ProjectRClassFinder {
 
+	public static final String RESOURCE_PACKAGE_NAME_OPTION = "resourcePackageName";
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProjectRClassFinder.class);
 
 	private ProcessingEnvironment processingEnv;
-	private OptionsHelper optionsHelper;
 
 	public ProjectRClassFinder(ProcessingEnvironment processingEnv) {
 		this.processingEnv = processingEnv;
-		optionsHelper = new OptionsHelper(processingEnv);
 	}
 
 	public Option<IRClass> find(AndroidManifest manifest) {
@@ -53,9 +51,8 @@ public class ProjectRClassFinder {
 	}
 
 	public String getRClassPackageName(AndroidManifest manifest) {
-		String resourcePackageName = optionsHelper.getResourcePackageName();
-		if (resourcePackageName != null) {
-			return resourcePackageName;
+		if (processingEnv.getOptions().containsKey(RESOURCE_PACKAGE_NAME_OPTION)) {
+			return processingEnv.getOptions().get(RESOURCE_PACKAGE_NAME_OPTION);
 		} else {
 			return manifest.getApplicationPackage();
 		}

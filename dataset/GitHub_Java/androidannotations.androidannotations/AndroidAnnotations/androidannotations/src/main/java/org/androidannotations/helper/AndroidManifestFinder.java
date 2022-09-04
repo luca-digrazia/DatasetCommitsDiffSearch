@@ -38,15 +38,15 @@ import org.w3c.dom.NodeList;
 
 public class AndroidManifestFinder {
 
+	public static final String ANDROID_MANIFEST_FILE_OPTION = "androidManifestFile";
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(AndroidManifestFinder.class);
 	private static final int MAX_PARENTS_FROM_SOURCE_FOLDER = 10;
 
-	private final ProcessingEnvironment processingEnv;
-	private final OptionsHelper optionsHelper;
+	private ProcessingEnvironment processingEnv;
 
 	public AndroidManifestFinder(ProcessingEnvironment processingEnv) {
 		this.processingEnv = processingEnv;
-		optionsHelper = new OptionsHelper(processingEnv);
 	}
 
 	public Option<AndroidManifest> extractAndroidManifest() {
@@ -81,18 +81,18 @@ public class AndroidManifestFinder {
 	}
 
 	private Option<File> findManifestFile() {
-		String androidManifestFile = optionsHelper.getAndroidManifestFile();
-		if (androidManifestFile != null) {
-			return findManifestInSpecifiedPath(androidManifestFile);
+		if (processingEnv.getOptions().containsKey(ANDROID_MANIFEST_FILE_OPTION)) {
+			return findManifestInSpecifiedPath();
 		} else {
 			return findManifestInParentsDirectories();
 		}
 	}
 
-	private Option<File> findManifestInSpecifiedPath(String androidManifestPath) {
-		File androidManifestFile = new File(androidManifestPath);
+	private Option<File> findManifestInSpecifiedPath() {
+		String path = processingEnv.getOptions().get(ANDROID_MANIFEST_FILE_OPTION);
+		File androidManifestFile = new File(path);
 		if (!androidManifestFile.exists()) {
-			LOGGER.error("Could not find the AndroidManifest.xml file in specified path : {}", androidManifestPath);
+			LOGGER.error("Could not find the AndroidManifest.xml file in specified path : {}", path);
 			return Option.absent();
 		} else {
 			LOGGER.debug("AndroidManifest.xml file found with specified path: {}", androidManifestFile.toString());
@@ -191,7 +191,7 @@ public class AndroidManifestFinder {
 
 			Node debuggableAttribute = applicationNode.getAttributes().getNamedItem("android:debuggable");
 			if (debuggableAttribute != null) {
-				applicationDebuggableMode = debuggableAttribute.getNodeValue().equalsIgnoreCase("true");
+				applicationDebuggableMode = debuggableAttribute.getNodeValue().equalsIgnoreCase("true") ? true : false;
 			}
 		}
 
@@ -214,7 +214,7 @@ public class AndroidManifestFinder {
 		componentQualifiedNames.addAll(providerQualifiedNames);
 
 		NodeList usesPermissionNodes = documentElement.getElementsByTagName("uses-permission");
-		List<String> usesPermissionQualifiedNames = extractUsesPermissionNames(usesPermissionNodes);
+		List<String> usesPermissionQualifiedNames = extractUsesPermissionNames(applicationPackage, usesPermissionNodes);
 
 		List<String> permissionQualifiedNames = new ArrayList<String>();
 		permissionQualifiedNames.addAll(usesPermissionQualifiedNames);
@@ -296,7 +296,7 @@ public class AndroidManifestFinder {
 		}
 	}
 
-	private List<String> extractUsesPermissionNames(NodeList usesPermissionNodes) {
+	private List<String> extractUsesPermissionNames(String applicationPackage, NodeList usesPermissionNodes) {
 		List<String> usesPermissionQualifiedNames = new ArrayList<String>();
 
 		for (int i = 0; i < usesPermissionNodes.getLength(); i++) {
