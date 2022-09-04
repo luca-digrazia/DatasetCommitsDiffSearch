@@ -28,7 +28,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLines.ParamFileActionInput;
@@ -48,8 +47,6 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnExecException;
 import com.google.devtools.build.lib.exec.SpawnRunner;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
@@ -69,7 +66,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -146,34 +142,25 @@ class RemoteSpawnRunner implements SpawnRunner {
     context.report(ProgressStatus.EXECUTING, getName());
     // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
     MetadataProvider inputFileCache = context.getMetadataProvider();
-    TreeNodeRepository repository =
-        new TreeNodeRepository(
-            execRoot, inputFileCache, digestUtil, remoteOptions.incompatibleRemoteSymlinks);
+    TreeNodeRepository repository = new TreeNodeRepository(execRoot, inputFileCache, digestUtil);
     SortedMap<PathFragment, ActionInput> inputMap = context.getInputMapping(true);
-    TreeNode inputRoot;
-    try (SilentCloseable c = Profiler.instance().profile("Remote.computeMerkleDigests")) {
-      inputRoot = repository.buildFromActionInputs(inputMap);
-      repository.computeMerkleDigests(inputRoot);
-    }
+    TreeNode inputRoot = repository.buildFromActionInputs(inputMap);
+    repository.computeMerkleDigests(inputRoot);
     maybeWriteParamFilesLocally(spawn);
     Command command = buildCommand(
         spawn.getOutputFiles(),
         spawn.getArguments(),
         spawn.getEnvironment(),
         spawn.getExecutionPlatform());
-    Action action;
-    ActionKey actionKey;
-    try (SilentCloseable c = Profiler.instance().profile("Remote.buildAction")) {
-      action =
-          buildAction(
-              digestUtil.compute(command),
-              repository.getMerkleDigest(inputRoot),
-              context.getTimeout(),
-              Spawns.mayBeCached(spawn));
-      actionKey = digestUtil.computeActionKey(action);
-    }
+    Action action =
+        buildAction(
+            digestUtil.compute(command),
+            repository.getMerkleDigest(inputRoot),
+            context.getTimeout(),
+            Spawns.mayBeCached(spawn));
 
     // Look up action cache, and reuse the action output if it is found.
+    ActionKey actionKey = digestUtil.computeActionKey(action);
     Context withMetadata =
         TracingMetadataUtils.contextWithMetadata(buildRequestId, commandId, actionKey);
     Context previous = withMetadata.attach();
@@ -183,10 +170,8 @@ class RemoteSpawnRunner implements SpawnRunner {
 
       try {
         // Try to lookup the action in the action cache.
-        ActionResult cachedResult;
-        try (SilentCloseable c = Profiler.instance().profile("Remote.getCachedActionResult")) {
-          cachedResult = acceptCachedResult ? remoteCache.getCachedActionResult(actionKey) : null;
-        }
+        ActionResult cachedResult =
+            acceptCachedResult ? remoteCache.getCachedActionResult(actionKey) : null;
         if (cachedResult != null) {
           if (cachedResult.getExitCode() != 0) {
             // The remote cache must never serve a failed action.
@@ -195,7 +180,7 @@ class RemoteSpawnRunner implements SpawnRunner {
                     + " served a failed action. Hash of the action: "
                     + actionKey.getDigest());
           }
-          try (SilentCloseable c = Profiler.instance().profile("Remote.downloadRemoteResults")) {
+          try {
             return downloadRemoteResults(cachedResult, context.getFileOutErr())
                 .setCacheHit(true)
                 .setRunnerName("remote cache hit")
@@ -218,7 +203,7 @@ class RemoteSpawnRunner implements SpawnRunner {
         // Remote execution is disabled and so execute the spawn on the local machine.
         return execLocallyAndUpload(
             spawn, context, inputMap, remoteCache, actionKey, action, command, uploadLocalResults);
-      }
+       }
 
       ExecuteRequest request =
           ExecuteRequest.newBuilder()
@@ -230,25 +215,14 @@ class RemoteSpawnRunner implements SpawnRunner {
         return retrier.execute(
             () -> {
               // Upload the command and all the inputs into the remote cache.
-              try (SilentCloseable c = Profiler.instance().profile("Remote.uploadInputs")) {
-                remoteCache.ensureInputsPresent(repository, execRoot, inputRoot, action, command);
-              }
-              ExecuteResponse reply;
-              try (SilentCloseable c = Profiler.instance().profile("Remote.executeRemotely")) {
-                reply = remoteExecutor.executeRemotely(request);
-              }
-              try (SilentCloseable c =
-                  Profiler.instance().profile("Remote.maybeDownloadServerLogs")) {
-                maybeDownloadServerLogs(reply, actionKey);
-              }
+             remoteCache.ensureInputsPresent(repository, execRoot, inputRoot, action, command);
+              ExecuteResponse reply = remoteExecutor.executeRemotely(request);
+              maybeDownloadServerLogs(reply, actionKey);
 
-              try (SilentCloseable c =
-                  Profiler.instance().profile("Remote.downloadRemoteResults")) {
-                return downloadRemoteResults(reply.getResult(), context.getFileOutErr())
-                    .setRunnerName(reply.getCachedResult() ? "remote cache hit" : getName())
-                    .setCacheHit(reply.getCachedResult())
-                    .build();
-              }
+              return downloadRemoteResults(reply.getResult(), context.getFileOutErr())
+                  .setRunnerName(reply.getCachedResult() ? "remote cache hit" : getName())
+                  .setCacheHit(reply.getCachedResult())
+                  .build();
             });
       } catch (IOException e) {
         return execLocallyAndUploadOrFail(
@@ -415,10 +389,6 @@ class RemoteSpawnRunner implements SpawnRunner {
               "Failed to parse remote_execution_properties from platform %s", platformLabel),
           e);
     }
-    List<Platform.Property> properties = platformBuilder.getPropertiesList();
-    platformBuilder.clearProperties();
-    platformBuilder.addAllProperties(
-        Ordering.from(Comparator.comparing(Platform.Property::getName)).sortedCopy(properties));
     return platformBuilder.build();
   }
 
@@ -506,7 +476,7 @@ class RemoteSpawnRunner implements SpawnRunner {
             && Status.SUCCESS.equals(result.status())
             && result.exitCode() == 0;
     Collection<Path> outputFiles = resolveActionInputs(execRoot, spawn.getOutputFiles());
-    try (SilentCloseable c = Profiler.instance().profile("Remote.upload")) {
+    try {
       remoteCache.upload(
           actionKey, action, command, execRoot, outputFiles, context.getFileOutErr(), uploadAction);
     } catch (IOException e) {

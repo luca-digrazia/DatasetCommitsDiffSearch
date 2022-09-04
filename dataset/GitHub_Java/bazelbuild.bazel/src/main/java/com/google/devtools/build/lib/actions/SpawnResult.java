@@ -183,7 +183,9 @@ public interface SpawnResult {
    */
   Optional<Long> getNumInvoluntaryContextSwitches();
 
-  SpawnMetrics getMetrics();
+  default SpawnMetrics getMetrics() {
+    return SpawnMetrics.forLocalExecution(getWallTime().orElse(Duration.ZERO));
+  }
 
   /** Whether the spawn result was a cache hit. */
   boolean isCacheHit();
@@ -217,7 +219,6 @@ public interface SpawnResult {
     private final Status status;
     private final String executorHostName;
     private final String runnerName;
-    private final SpawnMetrics spawnMetrics;
     private final Optional<Duration> wallTime;
     private final Optional<Duration> userTime;
     private final Optional<Duration> systemTime;
@@ -232,9 +233,6 @@ public interface SpawnResult {
       this.status = Preconditions.checkNotNull(builder.status);
       this.executorHostName = builder.executorHostName;
       this.runnerName = builder.runnerName;
-      this.spawnMetrics = builder.spawnMetrics != null
-          ? builder.spawnMetrics
-          : SpawnMetrics.forLocalExecution(builder.wallTime.orElse(Duration.ZERO));
       this.wallTime = builder.wallTime;
       this.userTime = builder.userTime;
       this.systemTime = builder.systemTime;
@@ -276,11 +274,6 @@ public interface SpawnResult {
     @Override
     public String getRunnerName() {
       return runnerName;
-    }
-
-    @Override
-    public SpawnMetrics getMetrics() {
-      return spawnMetrics;
     }
 
     @Override
@@ -368,7 +361,6 @@ public interface SpawnResult {
     private Status status;
     private String executorHostName;
     private String runnerName = "";
-    private SpawnMetrics spawnMetrics;
     private Optional<Duration> wallTime = Optional.empty();
     private Optional<Duration> userTime = Optional.empty();
     private Optional<Duration> systemTime = Optional.empty();
@@ -408,11 +400,6 @@ public interface SpawnResult {
 
     public Builder setRunnerName(String runnerName) {
       this.runnerName = runnerName;
-      return this;
-    }
-
-    public Builder setSpawnMetrics(SpawnMetrics spawnMetrics) {
-      this.spawnMetrics = spawnMetrics;
       return this;
     }
 
