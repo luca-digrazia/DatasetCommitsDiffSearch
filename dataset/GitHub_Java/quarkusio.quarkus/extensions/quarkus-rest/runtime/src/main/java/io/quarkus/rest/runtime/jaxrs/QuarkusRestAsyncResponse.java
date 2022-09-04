@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import javax.ws.rs.ServiceUnavailableException;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.TimeoutHandler;
 import javax.ws.rs.core.HttpHeaders;
@@ -79,9 +80,7 @@ public class QuarkusRestAsyncResponse implements AsyncResponse, Handler<Long> {
         ResponseBuilder response = Response.status(503);
         if (retryAfter != null)
             response.header(HttpHeaders.RETRY_AFTER, retryAfter);
-        // It's not clear if we should go via the exception handlers here, but our TCK setup makes us
-        // go through it, while RESTEasy doesn't because it does resume like this, so we do too
-        context.setResult(response.build());
+        context.setThrowable(new WebApplicationException(response.build()));
         context.resume();
         return true;
     }
