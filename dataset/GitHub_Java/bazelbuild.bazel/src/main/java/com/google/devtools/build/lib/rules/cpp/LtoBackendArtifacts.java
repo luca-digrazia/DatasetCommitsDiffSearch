@@ -159,11 +159,10 @@ public final class LtoBackendArtifacts {
           "per_object_debug_info_file", dwoFile.getExecPathString());
     }
 
-    List<String> execArgs = new ArrayList<>();
-    execArgs.addAll(commandLine);
     Variables buildVariables = buildVariablesBuilder.build();
-    // Feature options should go after --copt for consistency with compile actions.
+    List<String> execArgs = new ArrayList<>();
     execArgs.addAll(featureConfiguration.getCommandLine("lto-backend", buildVariables));
+    execArgs.addAll(commandLine);
     // If this is a PIC compile (set based on the CppConfiguration), the PIC
     // option should be added after the rest of the command line so that it
     // cannot be overridden. This is consistent with the ordering in the

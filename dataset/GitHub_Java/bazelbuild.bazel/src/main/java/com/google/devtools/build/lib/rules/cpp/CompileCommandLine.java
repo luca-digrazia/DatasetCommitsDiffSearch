@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -23,6 +22,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +57,7 @@ public final class CompileCommandLine {
     this.cppConfiguration = Preconditions.checkNotNull(cppConfiguration);
     this.variables = variables;
     this.actionName = actionName;
-    this.dotdFile = isGenerateDotdFile(sourceFile) ? dotdFile : null;
+    this.dotdFile = isGenerateDotdFile(sourceFile) ? Preconditions.checkNotNull(dotdFile) : null;
   }
 
   /** Returns true if Dotd file should be generated. */
@@ -88,7 +88,7 @@ public final class CompileCommandLine {
     // second: The compiler options.
     commandLine.addAll(getCompilerOptions(overwrittenVariables));
 
-    if (!featureConfiguration.isEnabled(CppRuleClasses.COMPILE_ACTION_FLAGS_IN_FLAG_SET)) {
+    if (!featureConfiguration.isEnabled("compile_action_flags_in_flag_set")) {
       // third: The file to compile!
       commandLine.add("-c");
       commandLine.add(sourceFile.getExecPathString());

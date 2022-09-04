@@ -37,7 +37,6 @@ public class CcToolchainProviderTest {
     CcToolchainProvider a =
         new CcToolchainProvider(
             null,
-            null,
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
@@ -67,7 +66,6 @@ public class CcToolchainProviderTest {
 
     CcToolchainProvider b =
         new CcToolchainProvider(
-            null,
             null,
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
