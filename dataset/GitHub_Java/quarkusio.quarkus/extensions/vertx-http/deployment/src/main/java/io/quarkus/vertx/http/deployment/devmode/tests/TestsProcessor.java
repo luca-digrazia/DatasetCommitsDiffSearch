@@ -12,6 +12,7 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
+import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.dev.testing.TestClassResult;
 import io.quarkus.deployment.dev.testing.TestListenerBuildItem;
 import io.quarkus.deployment.dev.testing.TestRunResults;
@@ -45,9 +46,11 @@ public class TestsProcessor {
             DevConsoleRecorder recorder,
             NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
             LaunchModeBuildItem launchModeBuildItem,
+            ShutdownContextBuildItem shutdownContextBuildItem,
             BuildProducer<RouteBuildItem> routeBuildItemBuildProducer,
             BuildProducer<TestListenerBuildItem> testListenerBuildItemBuildProducer) throws IOException {
-        if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
+        DevModeType devModeType = launchModeBuildItem.getDevModeType().orElse(null);
+        if (devModeType == null || !devModeType.isContinuousTestingSupported()) {
             return;
         }
 
@@ -55,7 +58,7 @@ public class TestsProcessor {
             // Add continuous testing
             routeBuildItemBuildProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
                     .route("dev/test")
-                    .handler(recorder.continousTestHandler())
+                    .handler(recorder.continousTestHandler(shutdownContextBuildItem))
                     .build());
             testListenerBuildItemBuildProducer.produce(new TestListenerBuildItem(new ContinuousTestingWebSocketListener()));
         }
@@ -76,17 +79,24 @@ public class TestsProcessor {
             @Override
             public void handle(RoutingContext event) {
                 jsonResponse(event);
-                TestSupport.RunStatus status = ts.get().getStatus();
+                TestSupport testSupport = ts.get();
+                TestSupport.RunStatus status = testSupport.getStatus();
                 TestStatus testStatus = new TestStatus();
-                testStatus.setLastRun(status.getLastRun());
-                testStatus.setRunning(status.getRunning());
-                if (status.getLastRun() > 0) {
-                    TestRunResults result = ts.get().getResults();
-                    testStatus.setTestsFailed(result.getTestsFailed());
-                    testStatus.setTestsPassed(result.getTestsPassed());
-                    testStatus.setTestsSkipped(result.getTestsSkipped());
-                    testStatus.setTestsRun(result.getTestsFailed() + result.getTestsPassed());
+                long lastRun = status.getLastRun();
+                testStatus.setLastRun(lastRun);
+                if (lastRun > 0) {
+                    TestRunResults result = testSupport.getResults();
+                    testStatus.setTestsFailed(result.getCurrentFailedCount());
+                    testStatus.setTestsPassed(result.getCurrentPassedCount());
+                    testStatus.setTestsSkipped(result.getCurrentSkippedCount());
+                    testStatus.setTestsRun(result.getFailedCount() + result.getPassedCount());
+                    testStatus.setTotalTestsFailed(result.getFailedCount());
+                    testStatus.setTotalTestsPassed(result.getPassedCount());
+                    testStatus.setTotalTestsSkipped(result.getSkippedCount());
                 }
+                //get running last, as otherwise if the test completes in the meantime you could see
+                //both running and last run being the same number
+                testStatus.setRunning(status.getRunning());
                 event.response().end(JsonObject.mapFrom(testStatus).encode());
             }
         });

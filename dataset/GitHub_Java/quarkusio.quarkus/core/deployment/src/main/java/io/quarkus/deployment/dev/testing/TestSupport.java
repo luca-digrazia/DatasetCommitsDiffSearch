@@ -1,6 +1,8 @@
 package io.quarkus.deployment.dev.testing;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -9,13 +11,15 @@ import java.util.regex.Pattern;
 
 import org.jboss.logging.Logger;
 
-import io.quarkus.bootstrap.app.AdditionalDependency;
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
+import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
+import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.deployment.dev.CompilationProvider;
 import io.quarkus.deployment.dev.DevModeContext;
 import io.quarkus.deployment.dev.QuarkusCompiler;
 import io.quarkus.deployment.dev.RuntimeUpdatesProcessor;
+import io.quarkus.dev.spi.DevModeType;
 
 public class TestSupport implements TestController {
 
@@ -26,6 +30,7 @@ public class TestSupport implements TestController {
     final DevModeContext context;
     final List<TestListener> testListeners = new CopyOnWriteArrayList<>();
     final TestState testState = new TestState();
+    final DevModeType devModeType;
 
     volatile CuratedApplication testCuratedApplication;
     volatile QuarkusCompiler compiler;
@@ -38,13 +43,15 @@ public class TestSupport implements TestController {
     volatile Pattern exclude = null;
     volatile boolean displayTestOutput;
     volatile Boolean explicitDisplayTestOutput;
-    volatile boolean failingTestsOnly;
+    volatile boolean brokenOnlyMode;
+    volatile TestType testType = TestType.ALL;
 
     public TestSupport(CuratedApplication curatedApplication, List<CompilationProvider> compilationProviders,
-            DevModeContext context) {
+            DevModeContext context, DevModeType devModeType) {
         this.curatedApplication = curatedApplication;
         this.compilationProviders = compilationProviders;
         this.context = context;
+        this.devModeType = devModeType;
     }
 
     public static Optional<TestSupport> instance() {
@@ -94,10 +101,10 @@ public class TestSupport implements TestController {
                         if (context.getApplicationRoot().getTest().isPresent()) {
                             started = true;
                             init();
+                            testRunner.enable();
                             for (TestListener i : testListeners) {
                                 i.testsEnabled();
                             }
-                            testRunner.enable();
                         }
                     } catch (Exception e) {
                         log.error("Failed to create compiler, runtime compilation will be unavailable", e);
@@ -114,20 +121,34 @@ public class TestSupport implements TestController {
         }
         if (testCuratedApplication == null) {
             try {
+                List<Path> paths = new ArrayList<>();
+                paths.add(Paths.get(context.getApplicationRoot().getTest().get().getClassesPath()));
+                paths.addAll(curatedApplication.getQuarkusBootstrap().getApplicationRoot().toList());
                 testCuratedApplication = curatedApplication.getQuarkusBootstrap().clonedBuilder()
                         .setMode(QuarkusBootstrap.Mode.TEST)
+                        .setAssertionsEnabled(true)
                         .setDisableClasspathCache(false)
                         .setIsolateDeployment(true)
                         .setBaseClassLoader(getClass().getClassLoader())
                         .setTest(true)
                         .setAuxiliaryApplication(true)
-                        .addAdditionalApplicationArchive(new AdditionalDependency(
-                                Paths.get(context.getApplicationRoot().getTest().get().getClassesPath()), true,
-                                true))
+                        .setHostApplicationIsTestOnly(devModeType == DevModeType.TEST_ONLY)
+                        .setApplicationRoot(PathsCollection.from(paths))
                         .build()
                         .bootstrap();
                 compiler = new QuarkusCompiler(testCuratedApplication, compilationProviders, context);
                 testRunner = new TestRunner(this, context, testCuratedApplication);
+                QuarkusClassLoader cl = (QuarkusClassLoader) getClass().getClassLoader();
+                cl.addCloseTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            stop();
+                        } finally {
+                            testCuratedApplication.close();
+                        }
+                    }
+                });
 
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -143,7 +164,6 @@ public class TestSupport implements TestController {
             }
         }
         if (testRunner != null) {
-
             testRunner.disable();
         }
     }
@@ -183,15 +203,17 @@ public class TestSupport implements TestController {
         return testRunResults;
     }
 
-    public synchronized void pause() {
-        if (started) {
-            testRunner.pause();
+    public void pause() {
+        TestRunner tr = this.testRunner;
+        if (tr != null) {
+            tr.pause();
         }
     }
 
-    public synchronized void resume() {
-        if (started) {
-            testRunner.resume();
+    public void resume() {
+        TestRunner tr = this.testRunner;
+        if (tr != null) {
+            tr.resume();
         }
     }
 
@@ -214,6 +236,11 @@ public class TestSupport implements TestController {
             this.displayTestOutput = displayTestOutput;
         }
         this.displayTestOutput = displayTestOutput;
+        return this;
+    }
+
+    public TestSupport setTestType(TestType testType) {
+        this.testType = testType;
         return this;
     }
 
@@ -240,7 +267,85 @@ public class TestSupport implements TestController {
 
     @Override
     public boolean toggleBrokenOnlyMode() {
-        return failingTestsOnly = !failingTestsOnly;
+
+        brokenOnlyMode = !brokenOnlyMode;
+
+        if (brokenOnlyMode) {
+            log.info("Broken only mode enabled");
+        } else {
+            log.info("Broken only mode disabled");
+        }
+
+        for (TestListener i : testListeners) {
+            i.setBrokenOnly(brokenOnlyMode);
+        }
+
+        return brokenOnlyMode;
+    }
+
+    @Override
+    public boolean toggleTestOutput() {
+
+        setDisplayTestOutput(!displayTestOutput);
+        if (displayTestOutput) {
+            log.info("Test output enabled");
+        } else {
+            log.info("Test output disabled");
+        }
+
+        for (TestListener i : testListeners) {
+            i.setTestOutput(displayTestOutput);
+        }
+
+        return displayTestOutput;
+    }
+
+    @Override
+    public boolean toggleInstrumentation() {
+
+        boolean ibr = RuntimeUpdatesProcessor.INSTANCE.toggleInstrumentation();
+
+        for (TestListener i : testListeners) {
+            i.setInstrumentationBasedReload(ibr);
+        }
+
+        return ibr;
+    }
+
+    @Override
+    public void printFullResults() {
+        if (currentState().getFailingClasses().isEmpty()) {
+            log.info("All tests passed, no output to display");
+        }
+        for (TestClassResult i : currentState().getFailingClasses()) {
+            for (TestResult failed : i.getFailing()) {
+                log.error(
+                        "Test " + failed.getDisplayName() + " failed "
+                                + failed.getTestExecutionResult().getStatus()
+                                + "\n",
+                        failed.getTestExecutionResult().getThrowable().get());
+            }
+        }
+    }
+
+    @Override
+    public boolean isBrokenOnlyMode() {
+        return brokenOnlyMode;
+    }
+
+    @Override
+    public boolean isDisplayTestOutput() {
+        return displayTestOutput;
+    }
+
+    @Override
+    public boolean isInstrumentationEnabled() {
+        return RuntimeUpdatesProcessor.INSTANCE.instrumentationEnabled();
+    }
+
+    @Override
+    public boolean isLiveReloadEnabled() {
+        return RuntimeUpdatesProcessor.INSTANCE.isLiveReloadEnabled();
     }
 
     public static class RunStatus {
