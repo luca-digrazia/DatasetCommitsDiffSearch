@@ -12,13 +12,8 @@ import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
 import org.junit.jupiter.api.extension.ExtensionContext.Store;
 import org.junit.platform.commons.util.StringUtils;
 
-import io.quarkus.test.junit.NativeTestExtension.ExtensionState;
+import io.quarkus.test.junit.QuarkusTestExtension.ExtensionState;
 
-/**
- * @deprecated Use {@link DisabledOnNativeImageCondition} instead.
- *
- */
-@Deprecated
 public class DisabledOnSubstrateCondition implements ExecutionCondition {
 
     private static final ConditionEvaluationResult ENABLED = ConditionEvaluationResult
@@ -35,7 +30,7 @@ public class DisabledOnSubstrateCondition implements ExecutionCondition {
         if (disabled.isPresent()) {
             Store store = context.getStore(Namespace.GLOBAL);
             ExtensionState state = (ExtensionState) store.get(ExtensionState.class.getName());
-            if (state != null) {
+            if (state != null && state.isSubstrate()) {
                 String reason = disabled.map(DisabledOnSubstrate::value)
                         .filter(StringUtils::isNotBlank)
                         .orElseGet(() -> element.get() + " is @DisabledOnSubstrate");
