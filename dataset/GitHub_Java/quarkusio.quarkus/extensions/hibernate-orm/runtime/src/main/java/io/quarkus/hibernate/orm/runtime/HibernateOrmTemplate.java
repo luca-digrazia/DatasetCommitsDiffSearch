@@ -17,13 +17,10 @@
 package io.quarkus.hibernate.orm.runtime;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 import org.hibernate.boot.archive.scan.spi.Scanner;
-import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
-import org.hibernate.service.spi.ServiceContributor;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.runtime.BeanContainer;
@@ -78,13 +75,11 @@ public class HibernateOrmTemplate {
     }
 
     public BeanContainerListener initMetadata(List<ParsedPersistenceXmlDescriptor> parsedPersistenceXmlDescriptors,
-            Scanner scanner, Collection<Class<? extends Integrator>> additionalIntegrators,
-            Collection<Class<? extends ServiceContributor>> additionalServiceContributors) {
+            Scanner scanner) {
         return new BeanContainerListener() {
             @Override
             public void created(BeanContainer beanContainer) {
-                PersistenceUnitsHolder.initializeJpa(parsedPersistenceXmlDescriptors, scanner, additionalIntegrators,
-                        additionalServiceContributors);
+                PersistenceUnitsHolder.initializeJpa(parsedPersistenceXmlDescriptors, scanner);
             }
         };
     }

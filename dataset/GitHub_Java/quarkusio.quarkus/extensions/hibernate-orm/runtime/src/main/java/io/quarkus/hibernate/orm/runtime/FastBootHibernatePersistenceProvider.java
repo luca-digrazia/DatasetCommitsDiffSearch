@@ -35,14 +35,12 @@ import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
 import org.hibernate.jpa.internal.util.PersistenceUtilHelper;
-import org.hibernate.service.internal.ProvidedService;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.hibernate.orm.runtime.boot.FastBootEntityManagerFactoryBuilder;
 import io.quarkus.hibernate.orm.runtime.boot.registry.PreconfiguredServiceRegistryBuilder;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrations;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 
 /**
@@ -164,19 +162,15 @@ final class FastBootHibernatePersistenceProvider implements PersistenceProvider 
             final MetadataImplementor metadata = recordedState.getMetadata();
 
             final BuildTimeSettings buildTimeSettings = recordedState.getBuildTimeSettings();
-            final IntegrationSettings integrationSettings = recordedState.getIntegrationSettings();
             // TODO:
             final Object validatorFactory = null;
             // TODO:
             final Object cdiBeanManager = null;
 
-            RuntimeSettings.Builder runtimeSettingsBuilder = new RuntimeSettings.Builder(buildTimeSettings,
-                    integrationSettings);
+            RuntimeSettings.Builder runtimeSettingsBuilder = new RuntimeSettings.Builder(buildTimeSettings);
 
             // Inject the datasource
             injectDataSource(persistenceUnitName, runtimeSettingsBuilder);
-
-            HibernateOrmIntegrations.contributeRuntimeProperties((k, v) -> runtimeSettingsBuilder.put(k, v));
 
             RuntimeSettings runtimeSettings = runtimeSettingsBuilder.build();
 
@@ -202,12 +196,9 @@ final class FastBootHibernatePersistenceProvider implements PersistenceProvider 
         runtimeSettings.getSettings().forEach((key, value) -> {
             serviceRegistryBuilder.applySetting(key, value);
         });
-
-        for (ProvidedService<?> providedService : rs.getProvidedServices()) {
-            serviceRegistryBuilder.addService(providedService);
-        }
-
         // TODO serviceRegistryBuilder.addInitiator( )
+        // TODO serviceRegistryBuilder.applyIntegrator( )
+        // TODO serviceregistryBuilder.addService( )
 
         StandardServiceRegistryImpl standardServiceRegistry = serviceRegistryBuilder.buildNewServiceRegistry();
         return standardServiceRegistry;
