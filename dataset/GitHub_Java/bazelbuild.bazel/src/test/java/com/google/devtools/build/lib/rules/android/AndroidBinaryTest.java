@@ -754,7 +754,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         getGeneratingSpawnAction(getBinArtifact("_dx/top/shard1.jar.dex.zip", topTarget));
     assertThat(mergeAction.getArguments()).doesNotContain("--main-dex-list");
     assertThat(ActionsTestUtil.baseArtifactNames(getNonToolInputs(mergeAction)))
-        .contains("shard1.jar");
+        .containsExactly("shard1.jar", "shard1.jar.dex.zip-2.params");
   }
 
   @Test
