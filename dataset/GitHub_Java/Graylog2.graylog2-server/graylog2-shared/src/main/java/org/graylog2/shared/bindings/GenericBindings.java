@@ -18,27 +18,25 @@ package org.graylog2.shared.bindings;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.eventbus.EventBus;
-import com.google.common.util.concurrent.Service;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
-import com.google.inject.multibindings.Multibinder;
-import com.google.inject.name.Names;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.inputs.util.ThroughputCounter;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.shared.bindings.providers.*;
+import org.graylog2.shared.bindings.providers.EventBusProvider;
+import org.graylog2.shared.bindings.providers.MetricRegistryProvider;
+import org.graylog2.shared.bindings.providers.NodeIdProvider;
+import org.graylog2.shared.bindings.providers.ProcessBufferProvider;
+import org.graylog2.shared.bindings.providers.ServiceManagerProvider;
 import org.graylog2.shared.buffers.InputBufferImpl;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.buffers.ProcessBufferWatermark;
 import org.graylog2.shared.buffers.processors.DecodingProcessor;
-import org.graylog2.shared.journal.JournalReader;
 import org.graylog2.shared.stats.ThroughputStats;
 import org.jboss.netty.util.HashedWheelTimer;
-
-import java.util.concurrent.Semaphore;
 
 public class GenericBindings extends AbstractModule {
     private final InstantiationService instantiationService;
@@ -70,9 +68,5 @@ public class GenericBindings extends AbstractModule {
         bind(ThroughputCounter.class);
 
         bind(EventBus.class).toProvider(EventBusProvider.class).in(Scopes.SINGLETON);
-
-        bind(Semaphore.class).annotatedWith(Names.named("JournalSignal")).toInstance(new Semaphore(0));
-        Multibinder<Service> serviceBinder = Multibinder.newSetBinder(binder(), Service.class);
-        serviceBinder.addBinding().to(JournalReader.class);
     }
 }
