@@ -114,7 +114,7 @@ public abstract class GSYBaseActivityDetail extends AppCompatActivity implements
             throw new NullPointerException("initVideo() or initVideoBuilderMode() first");
         }
         //开始播放了才能旋转和全屏
-        orientationUtils.setEnable(getDetailOrientationRotateAuto());
+        orientationUtils.setEnable(true);
         isPlay = true;
     }
 
@@ -234,9 +234,4 @@ public abstract class GSYBaseActivityDetail extends AppCompatActivity implements
      * 点击了全屏
      */
     public abstract void clickForFullScreen();
-
-    /**
-     * 是否启动旋转横屏，true表示启动
-     */
-    public abstract boolean getDetailOrientationRotateAuto();
 }
