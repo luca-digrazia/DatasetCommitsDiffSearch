@@ -20,10 +20,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import org.bson.Document;
+import org.graylog.testing.mongodb.MongoDBFixtures;
+import org.graylog.testing.mongodb.MongoDBInstance;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.cluster.ClusterConfigServiceImpl;
 import org.graylog2.events.ClusterEventBus;
-import org.graylog2.fongo.SeedingFongoRule;
 import org.graylog2.indexer.indexset.DefaultIndexSetConfig;
 import org.graylog2.migrations.V20161215163900_MoveIndexSetDefaultConfig.MigrationCompleted;
 import org.graylog2.plugin.system.NodeId;
@@ -41,11 +42,15 @@ import java.time.ZonedDateTime;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 public class V20161215163900_MoveIndexSetDefaultConfigTest {
     @Rule
-    public SeedingFongoRule fongoRule = SeedingFongoRule.create("graylog_test")
-            .addSeed("org/graylog2/migrations/V20161215163900_MoveIndexSetDefaultConfigTest.json");
+    public final MongoDBInstance mongodb = MongoDBInstance.createForClass();
 
     @Rule
     public final MockitoRule mockitoRule = MockitoJUnit.rule();
@@ -64,13 +69,13 @@ public class V20161215163900_MoveIndexSetDefaultConfigTest {
 
     @Before
     public void setUp() throws Exception {
-        this.clusterConfigService = new ClusterConfigServiceImpl(objectMapperProvider,
-                fongoRule.getConnection(), nodeId, objectMapper,
-                new ChainingClassLoader(getClass().getClassLoader()), new ClusterEventBus());
+        this.clusterConfigService = spy(new ClusterConfigServiceImpl(objectMapperProvider,
+                mongodb.mongoConnection(), nodeId,
+                new ChainingClassLoader(getClass().getClassLoader()), new ClusterEventBus()));
 
-        this.collection = fongoRule.getDatabase().getCollection("index_sets");
+        this.collection = mongodb.mongoConnection().getMongoDatabase().getCollection("index_sets");
 
-        this.migration = new V20161215163900_MoveIndexSetDefaultConfig(fongoRule.getConnection(), clusterConfigService);
+        this.migration = new V20161215163900_MoveIndexSetDefaultConfig(mongodb.mongoConnection(), clusterConfigService);
     }
 
     @Test
@@ -79,6 +84,7 @@ public class V20161215163900_MoveIndexSetDefaultConfigTest {
     }
 
     @Test
+    @MongoDBFixtures("V20161215163900_MoveIndexSetDefaultConfigTest.json")
     public void upgrade() throws Exception {
         final long count = collection.count();
 
@@ -99,10 +105,11 @@ public class V20161215163900_MoveIndexSetDefaultConfigTest {
         assertThat(clusterConfigService.get(DefaultIndexSetConfig.class).defaultIndexSetId()).isEqualTo("57f3d721a43c2d59cb750001");
 
         assertThat(migrationCompleted).isNotNull();
-        assertThat(migrationCompleted.indexSetIds()).containsExactly("57f3d721a43c2d59cb750001", "57f3d721a43c2d59cb750003");
+        assertThat(migrationCompleted.indexSetIds()).containsExactlyInAnyOrder("57f3d721a43c2d59cb750001", "57f3d721a43c2d59cb750003");
     }
 
     @Test
+    @MongoDBFixtures("V20161215163900_MoveIndexSetDefaultConfigTest.json")
     public void upgradeWhenMigrationCompleted() throws Exception {
         // Count how many documents with a "default" field are in the database.
         final long count = collection.count(Filters.exists("default"));
@@ -118,5 +125,17 @@ public class V20161215163900_MoveIndexSetDefaultConfigTest {
         // and shouldn't touch the database. Thank means we should still have all documents with the "default" field
         // from the seed file in the database.
         assertThat(collection.count(Filters.exists("default"))).isEqualTo(count);
+    }
+
+    @Test
+    public void upgradeWhenDefaultIndexSetConfigExists() throws Exception {
+        clusterConfigService.write(DefaultIndexSetConfig.create("57f3d721a43c2d59cb750001"));
+
+        // Reset the spy to be able to verify that there wasn't a write
+        reset(clusterConfigService);
+
+        migration.upgrade();
+
+        verify(clusterConfigService, never()).write(any(DefaultIndexSetConfig.class));
     }
 }
