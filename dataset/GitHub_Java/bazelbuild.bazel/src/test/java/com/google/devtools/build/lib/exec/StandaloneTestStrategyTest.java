@@ -127,7 +127,6 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
           ActionInputPrefetcher.NONE,
           new ActionKeyContext(),
           /*metadataHandler=*/ null,
-          /*rewindingEnabled=*/ false,
           LostInputsCheck.NONE,
           fileOutErr,
           /*eventHandler=*/ null,
