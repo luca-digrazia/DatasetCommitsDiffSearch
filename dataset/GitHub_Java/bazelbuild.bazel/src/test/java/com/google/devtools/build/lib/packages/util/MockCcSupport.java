@@ -70,9 +70,11 @@ public abstract class MockCcSupport {
   public static final String SUPPORTS_INTERFACE_SHARED_LIBRARIES_FEATURE =
       "feature { name: '" + CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES + "' enabled: true}";
 
+
   /** Feature expected by the C++ rules when pic build is requested */
   public static final String PIC_FEATURE =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'pic'"
           + "  enabled: true"
           + "  flag_set {"
@@ -92,7 +94,8 @@ public abstract class MockCcSupport {
 
   /** A feature configuration snippet useful for testing header processing. */
   public static final String PARSE_HEADERS_FEATURE_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'parse_headers'"
           + "  flag_set {"
           + "    action: 'c++-header-parsing'"
@@ -104,7 +107,8 @@ public abstract class MockCcSupport {
 
   /** A feature configuration snippet useful for testing the layering check. */
   public static final String LAYERING_CHECK_FEATURE_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'layering_check'"
           + "  flag_set {"
           + "    action: 'c-compile'"
@@ -118,11 +122,11 @@ public abstract class MockCcSupport {
           + "  }"
           + "}";
 
-  public static final String SIMPLE_LAYERING_CHECK_FEATURE_CONFIGURATION = "simple_layering_check";
 
   /** A feature configuration snippet useful for testing header modules. */
   public static final String HEADER_MODULES_FEATURE_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'header_modules'"
           + "  implies: 'use_header_modules'"
           + "  implies: 'header_module_compile'"
@@ -177,7 +181,8 @@ public abstract class MockCcSupport {
           + "}";
 
   public static final String MODULE_MAP_HOME_CWD_FEATURE =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'module_map_home_cwd'"
           + "  enabled: true"
           + "  flag_set {"
@@ -194,7 +199,8 @@ public abstract class MockCcSupport {
 
   /** A feature configuration snippet useful for testing environment variables. */
   public static final String ENV_VAR_FEATURE_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'env_feature'"
           + "  implies: 'static_env_feature'"
           + "  implies: 'module_maps'"
@@ -228,7 +234,8 @@ public abstract class MockCcSupport {
           + "}";
 
   public static final String HOST_AND_NONHOST_CONFIGURATION =
-      "feature { "
+      ""
+          + "feature { "
           + "  name: 'host'"
           + "  flag_set {"
           + "    action: 'c-compile'"
@@ -249,11 +256,9 @@ public abstract class MockCcSupport {
           + "  }"
           + "}";
 
-  public static final String HOST_AND_NONHOST_CONFIGURATION_FEATURES =
-      "host_and_nonhost_configuration";
-
   public static final String USER_COMPILE_FLAGS_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'user_compile_flags'"
           + "  enabled: true"
           + "  flag_set {"
@@ -276,7 +281,8 @@ public abstract class MockCcSupport {
           + "}";
 
   public static final String LEGACY_COMPILE_FLAGS_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'legacy_compile_flags'"
           + "  enabled: true"
           + "  flag_set {"
@@ -300,7 +306,8 @@ public abstract class MockCcSupport {
           + "compiler_flag: 'legacy_compile_flag'";
 
   public static final String THIN_LTO_CONFIGURATION =
-      "feature { "
+      ""
+          + "feature { "
           + "  name: 'thin_lto'"
           + "  requires { feature: 'nonhost' }"
           + "  flag_set {"
@@ -350,43 +357,47 @@ public abstract class MockCcSupport {
           + "}";
 
   public static final String THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS_CONFIGURATION =
-      "feature {  name: 'thin_lto_linkstatic_tests_use_shared_nonlto_backends'}";
+      "" + "feature {  name: 'thin_lto_linkstatic_tests_use_shared_nonlto_backends'}";
 
   public static final String THIN_LTO_ALL_LINKSTATIC_USE_SHARED_NONLTO_BACKENDS_CONFIGURATION =
-      "feature {  name: 'thin_lto_all_linkstatic_use_shared_nonlto_backends'}";
+      "" + "feature {  name: 'thin_lto_all_linkstatic_use_shared_nonlto_backends'}";
 
   public static final String ENABLE_AFDO_THINLTO_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'enable_afdo_thinlto'"
           + "  requires { feature: 'autofdo_implicit_thinlto' }"
           + "  implies: 'thin_lto'"
           + "}";
 
   public static final String AUTOFDO_IMPLICIT_THINLTO_CONFIGURATION =
-      "feature {  name: 'autofdo_implicit_thinlto'}";
+      "" + "feature {  name: 'autofdo_implicit_thinlto'}";
 
   public static final String ENABLE_FDO_THINLTO_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'enable_fdo_thinlto'"
           + "  requires { feature: 'fdo_implicit_thinlto' }"
           + "  implies: 'thin_lto'"
           + "}";
 
   public static final String FDO_IMPLICIT_THINLTO_CONFIGURATION =
-      "feature {  name: 'fdo_implicit_thinlto'}";
+      "" + "feature {  name: 'fdo_implicit_thinlto'}";
 
   public static final String ENABLE_XFDO_THINLTO_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'enable_xbinaryfdo_thinlto'"
           + "  requires { feature: 'xbinaryfdo_implicit_thinlto' }"
           + "  implies: 'thin_lto'"
           + "}";
 
   public static final String XFDO_IMPLICIT_THINLTO_CONFIGURATION =
-      "feature {  name: 'xbinaryfdo_implicit_thinlto'}";
+      "" + "feature {  name: 'xbinaryfdo_implicit_thinlto'}";
 
   public static final String AUTO_FDO_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'autofdo'"
           + "  provides: 'profile'"
           + "  flag_set {"
@@ -405,7 +416,8 @@ public abstract class MockCcSupport {
       "feature { name: 'is_cc_fake_binary' }";
 
   public static final String XBINARY_FDO_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'xbinaryfdo'"
           + "  provides: 'profile'"
           + "  flag_set {"
@@ -422,7 +434,8 @@ public abstract class MockCcSupport {
           + "}";
 
   public static final String FDO_OPTIMIZE_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'fdo_optimize'"
           + "  provides: 'profile'"
           + "  flag_set {"
@@ -440,7 +453,8 @@ public abstract class MockCcSupport {
           + "}";
 
   public static final String FDO_INSTRUMENT_CONFIGURATION =
-      "feature { "
+      ""
+          + "feature { "
           + "  name: 'fdo_instrument'"
           + "  provides: 'profile'"
           + "  flag_set {"
@@ -457,7 +471,8 @@ public abstract class MockCcSupport {
           + "}";
 
   public static final String PER_OBJECT_DEBUG_INFO_CONFIGURATION =
-      "feature { "
+      ""
+          + "feature { "
           + "  name: 'per_object_debug_info'"
           + "  enabled: true"
           + "  flag_set {"
@@ -475,37 +490,41 @@ public abstract class MockCcSupport {
           + "}";
 
   public static final String COPY_DYNAMIC_LIBRARIES_TO_BINARY_CONFIGURATION =
-      "feature { name: 'copy_dynamic_libraries_to_binary' }";
+      "" + "feature { name: 'copy_dynamic_libraries_to_binary' }";
 
   public static final String SUPPORTS_START_END_LIB_FEATURE =
-      "feature { name: 'supports_start_end_lib' enabled: true }";
+      "" + "feature { name: 'supports_start_end_lib' enabled: true }";
 
   public static final String SUPPORTS_PIC_FEATURE =
-      "feature { name: 'supports_pic' enabled: true }";
+      "" + "feature { name: 'supports_pic' enabled: true }";
 
   public static final String TARGETS_WINDOWS_CONFIGURATION =
-      "feature {"
+      ""
+          + "feature {"
           + "   name: 'targets_windows'"
           + "   implies: 'copy_dynamic_libraries_to_binary'"
           + "   enabled: true"
           + "}";
 
   public static final String STATIC_LINK_TWEAKED_CONFIGURATION =
-      "artifact_name_pattern {"
+      ""
+          + "artifact_name_pattern {"
           + "   category_name: 'static_library'"
           + "   prefix: 'lib'"
           + "   extension: '.lib'"
           + "}";
 
   public static final String STATIC_LINK_AS_DOT_A_CONFIGURATION =
-      "artifact_name_pattern {"
+      ""
+          + "artifact_name_pattern {"
           + "   category_name: 'static_library'"
           + "   prefix: 'lib'"
           + "   extension: '.a'"
           + "}";
 
   public static final String MODULE_MAPS_FEATURE =
-      "feature {"
+      ""
+          + "feature {"
           + "  name: 'module_maps'"
           + "  enabled: true"
           + "  flag_set {"
@@ -519,9 +538,6 @@ public abstract class MockCcSupport {
           + "    }"
           + "  }"
           + "}";
-
-  public static final String COMPILER_PARAM_FILE =
-      "feature { name: 'compiler_param_file' enabled: true }";
 
   public static final String EMPTY_COMPILE_ACTION_CONFIG =
       emptyActionConfigFor(CppActionNames.CPP_COMPILE);
@@ -622,17 +638,26 @@ public abstract class MockCcSupport {
   /**
    * Creates a crosstool package by merging {@code toolchain} with the default mock CROSSTOOL file.
    *
-   * @param partialToolchain A string representation of a CToolchain protocol buffer; note that this
-   *     is allowed to be a partial buffer (required fields may be omitted).
+   * @param partialToolchain A string representation of a CToolchain protocol buffer; note that
+   *        this is allowed to be a partial buffer (required fields may be omitted).
    */
   public void setupCrosstool(MockToolsConfig config, String... partialToolchain)
       throws IOException {
-    String toolchainString = Joiner.on("\n").join(partialToolchain);
+    setupCrosstool(config, /* appendToCurrentToolchain= */ true, partialToolchain);
+  }
 
-    CToolchain.Builder toolchainBuilder = CToolchain.newBuilder();
-    TextFormat.merge(toolchainString, toolchainBuilder);
-    String crosstoolFile =
-        mergeCrosstoolConfig(readCrosstoolFile(), toolchainBuilder.buildPartial());
+  public void setupCrosstool(
+      MockToolsConfig config, boolean appendToCurrentToolchain, String... partialToolchain)
+      throws IOException {
+    String toolchainString = Joiner.on("\n").join(partialToolchain);
+    String crosstoolFile;
+    if (appendToCurrentToolchain) {
+      CToolchain.Builder toolchainBuilder = CToolchain.newBuilder();
+      TextFormat.merge(toolchainString, toolchainBuilder);
+      crosstoolFile = mergeCrosstoolConfig(readCrosstoolFile(), toolchainBuilder.buildPartial());
+    } else {
+      crosstoolFile = readCrosstoolFile() + toolchainString;
+    }
     createCrosstoolPackage(
         config,
         crosstoolFile);
