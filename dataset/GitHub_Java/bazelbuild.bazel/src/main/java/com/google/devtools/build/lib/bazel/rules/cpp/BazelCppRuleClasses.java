@@ -108,7 +108,6 @@ public class BazelCppRuleClasses {
           .setPreferredDependencyPredicate(Predicates.<String>or(CPP_SOURCE, C_SOURCE, CPP_HEADER))
           .requiresConfigurationFragments(PlatformConfiguration.class)
           .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
-          .useToolchainTransition(true)
           .build();
     }
 
@@ -210,7 +209,7 @@ public class BazelCppRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$cc_decl_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
+          .ancestors(BaseRuleClasses.RuleBase.class)
           .build();
     }
   }
