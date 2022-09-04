@@ -21,6 +21,8 @@ import io.quarkus.rest.runtime.mapping.RuntimeResource;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
 import io.quarkus.runtime.LaunchMode;
 import io.vertx.core.http.HttpMethod;
+import io.vertx.core.http.HttpServerResponse;
+import io.vertx.ext.web.RoutingContext;
 
 public class ClassRoutingHandler implements RestHandler {
     private final Map<String, RequestMapper<RuntimeResource>> mappers;
@@ -33,6 +35,7 @@ public class ClassRoutingHandler implements RestHandler {
 
     @Override
     public void handle(QuarkusRestRequestContext requestContext) throws Exception {
+        RoutingContext event = requestContext.getContext();
         RequestMapper<RuntimeResource> mapper = mappers.get(requestContext.getMethod());
         if (mapper == null) {
             String requestMethod = requestContext.getMethod();
@@ -48,7 +51,9 @@ public class ClassRoutingHandler implements RestHandler {
                 }
                 allowedMethods.add(HttpMethod.OPTIONS.name());
                 allowedMethods.add(HttpMethod.HEAD.name());
-                requestContext.getHttpServerResponse().putHeader(HttpHeaders.ALLOW, allowedMethods).end();
+                HttpServerResponse vertxResponse = event.response();
+                vertxResponse.putHeader(HttpHeaders.ALLOW, allowedMethods);
+                vertxResponse.end();
                 return;
             }
             if (mapper == null) {

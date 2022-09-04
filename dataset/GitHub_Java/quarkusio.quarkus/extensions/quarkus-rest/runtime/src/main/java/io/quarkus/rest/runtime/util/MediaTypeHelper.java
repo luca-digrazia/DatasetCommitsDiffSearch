@@ -161,12 +161,10 @@ public class MediaTypeHelper {
         if (emptyProvided)
             return desired.get(0);
 
-        for (int i = 0; i < desired.size(); i++) {
-            for (int j = 0; j < provided.size(); j++) {
-                MediaType provide = provided.get(j);
-                if (provide.isCompatible(desired.get(i))) {
+        for (MediaType desire : desired) {
+            for (MediaType provide : provided) {
+                if (provide.isCompatible(desire))
                     return provide;
-                }
             }
         }
         return null;
