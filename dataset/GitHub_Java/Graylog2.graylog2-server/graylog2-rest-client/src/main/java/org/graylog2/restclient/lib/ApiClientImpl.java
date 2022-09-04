@@ -1,70 +1,73 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.lib;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.net.HttpHeaders;
 import com.google.common.net.MediaType;
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
-import com.google.inject.name.Named;
 import com.ning.http.client.AsyncCompletionHandler;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
+import com.ning.http.client.FluentCaseInsensitiveStringsMap;
 import com.ning.http.client.ListenableFuture;
-import com.ning.http.client.PerRequestConfig;
 import com.ning.http.client.Realm;
 import com.ning.http.client.Request;
 import com.ning.http.client.Response;
+import com.ning.http.client.listener.TransferCompletionHandler;
+import com.ning.http.client.listener.TransferListener;
+import com.squareup.okhttp.HttpUrl;
 import org.graylog2.restclient.models.ClusterEntity;
 import org.graylog2.restclient.models.Node;
-import org.graylog2.restclient.models.Radio;
 import org.graylog2.restclient.models.User;
 import org.graylog2.restclient.models.UserService;
-import org.graylog2.restclient.models.api.requests.ApiRequest;
 import org.graylog2.restclient.models.api.responses.EmptyResponse;
 import org.graylog2.restroutes.PathMethod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import play.libs.F;
-import play.mvc.Http;
 
-import javax.ws.rs.core.UriBuilder;
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.inject.Singleton;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -80,29 +83,36 @@ class ApiClientImpl implements ApiClient {
     private AsyncHttpClient client;
     private final ServerNodes serverNodes;
     private final Long defaultTimeout;
+    private final boolean acceptAnyCertificate;
     private final ObjectMapper objectMapper;
     private Thread shutdownHook;
 
     @Inject
-    private ApiClientImpl(ServerNodes serverNodes, @Named("Default Timeout") Long defaultTimeout) {
-        this(serverNodes, defaultTimeout,
+    private ApiClientImpl(ServerNodes serverNodes,
+                          @Named("Default Timeout") Long defaultTimeout,
+                          @Named("client.accept-any-certificate") boolean acceptAnyCertificate) {
+        this(serverNodes, defaultTimeout, acceptAnyCertificate,
                 new ObjectMapper()
                         .setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES)
                         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                        .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
                         .registerModule(new GuavaModule())
                         .registerModule(new JodaModule()));
     }
 
-    private ApiClientImpl(ServerNodes serverNodes, Long defaultTimeout, ObjectMapper objectMapper) {
+    private ApiClientImpl(ServerNodes serverNodes, Long defaultTimeout, boolean acceptAnyCertificate, ObjectMapper objectMapper) {
         this.serverNodes = serverNodes;
         this.defaultTimeout = defaultTimeout;
+        this.acceptAnyCertificate = acceptAnyCertificate;
         this.objectMapper = objectMapper;
     }
 
     @Override
     public void start() {
         AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
-        builder.setAllowPoolingConnection(false);
+        builder.setAllowPoolingConnections(false);
+        builder.setAllowPoolingSslConnections(false);
+        builder.setAcceptAnyCertificate(acceptAnyCertificate);
         builder.setUserAgent("graylog2-web/" + Version.VERSION);
         client = new AsyncHttpClient(builder.build());
 
@@ -169,7 +179,7 @@ class ApiClientImpl implements ApiClient {
     @Override
     public <T> org.graylog2.restclient.lib.ApiRequestBuilder<T> path(PathMethod pathMethod, Class<T> responseClasse) {
         Method httpMethod;
-        switch (pathMethod.getMethod().toUpperCase()) {
+        switch (pathMethod.getMethod().toUpperCase(Locale.ENGLISH)) {
             case "GET":
                 httpMethod = Method.GET;
                 break;
@@ -216,13 +226,12 @@ class ApiClientImpl implements ApiClient {
     public class ApiRequestBuilder<T> implements org.graylog2.restclient.lib.ApiRequestBuilder<T> {
         private String pathTemplate;
         private Node node;
-        private Radio radio;
         private Collection<Node> nodes;
         private final Method method;
-        private ApiRequest body;
+        private Object body;
         private final Class<T> responseClass;
         private final ArrayList<Object> pathParams = Lists.newArrayList();
-        private final ArrayList<F.Tuple<String, String>> queryParams = Lists.newArrayList();
+        private final ListMultimap<String, String> queryParams = ArrayListMultimap.create();
         private Set<Integer> expectedResponseCodes = Sets.newHashSet();
         private TimeUnit timeoutUnit = TimeUnit.MILLISECONDS;
         private long timeoutValue = defaultTimeout;
@@ -268,19 +277,11 @@ class ApiClientImpl implements ApiClient {
         }
 
         @Override
-        public org.graylog2.restclient.lib.ApiRequestBuilder<T> radio(Radio radio) {
-            this.radio = radio;
-            return this;
-        }
-
-        @Override
         public org.graylog2.restclient.lib.ApiRequestBuilder<T> clusterEntity(ClusterEntity entity) {
-            if (entity instanceof Radio) {
-                this.radio = (Radio) entity;
-            } else if (entity instanceof Node) {
+            if (entity instanceof Node) {
                 this.node = (Node) entity;
             } else {
-                LOG.warn("You passed a ClusterEntity that is not of type Node or Radio. Selected nothing.");
+                LOG.warn("You passed a ClusterEntity that is not of type Node. Selected nothing.");
             }
             return this;
         }
@@ -319,7 +320,7 @@ class ApiClientImpl implements ApiClient {
 
         @Override
         public ApiRequestBuilder<T> queryParam(String name, String value) {
-            queryParams.add(F.Tuple(name, value));
+            queryParams.put(name, value);
             return this;
         }
 
@@ -356,7 +357,7 @@ class ApiClientImpl implements ApiClient {
         }
 
         @Override
-        public org.graylog2.restclient.lib.ApiRequestBuilder<T> body(ApiRequest body) {
+        public org.graylog2.restclient.lib.ApiRequestBuilder<T> body(Object body) {
             this.body = body;
             return this;
         }
@@ -392,111 +393,49 @@ class ApiClientImpl implements ApiClient {
 
         @Override
         public T execute() throws APIException, IOException {
-            if (radio != null && (node != null || nodes != null)) {
-                throw new RuntimeException("You set both and a Node and a Radio as target. This is not possible.");
-            }
-
             final ClusterEntity target;
 
-            if (radio == null) {
-                if (node == null) {
-                    if (nodes != null) {
-                        LOG.error("Multiple nodes are set, but execute() was called. This is most likely a bug and you meant to call executeOnAll()!", new Throwable());
-                    }
-                    node(serverNodes.any());
+            if (node == null) {
+                if (nodes != null) {
+                    LOG.error("Multiple nodes are set, but execute() was called. This is most likely a bug and you meant to call executeOnAll()!", new Throwable());
                 }
-
-                target = node;
-            } else {
-                target = radio;
+                node(serverNodes.any());
             }
+
+            target = node;
 
             ensureAuthentication();
             final URL url = prepareUrl(target);
             final AsyncHttpClient.BoundRequestBuilder requestBuilder = requestBuilderForUrl(url);
-            requestBuilder.addHeader(Http.HeaderNames.ACCEPT, mediaType.toString());
+            requestBuilder.addHeader(HttpHeaders.ACCEPT, mediaType.toString());
 
             final Request request = requestBuilder.build();
             if (LOG.isDebugEnabled()) {
-                LOG.debug("API Request: {}", request.toString());
+                LOG.debug("API Request: {}", request);
             }
 
             // Set 200 OK as standard if not defined.
-            if (expectedResponseCodes.isEmpty()) {
-                expectedResponseCodes.add(Http.Status.OK);
-            }
+            ensureExpectedResponseCodes();
 
             try {
-                // TODO implement streaming responses
                 Response response = requestBuilder.execute().get(timeoutValue, timeoutUnit);
 
                 target.touch();
-
-                // TODO this is wrong, shouldn't it accept some callback instead of throwing an exception?
-                if (!expectedResponseCodes.contains(response.getStatusCode())) {
-                    throw new APIException(request, response);
-                }
-
-                // TODO: once we switch to jackson we can take the media type into account automatically
-                final MediaType responseContentType;
-                if (response.getContentType() == null) {
-                    responseContentType = MediaType.JSON_UTF_8;
-                } else {
-                    responseContentType = MediaType.parse(response.getContentType());
-                }
-
-                if (!responseContentType.is(mediaType.withoutParameters())) {
-                    LOG.warn("We said we'd accept {} but got {} back, let's see how that's going to work out...", mediaType, responseContentType);
-                }
-                if (responseClass.equals(String.class)) {
-                    return responseClass.cast(response.getResponseBody("UTF-8"));
-                }
-
-                if (expectedResponseCodes.contains(response.getStatusCode())
-                        || (response.getStatusCode() >= 200 && response.getStatusCode() < 300)) {
-                    T result;
-                    try {
-                        if (response.getResponseBody().isEmpty()) {
-                            return null;
-                        }
-
-                        if (responseContentType.is(MediaType.JSON_UTF_8.withoutParameters())) {
-                            result = deserializeJson(response, responseClass);
-                        } else {
-                            LOG.error("Don't know how to deserialize objects with content in {}, expected {}, failing.", responseContentType, mediaType);
-                            throw new APIException(request, response);
-                        }
-
-                        if (result == null) {
-                            throw new APIException(request, response);
-                        }
-
-                        return result;
-                    } catch (Exception e) {
-                        LOG.error("Caught Exception while deserializing JSON request: " + e);
-                        LOG.debug("Response from backend was: " + response.getResponseBody("UTF-8"));
-
-                        throw new APIException(request, response, e);
-                    }
-                } else {
-                    return null;
-                }
+                return handleResponse(request, response);
             } catch (InterruptedException e) {
-                // TODO
                 target.markFailure();
             } catch (MalformedURLException e) {
                 LOG.error("Malformed URL", e);
                 throw new RuntimeException("Malformed URL.", e);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof ConnectException) {
-                    LOG.warn("Graylog2 server unavailable. Connection refused.");
+                    LOG.warn("Graylog server unavailable. Connection refused.");
                     target.markFailure();
                     throw new Graylog2ServerUnavailableException(e);
                 }
                 LOG.error("REST call failed", rootCause(e));
                 throw new APIException(request, e);
             } catch (IOException e) {
-                // TODO
                 LOG.error("unhandled IOException", rootCause(e));
                 target.markFailure();
                 throw e;
@@ -505,6 +444,61 @@ class ApiClientImpl implements ApiClient {
                 target.markFailure();
             }
             throw new APIException(request, new IllegalStateException("Unhandled error condition in API client"));
+        }
+
+        private T handleResponse(Request request, Response response) throws IOException, APIException {
+            // TODO: once we switch to jackson we can take the media type into account automatically
+            final MediaType responseContentType;
+            if (response.getContentType() == null) {
+                responseContentType = MediaType.JSON_UTF_8;
+            } else {
+                responseContentType = MediaType.parse(response.getContentType());
+            }
+
+            if (!responseContentType.is(mediaType.withoutParameters())) {
+                LOG.error("Accept header was {} but response is {}. Failing.", mediaType, responseContentType);
+                throw new APIException(request, response);
+            }
+            if (responseClass.equals(String.class)) {
+                return responseClass.cast(response.getResponseBody("UTF-8"));
+            }
+
+            final boolean responseCodeIsExpected = expectedResponseCodes.contains(response.getStatusCode());
+            final boolean responseCodeIsSuccessful = response.getStatusCode() >= 200 && response.getStatusCode() < 300;
+            if (responseCodeIsExpected || responseCodeIsSuccessful) {
+                T result;
+                try {
+                    if (response.getResponseBody().isEmpty()) {
+                        return null;
+                    }
+
+                    if (responseContentType.is(MediaType.JSON_UTF_8.withoutParameters())) {
+                        result = deserializeJson(response, responseClass);
+                    } else {
+                        LOG.error("Cannot deserialize content type {} expected {}, failing.", responseContentType, mediaType);
+                        throw new APIException(request, response);
+                    }
+
+                    if (result == null) {
+                        throw new APIException(request, response);
+                    }
+
+                    return result;
+                } catch (Exception e) {
+                    LOG.error("Caught Exception while deserializing JSON request: ", e);
+                    LOG.debug("Response from backend was: " + response.getResponseBody("UTF-8"));
+
+                    throw new APIException(request, response, e);
+                }
+            } else {
+                throw new APIException(request, response);
+            }
+        }
+
+        private void ensureExpectedResponseCodes() {
+            if (expectedResponseCodes.isEmpty()) {
+                expectedResponseCodes.add(200);
+            }
         }
 
         private void ensureAuthentication() {
@@ -518,14 +512,47 @@ class ApiClientImpl implements ApiClient {
             }
         }
 
+        private class RequestContext {
+            private final Node node;
+            private final Request request;
+            private final ListenableFuture<Response> listenableFuture;
+
+            public RequestContext(Node node, Request request, ListenableFuture<Response> listenableFuture) {
+                this.node = node;
+                this.request = request;
+                this.listenableFuture = listenableFuture;
+            }
+
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (o == null || getClass() != o.getClass()) return false;
+
+                RequestContext that = (RequestContext) o;
+
+                if (!node.equals(that.node)) return false;
+                if (!request.equals(that.request)) return false;
+                return listenableFuture.equals(that.listenableFuture);
+
+            }
+
+            @Override
+            public int hashCode() {
+                int result = node.hashCode();
+                result = 31 * result + request.hashCode();
+                result = 31 * result + listenableFuture.hashCode();
+                return result;
+            }
+        }
+
         @Override
-        public Map<Node, T> executeOnAll() {
+        public Map<Node, T> executeOnAll() throws APIException {
             HashMap<Node, T> results = Maps.newHashMap();
             if (node == null && nodes == null) {
                 nodes = serverNodes.all();
             }
 
-            Collection<F.Tuple<ListenableFuture<Response>, Node>> requests = Lists.newArrayList();
+            final Set<RequestContext> requestContexts = Sets.newHashSetWithExpectedSize(nodes.size());
             final Collection<Response> responses = Lists.newArrayList();
 
             ensureAuthentication();
@@ -533,9 +560,12 @@ class ApiClientImpl implements ApiClient {
                 final URL url = prepareUrl(currentNode);
                 try {
                     final AsyncHttpClient.BoundRequestBuilder requestBuilder = requestBuilderForUrl(url);
-                    requestBuilder.addHeader(Http.HeaderNames.ACCEPT, mediaType.toString());
+                    requestBuilder.addHeader(HttpHeaders.ACCEPT, mediaType.toString());
+
+                    // we need to build the request in case we have to throw an APIException in handleResponse()
+                    final Request request = requestBuilder.build();
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("API Request: {}", requestBuilder.build().toString());
+                        LOG.debug("API Request: {}", request);
                     }
                     final ListenableFuture<Response> future = requestBuilder.execute(new AsyncCompletionHandler<Response>() {
                         @Override
@@ -544,24 +574,38 @@ class ApiClientImpl implements ApiClient {
                             return response;
                         }
                     });
-                    requests.add(new F.Tuple<>(future, currentNode));
+                    requestContexts.add(new RequestContext(currentNode, request, future));
                 } catch (IOException e) {
                     LOG.error("Cannot execute request", e);
                     currentNode.markFailure();
                 }
             }
-            for (F.Tuple<ListenableFuture<Response>, Node> requestAndNode : requests) {
-                final ListenableFuture<Response> request = requestAndNode._1;
-                final Node node = requestAndNode._2;
+
+            // Set 200 OK as standard if not defined.
+            ensureExpectedResponseCodes();
+
+            for (RequestContext context : requestContexts) {
+                final Node node = context.node;
+                final ListenableFuture<Response> future = context.listenableFuture;
                 try {
-                    final Response response = request.get(timeoutValue, timeoutUnit);
+                    final Response response = future.get(timeoutValue, timeoutUnit);
+                    if (response == null) {
+                        LOG.error("Didn't receive response from node {}", node);
+                        node.markFailure();
+                        continue;
+                    }
                     node.touch();
-                    results.put(node, deserializeJson(response, responseClass));
+                    final T result = handleResponse(context.request, response);
+                    results.put(node, result);
                 } catch (InterruptedException e) {
                     LOG.error("API call Interrupted", e);
                     node.markFailure();
                 } catch (ExecutionException e) {
-                    LOG.error("API call failed to execute.", e);
+                    if (e.getCause() instanceof ConnectException) {
+                        LOG.error("{}", e.getCause().getMessage());
+                    } else {
+                        LOG.error("API call failed to execute.", e);
+                    }
                     node.markFailure();
                 } catch (IOException e) {
                     LOG.error("API failed due to IO error", e);
@@ -575,44 +619,44 @@ class ApiClientImpl implements ApiClient {
             return results;
         }
 
-        private AsyncHttpClient.BoundRequestBuilder requestBuilderForUrl(URL url) {
+        private AsyncHttpClient.BoundRequestBuilder requestBuilderForUrl(URL url) throws JsonProcessingException {
             // *sigh* the generic requestBuilder methods are protected/private making this verbose :(
             final AsyncHttpClient.BoundRequestBuilder requestBuilder;
             final String userInfo = url.getUserInfo();
             // have to hack around here, because the userInfo will unescape the @ in usernames :(
-            try {
-                url = UriBuilder.fromUri(url.toURI()).userInfo(null).build().toURL();
-            } catch (URISyntaxException | MalformedURLException ignore) {
-                // cannot happen, because it was a valid url before
-            }
+            final HttpUrl httpUrl = HttpUrl.get(url)
+                    .newBuilder()
+                    .username("")
+                    .password("")
+                    .build();
 
             switch (method) {
                 case GET:
-                    requestBuilder = client.prepareGet(url.toString());
+                    requestBuilder = client.prepareGet(httpUrl.toString());
                     break;
                 case POST:
-                    requestBuilder = client.preparePost(url.toString());
+                    requestBuilder = client.preparePost(httpUrl.toString());
                     break;
                 case PUT:
-                    requestBuilder = client.preparePut(url.toString());
+                    requestBuilder = client.preparePut(httpUrl.toString());
                     break;
                 case DELETE:
-                    requestBuilder = client.prepareDelete(url.toString());
+                    requestBuilder = client.prepareDelete(httpUrl.toString());
                     break;
                 default:
                     throw new IllegalStateException("Illegal method " + method.toString());
             }
 
             applyBasicAuthentication(requestBuilder, userInfo);
-            requestBuilder.setPerRequestConfig(new PerRequestConfig(null, (int) timeoutUnit.toMillis(timeoutValue)));
+            requestBuilder.setRequestTimeout((int) timeoutUnit.toMillis(timeoutValue));
 
             if (body != null) {
                 if (method != Method.PUT && method != Method.POST) {
                     throw new IllegalArgumentException("Cannot set request body on non-PUT or POST requests.");
                 }
-                requestBuilder.addHeader("Content-Type", "application/json; charset=utf-8");
+                requestBuilder.addHeader(HttpHeaders.CONTENT_TYPE, "application/json; charset=utf-8");
                 requestBuilder.setBodyEncoding("UTF-8");
-                requestBuilder.setBody(body.toJson());
+                requestBuilder.setBody(objectMapper.writeValueAsString(body));
             } else if (method == Method.POST) {
                 LOG.warn("POST without body, this doesn't make sense,", new IllegalStateException());
             }
@@ -638,13 +682,23 @@ class ApiClientImpl implements ApiClient {
             // if this is null there's not much we can do anyway...
             Preconditions.checkNotNull(pathTemplate, "path() needs to be set to a non-null value.");
 
-            URI builtUrl;
+            HttpUrl builtUrl;
             try {
-                String path = MessageFormat.format(pathTemplate, pathParams.toArray());
-                final UriBuilder uriBuilder = UriBuilder.fromUri(target.getTransportAddress());
-                uriBuilder.path(path);
-                for (F.Tuple<String, String> queryParam : queryParams) {
-                    uriBuilder.queryParam(queryParam._1, queryParam._2);
+                String path;
+                if (pathParams.isEmpty()) {
+                    path = pathTemplate;
+                } else {
+                    path = MessageFormat.format(pathTemplate, pathParams.toArray());
+                }
+
+                final HttpUrl.Builder builder = HttpUrl.parse(target.getTransportAddress())
+                        .newBuilder()
+                        .encodedPath(path);
+
+                for (String key : queryParams.keySet()) {
+                    for (String value : queryParams.get(key)) {
+                        builder.addQueryParameter(key, value);
+                    }
                 }
 
                 if (unauthenticated && sessionId != null) {
@@ -652,14 +706,80 @@ class ApiClientImpl implements ApiClient {
                 }
                 if (sessionId != null) {
                     // pass the current session id via basic auth and special "password"
-                    uriBuilder.userInfo(sessionId + ":session");
+                    builder.username(sessionId);
+                    builder.password("session");
                 }
-                builtUrl = uriBuilder.build();
-                return builtUrl.toURL();
-            } catch (MalformedURLException e) {
-                // TODO handle this properly
+
+                builtUrl = builder.build();
+                return builtUrl.url();
+            } catch (RuntimeException e) {
                 LOG.error("Could not build target URL", e);
-                throw new RuntimeException(e);
+                throw e;
+            }
+        }
+
+        @Override
+        public InputStream executeStreaming() throws APIException, IOException {
+            final ClusterEntity target;
+
+            if (node == null) {
+                if (nodes != null) {
+                    LOG.error("Multiple nodes are set, but execute() was called. This is most likely a bug and you meant to call executeOnAll()!", new Throwable());
+                }
+                node(serverNodes.any());
+            }
+
+            target = node;
+
+            ensureAuthentication();
+            final URL url = prepareUrl(target);
+            final AsyncHttpClient.BoundRequestBuilder requestBuilder = requestBuilderForUrl(url);
+            requestBuilder.addHeader(HttpHeaders.ACCEPT, mediaType.toString());
+
+            final Request request = requestBuilder.build();
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("API Request: {}", request);
+            }
+
+            // Set 200 OK as standard if not defined.
+            ensureExpectedResponseCodes();
+
+            try {
+                final AsyncByteBufferInputStream stream = new AsyncByteBufferInputStream();
+                requestBuilder.execute(new TransferCompletionHandler().addTransferListener(new TransferListener() {
+                    @Override
+                    public void onRequestHeadersSent(FluentCaseInsensitiveStringsMap headers) {
+                    }
+
+                    @Override
+                    public void onResponseHeadersReceived(FluentCaseInsensitiveStringsMap headers) {
+                        target.touch();
+                    }
+
+                    @Override
+                    public void onBytesSent(long amount, long current, long total) {
+                    }
+
+                    @Override
+                    public void onBytesReceived(byte[] bytes) throws IOException {
+                        stream.putBuffer(ByteBuffer.wrap(bytes));
+                    }
+
+                    @Override
+                    public void onRequestResponseCompleted() {
+                        stream.setDone(true);
+                    }
+
+                    @Override
+                    public void onThrowable(Throwable t) {
+                        stream.setFailed(t);
+                    }
+                }));
+                return stream;
+            } catch (Exception e) {
+                LOG.error("unhandled IOException", rootCause(e));
+                target.markFailure();
+                throw e;
             }
         }
     }

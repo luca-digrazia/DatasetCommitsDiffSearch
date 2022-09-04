@@ -1,26 +1,23 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.restclient.models;
 
 import com.google.common.collect.Lists;
-import com.google.inject.Inject;
+import org.graylog2.rest.models.system.SystemJobSummary;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ServerNodes;
@@ -36,7 +33,6 @@ import org.graylog2.restclient.models.api.responses.system.GetSystemJobsResponse
 import org.graylog2.restclient.models.api.responses.system.GetSystemMessagesResponse;
 import org.graylog2.restclient.models.api.responses.system.NodeThroughputResponse;
 import org.graylog2.restclient.models.api.responses.system.NotificationSummaryResponse;
-import org.graylog2.restclient.models.api.responses.system.SystemJobSummaryResponse;
 import org.graylog2.restclient.models.api.responses.system.SystemMessageSummaryResponse;
 import org.graylog2.restclient.models.api.responses.system.indices.IndexerFailureCountResponse;
 import org.graylog2.restclient.models.api.responses.system.indices.IndexerFailuresResponse;
@@ -49,8 +45,10 @@ import org.slf4j.LoggerFactory;
 import play.libs.F;
 import play.mvc.Http;
 
+import javax.inject.Inject;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class ClusterService {
@@ -95,7 +93,7 @@ public class ClusterService {
     }
 
     public void deleteNotification(Notification.Type type) throws APIException, IOException {
-        api.path(routes.NotificationsResource().deleteNotification(type.toString().toLowerCase()))
+        api.path(routes.NotificationsResource().deleteNotification(type.toString().toLowerCase(Locale.ENGLISH)))
                 .expect(204)
                 .execute();
     }
@@ -137,7 +135,7 @@ public class ClusterService {
         for (Node node : serverNodes.all()) {
             GetSystemJobsResponse r = api.path(routes.SystemJobResource().list(), GetSystemJobsResponse.class).node(node).execute();
 
-            for (SystemJobSummaryResponse job : r.jobs) {
+            for (SystemJobSummary job : r.jobs) {
                 jobs.add(systemJobFactory.fromSummaryResponse(job));
             }
         }
@@ -157,7 +155,13 @@ public class ClusterService {
 
     public List<NodeJVMStats> getClusterJvmStats() {
         List<NodeJVMStats> result = Lists.newArrayList();
-        Map<Node, ClusterEntityJVMStatsResponse> rs = api.path(routes.SystemResource().jvm(), ClusterEntityJVMStatsResponse.class).fromAllNodes().executeOnAll();
+        Map<Node, ClusterEntityJVMStatsResponse> rs = null;
+        try {
+            rs = api.path(routes.SystemResource().jvm(), ClusterEntityJVMStatsResponse.class).fromAllNodes().executeOnAll();
+        } catch (APIException e) {
+            LOG.error("Unable to load JVM stats", e);
+            return result;
+        }
 
         for (Map.Entry<Node, ClusterEntityJVMStatsResponse> entry : rs.entrySet()) {
             if (entry.getValue() == null) {
@@ -171,10 +175,15 @@ public class ClusterService {
     }
 
     public F.Tuple<Integer, Integer> getClusterThroughput() {
-        final Map<Node, NodeThroughputResponse> responses =
-                api.path(routes.ThroughputResource().total(), NodeThroughputResponse.class)
-                        .fromAllNodes()
-                        .executeOnAll();
+        final Map<Node, NodeThroughputResponse> responses;
+        try {
+            responses = api.path(routes.ThroughputResource().total(), NodeThroughputResponse.class)
+                    .fromAllNodes()
+                    .executeOnAll();
+        } catch (APIException e) {
+            LOG.error("Unable to load cluster throughput", e);
+            return F.Tuple(0, 0);
+        }
         int t = 0;
         for (Map.Entry<Node, NodeThroughputResponse> entry : responses.entrySet()) {
             if (entry.getValue() == null) {
@@ -189,7 +198,10 @@ public class ClusterService {
 
     // TODO duplicated
     private long asLong(String read_bytes, Map<String, Metric> metrics) {
-        return ((Number) ((Gauge) metrics.get(read_bytes)).getValue()).longValue();
+        if (metrics.get(read_bytes) != null)
+            return ((Number) ((Gauge) metrics.get(read_bytes)).getValue()).longValue();
+        else
+            return 0;
     }
 
     // TODO duplicated
@@ -237,27 +249,7 @@ public class ClusterService {
                 ioStats.writtenBytes += asLong(written_bytes, metrics);
                 ioStats.writtenBytesTotal += asLong(written_bytes_total, metrics);
             }
-
-            for (Radio radio : nodeService.radios().values()) {
-                try {
-                    final MetricsListResponse radioResponse = api
-                            .path(routes.radio().MetricsResource().multipleMetrics(), MetricsListResponse.class)
-                            .body(request)
-                            .radio(radio)
-                            .expect(200, 404)
-                            .execute();
-                    final Map<String, Metric> metrics = radioResponse.getMetrics();
-
-                    ioStats.readBytes += asLong(read_bytes, metrics);
-                    ioStats.readBytesTotal += asLong(read_bytes_total, metrics);
-                    ioStats.writtenBytes += asLong(written_bytes, metrics);
-                    ioStats.writtenBytesTotal += asLong(written_bytes_total, metrics);
-                } catch (APIException | IOException e) {
-                    LOG.error("Unable to load metrics for radio node {}", radio.getId());
-                }
-            }
-
-        } catch (APIException | IOException e) {
+        } catch (APIException e) {
             LOG.error("Unable to load master node", e);
         }
         return ioStats;

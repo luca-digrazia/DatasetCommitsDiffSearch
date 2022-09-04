@@ -1,26 +1,23 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models.api.results;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.graylog2.restclient.models.FieldMapper;
 import org.graylog2.restclient.models.api.responses.HighlightRange;
@@ -29,8 +26,11 @@ import org.joda.time.DateTimeZone;
 
 import javax.annotation.Nullable;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -44,6 +44,8 @@ public class MessageResult {
             "gl2_source_node",
             "gl2_source_radio",
             "gl2_source_radio_input",
+            "gl2_source_collector",
+            "gl2_source_collector_input",
             "g2eid"
     );
 
@@ -53,8 +55,6 @@ public class MessageResult {
     private final DateTime timestamp;
     private final String sourceNodeId;
     private final String sourceInputId;
-    private final String sourceRadioId;
-    private final String sourceRadioInputId;
     private final List<String> streamIds;
     private final Map<String, List<HighlightRange>> highlightRanges;
     private final FieldMapper fieldMapper;
@@ -94,21 +94,13 @@ public class MessageResult {
         this.sourceInputId = (String) message.get("gl2_source_input");
         this.index = index;
         this.streamIds = (List<String>) message.get("streams");
-
-        if(message.containsKey("gl2_source_radio")) {
-            sourceRadioId = (String) message.get("gl2_source_radio");
-            sourceRadioInputId = (String) message.get("gl2_source_radio_input");
-        } else {
-            sourceRadioId = null;
-            sourceRadioInputId = null;
-        }
     }
 
     private DateTime timestampToDateTime(final Object timestamp) {
         if (timestamp instanceof Double) {
             return new DateTime(Math.round((double) timestamp * 1000.0d), DateTimeZone.UTC);
         } else if (timestamp instanceof Long || timestamp instanceof Integer) {
-            return new DateTime((long) timestamp * 1000l, DateTimeZone.UTC);
+            return new DateTime((long) timestamp * 1000L, DateTimeZone.UTC);
         } else {
             return new DateTime(timestamp, DateTimeZone.UTC);
         }
@@ -137,14 +129,14 @@ public class MessageResult {
     }
 
     public Map<String, Object> getFormattedFields() {
-        final DecimalFormat doubleFormatter = new DecimalFormat("#.###");
+        final DecimalFormat doubleFormatter = new DecimalFormat("#.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
         return Maps.transformEntries(getFilteredFields(), new Maps.EntryTransformer<String, Object, Object>() {
             @Override
             public Object transformEntry(@Nullable String key, @Nullable Object value) {
                 // Get rid of .0 of doubles. 9001.0 becomes "9001", 9001.25 becomes "9001.25"
                 // Never format a double in scientific notation.
-                if(value instanceof Double) {
+                if (value instanceof Double) {
                     Double d = (Double) value;
                     if (d.longValue() == d) {
                         // preserve the "numberness" of the value, so the field mappers can take this into account
@@ -171,23 +163,11 @@ public class MessageResult {
         return sourceInputId;
     }
 
-    public boolean viaRadio() {
-        return sourceRadioId != null;
-    }
-
-    public String getSourceRadioId() {
-        return sourceRadioId;
-    }
-
-    public String getSourceRadioInputId() {
-        return sourceRadioInputId;
-    }
-
     public List<String> getStreamIds() {
         if (this.streamIds != null) {
             return this.streamIds;
         } else {
-            return Lists.newArrayList();
+            return Collections.emptyList();
         }
     }
 

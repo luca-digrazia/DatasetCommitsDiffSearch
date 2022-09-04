@@ -1,20 +1,38 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.restclient.models;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.ServerNodes;
-import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
-import org.graylog2.restclient.models.api.responses.system.*;
+import org.graylog2.restclient.models.api.responses.system.InputLaunchResponse;
+import org.graylog2.restclient.models.api.responses.system.InputStateSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.InputTypeSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.InputTypesResponse;
+import org.graylog2.restclient.models.api.responses.system.InputsResponse;
 import org.graylog2.restroutes.generated.InputsResource;
 import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import play.mvc.Http;
 
+import javax.inject.Inject;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.List;
@@ -49,16 +67,11 @@ public class InputService {
 
     protected Map<ClusterEntity, InputsResponse> getInputsFromAllEntities() {
         Map<ClusterEntity, InputsResponse> result = Maps.newHashMap();
-        result.putAll(api.path(resource.list(), InputsResponse.class).fromAllNodes().executeOnAll());
         try {
-            for(Radio radio : nodeService.radios().values()) {
-                result.put(radio,
-                        api.path(routes.radio().InputsResource().list(), InputsResponse.class).radio(radio).execute());
-            }
+            result.putAll(api.path(resource.list(), InputsResponse.class).fromAllNodes().executeOnAll());
         } catch (APIException e) {
-            log.error("Unable to fetch radio list: " + e);
-        } catch (IOException e) {
-            log.error("Unable to fetch radio list: " + e);
+            log.error("Unable to fetch server input list", e);
+            return result;
         }
         return result;
     }
@@ -77,7 +90,13 @@ public class InputService {
     }
 
     protected Map<Node, InputsResponse> getInputsFromAllNodes() {
-        return api.path(resource.list(), InputsResponse.class).fromAllNodes().executeOnAll();
+        Map<Node, InputsResponse> responseMap = Maps.newHashMap();
+        try {
+            responseMap.putAll(api.path(resource.list(), InputsResponse.class).fromAllNodes().executeOnAll());
+        } catch (APIException e) {
+            log.error("Unable to fetch input list: ", e);
+        }
+        return responseMap;
     }
 
     public List<InputState> loadAllInputStates(ClusterEntity node) {
@@ -137,7 +156,7 @@ public class InputService {
 
     public Map<Node, Map<String, String>> getAllInputTypes() throws IOException, APIException {
         Map<Node, Map<String, String>> result = Maps.newHashMap();
-        Map<Node, InputTypesResponse> inputTypesResponseMap = api.path(resource.types(), InputTypesResponse.class)
+        Map<Node, InputTypesResponse> inputTypesResponseMap = api.path(routes.InputTypesResource().types(), InputTypesResponse.class)
                 .fromAllNodes().executeOnAll();
 
         for (Map.Entry<Node, InputTypesResponse> entry : inputTypesResponseMap.entrySet())
@@ -147,7 +166,7 @@ public class InputService {
     }
 
     public InputTypeSummaryResponse getInputTypeInformation(Node node, String type) throws IOException, APIException {
-        return api.path(resource.info(type), InputTypeSummaryResponse.class).node(node).execute();
+        return api.path(routes.InputTypesResource().info(type), InputTypeSummaryResponse.class).node(node).execute();
     }
 
     public Map<String, InputTypeSummaryResponse> getAllInputTypeInformation() throws IOException, APIException {
@@ -168,9 +187,9 @@ public class InputService {
         return types;
     }
 
-    public String launchGlobal(String title, String type, Map<String, Object> configuration, User creator, boolean isExclusive) throws ExclusiveInputException {
+    public String launchGlobal(String title, String type, Map<String, Object> configuration, boolean isExclusive) throws ExclusiveInputException {
         Node master = serverNodes.master();
-        InputLaunchResponse ilr = master.launchInput(title, type, true, configuration, creator, isExclusive);
+        InputLaunchResponse ilr = master.launchInput(title, type, true, configuration, isExclusive);
 
         if (ilr == null) {
             throw new RuntimeException("Unable to launch global input!");
@@ -178,19 +197,10 @@ public class InputService {
 
         for (Node serverNode: serverNodes.all()) {
             if (!serverNode.isMaster())
-                serverNode.launchExistingInput(ilr.persistId);
-        }
-        try {
-            for (Radio radio : nodeService.radios().values()) {
-                radio.launchExistingInput(ilr.persistId);
-            }
-        } catch (APIException e) {
-            log.error("Unable to fetch list of radios: " + e);
-        } catch (IOException e) {
-            log.error("Unable to fetch list of radios: " + e);
+                serverNode.launchExistingInput(ilr.id);
         }
 
-        return ilr.persistId;
+        return ilr.id;
     }
 
     public Map<ClusterEntity, Boolean> terminateGlobal(String inputId) {
@@ -199,15 +209,6 @@ public class InputService {
         for (Node serverNode : serverNodes.all())
             if (!serverNode.isMaster())
                 results.put(serverNode, serverNode.terminateInput(inputId));
-
-        try {
-            for (Radio radio : nodeService.radios().values())
-                results.put(radio, radio.terminateInput(inputId));
-        } catch (APIException e) {
-            log.error("Unable to fetch list of radios: " + e);
-        } catch (IOException e) {
-            log.error("Unable to fetch list of radios: " + e);
-        }
 
         Node master = serverNodes.master();
         results.put(master, master.terminateInput(inputId));
@@ -246,11 +247,6 @@ public class InputService {
         final List<ClusterEntity> targetNodes = Lists.newArrayList();
         if (target.getValue().getInput().getGlobal()) {
             targetNodes.addAll(serverNodes.all());
-            try {
-                targetNodes.addAll(nodeService.radios().values());
-            } catch (APIException | IOException e) {
-                log.error("Unable to fetch list of radios: " + e);
-            }
         } else {
             targetNodes.add(target.getKey());
         }
