@@ -101,7 +101,6 @@ public class HibernateSearchElasticsearchRuntimeConfig {
          * Per-index specific configuration.
          */
         @ConfigItem
-        @ConfigDocMapKey("index-name")
         Map<String, ElasticsearchIndexConfig> indexes;
     }
 
