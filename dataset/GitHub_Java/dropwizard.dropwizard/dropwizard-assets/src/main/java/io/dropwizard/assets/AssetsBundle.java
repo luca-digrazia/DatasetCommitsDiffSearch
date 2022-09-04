@@ -5,8 +5,6 @@ import io.dropwizard.Bundle;
 import io.dropwizard.servlets.assets.AssetServlet;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -14,8 +12,6 @@ import static com.google.common.base.Preconditions.checkArgument;
  * A bundle for serving static asset files from the classpath.
  */
 public class AssetsBundle implements Bundle {
-    private static final Logger LOGGER = LoggerFactory.getLogger(AssetsBundle.class);
-
     private static final String DEFAULT_ASSETS_NAME = "assets";
     private static final String DEFAULT_INDEX_FILE = "index.htm";
     private static final String DEFAULT_PATH = "/assets";
@@ -105,23 +101,10 @@ public class AssetsBundle implements Bundle {
 
     @Override
     public void run(Environment environment) {
-        LOGGER.info("Registering AssetBundle with name: {} for path {}", assetsName, uriPath + '*');
         environment.servlets().addServlet(assetsName, createServlet()).addMapping(uriPath + '*');
     }
 
-    public String getResourcePath() {
-        return resourcePath;
-    }
-
-    public String getUriPath() {
-        return uriPath;
-    }
-
-    public String getIndexFile() {
-        return indexFile;
-    }
-
-    protected AssetServlet createServlet() {
+    private AssetServlet createServlet() {
         return new AssetServlet(resourcePath, uriPath, indexFile, Charsets.UTF_8);
     }
 }
