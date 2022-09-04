@@ -14,7 +14,10 @@
 
 package com.google.devtools.build.lib.runtime;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.AdditionalMatchers.find;
 import static org.mockito.AdditionalMatchers.not;
 import static org.mockito.Matchers.anyString;
@@ -25,9 +28,8 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.AnsiTerminalPrinter;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -191,36 +193,36 @@ public class TestSummaryTest {
     // No need to copy if built twice in a row; no direct setters on the object.
     TestSummary summary = basicBuilder.build();
     TestSummary sameSummary = basicBuilder.build();
-    assertThat(sameSummary).isSameAs(summary);
+    assertSame(summary, sameSummary);
 
     basicBuilder.addTestTimes(ImmutableList.of(40L));
 
     TestSummary summaryCopy = basicBuilder.build();
-    assertThat(summaryCopy.getTarget()).isEqualTo(summary.getTarget());
-    assertThat(summaryCopy.getStatus()).isEqualTo(summary.getStatus());
-    assertThat(summaryCopy.numCached()).isEqualTo(summary.numCached());
-    assertThat(summaryCopy).isNotSameAs(summary);
-    assertThat(summary.totalRuns()).isEqualTo(0);
-    assertThat(summaryCopy.totalRuns()).isEqualTo(1);
+    assertEquals(summary.getTarget(), summaryCopy.getTarget());
+    assertEquals(summary.getStatus(), summaryCopy.getStatus());
+    assertEquals(summary.numCached(), summaryCopy.numCached());
+    assertNotSame(summary, summaryCopy);
+    assertEquals(0, summary.totalRuns());
+    assertEquals(1, summaryCopy.totalRuns());
 
     // Check that the builder can add a new warning to the copy,
     // despite the immutability of the original.
     basicBuilder.addTestTimes(ImmutableList.of(60L));
 
     TestSummary fiftyCached = basicBuilder.setNumCached(50).build();
-    assertThat(fiftyCached.getStatus()).isEqualTo(summary.getStatus());
-    assertThat(fiftyCached.numCached()).isEqualTo(50);
-    assertThat(fiftyCached.totalRuns()).isEqualTo(2);
+    assertEquals(summary.getStatus(), fiftyCached.getStatus());
+    assertEquals(50, fiftyCached.numCached());
+    assertEquals(2, fiftyCached.totalRuns());
 
     TestSummary sixtyCached = basicBuilder.setNumCached(60).build();
-    assertThat(sixtyCached.numCached()).isEqualTo(60);
-    assertThat(fiftyCached.numCached()).isEqualTo(50);
+    assertEquals(60, sixtyCached.numCached());
+    assertEquals(50, fiftyCached.numCached());
 
     TestSummary failedCacheTemplate = TestSummary.newBuilderFromExisting(fiftyCached)
         .setStatus(BlazeTestStatus.FAILED)
         .build();
-    assertThat(failedCacheTemplate.numCached()).isEqualTo(50);
-    assertThat(failedCacheTemplate.getStatus()).isEqualTo(BlazeTestStatus.FAILED);
+    assertEquals(50, failedCacheTemplate.numCached());
+    assertEquals(BlazeTestStatus.FAILED, failedCacheTemplate.getStatus());
   }
 
   @Test
@@ -365,7 +367,7 @@ public class TestSummaryTest {
 
     TestSummary summaryFailed = createTestSummaryWithDetails(
         BlazeTestStatus.FAILED, Arrays.asList(detailPassed, detailFailed));
-    assertThat(summaryFailed.getStatus()).isEqualTo(BlazeTestStatus.FAILED);
+    assertEquals(BlazeTestStatus.FAILED, summaryFailed.getStatus());
 
     AnsiTerminalPrinter printerPassed = Mockito.mock(AnsiTerminalPrinter.class);
     TestSummaryPrinter.print(summaryPassed, printerPassed, true, true);
@@ -426,8 +428,8 @@ public class TestSummaryTest {
     // This way we can make the test independent from the sort order of FAILEd
     // and PASSED.
 
-    assertThat(summaryFailedCached.compareTo(summaryPassedNotCached)).isLessThan(0);
-    assertThat(summaryPassedCached.compareTo(summaryFailedNotCached)).isLessThan(0);
+    assertTrue(summaryFailedCached.compareTo(summaryPassedNotCached) < 0);
+    assertTrue(summaryPassedCached.compareTo(summaryFailedNotCached) < 0);
   }
 
   @Test
@@ -453,11 +455,8 @@ public class TestSummaryTest {
   }
 
   private ConfiguredTarget target(String path, String targetName) throws Exception {
-    BuildConfiguration configuration = Mockito.mock(BuildConfiguration.class);
-    when(configuration.checksum()).thenReturn("abcdef");
     ConfiguredTarget target = Mockito.mock(ConfiguredTarget.class);
     when(target.getLabel()).thenReturn(Label.create(path, targetName));
-    when(target.getConfiguration()).thenReturn(configuration);
     return target;
   }
 
