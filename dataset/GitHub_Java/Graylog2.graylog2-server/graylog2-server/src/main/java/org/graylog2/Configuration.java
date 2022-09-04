@@ -20,8 +20,9 @@ import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.Validator;
 import com.github.joschi.jadconfig.ValidatorMethod;
-import com.github.joschi.jadconfig.converters.StringSetConverter;
+import com.github.joschi.jadconfig.converters.TrimmedStringSetConverter;
 import com.github.joschi.jadconfig.util.Duration;
+import com.github.joschi.jadconfig.validators.DirectoryPathReadableValidator;
 import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
@@ -32,6 +33,7 @@ import org.graylog2.utilities.IpSubnet;
 import org.joda.time.DateTimeZone;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Set;
@@ -114,12 +116,7 @@ public class Configuration extends BaseConfiguration {
     private int ldapConnectionTimeout = 2000;
 
     @Parameter(value = "alert_check_interval", validator = PositiveIntegerValidator.class)
-    @Deprecated
     private int alertCheckInterval = 60;
-
-    @Parameter(value = "enable_legacy_alerts")
-    @Deprecated
-    private boolean enableLegacyAlerts = false;
 
     @Parameter(value = "gc_warning_threshold")
     private Duration gcWarningThreshold = Duration.seconds(1L);
@@ -141,9 +138,6 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "trusted_proxies", converter = IPSubnetConverter.class)
     private Set<IpSubnet> trustedProxies = Collections.emptySet();
-
-    @Parameter(value = "deactivated_builtin_authentication_providers", converter = StringSetConverter.class)
-    private Set<String> deactivatedBuiltinAuthenticationProviders = Collections.emptySet();
 
     public boolean isMaster() {
         return isMaster;
@@ -242,14 +236,8 @@ public class Configuration extends BaseConfiguration {
         return ldapConnectionTimeout;
     }
 
-    @Deprecated
     public int getAlertCheckInterval() {
         return alertCheckInterval;
-    }
-
-    @Deprecated
-    public boolean isEnableLegacyAlerts() {
-        return enableLegacyAlerts;
     }
 
     public Duration getGcWarningThreshold() {
@@ -282,10 +270,6 @@ public class Configuration extends BaseConfiguration {
 
     public int getLoadBalancerRequestThrottleJournalUsage() {
         return loadBalancerThrottleThresholdPercentage;
-    }
-
-    public Set<String> getDeactivatedBuiltinAuthenticationProviders() {
-        return deactivatedBuiltinAuthenticationProviders;
     }
 
     @ValidatorMethod

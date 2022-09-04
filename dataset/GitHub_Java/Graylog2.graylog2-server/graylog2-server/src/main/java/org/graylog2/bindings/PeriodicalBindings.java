@@ -1,49 +1,47 @@
-/*
- * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.bindings;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.multibindings.Multibinder;
+import org.graylog2.events.ClusterEventCleanupPeriodical;
+import org.graylog2.events.ClusterEventPeriodical;
+import org.graylog2.indexer.fieldtypes.IndexFieldTypePollerPeriodical;
+import org.graylog2.periodical.AlarmCallbacksMigrationPeriodical;
 import org.graylog2.periodical.AlertScannerThread;
 import org.graylog2.periodical.BatchedElasticSearchOutputFlushThread;
 import org.graylog2.periodical.ClusterHealthCheckThread;
-import org.graylog2.periodical.DeadLetterThread;
+import org.graylog2.periodical.ClusterIdGeneratorPeriodical;
+import org.graylog2.periodical.ConfigurationManagementPeriodical;
 import org.graylog2.periodical.GarbageCollectionWarningThread;
+import org.graylog2.periodical.IndexFailuresPeriodical;
+import org.graylog2.periodical.IndexRangesCleanupPeriodical;
+import org.graylog2.periodical.IndexRangesMigrationPeriodical;
 import org.graylog2.periodical.IndexRetentionThread;
 import org.graylog2.periodical.IndexRotationThread;
 import org.graylog2.periodical.IndexerClusterCheckerThread;
-import org.graylog2.periodical.MasterCacheWorkerThread;
+import org.graylog2.periodical.LdapGroupMappingMigration;
 import org.graylog2.periodical.NodePingThread;
-import org.graylog2.periodical.OutputCacheWorkerThread;
-import org.graylog2.periodical.StreamThroughputCounterManagerThread;
-import org.graylog2.periodical.TelemetryReporterThread;
+import org.graylog2.periodical.ThrottleStateUpdaterThread;
+import org.graylog2.periodical.TrafficCounterCalculator;
+import org.graylog2.periodical.UserPermissionMigrationPeriodical;
 import org.graylog2.periodical.VersionCheckThread;
 import org.graylog2.plugin.periodical.Periodical;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
 public class PeriodicalBindings extends AbstractModule {
     @Override
     protected void configure() {
@@ -51,16 +49,24 @@ public class PeriodicalBindings extends AbstractModule {
         periodicalBinder.addBinding().to(AlertScannerThread.class);
         periodicalBinder.addBinding().to(BatchedElasticSearchOutputFlushThread.class);
         periodicalBinder.addBinding().to(ClusterHealthCheckThread.class);
-        periodicalBinder.addBinding().to(DeadLetterThread.class);
         periodicalBinder.addBinding().to(GarbageCollectionWarningThread.class);
         periodicalBinder.addBinding().to(IndexerClusterCheckerThread.class);
         periodicalBinder.addBinding().to(IndexRetentionThread.class);
         periodicalBinder.addBinding().to(IndexRotationThread.class);
-        periodicalBinder.addBinding().to(MasterCacheWorkerThread.class);
         periodicalBinder.addBinding().to(NodePingThread.class);
-        periodicalBinder.addBinding().to(OutputCacheWorkerThread.class);
-        periodicalBinder.addBinding().to(StreamThroughputCounterManagerThread.class);
-        periodicalBinder.addBinding().to(TelemetryReporterThread.class);
         periodicalBinder.addBinding().to(VersionCheckThread.class);
+        periodicalBinder.addBinding().to(ThrottleStateUpdaterThread.class);
+        periodicalBinder.addBinding().to(ClusterEventPeriodical.class);
+        periodicalBinder.addBinding().to(ClusterEventCleanupPeriodical.class);
+        periodicalBinder.addBinding().to(ClusterIdGeneratorPeriodical.class);
+        periodicalBinder.addBinding().to(IndexRangesMigrationPeriodical.class);
+        periodicalBinder.addBinding().to(IndexRangesCleanupPeriodical.class);
+        periodicalBinder.addBinding().to(UserPermissionMigrationPeriodical.class);
+        periodicalBinder.addBinding().to(AlarmCallbacksMigrationPeriodical.class);
+        periodicalBinder.addBinding().to(ConfigurationManagementPeriodical.class);
+        periodicalBinder.addBinding().to(LdapGroupMappingMigration.class);
+        periodicalBinder.addBinding().to(IndexFailuresPeriodical.class);
+        periodicalBinder.addBinding().to(TrafficCounterCalculator.class);
+        periodicalBinder.addBinding().to(IndexFieldTypePollerPeriodical.class);
     }
 }
