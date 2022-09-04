@@ -27,13 +27,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * @see Configuration
  */
 public abstract class ConfiguredCommand<T extends Configuration> extends Command {
-    private boolean asynchronous;
-
-    private T configuration;
-
     protected ConfiguredCommand(String name, String description) {
         super(name, description);
-        this.asynchronous = false;
     }
 
     /**
@@ -60,34 +55,16 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
     @Override
     @SuppressWarnings("unchecked")
     public final void run(Bootstrap<?> bootstrap, Namespace namespace) throws Exception {
-        configuration = parseConfiguration(((Bootstrap<T>)bootstrap).getConfigurationFactoryFactory(),
-                                           bootstrap.getConfigurationSourceProvider(),
-                                           namespace.getString("file"),
-                                           getConfigurationClass(),
-                                           bootstrap.getObjectMapper());
-
-        try {
-            if (configuration != null) {
-                configuration.getLoggingFactory().configure(bootstrap.getMetricRegistry(),
-                                                            bootstrap.getApplication().getName());
-            }
-
-            run((Bootstrap<T>) bootstrap, namespace, configuration);
-        } finally {
-            if (!asynchronous) {
-                cleanup();
-            }
-        }
-    }
-
-    protected void cleanupAsynchronously() {
-        this.asynchronous = true;
-    }
-
-    protected void cleanup() {
+        final T configuration = parseConfiguration(((Bootstrap<T>)bootstrap).getConfigurationFactoryFactory(),
+                                                   bootstrap.getConfigurationSourceProvider(),
+                                                   namespace.getString("file"),
+                                                   getConfigurationClass(),
+                                                   bootstrap.getObjectMapper());
         if (configuration != null) {
-            configuration.getLoggingFactory().stop();
+            configuration.getLoggingFactory().configure(bootstrap.getMetricRegistry(),
+                                                        bootstrap.getApplication().getName());
         }
+        run((Bootstrap<T>) bootstrap, namespace, configuration);
     }
 
     /**
