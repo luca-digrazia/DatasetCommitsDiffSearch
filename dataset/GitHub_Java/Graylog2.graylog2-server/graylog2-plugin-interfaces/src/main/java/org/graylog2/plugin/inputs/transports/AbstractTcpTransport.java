@@ -34,6 +34,7 @@ import org.jboss.netty.channel.ChannelHandler;
 import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 
+import javax.inject.Provider;
 import java.util.LinkedHashMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
@@ -48,11 +49,11 @@ public abstract class AbstractTcpTransport extends NettyTransport {
             ThroughputCounter throughputCounter,
             LocalMetricRegistry localRegistry,
             Executor bossPool,
-            Executor workerPool,
+            Provider<Executor> workerPoolProvider,
             ConnectionCounter connectionCounter) {
         super(configuration, throughputCounter, localRegistry);
         this.bossExecutor = bossPool;
-        this.workerExecutor = workerPool;
+        this.workerExecutor = workerPoolProvider.get();
         this.connectionCounter = connectionCounter;
 
         this.localRegistry.register("open_connections", connectionCounter.gaugeCurrent());
