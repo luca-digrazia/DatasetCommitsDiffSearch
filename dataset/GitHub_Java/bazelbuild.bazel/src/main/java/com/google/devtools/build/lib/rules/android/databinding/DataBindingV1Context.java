@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.rules.android.AndroidCommon;
 import com.google.devtools.build.lib.rules.android.AndroidDataContext;
 import com.google.devtools.build.lib.rules.android.AndroidResources;
@@ -77,10 +78,10 @@ final class DataBindingV1Context implements DataBindingContext {
       RuleContext ruleContext,
       BiConsumer<JavaPluginInfoProvider, Iterable<Artifact>> consumer) {
 
-    JavaPluginInfoProvider javaPluginInfoProvider =
-        JavaInfo.getProvider(
-            JavaPluginInfoProvider.class,
-            ruleContext.getPrerequisite(DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR));
+    JavaPluginInfoProvider javaPluginInfoProvider = JavaInfo.getProvider(
+        JavaPluginInfoProvider.class,
+        ruleContext.getPrerequisite(
+            DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR, RuleConfiguredTarget.Mode.HOST));
 
     ImmutableList<Artifact> annotationProcessorOutputs =
         DataBinding.getMetadataOutputs(ruleContext, useUpdatedArgs, metadataOutputSuffixes);
@@ -89,7 +90,7 @@ final class DataBindingV1Context implements DataBindingContext {
   }
 
   @Override
-  public ImmutableList<Artifact> processDeps(RuleContext ruleContext, boolean isBinary) {
+  public ImmutableList<Artifact> processDeps(RuleContext ruleContext) {
 
     ImmutableList.Builder<Artifact> dataBindingJavaInputs = ImmutableList.builder();
     if (AndroidResources.definesAndroidResources(ruleContext.attributes())) {
