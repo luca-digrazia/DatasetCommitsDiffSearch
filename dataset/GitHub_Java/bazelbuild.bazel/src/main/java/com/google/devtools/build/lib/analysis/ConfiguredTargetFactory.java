@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
@@ -244,12 +243,12 @@ public final class ConfiguredTargetFactory {
       }
     } else if (target instanceof InputFile) {
       InputFile inputFile = (InputFile) target;
-      SourceArtifact artifact =
+      Artifact artifact =
           artifactFactory.getSourceArtifact(
               inputFile.getExecPath(),
               inputFile.getPackage().getSourceRoot(),
               ConfiguredTargetKey.of(target.getLabel(), config));
-      analysisEnvironment.registerSourceDependency(artifact);
+
       return new InputFileConfiguredTarget(targetContext, inputFile, artifact);
     } else if (target instanceof PackageGroup) {
       PackageGroup packageGroup = (PackageGroup) target;
