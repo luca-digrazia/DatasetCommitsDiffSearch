@@ -344,7 +344,6 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
     if (defaultFlags().contains(Flag.TRIMMED_CONFIGURATIONS)) {
       return;
     }
-    getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
     scratch.file(
         "java/a/BUILD",
         "cc_library(name = 'lib', srcs = ['lib.cc'])",

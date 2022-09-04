@@ -398,6 +398,7 @@ public final class AspectFunction implements SkyFunction {
           ConfiguredTargetFunction.getConfigConditions(
               associatedConfiguredTargetAndData.getTarget(),
               env,
+              resolver,
               originalTargetAndAspectConfiguration,
               transitivePackagesForPackageRootResolution,
               transitiveRootCauses);
