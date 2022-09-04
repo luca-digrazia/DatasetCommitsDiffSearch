@@ -472,7 +472,7 @@ public class StandaloneTestStrategy extends TestStrategy {
             .build(),
         /* tools= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
         /* outputs= */ ImmutableSet.of(
-            ActionInputHelper.fromPath(action.getCoverageData().getExecPath())),
+            ActionInputHelper.fromPath(action.getCoverageData().getExecPathString())),
         SpawnAction.DEFAULT_RESOURCE_SET);
   }
 
