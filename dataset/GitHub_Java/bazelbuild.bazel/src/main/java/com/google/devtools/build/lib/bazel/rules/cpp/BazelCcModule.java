@@ -106,7 +106,6 @@ public class BazelCcModule extends CcModule
       Object codeCoverageEnabled,
       Object hdrsCheckingMode,
       Object variablesExtension,
-      Object language,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
     return compile(
@@ -142,7 +141,6 @@ public class BazelCcModule extends CcModule
         codeCoverageEnabled,
         hdrsCheckingMode,
         variablesExtension,
-        language,
         thread);
   }
 
