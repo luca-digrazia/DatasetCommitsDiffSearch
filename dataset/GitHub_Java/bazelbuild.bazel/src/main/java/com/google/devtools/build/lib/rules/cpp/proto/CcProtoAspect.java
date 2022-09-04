@@ -190,9 +190,7 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
       CcLibraryHelper.Info info = helper.build();
       ccLibraryProviders = info.getProviders();
       outputGroups = info.getOutputGroups();
-      // On Windows, dynamic library is not built by default, so don't add them to filesToBuild.
-      info.addLinkingOutputsTo(
-          filesBuilder, !featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS));
+      info.addLinkingOutputsTo(filesBuilder);
     }
 
     private boolean areSrcsBlacklisted() {

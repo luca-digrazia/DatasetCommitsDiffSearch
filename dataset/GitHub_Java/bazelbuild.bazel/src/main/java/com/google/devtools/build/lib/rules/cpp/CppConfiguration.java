@@ -645,6 +645,14 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
+   * Returns whether shared libraries must be compiled with position
+   * independent code on this platform.
+   */
+  public boolean toolchainNeedsPic() {
+    return cppToolchainInfo.toolchainNeedsPic();
+  }
+
+  /**
    * Returns whether binaries must be compiled with position independent code.
    */
   public boolean usePicForBinaries() {
@@ -703,6 +711,15 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
   public Label getSysrootLabel() {
     return sysrootLabel;
+  }
+
+  /**
+   * Returns the run time sysroot, which is where the dynamic linker
+   * and system libraries are found at runtime.  This is usually an absolute path. If the
+   * toolchain compiler does not support sysroots, then this method returns <code>null</code>.
+   */
+  public PathFragment getRuntimeSysroot() {
+    return cppToolchainInfo.getRuntimeSysroot();
   }
 
   /**
@@ -1218,6 +1235,15 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
   public boolean getUseInterfaceSharedObjects() {
     return cppOptions.useInterfaceSharedObjects;
+  }
+
+  /**
+   * Return the name of the directory (relative to the bin directory) that
+   * holds mangled links to shared libraries. This name is always set to
+   * the '{@code _solib_<cpu_archictecture_name>}.
+   */
+  public String getSolibDirectory() {
+    return cppToolchainInfo.getSolibDirectory();
   }
 
   /**

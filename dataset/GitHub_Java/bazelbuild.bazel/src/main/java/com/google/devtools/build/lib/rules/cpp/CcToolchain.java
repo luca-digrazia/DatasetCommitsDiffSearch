@@ -331,13 +331,9 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
           .getProvider(FileProvider.class).getFilesToBuild()) {
         if (CppHelper.SHARED_LIBRARY_FILETYPES.matches(artifact.getFilename())) {
           dynamicRuntimeLinkInputs.add(artifact);
-          dynamicRuntimeLinkSymlinksBuilder.add(
-              SolibSymlinkAction.getCppRuntimeSymlink(
-                  ruleContext,
-                  artifact,
-                  toolchainInfo.getSolibDirectory(),
-                  runtimeSolibDirBase,
-                  ruleContext.getConfiguration()));
+          dynamicRuntimeLinkSymlinksBuilder.add(SolibSymlinkAction.getCppRuntimeSymlink(
+              ruleContext, artifact, runtimeSolibDirBase,
+              ruleContext.getConfiguration()));
         }
       }
       dynamicRuntimeLinkSymlinks = dynamicRuntimeLinkSymlinksBuilder.build();
@@ -351,7 +347,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
               ruleContext,
               purposePrefix + "dynamic_runtime_link",
               dynamicRuntimeLinkInputs,
-              toolchainInfo.getSolibDirectory(),
               runtimeSolibDirBase,
               ruleContext.getConfiguration());
       dynamicRuntimeLinkMiddleman = dynamicRuntimeLinkMiddlemanSet.isEmpty()

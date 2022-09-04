@@ -332,6 +332,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // Store immutable context for use in other *_binary rules that are implemented by
     // linking the interpreter (Java, Python, etc.) together with native deps.
     CppLinkAction.Context linkContext = new CppLinkAction.Context(linkActionBuilder);
+    Iterable<LtoBackendArtifacts> ltoBackendArtifacts = ImmutableList.of();
     boolean usePic = CppHelper.usePic(ruleContext, !isLinkShared(ruleContext));
 
     if (linkActionBuilder.hasLtoBitcodeInputs()
@@ -340,6 +341,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       linkActionBuilder.setUsePicForLtoBackendActions(usePic);
       CppLinkAction indexAction = linkActionBuilder.build();
       ruleContext.registerAction(indexAction);
+
+      ltoBackendArtifacts = indexAction.getAllLtoBackendArtifacts();
 
       linkActionBuilder.setLtoIndexing(false);
     }
@@ -353,8 +356,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
 
     CppLinkAction linkAction = linkActionBuilder.build();
-    Iterable<LtoBackendArtifacts> ltoBackendArtifacts =
-        linkActionBuilder.getAllLtoBackendArtifacts();
     ruleContext.registerAction(linkAction);
     LibraryToLink outputLibrary = linkAction.getOutputLibrary();
     Iterable<Artifact> fakeLinkerInputs =
