@@ -204,10 +204,6 @@ public class Retrier {
     this.sleeper = sleeper;
   }
 
-  ListeningScheduledExecutorService getRetryService() {
-    return retryService;
-  }
-
   /**
    * Execute a {@link Callable}, retrying execution in case of failure and returning the result in
    * case of success.
@@ -264,7 +260,7 @@ public class Retrier {
    * Executes an {@link AsyncCallable}, retrying execution in case of failure with the given
    * backoff.
    */
-  public <T> ListenableFuture<T> executeAsync(AsyncCallable<T> call, Backoff backoff) {
+  private <T> ListenableFuture<T> executeAsync(AsyncCallable<T> call, Backoff backoff) {
     try {
       return Futures.catchingAsync(
           call.call(),
