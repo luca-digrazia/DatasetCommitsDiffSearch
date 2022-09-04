@@ -62,8 +62,6 @@ public class GELFMessage {
 
     private Map<Integer, GELFClientChunk> chunks = null;
     private boolean chunked = false;
-    
-    private byte[] raw;
 
     /**
      * Get the version
@@ -412,14 +410,6 @@ public class GELFMessage {
 
     public boolean isChunked() {
         return this.chunked;
-    }
-
-    public byte[] getRaw() {
-        return this.raw;
-    }
-
-    public void setRaw(byte[] raw) {
-        this.raw = raw;
     }
 
 }

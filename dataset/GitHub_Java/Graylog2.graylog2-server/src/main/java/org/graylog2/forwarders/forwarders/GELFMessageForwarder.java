@@ -47,15 +47,16 @@ public class GELFMessageForwarder extends UDPForwarder implements MessageForward
         if (this.host.isEmpty() || this.port <= 0) {
             throw new MessageForwarderConfigurationException("Host is empty or port is invalid.");
         }
-        
+
         if (message.isChunked()) {
             LOG.info("Forwarding a chunked message.");
             for (GELFClientChunk chunk : message.getMessageChunks().values()) {
-                LOG.info("Forwarding chunked GELF message chunk:" + chunk.toString());
-                this.send(chunk.getRaw());
+                LOG.info("Fowarding chunked GELF message chunk: <" + chunk.getHash() + ">");
+                this.send(chunk.getData());
             }
         } else {
-            this.succeeded = this.send(message.getRaw());
+            // TODO: THIS NEEDS TO BE GZIPPED.
+            this.succeeded = this.send(message.getShortMessage().getBytes());
         }
 
         return false;
