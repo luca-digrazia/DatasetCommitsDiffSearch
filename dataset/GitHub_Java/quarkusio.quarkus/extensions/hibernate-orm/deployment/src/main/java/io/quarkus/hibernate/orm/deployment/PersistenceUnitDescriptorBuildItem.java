@@ -18,7 +18,6 @@ import io.quarkus.hibernate.orm.runtime.boot.QuarkusPersistenceUnitDefinition;
 public final class PersistenceUnitDescriptorBuildItem extends MultiBuildItem {
 
     private final ParsedPersistenceXmlDescriptor descriptor;
-    private final boolean enversIsPresent;
     private final String dataSource;
     private final MultiTenancyStrategy multiTenancyStrategy;
     private final String multiTenancySchemaDataSource;
@@ -26,9 +25,8 @@ public final class PersistenceUnitDescriptorBuildItem extends MultiBuildItem {
     private final boolean fromPersistenceXml;
 
     public PersistenceUnitDescriptorBuildItem(ParsedPersistenceXmlDescriptor descriptor, boolean isReactive,
-            boolean fromPersistenceXml, boolean enversIsPresent) {
+            boolean fromPersistenceXml) {
         this.descriptor = descriptor;
-        this.enversIsPresent = enversIsPresent;
         this.dataSource = DataSourceUtil.DEFAULT_DATASOURCE_NAME;
         this.multiTenancyStrategy = MultiTenancyStrategy.NONE;
         this.multiTenancySchemaDataSource = null;
@@ -38,10 +36,9 @@ public final class PersistenceUnitDescriptorBuildItem extends MultiBuildItem {
 
     public PersistenceUnitDescriptorBuildItem(ParsedPersistenceXmlDescriptor descriptor, String dataSource,
             MultiTenancyStrategy multiTenancyStrategy, String multiTenancySchemaDataSource, boolean isReactive,
-            boolean fromPersistenceXml, boolean enversIsPresent) {
+            boolean fromPersistenceXml) {
         this.descriptor = descriptor;
         this.dataSource = dataSource;
-        this.enversIsPresent = enversIsPresent;
         this.multiTenancyStrategy = multiTenancyStrategy;
         this.multiTenancySchemaDataSource = multiTenancySchemaDataSource;
         this.isReactive = isReactive;
@@ -74,6 +71,6 @@ public final class PersistenceUnitDescriptorBuildItem extends MultiBuildItem {
 
     public QuarkusPersistenceUnitDefinition asOutputPersistenceUnitDefinition() {
         return new QuarkusPersistenceUnitDefinition(descriptor, dataSource, multiTenancyStrategy, isReactive,
-                fromPersistenceXml, enversIsPresent);
+                fromPersistenceXml);
     }
 }

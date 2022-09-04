@@ -123,7 +123,7 @@ public final class FastBootHibernateReactivePersistenceProvider implements Persi
                 continue;
             }
 
-            RecordedState recordedState = PersistenceUnitsHolder.popRecordedState(persistenceUnitName);
+            RecordedState recordedState = PersistenceUnitsHolder.getRecordedState(persistenceUnitName);
 
             final PrevalidatedQuarkusMetadata metadata = recordedState.getMetadata();
             final BuildTimeSettings buildTimeSettings = recordedState.getBuildTimeSettings();

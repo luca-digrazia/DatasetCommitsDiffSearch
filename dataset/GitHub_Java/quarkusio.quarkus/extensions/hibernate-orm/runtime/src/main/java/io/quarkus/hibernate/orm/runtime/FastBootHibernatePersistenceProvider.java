@@ -153,7 +153,7 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
                 continue;
             }
 
-            RecordedState recordedState = PersistenceUnitsHolder.popRecordedState(persistenceUnitName);
+            RecordedState recordedState = PersistenceUnitsHolder.getRecordedState(persistenceUnitName);
 
             if (recordedState.isReactive()) {
                 throw new IllegalStateException(

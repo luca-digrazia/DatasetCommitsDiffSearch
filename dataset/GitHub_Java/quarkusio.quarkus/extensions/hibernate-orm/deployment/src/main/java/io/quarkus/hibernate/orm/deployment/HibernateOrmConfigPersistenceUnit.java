@@ -75,14 +75,14 @@ public class HibernateOrmConfigPersistenceUnit {
     /**
      * The size of the batches used when loading entities and collections.
      *
-     * `-1` means batch loading is disabled.
+     * `-1` means batch loading is disabled. This is the default.
      *
      * @deprecated {@link #fetch} should be used to configure fetching properties.
      * @asciidoclet
      */
-    @ConfigItem(defaultValueDocumentation = "16")
+    @ConfigItem(defaultValue = "-1")
     @Deprecated
-    public OptionalInt batchFetchSize;
+    public int batchFetchSize;
 
     /**
      * The maximum depth of outer join fetch tree for single-ended associations (one-to-one, many-to-one).
@@ -179,7 +179,7 @@ public class HibernateOrmConfigPersistenceUnit {
                 packages.isPresent() ||
                 dialect.isAnyPropertySet() ||
                 sqlLoadScript.isPresent() ||
-                batchFetchSize.isPresent() ||
+                batchFetchSize > 0 ||
                 maxFetchDepth.isPresent() ||
                 physicalNamingStrategy.isPresent() ||
                 implicitNamingStrategy.isPresent() ||
@@ -395,12 +395,12 @@ public class HibernateOrmConfigPersistenceUnit {
         /**
          * The size of the batches used when loading entities and collections.
          *
-         * `-1` means batch loading is disabled.
+         * `-1` means batch loading is disabled. This is the default.
          *
          * @asciidoclet
          */
-        @ConfigItem(defaultValueDocumentation = "16")
-        public OptionalInt batchSize;
+        @ConfigItem(defaultValue = "-1")
+        public int batchSize;
 
         /**
          * The maximum depth of outer join fetch tree for single-ended associations (one-to-one, many-to-one).
@@ -413,7 +413,7 @@ public class HibernateOrmConfigPersistenceUnit {
         public OptionalInt maxDepth;
 
         public boolean isAnyPropertySet() {
-            return batchSize.isPresent() || maxDepth.isPresent();
+            return batchSize > 0 || maxDepth.isPresent();
         }
 
     }

@@ -1,10 +1,6 @@
 package io.quarkus.hibernate.reactive.runtime;
 
-import java.util.List;
-import java.util.Map;
-
 import io.quarkus.hibernate.orm.runtime.HibernateOrmRuntimeConfig;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationRuntimeInitListener;
 import io.quarkus.runtime.annotations.Recorder;
 
 @Recorder
@@ -19,10 +15,8 @@ public class HibernateReactiveRecorder {
         HibernateReactive.featureInit(enabled);
     }
 
-    public void initializePersistenceProvider(HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig,
-            Map<String, List<HibernateOrmIntegrationRuntimeInitListener>> integrationRuntimeInitListeners) {
-        ReactivePersistenceProviderSetup.registerRuntimePersistenceProvider(hibernateOrmRuntimeConfig,
-                integrationRuntimeInitListeners);
+    public void initializePersistenceProvider(HibernateOrmRuntimeConfig hibernateOrmRuntimeConfig) {
+        ReactivePersistenceProviderSetup.registerRuntimePersistenceProvider(hibernateOrmRuntimeConfig);
     }
 
 }
