@@ -39,14 +39,15 @@ import org.jboss.jandex.Type;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
 import org.jboss.shamrock.arc.deployment.AnnotationsTransformerBuildItem;
 import org.jboss.shamrock.beanvalidation.runtime.ValidatorProvider;
 import org.jboss.shamrock.beanvalidation.runtime.ValidatorTemplate;
 import org.jboss.shamrock.beanvalidation.runtime.interceptor.MethodValidationInterceptor;
+import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.HotDeploymentConfigFileBuildItem;
+import org.jboss.shamrock.deployment.builditem.SystemPropertyBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveFieldBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveMethodBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
@@ -57,6 +58,12 @@ class BeanValidationProcessor {
     private static final DotName VALIDATE_ON_EXECUTION = DotName.createSimple(ValidateOnExecution.class.getName());
 
     private static final DotName VALID = DotName.createSimple(Valid.class.getName());
+
+    @BuildStep
+    SystemPropertyBuildItem disableJavaFXIntegrations() {
+        // Bug in GraalVM rc10: see https://github.com/oracle/graal/issues/851
+        return new SystemPropertyBuildItem("org.hibernate.validator.force-disable-javafx-integration", "true");
+    }
 
     @BuildStep
     HotDeploymentConfigFileBuildItem configFile() {
