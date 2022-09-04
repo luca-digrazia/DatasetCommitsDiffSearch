@@ -32,11 +32,10 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler.FetchProgress;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleFormatter;
 import com.google.devtools.build.lib.repository.ExternalPackageException;
-import com.google.devtools.build.lib.repository.ExternalPackageHelper;
+import com.google.devtools.build.lib.repository.ExternalPackageUtil;
 import com.google.devtools.build.lib.repository.ExternalRuleNotFoundException;
 import com.google.devtools.build.lib.repository.RepositoryFailedEvent;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
-import com.google.devtools.build.lib.skyframe.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue.Precomputed;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -95,7 +94,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
   // Mapping of rule class name to RepositoryFunction.
   private final ImmutableMap<String, RepositoryFunction> handlers;
 
-  // Delegate function to handle Starlark remote repositories
+  // Delegate function to handle skylark remote repositories
   private final RepositoryFunction skylarkHandler;
 
   // This is a reference to isFetch in BazelRepositoryModule, which tracks whether the current
@@ -107,8 +106,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
   // before each command.
   private final ManagedDirectoriesKnowledge managedDirectoriesKnowledge;
 
-  private final ExternalPackageHelper externalPackageHelper;
-
   private final Supplier<Map<String, String>> clientEnvironmentSupplier;
 
   public RepositoryDelegatorFunction(
@@ -117,15 +114,13 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
       AtomicBoolean isFetch,
       Supplier<Map<String, String>> clientEnvironmentSupplier,
       BlazeDirectories directories,
-      ManagedDirectoriesKnowledge managedDirectoriesKnowledge,
-      ExternalPackageHelper externalPackageHelper) {
+      ManagedDirectoriesKnowledge managedDirectoriesKnowledge) {
     this.handlers = handlers;
     this.skylarkHandler = skylarkHandler;
     this.isFetch = isFetch;
     this.clientEnvironmentSupplier = clientEnvironmentSupplier;
     this.directories = directories;
     this.managedDirectoriesKnowledge = managedDirectoriesKnowledge;
-    this.externalPackageHelper = externalPackageHelper;
   }
 
   public static RepositoryDirectoryValue.Builder symlink(
@@ -318,7 +313,7 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
 
   private RepositoryFunction getHandler(Rule rule) {
     RepositoryFunction handler;
-    if (rule.getRuleClassObject().isStarlark()) {
+    if (rule.getRuleClassObject().isSkylark()) {
       handler = skylarkHandler;
     } else {
       handler = handlers.get(rule.getRuleClass());
@@ -368,9 +363,10 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
    * returns null.
    */
   @Nullable
-  private Rule getRepository(RepositoryName repositoryName, Environment env)
+  private static Rule getRepository(
+      RepositoryName repositoryName, Environment env)
       throws ExternalPackageException, InterruptedException {
-    return externalPackageHelper.getRuleByName(repositoryName.strippedName(), env);
+    return ExternalPackageUtil.getRuleByName(repositoryName.strippedName(), env);
   }
 
   @Override
