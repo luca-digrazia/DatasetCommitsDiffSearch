@@ -47,7 +47,6 @@ import org.jboss.jandex.Type.Kind;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
@@ -122,12 +121,12 @@ public class KafkaProcessor {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, i.getName()));
             collectSubclasses(toRegister, indexBuildItem, i);
         }
-        if (capabilities.isPresent(Capability.JSONB)) {
+        if (capabilities.isCapabilityPresent(Capabilities.JSONB)) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, JsonbSerializer.class, JsonbDeserializer.class));
             collectSubclasses(toRegister, indexBuildItem, JsonbSerializer.class);
             collectSubclasses(toRegister, indexBuildItem, JsonbDeserializer.class);
         }
-        if (capabilities.isPresent(Capability.JACKSON)) {
+        if (capabilities.isCapabilityPresent(Capabilities.JACKSON)) {
             reflectiveClass.produce(
                     new ReflectiveClassBuildItem(false, false, ObjectMapperSerializer.class, ObjectMapperDeserializer.class));
             collectSubclasses(toRegister, indexBuildItem, ObjectMapperSerializer.class);
@@ -212,19 +211,6 @@ public class KafkaProcessor {
 
         } catch (ClassNotFoundException e) {
             //ignore, Apicurio Avro is not in the classpath
-        }
-
-        //opentracing contrib kafka interceptors: https://github.com/opentracing-contrib/java-kafka-client
-        if (capabilities.isPresent(Capability.OPENTRACING)) {
-            try {
-                Class.forName("io.opentracing.contrib.kafka.TracingProducerInterceptor", false,
-                        Thread.currentThread().getContextClassLoader());
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, false,
-                        "io.opentracing.contrib.kafka.TracingProducerInterceptor",
-                        "io.opentracing.contrib.kafka.TracingConsumerInterceptor"));
-            } catch (ClassNotFoundException e) {
-                //ignore, opentracing contrib kafka is not in the classpath
-            }
         }
 
     }
