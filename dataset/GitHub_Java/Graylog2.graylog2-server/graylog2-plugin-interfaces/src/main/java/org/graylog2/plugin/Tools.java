@@ -22,11 +22,9 @@
 
 package org.graylog2.plugin;
 
-import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
+import org.drools.util.codec.Base64;
 import org.elasticsearch.search.SearchHit;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.handler.codec.base64.Base64;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.*;
@@ -50,8 +48,6 @@ public final class Tools {
 
     public static final String ES_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
     public static final String ES_DATE_FORMAT_NO_MS = "yyyy-MM-dd HH:mm:ss";
-
-    public static final DateTimeFormatter ES_DATE_FORMAT_FORMATTER = DateTimeFormat.forPattern(Tools.ES_DATE_FORMAT).withZoneUTC();
 
     private Tools() { }
 
@@ -227,11 +223,11 @@ public final class Tools {
     }
 
     public static String encodeBase64(String what) {
-        return Base64.encode(ChannelBuffers.wrappedBuffer(what.getBytes())).toString(Charsets.UTF_8);
+        return new String(Base64.encodeBase64(what.getBytes()));
     }
 
     public static String decodeBase64(String what) {
-        return Base64.decode(ChannelBuffers.wrappedBuffer(what.getBytes())).toString(Charsets.UTF_8);
+        return new String(Base64.decodeBase64(what));
     }
 
     public static String rdnsLookup(InetAddress socketAddress) throws UnknownHostException {
@@ -397,17 +393,5 @@ public final class Tools {
     }
 
     public static class NoInterfaceFoundException extends Exception {
-    }
-
-    /**
-     * The default uncaught exception handler will print to STDERR, which we don't always want for threads.
-     * Using this utility method you can avoid writing to STDERR on a per-thread basis
-     */
-    public static void silenceUncaughtExceptionsInThisThread() {
-        Thread.currentThread().setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread ignored, Throwable ignored1) {
-            }
-        });
     }
 }

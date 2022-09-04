@@ -1,31 +1,30 @@
 /**
- * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+ * Copyright (c) 2013 Lennart Koopmann <lennart@socketfeed.com>
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is furnished to do
+ * so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package org.graylog2.plugin.inputs;
 
-import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.slf4j.Logger;
@@ -88,10 +87,7 @@ public abstract class Extractor implements EmbeddedPersistable {
 
     protected abstract Result run(String field);
 
-    protected final MetricRegistry metricRegistry;
-
-    public Extractor(MetricRegistry metricRegistry,
-                     String id,
+    public Extractor(String id,
                      String title,
                      int order,
                      Type type,
@@ -103,7 +99,6 @@ public abstract class Extractor implements EmbeddedPersistable {
                      List<Converter> converters,
                      ConditionType conditionType,
                      String conditionValue) throws ReservedFieldException {
-        this.metricRegistry = metricRegistry;
         if (Message.RESERVED_FIELDS.contains(targetField) && !Message.RESERVED_SETTABLE_FIELDS.contains(targetField)) {
             throw new ReservedFieldException("You cannot apply an extractor on reserved field [" + targetField + "].");
         }
@@ -132,7 +127,7 @@ public abstract class Extractor implements EmbeddedPersistable {
         this.converterTimerName = name(getClass(), getType().toString().toLowerCase(), getId(), "converterExecutionTime");
     }
 
-    public void runExtractor(Message msg) {
+    public void runExtractor(GraylogServer server, Message msg) {
         // We can only work on Strings.
         if (!(msg.getField(sourceField) instanceof String)) {
             return;
@@ -151,7 +146,7 @@ public abstract class Extractor implements EmbeddedPersistable {
             }
         }
 
-        Timer timer = metricRegistry.timer(getTotalTimerName());
+        Timer timer = server.metrics().timer(getTotalTimerName());
         final Timer.Context timerContext = timer.time();
 
         Result result = run(field);
@@ -179,13 +174,13 @@ public abstract class Extractor implements EmbeddedPersistable {
             msg.addField(sourceField, finalResult);
         }
 
-        runConverters(msg);
+        runConverters(server, msg);
 
         timerContext.stop();
     }
 
-    public void runConverters(Message msg) {
-        Timer cTimer = metricRegistry.timer(getConverterTimerName());
+    public void runConverters(GraylogServer server, Message msg) {
+        Timer cTimer = server.metrics().timer(getConverterTimerName());
         final Timer.Context cTimerContext = cTimer.time();
 
         for (Converter converter : converters) {

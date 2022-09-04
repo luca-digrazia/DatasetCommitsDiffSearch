@@ -1,26 +1,29 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright (c) 2013, 2014 Lennart Koopmann <lennart@socketfeed.com>
  *
- * This file is part of Graylog2.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is furnished to do
+ * so, subject to the following conditions:
  *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software. 
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+*/
 package org.graylog2.plugin.inputs;
 
 import com.google.common.collect.Maps;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -30,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -50,26 +52,21 @@ public abstract class MessageInput {
     protected Boolean global = false;
 
     protected Configuration configuration;
+    protected InputHost graylogServer;
 
     private Map<String, Extractor> extractors = Maps.newHashMap(); // access is synchronized.
     private Map<String, String> staticFields = Maps.newConcurrentMap();
 
-    public void initialize(Configuration configuration) {
+    public void initialize(Configuration configuration, InputHost graylogServer) {
         this.configuration = configuration;
+        this.graylogServer = graylogServer;
     }
 
     public abstract void checkConfiguration() throws ConfigurationException;
 
-    public abstract void launch(Buffer processBuffer) throws MisfireException;
+    public abstract void launch() throws MisfireException;
     public abstract void stop();
 
-    /**
-     * Description of the config settings this input needs.
-     *
-     * Must not be null.
-     *
-     * @return a possibly empty ConfigurationRequest object
-     */
     public abstract ConfigurationRequest getRequestedConfiguration();
 
     public abstract boolean isExclusive();
@@ -128,30 +125,19 @@ public abstract class MessageInput {
     public Object getAttributesWithMaskedPasswords() {
         Map<String, Object> result = Maps.newHashMap();
 
-        final ConfigurationRequest config = getRequestedConfiguration();
-        if (config == null) {
+        if (getRequestedConfiguration() == null) {
             return result;
         }
 
         for(Map.Entry<String, Object> attribute : getAttributes().entrySet()) {
             Object value = attribute.getValue();
 
-            final Map<String, Map<String, Object>> configAsList = config.asList();
-            final String attributeKey = attribute.getKey();
-            final Map<String, Object> attributesForConfigSetting = configAsList.get(attributeKey);
-            if (attributesForConfigSetting != null) {
-                // we know the config setting, check its attributes
-                final List<String> attributes = (List<String>) attributesForConfigSetting.get("attributes");
-                if (attributes.contains(TextField.Attribute.IS_PASSWORD.toString().toLowerCase())) {
-                    value = "********";
-                }
-            } else {
-                // safety measure, although this is bad.
-                LOG.warn("Unknown input configuration setting {}={} found. Not trying to mask its value," +
-                                 " though this is likely a bug.", attribute, value);
+            List<String> attributes = (List<String>) getRequestedConfiguration().asList().get(attribute.getKey()).get("attributes");
+            if(attributes.contains(TextField.Attribute.IS_PASSWORD.toString().toLowerCase())) {
+                value = "********";
             }
 
-            result.put(attributeKey, value);
+            result.put(attribute.getKey(), value);
         }
 
         return result;
