@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.users;
 
@@ -33,7 +33,6 @@ import org.bson.types.ObjectId;
 import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.security.PermissionAndRoleResolver;
-import org.graylog.security.permissions.CaseSensitiveWildcardPermission;
 import org.graylog.security.permissions.GRNPermission;
 import org.graylog2.Configuration;
 import org.graylog2.database.MongoConnection;
@@ -60,7 +59,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -262,10 +260,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
     @Override
     public User create() {
-        return userFactory.create(initialUserFields());
-    }
-
-    public static Map<String, Object> initialUserFields() {
         final Map<String, Object> fields = new HashMap<>();
 
         // We always want the authentication service fields in new user objects, event if they don't get set
@@ -273,9 +267,8 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         fields.put(UserImpl.AUTH_SERVICE_UID, null);
         // User objects are internal by default. Ensure that we set this fields on all user objects.
         fields.put(UserImpl.EXTERNAL_USER, false);
-        // New accounts are enabled by default
-        fields.put(UserImpl.ACCOUNT_STATUS, User.AccountStatus.ENABLED.toString().toLowerCase(Locale.US));
-        return fields;
+
+        return userFactory.create(fields);
     }
 
     @Override
@@ -383,9 +376,9 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     public List<Permission> getPermissionsForUser(User user) {
         final GRN principal = grnRegistry.ofUser(user);
         final ImmutableSet.Builder<Permission> permSet = ImmutableSet.<Permission>builder()
-                .addAll(user.getPermissions().stream().map(CaseSensitiveWildcardPermission::new).collect(Collectors.toSet()))
+                .addAll(user.getPermissions().stream().map(WildcardPermission::new).collect(Collectors.toSet()))
                 .addAll(permissionAndRoleResolver.resolvePermissionsForPrincipal(principal))
-                .addAll(getUserPermissionsFromRoles(user).stream().map(CaseSensitiveWildcardPermission::new).collect(Collectors.toSet()));
+                .addAll(getUserPermissionsFromRoles(user).stream().map(WildcardPermission::new).collect(Collectors.toSet()));
 
         return permSet.build().asList();
     }

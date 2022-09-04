@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.users;
 
@@ -22,12 +22,12 @@ import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
+import org.apache.shiro.authz.permission.WildcardPermission;
 import org.bson.types.ObjectId;
 import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.grn.GRNTypes;
 import org.graylog.security.PermissionAndRoleResolver;
-import org.graylog.security.permissions.CaseSensitiveWildcardPermission;
 import org.graylog.security.permissions.GRNPermission;
 import org.graylog.testing.mongodb.MongoDBFixtures;
 import org.graylog.testing.mongodb.MongoDBInstance;
@@ -229,18 +229,6 @@ public class UserServiceImplTest {
     }
 
     @Test
-    public void testSaveNoFullNameSuccess() throws Exception {
-        final User user = userService.create();
-        user.setName("TEST");
-        user.setEmail("test@example.com");
-        user.setTimeZone(DateTimeZone.UTC);
-        user.setPassword("TEST");
-        user.setPermissions(Collections.<String>emptyList());
-        user.setFullName(null);
-        userService.save(user);
-    }
-
-    @Test
     public void testGetAdminUser() throws Exception {
         assertThat(userService.getAdminUser().getName()).isEqualTo(configuration.getRootUsername());
         assertThat(userService.getAdminUser().getEmail()).isEqualTo(configuration.getRootEmail());
@@ -331,14 +319,14 @@ public class UserServiceImplTest {
         final GRN userGRN = grnRegistry.ofUser(user);
         when(permissionAndRoleResolver.resolvePermissionsForPrincipal(userGRN))
                 .thenReturn(ImmutableSet.of(
-                        new CaseSensitiveWildcardPermission("perm:from:grant"),
+                        new WildcardPermission("perm:from:grant"),
                         ownerShipPermission));
 
         final String roleId = "12345";
         when(permissionAndRoleResolver.resolveRolesForPrincipal(userGRN)).thenReturn(ImmutableSet.of(roleId));
         when(permissionResolver.resolveStringPermission(roleId)).thenReturn(ImmutableSet.of("perm:from:role"));
 
-        assertThat(userService.getPermissionsForUser(user).stream().map(p -> p instanceof CaseSensitiveWildcardPermission ? p.toString() : p).collect(Collectors.toSet()))
+        assertThat(userService.getPermissionsForUser(user).stream().map(p -> p instanceof WildcardPermission ? p.toString() : p).collect(Collectors.toSet()))
                 .containsExactlyInAnyOrder("users:passwordchange:user", "users:edit:user", "foo:bar", "hello:world", "users:tokenlist:user",
                         "users:tokencreate:user", "users:tokenremove:user", "perm:from:grant", ownerShipPermission, "perm:from:role");
     }
