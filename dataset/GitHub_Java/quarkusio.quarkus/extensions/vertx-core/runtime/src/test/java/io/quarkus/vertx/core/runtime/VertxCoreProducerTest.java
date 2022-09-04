@@ -55,7 +55,7 @@ public class VertxCoreProducerTest {
         configuration.cluster = cc;
 
         try {
-            VertxCoreRecorder.initialize(configuration, null, null);
+            VertxCoreRecorder.initialize(configuration, null);
             Assertions.fail("It should not have a cluster manager on the classpath, and so fail the creation");
         } catch (IllegalStateException e) {
             Assertions.assertTrue(e.getMessage().contains("No ClusterManagerFactory"),
@@ -82,7 +82,7 @@ public class VertxCoreProducerTest {
                     }
                 }));
 
-        VertxCoreRecorder.initialize(configuration, customizers, null);
+        VertxCoreRecorder.initialize(configuration, customizers);
     }
 
     @Test
@@ -95,7 +95,7 @@ public class VertxCoreProducerTest {
                         called.set(true);
                     }
                 }));
-        Vertx v = VertxCoreRecorder.initialize(createDefaultConfiguration(), customizers, null);
+        Vertx v = VertxCoreRecorder.initialize(createDefaultConfiguration(), customizers);
         Assertions.assertTrue(called.get(), "Customizer should get called during initialization");
     }
 
