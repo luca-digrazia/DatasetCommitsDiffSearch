@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Services;
 
 /** An implementation for the "proto_library" rule. */
 public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
@@ -64,7 +63,25 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> transitiveDescriptorSetOutput =
         NestedSetBuilder.fromNestedSet(dependenciesDescriptorSets).add(descriptorSetOutput).build();
 
-    ProtoSourcesProvider protoProvider =
+    ProtoCompileActionBuilder.writeDescriptorSet(
+        ruleContext,
+        descriptorSetOutput.getExecPathString(),
+        protoSources,
+        transitiveProtoSources,
+        protosInDirectDeps,
+        descriptorSetOutput,
+        /* allowServices= */ true,
+        dependenciesDescriptorSets,
+        protoPathFlags,
+        directProtoSourceRoots);
+
+    Runfiles dataRunfiles =
+        ProtoCommon.createDataRunfilesProvider(transitiveProtoSources, ruleContext)
+            .addArtifact(descriptorSetOutput)
+            .build();
+
+    // TODO(bazel-team): this second constructor argument is superfluous and should be removed.
+    ProtoSourcesProvider sourcesProvider =
         ProtoSourcesProvider.create(
             transitiveProtoSources,
             protoSources,
@@ -78,24 +95,11 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
             protosInExports,
             exportedProtoSourceRoots);
 
-    ProtoCompileActionBuilder.writeDescriptorSet(
-        ruleContext,
-        descriptorSetOutput.getExecPathString(),
-        protoProvider,
-        descriptorSetOutput,
-        Services.ALLOW,
-        dependenciesDescriptorSets);
-
-    Runfiles dataRunfiles =
-        ProtoCommon.createDataRunfilesProvider(transitiveProtoSources, ruleContext)
-            .addArtifact(descriptorSetOutput)
-            .build();
-
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(NestedSetBuilder.create(STABLE_ORDER, descriptorSetOutput))
         .addProvider(RunfilesProvider.withData(Runfiles.EMPTY, dataRunfiles))
-        .addProvider(ProtoSourcesProvider.class, protoProvider)
-        .addSkylarkTransitiveInfo(ProtoSourcesProvider.SKYLARK_NAME, protoProvider)
+        .addProvider(ProtoSourcesProvider.class, sourcesProvider)
+        .addSkylarkTransitiveInfo(ProtoSourcesProvider.SKYLARK_NAME, sourcesProvider)
         .build();
   }
 }

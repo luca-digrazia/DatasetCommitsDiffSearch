@@ -366,10 +366,14 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       ImmutableList.Builder<ToolchainInvocation> invocations = ImmutableList.builder();
       invocations.add(
           new ToolchainInvocation("C++", checkNotNull(getProtoToolchainProvider()), genfilesPath));
-      ProtoCompileActionBuilder.registerActionsWithoutExports(
+      ProtoCompileActionBuilder.registerActions(
           ruleContext,
           invocations.build(),
-          protoProvider,
+          protoProvider.getDirectProtoSources(),
+          protoProvider.getTransitiveProtoSources(),
+          protoProvider.getProtosInDirectDeps(),
+          protoProvider.getTransitiveProtoSourceRoots(),
+          protoProvider.getDirectProtoSourceRoots(),
           ruleContext.getLabel(),
           outputs,
           "C++",

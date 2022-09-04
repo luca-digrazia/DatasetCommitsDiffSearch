@@ -39,49 +39,37 @@ public abstract class ProtoSourcesProvider
 
   @AutoCodec.Instantiator
   public static ProtoSourcesProvider create(
-      ImmutableList<Artifact> directProtoSources,
-      String directProtoSourceRoot,
       NestedSet<Artifact> transitiveProtoSources,
-      NestedSet<String> transitiveProtoSourceRoots,
-      NestedSet<Artifact> strictImportableProtoSourcesForDependents,
-      NestedSet<Artifact> strictImportableProtoSources,
-      NestedSet<String> strictImportableProtoSourceRoots,
-      @Nullable NestedSet<Artifact> exportedProtoSources,
-      NestedSet<String> exportedProtoSourceRoots,
+      ImmutableList<Artifact> directProtoSources,
+      NestedSet<Artifact> checkDepsProtoSources,
+      NestedSet<Artifact> protosInDirectDeps,
       Artifact directDescriptorSet,
-      NestedSet<Artifact> transitiveDescriptorSets) {
+      NestedSet<Artifact> transitiveDescriptorSets,
+      String protoSourceRoot,
+      NestedSet<String> directProtoSourceRoots,
+      NestedSet<String> transitiveProtoSourceRoots,
+      @Nullable NestedSet<Artifact> protosInExports,
+      NestedSet<String> exportedProtoSourceRoots) {
     return new AutoValue_ProtoSourcesProvider(
-        directProtoSources,
-        directProtoSourceRoot,
         transitiveProtoSources,
-        transitiveProtoSourceRoots,
-        strictImportableProtoSourcesForDependents,
-        strictImportableProtoSources,
-        strictImportableProtoSourceRoots,
-        exportedProtoSources,
-        exportedProtoSourceRoots,
+        directProtoSources,
+        checkDepsProtoSources,
+        protosInDirectDeps,
         directDescriptorSet,
-        transitiveDescriptorSets);
+        transitiveDescriptorSets,
+        protoSourceRoot,
+        directProtoSourceRoots,
+        transitiveProtoSourceRoots,
+        protosInExports,
+        exportedProtoSourceRoots);
   }
 
-  /** The proto sources of the {@code proto_library} declaring this provider. */
+  /** Returns the proto sources for this rule and all its dependent protocol buffer rules. */
   @Override
-  public abstract ImmutableList<Artifact> getDirectProtoSources();
-
-  /** The source root of the current library. */
-  @Override
-  public abstract String getDirectProtoSourceRoot();
-
-  /** The proto sources in the transitive closure of this rule. */
-  @Override
+  // TODO(bazel-team): The difference between transitive imports and transitive proto sources
+  // should never be used by Skylark or by an Aspect. One of these two should be removed,
+  // preferably soon, before Skylark users start depending on them.
   public abstract NestedSet<Artifact> getTransitiveProtoSources();
-
-  /**
-   * The proto source roots of the transitive closure of this rule. These flags will be passed to
-   * {@code protoc} in the specified order, via the {@code --proto_path} flag.
-   */
-  @Override
-  public abstract NestedSet<String> getTransitiveProtoSourceRoots();
 
   @Deprecated
   @Override
@@ -89,59 +77,71 @@ public abstract class ProtoSourcesProvider
     return getTransitiveProtoSources();
   }
 
+  /** Returns the proto sources from the 'srcs' attribute. */
+  @Override
+  public abstract ImmutableList<Artifact> getDirectProtoSources();
+
   /**
-   * Returns the set of source files importable by rules directly depending on the rule declaring
-   * this provider if strict dependency checking is in effect.
+   * Returns the proto sources from the 'srcs' attribute. If the library is a proxy library that has
+   * no sources, return the sources from the direct deps.
    *
-   * <p>(strict dependency checking: when a target can only include / import source files from its
-   * direct dependencies, but not from transitive ones)
+   * <p>This must be a set to avoid collecting the same source twice when depending on 2 proxy
+   * proto_library's that depend on the same proto_library.
    */
   @Override
-  public abstract NestedSet<Artifact> getStrictImportableProtoSourcesForDependents();
+  public abstract NestedSet<Artifact> getCheckDepsProtoSources();
 
   /**
-   * Returns the set of source files importable by the rule declaring this provider if strict
-   * dependency checking is in effect.
+   * Returns the .proto files that are the direct srcs of the direct-dependencies of this rule. If
+   * the current rule is an alias proto_library (=no srcs), we use the direct srcs of the
+   * direct-dependencies of our direct-dependencies.
    *
-   * <p>(strict dependency checking: when a target can only include / import source files from its
-   * direct dependencies, but not from transitive ones)
+   * <p>Used for strict deps checking.
    */
-  public abstract NestedSet<Artifact> getStrictImportableProtoSources();
+  public abstract NestedSet<Artifact> getProtosInDirectDeps();
 
   /**
-   * Returns the proto source roots of the dependencies whose sources can be imported if strict
-   * dependency checking is in effect.
-   *
-   * <p>(strict dependency checking: when a target can only include / import source files from its
-   * direct dependencies, but not from transitive ones)
+   * Be careful while using this artifact - it is the parsing of the transitive set of .proto files.
+   * It's possible to cause a O(n^2) behavior, where n is the length of a proto chain-graph.
+   * (remember that proto-compiler reads all transitive .proto files, even when producing the
+   * direct-srcs descriptor set)
    */
-  public abstract NestedSet<String> getStrictImportableProtoSourceRoots();
+  @Override
+  public abstract Artifact directDescriptorSet();
+
+  /**
+   * Be careful while using this artifact - it is the parsing of the transitive set of .proto files.
+   * It's possible to cause a O(n^2) behavior, where n is the length of a proto chain-graph.
+   * (remember that proto-compiler reads all transitive .proto files, even when producing the
+   * direct-srcs descriptor set)
+   */
+  @Override
+  public abstract NestedSet<Artifact> transitiveDescriptorSets();
+
+  /** The {@code proto_source_root} of the current library. */
+  @Override
+  public abstract String getProtoSourceRoot();
+
+  /**
+   * Returns a set of the {@code proto_source_root} collected from the current library and the
+   * direct dependencies.
+   */
+  public abstract NestedSet<String> getDirectProtoSourceRoots();
+
+  /**
+   * Directories of .proto sources collected from the transitive closure. These flags will be passed
+   * to {@code protoc} in the specified order, via the {@code --proto_path} flag.
+   */
+  @Override
+  public abstract NestedSet<String> getTransitiveProtoSourceRoots();
 
   /**
    * Returns the .proto files that are the direct srcs of the exported dependencies of this rule.
    */
   @Nullable
-  public abstract NestedSet<Artifact> getExportedProtoSources();
+  public abstract NestedSet<Artifact> getProtosInExports();
 
   public abstract NestedSet<String> getExportedProtoSourceRoots();
-
-  /**
-   * Be careful while using this artifact - it is the parsing of the transitive set of .proto files.
-   * It's possible to cause a O(n^2) behavior, where n is the length of a proto chain-graph.
-   * (remember that proto-compiler reads all transitive .proto files, even when producing the
-   * direct-srcs descriptor set)
-   */
-  @Override
-  public abstract Artifact getDirectDescriptorSet();
-
-  /**
-   * Be careful while using this artifact - it is the parsing of the transitive set of .proto files.
-   * It's possible to cause a O(n^2) behavior, where n is the length of a proto chain-graph.
-   * (remember that proto-compiler reads all transitive .proto files, even when producing the
-   * direct-srcs descriptor set)
-   */
-  @Override
-  public abstract NestedSet<Artifact> getTransitiveDescriptorSets();
 
   ProtoSourcesProvider() {}
 }

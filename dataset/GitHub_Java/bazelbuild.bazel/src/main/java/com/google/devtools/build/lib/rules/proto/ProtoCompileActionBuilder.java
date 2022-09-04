@@ -66,7 +66,6 @@ public class ProtoCompileActionBuilder {
 
   private final RuleContext ruleContext;
   private final ProtoSourcesProvider protoSourcesProvider;
-  private final FilesToRunProvider protoCompiler;
   private final String language;
   private final String langPrefix;
   private final Iterable<Artifact> outputs;
@@ -131,13 +130,11 @@ public class ProtoCompileActionBuilder {
   public ProtoCompileActionBuilder(
       RuleContext ruleContext,
       ProtoSourcesProvider protoSourcesProvider,
-      FilesToRunProvider protoCompiler,
       String language,
       String langPrefix,
       Iterable<Artifact> outputs) {
     this.ruleContext = ruleContext;
     this.protoSourcesProvider = protoSourcesProvider;
-    this.protoCompiler = protoCompiler;
     this.language = language;
     this.langPrefix = langPrefix;
     this.outputs = outputs;
@@ -235,21 +232,23 @@ public class ProtoCompileActionBuilder {
       result.addInputs(inputs);
     }
 
+    FilesToRunProvider compilerTarget =
+        ruleContext.getExecutablePrerequisite(":proto_compiler", RuleConfiguredTarget.Mode.HOST);
+    if (compilerTarget == null) {
+      throw new MissingPrerequisiteException();
+    }
+
     if (this.additionalTools != null) {
       for (FilesToRunProvider tool : additionalTools) {
         result.addTool(tool);
       }
     }
 
-    if (protoCompiler == null) {
-      throw new MissingPrerequisiteException();
-    }
-
     result
         .addOutputs(outputs)
         .setResources(AbstractAction.DEFAULT_RESOURCE_SET)
         .useDefaultShellEnvironment()
-        .setExecutable(protoCompiler)
+        .setExecutable(compilerTarget)
         .addCommandLine(
             createProtoCompilerCommandLine().build(),
             ParamFileInfo.builder(ParameterFileType.UNQUOTED).build())
