@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -57,15 +56,18 @@ import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.skylark.Args;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.collect.CollectionUtils;
+import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationContext.IncludeScanningHeaderDataHelper;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
 import com.google.devtools.build.lib.skyframe.ActionExecutionValue;
@@ -88,9 +90,10 @@ import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -100,6 +103,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -108,7 +112,6 @@ import javax.annotation.Nullable;
 public class CppCompileAction extends AbstractAction implements IncludeScannable, CommandAction {
 
   private static final Logger logger = Logger.getLogger(CppCompileAction.class.getName());
-  private static final Duration BLOCKED_NESTED_SET_EXPANSION_THRESHOLD = Duration.ofSeconds(5);
   private static final PathFragment BUILD_PATH_FRAGMENT = PathFragment.create("BUILD");
 
   private static final boolean VALIDATION_DEBUG_WARN = false;
@@ -195,6 +198,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   private ParamFileActionInput paramFileActionInput;
   private PathFragment paramFilePath;
+
+  private final Iterable<Artifact> alternateIncludeScanningDataInputs;
 
   /**
    * Creates a new action to compile C/C++ source files.
@@ -305,6 +310,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
               .getParentDirectory()
               .getChild(outputFile.getFilename() + ".params");
     }
+    this.alternateIncludeScanningDataInputs = cppSemantics.getAlternateIncludeScanningDataInputs();
   }
 
   static CompileCommandLine buildCommandLine(
@@ -509,6 +515,60 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    * This method returns null when a required SkyValue is missing and a Skyframe restart is
    * required.
    */
+  // Note: this function will be deleted in the migration cl.
+  @Nullable
+  private static IncludeScanningHeaderData.Builder createIncludeScanningHeaderData(
+      SkyFunction.Environment env,
+      List<CcCompilationContext.HeaderInfo> headerInfos,
+      Iterable<Artifact> inputs)
+      throws InterruptedException {
+    Map<PathFragment, Artifact> pathToLegalOutputArtifact = new HashMap<>();
+    ArrayList<Artifact> treeArtifacts = new ArrayList<>();
+    // Not using range-based for loops here and below as the additional overhead of the
+    // ImmutableList iterators has shown up in profiles.
+    for (CcCompilationContext.HeaderInfo headerInfo : headerInfos) {
+      for (Artifact a : headerInfo.modularHeaders) {
+        IncludeScanningHeaderDataHelper.handleArtifact(a, pathToLegalOutputArtifact, treeArtifacts);
+      }
+      for (Artifact a : headerInfo.textualHeaders) {
+        IncludeScanningHeaderDataHelper.handleArtifact(a, pathToLegalOutputArtifact, treeArtifacts);
+      }
+    }
+    for (Artifact a : inputs) {
+      IncludeScanningHeaderDataHelper.handleArtifact(a, pathToLegalOutputArtifact, treeArtifacts);
+    }
+    if (!IncludeScanningHeaderDataHelper.handleTreeArtifacts(
+        env, pathToLegalOutputArtifact, treeArtifacts)) {
+      return null;
+    }
+    return new IncludeScanningHeaderData.Builder(
+        Collections.unmodifiableMap(pathToLegalOutputArtifact),
+        Collections.unmodifiableSet(CompactHashSet.create()));
+  }
+
+  /**
+   * This method returns null when a required SkyValue is missing and a Skyframe restart is
+   * required.
+   */
+  @Nullable
+  public IncludeScanningHeaderData.Builder createIncludeScanningHeaderData(
+      SkyFunction.Environment env,
+      boolean usePic,
+      boolean useHeaderModules,
+      List<CcCompilationContext.HeaderInfo> headerInfo)
+      throws InterruptedException {
+    if (alternateIncludeScanningDataInputs != null) {
+      return createIncludeScanningHeaderData(env, headerInfo, alternateIncludeScanningDataInputs);
+    } else {
+      return ccCompilationContext.createIncludeScanningHeaderData(
+          env, usePic, useHeaderModules, headerInfo);
+    }
+  }
+
+  /**
+   * This method returns null when a required SkyValue is missing and a Skyframe restart is
+   * required.
+   */
   @Nullable
   @Override
   public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
@@ -533,7 +593,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       List<CcCompilationContext.HeaderInfo> headerInfo =
           ccCompilationContext.getTransitiveHeaderInfos();
       IncludeScanningHeaderData.Builder includeScanningHeaderData =
-          ccCompilationContext.createIncludeScanningHeaderData(
+          createIncludeScanningHeaderData(
               actionExecutionContext.getEnvironmentForDiscoveringInputs(),
               usePic,
               useHeaderModules,
@@ -589,16 +649,19 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     // used modules. Combining the NestedSets of transitive deps of the top-level modules also
     // gives us an effective way to compute and store discoveredModules.
     Set<Artifact> topLevel = new LinkedHashSet<>(usedModules);
-    for (NestedSet<? extends Artifact> transitive : transitivelyUsedModules.values()) {
-      // It is better to iterate over each nested set here instead of creating a joint one and
-      // iterating over it, as this makes use of NestedSet's memoization (each of them has likely
-      // been iterated over before). Don't use Set.removeAll() here as that iterates over the
-      // smaller set (topLevel, which would support efficient lookup) and looks up in the larger one
-      // (transitive, which is a linear scan).
-      // We get a collection view of the NestedSet in a way that can throw an InterruptedException
-      // because a NestedSet may contain a future.
-      for (Artifact module : modulesToListInterruptibly(transitive)) {
-        topLevel.remove(module);
+    try (AutoProfiler ignored =
+        AutoProfiler.logged("nested set expansion", logger, TimeUnit.SECONDS.toMillis(5))) {
+      for (NestedSet<? extends Artifact> transitive : transitivelyUsedModules.values()) {
+        // It is better to iterate over each nested set here instead of creating a joint one and
+        // iterating over it, as this makes use of NestedSet's memoization (each of them has likely
+        // been iterated over before). Don't use Set.removeAll() here as that iterates over the
+        // smaller set (topLevel, which would support efficient lookup) and looks up in the larger
+        // one (transitive, which is a linear scan).
+        // We get a collection view of the NestedSet in a way that can throw an InterruptedException
+        // because a NestedSet may contain a future.
+        for (Artifact module : transitive.toListInterruptibly()) {
+          topLevel.remove(module);
+        }
       }
     }
     NestedSetBuilder<Artifact> topLevelModulesBuilder = NestedSetBuilder.stableOrder();
@@ -618,20 +681,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     }
     usedModules = null;
     return additionalInputs;
-  }
-
-  private static ImmutableList<? extends Artifact> modulesToListInterruptibly(
-      NestedSet<? extends Artifact> nestedSet) throws InterruptedException {
-    Stopwatch blockedStopwatch = Stopwatch.createStarted();
-    ImmutableList<? extends Artifact> modules = nestedSet.toListInterruptibly();
-    Duration blockedDuration = blockedStopwatch.elapsed();
-    if (BLOCKED_NESTED_SET_EXPANSION_THRESHOLD.compareTo(blockedDuration) < 0) {
-      logger.info(
-          String.format(
-              "Spent %d milliseconds doing nested set expansion, %d elements",
-              blockedDuration.toMillis(), modules.size()));
-    }
-    return modules;
   }
 
   @Override
@@ -1563,7 +1612,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       throws ActionExecutionException, InterruptedException {
     try {
       IncludeScanningHeaderData.Builder includeScanningHeaderData =
-          ccCompilationContext.createIncludeScanningHeaderData(
+          createIncludeScanningHeaderData(
               actionExecutionContext.getEnvironmentForDiscoveringInputs(),
               usePic,
               useHeaderModules,
