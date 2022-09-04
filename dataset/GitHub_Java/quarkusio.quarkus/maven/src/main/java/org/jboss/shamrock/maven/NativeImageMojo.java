@@ -63,7 +63,6 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "${native-image.debug-build-process}")
     private boolean debugBuildProcess;
 
-
     @Parameter(readonly = true, required = true, defaultValue = "${project.build.finalName}")
     private String finalName;
 
@@ -84,9 +83,6 @@ public class NativeImageMojo extends AbstractMojo {
 
     @Parameter
     private boolean enableCodeSizeReporting;
-
-    @Parameter
-    private boolean enableIsolates;
 
     @Parameter(defaultValue = "${env.GRAALVM_HOME}")
     private String graalvmHome;
@@ -130,7 +126,7 @@ public class NativeImageMojo extends AbstractMojo {
 
         Config config = SmallRyeConfigProviderResolver.instance().getConfig();
         
-        boolean vmVersionOutOfDate = isThisGraalVMRCObsolete();
+        boolean vmVersionOutOfDate = isThisGraalVMRC7();
 
         HashMap<String, String> env = new HashMap<>(System.getenv());
         List<String> nativeImage;
@@ -237,9 +233,6 @@ public class NativeImageMojo extends AbstractMojo {
             if (enableCodeSizeReporting) {
                 command.add("-H:+PrintCodeSizeReport");
             }
-            if (! enableIsolates) {
-                command.add("-H:-SpawnIsolates");
-            }
             if (enableJni) {
                 command.add("-H:+JNI");
             }
@@ -253,12 +246,16 @@ public class NativeImageMojo extends AbstractMojo {
                 command.add("-H:+AllowVMInspection");
             }
             if (autoServiceLoaderRegistration) {
-                command.add( "-H:+UseServiceLoaderFeature" );
-                //When enabling, at least print what exactly is being added:
-                command.add( "-H:+TraceServiceLoaderFeature" );
+                if (!vmVersionOutOfDate) {
+                    command.add( "-H:+UseServiceLoaderFeature" );
+                    //When enabling, at least print what exactly is being added:
+                    command.add( "-H:+TraceServiceLoaderFeature" );
+                }
             }
             else {
-                command.add( "-H:-UseServiceLoaderFeature" );
+                if (!vmVersionOutOfDate) {
+                    command.add( "-H:-UseServiceLoaderFeature" );
+                }
             }
             if (fullStackTraces) {
                 command.add("-H:+StackTrace");
@@ -290,11 +287,11 @@ public class NativeImageMojo extends AbstractMojo {
     }
 
     //FIXME remove after transition period
-    private boolean isThisGraalVMRCObsolete() {
+    private boolean isThisGraalVMRC7() {
         final String vmName = System.getProperty( "java.vm.name" );
         getLog().info( "Running Shamrock native-image plugin on " + vmName );
-        if (vmName.contains( "-rc9" ) || vmName.contains( "-rc8")) {
-            getLog().error( "Out of date RC build of GraalVM detected! Please upgrade to RC10" );
+        if ( vmName.contains( "-rc7" ) ) {
+            getLog().error( "GraalVM rc7 detected! Please upgrade" );
             return true;
         }
         return false;

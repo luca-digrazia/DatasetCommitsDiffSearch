@@ -76,10 +76,6 @@ public class DevMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoFailureException {
-        if (! sourceDir.isDirectory()) {
-            throw new MojoFailureException("The `src/main/java` directory is required, please create it.");
-        }
-
         try {
             List<String> args = new ArrayList<>();
             args.add("java");

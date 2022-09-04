@@ -51,11 +51,6 @@ public interface AnnotationsTransformer extends BuildExtension {
 
         Collection<AnnotationInstance> getAnnotations();
 
-        /**
-         * The transformation is not applied until {@link Transformation#done()} is invoked.
-         * 
-         * @return a new transformation
-         */
         Transformation transform();
         
         default boolean isClass() {
