@@ -71,7 +71,7 @@ public class DecompressorValue implements SkyValue {
     }
 
     Path decompress(DecompressorDescriptor descriptor)
-        throws IOException, RepositoryFunctionException, InterruptedException;
+        throws IOException, RepositoryFunctionException;
   }
 
   private final Path directory;
@@ -121,7 +121,7 @@ public class DecompressorValue implements SkyValue {
   }
 
   public static Path decompress(DecompressorDescriptor descriptor)
-      throws RepositoryFunctionException, InterruptedException {
+      throws RepositoryFunctionException {
     try {
       return descriptor.getDecompressor().decompress(descriptor);
     } catch (IOException e) {
