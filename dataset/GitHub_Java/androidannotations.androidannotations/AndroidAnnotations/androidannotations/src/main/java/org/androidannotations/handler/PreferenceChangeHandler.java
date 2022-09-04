@@ -58,14 +58,9 @@ public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
-		validatorHelper.param.anyOrder() //
-				.extendsType(CanonicalNameConstants.PREFERENCE).optional() //
-				.anyOfTypes(CanonicalNameConstants.OBJECT, CanonicalNameConstants.STRING_SET, CanonicalNameConstants.STRING, //
-						CanonicalNameConstants.BOOLEAN, boolean.class.getName(), //
-						CanonicalNameConstants.INTEGER, int.class.getName(), //
-						CanonicalNameConstants.LONG, long.class.getName(), //
-						CanonicalNameConstants.FLOAT, float.class.getName()).optional() //
-				.validate(executableElement, valid);
+		validatorHelper.param.hasNoOtherParameterThanPreferenceOrObjectOrSetOrStringOrBoolean(executableElement, valid);
+		validatorHelper.param.hasZeroOrOnePreferenceParameter(executableElement, valid);
+		validatorHelper.param.hasAtMostOnePreferenceChangeSupportedParameter(executableElement, valid);
 	}
 
 	@Override
@@ -86,8 +81,9 @@ public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 
 		for (VariableElement variableElement : userParameters) {
 			String type = variableElement.asType().toString();
-			if (isTypeOrSubclass(CanonicalNameConstants.PREFERENCE, variableElement)) {
-				call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.PREFERENCE, preferenceParam, variableElement));
+
+			if (type.equals(CanonicalNameConstants.PREFERENCE)) {
+				call.arg(preferenceParam);
 			} else if (type.equals(CanonicalNameConstants.OBJECT)) {
 				call.arg(newValueParam);
 			} else if (type.equals(CanonicalNameConstants.INTEGER) || type.equals(int.class.getName()) || //
