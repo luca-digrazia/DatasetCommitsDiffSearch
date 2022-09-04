@@ -29,14 +29,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A class storing a rule attribute documentation along with some meta information. The class
- * provides functionality to compute the ancestry level of this attribute's generator rule
- * definition class compared to other rule definition classes.
+ * A class storing a rule attribute documentation along with some meta information.
+ * The class provides functionality to compute the ancestry level of this attribute's
+ * generator rule definition class compared to other rule definition classes.
  *
  * <p>Warning, two RuleDocumentationAttribute objects are equal based on only the attributeName.
  */
-public class RuleDocumentationAttribute
-    implements Comparable<RuleDocumentationAttribute>, Cloneable {
+public class RuleDocumentationAttribute implements Comparable<RuleDocumentationAttribute> {
 
   private static final ImmutableMap<Type<?>, String> TYPE_DESC =
       ImmutableMap.<Type<?>, String>builder()
@@ -71,7 +70,6 @@ public class RuleDocumentationAttribute
   private Set<String> flags;
   private Attribute attribute;
 
-
   /**
    * Creates common RuleDocumentationAttribute such as deps or data.
    * These attribute docs have no definitionClass or htmlDocumentation (it's in the BE header).
@@ -104,12 +102,6 @@ public class RuleDocumentationAttribute
     this.startLineCnt = startLineCnt;
     this.flags = flags;
     this.commonType = commonType;
-    this.fileName = fileName;
-  }
-
-  @Override
-  protected Object clone() throws CloneNotSupportedException {
-    return super.clone();
   }
 
   /**
@@ -124,11 +116,6 @@ public class RuleDocumentationAttribute
    */
   public String getAttributeName() {
     return attributeName;
-  }
-
-  /** Returns the file name where the rule attribute is defined. */
-  public String getFileName() {
-    return fileName;
   }
 
   /**
@@ -158,14 +145,6 @@ public class RuleDocumentationAttribute
       }
     }
     return expandedHtmlDoc;
-  }
-
-  /** Returns whether the param is required or optional. */
-  public boolean isMandatory() {
-    if (attribute == null) {
-      return false;
-    }
-    return attribute.isMandatory();
   }
 
   private String getDefaultValue() {
