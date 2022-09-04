@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
 package com.google.devtools.build.lib.bazel.rules.ninja.parser;
 
@@ -34,13 +35,10 @@ import java.io.IOException;
 public class NinjaParser implements DeclarationConsumer {
   private final NinjaPipeline pipeline;
   private final NinjaFileParseResult parseResult;
-  private final String ninjaFileName;
 
-  public NinjaParser(
-      NinjaPipeline pipeline, NinjaFileParseResult parseResult, String ninjaFileName) {
+  public NinjaParser(NinjaPipeline pipeline, NinjaFileParseResult parseResult) {
     this.pipeline = pipeline;
     this.parseResult = parseResult;
-    this.ninjaFileName = ninjaFileName;
   }
 
   @Override
@@ -84,15 +82,13 @@ public class NinjaParser implements DeclarationConsumer {
       case INCLUDE:
         NinjaVariableValue includeStatement = parser.parseIncludeStatement();
         NinjaPromise<NinjaFileParseResult> includeFuture =
-            pipeline.createChildFileParsingPromise(
-                includeStatement, declarationStart, ninjaFileName);
+            pipeline.createChildFileParsingPromise(includeStatement, declarationStart);
         parseResult.addIncludeScope(declarationStart, includeFuture);
         break;
       case SUBNINJA:
         NinjaVariableValue subNinjaStatement = parser.parseSubNinjaStatement();
         NinjaPromise<NinjaFileParseResult> subNinjaFuture =
-            pipeline.createChildFileParsingPromise(
-                subNinjaStatement, declarationStart, ninjaFileName);
+            pipeline.createChildFileParsingPromise(subNinjaStatement, declarationStart);
         parseResult.addSubNinjaScope(declarationStart, subNinjaFuture);
         break;
       case BUILD:

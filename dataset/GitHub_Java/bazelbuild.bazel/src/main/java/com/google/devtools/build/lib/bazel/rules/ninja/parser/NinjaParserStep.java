@@ -11,12 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
 package com.google.devtools.build.lib.bazel.rules.ninja.parser;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ascii;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -48,17 +50,17 @@ public class NinjaParserStep {
     String name = asString(parseExpected(NinjaToken.IDENTIFIER));
     parseExpected(NinjaToken.EQUALS);
 
-    NinjaVariableValue value = parseVariableValue();
+    NinjaVariableValue value = parseVariableValue(name);
     return Pair.of(name, value);
   }
 
   @VisibleForTesting
-  public NinjaVariableValue parseVariableValue() throws GenericParsingException {
-    return Preconditions.checkNotNull(parseVariableValueImpl(true));
+  public NinjaVariableValue parseVariableValue(String name) throws GenericParsingException {
+    return parseVariableValueImpl(() -> String.format("Variable '%s' has no value.", name));
   }
 
-  @Nullable
-  private NinjaVariableValue parseVariableValueImpl(boolean noValueAsEmpty) {
+  private NinjaVariableValue parseVariableValueImpl(Supplier<String> messageForNoValue)
+      throws GenericParsingException {
     NinjaVariableValue.Builder varBuilder = NinjaVariableValue.builder();
     int previous = -1;
     while (lexer.hasNextToken()) {
@@ -87,12 +89,7 @@ public class NinjaParserStep {
     }
     if (previous == -1) {
       // We read no value.
-      if (noValueAsEmpty) {
-        // Use empty string for value if specified by caller.
-        return NinjaVariableValue.createPlainText("");
-      }
-      // Otherwise, return null to indicate there was no value.
-      return null;
+      throw new GenericParsingException(messageForNoValue.get());
     }
     return varBuilder.build();
   }
@@ -158,11 +155,9 @@ public class NinjaParserStep {
   private NinjaVariableValue parseIncludeOrSubNinja(NinjaToken token)
       throws GenericParsingException {
     parseExpected(token);
-    NinjaVariableValue value = parseVariableValueImpl(false);
-    if (value == null) {
-      throw new GenericParsingException(
-          String.format("%s statement has no path.", Ascii.toLowerCase(token.name())));
-    }
+    NinjaVariableValue value =
+        parseVariableValueImpl(
+            () -> String.format("%s statement has no path.", Ascii.toLowerCase(token.name())));
     if (lexer.hasNextToken()) {
       parseExpected(NinjaToken.NEWLINE);
       lexer.undo();
@@ -184,7 +179,7 @@ public class NinjaParserStep {
       parseExpected(NinjaToken.INDENT);
       String variableName = asString(parseExpected(NinjaToken.IDENTIFIER));
       parseExpected(NinjaToken.EQUALS);
-      NinjaVariableValue value = parseVariableValue();
+      NinjaVariableValue value = parseVariableValue(variableName);
 
       NinjaRuleVariable ninjaRuleVariable = NinjaRuleVariable.nullOrValue(variableName);
       if (ninjaRuleVariable == null) {
@@ -256,7 +251,7 @@ public class NinjaParserStep {
    */
   public NinjaTarget parseNinjaTarget(NinjaScope fileScope, int offset)
       throws GenericParsingException {
-    NinjaTarget.Builder builder = NinjaTarget.builder(fileScope, offset);
+    NinjaTarget.Builder builder = NinjaTarget.builder();
     parseExpected(NinjaToken.BUILD);
 
     Map<InputOutputKind, List<NinjaVariableValue>> pathValuesMap =
