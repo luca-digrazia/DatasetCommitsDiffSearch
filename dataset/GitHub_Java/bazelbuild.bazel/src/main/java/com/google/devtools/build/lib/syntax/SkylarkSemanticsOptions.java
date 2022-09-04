@@ -15,12 +15,9 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.UsesOnlyCoreTypes;
-import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
-import com.google.devtools.common.options.proto.OptionFilters.OptionMetadataTag;
 import java.io.Serializable;
 
 /**
@@ -40,11 +37,9 @@ import java.io.Serializable;
 public class SkylarkSemanticsOptions extends OptionsBase implements Serializable {
   // Used in an integration test to confirm that flags are visible to the interpreter.
   @Option(
-    name = "internal_skylark_flag_test_canary",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
+      name = "internal_skylark_flag_test_canary",
+      defaultValue = "false",
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
   )
   public boolean skylarkFlagTestCanary;
 
@@ -52,9 +47,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     name = "incompatible_disallow_set_constructor",
     defaultValue = "false",
     category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
     help = "If set to true, disables the deprecated `set` constructor for depsets."
   )
   public boolean incompatibleDisallowSetConstructor;
@@ -63,9 +55,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     name = "incompatible_disallow_keyword_only_args",
     defaultValue = "false",
     category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
     help = "If set to true, disables the keyword-only argument syntax in function definition."
   )
   public boolean incompatibleDisallowKeywordOnlyArgs;
@@ -74,9 +63,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     name = "incompatible_list_plus_equals_inplace",
     defaultValue = "false",
     category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
     help =
         "If set to true, `+=` on lists works like the `extend` method mutating the original "
             + "list. Otherwise it copies the original list without mutating it."
@@ -87,9 +73,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     name = "incompatible_disallow_dict_plus",
     defaultValue = "false",
     category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
     help = "If set to true, the `+` becomes disabled for dicts."
   )
   public boolean incompatibleDisallowDictPlus;
@@ -98,91 +81,9 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     name = "incompatible_bzl_disallow_load_after_statement",
     defaultValue = "false",
     category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
     help =
         "If set to true, all `load` must be called at the top of .bzl files, before any other "
             + "statement."
   )
   public boolean incompatibleBzlDisallowLoadAfterStatement;
-
-  @Option(
-    name = "incompatible_load_argument_is_label",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help =
-        "If set to true, the first argument of 'load' statements is a label (not a path). "
-            + "It must start with '//' or ':'."
-  )
-  public boolean incompatibleLoadArgumentIsLabel;
-
-  @Option(
-    name = "incompatible_disallow_toplevel_if_statement",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help =
-        "If set to true, 'if' statements are forbidden at the top-level "
-            + "(outside a function definition)"
-  )
-  public boolean incompatibleDisallowToplevelIfStatement;
-
-  @Option(
-    name = "incompatible_comprehension_variables_do_not_leak",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help =
-        "If set to true, loop variables in a comprehension shadow any existing variable by "
-            + "the same name. If the existing variable was declared in the same scope that "
-            + "contains the comprehension, then it also becomes inaccessible after the "
-            + " comprehension executes."
-  )
-  public boolean incompatibleComprehensionVariablesDoNotLeak;
-
-  @Option(
-    name = "incompatible_depset_is_not_iterable",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help =
-        "If set to true, depset type is not iterable. For loops and functions expecting an "
-            + "iterable will reject depset objects. Use the `.to_list` method to explicitly "
-            + "convert to a list."
-  )
-  public boolean incompatibleDepsetIsNotIterable;
-
-  @Option(
-    name = "incompatible_dict_literal_has_no_duplicates",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help = "If set to true, the dictionary literal syntax doesn't allow duplicated keys."
-  )
-  public boolean incompatibleDictLiteralHasNoDuplicates;
-
-  @Option(
-      name = "incompatible_new_actions_api",
-      defaultValue = "false",
-      category = "incompatible changes",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      help = "If set to true, the API to create actions is only avaliable on `ctx.actions`, "
-          + "not on `ctx`."
-  )
-  public boolean incompatibleNewActionsApi;
-
 }
