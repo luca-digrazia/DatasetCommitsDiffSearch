@@ -198,14 +198,13 @@ public class GelfChunkAggregator implements CodecAggregator {
         return sb.toString();
     }
 
-    @VisibleForTesting
-    static class ChunkEntry implements Comparable<ChunkEntry> {
+    private static class ChunkEntry implements Comparable<ChunkEntry> {
         private final AtomicInteger chunkSlotsWritten = new AtomicInteger(0);
         private final long firstTimestamp;
         private final AtomicReferenceArray<GELFMessageChunk> payloadArray;
         private final String id;
 
-        public ChunkEntry(int chunkCount, long firstTimestamp, String id) {
+        private ChunkEntry(int chunkCount, long firstTimestamp, String id) {
             this.payloadArray = new AtomicReferenceArray<>(chunkCount);
             this.firstTimestamp = firstTimestamp;
             this.id = id;
@@ -239,12 +238,6 @@ public class GelfChunkAggregator implements CodecAggregator {
             if (equals(o)) {
                 return 0;
             }
-            // If two chunk entries have the same timestamp, we have to compare the IDs. Otherwise the removal from
-            // the eviction set might not work and leak memory.
-            // See: https://github.com/Graylog2/graylog2-server/issues/1462
-            if (firstTimestamp == o.firstTimestamp) {
-                return id.compareTo(o.id);
-            }
             return firstTimestamp < o.firstTimestamp ? -1 : 1;
         }
     }
@@ -257,10 +250,6 @@ public class GelfChunkAggregator implements CodecAggregator {
                 // loop until we've either evicted all outdated chunk entries, or the set is completely empty.
                 // this task will run every second by default (see constant in constructor)
                 while (true) {
-                    // Check if eviction set is empty to avoid a NoElementException when calling first().
-                    if (sortedEvictionSet.isEmpty()) {
-                        break;
-                    }
                     final ChunkEntry oldestChunkEntry = sortedEvictionSet.first();
                     if (isOutdated(oldestChunkEntry)) {
                         expireEntry(oldestChunkEntry.id);
@@ -269,9 +258,10 @@ public class GelfChunkAggregator implements CodecAggregator {
                         break;
                     }
                 }
-            } catch (Exception e) {
-                // Make sure to never throw an exception out of this runnable, it's being run in an executor.
-                log.warn("Error while expiring GELF chunk entries", e);
+            } catch (Exception ignored) {
+                // set empty, nothing more to do. make sure to never throw an exception out of this runnable, it's
+                // being run in an executor
+                log.debug("Eviction set empty, nothing more to do.");
             }
         }
     }
