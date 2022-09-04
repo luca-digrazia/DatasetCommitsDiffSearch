@@ -201,7 +201,6 @@ public class StandaloneSpawnStrategyTest {
         ActionInputPrefetcher.NONE,
         new ActionKeyContext(),
         /*metadataHandler=*/ null,
-        /*rewindingEnabled=*/ false,
         LostInputsCheck.NONE,
         outErr,
         reporter,
