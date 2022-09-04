@@ -52,7 +52,6 @@ public class StaticResourcesRecorder {
             }
         }
         if (!knownPaths.isEmpty()) {
-            ClassLoader currentCl = Thread.currentThread().getContextClassLoader();
             StaticHandler staticHandler = StaticHandler.create(META_INF_RESOURCES).setDefaultContentEncoding("UTF-8");
             handlers.add(ctx -> {
                 String rel = ctx.mountPoint() == null ? ctx.normalisedPath()
@@ -60,8 +59,6 @@ public class StaticResourcesRecorder {
                 if (knownPaths.contains(rel)) {
                     staticHandler.handle(ctx);
                 } else {
-                    // make sure we don't lose the correct TCCL to Vert.x...
-                    Thread.currentThread().setContextClassLoader(currentCl);
                     ctx.next();
                 }
             });

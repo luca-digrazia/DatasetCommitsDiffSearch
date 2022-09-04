@@ -8,7 +8,6 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
 import io.quarkus.smallrye.graphql.runtime.spi.QuarkusClassloadingService;
-import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.smallrye.graphql.cdi.producer.GraphQLProducer;
 import io.smallrye.graphql.schema.model.Schema;
 import io.vertx.core.Handler;
@@ -34,8 +33,7 @@ public class SmallRyeGraphQLRecorder {
         } else {
             association = null;
         }
-        CurrentVertxRequest currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
-        return new SmallRyeGraphQLExecutionHandler(allowGet, association, currentVertxRequest);
+        return new SmallRyeGraphQLExecutionHandler(allowGet, association);
     }
 
     public Handler<RoutingContext> schemaHandler() {
