@@ -1,38 +1,31 @@
 package io.dropwizard.auth.basic;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.base.Optional;
 import io.dropwizard.auth.*;
-import io.dropwizard.auth.util.AuthUtil;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.logging.LoggingFactory;
-import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
 import org.glassfish.jersey.servlet.ServletProperties;
 import org.glassfish.jersey.test.DeploymentContext;
 import org.glassfish.jersey.test.JerseyTest;
 import org.glassfish.jersey.test.ServletDeploymentContext;
-import org.glassfish.jersey.test.TestProperties;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.glassfish.jersey.test.spi.TestContainerException;
 import org.glassfish.jersey.test.spi.TestContainerFactory;
 import org.junit.Test;
-import javax.annotation.security.RolesAllowed;
+
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.container.ContainerRequestFilter;
-import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.SecurityContext;
-import java.security.Principal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 
 public class BasicCustomAuthProviderTest extends JerseyTest {
-    final private static String VALID_ROLE = "ADMIN";
     static {
         LoggingFactory.bootstrap();
     }
@@ -45,7 +38,6 @@ public class BasicCustomAuthProviderTest extends JerseyTest {
 
     @Override
     protected DeploymentContext configureDeployment() {
-        forceSet(TestProperties.CONTAINER_PORT, "0");
         return ServletDeploymentContext.builder(new BasicAuthTestResourceConfig())
                 .initParam(ServletProperties.JAXRS_APPLICATION_CLASS, BasicAuthTestResourceConfig.class.getName())
                 .build();
@@ -69,33 +61,6 @@ public class BasicCustomAuthProviderTest extends JerseyTest {
                 .header(HttpHeaders.AUTHORIZATION, "Custom Z29vZC1ndXk6c2VjcmV0")
                 .get(String.class))
                 .isEqualTo("good-guy");
-    }
-
-    @Test
-    public void resourceWithAuthNotRequired200() {
-        assertThat(target("/test/authnotrequired").request()
-                .get(String.class))
-                .isEqualTo("No Principal");
-    }
-
-    @Test
-    public void resourceWithDenyAllAndNoAuth401() {
-        try {
-            target("/test/denied").request().get(String.class);
-        } catch (WebApplicationException e) {
-            assertThat(e.getResponse().getStatus()).isEqualTo(401);
-        }
-    }
-
-    @Test
-    public void resourceWithDenyAllAndAuth403() {
-        try {
-            target("/test/denied").request()
-                    .header(HttpHeaders.AUTHORIZATION, "Custom Z29vZC1ndXk6c2VjcmV0")
-                    .get(String.class);
-        } catch (WebApplicationException e) {
-            assertThat(e.getResponse().getStatus()).isEqualTo(403);
-        }
     }
 
     @Test
@@ -128,10 +93,9 @@ public class BasicCustomAuthProviderTest extends JerseyTest {
     @Path("/test/")
     @Produces(MediaType.TEXT_PLAIN)
     public static class ExampleResource {
-        @RolesAllowed({VALID_ROLE})
         @GET
-        public String show(@Context SecurityContext context) {
-            return context.getUserPrincipal().getName();
+        public String show(@Auth String principal) {
+            return principal;
         }
     }
 
@@ -139,20 +103,21 @@ public class BasicCustomAuthProviderTest extends JerseyTest {
         public BasicAuthTestResourceConfig() {
             super(true, new MetricRegistry());
 
-            register(new AuthDynamicFeature(getAuthFilter()));
-            register(RolesAllowedDynamicFeature.class);
+            final Authenticator<BasicCredentials, String> authenticator = new Authenticator<BasicCredentials, String>() {
+                @Override
+                public Optional<String> authenticate(BasicCredentials credentials) throws AuthenticationException {
+                    if ("good-guy".equals(credentials.getUsername()) &&
+                            "secret".equals(credentials.getPassword())) {
+                        return Optional.of("good-guy");
+                    }
+                    if ("bad-guy".equals(credentials.getUsername())) {
+                        throw new AuthenticationException("CRAP");
+                    }
+                    return Optional.absent();
+                }
+            };
+            register(AuthFactory.binder(new BasicAuthFactory<>(authenticator, "realm", String.class).prefix("Custom")));
             register(AuthResource.class);
-        }
-
-        private ContainerRequestFilter getAuthFilter() {
-            final String validUser = "good-guy";
-
-            BasicCredentialAuthFilter.Builder<Principal, Authenticator<BasicCredentials, Principal>> builder
-                    = new BasicCredentialAuthFilter.Builder<>();
-            builder.setSecurityContextFunction(AuthUtil.getSecurityContextProviderFunction(validUser, VALID_ROLE));
-            builder.setAuthenticator(AuthUtil.getTestAuthenticatorBasicCredential(validUser));
-            builder.setPrefix("Custom");
-            return builder.buildAuthHandler();
         }
     }
 }

@@ -1,25 +1,25 @@
 package io.dropwizard.auth.oauth;
 
 import com.codahale.metrics.MetricRegistry;
-import io.dropwizard.auth.AuthDynamicFeature;
-import io.dropwizard.auth.AuthFilter;
+import com.google.common.base.Optional;
+import io.dropwizard.auth.AuthFactory;
 import io.dropwizard.auth.AuthResource;
-import io.dropwizard.auth.util.AuthUtil;
+import io.dropwizard.auth.AuthenticationException;
+import io.dropwizard.auth.Authenticator;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.logging.LoggingFactory;
-import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
 import org.glassfish.jersey.servlet.ServletProperties;
 import org.glassfish.jersey.test.DeploymentContext;
 import org.glassfish.jersey.test.JerseyTest;
 import org.glassfish.jersey.test.ServletDeploymentContext;
-import org.glassfish.jersey.test.TestProperties;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.glassfish.jersey.test.spi.TestContainerException;
 import org.glassfish.jersey.test.spi.TestContainerFactory;
 import org.junit.Test;
+
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.SecurityContext;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
@@ -36,7 +36,6 @@ public class OAuthCustomProviderTest extends JerseyTest {
 
     @Override
     protected DeploymentContext configureDeployment() {
-        forceSet(TestProperties.CONTAINER_PORT, "0");
         return ServletDeploymentContext.builder(new BasicAuthTestResourceConfig())
                 .initParam(ServletProperties.JAXRS_APPLICATION_CLASS, BasicAuthTestResourceConfig.class.getName())
                 .build();
@@ -58,40 +57,6 @@ public class OAuthCustomProviderTest extends JerseyTest {
     public void transformsCredentialsToPrincipals() throws Exception {
         assertThat(target("/test").request().header(HttpHeaders.AUTHORIZATION, "Custom good-guy").get(String.class))
                 .isEqualTo("good-guy");
-    }
-
-    @Test
-    public void resourceWithoutAuth200() {
-        assertThat(target("/test/noauth").request()
-                .get(String.class))
-                .isEqualTo("hello");
-    }
-
-    @Test
-    public void resourceWithAuthNotRequired200() {
-        assertThat(target("/test/authnotrequired").request()
-                .get(String.class))
-                .isEqualTo("No Principal");
-    }
-
-    @Test
-    public void resourceWithDenyAllAndNoAuth401() {
-        try {
-            target("/test/denied").request().get(String.class);
-        } catch (WebApplicationException e) {
-            assertThat(e.getResponse().getStatus()).isEqualTo(401);
-        }
-    }
-
-    @Test
-    public void resourceWithDenyAllAndAuth403() {
-        try {
-            target("/test/denied").request()
-                    .header(HttpHeaders.AUTHORIZATION, "Custom good-guy")
-                    .get(String.class);
-        } catch (WebApplicationException e) {
-            assertThat(e.getResponse().getStatus()).isEqualTo(403);
-        }
     }
 
     @Test
@@ -120,19 +85,23 @@ public class OAuthCustomProviderTest extends JerseyTest {
         public BasicAuthTestResourceConfig() {
             super(true, new MetricRegistry());
 
-            register(new AuthDynamicFeature(getAuthFilter()));
-            register(RolesAllowedDynamicFeature.class);
+            final Authenticator<String, String> authenticator = new Authenticator<String, String>() {
+                @Override
+                public Optional<String> authenticate(String credentials) throws AuthenticationException {
+                    if ("good-guy".equals(credentials)) {
+                        return Optional.of("good-guy");
+                    }
+
+                    if ("bad-guy".equals(credentials)) {
+                        throw new AuthenticationException("CRAP");
+                    }
+
+                    return Optional.absent();
+                }
+            };
+
+            register(AuthFactory.binder(new OAuthFactory<>(authenticator, "realm", String.class).prefix("Custom")));
             register(AuthResource.class);
-        }
-
-        private AuthFilter getAuthFilter() {
-            final String validUser = "good-guy";
-
-            return new OAuthCredentialAuthFilter.Builder<>()
-                    .setAuthenticator(AuthUtil.<String, SecurityContext>getTestAuthenticator(validUser))
-                    .setSecurityContextFunction(AuthUtil.getSecurityContextProviderFunction(validUser, "ADMIN"))
-                    .setPrefix("Custom")
-                    .buildAuthHandler();
         }
     }
 }
