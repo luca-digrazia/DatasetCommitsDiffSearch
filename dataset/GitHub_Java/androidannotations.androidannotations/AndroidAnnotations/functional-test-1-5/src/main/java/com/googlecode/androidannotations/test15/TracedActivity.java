@@ -77,12 +77,12 @@ public class TracedActivity extends Activity {
 	}
 
 	@Trace
-	void overloadedMethod(int x) {
+	void overLoaddedMethod(int x) {
 		overLoaddedMethodInt = true;
 	}
 
 	@Trace
-	void overloadedMethod(int x, float f) {
+	void overLoaddedMethod(int x, float f) {
 		overLoaddedMethodIntFLoat = true;
 	}
 }
