@@ -15,13 +15,14 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.primitives.Ints;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -661,8 +662,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
     assertThat(resources.getCpuUsage())
         .isAtLeast(CppLinkAction.MIN_STATIC_LINK_RESOURCES.getCpuUsage());
 
-    final int linkSize =
-        linkAction.getLinkCommandLine().getLinkerInputArtifacts().memoizedFlattenAndGetSize();
+    final int linkSize = Iterables.size(linkAction.getLinkCommandLine().getLinkerInputArtifacts());
     ResourceSet scaledSet =
         ResourceSet.createWithRamCpu(
             CppLinkAction.LINK_RESOURCES_PER_INPUT.getMemoryMb() * linkSize,
@@ -729,9 +729,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
   private Artifact scratchArtifact(String s) {
     Path execRoot = outputBase.getRelative("exec");
-    String outSegment = "out";
-    Path outputRoot = execRoot.getRelative(outSegment);
-    ArtifactRoot root = ArtifactRoot.asDerivedRoot(execRoot, outSegment);
+    Path outputRoot = execRoot.getRelative("out");
+    ArtifactRoot root = ArtifactRoot.asDerivedRoot(execRoot, outputRoot);
     try {
       return ActionsTestUtil.createArtifact(
           root, scratch.overwriteFile(outputRoot.getRelative(s).toString()));
@@ -772,7 +771,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:foo");
     assertThat(configuredTarget).isNotNull();
     ImmutableList<String> inputs =
-        getGeneratingAction(configuredTarget, "foo/libfoo.so").getInputs().toList().stream()
+        ImmutableList.copyOf(getGeneratingAction(configuredTarget, "foo/libfoo.so").getInputs())
+            .stream()
             .map(Artifact::getExecPathString)
             .collect(ImmutableList.toImmutableList());
     assertThat(inputs.stream().anyMatch(i -> i.contains("tools/cpp/link_dynamic_library")))
@@ -889,7 +889,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
     Path execRoot = fs.getPath(TestUtils.tmpDir());
     PathFragment execPath = PathFragment.create("out").getRelative(name);
     return new SpecialArtifact(
-        ArtifactRoot.asDerivedRoot(execRoot, "out"),
+        ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("out")),
         execPath,
         ActionsTestUtil.NULL_ARTIFACT_OWNER,
         SpecialArtifactType.TREE);
