@@ -17,16 +17,16 @@ package com.google.devtools.build.lib.skylarkbuildapi.repository;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
-import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
- * The Skylark module containing the definition of {@code repository_rule} function to define a
- * skylark remote repository.
+ * The Starlark module containing the definition of {@code repository_rule} function to define a
+ * Starlark remote repository.
  */
 @SkylarkGlobalLibrary
 public interface RepositoryModuleApi {
@@ -39,14 +39,16 @@ public interface RepositoryModuleApi {
       parameters = {
         @Param(
             name = "implementation",
-            type = BaseFunction.class,
+            type = StarlarkCallable.class,
+            named = true,
             doc =
-                "the function implementing this rule, has to have exactly one parameter: "
-                    + "<code><a href=\"repository_ctx.html\">repository_ctx</a></code>. The function "
-                    + "is called during loading phase for each instance of the rule."),
+                "the function that implements this rule. Must have a single parameter,"
+                    + " <code><a href=\"repository_ctx.html\">repository_ctx</a></code>. The"
+                    + " function is called during the loading phase for each instance of the"
+                    + " rule."),
         @Param(
             name = "attrs",
-            type = SkylarkDict.class,
+            type = Dict.class,
             noneable = true,
             defaultValue = "None",
             doc =
@@ -69,22 +71,60 @@ public interface RepositoryModuleApi {
             positional = false),
         @Param(
             name = "environ",
-            type = SkylarkList.class,
+            type = Sequence.class,
             generic1 = String.class,
             defaultValue = "[]",
-            doc = "Provides a list of environment variable that this repository rule depends on. If"
-                + " an environment variable in that list change, the repository will be refetched.",
+            doc =
+                "Provides a list of environment variable that this repository rule depends on. If "
+                    + "an environment variable in that list change, the repository will be "
+                    + "refetched.",
+            named = true,
+            positional = false),
+        @Param(
+            name = "configure",
+            type = Boolean.class,
+            defaultValue = "False",
+            doc = "Indicate that the repository inspects the system for configuration purpose",
+            named = true,
+            positional = false),
+        @Param(
+            name = "remotable",
+            type = Boolean.class,
+            defaultValue = "False",
+            doc = "Compatible with remote execution",
+            named = true,
+            positional = false,
+            enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_REPO_REMOTE_EXEC,
+            valueWhenDisabled = "False"),
+        @Param(
+            name = "doc",
+            type = String.class,
+            defaultValue = "''",
+            doc =
+                "A description of the repository rule that can be extracted by documentation "
+                    + "generating tools.",
             named = true,
             positional = false)
       },
-      useAst = true,
-      useEnvironment = true)
-    public BaseFunction repositoryRule(
-        BaseFunction implementation,
-        Object attrs,
-        Boolean local,
-        SkylarkList<String> environ,
-        FuncallExpression ast,
-        Environment env)
-        throws EvalException;
+      useStarlarkThread = true)
+  StarlarkCallable repositoryRule(
+      StarlarkCallable implementation,
+      Object attrs,
+      Boolean local,
+      Sequence<?> environ, // <String> expected
+      Boolean configure,
+      Boolean remotable,
+      String doc,
+      StarlarkThread thread)
+      throws EvalException;
+
+  @SkylarkCallable(
+      name = "__do_not_use_fail_with_incompatible_use_cc_configure_from_rules_cc",
+      doc =
+          "When --incompatible_use_cc_configure_from_rules_cc is set to true, Bazel will "
+              + "fail the build. Please see https://github.com/bazelbuild/bazel/issues/10134 for "
+              + "details and migration instructions.",
+      documented = false,
+      useStarlarkThread = true)
+  void failWithIncompatibleUseCcConfigureFromRulesCc(StarlarkThread thread) throws EvalException;
 }
