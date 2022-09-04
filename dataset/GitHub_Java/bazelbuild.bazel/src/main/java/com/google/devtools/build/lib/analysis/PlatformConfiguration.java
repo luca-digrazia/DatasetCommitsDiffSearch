@@ -18,38 +18,42 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
-import com.google.devtools.build.lib.skylarkbuildapi.platform.PlatformConfigurationApi;
-import com.google.devtools.build.lib.util.RegexFilter;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import java.util.List;
-import java.util.Map;
 
 /** A configuration fragment describing the current platform configuration. */
+@AutoCodec
 @ThreadSafety.Immutable
-public class PlatformConfiguration extends BuildConfiguration.Fragment
-    implements PlatformConfigurationApi {
+@SkylarkModule(
+  name = "platform",
+  doc = "The platform configuration.",
+  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
+)
+public class PlatformConfiguration extends BuildConfiguration.Fragment {
   private final Label hostPlatform;
   private final ImmutableList<String> extraExecutionPlatforms;
-  private final Label targetPlatform;
+  private final ImmutableList<Label> targetPlatforms;
   private final ImmutableList<String> extraToolchains;
   private final ImmutableList<Label> enabledToolchainTypes;
-  private final List<Map.Entry<RegexFilter, List<Label>>> targetFilterToAdditionalExecConstraints;
 
+  @AutoCodec.Instantiator
   PlatformConfiguration(
       Label hostPlatform,
       ImmutableList<String> extraExecutionPlatforms,
-      Label targetPlatform,
+      ImmutableList<Label> targetPlatforms,
       ImmutableList<String> extraToolchains,
-      ImmutableList<Label> enabledToolchainTypes,
-      List<Map.Entry<RegexFilter, List<Label>>> targetFilterToAdditionalExecConstraints) {
+      ImmutableList<Label> enabledToolchainTypes) {
     this.hostPlatform = hostPlatform;
     this.extraExecutionPlatforms = extraExecutionPlatforms;
-    this.targetPlatform = targetPlatform;
+    this.targetPlatforms = targetPlatforms;
     this.extraToolchains = extraToolchains;
     this.enabledToolchainTypes = enabledToolchainTypes;
-    this.targetFilterToAdditionalExecConstraints = targetFilterToAdditionalExecConstraints;
   }
 
-  @Override
+  @SkylarkCallable(name = "host_platform", structField = true, doc = "The current host platform")
   public Label getHostPlatform() {
     return hostPlatform;
   }
@@ -62,19 +66,9 @@ public class PlatformConfiguration extends BuildConfiguration.Fragment
     return extraExecutionPlatforms;
   }
 
-  /**
-   * Returns the single target platform used in this configuration. The flag is multi-valued for
-   * future handling of multiple target platforms but any given configuration should only be
-   * concerned with a single target platform.
-   */
-  @Override
-  public Label getTargetPlatform() {
-    return targetPlatform;
-  }
-
-  @Override
+  @SkylarkCallable(name = "platforms", structField = true, doc = "The current target platforms")
   public ImmutableList<Label> getTargetPlatforms() {
-    return ImmutableList.of(targetPlatform);
+    return targetPlatforms;
   }
 
   /**
@@ -85,23 +79,16 @@ public class PlatformConfiguration extends BuildConfiguration.Fragment
     return extraToolchains;
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "enabled_toolchain_types",
+    structField = true,
+    doc = "The set of toolchain types enabled for platform-based toolchain selection."
+  )
   public List<Label> getEnabledToolchainTypes() {
     return enabledToolchainTypes;
   }
 
-  /**
-   * Returns a list of labels referring to additional constraint value targets which should be taken
-   * into account when resolving the toolchains/execution platform for the target with the given
-   * label.
-   */
-  public List<Label> getAdditionalExecutionConstraintsFor(Label label) {
-    ImmutableList.Builder<Label> constraints = ImmutableList.builder();
-    for (Map.Entry<RegexFilter, List<Label>> filter : targetFilterToAdditionalExecConstraints) {
-      if (filter.getKey().isIncluded(label.getCanonicalForm())) {
-        constraints.addAll(filter.getValue());
-      }
-    }
-    return constraints.build();
+  public boolean isToolchainTypeEnabled(Label toolchainType) {
+    return getEnabledToolchainTypes().contains(toolchainType);
   }
 }
