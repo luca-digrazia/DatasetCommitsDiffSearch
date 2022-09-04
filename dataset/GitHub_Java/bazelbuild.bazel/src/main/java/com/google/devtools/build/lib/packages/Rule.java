@@ -527,7 +527,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
         }
       }
     } catch (EvalException e) {
-      reportError(String.format("In rule %s: %s", getLabel(), e.print()), eventHandler);
+      reportError(e.print(), eventHandler);
     }
   }
 
