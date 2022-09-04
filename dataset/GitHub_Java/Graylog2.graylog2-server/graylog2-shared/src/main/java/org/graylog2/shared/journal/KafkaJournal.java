@@ -58,11 +58,10 @@ import static org.graylog2.plugin.Tools.bytesToHex;
 
 public class KafkaJournal extends AbstractIdleService implements Journal {
     private static final Logger log = LoggerFactory.getLogger(KafkaJournal.class);
-    private static final long DEFAULT_COMMITTED_OFFSET = Long.MIN_VALUE;
     private final LogManager logManager;
     private final Log kafkaLog;
     private final File committedReadOffsetFile;
-    private final AtomicLong committedOffset = new AtomicLong(DEFAULT_COMMITTED_OFFSET);
+    private final AtomicLong committedOffset = new AtomicLong(Long.MIN_VALUE);
     private final ScheduledExecutorService scheduler;
     private final OffsetFileFlusher offsetFlusher;
     private long nextReadOffset = 0L;
@@ -294,10 +293,6 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     private class OffsetFileFlusher implements Runnable {
         @Override
         public void run() {
-            // Do not write the file if committedOffset has never been updated.
-            if (committedOffset.get() == DEFAULT_COMMITTED_OFFSET) {
-                return;
-            }
             try (final FileOutputStream fos = new FileOutputStream(committedReadOffsetFile)) {
                 fos.write(String.valueOf(committedOffset.get()).getBytes(Charsets.UTF_8));
                 // flush stream

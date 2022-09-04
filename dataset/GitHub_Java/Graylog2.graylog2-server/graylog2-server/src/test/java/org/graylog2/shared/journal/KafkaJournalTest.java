@@ -16,7 +16,6 @@
  */
 package org.graylog2.shared.journal;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Iterators;
 import org.graylog2.Graylog2BaseTest;
 import org.testng.annotations.AfterClass;
@@ -50,7 +49,7 @@ public class KafkaJournalTest extends Graylog2BaseTest {
     @Test
     public void writeAndRead() throws IOException {
         final Path journalDir = Files.createTempDirectory("journal");
-        final Journal journal = new KafkaJournal(journalDir.toFile().getAbsolutePath(), scheduler, 100 * 1024 * 1024, new MetricRegistry());
+        final Journal journal = new KafkaJournal(journalDir.toFile().getAbsolutePath(), scheduler, 100 * 1024 * 1024);
 
         final byte[] idBytes = "id".getBytes(UTF_8);
         final byte[] messageBytes = "message".getBytes(UTF_8);
@@ -68,7 +67,7 @@ public class KafkaJournalTest extends Graylog2BaseTest {
     @Test
     public void readAtLeastOne() throws Exception {
         final Path journalDir = Files.createTempDirectory("journal");
-        final Journal journal = new KafkaJournal(journalDir.toFile().getAbsolutePath(), scheduler, 100 * 1024 * 1024, new MetricRegistry());
+        final Journal journal = new KafkaJournal(journalDir.toFile().getAbsolutePath(), scheduler, 100 * 1024 * 1024);
 
         final byte[] idBytes = "id".getBytes(UTF_8);
         final byte[] messageBytes = "message1".getBytes(UTF_8);
