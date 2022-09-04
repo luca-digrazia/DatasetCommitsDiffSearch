@@ -20,7 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -309,14 +309,13 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     AndroidFeatureFlagSetProvider.getAndValidateFlagMapFromRuleContext(ruleContext);
 
     if (oneVersionOutputArtifact != null) {
-      builder.addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, oneVersionOutputArtifact);
+      builder.addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, oneVersionOutputArtifact);
     }
 
     NestedSet<Artifact> extraFilesToRun =
         NestedSetBuilder.create(Order.STABLE_ORDER, runfilesSupport.getRunfilesMiddleman());
 
-    JavaInfo javaInfo =
-        javaInfoBuilder
+    JavaInfo javaInfo = javaInfoBuilder
             .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
             .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
             .build();
@@ -367,7 +366,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
    * Returns a merged {@link ApplicationManifest} for the rule. The final merged manifest will be
    * merged into the manifest provided on the rule, or into a placeholder manifest if one is not
    * provided
-   *
    * @throws InterruptedException
    * @throws RuleErrorException
    */
@@ -390,10 +388,8 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     return applicationManifest;
   }
 
-  /**
-   * Returns the transitive closure of resource dependencies, including those specified on the rule
-   * if present.
-   */
+  /** Returns the transitive closure of resource dependencies, including those specified on the rule
+   * if present. */
   private ResourceDependencies getResourceDependencies(RuleContext ruleContext) {
     return LocalResourceContainer.definesAndroidResources(ruleContext.attributes())
         ? ResourceDependencies.fromRuleDeps(ruleContext, false /* neverlink */)
@@ -549,7 +545,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
 
   /**
    * Add compilation dependencies to the java compilation helper.
-   *
    * @throws RuleErrorException
    */
   protected abstract JavaCompilationHelper getJavaCompilationHelperWithDependencies(
