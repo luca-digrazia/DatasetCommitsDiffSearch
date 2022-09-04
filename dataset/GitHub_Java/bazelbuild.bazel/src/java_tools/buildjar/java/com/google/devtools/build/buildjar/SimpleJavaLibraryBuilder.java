@@ -18,6 +18,7 @@ import com.google.common.io.MoreFiles;
 import com.google.common.io.RecursiveDeleteOption;
 import com.google.devtools.build.buildjar.instrumentation.JacocoInstrumentationProcessor;
 import com.google.devtools.build.buildjar.jarhelper.JarCreator;
+import com.google.devtools.build.buildjar.javac.BlazeJavacArguments;
 import com.google.devtools.build.buildjar.javac.BlazeJavacMain;
 import com.google.devtools.build.buildjar.javac.BlazeJavacResult;
 import com.google.devtools.build.buildjar.javac.JavacRunner;
@@ -48,20 +49,7 @@ public class SimpleJavaLibraryBuilder implements Closeable {
 
   BlazeJavacResult compileSources(JavaLibraryBuildRequest build, JavacRunner javacRunner)
       throws IOException {
-    BlazeJavacResult result =
-        javacRunner.invokeJavac(build.toBlazeJavacArguments(build.getClassPath()));
-
-    result =
-        result.withStatistics(
-            result
-                .statistics()
-                .toBuilder()
-                .transitiveClasspathLength(build.getClassPath().size())
-                .reducedClasspathLength(build.getClassPath().size())
-                .transitiveClasspathFallback(false)
-                .build());
-
-    return result;
+    return javacRunner.invokeJavac(build.toBlazeJavacArguments(build.getClassPath()));
   }
 
   protected void prepareSourceCompilation(JavaLibraryBuildRequest build) throws IOException {
@@ -111,7 +99,15 @@ public class SimpleJavaLibraryBuilder implements Closeable {
     if (build.getSourceFiles().isEmpty()) {
       return BlazeJavacResult.ok();
     }
-    return compileSources(build, BlazeJavacMain::compile);
+    JavacRunner javacRunner =
+        new JavacRunner() {
+          @Override
+          public BlazeJavacResult invokeJavac(BlazeJavacArguments arguments) {
+            return BlazeJavacMain.compile(arguments);
+          }
+        };
+    BlazeJavacResult result = compileSources(build, javacRunner);
+    return result;
   }
 
   /** Perform the build. */
