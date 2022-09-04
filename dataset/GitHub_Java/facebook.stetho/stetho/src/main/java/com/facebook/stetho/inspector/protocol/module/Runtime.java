@@ -234,8 +234,8 @@ public class Runtime implements ChromeDevtoolsDomain {
         RuntimeRepl repl = getRepl(replFactory);
         Object result = repl.evaluate(request.expression);
         return buildNormalResponse(result);
-      } catch (Throwable t) {
-        return buildExceptionResponse(t);
+      } catch (Exception e) {
+        return buildExceptionResponse(e);
       }
     }
 
