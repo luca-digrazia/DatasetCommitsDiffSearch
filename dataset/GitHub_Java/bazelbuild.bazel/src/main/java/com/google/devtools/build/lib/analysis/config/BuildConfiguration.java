@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
@@ -1908,8 +1907,8 @@ public class BuildConfiguration implements BuildConfigurationApi {
    * configuration. Returns null if no transition is needed.
    */
   @Nullable
-  public ConfigurationTransition topLevelConfigurationHook(Target toTarget) {
-    ConfigurationTransition currentTransition = null;
+  public PatchTransition topLevelConfigurationHook(Target toTarget) {
+    PatchTransition currentTransition = null;
     for (Fragment fragment : fragments.values()) {
       PatchTransition fragmentTransition = fragment.topLevelConfigurationHook(toTarget);
       if (fragmentTransition == null) {
@@ -1918,7 +1917,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
         currentTransition = fragmentTransition;
       } else {
         currentTransition =
-            TransitionResolver.composeTransitions(currentTransition, fragmentTransition);
+            TransitionResolver.composePatchTransitions(currentTransition, fragmentTransition);
       }
     }
     return currentTransition;
