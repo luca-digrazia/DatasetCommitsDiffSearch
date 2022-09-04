@@ -54,28 +54,17 @@ public final class AndroidDeployInfoAction extends AbstractFileWriteAction {
   }
 
   private static final String GUID = "eda283ba-9000-4b80-8dc4-7939101c44ba";
-
-  private final Artifact mergedManifest;
-  private final ImmutableList<Artifact> additionalMergedManifests;
-  private final ImmutableList<Artifact> apksToDeploy;
-  private final ImmutableList<Artifact> dataDeps;
+  private final ByteString byteString;
 
   AndroidDeployInfoAction(
       ActionOwner owner,
       Artifact outputFile,
       Artifact mergedManifest,
-      ImmutableList<Artifact> additionalMergedManifests,
-      ImmutableList<Artifact> apksToDeploy,
-      ImmutableList<Artifact> dataDeps) {
+      Iterable<Artifact> additionalMergedManifests,
+      Iterable<Artifact> apksToDeploy,
+      Iterable<Artifact> dataDeps) {
     super(owner, makeInputs(mergedManifest, additionalMergedManifests, apksToDeploy, dataDeps),
         outputFile, false);
-    this.mergedManifest = mergedManifest;
-    this.additionalMergedManifests = additionalMergedManifests;
-    this.apksToDeploy = apksToDeploy;
-    this.dataDeps = dataDeps;
-  }
-
-  private ByteString getByteString() {
     AndroidDeployInfoOuterClass.AndroidDeployInfo.Builder builder =
         AndroidDeployInfoOuterClass.AndroidDeployInfo.newBuilder();
     builder.setMergedManifest(makeArtifactProto(mergedManifest));
@@ -88,16 +77,16 @@ public final class AndroidDeployInfoAction extends AbstractFileWriteAction {
     for (Artifact dataDep : dataDeps) {
       builder.addDataToDeploy(makeArtifactProto(dataDep));
     }
-    return builder.build().toByteString();
+    this.byteString = builder.build().toByteString();
   }
 
   static void createDeployInfoAction(
       RuleContext ruleContext,
       Artifact deployInfo,
       Artifact mergedManifest,
-      ImmutableList<Artifact> additionalMergedManifests,
-      ImmutableList<Artifact> apksToDeploy,
-      ImmutableList<Artifact> dataDeps) {
+      Iterable<Artifact> additionalMergedManifests,
+      Iterable<Artifact> apksToDeploy,
+      Iterable<Artifact> dataDeps) {
     Action action = new AndroidDeployInfoAction(ruleContext.getActionOwner(),
         deployInfo, mergedManifest, additionalMergedManifests, apksToDeploy, dataDeps);
     ruleContext.registerAction(action);
@@ -105,12 +94,12 @@ public final class AndroidDeployInfoAction extends AbstractFileWriteAction {
 
   @Override
   public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx) throws IOException {
-    return new ByteStringDeterministicWriter(getByteString());
+    return new ByteStringDeterministicWriter(byteString);
   }
 
   @VisibleForTesting
   public AndroidDeployInfo getDeployInfo() throws InvalidProtocolBufferException {
-    return AndroidDeployInfo.parseFrom(getByteString());
+    return AndroidDeployInfo.parseFrom(byteString);
   }
 
   @Override
@@ -118,7 +107,7 @@ public final class AndroidDeployInfoAction extends AbstractFileWriteAction {
     Fingerprint f = new Fingerprint()
         .addString(GUID);
 
-    try (InputStream in = getByteString().newInput()) {
+    try (InputStream in = byteString.newInput()) {
       byte[] buffer = new byte[512];
       int amountRead;
       while ((amountRead = in.read(buffer)) != -1) {
@@ -127,6 +116,7 @@ public final class AndroidDeployInfoAction extends AbstractFileWriteAction {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+
     return f.hexDigestAndReset();
   }
 

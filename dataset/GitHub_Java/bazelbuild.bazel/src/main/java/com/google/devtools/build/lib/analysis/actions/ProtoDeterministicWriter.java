@@ -19,36 +19,21 @@ import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.io.OutputStream;
 
-/** A {@link DeterministicWriter} wrapping an {@link AbstractMessageLite} supplier. */
+/** A {@link DeterministicWriter} wrapping an {@link AbstractMessageLite} object. */
 public class ProtoDeterministicWriter implements DeterministicWriter {
-  private final MessageSupplier messageSupplier;
+  private final AbstractMessageLite message;
 
-  /** Constructs a {@link ProtoDeterministicWriter} with an eagerly constructed message. */
   public ProtoDeterministicWriter(AbstractMessageLite message) {
-    this.messageSupplier = () -> message;
-  }
-
-  /**
-   * Constructs a {@link ProtoDeterministicWriter} with the given supplier. The supplier may be
-   * called multiple times.
-   */
-  public ProtoDeterministicWriter(MessageSupplier supplier) {
-    this.messageSupplier = supplier;
+    this.message = message;
   }
 
   @Override
   public void writeOutputFile(OutputStream out) throws IOException {
-    messageSupplier.getMessage().writeTo(out);
+    message.writeTo(out);
   }
 
   @Override
   public ByteString getBytes() throws IOException {
-    return messageSupplier.getMessage().toByteString();
-  }
-
-  /** Supplies an {@link AbstractMessageLite}, possibly throwing {@link IOException}. */
-  @FunctionalInterface
-  public interface MessageSupplier {
-    AbstractMessageLite<?, ?> getMessage() throws IOException;
+    return message.toByteString();
   }
 }
