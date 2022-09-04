@@ -645,7 +645,7 @@ public class ExperimentalEventHandler implements EventHandler {
 
   @Subscribe
   public synchronized void analysisComplete(AnalysisPhaseCompleteEvent event) {
-    String analysisSummary = stateTracker.analysisComplete();
+    String analysisSummary = stateTracker.analysisComplete(event);
     handle(Event.info(null, analysisSummary));
   }
 
