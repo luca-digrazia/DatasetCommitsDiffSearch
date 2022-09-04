@@ -406,17 +406,12 @@ public class ValidatorParameterHelper {
 			case INT:
 				return CanonicalNameConstants.INTEGER;
 			case BYTE:
-				return CanonicalNameConstants.BYTE;
 			case SHORT:
-				return CanonicalNameConstants.SHORT;
 			case LONG:
-				return CanonicalNameConstants.LONG;
 			case CHAR:
-				return CanonicalNameConstants.CHAR;
 			case FLOAT:
-				return CanonicalNameConstants.FLOAT;
 			case DOUBLE:
-				return CanonicalNameConstants.DOUBLE;
+				throw new UnsupportedOperationException("This primitive is not handled yet");
 			default:
 				throw new IllegalArgumentException("The TypeKind passed does not represent a primitive");
 			}
