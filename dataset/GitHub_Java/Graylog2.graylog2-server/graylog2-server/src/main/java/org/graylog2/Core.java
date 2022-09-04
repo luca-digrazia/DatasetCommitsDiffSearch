@@ -47,7 +47,6 @@ import org.graylog2.indexer.Indexer;
 import org.graylog2.initializers.Initializers;
 import org.graylog2.inputs.BasicCache;
 import org.graylog2.inputs.Cache;
-import org.graylog2.shared.filters.FilterRegistry;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
@@ -122,7 +121,6 @@ public class Core implements GraylogServer, InputHost, MetricsHost, ProcessingHo
     private MongoConnection mongoConnection;
     @Inject
     private MongoBridge mongoBridge;
-    @Inject
     private Configuration configuration;
     private RulesEngineImpl rulesEngine;
     private GELFChunkManager gelfChunkManager;
@@ -143,9 +141,7 @@ public class Core implements GraylogServer, InputHost, MetricsHost, ProcessingHo
             new AtomicReference<ConcurrentHashMap<String, Counter>>(new ConcurrentHashMap<String, Counter>());
     private long throughput = 0;
 
-    @Inject
-    private FilterRegistry filterRegistry;
-
+    private List<MessageFilter> filters = Lists.newArrayList();
     private List<Transport> transports = Lists.newArrayList();
     private List<AlarmCallback> alarmCallbacks = Lists.newArrayList();
 
@@ -186,11 +182,14 @@ public class Core implements GraylogServer, InputHost, MetricsHost, ProcessingHo
     private MongoDbMetricsReporter metricsReporter;
     private AtomicReference<HashMap<String, Counter>> currentStreamThroughput = new AtomicReference<HashMap<String, Counter>>();
 
-    public void initialize() {
+    public void initialize(Configuration configuration) {
     	startedAt = new DateTime(DateTimeZone.UTC);
 
         NodeId id = new NodeId(configuration.getNodeIdFile());
         this.nodeId = id.readOrGenerate();
+
+        this.metricRegistry = metrics;
+        this.configuration = configuration; // TODO use dependency injection
 
         if (configuration.isMetricsCollectionEnabled()) {
             metricsReporter = MongoDbMetricsReporter.forRegistry(this, metricRegistry).build();
@@ -252,6 +251,10 @@ public class Core implements GraylogServer, InputHost, MetricsHost, ProcessingHo
                 }
             }
         });
+    }
+
+    public void registerFilter(MessageFilter filter) {
+        this.filters.add(filter);
     }
 
     public void registerTransport(Transport transport) {
@@ -427,7 +430,7 @@ public class Core implements GraylogServer, InputHost, MetricsHost, ProcessingHo
             LOG.info("Loaded <{}> plugin [{}].", type.getSimpleName(), plugin.getClass().getCanonicalName());
 
             if (plugin instanceof MessageFilter) {
-                filterRegistry.register((MessageFilter) plugin);
+                registerFilter((MessageFilter) plugin);
             } else if (plugin instanceof MessageInput) {
                 inputs.register(plugin.getClass(), ((MessageInput) plugin).getName());
             } else if (plugin instanceof MessageOutput) {
@@ -502,6 +505,10 @@ public class Core implements GraylogServer, InputHost, MetricsHost, ProcessingHo
         return this.transports;
     }
     
+    public List<MessageFilter> getFilters() {
+        return this.filters;
+    }
+
     public List<AlarmCallback> getAlarmCallbacks() {
         return this.alarmCallbacks;
     }
