@@ -15,7 +15,7 @@ import java.util.Map;
 
 public class BasicRest extends ShamrockTemplate {
     private Map<String, Object> context;
-    private String className;
+    private String className = "ShamrockResource";
     private String path = "/hello";
     private File projectRoot;
     private File srcMain;
@@ -34,9 +34,7 @@ public class BasicRest extends ShamrockTemplate {
         initProject();
         setupContext();
 
-        if (className != null) {
-            createClasses();
-        }
+        createClasses();
         createIndexPage();
         createDockerFile();
         createMicroProfileConfig();
@@ -44,33 +42,29 @@ public class BasicRest extends ShamrockTemplate {
 
     private void setupContext() {
         MojoUtils.getAllProperties().forEach((k, v) -> context.put(k.replace("-", "_"), v));
+        String packageName = (String) context.get(PACKAGE_NAME);
+        if (className.endsWith(MojoUtils.JAVA_EXTENSION)) {
+            className = className.substring(0, className.length() - MojoUtils.JAVA_EXTENSION.length());
+        }
 
-        if (className != null) {
-            String packageName = (String) context.get(PACKAGE_NAME);
+        if (className.contains(".")) {
+            int idx = className.lastIndexOf('.');
+            packageName = className.substring(0, idx);
+            className = className.substring(idx + 1);
+        }
 
-            if (className.endsWith(MojoUtils.JAVA_EXTENSION)) {
-                className = className.substring(0, className.length() - MojoUtils.JAVA_EXTENSION.length());
-            }
+        if (packageName != null) {
+            File packageDir = new File(srcMain, packageName.replace('.', '/'));
+            File testPackageDir = new File(testMain, packageName.replace('.', '/'));
+            srcMain = mkdirs(packageDir);
+            testMain = mkdirs(testPackageDir);
+        }
 
-            if (className.contains(".")) {
-                int idx = className.lastIndexOf('.');
-                packageName = className.substring(0, idx);
-                className = className.substring(idx + 1);
-            }
+        context.put(CLASS_NAME, className);
+        context.put(RESOURCE_PATH, path);
 
-            if (packageName != null) {
-                File packageDir = new File(srcMain, packageName.replace('.', '/'));
-                File testPackageDir = new File(testMain, packageName.replace('.', '/'));
-                srcMain = mkdirs(packageDir);
-                testMain = mkdirs(testPackageDir);
-            }
-
-            context.put(CLASS_NAME, className);
-            context.put(RESOURCE_PATH, path);
-
-            if (packageName != null) {
-                context.put(PACKAGE_NAME, packageName);
-            }
+        if (packageName != null) {
+            context.put(PACKAGE_NAME, packageName);
         }
     }
 
@@ -97,8 +91,9 @@ public class BasicRest extends ShamrockTemplate {
             context.put(PROJECT_ARTIFACT_ID, model.getArtifactId());
         }
 
-        // If className is null we disable the generation of the Jax-RS resource.
-        className = get("className", null);
+        className = get("className",
+            String.format("%s.%s.%s", context.get(PROJECT_GROUP_ID), context.get(PROJECT_ARTIFACT_ID),
+                "MyResource"));
         path = get(RESOURCE_PATH, path);
 
         srcMain = mkdirs(new File(projectRoot, "src/main/java"));
