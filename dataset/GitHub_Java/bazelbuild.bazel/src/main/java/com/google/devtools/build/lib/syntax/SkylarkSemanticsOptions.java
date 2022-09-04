@@ -135,7 +135,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
 
   @Option(
     name = "incompatible_disallow_toplevel_if_statement",
-    defaultValue = "true",
+    defaultValue = "false",
     category = "incompatible changes",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
@@ -226,7 +226,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     name = "incompatible_descriptive_string_representations",
     defaultValue = "false",
     category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
     effectTags = {OptionEffectTag.UNKNOWN},
     metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
     help =
