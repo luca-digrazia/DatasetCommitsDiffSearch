@@ -32,24 +32,12 @@ public class LoggingConfiguration {
             return enabled;
         }
 
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
         public Level getThreshold() {
             return threshold;
         }
 
-        public void setThreshold(Level threshold) {
-            this.threshold = threshold;
-        }
-
         public TimeZone getTimeZone() {
             return timeZone;
-        }
-
-        public void setTimeZone(TimeZone timeZone) {
-            this.timeZone = timeZone;
         }
     }
 
@@ -128,10 +116,6 @@ public class LoggingConfiguration {
         )
         private String facility = "local0";
 
-        @NotNull
-        @JsonProperty
-        private TimeZone timeZone = UTC;
-
         public boolean isEnabled() {
             return enabled;
         }
@@ -146,10 +130,6 @@ public class LoggingConfiguration {
 
         public String getFacility() {
             return facility;
-        }
-
-        public TimeZone getTimeZone() {
-            return timeZone;
         }
     }
 
