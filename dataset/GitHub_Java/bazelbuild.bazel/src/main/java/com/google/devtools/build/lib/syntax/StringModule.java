@@ -113,7 +113,7 @@ final class StringModule implements SkylarkValue {
       useStarlarkThread = true)
   public String join(String self, Object elements, Location loc, StarlarkThread thread)
       throws EvalException {
-    Collection<?> items = EvalUtils.toCollection(elements, loc);
+    Collection<?> items = EvalUtils.toCollection(elements, loc, thread);
     if (thread.getSemantics().incompatibleStringJoinRequiresStrings()) {
       for (Object item : items) {
         if (!(item instanceof String)) {

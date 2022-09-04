@@ -324,16 +324,17 @@ public final class EvalUtils {
       } catch (ComparisonException e) {
         throw new EvalException(loc, e);
       }
+    } else if (o instanceof SkylarkNestedSet) {
+      return nestedSetToCollection((SkylarkNestedSet) o, loc, thread);
     } else {
       throw new EvalException(loc,
           "type '" + getDataTypeName(o) + "' is not a collection");
     }
   }
 
-  // TODO(laurentlb): Get rid of this function.
   private static Collection<?> nestedSetToCollection(
       SkylarkNestedSet set, Location loc, @Nullable StarlarkThread thread) throws EvalException {
-    if (thread != null) {
+    if (thread != null && thread.getSemantics().incompatibleDepsetIsNotIterable()) {
       throw new EvalException(
           loc,
           "type 'depset' is not iterable. Use the `to_list()` method to get a list. Use "
@@ -355,7 +356,9 @@ public final class EvalUtils {
 
   public static Iterable<?> toIterable(Object o, Location loc, @Nullable StarlarkThread thread)
       throws EvalException {
-    if (o instanceof Iterable) {
+    if (o instanceof SkylarkNestedSet) {
+      return nestedSetToCollection((SkylarkNestedSet) o, loc, thread);
+    } else if (o instanceof Iterable) {
       return (Iterable<?>) o;
     } else if (o instanceof Map) {
       return toCollection(o, loc, thread);
@@ -958,7 +961,16 @@ public final class EvalUtils {
   /** Implements 'x in y'. */
   private static boolean in(Object x, Object y, StarlarkThread thread, Location location)
       throws EvalException {
-    if (y instanceof SkylarkQueryable) {
+    if (thread.getSemantics().incompatibleDepsetIsNotIterable() && y instanceof SkylarkNestedSet) {
+      throw new EvalException(
+          location,
+          "argument of type '"
+              + getDataTypeName(y)
+              + "' is not iterable. "
+              + "in operator only works on lists, tuples, dicts and strings. "
+              + "Use --incompatible_depset_is_not_iterable=false to temporarily disable "
+              + "this check.");
+    } else if (y instanceof SkylarkQueryable) {
       return ((SkylarkQueryable) y).containsKey(x, location, thread);
     } else if (y instanceof String) {
       if (x instanceof String) {

@@ -96,7 +96,7 @@ final class Eval {
 
   private TokenKind execFor(ForStatement node) throws EvalException, InterruptedException {
     Object o = eval(thread, node.getCollection());
-    Iterable<?> col = EvalUtils.toIterable(o, node.getLocation());
+    Iterable<?> col = EvalUtils.toIterable(o, node.getLocation(), thread);
     EvalUtils.lock(o, node.getLocation());
     try {
       for (Object it : col) {
@@ -301,7 +301,7 @@ final class Eval {
   private static void assignList(
       ListExpression list, Object value, StarlarkThread thread, Location loc)
       throws EvalException, InterruptedException {
-    Collection<?> collection = EvalUtils.toCollection(value, loc);
+    Collection<?> collection = EvalUtils.toCollection(value, loc, thread);
     int len = list.getElements().size();
     if (len == 0) {
       throw new EvalException(
@@ -360,7 +360,7 @@ final class Eval {
     // TODO(b/141263526): following Python, allow list+=iterable (but not list+iterable).
     if (op == TokenKind.PLUS && x instanceof StarlarkList && y instanceof StarlarkList) {
       StarlarkList<?> list = (StarlarkList) x;
-      list.extend(y, location);
+      list.extend(y, location, thread);
       return list;
     }
     return EvalUtils.binaryOp(op, x, y, thread, location);
@@ -642,7 +642,7 @@ final class Eval {
 
             Object iterable = eval(thread, forClause.getIterable());
             Location loc = comp.getLocation();
-            Iterable<?> listValue = EvalUtils.toIterable(iterable, loc);
+            Iterable<?> listValue = EvalUtils.toIterable(iterable, loc, thread);
             EvalUtils.lock(iterable, loc);
             try {
               for (Object elem : listValue) {
