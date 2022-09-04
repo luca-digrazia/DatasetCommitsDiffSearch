@@ -1,5 +1,7 @@
 package io.quarkus.maven;
 
+import static java.util.stream.Collectors.joining;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -55,6 +57,7 @@ import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
+import io.quarkus.bootstrap.util.PropertyUtils;
 import io.quarkus.dev.DevModeContext;
 import io.quarkus.dev.DevModeMain;
 import io.quarkus.maven.components.MavenVersionEnforcer;
@@ -380,13 +383,23 @@ public class DevMojo extends AbstractMojo {
     }
 
     private void addToClassPaths(StringBuilder classPathManifest, DevModeContext classPath, File file) {
-        final URI uri = file.toPath().toAbsolutePath().toUri();
+        URI uri = file.toPath().toAbsolutePath().toUri();
         try {
             classPath.getClassPath().add(uri.toURL());
         } catch (MalformedURLException e) {
             throw new RuntimeException(e);
         }
-        classPathManifest.append(uri).append(" ");
+        String path = uri.getRawPath();
+        if (PropertyUtils.isWindows()) {
+            if (path.length() > 2 && Character.isLetter(path.charAt(0)) && path.charAt(1) == ':') {
+                path = "/" + path;
+            }
+        }
+        classPathManifest.append(path);
+        if (file.isDirectory() && path.charAt(path.length() - 1) != '/') {
+            classPathManifest.append("/");
+        }
+        classPathManifest.append(" ");
     }
 
     class DevModeRunner {
@@ -606,14 +619,11 @@ public class DevMojo extends AbstractMojo {
 
         public void run() throws Exception {
             // Display the launch command line in dev mode
-            getLog().info("Launching JVM with command line: " + args.toString());
-            ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
-            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
-            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-            pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
-            pb.directory(workingDir);
-            process = pb.start();
-
+            getLog().info("Launching JVM with command line: " + args.stream().collect(joining(" ")));
+            process = new ProcessBuilder(args)
+                    .inheritIO()
+                    .directory(workingDir)
+                    .start();
             //https://github.com/quarkusio/quarkus/issues/232
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 @Override
