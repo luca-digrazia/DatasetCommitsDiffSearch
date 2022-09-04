@@ -16,7 +16,6 @@
  */
 package org.graylog2.rest.resources.users;
 
-import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -462,8 +461,7 @@ public class UsersResource extends RestResource {
         if (!roleIds.isEmpty()) {
             try {
                 final Map<String, Role> idMap = roleService.loadAllIdMap();
-                roleNames = Sets.newHashSet(Iterables.filter(Collections2.transform(roleIds, Roles.roleIdToNameFunction(idMap)),
-                                            Predicates.notNull()));
+                roleNames = Sets.newHashSet(Collections2.transform(roleIds, Roles.roleIdToNameFunction(idMap)));
             } catch (org.graylog2.database.NotFoundException e) {
                 LOG.error("Unable to load roles", e);
                 throw new InternalServerErrorException("Unable to load roles", e);
