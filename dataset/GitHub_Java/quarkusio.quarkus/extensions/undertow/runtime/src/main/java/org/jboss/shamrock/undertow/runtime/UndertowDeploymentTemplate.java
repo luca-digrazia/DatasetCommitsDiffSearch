@@ -28,11 +28,8 @@ import javax.servlet.DispatcherType;
 import javax.servlet.Filter;
 import javax.servlet.MultipartConfigElement;
 import javax.servlet.Servlet;
-import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
-import org.jboss.protean.arc.ManagedContext;
-import org.jboss.shamrock.arc.runtime.BeanContainer;
 import org.jboss.shamrock.runtime.InjectionFactory;
 import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.RuntimeValue;
@@ -45,7 +42,6 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.CanonicalPathHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
-import io.undertow.server.handlers.resource.CachingResourceManager;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.server.handlers.resource.PathResourceManager;
 import io.undertow.server.session.SessionIdGenerator;
@@ -62,9 +58,6 @@ import io.undertow.servlet.api.ListenerInfo;
 import io.undertow.servlet.api.ServletContainer;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ServletSecurityInfo;
-import io.undertow.servlet.api.ThreadSetupHandler;
-import io.undertow.servlet.handlers.DefaultServlet;
-import io.undertow.servlet.handlers.ServletPathMatches;
 
 /**
  * Provides the runtime methods to bootstrap Undertow. This class is present in the final uber-jar,
@@ -92,7 +85,6 @@ public class UndertowDeploymentTemplate {
         d.setClassLoader(getClass().getClassLoader());
         d.setDeploymentName(name);
         d.setContextPath("/");
-        d.setEagerFilterInit(true);
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) {
             cl = new ClassLoader() {
@@ -100,17 +92,13 @@ public class UndertowDeploymentTemplate {
         }
         d.setClassLoader(cl);
         //TODO: this is a big hack
-        //TODO: caching configuration once the new config model is in place
         String resourcesDir = System.getProperty(RESOURCES_PROP);
         if (resourcesDir == null) {
-            d.setResourceManager(new CachingResourceManager(1000, 0, null, new KnownPathResourceManager(knownFile, knownDirectories, new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources")), 2000));
+            d.setResourceManager(new KnownPathResourceManager(knownFile, knownDirectories, new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources")));
         } else {
-            d.setResourceManager(new CachingResourceManager(1000, 0, null, new PathResourceManager(Paths.get(resourcesDir)), 2000));
+            d.setResourceManager(new PathResourceManager(Paths.get(resourcesDir)));
         }
         d.addWelcomePages("index.html", "index.htm");
-
-        d.addServlet(new ServletInfo(ServletPathMatches.DEFAULT_SERVLET_NAME, DefaultServlet.class).setAsyncSupported(true));
-
         return new RuntimeValue<>(d);
     }
 
@@ -291,35 +279,6 @@ public class UndertowDeploymentTemplate {
 
     public void addServletExtension(RuntimeValue<DeploymentInfo> deployment, ServletExtension extension) {
         deployment.getValue().addServletExtension(extension);
-    }
-
-    public ServletExtension setupRequestScope(BeanContainer beanContainer) {
-        return new ServletExtension() {
-            @Override
-            public void handleDeployment(DeploymentInfo deploymentInfo, ServletContext servletContext) {
-                deploymentInfo.addThreadSetupAction(new ThreadSetupHandler() {
-                    @Override
-                    public <T, C> ThreadSetupHandler.Action<T, C> create(Action<T, C> action) {
-                        return new Action<T, C>() {
-                            @Override
-                            public T call(HttpServerExchange exchange, C context) throws Exception {
-                                ManagedContext requestContext = beanContainer.requestContext();
-                                if (requestContext.isActive()) {
-                                    return action.call(exchange, context);
-                                } else {
-                                    try {
-                                        requestContext.activate();
-                                        return action.call(exchange, context);
-                                    } finally {
-                                        requestContext.terminate();
-                                    }
-                                }
-                            }
-                        };
-                    }
-                });
-            }
-        };
     }
 
     /**

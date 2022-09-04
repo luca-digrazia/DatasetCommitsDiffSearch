@@ -17,21 +17,18 @@
 package org.jboss.shamrock.deployment.builditem;
 
 import org.jboss.builder.item.MultiBuildItem;
-import org.jboss.shamrock.deployment.Capabilities;
+import org.jboss.shamrock.runtime.StartupEvent;
 
 /**
- * Registers an internal feature.
- * 
- * @see Capabilities#isCapabilityPresent(String)
+ * A symbolic class that represents a service start.
+ * <p>
+ * {@link StartupEvent} is fired after all services are started.
  */
-public final class CapabilityBuildItem extends MultiBuildItem {
+public final class ServiceStartBuildItem extends MultiBuildItem {
 
     private final String name;
 
-    public CapabilityBuildItem(String name) {
-        if(name == null) {
-            throw new IllegalArgumentException("name cannot be null");
-        }
+    public ServiceStartBuildItem(String name) {
         this.name = name;
     }
 

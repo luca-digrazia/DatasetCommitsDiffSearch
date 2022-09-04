@@ -35,11 +35,10 @@ import org.jboss.jandex.MethodInfo;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
-import org.jboss.shamrock.arc.deployment.BeanArchiveIndexBuildItem;
-import org.jboss.shamrock.arc.deployment.BeanContainerBuildItem;
+import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
+import org.jboss.shamrock.deployment.builditem.BeanArchiveIndexBuildItem;
+import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
-import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.metrics.runtime.MetricsDeploymentTemplate;
 import org.jboss.shamrock.metrics.runtime.MetricsServlet;
@@ -87,7 +86,6 @@ public class MetricsProcessor {
     @Record(STATIC_INIT)
     public void build(BeanContainerBuildItem beanContainerBuildItem,
                       MetricsDeploymentTemplate metrics,
-                      ShutdownContextBuildItem shutdown,
                       BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
                       BeanArchiveIndexBuildItem beanArchiveIndex,
                       BuildProducer<FeatureBuildItem> feature) throws Exception {
@@ -96,6 +94,7 @@ public class MetricsProcessor {
 
         reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, Counted.class.getName()));
         reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, MetricsBinding.class.getName()));
+
 
         metrics.createRegistries(beanContainerBuildItem.getValue());
 
@@ -119,15 +118,15 @@ public class MetricsProcessor {
             ClassInfo classInfo = methodInfo.declaringClass();
 
             metrics.registerCounted(classInfo.name().toString(),
-                    name, shutdown);
+                    name);
         }
     }
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    void register(MetricsDeploymentTemplate metrics, ShutdownContextBuildItem shutdown) {
-        metrics.registerBaseMetrics(shutdown);
-        metrics.registerVendorMetrics(shutdown);
+    void register(MetricsDeploymentTemplate metrics) {
+        metrics.registerBaseMetrics();
+        metrics.registerVendorMetrics();
     }
 
 }

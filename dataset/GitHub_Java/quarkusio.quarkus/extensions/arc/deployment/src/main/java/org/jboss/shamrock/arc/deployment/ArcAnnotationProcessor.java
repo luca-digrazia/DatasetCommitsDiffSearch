@@ -16,6 +16,7 @@
 
 package org.jboss.shamrock.arc.deployment;
 
+import static org.jboss.shamrock.annotations.ExecutionTime.RUNTIME_INIT;
 import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
 import java.io.ByteArrayInputStream;
@@ -31,7 +32,6 @@ import java.util.stream.Collectors;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
@@ -44,29 +44,38 @@ import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.processor.BeanDefiningAnnotation;
 import org.jboss.protean.arc.processor.BeanProcessor;
 import org.jboss.protean.arc.processor.BeanProcessor.Builder;
-import org.jboss.protean.arc.processor.DotNames;
 import org.jboss.protean.arc.processor.ReflectionRegistration;
 import org.jboss.protean.arc.processor.ResourceOutput;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem.BeanClassNameExclusion;
-import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
 import org.jboss.shamrock.arc.runtime.ArcDeploymentTemplate;
-import org.jboss.shamrock.arc.runtime.BeanContainer;
 import org.jboss.shamrock.arc.runtime.LifecycleEventRunner;
 import org.jboss.shamrock.deployment.Capabilities;
+import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
 import org.jboss.shamrock.deployment.builditem.ApplicationArchivesBuildItem;
+import org.jboss.shamrock.deployment.builditem.BeanArchiveIndexBuildItem;
+import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedResourceBuildItem;
+import org.jboss.shamrock.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import org.jboss.shamrock.deployment.builditem.InjectionProviderBuildItem;
+import org.jboss.shamrock.deployment.builditem.ServiceStartBuildItem;
 import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveFieldBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveMethodBuildItem;
+import org.jboss.shamrock.deployment.cdi.BeanContainerListenerBuildItem;
+import org.jboss.shamrock.deployment.cdi.BeanDefiningAnnotationBuildItem;
+import org.jboss.shamrock.deployment.cdi.GeneratedBeanBuildItem;
+import org.jboss.shamrock.deployment.cdi.ResourceAnnotationBuildItem;
+import org.jboss.shamrock.runtime.cdi.BeanContainer;
+import org.jboss.shamrock.undertow.ServletExtensionBuildItem;
 
 public class ArcAnnotationProcessor {
+
+    private static final DotName JAVA_LANG_OBJECT = DotName.createSimple(Object.class.getName());
 
     private static final Logger log = Logger.getLogger("org.jboss.shamrock.arc.deployment.processor");
 
@@ -103,16 +112,10 @@ public class ArcAnnotationProcessor {
     @Inject
     List<BeanDefiningAnnotationBuildItem> additionalBeanDefiningAnnotations;
     
-    @Inject
-    List<UnremovableBeanBuildItem> removalExclusions;
-    
-    @ConfigProperty(name = "shamrock.arc")
-    ArcConfig config;
-    
     @BuildStep(providesCapabilities = Capabilities.CDI_ARC, applicationArchiveMarkers = { "META-INF/beans.xml",
             "META-INF/services/javax.enterprise.inject.spi.Extension" })
     @Record(STATIC_INIT)
-    public BeanContainerBuildItem build(ArcDeploymentTemplate arcTemplate,
+    public BeanContainerBuildItem build(ArcDeploymentTemplate arcTemplate, BuildProducer<ServletExtensionBuildItem> extensions,
             BuildProducer<InjectionProviderBuildItem> injectionProvider, List<BeanContainerListenerBuildItem> beanContainerListenerBuildItems,
             ApplicationArchivesBuildItem applicationArchivesBuildItem, List<GeneratedBeanBuildItem> generatedBeans,
             List<AnnotationsTransformerBuildItem> annotationTransformers, ShutdownContextBuildItem shutdown, BuildProducer<FeatureBuildItem> feature)
@@ -122,7 +125,7 @@ public class ArcAnnotationProcessor {
 
         List<String> additionalBeans = new ArrayList<>();
         for (AdditionalBeanBuildItem i : this.additionalBeans) {
-            additionalBeans.addAll(i.getBeanClasses());
+            additionalBeans.addAll(i.getBeanNames());
         }
         additionalBeans.add(LifecycleEventRunner.class.getName());
 
@@ -197,24 +200,6 @@ public class ArcAnnotationProcessor {
         for (BeanDeploymentValidatorBuildItem item : beanDeploymentValidators) {
             builder.addBeanDeploymentValidator(item.getBeanDeploymentValidator());
         }
-        builder.setRemoveUnusedBeans(config.removeUnusedBeans);
-        builder.addRemovalExclusion(new BeanClassNameExclusion(LifecycleEventRunner.class.getName()));
-        for (AdditionalBeanBuildItem additionalBean : this.additionalBeans) {
-            if (!additionalBean.isRemovable()) {
-                for (String beanClass : additionalBean.getBeanClasses()) {
-                    builder.addRemovalExclusion(new BeanClassNameExclusion(beanClass));
-                }
-            }
-        }
-        for (BeanDefiningAnnotationBuildItem annotation : this.additionalBeanDefiningAnnotations) {
-            if (!annotation.isRemovable()) {
-                builder.addRemovalExclusion(new BeanClassAnnotationExclusion(annotation.getName()));
-            }
-        }
-        for (UnremovableBeanBuildItem exclusion : removalExclusions) {
-            builder.addRemovalExclusion(exclusion.getPredicate());
-        }
-
         BeanProcessor beanProcessor = builder.build();
         beanProcessor.process();
 
@@ -222,8 +207,16 @@ public class ArcAnnotationProcessor {
         BeanContainer bc = arcTemplate.initBeanContainer(container,
                 beanContainerListenerBuildItems.stream().map(BeanContainerListenerBuildItem::getBeanContainerListener).collect(Collectors.toList()));
         injectionProvider.produce(new InjectionProviderBuildItem(arcTemplate.setupInjection(container)));
+        extensions.produce(new ServletExtensionBuildItem(arcTemplate.setupRequestScope(container)));
 
         return new BeanContainerBuildItem(bc);
+    }
+
+    @BuildStep
+    @Record(RUNTIME_INIT)
+    void startupEvent(ArcDeploymentTemplate template, List<ServiceStartBuildItem> startList, BeanContainerBuildItem beanContainer,
+            ShutdownContextBuildItem shutdown) {
+        template.handleLifecycleEvents(shutdown, beanContainer.getValue());
     }
 
     private void indexBeanClass(String beanClass, Indexer indexer, IndexView shamrockIndex, Set<DotName> additionalIndex) {
@@ -256,9 +249,15 @@ public class ArcAnnotationProcessor {
                 }
             }
         }
-        if (!beanInfo.superName().equals(DotNames.OBJECT)) {
+        if (!beanInfo.superName().equals(JAVA_LANG_OBJECT)) {
             indexBeanClass(beanInfo.superName().toString(), indexer, shamrockIndex, additionalIndex);
         }
+
+    }
+
+    @BuildStep
+    HotDeploymentConfigFileBuildItem configFile() {
+        return new HotDeploymentConfigFileBuildItem("META-INF/beans.xml");
     }
 
     private void indexBeanClass(String beanClass, Indexer indexer, IndexView shamrockIndex, Set<DotName> additionalIndex, byte[] beanData) {

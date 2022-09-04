@@ -22,7 +22,6 @@ import static org.jboss.protean.gizmo.MethodDescriptor.ofMethod;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.jboss.builder.Version;
@@ -33,11 +32,8 @@ import org.jboss.protean.gizmo.MethodCreator;
 import org.jboss.protean.gizmo.MethodDescriptor;
 import org.jboss.protean.gizmo.ResultHandle;
 import org.jboss.protean.gizmo.TryBlock;
-import org.jboss.shamrock.deployment.annotations.BuildProducer;
-import org.jboss.shamrock.deployment.annotations.BuildStep;
+import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.deployment.ClassOutput;
-import org.jboss.shamrock.deployment.builditem.ApplicationClassNameBuildItem;
-import org.jboss.shamrock.deployment.builditem.BytecodeRecorderObjectLoaderBuildItem;
 import org.jboss.shamrock.deployment.builditem.ClassOutputBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.HttpServerBuiltItem;
@@ -45,7 +41,6 @@ import org.jboss.shamrock.deployment.builditem.MainBytecodeRecorderBuildItem;
 import org.jboss.shamrock.deployment.builditem.MainClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.StaticBytecodeRecorderBuildItem;
 import org.jboss.shamrock.deployment.builditem.SystemPropertyBuildItem;
-import org.jboss.shamrock.deployment.recording.BytecodeRecorderImpl;
 import org.jboss.shamrock.runtime.Application;
 import org.jboss.shamrock.runtime.StartupContext;
 import org.jboss.shamrock.runtime.StartupTask;
@@ -56,24 +51,17 @@ class MainClassBuildStep {
     private static final String APP_CLASS = "org.jboss.shamrock.runner.ApplicationImpl";
     private static final String MAIN_CLASS = "org.jboss.shamrock.runner.GeneratedMain";
     private static final String STARTUP_CONTEXT = "STARTUP_CONTEXT";
-
-    private static final AtomicInteger COUNT = new AtomicInteger();
-
+    
     @BuildStep
     MainClassBuildItem build(List<StaticBytecodeRecorderBuildItem> staticInitTasks,
                              List<MainBytecodeRecorderBuildItem> mainMethod,
                              List<SystemPropertyBuildItem> properties,
                              Optional<HttpServerBuiltItem> httpServer,
                              List<FeatureBuildItem> features,
-                             BuildProducer<ApplicationClassNameBuildItem> appClassNameProducer,
-                             List<BytecodeRecorderObjectLoaderBuildItem> loaders,
                              ClassOutputBuildItem classOutput) {
 
-        String appClassName = APP_CLASS + COUNT.incrementAndGet();
-        appClassNameProducer.produce(new ApplicationClassNameBuildItem(appClassName));
-
         // Application class
-        ClassCreator file = new ClassCreator(ClassOutput.gizmoAdaptor(classOutput.getClassOutput(), true), appClassName, null, Application.class.getName());
+        ClassCreator file = new ClassCreator(ClassOutput.gizmoAdaptor(classOutput.getClassOutput(), true), APP_CLASS, null, Application.class.getName());
 
         // Application class: static init
 
@@ -93,14 +81,10 @@ class MainClassBuildStep {
         mv.writeStaticField(scField.getFieldDescriptor(), startupContext);
         TryBlock tryBlock = mv.tryBlock();
         for (StaticBytecodeRecorderBuildItem holder : staticInitTasks) {
-            final BytecodeRecorderImpl recorder = holder.getBytecodeRecorder();
-            if (! recorder.isEmpty()) {
-                for (BytecodeRecorderObjectLoaderBuildItem item : loaders) {
-                    recorder.registerObjectLoader(item.getObjectLoader());
-                }
-                recorder.writeBytecode(classOutput.getClassOutput());
+            if (!holder.getBytecodeRecorder().isEmpty()) {
+                holder.getBytecodeRecorder().writeBytecode(classOutput.getClassOutput());
 
-                ResultHandle dup = tryBlock.newInstance(ofConstructor(recorder.getClassName()));
+                ResultHandle dup = tryBlock.newInstance(ofConstructor(holder.getBytecodeRecorder().getClassName()));
                 tryBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
             }
         }
@@ -125,21 +109,16 @@ class MainClassBuildStep {
         startupContext = mv.readStaticField(scField.getFieldDescriptor());
         tryBlock = mv.tryBlock();
         for (MainBytecodeRecorderBuildItem holder : mainMethod) {
-            final BytecodeRecorderImpl recorder = holder.getBytecodeRecorder();
-            if (! recorder.isEmpty()) {
-                for (BytecodeRecorderObjectLoaderBuildItem item : loaders) {
-                    recorder.registerObjectLoader(item.getObjectLoader());
-                }
-                recorder.writeBytecode(classOutput.getClassOutput());
-                ResultHandle dup = tryBlock.newInstance(ofConstructor(recorder.getClassName()));
+            if (!holder.getBytecodeRecorder().isEmpty()) {
+                holder.getBytecodeRecorder().writeBytecode(classOutput.getClassOutput());
+                ResultHandle dup = tryBlock.newInstance(ofConstructor(holder.getBytecodeRecorder().getClassName()));
                 tryBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
             }
         }
-
+        
         // Startup log messages
         ResultHandle featuresHandle = tryBlock.load(features.stream()
                 .map(f -> f.getInfo())
-                .sorted()
                 .collect(Collectors.joining(", ")));
         ResultHandle serverHandle = httpServer.isPresent() ? tryBlock.load("Listening on: http://" + httpServer.get()
                 .getHost() + ":" + httpServer.get().getPort()) : tryBlock.load("");
@@ -170,7 +149,7 @@ class MainClassBuildStep {
         mv = file.getMethodCreator("main", void.class, String[].class);
         mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
 
-        final ResultHandle appClassInstance = mv.newInstance(ofConstructor(appClassName));
+        final ResultHandle appClassInstance = mv.newInstance(ofConstructor(APP_CLASS));
         // run the app
         mv.invokeVirtualMethod(ofMethod(Application.class, "run", void.class, String[].class), appClassInstance, mv.getMethodParam(0));
 

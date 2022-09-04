@@ -25,11 +25,11 @@ import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.ExecutionTime;
 import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
-import org.jboss.shamrock.arc.deployment.BeanContainerListenerBuildItem;
+import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
+import org.jboss.shamrock.deployment.cdi.BeanContainerListenerBuildItem;
 import org.jboss.shamrock.vertx.runtime.VertxConfiguration;
 import org.jboss.shamrock.vertx.runtime.VertxProducer;
 import org.jboss.shamrock.vertx.runtime.VertxTemplate;
@@ -55,7 +55,7 @@ class VertxProcessor {
                 .addRuntimeInitializedClass("io.netty.handler.codec.http.websocketx.WebSocket00FrameEncoder")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.JdkNpnApplicationProtocolNegotiator")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslEngine")
-                .addNativeImageSystemProperty("io.netty.leakDetection.level", "DISABLED") //TODO: make configurable
+
                 .build();
     }
 
