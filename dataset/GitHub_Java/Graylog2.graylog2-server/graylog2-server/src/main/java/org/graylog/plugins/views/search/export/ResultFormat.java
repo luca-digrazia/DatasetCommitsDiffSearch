@@ -1,48 +1,58 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog.plugins.views.search.export;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
-import org.graylog.plugins.views.search.searchtypes.Sort;
+import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 
+import javax.annotation.Nullable;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.Positive;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 
 import static org.graylog.plugins.views.search.export.ExportMessagesCommand.DEFAULT_FIELDS;
 import static org.graylog.plugins.views.search.export.LinkedHashSetUtil.linkedHashSetOf;
 
+@JsonAutoDetect
 @AutoValue
 @JsonDeserialize(builder = ResultFormat.Builder.class)
 public abstract class ResultFormat {
+    private static final String FIELD_FIELDS = "fields_in_order";
+
+    @JsonProperty(FIELD_FIELDS)
     @NotEmpty
     public abstract LinkedHashSet<String> fieldsInOrder();
 
-    public abstract LinkedHashSet<Sort> sort();
+    @JsonProperty
+    public abstract Optional<AbsoluteRange> timerange();
 
+    @JsonProperty
     @Positive
     public abstract OptionalInt limit();
 
+    @JsonProperty
     public abstract Map<String, Object> executionState();
 
     public static ResultFormat.Builder builder() {
@@ -55,18 +65,11 @@ public abstract class ResultFormat {
 
     @AutoValue.Builder
     public abstract static class Builder {
-        @JsonProperty("fields_in_order")
+        @JsonProperty(FIELD_FIELDS)
         public abstract Builder fieldsInOrder(LinkedHashSet<String> fieldsInOrder);
 
         public Builder fieldsInOrder(String... fields) {
             return fieldsInOrder(linkedHashSetOf(fields));
-        }
-
-        @JsonProperty
-        public abstract Builder sort(LinkedHashSet<Sort> sort);
-
-        public Builder sort(Sort... sorts) {
-            return sort(linkedHashSetOf(sorts));
         }
 
         @JsonProperty
@@ -75,18 +78,16 @@ public abstract class ResultFormat {
         @JsonProperty
         public abstract Builder executionState(Map<String, Object> executionState);
 
-        abstract ResultFormat autoBuild();
+        @JsonProperty
+        public abstract Builder timerange(@Nullable AbsoluteRange timeRange);
 
-        public ResultFormat build() {
-            return autoBuild();
-        }
+        public abstract ResultFormat build();
 
         @JsonCreator
         public static ResultFormat.Builder create() {
             return new AutoValue_ResultFormat.Builder()
                     .fieldsInOrder(DEFAULT_FIELDS)
-                    .executionState(Collections.emptyMap())
-                    .sort();
+                    .executionState(Collections.emptyMap());
         }
     }
 }
