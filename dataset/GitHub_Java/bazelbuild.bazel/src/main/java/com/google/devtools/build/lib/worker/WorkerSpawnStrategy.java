@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers;
 import com.google.devtools.build.lib.sandbox.SpawnHelpers;
 import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
@@ -50,6 +51,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -138,6 +140,7 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
+    EventHandler eventHandler = executor.getEventHandler();
 
     if (executor.reportsSubcommands()) {
       executor.reportSubcommand(spawn);
@@ -179,7 +182,7 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       WorkRequest workRequest =
           createWorkRequest(spawn, actionExecutionContext, flagFiles, inputFileCache);
 
-      WorkResponse response = execInWorker(key, workRequest, writeOutputFiles);
+      WorkResponse response = execInWorker(eventHandler, key, workRequest, writeOutputFiles);
 
       FileOutErr outErr = actionExecutionContext.getFileOutErr();
       response.getOutputBytes().writeTo(outErr.getErrorStream());
@@ -193,8 +196,7 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       String message =
           CommandFailureUtils.describeCommandFailure(
               verboseFailures, spawn.getArguments(), env, execRoot.getPathString());
-      throw new UserExecException(
-          ErrorMessage.builder().message(message).exception(e).build().toString());
+      throw new UserExecException(message, e);
     }
   }
 
@@ -283,51 +285,20 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
   }
 
   private WorkResponse execInWorker(
+      EventHandler eventHandler,
       WorkerKey key,
       WorkRequest request,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
-      throws InterruptedException, ExecException {
+      throws IOException, InterruptedException, UserExecException {
     Worker worker = null;
-    WorkResponse response;
+    WorkResponse response = null;
 
     try {
-      try {
-        worker = workers.borrowObject(key);
-      } catch (IOException e) {
-        throw new UserExecException(
-            ErrorMessage.builder()
-                .message("IOException while borrowing a worker from the pool:")
-                .exception(e)
-                .build()
-                .toString());
-      }
+      worker = workers.borrowObject(key);
+      worker.prepareExecution(key);
 
-      try {
-        worker.prepareExecution(key);
-      } catch (IOException e) {
-        throw new UserExecException(
-            ErrorMessage.builder()
-                .message("IOException while preparing the execution environment of a worker:")
-                .logFile(worker.getLogFile())
-                .exception(e)
-                .build()
-                .toString());
-      }
-
-      try {
-        request.writeDelimitedTo(worker.getOutputStream());
-        worker.getOutputStream().flush();
-      } catch (IOException e) {
-        throw new UserExecException(
-            ErrorMessage.builder()
-                .message(
-                    "Worker process quit or closed its stdin stream when we tried to send a"
-                        + " WorkRequest:")
-                .logFile(worker.getLogFile())
-                .exception(e)
-                .build()
-                .toString());
-      }
+      request.writeDelimitedTo(worker.getOutputStream());
+      worker.getOutputStream().flush();
 
       RecordingInputStream recordingStream = new RecordingInputStream(worker.getInputStream());
       recordingStream.startRecording(4096);
@@ -335,18 +306,18 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
         // response can be null when the worker has already closed stdout at this point and thus the
         // InputStream is at EOF.
         response = WorkResponse.parseDelimitedFrom(recordingStream);
-      } catch (IOException e) {
+      } catch (InvalidProtocolBufferException e) {
         // If protobuf couldn't parse the response, try to print whatever the failing worker wrote
         // to stdout - it's probably a stack trace or some kind of error message that will help the
         // user figure out why the compiler is failing.
         recordingStream.readRemaining();
-        throw new UserExecException(
+        ErrorMessage errorMessage =
             ErrorMessage.builder()
                 .message("Worker process returned an unparseable WorkResponse:")
                 .logText(recordingStream.getRecordedDataAsString())
-                .exception(e)
-                .build()
-                .toString());
+                .build();
+        eventHandler.handle(Event.warn(errorMessage.toString()));
+        throw e;
       }
 
       if (writeOutputFiles != null
@@ -354,33 +325,22 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
         throw new InterruptedException();
       }
 
+      worker.finishExecution(key);
+
       if (response == null) {
-        throw new UserExecException(
+        ErrorMessage errorMessage =
             ErrorMessage.builder()
-                .message("Worker process did not return a WorkResponse:")
+                .message(
+                    "Worker process did not return a WorkResponse. This is usually caused by a bug"
+                        + " in the worker, thus dumping its log file for debugging purposes:")
                 .logFile(worker.getLogFile())
                 .logSizeLimit(4096)
-                .build()
-                .toString());
+                .build();
+        throw new UserExecException(errorMessage.toString());
       }
-
-      try {
-        worker.finishExecution(key);
-      } catch (IOException e) {
-        throw new UserExecException(
-            ErrorMessage.builder()
-                .message("IOException while finishing worker execution:")
-                .exception(e)
-                .build()
-                .toString());
-      }
-    } catch (ExecException e) {
+    } catch (IOException e) {
       if (worker != null) {
-        try {
-          workers.invalidateObject(key, worker);
-        } catch (IOException e1) {
-          // The original exception is more important / helpful, so we'll just ignore this one.
-        }
+        workers.invalidateObject(key, worker);
         worker = null;
       }
 
@@ -390,7 +350,6 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
         workers.returnObject(key, worker);
       }
     }
-
     return response;
   }
 
