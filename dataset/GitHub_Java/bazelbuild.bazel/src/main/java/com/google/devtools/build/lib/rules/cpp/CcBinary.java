@@ -540,18 +540,18 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CppHelper.createStripAction(
         ruleContext, ccToolchain, cppConfiguration, binary, strippedFile, featureConfiguration);
 
-    NestedSet<Artifact> dwoFiles =
+    DwoArtifactsCollector dwoArtifacts =
         collectTransitiveDwoArtifacts(
+            ruleContext,
             ccCompilationOutputs,
-            CppHelper.mergeCcDebugInfoContexts(
-                compilationInfo.getCcCompilationOutputs(),
-                AnalysisUtils.getProviders(deps, CcInfo.PROVIDER)),
             linkingMode,
+            ccToolchain.shouldCreatePerObjectDebugInfo(featureConfiguration, cppConfiguration),
             usePic,
             ccLinkingOutputsBinary.getAllLtoArtifacts());
     Artifact dwpFile =
         ruleContext.getImplicitOutputArtifact(CppRuleClasses.CC_BINARY_DEBUG_PACKAGE);
-    createDebugPackagerActions(ruleContext, ccToolchain, dwpFile, dwoFiles);
+    createDebugPackagerActions(
+        ruleContext, ccToolchain, cppConfiguration, featureConfiguration, dwpFile, dwoArtifacts);
 
     // The debug package should include the dwp file only if it was explicitly requested.
     Artifact explicitDwpFile = dwpFile;
@@ -619,6 +619,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         ccCompilationOutputs,
         ccCompilationContext,
         libraries,
+        dwoArtifacts,
         fake);
 
     // Support test execution on darwin.
@@ -858,31 +859,33 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
    * dynamic linking, dependencies are separately linked into their own shared libraries, so we
    * don't need them here.
    */
-  private static NestedSet<Artifact> collectTransitiveDwoArtifacts(
+  private static DwoArtifactsCollector collectTransitiveDwoArtifacts(
+      RuleContext context,
       CcCompilationOutputs compilationOutputs,
-      CcDebugInfoContext ccDebugInfoContext,
-      LinkingMode linkingMode,
-      boolean usePic,
+      Link.LinkingMode linkingMode,
+      boolean generateDwo,
+      boolean ltoBackendArtifactsUsePic,
       Iterable<LtoBackendArtifacts> ltoBackendArtifacts) {
-    NestedSetBuilder<Artifact> dwoFiles = NestedSetBuilder.stableOrder();
-    dwoFiles.addAll(
-        usePic ? compilationOutputs.getPicDwoFiles() : compilationOutputs.getDwoFiles());
-
-    if (ltoBackendArtifacts != null) {
-      for (LtoBackendArtifacts ltoBackendArtifact : ltoBackendArtifacts) {
-        if (ltoBackendArtifact.getDwoFile() != null) {
-          dwoFiles.add(ltoBackendArtifact.getDwoFile());
-        }
-      }
+    if (linkingMode == LinkingMode.DYNAMIC) {
+      return DwoArtifactsCollector.directCollector(
+          compilationOutputs, generateDwo, ltoBackendArtifactsUsePic, ltoBackendArtifacts);
+    } else {
+      return CcCommon.collectTransitiveDwoArtifacts(
+          context, compilationOutputs, generateDwo, ltoBackendArtifactsUsePic, ltoBackendArtifacts);
     }
+  }
 
-    if (linkingMode != LinkingMode.DYNAMIC) {
-      dwoFiles.addTransitive(
-          usePic
-              ? ccDebugInfoContext.getTransitivePicDwoFiles()
-              : ccDebugInfoContext.getTransitiveDwoFiles());
-    }
-    return dwoFiles.build();
+  @VisibleForTesting
+  public static Iterable<Artifact> getDwpInputs(
+      RuleContext context,
+      CcToolchainProvider toolchain,
+      CppConfiguration cppConfiguration,
+      FeatureConfiguration featureConfiguration,
+      NestedSet<Artifact> picDwoArtifacts,
+      NestedSet<Artifact> dwoArtifacts) {
+    return usePic(context, toolchain, cppConfiguration, featureConfiguration)
+        ? picDwoArtifacts
+        : dwoArtifacts;
   }
 
   /**
@@ -891,16 +894,27 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   private static void createDebugPackagerActions(
       RuleContext context,
       CcToolchainProvider toolchain,
+      CppConfiguration cppConfiguration,
+      FeatureConfiguration featureConfiguration,
       Artifact dwpOutput,
-      NestedSet<Artifact> dwoFiles)
+      DwoArtifactsCollector dwoArtifactsCollector)
       throws RuleErrorException {
+    Iterable<Artifact> allInputs =
+        getDwpInputs(
+            context,
+            toolchain,
+            cppConfiguration,
+            featureConfiguration,
+            dwoArtifactsCollector.getPicDwoArtifacts(),
+            dwoArtifactsCollector.getDwoArtifacts());
+
     // No inputs? Just generate a trivially empty .dwp.
     //
     // Note this condition automatically triggers for any build where fission is disabled.
     // Because rules referencing .dwp targets may be invoked with or without fission, we need
     // to support .dwp generation even when fission is disabled. Since no actual functionality
     // is expected then, an empty file is appropriate.
-    if (Iterables.isEmpty(dwoFiles)) {
+    if (Iterables.isEmpty(allInputs)) {
       context.registerAction(FileWriteAction.create(context, dwpOutput, "", false));
       return;
     }
@@ -924,7 +938,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // at the leaves than the root, but that both increases parallelism and reduces the final
     // action's input size.
     Packager packager =
-        createIntermediateDwpPackagers(context, dwpOutput, toolchain, dwpFiles, dwoFiles, 1);
+        createIntermediateDwpPackagers(context, dwpOutput, toolchain, dwpFiles, allInputs, 1);
     packager.spawnAction.setMnemonic("CcGenerateDwp").addOutput(dwpOutput);
     packager.commandLine.addExecPath("-o", dwpOutput);
     context.registerAction(packager.build(context));
@@ -949,25 +963,25 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleContext context,
       Artifact dwpOutput,
       CcToolchainProvider toolchain,
-      NestedSet<Artifact> dwpFiles,
-      Iterable<Artifact> dwoFiles,
+      NestedSet<Artifact> dwpTools,
+      Iterable<Artifact> inputs,
       int intermediateDwpCount)
       throws RuleErrorException {
     List<Packager> packagers = new ArrayList<>();
 
     // Step 1: generate our batches. We currently break into arbitrary batches of fixed maximum
     // input counts, but we can always apply more intelligent heuristics if the need arises.
-    Packager currentPackager = newDwpAction(context, toolchain, dwpFiles);
+    Packager currentPackager = newDwpAction(context, toolchain, dwpTools);
     int inputsForCurrentPackager = 0;
 
-    for (Artifact dwoFile : dwoFiles) {
+    for (Artifact dwoInput : inputs) {
       if (inputsForCurrentPackager == MAX_INPUTS_PER_DWP_ACTION) {
         packagers.add(currentPackager);
-        currentPackager = newDwpAction(context, toolchain, dwpFiles);
+        currentPackager = newDwpAction(context, toolchain, dwpTools);
         inputsForCurrentPackager = 0;
       }
-      currentPackager.spawnAction.addInput(dwoFile);
-      currentPackager.commandLine.addExecPath(dwoFile);
+      currentPackager.spawnAction.addInput(dwoInput);
+      currentPackager.commandLine.addExecPath(dwoInput);
       inputsForCurrentPackager++;
     }
     packagers.add(currentPackager);
@@ -986,7 +1000,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         intermediateOutputs.add(intermediateOutput);
       }
       return createIntermediateDwpPackagers(
-          context, dwpOutput, toolchain, dwpFiles, intermediateOutputs, intermediateDwpCount);
+          context, dwpOutput, toolchain, dwpTools, intermediateOutputs, intermediateDwpCount);
     }
     return Iterables.getOnlyElement(packagers);
   }
@@ -1070,6 +1084,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       CcCompilationOutputs ccCompilationOutputs,
       CcCompilationContext ccCompilationContext,
       List<LibraryToLink> libraries,
+      DwoArtifactsCollector dwoArtifacts,
       boolean fake)
       throws RuleErrorException {
     List<Artifact> instrumentedObjectFiles = new ArrayList<>();
@@ -1102,6 +1117,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             CcNativeLibraryProvider.class,
             new CcNativeLibraryProvider(collectTransitiveCcNativeLibraries(ruleContext, libraries)))
         .addNativeDeclaredProvider(instrumentedFilesProvider)
+        .addProvider(
+            CppDebugFileProvider.class,
+            new CppDebugFileProvider(
+                dwoArtifacts.getDwoArtifacts(), dwoArtifacts.getPicDwoArtifacts()))
         // For CcBinary targets, we only want to ensure that we process headers in dependencies and
         // thus only add header tokens to HIDDEN_TOP_LEVEL. If we add all HIDDEN_TOP_LEVEL artifacts
         // from dependent CcLibrary targets, we'd be building .pic.o files in nopic builds.
