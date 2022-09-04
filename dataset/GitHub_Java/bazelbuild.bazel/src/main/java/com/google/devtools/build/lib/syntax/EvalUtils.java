@@ -15,10 +15,16 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.starlark.spelling.SpellChecker;
 import java.util.IllegalFormatException;
+import java.util.List;
+import java.util.Map;
+import javax.annotation.Nullable;
 
 /** Utilities used by the evaluator. */
 // TODO(adonovan): move all fundamental values and operators of the language to Starlark
@@ -163,6 +169,73 @@ public final class EvalUtils {
         || c.equals(String.class)
         || c.equals(Integer.class)
         || c.equals(Boolean.class);
+  }
+
+  /**
+   * Returns a pretty name for the datatype of object 'o' in the Build language.
+   */
+  public static String getDataTypeName(Object o) {
+    return getDataTypeName(o, false);
+  }
+
+  /**
+   * Returns a pretty name for the datatype of object {@code object} in Starlark or the BUILD
+   * language, with full details if the {@code full} boolean is true.
+   */
+  public static String getDataTypeName(Object object, boolean fullDetails) {
+    Preconditions.checkNotNull(object);
+    if (fullDetails) {
+      if (object instanceof Depset) {
+        Depset set = (Depset) object;
+        return "depset of " + set.getElementType() + "s";
+      }
+    }
+    return getDataTypeNameFromClass(object.getClass());
+  }
+
+  /**
+   * Returns a pretty name for the datatype equivalent of class 'c' in the Build language.
+   */
+  public static String getDataTypeNameFromClass(Class<?> c) {
+    return getDataTypeNameFromClass(c, true);
+  }
+
+  /**
+   * Returns a pretty name for the datatype equivalent of class 'c' in the Build language.
+   *
+   * @param highlightNameSpaces Determines whether the result should also contain a special comment
+   *     when the given class identifies a Starlark name space.
+   */
+  // TODO(adonovan): document that this function accepts (and must accept) any Java class,
+  // not just those corresponding to legal Starlark value classes, or even their supertypes.
+  private static String getDataTypeNameFromClass(Class<?> c, boolean highlightNameSpaces) {
+    // Check for "direct hits" first to avoid needing to scan for annotations.
+    if (c.equals(String.class)) {
+      return "string";
+    } else if (c.equals(Integer.class)) {
+      return "int";
+    } else if (c.equals(Boolean.class)) {
+      return "bool";
+    }
+
+    SkylarkModule module = SkylarkInterfaceUtils.getSkylarkModule(c);
+    if (module != null) {
+      return module.namespace() && highlightNameSpaces
+          ? module.name() + " (a language module)"
+          : module.name();
+    } else if (List.class.isAssignableFrom(c)) { // This is a Java List that isn't a Sequence
+      return "List"; // This case shouldn't happen in normal code, but we keep it for debugging.
+    } else if (Map.class.isAssignableFrom(c)) { // This is a Java Map that isn't a Dict
+      return "Map"; // This case shouldn't happen in normal code, but we keep it for debugging.
+    } else if (StarlarkCallable.class.isAssignableFrom(c)) {
+      // TODO(adonovan): each StarlarkCallable should report its own type string.
+      return "function";
+    } else if (c.equals(Object.class)) {
+      return "unknown";
+    } else {
+      String simpleName = c.getSimpleName();
+      return simpleName.isEmpty() ? c.getName() : simpleName;
+    }
   }
 
   static void addIterator(Object x) {
@@ -639,30 +712,33 @@ public final class EvalUtils {
 
   /**
    * Parses the input as a file, resolves it in the module environment using the specified options
-   * and executes it. It returns None, unless the final statement is an expression, in which case it
-   * returns the expression's value.
+   * and executes it.
    */
-  public static Object exec(
+  public static void exec(
       ParserInput input, FileOptions options, Module module, StarlarkThread thread)
       throws SyntaxError.Exception, EvalException, InterruptedException {
     StarlarkFile file = parseAndValidate(input, options, module);
     if (!file.ok()) {
       throw new SyntaxError.Exception(file.errors());
     }
-    return exec(file, module, thread);
+    exec(file, module, thread);
   }
 
-  /** Executes a parsed, resolved Starlark file in the given StarlarkThread. */
-  public static Object exec(StarlarkFile file, Module module, StarlarkThread thread)
+  /** Executes a parsed, resolved Starlark file in a given StarlarkThread. */
+  public static void exec(StarlarkFile file, Module module, StarlarkThread thread)
       throws EvalException, InterruptedException {
-    Preconditions.checkNotNull(
-        file.resolved,
-        "cannot evaluate unresolved syntax (use other exec method, or parseAndValidate)");
+    StarlarkFunction toplevel =
+        new StarlarkFunction(
+            "<toplevel>",
+            file.getStartLocation(),
+            FunctionSignature.NOARGS,
+            /*defaultValues=*/ Tuple.empty(),
+            file.getStatements(),
+            module);
+    // Hack: assume unresolved identifiers are globals.
+    toplevel.isToplevel = true;
 
-    Tuple<Object> defaultValues = Tuple.empty();
-    StarlarkFunction toplevel = new StarlarkFunction(file.resolved, defaultValues, module);
-
-    return Starlark.fastcall(thread, toplevel, NOARGS, NOARGS);
+    Starlark.fastcall(thread, toplevel, NOARGS, NOARGS);
   }
 
   /**
@@ -673,14 +749,65 @@ public final class EvalUtils {
       ParserInput input, FileOptions options, Module module, StarlarkThread thread)
       throws SyntaxError.Exception, EvalException, InterruptedException {
     Expression expr = Expression.parse(input, options);
+    Resolver.resolveExpr(expr, module, options);
 
-    Resolver.Function rfn = Resolver.resolveExpr(expr, module, options);
+    // Turn expression into a no-arg StarlarkFunction and call it.
+    StarlarkFunction fn =
+        new StarlarkFunction(
+            "<expr>",
+            expr.getStartLocation(),
+            FunctionSignature.NOARGS,
+            /*defaultValues=*/ Tuple.empty(),
+            ImmutableList.<Statement>of(ReturnStatement.make(expr)),
+            module);
 
-    // Turn expression into a no-arg StarlarkFunction.
-    Tuple<Object> defaultValues = Tuple.empty();
-    StarlarkFunction exprFunc = new StarlarkFunction(rfn, defaultValues, module);
+    return Starlark.fastcall(thread, fn, NOARGS, NOARGS);
+  }
 
-    return Starlark.fastcall(thread, exprFunc, NOARGS, NOARGS);
+  /**
+   * Parses the input as a file, resolves it in the module environment using options defined by
+   * {@code thread.getSemantics}, and executes it. If the final statement is an expression
+   * statement, it returns the value of that expression, otherwise it returns null.
+   *
+   * <p>The function's name is intentionally unattractive. Don't call it unless you're accepting
+   * strings from an interactive user interface such as a REPL or debugger; use {@link #exec} or
+   * {@link #eval} instead.
+   */
+  @Nullable
+  public static Object execAndEvalOptionalFinalExpression(
+      ParserInput input, FileOptions options, Module module, StarlarkThread thread)
+      throws SyntaxError.Exception, EvalException, InterruptedException {
+    StarlarkFile file = StarlarkFile.parse(input, options);
+    Resolver.resolveFile(file, module);
+    if (!file.ok()) {
+      throw new SyntaxError.Exception(file.errors());
+    }
+
+    // If the final statement is an expression, synthesize a return statement.
+    ImmutableList<Statement> stmts = file.getStatements();
+    int n = stmts.size();
+    if (n > 0 && stmts.get(n - 1) instanceof ExpressionStatement) {
+      Expression expr = ((ExpressionStatement) stmts.get(n - 1)).getExpression();
+      stmts =
+          ImmutableList.<Statement>builder()
+              .addAll(stmts.subList(0, n - 1))
+              .add(ReturnStatement.make(expr))
+              .build();
+    }
+
+    // Turn the file into a no-arg function and call it.
+    StarlarkFunction toplevel =
+        new StarlarkFunction(
+            "<toplevel>",
+            file.getStartLocation(),
+            FunctionSignature.NOARGS,
+            /*defaultValues=*/ Tuple.empty(),
+            stmts,
+            module);
+    // Hack: assume unresolved identifiers are globals.
+    toplevel.isToplevel = true;
+
+    return Starlark.fastcall(thread, toplevel, NOARGS, NOARGS);
   }
 
   private static final Object[] NOARGS = {};
