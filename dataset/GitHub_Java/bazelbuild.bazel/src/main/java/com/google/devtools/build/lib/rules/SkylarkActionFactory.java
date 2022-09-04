@@ -82,7 +82,7 @@ public class SkylarkActionFactory implements SkylarkValue {
       }
   )
   public Artifact declareFile(String filename, Object sibling) throws EvalException {
-    context.checkMutable("actions.declare_file");
+    context.checkMutable("actions.declareFile");
     if (Runtime.NONE.equals(sibling)) {
       return ruleContext.getPackageRelativeArtifact(filename, newFileRoot());
     } else {
