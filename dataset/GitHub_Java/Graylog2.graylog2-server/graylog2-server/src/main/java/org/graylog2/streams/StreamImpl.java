@@ -28,7 +28,6 @@ import org.graylog2.database.validators.DateValidator;
 import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.database.validators.MapValidator;
 import org.graylog2.database.validators.OptionalStringValidator;
-import org.graylog2.indexer.IndexSet;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.validators.Validator;
 import org.graylog2.plugin.streams.Output;
@@ -40,8 +39,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import static com.google.common.base.MoreObjects.firstNonNull;
 
 /**
  * Representing a single stream from the streams collection. Also provides method
@@ -59,33 +56,28 @@ public class StreamImpl extends PersistedImpl implements Stream {
     public static final String FIELD_CREATED_AT = "created_at";
     public static final String FIELD_CREATOR_USER_ID = "creator_user_id";
     public static final String FIELD_MATCHING_TYPE = "matching_type";
-    public static final String FIELD_DEFAULT_STREAM = "is_default_stream";
     public static final String EMBEDDED_ALERT_CONDITIONS = "alert_conditions";
 
     private final List<StreamRule> streamRules;
     private final Set<Output> outputs;
-    private final Set<IndexSet> indexSets;
 
     public StreamImpl(Map<String, Object> fields) {
         super(fields);
         this.streamRules = null;
         this.outputs = null;
-        this.indexSets = null;
     }
 
     protected StreamImpl(ObjectId id, Map<String, Object> fields) {
         super(id, fields);
         this.streamRules = null;
         this.outputs = null;
-        this.indexSets = null;
     }
 
-    public StreamImpl(ObjectId id, Map<String, Object> fields, List<StreamRule> streamRules, Set<Output> outputs, Set<IndexSet> indexSets) {
+    public StreamImpl(ObjectId id, Map<String, Object> fields, List<StreamRule> streamRules, Set<Output> outputs) {
         super(id, fields);
 
         this.streamRules = streamRules;
         this.outputs = outputs;
-        this.indexSets = indexSets;
     }
 
     @Override
@@ -143,13 +135,11 @@ public class StreamImpl extends PersistedImpl implements Stream {
         fields.put(FIELD_CONTENT_PACK, contentPack);
     }
 
-    @Override
     public Boolean isPaused() {
         Boolean disabled = getDisabled();
         return (disabled != null && disabled);
     }
 
-    @Override
     public Map<String, Object> asMap(List<StreamRule> streamRules) {
         Map<String, Object> result = asMap();
 
@@ -165,7 +155,6 @@ public class StreamImpl extends PersistedImpl implements Stream {
     }
 
     @JsonValue
-    @Override
     public Map<String, Object> asMap() {
         // We work on the result a bit to allow correct JSON serializing.
         Map<String, Object> result = Maps.newHashMap(fields);
@@ -179,7 +168,6 @@ public class StreamImpl extends PersistedImpl implements Stream {
         return result;
     }
 
-    @Override
     public Map<String, Validator> getValidations() {
         return ImmutableMap.<String, Validator>builder()
                 .put(FIELD_TITLE, new FilledStringValidator())
@@ -200,7 +188,6 @@ public class StreamImpl extends PersistedImpl implements Stream {
         return Collections.emptyMap();
     }
 
-    @Override
     public Map<String, List<String>> getAlertReceivers() {
         if (!fields.containsKey(FIELD_ALERT_RECEIVERS)) {
             return Collections.emptyMap();
@@ -211,7 +198,7 @@ public class StreamImpl extends PersistedImpl implements Stream {
 
     @Override
     public MatchingType getMatchingType() {
-        final String matchingTypeString = (String) fields.get(FIELD_MATCHING_TYPE);
+        final String matchingTypeString = (String)fields.get(FIELD_MATCHING_TYPE);
 
         if (matchingTypeString == null) {
             return MatchingType.AND;
@@ -224,20 +211,5 @@ public class StreamImpl extends PersistedImpl implements Stream {
     public void setMatchingType(MatchingType matchingType) {
         Preconditions.checkNotNull(matchingType);
         fields.put(FIELD_MATCHING_TYPE, matchingType.toString());
-    }
-
-    @Override
-    public boolean isDefaultStream() {
-        return (boolean) firstNonNull(fields.get(FIELD_DEFAULT_STREAM), false);
-    }
-
-    @Override
-    public void setDefaultStream(boolean defaultStream) {
-        fields.put(FIELD_DEFAULT_STREAM, defaultStream);
-    }
-
-    @Override
-    public Set<IndexSet> getIndexSets() {
-        return indexSets;
     }
 }
