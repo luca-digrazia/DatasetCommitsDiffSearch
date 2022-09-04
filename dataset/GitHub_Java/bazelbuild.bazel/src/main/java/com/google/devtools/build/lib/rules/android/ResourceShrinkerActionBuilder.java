@@ -204,10 +204,7 @@ public class ResourceShrinkerActionBuilder {
     inputs.add(primaryResources.getManifest());
 
     List<Artifact> dependencyManifests = getManifests(dependencyResources);
-    commandLine.addJoinExecPaths(
-        "--dependencyManifests",
-        ruleContext.getConfiguration().getHostPathSeparator(),
-        dependencyManifests);
+    commandLine.addJoinExecPaths("--dependencyManifests", ":", dependencyManifests);
     inputs.addAll(dependencyManifests);
 
     List<String> resourcePackages = getResourcePackages(primaryResources, dependencyResources);
