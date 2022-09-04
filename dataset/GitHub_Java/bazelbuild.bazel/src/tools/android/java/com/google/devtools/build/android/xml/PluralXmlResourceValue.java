@@ -148,7 +148,7 @@ public class PluralXmlResourceValue implements XmlResourceValue {
   public static XmlResourceValue from(SerializeFormat.DataValueXml proto) {
     return createWithAttributesAndValues(
         ImmutableMap.copyOf(proto.getAttributeMap()),
-        ImmutableMap.copyOf(proto.getMappedStringValueMap()));
+        ImmutableMap.copyOf(proto.getMappedStringValue()));
   }
 
   public static XmlResourceValue from(Value proto, Visibility visibility) {
