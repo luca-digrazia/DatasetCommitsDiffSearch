@@ -104,7 +104,7 @@ public class ContentPackResourceTest {
     public void listAndLatest() throws Exception {
         final ContentPack contentPack = objectMapper.readValue(CONTENT_PACK, ContentPack.class);
         final Set<ContentPack> contentPacks = Collections.singleton(contentPack);
-        final ContentPackList expectedList = ContentPackList.create(contentPacks);
+        final ContentPackList expectedList = ContentPackList.create(contentPacks.size(), contentPacks);
 
         when(contentPackPersistenceService.loadAll()).thenReturn(Collections.singleton(contentPack));
         final ContentPackList contentPackList = contentPackResource.listContentPacks();
@@ -158,6 +158,11 @@ public class ContentPackResourceTest {
 
         @Override
         protected boolean isPermitted(String permission) {
+            return true;
+        }
+
+        @Override
+        protected boolean isPermitted(String permission, String id) {
             return true;
         }
 
