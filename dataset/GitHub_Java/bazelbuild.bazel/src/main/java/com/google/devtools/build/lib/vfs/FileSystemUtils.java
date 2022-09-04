@@ -411,40 +411,21 @@ public class FileSystemUtils {
     to.setExecutable(from.isExecutable()); // Copy executable bit.
   }
 
-  /** Describes the behavior of a {@link #moveFile(Path, Path)} operation. */
-  public enum MoveResult {
-    /** The file was moved at the file system level. */
-    FILE_MOVED,
-
-    /** The file had to be copied and then deleted because the move failed. */
-    FILE_COPIED,
-  }
-
   /**
    * Moves the file from location "from" to location "to", while overwriting a potentially existing
    * "to". If "from" is a regular file, its last modified time, executable and writable bits are
    * also preserved. Symlinks are also supported but not directories or special files.
    *
-   * <p>If the move fails (usually because the "from" and "to" live in different file systems), this
-   * falls back to copying the file. Note that these two operations have very different performance
-   * characteristics and is why this operation reports back to the caller what actually happened.
-   *
    * <p>If no error occurs, the method returns normally. If a parent directory does not exist, a
    * FileNotFoundException is thrown. {@link IOException} is thrown when other erroneous situations
    * occur. (e.g. read errors)
-   *
-   * @param from location of the file to move
-   * @param to destination to where to move the file
-   * @return a description of how the move was performed
-   * @throws IOException if the move fails
    */
   @ThreadSafe // but not atomic
-  public static MoveResult moveFile(Path from, Path to) throws IOException {
+  public static void moveFile(Path from, Path to) throws IOException {
     // We don't try-catch here for better performance.
     to.delete();
     try {
       from.renameTo(to);
-      return MoveResult.FILE_MOVED;
     } catch (IOException e) {
       // Fallback to a copy.
       FileStatus stat = from.stat(Symlinks.NOFOLLOW);
@@ -469,7 +450,6 @@ public class FileSystemUtils {
         }
         throw new IOException("Unable to delete " + from);
       }
-      return MoveResult.FILE_COPIED;
     }
   }
 
@@ -878,24 +858,6 @@ public class FileSystemUtils {
   }
 
   /**
-   * The type of {@link IOException} thrown by {@link #readWithKnownFileSize} when fewer bytes than
-   * expected are read.
-   */
-  public static class ShortReadIOException extends IOException {
-    public final Path path;
-    public final int fileSize;
-    public final int numBytesRead;
-
-    private ShortReadIOException(Path path, int fileSize, int numBytesRead) {
-      super("Unexpected short read from file '" + path + "' (expected " + fileSize + ", got "
-          + numBytesRead + " bytes)");
-      this.path = path;
-      this.fileSize = fileSize;
-      this.numBytesRead = numBytesRead;
-    }
-  }
-
-  /**
    * Reads the given file {@code path}, assumed to have size {@code fileSize}, and does a sanity
    * check on the number of bytes read.
    *
@@ -911,7 +873,8 @@ public class FileSystemUtils {
     int fileSizeInt = (int) fileSize;
     byte[] bytes = readContentWithLimit(path, fileSizeInt);
     if (fileSizeInt > bytes.length) {
-      throw new ShortReadIOException(path, fileSizeInt, bytes.length);
+      throw new IOException("Unexpected short read from file '" + path
+          + "' (expected " + fileSizeInt + ", got " + bytes.length + " bytes)");
     }
     return bytes;
   }
