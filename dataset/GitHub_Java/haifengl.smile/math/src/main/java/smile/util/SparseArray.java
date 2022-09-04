@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.util;
 
@@ -89,15 +89,6 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
 
     /**
      * Constructor.
-     * @param initialCapacity the initial capacity.
-     */
-    public SparseArray(int initialCapacity) {
-        index = new IntArrayList(initialCapacity);
-        value = new DoubleArrayList(initialCapacity);
-    }
-
-    /**
-     * Constructor.
      */
     public SparseArray(List<Entry> entries) {
         index = new IntArrayList(entries.size());
@@ -114,6 +105,15 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
      */
     public SparseArray(Stream<Entry> stream) {
         this(stream.collect(Collectors.toList()));
+    }
+
+    /**
+     * Constructor.
+     * @param initialCapacity the number of rows in the matrix.
+     */
+    private SparseArray(int initialCapacity) {
+        index = new IntArrayList(initialCapacity);
+        value = new DoubleArrayList(initialCapacity);
     }
 
     @Override

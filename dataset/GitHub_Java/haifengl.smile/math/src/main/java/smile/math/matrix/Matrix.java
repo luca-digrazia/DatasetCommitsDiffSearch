@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math.matrix;
 
@@ -77,7 +77,7 @@ import smile.util.SparseArray;
  *
  * @author Haifeng Li
  */
-public interface Matrix extends Serializable, Cloneable {
+public interface Matrix extends Serializable {
     /**
      * Returns an matrix initialized by given two-dimensional array.
      */
@@ -193,7 +193,7 @@ public interface Matrix extends Serializable, Cloneable {
      * @param n the number of columns to print.
      */
     default String toString(int m, int n) {
-        StringBuilder sb = new StringBuilder(nrows() + " x " + ncols() + "\n");
+        StringBuilder sb = new StringBuilder();
         m = Math.min(m, nrows());
         n = Math.min(n, ncols());
 
@@ -219,16 +219,13 @@ public interface Matrix extends Serializable, Cloneable {
     }
 
     /**
-     * Sets if the matrix is symmetric. It is the caller's responsibility to
+     * Sets if the matrix is symmetric. It is the caller's responability to
      * make sure if the matrix symmetric. Also the matrix won't update this
      * property if the matrix values are changed.
      */
     default void setSymmetric(boolean symmetric) {
         throw new UnsupportedOperationException();
     }
-
-    /** Returns a deep copy of this matrix. */
-    Matrix clone();
 
     /**
      * Returns the number of rows.
@@ -248,9 +245,7 @@ public interface Matrix extends Serializable, Cloneable {
     /**
      * Returns the entry value at row i and column j.
      */
-    default double get(int i, int j) {
-        throw new UnsupportedOperationException();
-    }
+    double get(int i, int j);
 
     /**
      * Returns the entry value at row i and column j. For Scala users.
@@ -290,16 +285,12 @@ public interface Matrix extends Serializable, Cloneable {
     /**
      * Returns A' * A
      */
-    default Matrix ata() {
-        throw new UnsupportedOperationException();
-    }
+    Matrix ata();
 
     /**
      * Returns A * A'
      */
-    default Matrix aat() {
-        throw new UnsupportedOperationException();
-    }
+    Matrix aat();
 
     /**
      * y = A * x
@@ -311,41 +302,31 @@ public interface Matrix extends Serializable, Cloneable {
      * y = A * x + y
      * @return y
      */
-    default double[] axpy(double[] x, double[] y) {
-        throw new UnsupportedOperationException();
-    }
+    double[] axpy(double[] x, double[] y);
 
     /**
      * y = A * x + b * y
      * @return y
      */
-    default double[] axpy(double[] x, double[] y, double b) {
-        throw new UnsupportedOperationException();
-    }
+    double[] axpy(double[] x, double[] y, double b);
 
     /**
      * y = A' * x
      * @return y
      */
-    default double[] atx(double[] x, double[] y) {
-        throw new UnsupportedOperationException();
-    }
+    double[] atx(double[] x, double[] y);
 
     /**
      * y = A' * x + y
      * @return y
      */
-    default double[] atxpy(double[] x, double[] y) {
-        throw new UnsupportedOperationException();
-    }
+    double[] atxpy(double[] x, double[] y);
 
     /**
      * y = A' * x + b * y
      * @return y
      */
-    default double[] atxpy(double[] x, double[] y, double b) {
-        throw new UnsupportedOperationException();
-    }
+    double[] atxpy(double[] x, double[] y, double b);
 
     /**
      * Find k largest approximate eigen pairs of a symmetric matrix by the

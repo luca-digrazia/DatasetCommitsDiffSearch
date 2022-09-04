@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
@@ -28,7 +28,6 @@ import smile.math.special.Gamma;
  * intervals such as distance, area or volume. If the expected number of
  * occurrences in this interval is &lambda;, then the probability that there
  * are exactly n occurrences (n = 0, 1, 2, ...) is equal to
- * <p>
  * <pre>
  *             &lambda;<sup>n</sup> e<sup>-&lambda;</sup>
  * f(n; &lambda;) = ---------

@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
 import smile.math.MathEx;
-import smile.math.blas.UPLO;
+import smile.math.matrix.Cholesky;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 
 /**
@@ -36,13 +37,13 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
     /** The mean vector. */
     public final double[] mu;
     /** The covariance matrix. */
-    public final Matrix sigma;
+    public final DenseMatrix sigma;
     /** True if the covariance matrix is diagonal. */
     public final boolean diagonal;
 
     private int dim;
-    private Matrix sigmaInv;
-    private Matrix sigmaL;
+    private DenseMatrix sigmaInv;
+    private DenseMatrix sigmaL;
     private double sigmaDet;
     private double pdfConstant;
     private int length;
@@ -60,7 +61,7 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
         }
 
         mu = new double[mean.length];
-        sigma = new Matrix(mu.length, mu.length);
+        sigma = Matrix.zeros(mu.length, mu.length);
         for (int i = 0; i < mu.length; i++) {
             mu[i] = mean[i];
             sigma.set(i, i, variance);
@@ -106,7 +107,7 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
      * @param mean mean vector.
      * @param cov covariance matrix.
      */
-    public MultivariateGaussianDistribution(double[] mean, Matrix cov) {
+    public MultivariateGaussianDistribution(double[] mean, DenseMatrix cov) {
         if (mean.length != cov.nrows()) {
             throw new IllegalArgumentException("Mean vector and covariance matrix have different dimension");
         }
@@ -157,7 +158,7 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
 
             return new MultivariateGaussianDistribution(mu, variance);
         } else {
-            return new MultivariateGaussianDistribution(mu, new Matrix(MathEx.cov(data, mu)));
+            return new MultivariateGaussianDistribution(mu, Matrix.of(MathEx.cov(data, mu)));
         }
     }
 
@@ -166,11 +167,10 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
      */
     private void init() {
         dim = mu.length;
-        sigma.uplo(UPLO.LOWER);
-        Matrix.Cholesky cholesky = sigma.cholesky();
+        Cholesky cholesky = sigma.cholesky(false);
         sigmaInv = cholesky.inverse();
         sigmaDet = cholesky.det();
-        sigmaL = cholesky.lu;
+        sigmaL = cholesky.matrix();
         pdfConstant = (dim * Math.log(2 * Math.PI) + Math.log(sigmaDet)) / 2.0;
     }
 
@@ -190,7 +190,7 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
     }
 
     @Override
-    public Matrix cov() {
+    public DenseMatrix cov() {
         return sigma;
     }
 
@@ -209,7 +209,7 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
 
         double[] v = x.clone();
         MathEx.sub(v, mu);
-        double result = sigmaInv.xAx(v) / -2.0;
+        double result = sigmaInv.xax(v) / -2.0;
         return result - pdfConstant;
     }
 
@@ -353,9 +353,9 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
                 variance[i] /= alpha;
             }
 
-            gaussian = new MultivariateGaussianDistribution(mean, new Matrix(variance));
+            gaussian = new MultivariateGaussianDistribution(mean, Matrix.of(variance));
         } else {
-            Matrix cov = new Matrix(d, d);
+            DenseMatrix cov = Matrix.zeros(d, d);
             for (int k = 0; k < n; k++) {
                 double[] x = data[k];
                 for (int i = 0; i < d; i++) {

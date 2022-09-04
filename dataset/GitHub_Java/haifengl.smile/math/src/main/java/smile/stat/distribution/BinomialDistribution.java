@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
@@ -31,9 +31,9 @@ import static smile.math.MathEx.lfactorial;
  * In fact, when n = 1, the binomial distribution is a Bernoulli distribution.
  * The probability of getting exactly k successes in n trials is given by the
  * probability mass function:
- * <pre>
- *     Pr(K = k) = <sub>n</sub>C<sub>k</sub> p<sup>k</sup> (1-p)<sup>n-k</sup>
- * </pre>
+ * <p>
+ * Pr(K = k) = <sub>n</sub>C<sub>k</sub> p<sup>k</sup> (1-p)<sup>n-k</sup>
+ * <p>
  * where <sub>n</sub>C<sub>k</sub> is n choose k.
  * <p>
  * It is frequently used to model number of successes in a sample of size

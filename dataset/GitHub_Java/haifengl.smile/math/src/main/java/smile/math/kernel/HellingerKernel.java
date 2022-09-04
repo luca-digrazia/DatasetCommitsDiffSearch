@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math.kernel;
 
@@ -23,7 +23,7 @@ package smile.math.kernel;
  * @author Diego Catalano
  */
 public class HellingerKernel implements MercerKernel<double[]> {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
     
     /**
      * Constructor.
@@ -37,10 +37,9 @@ public class HellingerKernel implements MercerKernel<double[]> {
 
     @Override
     public double k(double[] x, double[] y) {
-        if (x.length != y.length) {
+        if (x.length != y.length)
             throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
-        }
-
+        
         double sum = 0;
         for (int i = 0; i < x.length; i++) {
             sum += Math.sqrt(x[i] * y[i]);

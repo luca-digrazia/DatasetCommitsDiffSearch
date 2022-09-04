@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math.special;
 
@@ -22,11 +22,10 @@ import static smile.math.special.Gamma.lgamma;
 
 /**
  * The beta function, also called the Euler integral of the first kind.
- * <pre>
- *     B(x, y) = <i><big>&#8747;</big><sub><small>0</small></sub><sup><small>1</small></sup> t<sup>x-1</sup> (1-t)<sup>y-1</sup>dt</i>
- * </pre>
- * for <code>x, y &gt; 0</code> and the integration is over [0, 1].
- * The beta function is symmetric, i.e. <code>B(x, y) = B(y, x)</code>.
+ * <p>
+ * B(x, y) = <i><big>&#8747;</big><sub><small>0</small></sub><sup><small>1</small></sup> t<sup>x-1</sup> (1-t)<sup>y-1</sup>dt</i>
+ * <p>
+ * for x, y &gt; 0 and the integration is over [0,1].The beta function is symmetric, i.e. B(x,y) = B(y,x).
  *
  * @author Haifeng Li
  */
@@ -61,11 +60,11 @@ public class Beta {
         // greater than 1 or less than 0. We allow tiny slack here to avoid brute exception.
         final double EPS = 1E-8;
 
-        if (x < 0.0 && abs(x) < EPS) {
+        if (abs(x) < EPS) {
             return 0.0;
         }
 
-        if (x > 1.0 && abs(x - 1.0) < EPS) {
+        if (abs(x - 1.0) < EPS) {
             return 1.0;
         }
 

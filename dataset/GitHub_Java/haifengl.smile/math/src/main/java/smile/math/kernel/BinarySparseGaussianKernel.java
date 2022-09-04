@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,16 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math.kernel;
 
 /**
- * The Gaussian Mercer Kernel.
- * <pre>
- *     k(u, v) = e<sup>-||u-v||<sup>2</sup> / (2 * &sigma;<sup>2</sup>)</sup>
- * </pre>,
- * where <code>&sigma; &gt; 0</code> is the scale parameter of the kernel. The kernel works
+ * The Gaussian Mercer Kernel. k(u, v) = e<sup>-||u-v||<sup>2</sup> / (2 * &sigma;<sup>2</sup>)</sup>,
+ * where &sigma; &gt; 0 is the scale parameter of the kernel. The kernel works
  * on sparse binary array as int[], which are the indices of nonzero elements.
  * <p>
  * The Gaussian kernel is a good choice for a great deal of applications,

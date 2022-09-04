@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math;
 
@@ -94,6 +94,15 @@ public class MathEx {
      * except that negeps is bounded below by -(DIGITS+3)
      */
     public static final int NEGEP = fpu.NEGEP;
+    /**
+     * Root finding algorithms.
+     */
+    public static final Root root = new Root();
+    /**
+     * The Broyden–Fletcher–Goldfarb–Shanno (BFGS) algorithm
+     * for unconstrained nonlinear optimization problems.
+     */
+    public static final BFGS BFGS = new BFGS();
 
     /**
      * This RNG is to generate the seeds for multi-threads.

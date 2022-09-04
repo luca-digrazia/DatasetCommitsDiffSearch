@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
@@ -22,11 +22,11 @@ import smile.math.special.Erf;
 
 /**
  * A log-normal distribution is a probability distribution of a random variable
- * whose logarithm is normally distributed. The log-normal distribution is the
- * single-tailed probability distribution of any random variable whose logarithm
- * is normally distributed. If X is a random variable with a normal distribution,
- * then Y = exp(X) has a log-normal distribution; likewise, if Y is log-normally
- * distributed, then log(Y) is normally distributed.
+ * whose logarithm is normally distributed. The log-normal distribution is the single-tailed probability distribution
+ * of any random variable whose logarithm is normally distributed. If X is a
+ * random variable with a normal distribution, then Y = exp(X) has a log-normal
+ * distribution; likewise, if Y is log-normally distributed, then log(Y) is
+ * normally distributed.
  * A variable might be modeled as log-normal if it can be thought of as
  * the multiplicative product of many independent random variables each of
  * which is positive.
