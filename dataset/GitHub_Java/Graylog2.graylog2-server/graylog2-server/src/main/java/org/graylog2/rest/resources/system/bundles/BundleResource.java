@@ -73,10 +73,8 @@ public class BundleResource extends RestResource {
             @ApiParam(title = "Configuration bundle", required = true)
             @NotNull @Valid
             final ConfigurationBundle configurationBundle) {
-        final ConfigurationBundle bundle = bundleService.insert(configurationBundle);
-        final URI bundleUri = UriBuilder.fromResource(BundleResource.class)
-                .path("{bundleId}")
-                .build(bundle.getId());
+        final String bundleId = bundleService.insert(configurationBundle);
+        final URI bundleUri = UriBuilder.fromMethod(BundleResource.class, "showBundle").build(bundleId);
 
         return Response.created(bundleUri).build();
     }

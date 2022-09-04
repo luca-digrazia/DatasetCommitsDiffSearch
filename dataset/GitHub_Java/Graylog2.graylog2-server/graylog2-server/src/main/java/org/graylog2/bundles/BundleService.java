@@ -164,9 +164,9 @@ public class BundleService {
         return writeResult.getSavedObject();
     }
 
-    public ConfigurationBundle insert(final ConfigurationBundle bundle) {
+    public String insert(ConfigurationBundle bundle) {
         final WriteResult<ConfigurationBundle, ObjectId> writeResult = dbCollection.insert(bundle);
-        return writeResult.getSavedObject();
+        return writeResult.getSavedId().toHexString();
     }
 
     public int delete(String bundleId) {
