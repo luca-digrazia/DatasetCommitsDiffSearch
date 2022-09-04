@@ -13,7 +13,7 @@ final class AgroalEventLoggingListener implements AgroalDataSourceListener {
     private final String datasourceName;
 
     public AgroalEventLoggingListener(String name) {
-        this.datasourceName = name;
+        this.datasourceName = "Datasource '" + name + "'";
     }
 
     @Override
@@ -59,6 +59,11 @@ final class AgroalEventLoggingListener implements AgroalDataSourceListener {
     @Override
     public void onWarning(String warning) {
         log.warnv("{0}: {1}", datasourceName, warning);
+    }
+
+    @Override
+    public void onInfo(String message) {
+        log.infov("{0}: {1}", datasourceName, message);
     }
 
     @Override
