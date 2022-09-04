@@ -16,9 +16,8 @@ package com.google.devtools.build.lib.analysis.platform;
 
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
@@ -33,16 +32,16 @@ public class ConstraintValueInfo extends NativeInfo implements ConstraintValueIn
   /** Name used in Skylark for accessing this provider. */
   public static final String SKYLARK_NAME = "ConstraintValueInfo";
 
-  /** Provider singleton constant. */
-  public static final BuiltinProvider<ConstraintValueInfo> PROVIDER =
-      new BuiltinProvider<ConstraintValueInfo>(SKYLARK_NAME, ConstraintValueInfo.class) {};
+  /** Skylark constructor and identifier for this provider. */
+  public static final NativeProvider<ConstraintValueInfo> PROVIDER =
+      new NativeProvider<ConstraintValueInfo>(ConstraintValueInfo.class, SKYLARK_NAME) {};
 
   private final ConstraintSettingInfo constraint;
   private final Label label;
 
   @VisibleForSerialization
-  ConstraintValueInfo(ConstraintSettingInfo constraint, Label label, Location location) {
-    super(PROVIDER, location);
+  ConstraintValueInfo(ConstraintSettingInfo constraint, Label label) {
+    super(PROVIDER);
 
     this.constraint = constraint;
     this.label = label;
@@ -66,13 +65,7 @@ public class ConstraintValueInfo extends NativeInfo implements ConstraintValueIn
 
   /** Returns a new {@link ConstraintValueInfo} with the given data. */
   public static ConstraintValueInfo create(ConstraintSettingInfo constraint, Label value) {
-    return create(constraint, value, Location.BUILTIN);
-  }
-
-  /** Returns a new {@link ConstraintValueInfo} with the given data. */
-  public static ConstraintValueInfo create(
-      ConstraintSettingInfo constraint, Label value, Location location) {
-    return new ConstraintValueInfo(constraint, value, location);
+    return new ConstraintValueInfo(constraint, value);
   }
 
   /** Add this constraint value to the given fingerprint. */

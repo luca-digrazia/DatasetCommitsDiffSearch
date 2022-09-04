@@ -19,17 +19,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.platform.ConstraintCollection.DuplicateConstraintException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.PlatformInfoApi;
-import com.google.devtools.build.lib.syntax.Dict;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.StringUtilities;
 import java.util.HashMap;
@@ -53,49 +48,9 @@ public class PlatformInfo extends NativeInfo
   /** Name used in Skylark for accessing this provider. */
   public static final String SKYLARK_NAME = "PlatformInfo";
 
-  /** Provider singleton constant. */
-  public static final BuiltinProvider<PlatformInfo> PROVIDER = new Provider();
-
-  /** Provider for {@link ToolchainInfo} objects. */
-  private static class Provider extends BuiltinProvider<PlatformInfo>
-      implements PlatformInfoApi.Provider<
-          ConstraintSettingInfo, ConstraintValueInfo, PlatformInfo> {
-    private Provider() {
-      super(SKYLARK_NAME, PlatformInfo.class);
-    }
-
-    @Override
-    public PlatformInfo platformInfo(
-        Label label,
-        Object parentUnchecked,
-        Sequence<?> constraintValuesUnchecked,
-        Object execPropertiesUnchecked,
-        Location location)
-        throws EvalException {
-      PlatformInfo.Builder builder = PlatformInfo.builder();
-      builder.setLabel(label);
-      if (parentUnchecked != Starlark.NONE) {
-        builder.setParent((PlatformInfo) parentUnchecked);
-      }
-      if (!constraintValuesUnchecked.isEmpty()) {
-        builder.addConstraints(
-            constraintValuesUnchecked.getContents(ConstraintValueInfo.class, "constraint_values"));
-      }
-      if (execPropertiesUnchecked != null) {
-        Map<String, String> execProperties =
-            Dict.castSkylarkDictOrNoneToDict(
-                execPropertiesUnchecked, String.class, String.class, "exec_properties");
-        builder.setExecProperties(ImmutableMap.copyOf(execProperties));
-      }
-      builder.setLocation(location);
-
-      try {
-        return builder.build();
-      } catch (DuplicateConstraintException | ExecPropertiesException e) {
-        throw new EvalException(location, e);
-      }
-    }
-  }
+  /** Skylark constructor and identifier for this provider. */
+  public static final NativeProvider<PlatformInfo> PROVIDER =
+      new NativeProvider<PlatformInfo>(PlatformInfo.class, SKYLARK_NAME) {};
 
   private final Label label;
   private final ConstraintCollection constraints;
@@ -109,9 +64,8 @@ public class PlatformInfo extends NativeInfo
       Label label,
       ConstraintCollection constraints,
       String remoteExecutionProperties,
-      ImmutableMap<String, String> execProperties,
-      Location location) {
-    super(PROVIDER, location);
+      ImmutableMap<String, String> execProperties) {
+    super(PROVIDER);
 
     this.label = label;
     this.constraints = constraints;
@@ -165,7 +119,6 @@ public class PlatformInfo extends NativeInfo
     private final ConstraintCollection.Builder constraints = ConstraintCollection.builder();
     private String remoteExecutionProperties = null;
     @Nullable private ImmutableMap<String, String> execProperties;
-    private Location location = Location.BUILTIN;
 
     /**
      * Sets the parent {@link PlatformInfo} that this platform inherits from. Constraint values set
@@ -270,17 +223,6 @@ public class PlatformInfo extends NativeInfo
       return this;
     }
 
-    /**
-     * Sets the {@link Location} where this {@link PlatformInfo} was created.
-     *
-     * @param location the location where the instance was created
-     * @return the {@link Builder} instance for method chaining
-     */
-    public Builder setLocation(Location location) {
-      this.location = location;
-      return this;
-    }
-
     private void checkRemoteExecutionProperties() throws ExecPropertiesException {
       if (execProperties != null && !Strings.isNullOrEmpty(remoteExecutionProperties)) {
         throw new ExecPropertiesException(
@@ -326,7 +268,7 @@ public class PlatformInfo extends NativeInfo
       }
 
       return new PlatformInfo(
-          label, constraints.build(), remoteExecutionProperties, execProperties, location);
+          label, constraints.build(), remoteExecutionProperties, execProperties);
     }
 
     private static String mergeRemoteExecutionProperties(
