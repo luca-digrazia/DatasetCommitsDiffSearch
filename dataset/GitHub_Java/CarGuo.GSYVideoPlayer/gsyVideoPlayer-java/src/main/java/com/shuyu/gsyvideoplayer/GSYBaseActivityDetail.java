@@ -6,7 +6,6 @@ import android.view.View;
 
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
 import com.shuyu.gsyvideoplayer.listener.VideoAllCallBack;
-import com.shuyu.gsyvideoplayer.utils.OrientationOption;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 
@@ -35,7 +34,7 @@ public abstract class GSYBaseActivityDetail<T extends GSYBaseVideoPlayer> extend
      */
     public void initVideo() {
         //外部辅助的旋转，帮助全屏
-        orientationUtils = new OrientationUtils(this, getGSYVideoPlayer(), getOrientationOption());
+        orientationUtils = new OrientationUtils(this, getGSYVideoPlayer());
         //初始化不打开外部的旋转
         orientationUtils.setEnable(false);
         if (getGSYVideoPlayer().getFullscreenButton() != null) {
@@ -239,18 +238,11 @@ public abstract class GSYBaseActivityDetail<T extends GSYBaseVideoPlayer> extend
     }
 
     public boolean hideActionBarWhenFull() {
-        return true;
+        return  true;
     }
 
     public boolean hideStatusBarWhenFull() {
-        return true;
-    }
-
-    /**
-     * 可配置旋转 OrientationUtils
-     */
-    public OrientationOption getOrientationOption() {
-        return null;
+        return  true;
     }
 
     /**
