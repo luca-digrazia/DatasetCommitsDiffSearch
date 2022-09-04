@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.taxonomy;
 
@@ -32,7 +32,7 @@ public class TaxonomicDistance implements Distance<Concept> {
     /**
      * The taxonomy basis to calculate the distance.
      */
-    private Taxonomy taxonomy;
+    private final Taxonomy taxonomy;
 
     /**
      * Constructor.
@@ -49,14 +49,17 @@ public class TaxonomicDistance implements Distance<Concept> {
     }
 
     /**
-     * Compute the distance between two concepts in a taxonomy.
+     * Computes the distance between two concepts in a taxonomy.
+     * @param x a concept.
+     * @param y the other concept.
+     * @return the distance.
      */
     public double d(String x, String y) {
         return d(taxonomy.getConcept(x), taxonomy.getConcept(y));
     }
 
     /**
-     * Compute the distance between two concepts in a taxonomy.
+     * Computes the distance between two concepts in a taxonomy.
      */
     @Override
     public double d(Concept x, Concept y) {

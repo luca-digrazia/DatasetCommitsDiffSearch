@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.taxonomy;
 
@@ -60,34 +60,36 @@ public class Taxonomy {
     }
 
     /**
-     * Returns a concept node which synset contains the keyword.
+     * Returns the concept node which synset contains the keyword.
+     * @param keyword the keyword.
+     * @return the concept node which synset contains the keyword.
      */
     public Concept getConcept(String keyword) {
         return concepts.get(keyword);
     }
 
     /**
-     * Returns all named concepts from this taxonomy
+     * Returns all named concepts in the taxonomy.
+     * @return all named concepts.
      */
     public List<String> getConcepts() {
         return getConcepts(root);
     }
 
     /**
-     * Returns all named sub-concepts from this taxonomy
+     * Returns all named sub-concepts in the taxonomy.
+     * @return all named sub-concepts.
      */
     private List<String> getConcepts(Concept c) {
         List<String> keywords = new ArrayList<>();
 
-        while (c != null) {
-            if (c.synset != null) {
-                keywords.addAll(c.synset);
-            }
+        if (c.synset != null) {
+            keywords.addAll(c.synset);
+        }
 
-            if (c.children != null) {
-                for (Concept child : c.children) {
-                    keywords.addAll(getConcepts(child));
-                }
+        if (c.children != null) {
+            for (Concept child : c.children) {
+                keywords.addAll(getConcepts(child));
             }
         }
 
@@ -99,6 +101,10 @@ public class Taxonomy {
      * common ancestor is defined between two nodes v and w as the lowest node
      * that has both v and w as descendants (where we allow a node to be a
      * descendant of itself).
+     *
+     * @param v a concept.
+     * @param w the other concept.
+     * @return the lowest common ancestor.
      */
     public Concept lowestCommonAncestor(String v, String w) {
         Concept vnode = getConcept(v);
@@ -112,6 +118,10 @@ public class Taxonomy {
      * common ancestor is defined between two nodes v and w as the lowest node
      * that has both v and w as descendants (where we allow a node to be a
      * descendant of itself).
+     *
+     * @param v a concept.
+     * @param w the other concept.
+     * @return the lowest common ancestor.
      */
     public Concept lowestCommonAncestor(Concept v, Concept w) {
         if (v.taxonomy != w.taxonomy) {

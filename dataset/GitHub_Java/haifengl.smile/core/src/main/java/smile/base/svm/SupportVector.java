@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.base.svm;
 
@@ -21,6 +21,8 @@ import java.io.Serializable;
 
 /**
  * Support vector.
+ *
+ * @author Haifeng Li
  */
 public class SupportVector<T> implements Serializable {
     private static final long serialVersionUID = 2L;
@@ -54,6 +56,17 @@ public class SupportVector<T> implements Serializable {
      */
     final double k;
 
+    /**
+     * Constructor.
+     * @param i the index of support vector.
+     * @param x the support vector.
+     * @param y the class label.
+     * @param alpha Lagrangian multiplier of support vector.
+     * @param g the gradient.
+     * @param Cp the bound on positive samples.
+     * @param Cn the bound on negative samples.
+     * @param k the kernel value k(x, x).
+     */
     public SupportVector(int i, T x, int y, double alpha, double g, double Cp, double Cn, double k) {
         this.i = i;
         this.x = x;

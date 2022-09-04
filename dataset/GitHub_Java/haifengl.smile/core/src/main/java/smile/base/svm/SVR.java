@@ -161,7 +161,7 @@ public class SVR<T> {
     }
 
     /**
-     * Fits an epsilon support vector regression model.
+     * Fits a epsilon support vector regression model.
      * @param x training instances.
      * @param y response variable.
      * @return the model.
