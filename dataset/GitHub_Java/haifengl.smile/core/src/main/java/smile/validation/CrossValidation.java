@@ -108,7 +108,7 @@ public interface CrossValidation {
      * @param k the number of folds.
      * @return k-fold data splits.
      */
-    static Bag[] stratify(int[] category, int k) {
+    static Bag[] of(int[] category, int k) {
         if (k < 0) {
             throw new IllegalArgumentException("Invalid number of folds: " + k);
         }
@@ -147,12 +147,6 @@ public interface CrossValidation {
         for (int i = 0; i < n; i++) {
             int j =  y[i];
             strata[j][pos[j]++] = i;
-        }
-
-        // Shuffle every strata so that we can get different
-        // splits in repeated cross validation.
-        for (int i = 0; i < m; i++) {
-            MathEx.permutate(strata[i]);
         }
 
         int[] chunk = new int[m];
@@ -273,7 +267,7 @@ public interface CrossValidation {
     }
 
     /**
-     * Cross validation of classification.
+     * Runs classification cross validation.
      * @param k k-fold cross validation.
      * @param x the samples.
      * @param y the sample labels.
@@ -287,7 +281,7 @@ public interface CrossValidation {
     }
 
     /**
-     * Cross validation of classification.
+     * Runs classification cross validation.
      * @param k k-fold cross validation.
      * @param formula the model specification.
      * @param data the training/validation data.
@@ -300,35 +294,7 @@ public interface CrossValidation {
     }
 
     /**
-     * Stratified cross validation of classification.
-     * @param k k-fold cross validation.
-     * @param x the samples.
-     * @param y the sample labels.
-     * @param trainer the lambda to train a model.
-     * @param <T> the data type of samples.
-     * @param <M> the model type.
-     * @return the validation results.
-     */
-    static <T, M extends Classifier<T>> ClassificationValidations<M> stratify(int k, T[] x, int[] y, BiFunction<T[], int[], M> trainer) {
-        return ClassificationValidation.of(stratify(y, k), x, y, trainer);
-    }
-
-    /**
-     * Stratified cross validation of classification.
-     * @param k k-fold cross validation.
-     * @param formula the model specification.
-     * @param data the training/validation data.
-     * @param trainer the lambda to train a model.
-     * @param <M> the model type.
-     * @return the validation results.
-     */
-    static <M extends DataFrameClassifier> ClassificationValidations<M> stratify(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {
-        int[] y = formula.y(data).toIntArray();
-        return ClassificationValidation.of(stratify(y, k), formula, data, trainer);
-    }
-
-    /**
-     * RCross validation of regression.
+     * Runs regression cross validation.
      * @param k k-fold cross validation.
      * @param x the samples.
      * @param y the response variable.
@@ -342,7 +308,7 @@ public interface CrossValidation {
     }
 
     /**
-     * Cross validation of regression.
+     * Runs regression cross validation.
      * @param k k-fold cross validation.
      * @param formula the model specification.
      * @param data the training/validation data.

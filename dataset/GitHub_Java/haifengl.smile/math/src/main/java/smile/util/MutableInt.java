@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.util;
 
@@ -26,7 +26,7 @@ package smile.util;
 public class MutableInt {
 
     /** The integer value. */
-    public int value = 1;
+    public int value;
 
     /**
      * Constructor. The initial value is 1 since we're counting.
@@ -44,22 +44,36 @@ public class MutableInt {
         this.value = value;
     }
 
-    /** Increment by one. */
+    /**
+     * Increment by one.
+     * @return the update value.
+     */
     public int increment() {
         return ++value;
     }
 
-    /** Increment. */
+    /**
+     * Increment.
+     * @param x the operand.
+     * @return the update value.
+     */
     public int increment(int x) {
         return value += x;
     }
 
-    /** Decrement by one. */
+    /**
+     * Decrement by one.
+     * @return the update value.
+     */
     public int decrement() {
         return --value;
     }
 
-    /** Decrement. */
+    /**
+     * Decrement.
+     * @param x the operand.
+     * @return the update value.
+     */
     public int decrement(int x) {
         return value -= x;
     }

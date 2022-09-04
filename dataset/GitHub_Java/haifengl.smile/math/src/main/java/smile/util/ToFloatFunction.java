@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.util;
 
@@ -25,9 +25,12 @@ package smile.util;
  *
  * @author Haifeng Li
  */
-/**  */
 public interface ToFloatFunction<T> {
-    /** Applies this function to the given argument. */
+    /**
+     * Applies this function to the given argument.
+     * @param o the input object.
+     * @return the function value.
+     */
     float applyAsFloat(T o);
 }
 

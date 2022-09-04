@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,18 +13,16 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.util;
 
 import java.io.Serializable;
-import java.text.DecimalFormat;
 import java.util.Iterator;
 import java.util.List;
-import java.util.OptionalInt;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import java.util.stream.Collectors;
 import smile.sort.QuickSort;
 
 /**
@@ -35,46 +33,54 @@ import smile.sort.QuickSort;
 public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
     private static final long serialVersionUID = 2L;
 
+    // Entry as an object has too much overhead and not CPU cache friendly.
+    // Use two continuous array lists for index and value correspondingly.
+    /** The index of nonzero entries. */
+    private final IntArrayList index;
+    /** The value of nonzero entries. */
+    private final DoubleArrayList value;
+
     /**
      * The entry in a sparse array of double values.
      */
-    public static class Entry implements Serializable {
-        private static final long serialVersionUID = 1L;
-        /** Format for toString. */
-        private static DecimalFormat format = new DecimalFormat("#.######");
-
+    public class Entry {
         /**
          * The index of entry.
          */
-        public int i;
+        public final int i;
         /**
          * The value of entry.
          */
-        public double x;
+        public final double x;
+        /**
+         * The index to internal storage.
+         */
+        private final int index;
 
         /**
          * Constructor.
-         * @param i the index of entry.
-         * @param x the value of entry.
          */
-        public Entry(int i, double x) {
-            this.i = i;
-            this.x = x;
+        private Entry(int index) {
+            this.i = SparseArray.this.index.get(index);
+            this.x = value.get(index);
+            this.index = index;
+        }
+
+        /**
+         * Update the value of entry in the array.
+         * Note that the field <code>x</code> is final and thus not updated.
+         * @param x the new entry value.
+         */
+        public void update(double x) {
+            value.set(index, x);
         }
 
         @Override
         public String toString() {
-            return String.format("%d:%s", i, format.format(x));
+            return String.format("%d:%s", i, Strings.format(x));
         }
     }
 
-    /**
-     * Entry as an object has too much overhead and not CPU cache friendly.
-     * Use two continuous array lists for index and value correspondingly.
-     */
-    private IntArrayList index;
-    private DoubleArrayList value;
-    
     /**
      * Constructor.
      */
@@ -84,6 +90,16 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
 
     /**
      * Constructor.
+     * @param initialCapacity the initial capacity.
+     */
+    public SparseArray(int initialCapacity) {
+        index = new IntArrayList(initialCapacity);
+        value = new DoubleArrayList(initialCapacity);
+    }
+
+    /**
+     * Constructor.
+     * @param entries the nonzero entries.
      */
     public SparseArray(List<Entry> entries) {
         index = new IntArrayList(entries.size());
@@ -97,18 +113,10 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
 
     /**
      * Constructor.
+     * @param stream the stream of nonzero entries.
      */
     public SparseArray(Stream<Entry> stream) {
         this(stream.collect(Collectors.toList()));
-    }
-
-    /**
-     * Constructor.
-     * @param initialCapacity the number of rows in the matrix.
-     */
-    private SparseArray(int initialCapacity) {
-        index = new IntArrayList(initialCapacity);
-        value = new DoubleArrayList(initialCapacity);
     }
 
     @Override
@@ -132,10 +140,7 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
         return index.isEmpty();
     }
     
-    /**
-     * Returns an iterator of nonzero entries.
-     * @return an iterator of nonzero entries
-     */
+    @Override
     public Iterator<Entry> iterator() {
         return new Iterator<Entry>() {
             int i = 0;
@@ -146,19 +151,22 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
 
             @Override
             public Entry next() {
-                Entry e = new Entry(index.get(i), value.get(i));
-                i += 1;
-                return e;
+                return new Entry(i++);
             }
         };
     }
 
-    /** Returns the stream of nonzero entries. */
+    /**
+     * Returns the stream of nonzero entries.
+     * @return the stream of nonzero entries.
+     */
     public Stream<Entry> stream() {
-        return IntStream.range(0, size()).mapToObj(i -> new Entry(index.get(i), value.get(i)));
+        return IntStream.range(0, size()).mapToObj(Entry::new);
     }
 
-    /** Sorts the array elements such that the indices are in ascending order. */
+    /**
+     * Sorts the array elements such that the indices are in ascending order.
+     */
     public void sort() {
         QuickSort.sort(index.data, value.data, size());
     }

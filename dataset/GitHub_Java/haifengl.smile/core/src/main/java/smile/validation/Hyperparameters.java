@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation;
 
@@ -38,37 +38,37 @@ import smile.math.MathEx;
  * while learning rate and mini-batch size are algorithm hyperparameters.
  * <p>
  * The below example shows how to tune the hyperparameters of random forest.
- * <p>
  * <pre>
- * import smile.io.*;
- * import smile.data.formula.Formula;
- * import smile.validation.*;
- * import smile.classification.RandomForest;
+ * {@code
+ *    import smile.io.*;
+ *    import smile.data.formula.Formula;
+ *    import smile.validation.*;
+ *    import smile.classification.RandomForest;
  *
- * var hp = new Hyperparameters()
- *     .add("smile.random.forest.trees", 100) // a fixed value
- *     .add("smile.random.forest.mtry", new int[] {2, 3, 4}) // an array of values to choose
- *     .add("smile.random.forest.max.nodes", 100, 500, 50); // range [100, 500] with step 50
+ *    var hp = new Hyperparameters()
+ *        .add("smile.random.forest.trees", 100) // a fixed value
+ *        .add("smile.random.forest.mtry", new int[] {2, 3, 4}) // an array of values to choose
+ *        .add("smile.random.forest.max.nodes", 100, 500, 50); // range [100, 500] with step 50
  *
+ *    var train = Read.arff("data/weka/segment-challenge.arff");
+ *    var test = Read.arff("data/weka/segment-test.arff");
+ *    var formula = Formula.lhs("class");
+ *    var testy = formula.y(test).toIntArray();
  *
- * var train = Read.arff("data/weka/segment-challenge.arff");
- * var test = Read.arff("data/weka/segment-test.arff");
- * var formula = Formula.lhs("class");
- * var testy = formula.y(test).toIntArray();
- *
- * hp.grid().forEach(prop -&gt; {
- *     var model = RandomForest.fit(formula, train, prop);
- *     var pred = model.predict(test);
- *     System.out.println(prop);
- *     System.out.format("Accuracy = %.2f%%%n", (100.0 * Accuracy.of(testy, pred)));
- *     System.out.println(ConfusionMatrix.of(testy, pred));
- * });
+ *    hp.grid().forEach(prop -&gt; {
+ *        var model = RandomForest.fit(formula, train, prop);
+ *        var pred = model.predict(test);
+ *        System.out.println(prop);
+ *        System.out.format("Accuracy = %.2f%%%n", (100.0 * Accuracy.of(testy, pred)));
+ *        System.out.println(ConfusionMatrix.of(testy, pred));
+ *    });
+ * }
  * </pre>
  * @author Haifeng Li
  */
 public class Hyperparameters {
     /** The set of parameters. */
-    private HashMap<String, Object> parameters = new HashMap<>();
+    private final HashMap<String, Object> parameters = new HashMap<>();
 
     static class Pair {
         String name;
@@ -120,7 +120,7 @@ public class Hyperparameters {
 
         DoubleRange(double start, double end, double step) {
             if (start >= end) {
-                throw new IllegalArgumentException(String.format("start = %d, end = %d", start, end));
+                throw new IllegalArgumentException(String.format("start = %f, end = %f", start, end));
             }
             this.start = start;
             this.end = end;
@@ -278,7 +278,10 @@ public class Hyperparameters {
         return this;
     }
 
-    /** Generates a stream of hyperparameters for random search. */
+    /**
+     * Generates a stream of hyperparameters for random search.
+     * @return the stream of hyperparameters for random search.
+     */
     public Stream<Properties> random() {
         return Stream.generate(() -> {
             Properties prop = new Properties();
@@ -309,7 +312,10 @@ public class Hyperparameters {
         });
     }
 
-    /** Generates a stream of hyperparameters for grid search. */
+    /**
+     * Generates a stream of hyperparameters for grid search.
+     * @return the stream of hyperparameters for grid search.
+     */
     public Stream<Properties> grid() {
         ArrayList<Map.Entry<String, Object>> lists = new ArrayList<>(parameters.entrySet());
 
@@ -326,8 +332,7 @@ public class Hyperparameters {
             ArrayList<ArrayList<Pair>> newCombinations = new ArrayList<>();
             for(ArrayList<Pair> first: combinations) {
                 for(Pair second: nextList) {
-                    ArrayList<Pair> newList = new ArrayList<>();
-                    newList.addAll(first);
+                    ArrayList<Pair> newList = new ArrayList<>(first);
                     newList.add(second);
                     newCombinations.add(newList);
                 }

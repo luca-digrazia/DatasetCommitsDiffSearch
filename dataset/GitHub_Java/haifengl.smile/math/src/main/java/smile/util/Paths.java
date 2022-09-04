@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,15 +13,14 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.util;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.InputStreamReader;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 /**
  * Static methods that return a Path by converting a path string or URI.
@@ -32,14 +31,32 @@ public interface Paths {
     /** Smile home directory. */
     String home = System.getProperty("smile.home", "shell/src/universal/");
 
-    /** Get the file path of a test sample dataset. */
+    /**
+     * Get the file path of a test sample dataset.
+     * @param path the path strings to be joined to form the path.
+     * @return the file path to the test data.
+     */
     static Path getTestData(String... path) {
         return java.nio.file.Paths.get(home + "/data", path);
     }
 
-    /** Returns a reader of test data. */
-    static BufferedReader getTestDataReader(String... path) throws FileNotFoundException {
-        FileInputStream stream = new FileInputStream(getTestData(path).toFile());
-        return new BufferedReader(new InputStreamReader(stream));
+    /**
+     * Returns the reader of a test data.
+     * @param path the path strings to be joined to form the path.
+     * @return the reader of the test data.
+     * @throws IOException when fails to create the reader.
+     */
+    static BufferedReader getTestDataReader(String... path) throws IOException {
+        return java.nio.file.Files.newBufferedReader(getTestData(path));
+    }
+
+    /**
+     * Returns the reader of a test data.
+     * @param path the path strings to be joined to form the path.
+     * @return the file lines of test data.
+     * @throws IOException when fails to read the file.
+     */
+    static Stream<String> getTestDataLines(String... path) throws IOException {
+        return java.nio.file.Files.lines(getTestData(path));
     }
 }

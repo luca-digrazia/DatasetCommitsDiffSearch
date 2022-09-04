@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.graph;
 
@@ -137,9 +137,8 @@ public class AdjacencyList implements Graph, Serializable {
     public Collection<Edge> getEdges() {
         Collection<Edge> set = new HashSet<>();
 
-        int n = graph.length;
-        for (int i = 0; i < n; i++) {
-            set.addAll(graph[i]);
+        for (LinkedList<Edge> edges : graph) {
+            set.addAll(edges);
         }
 
         return set;
@@ -206,9 +205,8 @@ public class AdjacencyList implements Graph, Serializable {
 
     @Override
     public void removeEdges(Collection<Edge> edges) {
-        Iterator<Edge> iter = edges.iterator();
-        while (iter.hasNext()) {
-            removeEdge(iter.next());
+        for (Edge edge : edges) {
+            removeEdge(edge);
         }
     }
 
@@ -578,7 +576,7 @@ public class AdjacencyList implements Graph, Serializable {
         wt[s] = 0.0;
         queue.lower(s);
 
-        while (!queue.empty()) {
+        while (!queue.isEmpty()) {
             int v = queue.poll();
             if (!Double.isInfinite(wt[v])) {
                 for (Edge edge : graph[v]) {
@@ -668,15 +666,16 @@ public class AdjacencyList implements Graph, Serializable {
      * where two vertices i and j are connected if the (i, j)-th entry of
      * the matrix is nonzero. Rectangular or structurally asymmetric
      * matrices are treated as bipartite graphs.
-     * 
+     *
+     * @param matrix the matrix representation of the graph.
      * @return a graph
      */
     public static AdjacencyList of(SparseMatrix matrix) {
         boolean symmetric = false;
         
-        if (matrix.nrows() == matrix.ncols()) {
+        if (matrix.nrow() == matrix.ncol()) {
             symmetric = true;
-            for (int i = 0; i < matrix.nrows(); i++) {
+            for (int i = 0; i < matrix.nrow(); i++) {
                 for (int j = 0; j < i; j++) {
                     if (matrix.get(i, j) != matrix.get(j, i)) {
                         symmetric = false;
@@ -691,9 +690,9 @@ public class AdjacencyList implements Graph, Serializable {
         }
         
         if (symmetric) {
-            AdjacencyList graph = new AdjacencyList(matrix.nrows());
+            AdjacencyList graph = new AdjacencyList(matrix.nrow());
             
-            for (int i = 0; i < matrix.nrows(); i++) {
+            for (int i = 0; i < matrix.nrow(); i++) {
                 for (int j = 0; j < i; j++) {
                     double z = matrix.get(i, j);
                     if (z != 0.0) {
@@ -704,13 +703,13 @@ public class AdjacencyList implements Graph, Serializable {
             
             return graph;
         } else {
-            AdjacencyList graph = new AdjacencyList(matrix.nrows() + matrix.ncols());
+            AdjacencyList graph = new AdjacencyList(matrix.nrow() + matrix.ncol());
             
-            for (int i = 0; i < matrix.nrows(); i++) {
-                for (int j = 0; j < matrix.ncols(); j++) {
+            for (int i = 0; i < matrix.nrow(); i++) {
+                for (int j = 0; j < matrix.ncol(); j++) {
                     double z = matrix.get(i, j);
                     if (z != 0.0) {
-                        graph.addEdge(i, matrix.nrows() + j, z);
+                        graph.addEdge(i, matrix.nrow() + j, z);
                     }
                 }
             }

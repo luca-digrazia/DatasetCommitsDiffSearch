@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.util;
 
@@ -32,7 +32,7 @@ import java.util.stream.DoubleStream;
 public final class DoubleArrayList implements Serializable {
     private static final long serialVersionUID = 1L;
     /** Format for toString. */
-    private static DecimalFormat format = new DecimalFormat("#.######");
+    private static final DecimalFormat format = new DecimalFormat("#.######");
 
     /**
      * The data of the list.
@@ -76,7 +76,10 @@ public final class DoubleArrayList implements Serializable {
         return Arrays.stream(data).limit(size).mapToObj(format::format).collect(Collectors.joining(", ", "[", "]"));
     }
 
-    /** Returns the stream of the array list. */
+    /**
+     * Returns the stream of the array list.
+     * @return the stream of the array list.
+     */
     public DoubleStream stream() {
         return DoubleStream.of(data).limit(size);
     }
@@ -118,10 +121,9 @@ public final class DoubleArrayList implements Serializable {
     /**
      * Trims the capacity to be the list's current size.
      */
-    public void trimToSize() {
+    public void trim() {
         if (data.length > size()) {
-            double[] tmp = toArray();
-            data = tmp;
+            data = toArray();
         }
     }
 
@@ -162,14 +164,13 @@ public final class DoubleArrayList implements Serializable {
      *
      * @param index index of the value to replace
      * @param val value to be stored at the specified position 
-     * @throws IndexOutOfBoundsException if the index is out of range (index &lt; 0 || index &ge; size())
+     * @throws IndexOutOfBoundsException if the index is out of range ({@code index < 0 || index >= size()})
      */
-    public DoubleArrayList set(int index, double val) {
+    public void set(int index, double val) {
         if (index < 0 || index >= size) {
             throw new IndexOutOfBoundsException(String.valueOf(index));
         }
         data[index] = val;
-        return this;
     }
 
     /**
@@ -185,7 +186,7 @@ public final class DoubleArrayList implements Serializable {
      *
      * @param index index of the value to remove.
      * @return the value previously stored at specified index
-     * @throws IndexOutOfBoundsException if the index is out of range (index &lt; 0 || index &ge; size())
+     * @throws IndexOutOfBoundsException if the index is out of range ({@code index < 0 || index >= size()})
      */
     public double remove(int index) {
         if (index < 0 || index >= size) {
@@ -197,10 +198,7 @@ public final class DoubleArrayList implements Serializable {
         if (index == 0) {
             // data at the front
             System.arraycopy(data, 1, data, 0, size - 1);
-        } else if (size - 1 == index) {
-            // no copy to make, decrementing pos "deletes" values at
-            // the end
-        } else {
+        } else if (size - 1 != index) {
             // data in the middle
             System.arraycopy(data, index + 1, data, index, size - (index + 1));
         }
@@ -212,7 +210,8 @@ public final class DoubleArrayList implements Serializable {
     /**
      * Returns an array containing all of the values in this list in
      * proper sequence (from first to last value). 
-     * The caller is thus free to modify the returned array. 
+     * The caller is thus free to modify the returned array.
+     * @return an array containing the values of the list.
      */
     public double[] toArray() {
         return toArray(null);
@@ -227,7 +226,7 @@ public final class DoubleArrayList implements Serializable {
      * @param dest the array into which the values of the list are to
      * be stored, if it is big enough; otherwise, a new array is allocated
      * for this purpose. 
-     * @return an array containing the values of the list 
+     * @return an array containing the values of the list.
      */
     public double[] toArray(double[] dest) {
         if (dest == null || dest.length < size()) {

@@ -26,6 +26,7 @@ import smile.math.MathEx;
 import smile.data.DataFrame;
 import smile.regression.DataFrameRegression;
 import smile.regression.Regression;
+import smile.validation.metric.*;
 
 /**
  * Regression model validation results.
@@ -85,7 +86,14 @@ public class RegressionValidation<M> implements Serializable {
         double[] prediction = model.predict(testx);
         double scoreTime = (System.nanoTime() - start) / 1E6;
 
-        RegressionMetrics metrics = RegressionMetrics.of(fitTime, scoreTime, testy, prediction);
+        RegressionMetrics metrics = new RegressionMetrics(
+                fitTime, scoreTime, testy.length,
+                RSS.of(testy, prediction),
+                MSE.of(testy, prediction),
+                RMSE.of(testy, prediction),
+                MAD.of(testy, prediction),
+                R2.of(testy, prediction)
+        );
         return new RegressionValidation<>(model, testy, prediction, metrics);
     }
 
@@ -138,7 +146,14 @@ public class RegressionValidation<M> implements Serializable {
         }
         double scoreTime = (System.nanoTime() - start) / 1E6;
 
-        RegressionMetrics metrics = RegressionMetrics.of(fitTime, scoreTime, testy, prediction);
+        RegressionMetrics metrics = new RegressionMetrics(
+                fitTime, scoreTime, testy.length,
+                RSS.of(testy, prediction),
+                MSE.of(testy, prediction),
+                RMSE.of(testy, prediction),
+                MAD.of(testy, prediction),
+                R2.of(testy, prediction)
+        );
         return new RegressionValidation<>(model, testy, prediction, metrics);
     }
 

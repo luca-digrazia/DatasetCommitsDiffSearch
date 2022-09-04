@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.util;
 
@@ -33,20 +33,20 @@ public class PriorityQueue {
      * structure whose non-leaf nodes have d children, instead of 2. Thus,
      * a binary heap is a 2-heap.
      */
-    private int d;
+    private final int d;
     /**
      * External array of priority.
      */
-    private double[] a;
+    private final double[] a;
     /**
      * The array of item indices.
      */
-    private int[] pq;
+    private final int[] pq;
     /**
      * The inverse array qp allows the priority-queue to treat the array indices
      * as handles.
      */
-    private int[] qp;
+    private final int[] qp;
 
     /**
      * Priority comparison of item i and j.
@@ -122,8 +122,9 @@ public class PriorityQueue {
 
     /**
      * Returns true if the queue is empty.
+     * @return true if the queue is empty.
      */
-    public boolean empty() {
+    public boolean isEmpty() {
         return n == 0;
     }
 
@@ -139,6 +140,7 @@ public class PriorityQueue {
 
     /**
      * Removes and returns the index of item with minimum value (highest priority).
+     * @return the index of item with minimum value.
      */
     public int poll() {
         swap(1, n);
@@ -148,6 +150,7 @@ public class PriorityQueue {
 
     /**
      * The value of item k is lower (higher priority) now.
+     * @param k the item index.
      */
     public void lower(int k) {
         swim(qp[k]);
@@ -155,6 +158,7 @@ public class PriorityQueue {
 
     /**
      * The priority of item k has changed.
+     * @param k the item index.
      */
     public void change(int k) {
         swim(qp[k]);
