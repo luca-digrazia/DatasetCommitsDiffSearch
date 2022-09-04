@@ -53,7 +53,7 @@ public class JPATestBootstrapEndpoint extends HttpServlet {
         }
         catch (Exception e) {
             e.printStackTrace();
-           reportException("An error occurred while performing Hibernate operations", e, resp);
+           reportException("Oops, shit happened, No boot for you!", e, resp);
         }
 
 

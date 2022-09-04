@@ -50,7 +50,7 @@ public class JPATestEMInjectionEndpoint extends HttpServlet {
         try {
             testStoreLoadOnJPA();
         } catch (Exception e) {
-            reportException("An error occurred while performing Hibernate operations", e, resp);
+            reportException("Oops, shit happened, No boot for you!", e, resp);
         }
         resp.getWriter().write("OK");
     }

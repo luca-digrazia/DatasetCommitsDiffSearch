@@ -6,7 +6,10 @@ import org.apache.maven.shared.invoker.*;
 import org.jutils.jprocesses.JProcesses;
 import org.jutils.jprocesses.model.ProcessInfo;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,12 +37,7 @@ public class RunningInvoker extends MavenProcessInvoker {
         installPluginToLocalRepository(new File(repo));
         setLocalRepositoryDirectory(new File(repo));
         log = new File(basedir, "build-" + basedir.getName() + ".log");
-        PrintStream stream = null;
-        try {
-            stream = new PrintStream(log, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            stream = new PrintStream(log);
-        }
+        PrintStream stream = new PrintStream(log);
         logHandler = new PrintStreamHandler(stream, true);
         setErrorHandler(logHandler);
         setOutputHandler(logHandler);
