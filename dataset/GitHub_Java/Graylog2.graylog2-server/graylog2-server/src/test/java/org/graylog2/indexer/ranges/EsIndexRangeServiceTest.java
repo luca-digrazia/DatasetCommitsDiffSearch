@@ -19,7 +19,6 @@ package org.graylog2.indexer.ranges;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.joschi.jadconfig.util.Duration;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.eventbus.EventBus;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.elasticsearch.ElasticsearchRule;
@@ -87,7 +86,7 @@ public class EsIndexRangeServiceTest {
     public void setUp() throws Exception {
         indices = new Indices(client, ELASTICSEARCH_CONFIGURATION, new IndexMapping(client));
         final Deflector deflector = new Deflector(null, ELASTICSEARCH_CONFIGURATION, new NullActivityWriter(), null, null, null, indices);
-        indexRangeService = new EsIndexRangeService(client, objectMapper, indices, deflector, new EventBus("test"));
+        indexRangeService = new EsIndexRangeService(client, objectMapper, indices, deflector, Duration.minutes(1L));
     }
 
     @Test
