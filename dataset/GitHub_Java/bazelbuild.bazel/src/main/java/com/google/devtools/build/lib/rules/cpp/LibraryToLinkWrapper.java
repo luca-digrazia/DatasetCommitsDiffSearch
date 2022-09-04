@@ -62,8 +62,8 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       libraryToLinkWrapperBuilder.setStaticLibrary(staticLibrary.getArtifact());
       libraryToLinkWrapperBuilder.setObjectFiles(
           ImmutableList.copyOf(staticLibrary.getObjectFiles()));
-      libraryToLinkWrapperBuilder.setLtoCompilationContext(
-          staticLibrary.getLtoCompilationContext());
+      libraryToLinkWrapperBuilder.setLtoBitcodeFiles(
+          ImmutableMap.copyOf(staticLibrary.getLtoBitcodeFiles()));
       libraryToLinkWrapperBuilder.setSharedNonLtoBackends(
           ImmutableMap.copyOf(staticLibrary.getSharedNonLtoBackends()));
       libraryToLinkWrapperBuilder.setAlwayslink(
@@ -77,8 +77,8 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       libraryToLinkWrapperBuilder.setPicStaticLibrary(picStaticLibrary.getArtifact());
       libraryToLinkWrapperBuilder.setPicObjectFiles(
           ImmutableList.copyOf(picStaticLibrary.getObjectFiles()));
-      libraryToLinkWrapperBuilder.setPicLtoCompilationContext(
-          picStaticLibrary.getLtoCompilationContext());
+      libraryToLinkWrapperBuilder.setPicLtoBitcodeFiles(
+          ImmutableMap.copyOf(picStaticLibrary.getLtoBitcodeFiles()));
       libraryToLinkWrapperBuilder.setPicSharedNonLtoBackends(
           ImmutableMap.copyOf(picStaticLibrary.getSharedNonLtoBackends()));
       libraryToLinkWrapperBuilder.setAlwayslink(
@@ -238,12 +238,12 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
 
   private final Artifact staticLibrary;
   private final Iterable<Artifact> objectFiles;
-  private final LtoCompilationContext ltoCompilationContext;
+  private final ImmutableMap<Artifact, Artifact> ltoBitcodeFiles;
   private final ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends;
 
   private final Artifact picStaticLibrary;
   private final Iterable<Artifact> picObjectFiles;
-  private final LtoCompilationContext picLtoCompilationContext;
+  private final ImmutableMap<Artifact, Artifact> picLtoBitcodeFiles;
   private final ImmutableMap<Artifact, LtoBackendArtifacts> picSharedNonLtoBackends;
 
   private final Artifact dynamicLibrary;
@@ -267,11 +267,11 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       String libraryIdentifier,
       Artifact staticLibrary,
       Iterable<Artifact> objectFiles,
-      LtoCompilationContext ltoCompilationContext,
+      ImmutableMap<Artifact, Artifact> ltoBitcodeFiles,
       ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends,
       Artifact picStaticLibrary,
       Iterable<Artifact> picObjectFiles,
-      LtoCompilationContext picLtoCompilationContext,
+      ImmutableMap<Artifact, Artifact> picLtoBitcodeFiles,
       ImmutableMap<Artifact, LtoBackendArtifacts> picSharedNonLtoBackends,
       Artifact dynamicLibrary,
       Artifact resolvedSymlinkDynamicLibrary,
@@ -282,12 +282,12 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     this.libraryIdentifier = libraryIdentifier;
     this.staticLibrary = staticLibrary;
     this.objectFiles = objectFiles;
-    this.ltoCompilationContext = ltoCompilationContext;
+    this.ltoBitcodeFiles = ltoBitcodeFiles;
     this.sharedNonLtoBackends = sharedNonLtoBackends;
 
     this.picStaticLibrary = picStaticLibrary;
     this.picObjectFiles = picObjectFiles;
-    this.picLtoCompilationContext = picLtoCompilationContext;
+    this.picLtoBitcodeFiles = picLtoBitcodeFiles;
     this.picSharedNonLtoBackends = picSharedNonLtoBackends;
 
     this.dynamicLibrary = dynamicLibrary;
@@ -548,8 +548,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       if (noPicStaticLibrary.containsObjectFiles()) {
         libraryToLinkWrapperBuilder.setObjectFiles(noPicStaticLibrary.getObjectFiles());
       }
-      libraryToLinkWrapperBuilder.setLtoCompilationContext(
-          noPicStaticLibrary.getLtoCompilationContext());
+      libraryToLinkWrapperBuilder.setLtoBitcodeFiles(noPicStaticLibrary.getLtoBitcodeFiles());
       libraryToLinkWrapperBuilder.setSharedNonLtoBackends(
           noPicStaticLibrary.getSharedNonLtoBackends());
       libraryToLinkWrapperBuilder.setAlwayslink(
@@ -566,8 +565,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       if (picStaticLibrary.containsObjectFiles()) {
         libraryToLinkWrapperBuilder.setPicObjectFiles(picStaticLibrary.getObjectFiles());
       }
-      libraryToLinkWrapperBuilder.setPicLtoCompilationContext(
-          picStaticLibrary.getLtoCompilationContext());
+      libraryToLinkWrapperBuilder.setPicLtoBitcodeFiles(picStaticLibrary.getLtoBitcodeFiles());
       libraryToLinkWrapperBuilder.setPicSharedNonLtoBackends(
           picStaticLibrary.getSharedNonLtoBackends());
       libraryToLinkWrapperBuilder.setAlwayslink(
@@ -975,7 +973,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
                 : ArtifactCategory.STATIC_LIBRARY,
             libraryIdentifier,
             objectFiles,
-            ltoCompilationContext,
+            ltoBitcodeFiles,
             sharedNonLtoBackends,
             mustKeepDebug);
     return staticLibraryToLink;
@@ -994,7 +992,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
                 : ArtifactCategory.STATIC_LIBRARY,
             libraryIdentifier,
             picObjectFiles,
-            picLtoCompilationContext,
+            picLtoBitcodeFiles,
             picSharedNonLtoBackends,
             mustKeepDebug);
     return picStaticLibraryToLink;
@@ -1016,7 +1014,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
               ArtifactCategory.DYNAMIC_LIBRARY,
               libraryIdentifier,
               /* objectFiles */ ImmutableSet.of(),
-              /* ltoCompilationContext */ new LtoCompilationContext(ImmutableMap.of()),
+              /* ltoBitcodeFiles */ ImmutableMap.of(),
               /* sharedNonLtoBackends */ ImmutableMap.of(),
               mustKeepDebug);
     }
@@ -1039,7 +1037,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
               ArtifactCategory.INTERFACE_LIBRARY,
               libraryIdentifier,
               /* objectFiles */ ImmutableSet.of(),
-              /* ltoCompilationContext */ new LtoCompilationContext(ImmutableMap.of()),
+              /* ltoBitcodeFiles */ ImmutableMap.of(),
               /* sharedNonLtoBackends */ ImmutableMap.of(),
               mustKeepDebug);
     }
@@ -1069,12 +1067,12 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
 
     private Artifact staticLibrary;
     private Iterable<Artifact> objectFiles;
-    private LtoCompilationContext ltoCompilationContext;
+    private ImmutableMap<Artifact, Artifact> ltoBitcodeFiles;
     private ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends;
 
     private Artifact picStaticLibrary;
     private Iterable<Artifact> picObjectFiles;
-    private LtoCompilationContext picLtoCompilationContext;
+    private ImmutableMap<Artifact, Artifact> picLtoBitcodeFiles;
     private ImmutableMap<Artifact, LtoBackendArtifacts> picSharedNonLtoBackends;
 
     private Artifact dynamicLibrary;
@@ -1101,8 +1099,8 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       return this;
     }
 
-    public Builder setLtoCompilationContext(LtoCompilationContext ltoCompilationContext) {
-      this.ltoCompilationContext = ltoCompilationContext;
+    public Builder setLtoBitcodeFiles(ImmutableMap<Artifact, Artifact> ltoBitcodeFiles) {
+      this.ltoBitcodeFiles = ltoBitcodeFiles;
       return this;
     }
 
@@ -1122,8 +1120,8 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       return this;
     }
 
-    public Builder setPicLtoCompilationContext(LtoCompilationContext picLtoCompilationContext) {
-      this.picLtoCompilationContext = picLtoCompilationContext;
+    public Builder setPicLtoBitcodeFiles(ImmutableMap<Artifact, Artifact> picLtoBitcodeFiles) {
+      this.picLtoBitcodeFiles = picLtoBitcodeFiles;
       return this;
     }
 
@@ -1166,12 +1164,10 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     public LibraryToLinkWrapper build() {
       Preconditions.checkNotNull(libraryIdentifier);
       Preconditions.checkState(
-          (objectFiles == null && ltoCompilationContext == null && sharedNonLtoBackends == null)
+          (objectFiles == null && ltoBitcodeFiles == null && sharedNonLtoBackends == null)
               || staticLibrary != null);
       Preconditions.checkState(
-          (picObjectFiles == null
-                  && picLtoCompilationContext == null
-                  && picSharedNonLtoBackends == null)
+          (picObjectFiles == null && picLtoBitcodeFiles == null && picSharedNonLtoBackends == null)
               || picStaticLibrary != null);
       Preconditions.checkState(resolvedSymlinkDynamicLibrary == null || dynamicLibrary != null);
       Preconditions.checkState(resolvedSymlinkInterfaceLibrary == null || interfaceLibrary != null);
@@ -1186,11 +1182,11 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
           libraryIdentifier,
           staticLibrary,
           objectFiles,
-          ltoCompilationContext,
+          ltoBitcodeFiles,
           sharedNonLtoBackends,
           picStaticLibrary,
           picObjectFiles,
-          picLtoCompilationContext,
+          picLtoBitcodeFiles,
           picSharedNonLtoBackends,
           dynamicLibrary,
           resolvedSymlinkDynamicLibrary,

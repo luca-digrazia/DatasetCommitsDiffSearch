@@ -27,6 +27,8 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkParamsApi;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import java.util.Collection;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -41,7 +43,7 @@ import javax.annotation.Nullable;
  * link order (preorder) and linkstamps are sorted.
  */
 @AutoCodec
-public final class CcLinkParams {
+public final class CcLinkParams implements CcLinkParamsApi {
   /**
    * A list of link options contributed by a single configured target.
    *
@@ -111,6 +113,14 @@ public final class CcLinkParams {
         .collect(ImmutableList.toImmutableList());
   }
 
+  @Override
+  public SkylarkNestedSet getSkylarkLinkopts() {
+    // TODO(plf): Shouldn't flatten nested set. Remove LinkOptions class and just have a nested set
+    // of strings.
+    return SkylarkNestedSet.of(
+        String.class, NestedSetBuilder.wrap(Order.LINK_ORDER, flattenedLinkopts()));
+  }
+
   /**
    * Returns the linkstamps
    */
@@ -125,9 +135,19 @@ public final class CcLinkParams {
     return libraries;
   }
 
+  @Override
+  public SkylarkNestedSet getSkylarkLibrariesToLink() {
+    return SkylarkNestedSet.of(LibraryToLink.class, libraries);
+  }
+
   /** Returns the dynamicLibrariesForRuntime. */
   public NestedSet<Artifact> getDynamicLibrariesForRuntime() {
     return dynamicLibrariesForRuntime;
+  }
+
+  @Override
+  public SkylarkNestedSet getSkylarkDynamicLibrariesForRuntime() {
+    return SkylarkNestedSet.of(Artifact.class, dynamicLibrariesForRuntime);
   }
 
   /**

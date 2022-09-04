@@ -124,7 +124,7 @@ public class CppLinkActionBuilder {
   private LinkTargetType linkType = LinkTargetType.STATIC_LIBRARY;
   private Link.LinkingMode linkingMode = LinkingMode.STATIC;
   private String libraryIdentifier = null;
-  private LtoCompilationContext ltoCompilationContext;
+  private ImmutableMap<Artifact, Artifact> ltoBitcodeFiles;
   private Artifact defFile;
 
   private boolean fake;
@@ -294,7 +294,7 @@ public class CppLinkActionBuilder {
       Artifact objectFile = input.getArtifact();
       objectFileInputsBuilder.add(
           LinkerInputs.simpleLinkerInput(
-              this.ltoCompilationContext.getMinimizedBitcodeOrSelf(objectFile),
+              this.ltoBitcodeFiles.getOrDefault(objectFile, objectFile),
               ArtifactCategory.OBJECT_FILE,
               /* disableWholeArchive= */ false));
     }
@@ -322,7 +322,7 @@ public class CppLinkActionBuilder {
           LtoBackendArtifacts ltoArtifacts = lib.getSharedNonLtoBackends().getOrDefault(a, null);
           // Either we have a shared LTO artifact, or this wasn't bitcode to start with.
           Preconditions.checkState(
-              ltoArtifacts != null || !lib.getLtoCompilationContext().containsBitcodeFile(a));
+              ltoArtifacts != null || !lib.getLtoBitcodeFiles().containsKey(a));
           if (ltoArtifacts != null) {
             // Include the native object produced by the shared LTO backend in the LTO indexing
             // step instead of the bitcode file. The LTO indexing step invokes the linker which
@@ -331,7 +331,7 @@ public class CppLinkActionBuilder {
             continue;
           }
         }
-        newObjectFilesBuilder.add(lib.getLtoCompilationContext().getMinimizedBitcodeOrSelf(a));
+        newObjectFilesBuilder.add(lib.getLtoBitcodeFiles().getOrDefault(a, a));
       }
       uniqueLibrariesBuilder.add(
           LinkerInputs.newInputLibrary(
@@ -339,7 +339,7 @@ public class CppLinkActionBuilder {
               lib.getArtifactCategory(),
               lib.getLibraryIdentifier(),
               newObjectFilesBuilder.build(),
-              lib.getLtoCompilationContext(),
+              lib.getLtoBitcodeFiles(),
               /* sharedNonLtoBackends= */ null,
               /* mustKeepDebug= */ false));
     }
@@ -351,11 +351,11 @@ public class CppLinkActionBuilder {
    * library inputs.
    */
   public boolean hasLtoBitcodeInputs() {
-    if (!ltoCompilationContext.isEmpty()) {
+    if (!ltoBitcodeFiles.isEmpty()) {
       return true;
     }
     for (LibraryToLink lib : libraries.build()) {
-      if (!lib.getLtoCompilationContext().isEmpty()) {
+      if (!lib.getLtoBitcodeFiles().isEmpty()) {
         return true;
       }
     }
@@ -432,7 +432,7 @@ public class CppLinkActionBuilder {
       boolean includeLinkStaticInLtoIndexing) {
     Set<Artifact> compiled = new LinkedHashSet<>();
     for (LibraryToLink lib : uniqueLibraries) {
-      compiled.addAll(lib.getLtoCompilationContext().getBitcodeFiles());
+      compiled.addAll(lib.getLtoBitcodeFiles().keySet());
     }
 
     // This flattens the set of object files, so for M binaries and N .o files,
@@ -454,7 +454,7 @@ public class CppLinkActionBuilder {
       }
     }
     for (LinkerInput input : objectFiles) {
-      if (this.ltoCompilationContext.containsBitcodeFile(input.getArtifact())) {
+      if (this.ltoBitcodeFiles.containsKey(input.getArtifact())) {
         allBitcode.put(input.getArtifact().getExecPath(), input.getArtifact());
       }
     }
@@ -492,7 +492,7 @@ public class CppLinkActionBuilder {
       }
     }
     for (LinkerInput input : objectFiles) {
-      if (this.ltoCompilationContext.containsBitcodeFile(input.getArtifact())) {
+      if (this.ltoBitcodeFiles.containsKey(input.getArtifact())) {
         List<String> backendArgv = new ArrayList<>(argv);
         backendArgv.addAll(collectPerFileLtoBackendOpts(input.getArtifact()));
         LtoBackendArtifacts ltoArtifacts =
@@ -512,7 +512,7 @@ public class CppLinkActionBuilder {
   private ImmutableMap<Artifact, LtoBackendArtifacts> createSharedNonLtoArtifacts(
       boolean isLtoIndexing) {
     // Only create the shared LTO artifacts for a statically linked library that has bitcode files.
-    if (ltoCompilationContext == null
+    if (ltoBitcodeFiles == null
         || isLtoIndexing
         || linkType.linkerOrArchiver() != LinkerOrArchiver.ARCHIVER) {
       return ImmutableMap.<Artifact, LtoBackendArtifacts>of();
@@ -526,7 +526,7 @@ public class CppLinkActionBuilder {
         ImmutableMap.builder();
 
     for (LinkerInput input : objectFiles) {
-      if (this.ltoCompilationContext.containsBitcodeFile(input.getArtifact())) {
+      if (this.ltoBitcodeFiles.containsKey(input.getArtifact())) {
         List<String> backendArgv = new ArrayList<>(argv);
         backendArgv.addAll(collectPerFileLtoBackendOpts(input.getArtifact()));
         LtoBackendArtifacts ltoArtifacts =
@@ -626,7 +626,7 @@ public class CppLinkActionBuilder {
                 || !(ruleContext.isTestTarget() || ruleContext.isTestOnlyTarget()));
     boolean allowLtoIndexing =
         includeLinkStaticInLtoIndexing
-            || (linkingMode == Link.LinkingMode.DYNAMIC && !ltoCompilationContext.isEmpty());
+            || (linkingMode == Link.LinkingMode.DYNAMIC && !ltoBitcodeFiles.isEmpty());
 
     NestedSet<LibraryToLink> originalUniqueLibraries = libraries.build();
 
@@ -704,8 +704,8 @@ public class CppLinkActionBuilder {
                     ? combinedObjectArtifacts
                     : ImmutableSet.of(),
                 linkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER
-                    ? ltoCompilationContext
-                    : new LtoCompilationContext(ImmutableMap.of()),
+                    ? ltoBitcodeFiles
+                    : ImmutableMap.of(),
                 createSharedNonLtoArtifacts(isLtoIndexing),
                 /* mustKeepDebug= */ false);
     final LibraryToLink interfaceOutputLibrary =
@@ -716,7 +716,7 @@ public class CppLinkActionBuilder {
                 ArtifactCategory.DYNAMIC_LIBRARY,
                 libraryIdentifier,
                 combinedObjectArtifacts,
-                ltoCompilationContext,
+                ltoBitcodeFiles,
                 /* sharedNonLtoBackends= */ null,
                 /* mustKeepDebug= */ false);
 
@@ -1011,8 +1011,7 @@ public class CppLinkActionBuilder {
                 CppHelper.getFdoBuildStamp(ruleContext, fdoProvider, featureConfiguration),
                 featureConfiguration,
                 cppConfiguration.forcePic()
-                    || (linkType.isDynamicLibrary()
-                        && toolchain.usePicForDynamicLibraries(featureConfiguration)),
+                    || (linkType.isDynamicLibrary() && toolchain.toolchainNeedsPic()),
                 Matcher.quoteReplacement(
                     isNativeDeps && cppConfiguration.shareNativeDeps()
                         ? output.getExecPathString()
@@ -1217,10 +1216,9 @@ public class CppLinkActionBuilder {
     return this;
   }
 
-  public CppLinkActionBuilder addLtoCompilationContext(
-      LtoCompilationContext ltoCompilationContext) {
-    Preconditions.checkState(this.ltoCompilationContext == null);
-    this.ltoCompilationContext = ltoCompilationContext;
+  public CppLinkActionBuilder addLtoBitcodeFiles(ImmutableMap<Artifact, Artifact> files) {
+    Preconditions.checkState(ltoBitcodeFiles == null);
+    ltoBitcodeFiles = files;
     return this;
   }
 

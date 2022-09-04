@@ -411,9 +411,8 @@ public final class CcLinkingHelper {
 
     CcLinkingOutputs.Builder result = new CcLinkingOutputs.Builder();
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
-    boolean usePicForBinaries =
-        CppHelper.usePicForBinaries(ruleContext, ccToolchain, featureConfiguration);
-    boolean usePicForDynamicLibs = ccToolchain.usePicForDynamicLibraries(featureConfiguration);
+    boolean usePicForBinaries = CppHelper.usePicForBinaries(ruleContext, ccToolchain);
+    boolean usePicForDynamicLibs = ccToolchain.usePicForDynamicLibraries();
 
     PathFragment labelName = PathFragment.create(ruleContext.getLabel().getName());
     String libraryIdentifier =
@@ -566,7 +565,7 @@ public final class CcLinkingHelper {
         newLinkActionBuilder(linkedArtifact)
             .addObjectFiles(ccOutputs.getObjectFiles(usePic))
             .addNonCodeInputs(nonCodeLinkerInputs)
-            .addLtoCompilationContext(ccOutputs.getLtoCompilationContext())
+            .addLtoBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
             .setUsePicForLtoBackendActions(usePic)
             .setLinkType(linkTargetTypeUsedForNaming)
             .setLinkingMode(LinkingMode.STATIC)
@@ -625,7 +624,7 @@ public final class CcLinkingHelper {
             .setAdditionalLinkstampDefines(additionalLinkstampDefines.build())
             .setInterfaceOutput(soInterface)
             .addNonCodeInputs(ccOutputs.getHeaderTokenFiles())
-            .addLtoCompilationContext(ccOutputs.getLtoCompilationContext())
+            .addLtoBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
             .setLinkType(dynamicLinkType)
             .setLinkingMode(linkingMode)
             .setFake(fake)
@@ -648,13 +647,13 @@ public final class CcLinkingHelper {
     if (linkingMode == LinkingMode.DYNAMIC) {
       dynamicLinkActionBuilder.setRuntimeInputs(
           ArtifactCategory.DYNAMIC_LIBRARY,
-          ccToolchain.getDynamicRuntimeLinkMiddleman(ruleContext, featureConfiguration),
-          ccToolchain.getDynamicRuntimeLinkInputs(ruleContext, featureConfiguration));
+          ccToolchain.getDynamicRuntimeLinkMiddleman(featureConfiguration),
+          ccToolchain.getDynamicRuntimeLinkInputs(featureConfiguration));
     } else {
       dynamicLinkActionBuilder.setRuntimeInputs(
           ArtifactCategory.STATIC_LIBRARY,
-          ccToolchain.getStaticRuntimeLinkMiddleman(ruleContext, featureConfiguration),
-          ccToolchain.getStaticRuntimeLinkInputs(ruleContext, featureConfiguration));
+          ccToolchain.getStaticRuntimeLinkMiddleman(featureConfiguration),
+          ccToolchain.getStaticRuntimeLinkInputs(featureConfiguration));
     }
 
     if (CppLinkAction.enableSymbolsCounts(
