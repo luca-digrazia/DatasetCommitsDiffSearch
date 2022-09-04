@@ -78,7 +78,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       CcCompilationContext ccCompilationContext,
       CoptsFilter nocopts,
       CppSemantics cppSemantics,
-      ImmutableList<PathFragment> builtInIncludeDirectories,
+      CcToolchainProvider cppProvider,
       ImmutableMap<String, String> executionInfo,
       Artifact grepIncludes) {
     super(
@@ -116,7 +116,7 @@ public class FakeCppCompileAction extends CppCompileAction {
         executionInfo,
         CppActionNames.CPP_COMPILE,
         cppSemantics,
-        builtInIncludeDirectories,
+        cppProvider,
         grepIncludes);
     this.tempOutputFile = Preconditions.checkNotNull(tempOutputFile);
   }

@@ -913,6 +913,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.forceIgnoreDashStatic;
   }
 
+  public boolean shortenObjFilePath() {
+    return cppOptions.shortenObjFilePath;
+  }
+
   public boolean legacyWholeArchive() {
     return cppOptions.legacyWholeArchive;
   }
@@ -1159,11 +1163,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean useLLVMCoverageMapFormat() {
     return cppOptions.useLLVMCoverageMapFormat;
-  }
-
-  /** Returns true if the deprecated CcDynamicLibrariesForRuntime class should be used */
-  public boolean enableCcDynamicLibrariesForRuntime() {
-    return cppOptions.enableCcDynamicLibrariesForRuntime;
   }
 
   private void checkForToolchainSkylarkApiAvailability() throws EvalException {

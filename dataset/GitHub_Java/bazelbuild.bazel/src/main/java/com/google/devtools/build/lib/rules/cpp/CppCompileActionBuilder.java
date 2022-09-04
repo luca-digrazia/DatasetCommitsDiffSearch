@@ -284,10 +284,12 @@ public class CppCompileActionBuilder {
     NestedSet<Artifact> realMandatoryInputs = buildMandatoryInputs();
     NestedSet<Artifact> allInputs = buildAllInputs(realMandatoryInputs);
 
-    NestedSet<Artifact> prunableHeaders =
-        NestedSetBuilder.fromNestedSet(cppSemantics.getAdditionalPrunableIncludes())
-            .addAll(additionalPrunableHeaders)
-            .build();
+    NestedSetBuilder<Artifact> prunableHeadersBuilder = NestedSetBuilder.stableOrder();
+    prunableHeadersBuilder.addTransitive(ccCompilationContext.getDeclaredIncludeSrcs());
+    prunableHeadersBuilder.addTransitive(cppSemantics.getAdditionalPrunableIncludes());
+    prunableHeadersBuilder.addAll(additionalPrunableHeaders);
+
+    NestedSet<Artifact> prunableHeaders = prunableHeadersBuilder.build();
 
     // Copying the collections is needed to make the builder reusable.
     CppCompileAction action;
@@ -391,7 +393,10 @@ public class CppCompileActionBuilder {
    * Returns the list of all inputs for the {@link CppCompileAction} as configured.
    */
   NestedSet<Artifact> buildAllInputs(NestedSet<Artifact> mandatoryInputs) {
-    return NestedSetBuilder.fromNestedSet(mandatoryInputs).addAll(inputsForInvalidation).build();
+    NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
+    builder.addTransitive(mandatoryInputs);
+    builder.addAll(inputsForInvalidation);
+    return builder.build();
   }
 
   private boolean useHeaderModules() {
