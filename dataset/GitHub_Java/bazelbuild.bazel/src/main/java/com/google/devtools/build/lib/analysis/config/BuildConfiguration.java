@@ -1096,7 +1096,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
         // "bazel-out/android-arm-linux-fastbuild/bin". That's pretty awkward to check here.
         //      && outputRoots.equals(other.outputRoots)
                 && fragments.values().containsAll(other.fragments.values())
-                && buildOptions.getNativeOptions().containsAll(other.buildOptions.getNativeOptions()));
+                && buildOptions.getOptions().containsAll(other.buildOptions.getOptions()));
   }
 
   /**
@@ -1117,7 +1117,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
   }
 
   private int computeHashCode() {
-    return Objects.hash(fragments, buildOptions.getNativeOptions());
+    return Objects.hash(fragments, buildOptions.getOptions());
   }
 
   public void describe(StringBuilder sb) {
@@ -1366,7 +1366,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
     }
 
     return TransitiveOptionDetails.forOptionsWithDefaults(
-        buildOptions.getNativeOptions(), lateBoundDefaults);
+        buildOptions.getOptions(), lateBoundDefaults);
   }
 
   private String buildMnemonic() {
