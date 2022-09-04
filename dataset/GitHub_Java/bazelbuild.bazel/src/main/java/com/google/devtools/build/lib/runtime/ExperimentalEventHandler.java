@@ -954,8 +954,7 @@ public class ExperimentalEventHandler implements EventHandler {
                 } catch (InterruptedException e) {
                   // Ignore
                 }
-              },
-              "cli-update-thread");
+              });
       if (updateThread.compareAndSet(null, threadToStart)) {
         threadToStart.start();
       }

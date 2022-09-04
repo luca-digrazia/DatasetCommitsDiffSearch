@@ -172,8 +172,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         defaultBuildOptions,
         new PackageProgressReceiver(),
         mutableArtifactFactorySupplier,
-        new ConfiguredTargetProgressReceiver(),
-        /*nonexistentFileReceiver=*/ null);
+        new ConfiguredTargetProgressReceiver());
     this.diffAwarenessManager = new DiffAwarenessManager(diffAwarenessFactories);
     this.customDirtinessCheckers = customDirtinessCheckers;
   }
