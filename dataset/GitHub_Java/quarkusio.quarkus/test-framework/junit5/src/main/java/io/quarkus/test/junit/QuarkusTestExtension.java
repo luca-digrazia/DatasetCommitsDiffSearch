@@ -314,11 +314,6 @@ public class QuarkusTestExtension
                         .bootstrap();
             }
 
-            if (curatedApplication.getAppModel().getUserDependencies().isEmpty()) {
-                throw new RuntimeException(
-                        "The tests were run against a directory that does not contain a Quarkus project. Please ensure that the test is configured to use the proper working directory.");
-            }
-
             Index testClassesIndex = TestClassIndexer.indexTestClasses(requiredTestClass);
             // we need to write the Index to make it reusable from other parts of the testing infrastructure that run in different ClassLoaders
             TestClassIndexer.writeIndex(testClassesIndex, requiredTestClass);
@@ -1155,6 +1150,12 @@ public class QuarkusTestExtension
             List<Consumer<BuildChainBuilder>> allCustomizers = new ArrayList<>(1);
             Consumer<BuildChainBuilder> defaultCustomizer = new Consumer<BuildChainBuilder>() {
 
+                private static final int ANNOTATION = 0x00002000;
+
+                boolean isAnnotation(final int mod) {
+                    return (mod & ANNOTATION) != 0;
+                }
+
                 @Override
                 public void accept(BuildChainBuilder buildChainBuilder) {
                     buildChainBuilder.addBuildStep(new BuildStep() {
@@ -1204,7 +1205,7 @@ public class QuarkusTestExtension
                             continue;
                         }
                         ClassInfo classInfo = annotationInstance.target().asClass();
-                        if (classInfo.isAnnotation()) {
+                        if (isAnnotation(classInfo.flags())) {
                             continue;
                         }
                         Type[] extendsWithTypes = annotationInstance.value().asClassArray();

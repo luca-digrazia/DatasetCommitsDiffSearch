@@ -1,27 +1,46 @@
 package io.quarkus.test.junit;
 
-import java.io.Closeable;
-import java.io.IOException;
+import static io.quarkus.test.junit.IntegrationTestUtil.determineTestProfileAndProperties;
+import static io.quarkus.test.junit.IntegrationTestUtil.doProcessTestInstance;
+import static io.quarkus.test.junit.IntegrationTestUtil.ensureNoInjectAnnotationIsUsed;
+import static io.quarkus.test.junit.IntegrationTestUtil.getAdditionalTestResources;
+import static io.quarkus.test.junit.IntegrationTestUtil.getSysPropsToRestore;
+import static io.quarkus.test.junit.IntegrationTestUtil.handleDevDb;
+import static io.quarkus.test.junit.IntegrationTestUtil.startLauncher;
+
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestInstancePostProcessor;
-import org.junit.platform.commons.JUnitException;
+import org.opentest4j.TestAbortedException;
 
+import io.quarkus.runtime.test.TestHttpEndpointProvider;
 import io.quarkus.test.common.NativeImageLauncher;
-import io.quarkus.test.common.PropertyTestUtil;
 import io.quarkus.test.common.RestAssuredURLManager;
 import io.quarkus.test.common.TestResourceManager;
 import io.quarkus.test.common.TestScopeManager;
-import io.quarkus.test.common.http.TestHTTPResourceManager;
 
 public class NativeTestExtension
         implements BeforeEachCallback, AfterEachCallback, BeforeAllCallback, TestInstancePostProcessor {
 
     private static boolean failedBoot;
+
+    private static List<Function<Class<?>, String>> testHttpEndpointProviders;
+    private static boolean ssl;
+
+    private static Class<? extends QuarkusTestProfile> quarkusTestProfile;
+    private static Throwable firstException; //if this is set then it will be thrown from the very first test that is run, the rest are aborted
+
+    private static Class<?> currentJUnitTestClass;
+
+    private static boolean hasPerTestResources;
 
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
@@ -33,67 +52,143 @@ public class NativeTestExtension
 
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
-        if (!failedBoot) {
-            RestAssuredURLManager.setURL(false);
+        if (failedBoot) {
+            throwBootFailureException();
+        } else {
+            RestAssuredURLManager.setURL(ssl, QuarkusTestExtension.getEndpointPath(context, testHttpEndpointProviders));
             TestScopeManager.setup(true);
         }
     }
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
+        ensureStarted(extensionContext);
+    }
+
+    private IntegrationTestExtensionState ensureStarted(ExtensionContext extensionContext) {
+        Class<?> testClass = extensionContext.getRequiredTestClass();
+        ensureNoInjectAnnotationIsUsed(testClass);
 
         ExtensionContext root = extensionContext.getRoot();
         ExtensionContext.Store store = root.getStore(ExtensionContext.Namespace.GLOBAL);
-        ExtensionState state = store.get(ExtensionState.class.getName(), ExtensionState.class);
-        PropertyTestUtil.setLogFileProperty();
-        if (state == null) {
-            TestResourceManager testResourceManager = new TestResourceManager(extensionContext.getRequiredTestClass());
-            try {
-                Map<String, String> systemProps = testResourceManager.start();
-                NativeImageLauncher launcher = new NativeImageLauncher(extensionContext.getRequiredTestClass());
-                launcher.addSystemProperties(systemProps);
-                try {
-                    launcher.start();
-                } catch (IOException e) {
+        IntegrationTestExtensionState state = store.get(IntegrationTestExtensionState.class.getName(),
+                IntegrationTestExtensionState.class);
+        Class<? extends QuarkusTestProfile> selectedProfile = IntegrationTestUtil.findProfile(testClass);
+        boolean wrongProfile = !Objects.equals(selectedProfile, quarkusTestProfile);
+        // we reload the test resources if we changed test class and if we had or will have per-test test resources
+        boolean reloadTestResources = !Objects.equals(extensionContext.getRequiredTestClass(), currentJUnitTestClass)
+                && (hasPerTestResources || QuarkusTestExtension.hasPerTestResources(extensionContext));
+        if ((state == null && !failedBoot) || wrongProfile || reloadTestResources) {
+            if (wrongProfile || reloadTestResources) {
+                if (state != null) {
                     try {
-                        launcher.close();
-                    } catch (Throwable t) {
+                        state.close();
+                    } catch (Throwable throwable) {
+                        throwable.printStackTrace();
                     }
-                    throw e;
                 }
-                state = new ExtensionState(testResourceManager, launcher, true);
-                store.put(ExtensionState.class.getName(), state);
-            } catch (Exception e) {
-
-                failedBoot = true;
-                throw new JUnitException("Quarkus native image start failed, original cause: " + e);
             }
+            try {
+                state = doNativeStart(extensionContext, selectedProfile);
+                store.put(IntegrationTestExtensionState.class.getName(), state);
+
+            } catch (Throwable e) {
+                failedBoot = true;
+                firstException = e;
+            }
+        }
+        return state;
+    }
+
+    private IntegrationTestExtensionState doNativeStart(ExtensionContext context, Class<? extends QuarkusTestProfile> profile)
+            throws Throwable {
+        Map<String, String> devDbProps = handleDevDb(context);
+        quarkusTestProfile = profile;
+        currentJUnitTestClass = context.getRequiredTestClass();
+        TestResourceManager testResourceManager = null;
+        try {
+            Class<?> requiredTestClass = context.getRequiredTestClass();
+
+            Map<String, String> sysPropRestore = getSysPropsToRestore();
+            TestProfileAndProperties testProfileAndProperties = determineTestProfileAndProperties(profile, sysPropRestore);
+
+            testResourceManager = new TestResourceManager(requiredTestClass, quarkusTestProfile,
+                    getAdditionalTestResources(testProfileAndProperties.testProfile, currentJUnitTestClass.getClassLoader()),
+                    testProfileAndProperties.testProfile != null
+                            && testProfileAndProperties.testProfile.disableGlobalTestResources());
+            testResourceManager.init();
+            hasPerTestResources = testResourceManager.hasPerTestResources();
+
+            Map<String, String> additionalProperties = new HashMap<>(testProfileAndProperties.properties);
+            additionalProperties.putAll(devDbProps);
+            Map<String, String> resourceManagerProps = testResourceManager.start();
+            Map<String, String> old = new HashMap<>();
+            for (Map.Entry<String, String> i : resourceManagerProps.entrySet()) {
+                old.put(i.getKey(), System.getProperty(i.getKey()));
+                if (i.getValue() == null) {
+                    System.clearProperty(i.getKey());
+                } else {
+                    System.setProperty(i.getKey(), i.getValue());
+                }
+            }
+            context.getStore(ExtensionContext.Namespace.GLOBAL).put(NativeTestExtension.class.getName() + ".systemProps",
+                    new ExtensionContext.Store.CloseableResource() {
+                        @Override
+                        public void close() throws Throwable {
+                            for (Map.Entry<String, String> i : old.entrySet()) {
+                                old.put(i.getKey(), System.getProperty(i.getKey()));
+                                if (i.getValue() == null) {
+                                    System.clearProperty(i.getKey());
+                                } else {
+                                    System.setProperty(i.getKey(), i.getValue());
+                                }
+                            }
+                        }
+                    });
+            additionalProperties.putAll(resourceManagerProps);
+
+            NativeImageLauncher launcher = new NativeImageLauncher(requiredTestClass);
+            startLauncher(launcher, additionalProperties, () -> ssl = true);
+
+            final IntegrationTestExtensionState state = new IntegrationTestExtensionState(testResourceManager, launcher,
+                    sysPropRestore);
+
+            testHttpEndpointProviders = TestHttpEndpointProvider.load();
+
+            return state;
+        } catch (Throwable e) {
+
+            try {
+                if (testResourceManager != null) {
+                    testResourceManager.close();
+                }
+            } catch (Exception ex) {
+                e.addSuppressed(ex);
+            }
+            throw e;
         }
     }
 
     @Override
-    public void postProcessTestInstance(Object testInstance, ExtensionContext context) throws Exception {
-        TestHTTPResourceManager.inject(testInstance);
-        ExtensionContext root = context.getRoot();
-        ExtensionContext.Store store = root.getStore(ExtensionContext.Namespace.GLOBAL);
-        ExtensionState state = store.get(ExtensionState.class.getName(), ExtensionState.class);
-        state.testResourceManager.inject(testInstance);
-    }
-
-    public class ExtensionState implements ExtensionContext.Store.CloseableResource {
-
-        private final TestResourceManager testResourceManager;
-        private final Closeable resource;
-
-        ExtensionState(TestResourceManager testResourceManager, Closeable resource, boolean nativeImage) {
-            this.testResourceManager = testResourceManager;
-            this.resource = resource;
-        }
-
-        @Override
-        public void close() throws Throwable {
-            testResourceManager.stop();
-            resource.close();
+    public void postProcessTestInstance(Object testInstance, ExtensionContext context) {
+        if (!failedBoot) {
+            doProcessTestInstance(testInstance, context);
         }
     }
+
+    private void throwBootFailureException() throws Exception {
+        if (firstException != null) {
+            Throwable throwable = firstException;
+            firstException = null;
+
+            if (throwable instanceof Exception) {
+                throw (Exception) throwable;
+            }
+
+            throw new RuntimeException(throwable);
+        } else {
+            throw new TestAbortedException("Boot failed");
+        }
+    }
+
 }
