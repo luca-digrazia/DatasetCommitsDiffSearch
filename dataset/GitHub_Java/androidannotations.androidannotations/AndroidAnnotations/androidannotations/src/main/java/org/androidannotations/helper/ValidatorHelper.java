@@ -1508,8 +1508,4 @@ public class ValidatorHelper {
 		extendsOneOfTypes(element, VALID_PREFERENCE_CLASSES, valid);
 	}
 
-	public void enclosingElementExtendsPreferenceActivityOrPreferenceFragment(Element element, IsValid valid) {
-		extendsOneOfTypes(element.getEnclosingElement(), VALID_PREFERENCE_CLASSES, valid);
-	}
-
 }

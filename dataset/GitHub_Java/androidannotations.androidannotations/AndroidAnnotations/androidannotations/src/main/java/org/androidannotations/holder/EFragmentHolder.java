@@ -23,7 +23,6 @@ import static com.sun.codemodel.JExpr.ref;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -135,7 +134,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	private void setFragmentBuilder() throws JClassAlreadyExistsException {
-		fragmentBuilderClass = generatedClass._class(PUBLIC | STATIC, "FragmentBuilder" + generationSuffix());
+		fragmentBuilderClass = generatedClass._class(PUBLIC | STATIC, "FragmentBuilder_");
 
 		narrowBuilderClass = narrow(fragmentBuilderClass);
 
@@ -228,7 +227,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init_");
 		init.param(classes().BUNDLE, "savedInstanceState");
 	}
 
@@ -242,7 +241,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	private void setContentView() {
-		contentView = generatedClass.field(PRIVATE, classes().VIEW, "contentView" + generationSuffix());
+		contentView = generatedClass.field(PRIVATE, classes().VIEW, "contentView_");
 	}
 
 	private void setOnCreateView() {
@@ -383,7 +382,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	private void setInjectArgs() {
-		injectArgsMethod = generatedClass.method(PRIVATE, codeModel().VOID, "injectFragmentArguments" + generationSuffix());
+		injectArgsMethod = generatedClass.method(PRIVATE, codeModel().VOID, "injectFragmentArguments_");
 		JBlock injectExtrasBody = injectArgsMethod.body();
 		injectBundleArgs = injectExtrasBody.decl(classes().BUNDLE, "args_", invoke("getArguments"));
 		injectArgsBlock = injectExtrasBody._if(injectBundleArgs.ne(_null()))._then();

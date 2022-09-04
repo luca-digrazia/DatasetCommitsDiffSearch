@@ -15,6 +15,7 @@
  */
 package org.androidannotations.handler;
 
+import static com.sun.codemodel.JExpr._new;
 import static com.sun.codemodel.JExpr.invoke;
 
 import java.util.List;
@@ -28,7 +29,8 @@ import javax.lang.model.type.TypeMirror;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.IdAnnotationHelper;
 import org.androidannotations.helper.IdValidatorHelper;
-import org.androidannotations.holder.GeneratedClassHolder;
+import org.androidannotations.holder.EComponentWithViewSupportHolder;
+import org.androidannotations.holder.FoundViewHolder;
 import org.androidannotations.model.AndroidSystemServices;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
@@ -42,10 +44,10 @@ import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 
-public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> extends BaseAnnotationHandler<T> {
+public abstract class AbstractListenerHandler extends BaseAnnotationHandler<EComponentWithViewSupportHolder> {
 
 	private IdAnnotationHelper helper;
-	private T holder;
+	private EComponentWithViewSupportHolder holder;
 	private String methodName;
 
 	public AbstractListenerHandler(Class<?> targetClass, ProcessingEnvironment processingEnvironment) {
@@ -64,17 +66,19 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 
 	@Override
 	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		validatorHelper.resIdsExist(element, getResourceType(), IdValidatorHelper.FallbackStrategy.USE_ELEMENT_NAME, valid);
+		validatorHelper.enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
+
+		validatorHelper.resIdsExist(element, IRClass.Res.ID, IdValidatorHelper.FallbackStrategy.USE_ELEMENT_NAME, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
 
 		validatorHelper.doesntThrowException(element, valid);
 
-		validatorHelper.uniqueResourceId(element, validatedElements, getResourceType(), valid);
+		validatorHelper.uniqueId(element, validatedElements, valid);
 	}
 
 	@Override
-	public void process(Element element, T holder) {
+	public void process(Element element, EComponentWithViewSupportHolder holder) {
 		this.holder = holder;
 		methodName = element.getSimpleName().toString();
 
@@ -82,7 +86,7 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 		List<? extends VariableElement> parameters = executableElement.getParameters();
 		TypeMirror returnType = executableElement.getReturnType();
 
-		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(processHolder, element, getResourceType(), true);
+		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(processHolder, element, IRClass.Res.ID, true);
 
 		JDefinedClass listenerAnonymousClass = codeModel().anonymousClass(getListenerClass());
 		JMethod listenerMethod = createListenerMethod(listenerAnonymousClass);
@@ -97,14 +101,15 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 
 		processParameters(holder, listenerMethod, call, parameters);
 
-		assignListeners(holder, idsRefs, listenerAnonymousClass);
+		for (JFieldRef idRef : idsRefs) {
+			FoundViewHolder foundViewHolder = holder.getFoundViewHolder(idRef, getViewClass());
+			foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getRef(), getSetterName()).arg(_new(listenerAnonymousClass));
+		}
 	}
-
-	protected abstract void assignListeners(T holder, List<JFieldRef> idsRefs, JDefinedClass listenerAnonymousClass);
 
 	protected abstract void makeCall(JBlock listenerMethodBody, JInvocation call, TypeMirror returnType);
 
-	protected abstract void processParameters(T holder, JMethod listenerMethod, JInvocation call, List<? extends VariableElement> userParameters);
+	protected abstract void processParameters(EComponentWithViewSupportHolder holder, JMethod listenerMethod, JInvocation call, List<? extends VariableElement> userParameters);
 
 	protected abstract JMethod createListenerMethod(JDefinedClass listenerAnonymousClass);
 
@@ -112,15 +117,15 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 
 	protected abstract JClass getListenerClass();
 
-	protected abstract JClass getListenerTargetClass();
+	protected JClass getViewClass() {
+		return classes().VIEW;
+	}
 
 	protected String getMethodName() {
 		return methodName;
 	}
 
-	protected final T getHolder() {
+	protected final EComponentWithViewSupportHolder getHolder() {
 		return holder;
 	}
-
-	protected abstract IRClass.Res getResourceType();
 }

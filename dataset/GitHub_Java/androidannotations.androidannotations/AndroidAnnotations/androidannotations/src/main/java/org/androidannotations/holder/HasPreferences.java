@@ -17,17 +17,15 @@ package org.androidannotations.holder;
 
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
-import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
 
-public class FoundViewHolder extends FoundHolder {
+public interface HasPreferences extends GeneratedClassHolder {
 
-	public FoundViewHolder(GeneratedClassHolder holder, JClass viewClass, JExpression view, JBlock block) {
-		super(holder, viewClass, view, block);
-	}
+	JBlock getPreferenceScreenInitializationBlock();
 
-	@Override
-	protected JClass getBaseType() {
-		return holder.classes().VIEW;
-	}
+	JBlock getAddPreferencesFromResourceBlock();
 
+	void assignFindPreferenceByKey(JFieldRef idRef, JClass preferenceClass, JFieldRef fieldRef);
+
+	FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, JClass preferenceClass);
 }

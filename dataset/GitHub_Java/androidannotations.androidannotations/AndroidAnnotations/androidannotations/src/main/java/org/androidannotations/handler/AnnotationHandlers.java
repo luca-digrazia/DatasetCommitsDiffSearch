@@ -131,7 +131,6 @@ public class AnnotationHandlers {
 		add(new PreferenceScreenHandler(processingEnvironment));
 		/* Preference injections must be after preference screen handler */
 		add(new PreferenceByKeyHandler(processingEnvironment));
-		add(new PreferenceChangeHandler(processingEnvironment));
 
 		if (optionsHelper.shouldLogTrace()) {
 			add(new TraceHandler(processingEnvironment));
