@@ -39,9 +39,6 @@ import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
-import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
@@ -65,7 +62,6 @@ import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -98,20 +94,6 @@ public class AndroidCommon {
     }
     return builder.build();
   }
-
-  public static final <T extends SkylarkClassObject> Iterable<T> getTransitivePrerequisites(
-      RuleContext ruleContext, Mode mode, SkylarkClassObjectConstructor.Key key,
-      final Class<T> classType) {
-    IterablesChain.Builder<T> builder = IterablesChain.builder();
-    AttributeMap attributes = ruleContext.attributes();
-    for (String attr : TRANSITIVE_ATTRIBUTES) {
-      if (attributes.has(attr, BuildType.LABEL_LIST)) {
-        builder.add(ruleContext.getPrerequisites(attr, mode, key, classType));
-      }
-    }
-    return builder.build();
-  }
-
 
   public static final Iterable<TransitiveInfoCollection> collectTransitiveInfo(
       RuleContext ruleContext, Mode mode) {
@@ -389,24 +371,6 @@ public class AndroidCommon {
       transitiveAarNativeLibs.addTransitive(nativeLibsZipsProvider.getAarNativeLibs());
     }
     return transitiveAarNativeLibs;
-  }
-
-  static boolean getExportsManifest(RuleContext ruleContext) {
-    // AndroidLibraryBaseRule has exports_manifest but AndroidBinaryBaseRule does not.
-    // ResourceContainers are built for both, so we must check if exports_manifest is present.
-    if (!ruleContext.attributes().has("exports_manifest", BuildType.TRISTATE)) {
-      return false;
-    }
-    TriState attributeValue = ruleContext.attributes().get("exports_manifest", BuildType.TRISTATE);
-
-    // If the rule does not have the Android configuration fragment, we default to false.
-    boolean exportsManifestDefault =
-        ruleContext.isLegalFragment(AndroidConfiguration.class)
-            && ruleContext
-                .getFragment(AndroidConfiguration.class)
-                .getExportsManifestDefault(ruleContext);
-    return attributeValue == TriState.YES
-        || (attributeValue == TriState.AUTO && exportsManifestDefault);
   }
 
   private void compileResources(
@@ -930,9 +894,7 @@ public class AndroidCommon {
   private NestedSet<Artifact> collectHiddenTopLevelArtifacts(RuleContext ruleContext) {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     for (OutputGroupProvider provider :
-        getTransitivePrerequisites(ruleContext, Mode.TARGET,
-            OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey(),
-            OutputGroupProvider.class)) {
+        getTransitivePrerequisites(ruleContext, Mode.TARGET, OutputGroupProvider.class)) {
       builder.addTransitive(provider.getOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL));
     }
     return builder.build();
@@ -981,27 +943,5 @@ public class AndroidCommon {
     }
 
     return new JavaCommon(ruleContext, semantics, srcs, compileDeps, runtimeDeps, bothDeps);
-  }
-
-  /**
-   * Gets the transitive support APKs required by this rule through the {@code support_apks}
-   * attribute.
-   */
-  static NestedSet<Artifact> getSupportApks(RuleContext ruleContext) {
-    NestedSetBuilder<Artifact> supportApks = NestedSetBuilder.stableOrder();
-    for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("support_apks", Mode.TARGET)) {
-      ApkProvider apkProvider = dep.getProvider(ApkProvider.class);
-      FileProvider fileProvider = dep.getProvider(FileProvider.class);
-      // If ApkProvider is present, do not check FileProvider for .apk files. For example,
-      // android_binary creates a FileProvider containing both the signed and unsigned APKs.
-      if (apkProvider != null) {
-        supportApks.addTransitive(apkProvider.getTransitiveApks());
-      } else if (fileProvider != null) {
-        // The rule definition should enforce that only .apk files are allowed, however, it can't
-        // hurt to double check.
-        supportApks.addAll(FileType.filter(fileProvider.getFilesToBuild(), AndroidRuleClasses.APK));
-      }
-    }
-    return supportApks.build();
   }
 }
