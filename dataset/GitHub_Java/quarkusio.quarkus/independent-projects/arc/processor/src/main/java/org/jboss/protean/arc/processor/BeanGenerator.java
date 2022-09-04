@@ -48,8 +48,6 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
-import org.jboss.logging.Logger;
-import org.jboss.logging.Logger.Level;
 import org.jboss.protean.arc.CreationalContextImpl;
 import org.jboss.protean.arc.CurrentInjectionPointProvider;
 import org.jboss.protean.arc.InitializedInterceptor;
@@ -59,6 +57,7 @@ import org.jboss.protean.arc.InjectableReferenceProvider;
 import org.jboss.protean.arc.LazyValue;
 import org.jboss.protean.arc.Subclass;
 import org.jboss.protean.arc.processor.BeanInfo.InterceptionInfo;
+import org.jboss.protean.arc.processor.BeanProcessor.PrivateMembersCollector;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource.SpecialType;
 import org.jboss.protean.gizmo.AssignableResultHandle;
@@ -89,22 +88,23 @@ public class BeanGenerator extends AbstractGenerator {
 
     static final String SYNTHETIC_SUFFIX = "_Synthetic";
 
-    private static final Logger LOGGER = Logger.getLogger(BeanGenerator.class);
-
     protected static final String FIELD_NAME_DECLARING_PROVIDER = "declaringProvider";
     protected static final String FIELD_NAME_BEAN_TYPES = "types";
     protected static final String FIELD_NAME_QUALIFIERS = "qualifiers";
     protected static final String FIELD_NAME_STEREOTYPES = "stereotypes";
     protected static final String FIELD_NAME_PROXY = "proxy";
     protected static final String FIELD_NAME_PARAMS = "params";
-
+    
     protected final AnnotationLiteralProcessor annotationLiterals;
 
     protected final Predicate<DotName> applicationClassPredicate;
 
-    public BeanGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate) {
+    protected final PrivateMembersCollector privateMembers;
+    
+    public BeanGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate, PrivateMembersCollector privateMembers) {
         this.annotationLiterals = annotationLiterals;
         this.applicationClassPredicate = applicationClassPredicate;
+        this.privateMembers = privateMembers;
     }
 
     /**
@@ -135,15 +135,17 @@ public class BeanGenerator extends AbstractGenerator {
 
         String baseName;
         if (bean.getImplClazz().enclosingClass() != null) {
-            baseName = DotNames.simpleName(bean.getImplClazz().enclosingClass()) + "_" + DotNames.simpleName(bean.getImplClazz().name());
+            baseName = DotNames.simpleName(bean.getImplClazz().enclosingClass()) + "_" + DotNames.simpleName(bean.getImplClazz());
         } else {
-            baseName = DotNames.simpleName(bean.getImplClazz().name());
+            baseName = DotNames.simpleName(bean.getImplClazz());
         }
+        baseName += SYNTHETIC_SUFFIX;
+        
         Type providerType = bean.getProviderType();
         ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();
         String targetPackage = getPackageName(bean);
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + SYNTHETIC_SUFFIX + BEAN_SUFFIX;
+        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + BEAN_SUFFIX;
         
         boolean isApplicationClass = applicationClassPredicate.test(bean.getImplClazz().name());
         ResourceClassOutput classOutput = new ResourceClassOutput(isApplicationClass, name -> name.equals(generatedName) ? SpecialType.BEAN : null);
@@ -227,9 +229,9 @@ public class BeanGenerator extends AbstractGenerator {
 
         String baseName;
         if (beanClass.enclosingClass() != null) {
-            baseName = DotNames.simpleName(beanClass.enclosingClass()) + "_" + DotNames.simpleName(beanClass.name());
+            baseName = DotNames.simpleName(beanClass.enclosingClass()) + "_" + DotNames.simpleName(beanClass);
         } else {
-            baseName = DotNames.simpleName(beanClass.name());
+            baseName = DotNames.simpleName(beanClass);
         }
         Type providerType = bean.getProviderType();
         ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
@@ -298,9 +300,9 @@ public class BeanGenerator extends AbstractGenerator {
         ClassInfo declaringClass = producerMethod.declaringClass();
         String declaringClassBase;
         if (declaringClass.enclosingClass() != null) {
-            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass.name());
+            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass);
         } else {
-            declaringClassBase = DotNames.simpleName(declaringClass.name());
+            declaringClassBase = DotNames.simpleName(declaringClass);
         }
 
         Type providerType = bean.getProviderType();
@@ -378,9 +380,9 @@ public class BeanGenerator extends AbstractGenerator {
         ClassInfo declaringClass = producerField.declaringClass();
         String declaringClassBase;
         if (declaringClass.enclosingClass() != null) {
-            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass.name());
+            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass);
         } else {
-            declaringClassBase = DotNames.simpleName(declaringClass.name());
+            declaringClassBase = DotNames.simpleName(declaringClass);
         }
 
         Type providerType = bean.getProviderType();
@@ -442,18 +444,15 @@ public class BeanGenerator extends AbstractGenerator {
     protected void initMaps(BeanInfo bean, Map<InjectionPointInfo, String> injectionPointToProvider, Map<InterceptorInfo, String> interceptorToProvider) {
         int providerIdx = 1;
         for (InjectionPointInfo injectionPoint : bean.getAllInjectionPoints()) {
-            String name = providerName(DotNames.simpleName(injectionPoint.getRequiredType().name())) + "Provider" + providerIdx++;
-            injectionPointToProvider.put(injectionPoint, name);
+            injectionPointToProvider.put(injectionPoint, "injectProvider" + providerIdx++);
         }
         if (bean.getDisposer() != null) {
             for (InjectionPointInfo injectionPoint : bean.getDisposer().getInjection().injectionPoints) {
-                String name = providerName(DotNames.simpleName(injectionPoint.getRequiredType().name())) + "Provider" + providerIdx++;
-                injectionPointToProvider.put(injectionPoint, name);
+                injectionPointToProvider.put(injectionPoint, "disposerProvider" + providerIdx++);
             }
         }
         for (InterceptorInfo interceptor : bean.getBoundInterceptors()) {
-            String name = providerName(DotNames.simpleName(interceptor.getProviderType().name())) + "Provider" + providerIdx++;
-            interceptorToProvider.put(interceptor, name);
+            interceptorToProvider.put(interceptor, "interceptorProvider" + providerIdx++);
         }
     }
 
@@ -505,7 +504,7 @@ public class BeanGenerator extends AbstractGenerator {
             parameterTypes.add(InjectableInterceptor.class.getName());
         }
 
-        MethodCreator constructor = beanCreator.getMethodCreator("<init>", "V", parameterTypes.toArray(new String[0]));
+        MethodCreator constructor = beanCreator.getMethodCreator(Methods.INIT, "V", parameterTypes.toArray(new String[0]));
         // Invoke super()
         constructor.invokeSpecialMethod(MethodDescriptors.OBJECT_CONSTRUCTOR, constructor.getThis());
 
@@ -544,10 +543,8 @@ public class BeanGenerator extends AbstractGenerator {
                         } else {
                             // Create annotation literal first
                             ClassInfo qualifierClass = bean.getDeployment().getQualifier(qualifierAnnotation.name());
-                            String annotationLiteralName = annotationLiterals.process(classOutput, qualifierClass, qualifierAnnotation,
-                                    Types.getPackageName(beanCreator.getClassName()));
-                            constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, requiredQualifiersHandle,
-                                    constructor.newInstance(MethodDescriptor.ofConstructor(annotationLiteralName)));
+                            constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, requiredQualifiersHandle, annotationLiterals.process(constructor,
+                                    classOutput, qualifierClass, qualifierAnnotation, Types.getPackageName(beanCreator.getClassName())));
                         }
                     }
                     ResultHandle wrapHandle = constructor.newInstance(
@@ -590,10 +587,8 @@ public class BeanGenerator extends AbstractGenerator {
                 } else {
                     // Create annotation literal first
                     ClassInfo qualifierClass = bean.getDeployment().getQualifier(qualifierAnnotation.name());
-                    String annotationLiteralName = annotationLiterals.process(classOutput, qualifierClass, qualifierAnnotation,
-                            Types.getPackageName(beanCreator.getClassName()));
-                    constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, qualifiersHandle,
-                            constructor.newInstance(MethodDescriptor.ofConstructor(annotationLiteralName)));
+                    constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, qualifiersHandle, annotationLiterals.process(constructor, classOutput,
+                            qualifierClass, qualifierAnnotation, Types.getPackageName(beanCreator.getClassName())));
                 }
             }
             ResultHandle unmodifiableQualifiersHandle = constructor.invokeStaticMethod(MethodDescriptors.COLLECTIONS_UNMODIFIABLE_SET, qualifiersHandle);
@@ -646,8 +641,7 @@ public class BeanGenerator extends AbstractGenerator {
                         bean.getDeployment().getIndex());
                 for (MethodInfo callback : preDestroyCallbacks) {
                     if (Modifier.isPrivate(callback.flags())) {
-                        LOGGER.infof("PreDestroy callback %s#%s is private - users are encouraged to avoid using private callbacks",
-                                callback.declaringClass().name(), callback.name());
+                        privateMembers.add(isApplicationClass, String.format("@PreDestroy callback %s#%s()", callback.declaringClass().name(), callback.name()));
                         reflectionRegistration.registerMethod(callback);
                         destroy.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD, destroy.loadClass(callback.declaringClass().name().toString()),
                                 destroy.load(callback.name()), destroy.newArray(Class.class, destroy.load(0)), destroy.getMethodParam(0),
@@ -696,9 +690,8 @@ public class BeanGenerator extends AbstractGenerator {
             }
 
             if (Modifier.isPrivate(disposerMethod.flags())) {
-                Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-                LOGGER.logf(level, "Disposer %s#%s is private - users are encouraged to avoid using private disposers", disposerMethod.declaringClass().name(),
-                        disposerMethod.name());
+                privateMembers.add(isApplicationClass, String.format("Disposer %s#%s", disposerMethod.declaringClass().name(),
+                        disposerMethod.name()));
                 ResultHandle paramTypesArray = destroy.newArray(Class.class, destroy.load(referenceHandles.length));
                 ResultHandle argsArray = destroy.newArray(Object.class, destroy.load(referenceHandles.length));
                 for (int i = 0; i < referenceHandles.length; i++) {
@@ -768,10 +761,10 @@ public class BeanGenerator extends AbstractGenerator {
                     ResultHandle interceptorProvider = create.readInstanceField(
                             FieldDescriptor.of(beanCreator.getClassName(), interceptorToProviderField.get(interceptor), InjectableInterceptor.class.getName()),
                             create.getThis());
-                    ResultHandle interceptorInstaceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, interceptorProvider,
+                    ResultHandle interceptorInstanceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, interceptorProvider,
                             create.getMethodParam(0));
                     ResultHandle wrapHandle = create.invokeStaticMethod(MethodDescriptor.ofMethod(InitializedInterceptor.class, "of",
-                            InitializedInterceptor.class, Object.class, InjectableInterceptor.class), interceptorInstaceHandle, interceptorProvider);
+                            InitializedInterceptor.class, Object.class, InjectableInterceptor.class), interceptorInstanceHandle, interceptorProvider);
                     interceptorToWrap.put(interceptor, wrapHandle);
                 }
 
@@ -853,8 +846,8 @@ public class BeanGenerator extends AbstractGenerator {
                 for (AnnotationInstance binding : aroundConstructs.bindings) {
                     // Create annotation literals first
                     ClassInfo bindingClass = bean.getDeployment().getInterceptorBinding(binding.name());
-                    String literalType = annotationLiterals.process(classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName()));
-                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle, create.newInstance(MethodDescriptor.ofConstructor(literalType)));
+                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle,
+                            annotationLiterals.process(create, classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName())));
                 }
 
                 // InvocationContextImpl.aroundConstruct(constructor,aroundConstructs,forward).proceed()
@@ -884,9 +877,8 @@ public class BeanGenerator extends AbstractGenerator {
                 FieldInfo injectedField = fieldInjection.target.asField();
                 if (isReflectionFallbackNeeded(injectedField, targetPackage)) {
                     if (Modifier.isPrivate(injectedField.flags())) {
-                        Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-                        LOGGER.logf(level, "@Inject %s#%s is private - users are encouraged to avoid using private injection fields",
-                                fieldInjection.target.asField().declaringClass().name(), fieldInjection.target.asField().name());
+                        privateMembers.add(isApplicationClass, String.format("@Inject field %s#%s", fieldInjection.target.asField().declaringClass().name(),
+                                fieldInjection.target.asField().name()));
                     }
                     reflectionRegistration.registerField(injectedField);
                     create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_WRITE_FIELD, create.loadClass(injectedField.declaringClass().name().toString()),
@@ -911,9 +903,8 @@ public class BeanGenerator extends AbstractGenerator {
                 MethodInfo initializerMethod = methodInjection.target.asMethod();
                 if (isReflectionFallbackNeeded(initializerMethod, targetPackage)) {
                     if (Modifier.isPrivate(initializerMethod.flags())) {
-                        Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-                        LOGGER.logf(level, "@Inject %s#%s() is private - users are encouraged to avoid using private injection initializers",
-                                initializerMethod.declaringClass().name(), initializerMethod.name());
+                        privateMembers.add(isApplicationClass,
+                                String.format("@Inject initializer %s#%s()", initializerMethod.declaringClass().name(), initializerMethod.name()));
                     }
                     ResultHandle paramTypesArray = create.newArray(Class.class, create.load(referenceHandles.length));
                     ResultHandle argsArray = create.newArray(Object.class, create.load(referenceHandles.length));
@@ -940,8 +931,8 @@ public class BeanGenerator extends AbstractGenerator {
                 for (AnnotationInstance binding : postConstructs.bindings) {
                     // Create annotation literals first
                     ClassInfo bindingClass = bean.getDeployment().getInterceptorBinding(binding.name());
-                    String literalType = annotationLiterals.process(classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName()));
-                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle, create.newInstance(MethodDescriptor.ofConstructor(literalType)));
+                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle,
+                            annotationLiterals.process(create, classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName())));
                 }
 
                 // InvocationContextImpl.postConstruct(instance,postConstructs).proceed()
@@ -961,10 +952,8 @@ public class BeanGenerator extends AbstractGenerator {
                         bean.getDeployment().getIndex());
                 for (MethodInfo callback : postConstructCallbacks) {
                     if (Modifier.isPrivate(callback.flags())) {
-                        Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-                        LOGGER.logf(level, "PostConstruct callback %s#%s is private - users are encouraged to avoid using private callbacks",
-                               callback.declaringClass().name(),
-                               callback.name());
+                        privateMembers.add(isApplicationClass,
+                                String.format("@PostConstruct callback %s#%s()", callback.declaringClass().name(), callback.name()));
                         reflectionRegistration.registerMethod(callback);
                         create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD, create.loadClass(callback.declaringClass().name().toString()),
                                 create.load(callback.name()), create.newArray(Class.class, create.load(0)), instanceHandle,
@@ -1004,9 +993,7 @@ public class BeanGenerator extends AbstractGenerator {
 
             MethodInfo producerMethod = bean.getTarget().get().asMethod();
             if (Modifier.isPrivate(producerMethod.flags())) {
-                Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-                LOGGER.logf(level, "Producer %s#%s is private - users are encouraged to avoid using private producers", producerMethod.declaringClass().name(),
-                         producerMethod.name());
+                privateMembers.add(isApplicationClass, String.format("Producer method %s#%s()", producerMethod.declaringClass().name(), producerMethod.name()));
                 ResultHandle paramTypesArray = create.newArray(Class.class, create.load(referenceHandles.length));
                 ResultHandle argsArray = create.newArray(Object.class, create.load(referenceHandles.length));
                 for (int i = 0; i < referenceHandles.length; i++) {
@@ -1046,9 +1033,7 @@ public class BeanGenerator extends AbstractGenerator {
             }
 
             if (Modifier.isPrivate(producerField.flags())) {
-                Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-                LOGGER.logf(level, "Producer %s#%s is private - users are encouraged to avoid using private producers", producerField.declaringClass().name(),
-                            producerField.name());
+                privateMembers.add(isApplicationClass, String.format("Producer field %s#%s", producerField.declaringClass().name(), producerField.name()));
                 reflectionRegistration.registerField(producerField);
                 create.assign(instanceHandle, create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_READ_FIELD,
                         create.loadClass(producerField.declaringClass().name().toString()), create.load(producerField.name()), declaringProviderInstanceHandle));
@@ -1137,9 +1122,7 @@ public class BeanGenerator extends AbstractGenerator {
 
         } else if (constructorInjection.isPresent()) {
             if (Modifier.isPrivate(constructor.flags())) {
-                Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-                LOGGER.logf(level, "Constructor %s is private - users are encouraged to avoid using private constructors",
-                            constructor.declaringClass().name());
+                privateMembers.add(isApplicationClass, String.format("Bean constructor %s on %s", constructor, constructor.declaringClass().name()));
                 ResultHandle paramTypesArray = creator.newArray(Class.class, creator.load(providerHandles.size()));
                 ResultHandle argsArray = creator.newArray(Object.class, creator.load(providerHandles.size()));
                 for (int i = 0; i < injectionPoints.size(); i++) {
@@ -1159,11 +1142,10 @@ public class BeanGenerator extends AbstractGenerator {
                 return creator.newInstance(MethodDescriptor.ofConstructor(providerTypeName, paramTypes), providerHandles.toArray(new ResultHandle[0]));
             }
         } else {
-            MethodInfo noArgsConstructor = bean.getTarget().get().asClass().method("<init>");
+            MethodInfo noArgsConstructor = bean.getTarget().get().asClass().method(Methods.INIT);
             if (Modifier.isPrivate(noArgsConstructor.flags())) {
-                Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-                LOGGER.logf(level, "Constructor %s is private - users are encouraged to avoid using private constructors",
-                        noArgsConstructor.declaringClass().name());
+                privateMembers.add(isApplicationClass,
+                        String.format("Bean constructor %s on %s", noArgsConstructor, noArgsConstructor.declaringClass().name()));
                 ResultHandle paramTypesArray = creator.newArray(Class.class, creator.load(0));
                 ResultHandle argsArray = creator.newArray(Object.class, creator.load(0));
 

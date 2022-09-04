@@ -47,6 +47,7 @@ import javax.interceptor.AroundInvoke;
 import javax.interceptor.Interceptor;
 import javax.interceptor.InterceptorBinding;
 
+import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.protean.arc.ComputingCache;
 
@@ -87,14 +88,14 @@ public final class DotNames {
     public static final DotName OPTIONAL = create(Optional.class);
     public static final DotName NAMED = create(Named.class);
 
-    public static final DotName BOOLEAN = create(Boolean.class.getName());
-    public static final DotName BYTE = create(Byte.class.getName());
-    public static final DotName CHARACTER = create(Character.class.getName());
-    public static final DotName DOUBLE = create(Double.class.getName());
-    public static final DotName FLOAT = create(Float.class.getName());
-    public static final DotName INTEGER = create(Integer.class.getName());
-    public static final DotName LONG = create(Long.class.getName());
-    public static final DotName SHORT = create(Short.class.getName());
+    public static final DotName BOOLEAN = create(Boolean.class);
+    public static final DotName BYTE = create(Byte.class);
+    public static final DotName CHARACTER = create(Character.class);
+    public static final DotName DOUBLE = create(Double.class);
+    public static final DotName FLOAT = create(Float.class);
+    public static final DotName INTEGER = create(Integer.class);
+    public static final DotName LONG = create(Long.class);
+    public static final DotName SHORT = create(Short.class);
 
     private DotNames() {
     }
@@ -104,18 +105,51 @@ public final class DotNames {
     }
 
     static DotName create(String name) {
-        if (!name.contains(".")) {
+        int lastDot = name.lastIndexOf('.');
+        if (lastDot < 0) {
             return DotName.createComponentized(null, name);
         }
-        String prefix = name.substring(0, name.lastIndexOf('.'));
+        String prefix = name.substring(0, lastDot);
         DotName prefixName = NAMES.getValue(prefix);
-        String local = name.substring(name.lastIndexOf('.') + 1);
+        String local = name.substring(lastDot + 1);
         return DotName.createComponentized(prefixName, local);
     }
 
+    /**
+     * 
+     * @param clazz
+     * @return the simple name for the given top-level or nested class
+     */
+    public static String simpleName(ClassInfo clazz) {
+        switch (clazz.nestingType()) {
+            case TOP_LEVEL:
+                return simpleName(clazz.name());
+            case INNER:
+                // Nested class
+                // com.foo.Foo$Bar -> Bar
+                return clazz.simpleName();
+            default:
+                throw new IllegalStateException("Unsupported nesting type: " + clazz);
+        }
+    }
+    
+    /**
+     * @param dotName
+     * @see #simpleName(String)
+     */
     public static String simpleName(DotName dotName) {
-        String local = dotName.local();
-        return local.contains(".") ? Types.convertNested(local.substring(local.lastIndexOf("."), local.length())) : Types.convertNested(local);
+        return simpleName(dotName.toString());
+    }
+
+    /**
+     * Note that "$" is a valid character for class names so we cannot detect a nested class here. Therefore, this method would return "Foo$Bar" for the
+     * parameter "com.foo.Foo$Bar". Use {@link #simpleName(ClassInfo)} when you need to distinguish the nested classes.
+     * 
+     * @param name
+     * @return the simple name
+     */
+    public static String simpleName(String name) {
+        return name.contains(".") ? name.substring(name.lastIndexOf(".") + 1, name.length()) : name;
     }
 
     public static String packageName(DotName dotName) {

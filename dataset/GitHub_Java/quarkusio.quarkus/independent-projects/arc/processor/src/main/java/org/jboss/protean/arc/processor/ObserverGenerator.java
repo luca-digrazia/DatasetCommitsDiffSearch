@@ -31,7 +31,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
 import javax.enterprise.inject.spi.EventContext;
@@ -40,13 +39,12 @@ import javax.enterprise.inject.spi.ObserverMethod;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.logging.Logger;
-import org.jboss.logging.Logger.Level;
 import org.jboss.protean.arc.CreationalContextImpl;
 import org.jboss.protean.arc.CurrentInjectionPointProvider;
 import org.jboss.protean.arc.InjectableBean;
 import org.jboss.protean.arc.InjectableObserverMethod;
 import org.jboss.protean.arc.InjectableReferenceProvider;
+import org.jboss.protean.arc.processor.BeanProcessor.PrivateMembersCollector;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource.SpecialType;
 import org.jboss.protean.gizmo.ClassCreator;
@@ -65,21 +63,17 @@ public class ObserverGenerator extends AbstractGenerator {
 
     static final String OBSERVER_SUFFIX = "_Observer";
 
-    private static final Logger LOGGER = Logger.getLogger(ObserverGenerator.class);
-
-    private static final AtomicInteger OBSERVER_INDEX = new AtomicInteger();
-
     private final AnnotationLiteralProcessor annotationLiterals;
 
     private final Predicate<DotName> applicationClassPredicate;
-    /**
-     *
-     * @param annotationLiterals
-     * @param applicationClassPredicate
-     */
-    public ObserverGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate) {
+    
+    private final PrivateMembersCollector privateMembers;
+    
+    public ObserverGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate,
+            PrivateMembersCollector privateMembers) {
         this.annotationLiterals = annotationLiterals;
         this.applicationClassPredicate = applicationClassPredicate;
+        this.privateMembers = privateMembers;
     }
 
     /**
@@ -92,18 +86,25 @@ public class ObserverGenerator extends AbstractGenerator {
         ClassInfo declaringClass = observer.getObserverMethod().declaringClass();
         String declaringClassBase;
         if (declaringClass.enclosingClass() != null) {
-            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass.name());
+            declaringClassBase = DotNames.simpleName(declaringClass.enclosingClass()) + "_" + DotNames.simpleName(declaringClass);
         } else {
-            declaringClassBase = DotNames.simpleName(declaringClass.name());
+            declaringClassBase = DotNames.simpleName(declaringClass);
         }
 
-        String baseName = declaringClassBase + OBSERVER_SUFFIX + OBSERVER_INDEX.incrementAndGet();
+        StringBuilder sigBuilder = new StringBuilder();
+        sigBuilder.append(observer.getObserverMethod().name())
+                .append("_")
+                .append(observer.getObserverMethod().returnType().name().toString());
+        for(org.jboss.jandex.Type paramType : observer.getObserverMethod().parameters()) {
+            sigBuilder.append(paramType.name().toString());
+        }
+        String baseName = declaringClassBase + OBSERVER_SUFFIX + "_" + observer.getObserverMethod().name() + "_" + Hashes.sha1(sigBuilder.toString());
         String generatedName = DotNames.packageName(declaringClass.name()).replace('.', '/') + "/" + baseName;
 
         boolean isApplicationClass = applicationClassPredicate.test(observer.getObserverMethod().declaringClass().name());
         ResourceClassOutput classOutput = new ResourceClassOutput(isApplicationClass, name -> name.equals(generatedName) ? SpecialType.OBSERVER : null);
 
-        // Foo_Observer1 implements ObserverMethod<T>
+        // Foo_Observer_fooMethod_hash implements ObserverMethod<T>
         ClassCreator observerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(InjectableObserverMethod.class)
                 .build();
 
@@ -140,8 +141,7 @@ public class ObserverGenerator extends AbstractGenerator {
     protected void initMaps(ObserverInfo observer, Map<InjectionPointInfo, String> injectionPointToProvider) {
         int providerIdx = 1;
         for (InjectionPointInfo injectionPoint : observer.getInjection().injectionPoints) {
-            String name = providerName(DotNames.simpleName(injectionPoint.getRequiredType().name())) + "Provider" + providerIdx++;
-            injectionPointToProvider.put(injectionPoint, name);
+            injectionPointToProvider.put(injectionPoint, "observerProvider" + providerIdx++);
         }
     }
 
@@ -176,7 +176,10 @@ public class ObserverGenerator extends AbstractGenerator {
 
         ResultHandle declaringProviderHandle = notify
                 .readInstanceField(FieldDescriptor.of(observerCreator.getClassName(), "declaringProvider", InjectableBean.class.getName()), notify.getThis());
-        ResultHandle ctxHandle = notify.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
+        
+        // It is safe to skip CreationalContext.release() for normal scoped declaring provider and no injection points
+        boolean skipRelease = observer.getDeclaringBean().getScope().isNormal() && observer.getInjection().injectionPoints.isEmpty();
+        ResultHandle ctxHandle = skipRelease ? notify.loadNull() : notify.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
         ResultHandle declaringProviderInstanceHandle = notify.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
                 ctxHandle);
 
@@ -204,9 +207,8 @@ public class ObserverGenerator extends AbstractGenerator {
         }
 
         if (Modifier.isPrivate(observer.getObserverMethod().flags())) {
-            Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
-            LOGGER.logf(level, "Observer %s#%s is private - users are encouraged to avoid using private observers", observer.getObserverMethod().declaringClass().name(),
-                    observer.getObserverMethod().name());
+            privateMembers.add(isApplicationClass,
+                    String.format("Observer method %s#%s()", observer.getObserverMethod().declaringClass().name(), observer.getObserverMethod().name()));
             ResultHandle paramTypesArray = notify.newArray(Class.class, notify.load(referenceHandles.length));
             ResultHandle argsArray = notify.newArray(Object.class, notify.load(referenceHandles.length));
             for (int i = 0; i < referenceHandles.length; i++) {
@@ -221,8 +223,10 @@ public class ObserverGenerator extends AbstractGenerator {
             notify.invokeVirtualMethod(MethodDescriptor.of(observer.getObserverMethod()), declaringProviderInstanceHandle, referenceHandles);
         }
 
-        // Destroy @Dependent instances injected into method parameters of a disposer method
-        notify.invokeInterfaceMethod(MethodDescriptors.CREATIONAL_CTX_RELEASE, ctxHandle);
+        // Destroy @Dependent instances injected into method parameters of an observer method
+        if (!skipRelease) {
+            notify.invokeInterfaceMethod(MethodDescriptors.CREATIONAL_CTX_RELEASE, ctxHandle);
+        }
 
         // If the declaring bean is @Dependent we must destroy the instance afterwards
         if (ScopeInfo.DEPENDENT.equals(observer.getDeclaringBean().getScope())) {
@@ -253,7 +257,7 @@ public class ObserverGenerator extends AbstractGenerator {
             }
         }
 
-        MethodCreator constructor = observerCreator.getMethodCreator("<init>", "V", parameterTypes.toArray(new String[0]));
+        MethodCreator constructor = observerCreator.getMethodCreator(Methods.INIT, "V", parameterTypes.toArray(new String[0]));
         // Invoke super()
         constructor.invokeSpecialMethod(MethodDescriptors.OBJECT_CONSTRUCTOR, constructor.getThis());
 
@@ -283,10 +287,8 @@ public class ObserverGenerator extends AbstractGenerator {
                         } else {
                             // Create annotation literal first
                             ClassInfo qualifierClass = observer.getDeclaringBean().getDeployment().getQualifier(qualifierAnnotation.name());
-                            String annotationLiteralName = annotationLiterals.process(classOutput, qualifierClass, qualifierAnnotation,
-                                    Types.getPackageName(observerCreator.getClassName()));
-                            constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, requiredQualifiersHandle,
-                                    constructor.newInstance(MethodDescriptor.ofConstructor(annotationLiteralName)));
+                            constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, requiredQualifiersHandle, annotationLiterals.process(constructor,
+                                    classOutput, qualifierClass, qualifierAnnotation, Types.getPackageName(observerCreator.getClassName())));
                         }
                     }
                     ResultHandle wrapHandle = constructor.newInstance(
@@ -319,10 +321,8 @@ public class ObserverGenerator extends AbstractGenerator {
                 } else {
                     // Create annotation literal first
                     ClassInfo qualifierClass = observer.getDeclaringBean().getDeployment().getQualifier(qualifierAnnotation.name());
-                    String annotationLiteralName = annotationLiterals.process(classOutput, qualifierClass, qualifierAnnotation,
-                            Types.getPackageName(observerCreator.getClassName()));
-                    constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, qualifiersHandle,
-                            constructor.newInstance(MethodDescriptor.ofConstructor(annotationLiteralName)));
+                    constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, qualifiersHandle, annotationLiterals.process(constructor, classOutput,
+                            qualifierClass, qualifierAnnotation, Types.getPackageName(observerCreator.getClassName())));
                 }
             }
             ResultHandle unmodifiableQualifiersHandle = constructor
