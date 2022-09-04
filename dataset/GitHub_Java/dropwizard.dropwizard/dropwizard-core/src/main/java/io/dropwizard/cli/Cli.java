@@ -1,20 +1,28 @@
 package io.dropwizard.cli;
 
-import com.google.common.base.Charsets;
-import com.google.common.collect.Maps;
-import io.dropwizard.configuration.ConfigurationException;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.util.JarLocation;
 import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.helper.HelpScreenException;
 import net.sourceforge.argparse4j.impl.Arguments;
-import net.sourceforge.argparse4j.inf.*;
+import net.sourceforge.argparse4j.inf.Argument;
+import net.sourceforge.argparse4j.inf.ArgumentAction;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.Subparser;
 
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import java.util.SortedMap;
+import java.util.TreeMap;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * The command-line runner for Dropwizard application.
@@ -40,9 +48,9 @@ public class Cli {
      * @param stdErr       standard err
      */
     public Cli(JarLocation location, Bootstrap<?> bootstrap, OutputStream stdOut, OutputStream stdErr) {
-        this.stdOut = new PrintWriter(new OutputStreamWriter(stdOut, Charsets.UTF_8), true);
-        this.stdErr = new PrintWriter(new OutputStreamWriter(stdErr, Charsets.UTF_8), true);
-        this.commands = Maps.newTreeMap();
+        this.stdOut = new PrintWriter(new OutputStreamWriter(stdOut, StandardCharsets.UTF_8), true);
+        this.stdErr = new PrintWriter(new OutputStreamWriter(stdErr, StandardCharsets.UTF_8), true);
+        this.commands = new TreeMap<>();
         this.parser = buildParser(location);
         this.bootstrap = bootstrap;
         for (Command command : bootstrap.getCommands()) {
@@ -54,10 +62,9 @@ public class Cli {
      * Runs the command line interface given some arguments.
      *
      * @param arguments the command line arguments
-     * @return whether or not the command successfully executed
-     * @throws Exception if something goes wrong
+     * @return the error or an empty optional if command succeeded
      */
-    public boolean run(String... arguments) throws Exception {
+    public Optional<Throwable> run(String... arguments) {
         try {
             if (isFlag(HELP, arguments)) {
                 parser.printHelp(stdOut);
@@ -65,25 +72,30 @@ public class Cli {
                 parser.printVersion(stdOut);
             } else {
                 final Namespace namespace = parser.parseArgs(arguments);
-                if (namespace.get("is-help") == null) {
-                    final Command command = commands.get(namespace.getString(COMMAND_NAME_ATTR));
+                final Command command = requireNonNull(commands.get(namespace.getString(COMMAND_NAME_ATTR)),
+                    "Command is not found");
+                try {
                     command.run(bootstrap, namespace);
+                } catch (Throwable e) {
+                    // The command failed to run, and the command knows
+                    // best how to cleanup / debug exception
+                    command.onError(this, namespace, e);
+                    return Optional.of(e);
                 }
             }
-            return true;
+            return Optional.empty();
+        } catch (HelpScreenException ignored) {
+            // This exception is triggered when the user passes in a help flag.
+            // Return true to signal that the process executed normally.
+            return Optional.empty();
         } catch (ArgumentParserException e) {
-            // TODO: 5/25/13 <coda> -- make ArgumentParser#handleError not depend on System.err
             stdErr.println(e.getMessage());
             e.getParser().printHelp(stdErr);
-            return false;
-        } catch (ConfigurationException e) {
-            // TODO: 7/26/13 <ntelford> -- as above, this probably shouldn't depend on System.err
-            stdErr.println(e.getMessage());
-            return false;
+            return Optional.of(e);
         }
     }
 
-    private boolean isFlag(String[][] flags, String[] arguments) {
+    private static boolean isFlag(String[][] flags, String[] arguments) {
         for (String[] cmd : flags) {
             if (Arrays.equals(arguments, cmd)) {
                 return true;
@@ -94,22 +106,22 @@ public class Cli {
 
     private ArgumentParser buildParser(JarLocation location) {
         final String usage = "java -jar " + location;
-        final ArgumentParser p = ArgumentParsers.newArgumentParser(usage, false);
-        p.version(location.getVersion().or(
+        final ArgumentParser p = ArgumentParsers.newFor(usage).addHelp(false).build();
+        p.version(location.getVersion().orElse(
                 "No application version detected. Add a Implementation-Version " +
                         "entry to your JAR's manifest to enable this."));
         addHelp(p);
         p.addArgument("-v", "--version")
-         .action(Arguments.help()) // never gets called; intercepted in #run
-         .help("show the application version and exit");
+            .action(Arguments.help()) // never gets called; intercepted in #run
+            .help("show the application version and exit");
         return p;
     }
 
     private void addHelp(ArgumentParser p) {
         p.addArgument("-h", "--help")
-         .action(new SafeHelpAction(stdOut))
-         .help("show this help message and exit")
-         .setDefault(Arguments.SUPPRESS);
+            .action(new SafeHelpAction(stdOut))
+            .help("show this help message and exit")
+            .setDefault(Arguments.SUPPRESS);
     }
 
     private void addCommand(Command command) {
@@ -121,6 +133,14 @@ public class Cli {
         subparser.description(command.getDescription())
                  .setDefault(COMMAND_NAME_ATTR, command.getName())
                  .defaultHelp(true);
+    }
+
+    public PrintWriter getStdOut() {
+        return stdOut;
+    }
+
+    public PrintWriter getStdErr() {
+        return stdErr;
     }
 
     private static class SafeHelpAction implements ArgumentAction {
@@ -135,7 +155,7 @@ public class Cli {
                         Map<String, Object> attrs, String flag, Object value)
                 throws ArgumentParserException {
             parser.printHelp(out);
-            attrs.put("is-help", Boolean.TRUE);
+            throw new HelpScreenException(parser);
         }
 
         @Override
