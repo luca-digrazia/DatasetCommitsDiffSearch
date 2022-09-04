@@ -35,7 +35,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -93,12 +92,11 @@ import javax.annotation.Nullable;
 /** A cache for storing artifacts (input and output) as well as the output of running an action. */
 @ThreadSafety.ThreadSafe
 public class RemoteCache implements AutoCloseable {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   /** See {@link SpawnExecutionContext#lockOutputFiles()}. */
   @FunctionalInterface
   interface OutputFilesLocker {
-    void lock() throws InterruptedException;
+    void lock() throws InterruptedException, IOException;
   }
 
   private static final ListenableFuture<Void> COMPLETED_SUCCESS = immediateFuture(null);
@@ -218,7 +216,7 @@ public class RemoteCache implements AutoCloseable {
       try {
         if (interruptedException == null) {
           // Wait for all transfers to finish.
-          getFromFuture(transfer, cancelRemainingOnInterrupt);
+          getFromFuture(transfer);
         } else {
           transfer.cancel(true);
         }
@@ -267,12 +265,7 @@ public class RemoteCache implements AutoCloseable {
         new FutureCallback<Void>() {
           @Override
           public void onSuccess(Void aVoid) {
-            try {
-              outerF.set(bOut.toByteArray());
-            } catch (RuntimeException e) {
-              logger.atWarning().withCause(e).log("Unexpected exception");
-              outerF.setException(e);
-            }
+            outerF.set(bOut.toByteArray());
           }
 
           @Override
@@ -478,9 +471,6 @@ public class RemoteCache implements AutoCloseable {
               outerF.set(null);
             } catch (IOException e) {
               outerF.setException(e);
-            } catch (RuntimeException e) {
-              logger.atWarning().withCause(e).log("Unexpected exception");
-              outerF.setException(e);
             }
           }
 
@@ -492,9 +482,6 @@ public class RemoteCache implements AutoCloseable {
               if (t != e) {
                 t.addSuppressed(e);
               }
-            } catch (RuntimeException e) {
-              logger.atWarning().withCause(e).log("Unexpected exception");
-              t.addSuppressed(e);
             } finally {
               outerF.setException(t);
             }
