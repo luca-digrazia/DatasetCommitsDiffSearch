@@ -13,8 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.buildtool;
 
-import com.github.benmanes.caffeine.cache.CaffeineSpec;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.CacheBuilderSpec;
 import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
 import com.google.devtools.build.lib.util.OptionsUtils;
@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.util.ResourceConverter;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.BoolOrEnumConverter;
 import com.google.devtools.common.options.Converters;
-import com.google.devtools.common.options.Converters.CaffeineSpecConverter;
+import com.google.devtools.common.options.Converters.CacheBuilderSpecConverter;
 import com.google.devtools.common.options.Converters.RangeConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDefinition;
@@ -161,14 +161,6 @@ public class BuildRequestOptions extends OptionsBase {
   public boolean runValidationActions;
 
   @Option(
-      name = "experimental_use_validation_aspect",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.EXECUTION, OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "Whether to run validation actions using aspect (for parallelism with tests).")
-  public boolean useValidationAspect;
-
-  @Option(
       name = "show_result",
       defaultValue = "1",
       documentationCategory = OptionDocumentationCategory.LOGGING,
@@ -283,11 +275,11 @@ public class BuildRequestOptions extends OptionsBase {
       defaultValue = "maximumSize=100000",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.EXECUTION},
-      converter = CaffeineSpecConverter.class,
+      converter = CacheBuilderSpecConverter.class,
       help =
           "Describes the cache used to store known regular directories as they're created. Parent"
               + " directories of output files are created on-demand during action execution.")
-  public CaffeineSpec directoryCreationCacheSpec;
+  public CacheBuilderSpec directoryCreationCacheSpec;
 
   @Option(
       name = "aspects",
@@ -297,18 +289,11 @@ public class BuildRequestOptions extends OptionsBase {
       effectTags = {OptionEffectTag.UNKNOWN},
       allowMultiple = true,
       help =
-          "Comma-separated list of aspects to be applied to top-level targets. All aspects are"
-              + " applied to all top-level targets. If aspect <code>some_aspect</code> specifies"
-              + " required aspect providers via <code>required_aspect_providers</code>,"
-              + " <code>some_aspect</code> will run after every aspect that was mentioned before it"
-              + " in the aspects list and whose advertised providers satisfy"
-              + " <code>some_aspect</code> required aspect providers. <code>some_aspect</code> will"
-              + " then have access to the values of those aspects' providers. Aspects that do not"
-              + " have such dependency will run independently on the top-level targets."
-              + ""
-              + " Aspects are specified in the form <bzl-file-label>%<aspect_name>, for example"
-              + " '//tools:my_def.bzl%my_aspect', where 'my_aspect' is a top-level value from a"
-              + " file tools/my_def.bzl")
+          "Comma-separated list of aspects to be applied to top-level targets. All aspects "
+              + "are applied to all top-level targets independently. Aspects are specified in "
+              + "the form <bzl-file-label>%<aspect_name>, "
+              + "for example '//tools:my_def.bzl%my_aspect', where 'my_aspect' is a top-level "
+              + "value from from a file tools/my_def.bzl")
   public List<String> aspects;
 
   public BuildRequestOptions() throws OptionsParsingException {}
@@ -424,6 +409,17 @@ public class BuildRequestOptions extends OptionsBase {
   public boolean incompatibleSkipGenfilesSymlink;
 
   @Option(
+      name = "experimental_nested_set_as_skykey_threshold",
+      defaultValue = "1",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      metadataTags = OptionMetadataTag.EXPERIMENTAL,
+      effectTags = {OptionEffectTag.EXECUTION, OptionEffectTag.LOSES_INCREMENTAL_STATE},
+      help =
+          "If this flag is set with a non-zero value, NestedSets whose size exceeds the threshold"
+              + " will be evaluated as a unit on Skyframe.")
+  public int nestedSetAsSkyKeyThreshold;
+
+  @Option(
       name = "experimental_use_fork_join_pool",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -471,6 +467,20 @@ public class BuildRequestOptions extends OptionsBase {
       effectTags = {OptionEffectTag.EXECUTION},
       help = "The number of threads that are used by the FileSystemValueChecker.")
   public int fsvcThreads;
+
+  @Option(
+      name = "experimental_no_product_name_out_symlink",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      metadataTags = OptionMetadataTag.EXPERIMENTAL,
+      effectTags = {OptionEffectTag.EXECUTION},
+      deprecationWarning =
+          "This flag is deprecated and will be removed soon. Please file an issue if you need to "
+              + "use it",
+      help =
+          "If this flag is set to true, the <product>-out symlink will not be created if "
+              + "--symlink_prefix is used.")
+  public boolean experimentalNoProductNameOutSymlink;
 
   @Option(
       name = "experimental_aquery_dump_after_build_format",
