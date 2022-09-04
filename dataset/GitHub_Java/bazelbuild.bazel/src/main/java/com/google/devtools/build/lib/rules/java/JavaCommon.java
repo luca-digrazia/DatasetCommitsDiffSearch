@@ -13,16 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
@@ -44,11 +40,9 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import com.google.devtools.build.lib.rules.cpp.CcNativeLibraryInfo;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
-import com.google.devtools.build.lib.rules.java.JavaPluginInfo.JavaPluginData;
+import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -59,7 +53,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
 /** A helper class to create configured targets for Java rules. */
@@ -79,7 +72,7 @@ public class JavaCommon {
       targetsTreatedAsDeps;
 
   private final ImmutableList<Artifact> sources;
-  private JavaPluginInfo activePlugins = JavaPluginInfo.empty();
+  private JavaPluginInfoProvider activePlugins = JavaPluginInfoProvider.empty();
 
   private final RuleContext ruleContext;
   private final JavaSemantics semantics;
@@ -696,62 +689,6 @@ public class JavaCommon {
 
     javaInfoBuilder.addProvider(JavaExportsProvider.class, exportsProvider);
     javaInfoBuilder.addProvider(JavaCompilationInfoProvider.class, compilationInfoProvider);
-
-    addCcRelatedProviders(builder, javaInfoBuilder);
-  }
-
-  /** Adds Cc related providers to a Java target. */
-  private void addCcRelatedProviders(
-      RuleConfiguredTargetBuilder ruleBuilder, JavaInfo.Builder javaInfoBuilder) {
-    Iterable<? extends TransitiveInfoCollection> deps = targetsTreatedAsDeps(ClasspathType.BOTH);
-
-
-    ImmutableList<CcInfo> ccInfos =
-        Streams.concat(
-                AnalysisUtils.getProviders(deps, CcInfo.PROVIDER).stream(),
-                AnalysisUtils.getProviders(deps, JavaCcLinkParamsProvider.PROVIDER).stream()
-                    .map(JavaCcLinkParamsProvider::getCcInfo),
-                JavaInfo.getProvidersFromListOfTargets(JavaCcInfoProvider.class, deps).stream()
-                    .map(JavaCcInfoProvider::getCcInfo))
-            .collect(toImmutableList());
-
-    CcInfo mergedCcInfo = CcInfo.merge(ccInfos);
-
-    // Collect library paths from all attributes (including data)
-    Iterable<? extends TransitiveInfoCollection> data;
-    if (ruleContext.getRule().isAttrDefined("data", BuildType.LABEL_LIST)) {
-      data = ruleContext.getPrerequisites("data");
-    } else {
-      data = ImmutableList.of();
-    }
-    CcNativeLibraryInfo mergedCcNativeLibraryInfo =
-        CcNativeLibraryInfo.merge(
-            Streams.concat(
-                    Stream.of(mergedCcInfo.getCcNativeLibraryInfo()),
-                    AnalysisUtils.getProviders(
-                            Iterables.concat(deps, data), JavaNativeLibraryInfo.PROVIDER)
-                        .stream()
-                        .map(JavaNativeLibraryInfo::getTransitiveJavaNativeLibraries)
-                        .map(CcNativeLibraryInfo::new),
-                    JavaInfo.getProvidersFromListOfTargets(JavaCcInfoProvider.class, data).stream()
-                        .map(JavaCcInfoProvider::getCcInfo)
-                        .map(CcInfo::getCcNativeLibraryInfo),
-                    AnalysisUtils.getProviders(data, CcInfo.PROVIDER).stream()
-                        .map(CcInfo::getCcNativeLibraryInfo))
-                .collect(toImmutableList()));
-
-    CcInfo filteredCcInfo =
-        CcInfo.builder()
-            .setCcLinkingContext(mergedCcInfo.getCcLinkingContext())
-            .setCcNativeLibraryInfo(mergedCcNativeLibraryInfo)
-            .build();
-
-    if (ruleContext
-        .getFragment(JavaConfiguration.class)
-        .experimentalPublishJavaCcLinkParamsInfo()) {
-      ruleBuilder.addNativeDeclaredProvider(new JavaCcLinkParamsProvider(filteredCcInfo));
-    }
-    javaInfoBuilder.addProvider(JavaCcInfoProvider.class, new JavaCcInfoProvider(filteredCcInfo));
   }
 
   private InstrumentedFilesInfo getInstrumentationFilesProvider(
@@ -826,32 +763,28 @@ public class JavaCommon {
    * added to the given attributes. Plugins having repetitive names/paths will be added only once.
    */
   public static void addPlugins(
-      JavaTargetAttributes.Builder attributes, JavaPluginInfo activePlugins) {
+      JavaTargetAttributes.Builder attributes, JavaPluginInfoProvider activePlugins) {
     attributes.addPlugin(activePlugins);
   }
 
-  private JavaPluginInfo collectPlugins() {
-    List<JavaPluginInfo> result = new ArrayList<>();
-    Iterables.addAll(result, getJavaPluginInfoForAttribute(ruleContext, ":java_plugins"));
-    Iterables.addAll(result, getJavaPluginInfoForAttribute(ruleContext, "plugins"));
-    Iterables.addAll(result, getJavaPluginInfoForAttribute(ruleContext, "deps"));
-    return JavaPluginInfo.merge(result);
+  private JavaPluginInfoProvider collectPlugins() {
+    List<JavaPluginInfoProvider> result = new ArrayList<>();
+    Iterables.addAll(result, getPluginInfoProvidersForAttribute(ruleContext, ":java_plugins"));
+    Iterables.addAll(result, getPluginInfoProvidersForAttribute(ruleContext, "plugins"));
+    Iterables.addAll(result, getPluginInfoProvidersForAttribute(ruleContext, "deps"));
+    return JavaPluginInfoProvider.merge(result);
   }
 
-  private static Iterable<JavaPluginInfo> getJavaPluginInfoForAttribute(
+  private static Iterable<JavaPluginInfoProvider> getPluginInfoProvidersForAttribute(
       RuleContext ruleContext, String attribute) {
     if (ruleContext.attributes().has(attribute, BuildType.LABEL_LIST)) {
-      return ruleContext.getPrerequisites(attribute).stream()
-          .map(JavaInfo::getJavaInfo)
-          .filter(Objects::nonNull)
-          .map(JavaInfo::getJavaPluginInfo)
-          .filter(Objects::nonNull)
-          .collect(toImmutableList());
+      return JavaInfo.getProvidersFromListOfTargets(
+          JavaPluginInfoProvider.class, ruleContext.getPrerequisites(attribute));
     }
     return ImmutableList.of();
   }
 
-  JavaPluginInfo createJavaPluginInfo(RuleContext ruleContext) {
+  JavaPluginInfoProvider getJavaPluginInfoProvider(RuleContext ruleContext) {
     NestedSet<String> processorClasses =
         NestedSetBuilder.wrap(Order.NAIVE_LINK_ORDER, getProcessorClasses(ruleContext));
     NestedSet<Artifact> processorClasspath = getRuntimeClasspath();
@@ -860,8 +793,8 @@ public class JavaCommon {
         dataProvider != null
             ? dataProvider.getFilesToBuild()
             : NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
-    return JavaPluginInfo.create(
-        JavaPluginData.create(processorClasses, processorClasspath, data),
+    return JavaPluginInfoProvider.create(
+        JavaPluginInfo.create(processorClasses, processorClasspath, data),
         ruleContext.attributes().get("generates_api", Type.BOOLEAN));
   }
 
@@ -875,11 +808,11 @@ public class JavaCommon {
         : ImmutableSet.of();
   }
 
-  public static JavaPluginInfo getTransitivePlugins(RuleContext ruleContext) {
-    return JavaPluginInfo.merge(
+  public static JavaPluginInfoProvider getTransitivePlugins(RuleContext ruleContext) {
+    return JavaPluginInfoProvider.merge(
         Iterables.concat(
-            getJavaPluginInfoForAttribute(ruleContext, "exported_plugins"),
-            getJavaPluginInfoForAttribute(ruleContext, "exports")));
+            getPluginInfoProvidersForAttribute(ruleContext, "exported_plugins"),
+            getPluginInfoProvidersForAttribute(ruleContext, "exports")));
   }
 
   public static Runfiles getRunfiles(
