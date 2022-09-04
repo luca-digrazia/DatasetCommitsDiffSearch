@@ -17,11 +17,11 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.rules.cpp.CcBuildVariables.CompileBuildVariables;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Pair;
@@ -34,6 +34,8 @@ import javax.annotation.Nullable;
 /** The compile command line for the C++ compile action. */
 @AutoCodec
 public final class CompileCommandLine {
+  public static final ObjectCodec<CompileCommandLine> CODEC = new CompileCommandLine_AutoCodec();
+
   private final Artifact sourceFile;
   private final CoptsFilter coptsFilter;
   private final FeatureConfiguration featureConfiguration;
@@ -151,9 +153,9 @@ public final class CompileCommandLine {
    * explicit attribute, not using platform-dependent garbage bag that copts is).
    */
   public ImmutableList<String> getCopts() {
-    if (variables.isAvailable(CompileBuildVariables.USER_COMPILE_FLAGS.getVariableName())) {
+    if (variables.isAvailable(CcCompilationHelper.USER_COMPILE_FLAGS_VARIABLE_NAME)) {
       return Variables.toStringList(
-          variables, CompileBuildVariables.USER_COMPILE_FLAGS.getVariableName());
+          variables, CcCompilationHelper.USER_COMPILE_FLAGS_VARIABLE_NAME);
     } else {
       return ImmutableList.of();
     }

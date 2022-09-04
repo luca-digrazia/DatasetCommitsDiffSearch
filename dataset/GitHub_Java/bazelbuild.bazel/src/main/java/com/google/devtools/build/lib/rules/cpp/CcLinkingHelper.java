@@ -49,9 +49,6 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.Picness;
 import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -79,11 +76,6 @@ public final class CcLinkingHelper {
   public static final String DYNAMIC_LIBRARY_OUTPUT_GROUP_NAME = "dynamic_library";
 
   /** Contains the providers as well as the linking outputs. */
-  @SkylarkModule(
-    name = "linking_info",
-    category = SkylarkModuleCategory.BUILTIN,
-    doc = "Helper class containing CC linking providers."
-  )
   public static final class LinkingInfo {
     private final TransitiveInfoProviderMap providers;
     private final Map<String, NestedSet<Artifact>> outputGroups;
@@ -104,11 +96,6 @@ public final class CcLinkingHelper {
 
     public TransitiveInfoProviderMap getProviders() {
       return providers;
-    }
-
-    @SkylarkCallable(name = "cc_link_params_info", documented = false)
-    public CcLinkParamsInfo getCcLinkParamsInfo() {
-      return (CcLinkParamsInfo) providers.getProvider(CcLinkParamsInfo.PROVIDER.getKey());
     }
 
     public Map<String, NestedSet<Artifact>> getOutputGroups() {
@@ -160,7 +147,7 @@ public final class CcLinkingHelper {
   private final List<TransitiveInfoCollection> deps = new ArrayList<>();
   private final NestedSetBuilder<Artifact> linkstamps = NestedSetBuilder.stableOrder();
   private final List<Artifact> linkActionInputs = new ArrayList<>();
-  private CcCompilationInfo ccCompilationInfo;
+  private CppCompilationContext cppCompilationContext;
 
   @Nullable private Artifact dynamicLibrary;
   private LinkTargetType linkType = LinkTargetType.STATIC_LIBRARY;
@@ -438,12 +425,11 @@ public final class CcLinkingHelper {
    *
    * @throws RuleErrorException
    */
-  // TODO(b/73997894): Try to remove CcCompilationInfo. Right now headers are passed as non code
-  // inputs to the linker.
-  public LinkingInfo link(CcCompilationOutputs ccOutputs, CcCompilationInfo ccCompilationInfo)
+  public LinkingInfo link(
+      CcCompilationOutputs ccOutputs, CppCompilationContext cppCompilationContext)
       throws RuleErrorException, InterruptedException {
     Preconditions.checkNotNull(ccOutputs);
-    Preconditions.checkNotNull(ccCompilationInfo);
+    Preconditions.checkNotNull(cppCompilationContext);
 
     if (checkDepsGenerateCpp) {
       for (LanguageDependentFragment dep :
@@ -453,7 +439,7 @@ public final class CcLinkingHelper {
       }
     }
 
-    this.ccCompilationInfo = ccCompilationInfo;
+    this.cppCompilationContext = cppCompilationContext;
 
     // Create link actions (only if there are object files or if explicitly requested).
     CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
@@ -550,11 +536,11 @@ public final class CcLinkingHelper {
     if (emitCcSpecificLinkParamsProvider) {
       providers.add(
           new CcSpecificLinkParamsProvider(
-              createCcLinkParamsStore(ccLinkingOutputs, ccCompilationInfo, forcePic)));
+              createCcLinkParamsStore(ccLinkingOutputs, cppCompilationContext, forcePic)));
     } else {
       providers.put(
           new CcLinkParamsInfo(
-              createCcLinkParamsStore(ccLinkingOutputs, ccCompilationInfo, forcePic)));
+              createCcLinkParamsStore(ccLinkingOutputs, cppCompilationContext, forcePic)));
     }
     return new LinkingInfo(
         providers.build(), outputGroups, ccLinkingOutputs, originalLinkingOutputs);
@@ -602,7 +588,7 @@ public final class CcLinkingHelper {
           CppHelper.getLinuxLinkedArtifact(
               ruleContext,
               configuration,
-              Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY,
+              Link.LinkTargetType.DYNAMIC_LIBRARY,
               linkedArtifactNameSuffix));
 
       if (CppHelper.useInterfaceSharedObjects(ccToolchain.getCppConfiguration(), ccToolchain)
@@ -635,13 +621,13 @@ public final class CcLinkingHelper {
 
   private CcLinkParamsStore createCcLinkParamsStore(
       final CcLinkingOutputs ccLinkingOutputs,
-      final CcCompilationInfo ccCompilationInfo,
+      final CppCompilationContext cppCompilationContext,
       final boolean forcePic) {
     return new CcLinkParamsStore() {
       @Override
       protected void collect(
           CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
-        builder.addLinkstamps(linkstamps.build(), ccCompilationInfo);
+        builder.addLinkstamps(linkstamps.build(), cppCompilationContext);
         builder.addTransitiveTargets(
             deps, CcLinkParamsInfo.TO_LINK_PARAMS, CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
         if (!neverlink) {
@@ -834,7 +820,7 @@ public final class CcLinkingHelper {
     if (dynamicLibrary == null) {
       // If the crosstool is configured to select an output artifact, we use that selection.
       // Otherwise, we use linux defaults.
-      soImpl = getLinkedArtifact(LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
+      soImpl = getLinkedArtifact(LinkTargetType.DYNAMIC_LIBRARY);
       mainLibraryIdentifier = libraryIdentifier;
     } else {
       // This branch is only used for vestigial Google-internal rules where the name of the output
@@ -872,7 +858,7 @@ public final class CcLinkingHelper {
             .addObjectFiles(ccOutputs.getObjectFiles(usePicForSharedLibs))
             .addNonCodeInputs(ccOutputs.getHeaderTokenFiles())
             .addLtoBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
-            .setLinkType(LinkTargetType.NODEPS_DYNAMIC_LIBRARY)
+            .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
             .setLinkStaticness(LinkStaticness.DYNAMIC)
             .addActionInputs(linkActionInputs)
             .setLibraryIdentifier(mainLibraryIdentifier)
@@ -982,7 +968,7 @@ public final class CcLinkingHelper {
     return new CppLinkActionBuilder(
             ruleContext, outputArtifact, ccToolchain, fdoSupport, featureConfiguration, semantics)
         .setCrosstoolInputs(ccToolchain.getLink())
-        .addNonCodeInputs(ccCompilationInfo.getTransitiveCompilationPrerequisites());
+        .addNonCodeInputs(cppCompilationContext.getTransitiveCompilationPrerequisites());
   }
 
   /**

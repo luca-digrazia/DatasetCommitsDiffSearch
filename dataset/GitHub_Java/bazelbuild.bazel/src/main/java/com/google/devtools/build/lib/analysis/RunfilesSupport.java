@@ -17,9 +17,9 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.SourceManifestAction.ManifestType;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
+import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
@@ -27,8 +27,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -70,7 +68,6 @@ import javax.annotation.Nullable;
  * which will run an executable should depend on this Middleman Artifact.
  */
 @Immutable
-@AutoCodec
 public final class RunfilesSupport {
   private static final String RUNFILES_DIR_EXT = ".runfiles";
 
@@ -88,15 +85,14 @@ public final class RunfilesSupport {
    * Creates the RunfilesSupport helper with the given executable and runfiles.
    *
    * @param ruleContext the rule context to create the runfiles support for
-   * @param executable the executable for whose runfiles this runfiles support is responsible, may
-   *     be null
+   * @param executable the executable for whose runfiles this runfiles support is responsible
    * @param runfiles the runfiles
    */
-  private static RunfilesSupport create(
+  private RunfilesSupport(
       RuleContext ruleContext, Artifact executable, Runfiles runfiles, CommandLine args) {
-    Artifact owningExecutable = Preconditions.checkNotNull(executable);
+    owningExecutable = Preconditions.checkNotNull(executable);
     boolean createManifest = ruleContext.getConfiguration().buildRunfilesManifests();
-    boolean createSymlinks = createManifest && ruleContext.getConfiguration().buildRunfiles();
+    createSymlinks = createManifest && ruleContext.getConfiguration().buildRunfiles();
 
     // Adding run_under target to the runfiles manifest so it would become part
     // of runfiles tree and would be executable everywhere.
@@ -111,56 +107,26 @@ public final class RunfilesSupport {
           .merge(runfiles)
           .build();
     }
+    this.runfiles = runfiles;
+
     Preconditions.checkState(!runfiles.isEmpty());
 
-    Map<PathFragment, Artifact> symlinks = runfiles.asMapWithoutRootSymlinks();
-    if (executable != null && !symlinks.containsValue(executable)) {
+    Map<PathFragment, Artifact> symlinks = getRunfilesSymlinks();
+    if (!symlinks.containsValue(executable)) {
       throw new IllegalStateException("main program " + executable + " not included in runfiles");
     }
 
-    Artifact runfilesInputManifest;
-    Artifact runfilesManifest;
     if (createManifest) {
-      runfilesInputManifest = createRunfilesInputManifestArtifact(ruleContext, owningExecutable);
-      runfilesManifest =
-          createRunfilesAction(ruleContext, runfiles, createSymlinks, runfilesInputManifest);
+      runfilesInputManifest = createRunfilesInputManifestArtifact(ruleContext);
+      runfilesManifest = createRunfilesAction(ruleContext, runfiles);
     } else {
       runfilesInputManifest = null;
       runfilesManifest = null;
     }
-    Artifact runfilesMiddleman =
+    runfilesMiddleman =
         createRunfilesMiddleman(ruleContext, owningExecutable, runfiles, runfilesManifest);
-    Artifact sourcesManifest = createSourceManifest(ruleContext, runfiles, owningExecutable);
+    sourcesManifest = createSourceManifest(ruleContext, runfiles);
 
-    return new RunfilesSupport(
-        runfiles,
-        runfilesInputManifest,
-        runfilesManifest,
-        runfilesMiddleman,
-        sourcesManifest,
-        owningExecutable,
-        createSymlinks,
-        args);
-  }
-
-  @AutoCodec.Instantiator
-  @VisibleForSerialization
-  RunfilesSupport(
-      Runfiles runfiles,
-      Artifact runfilesInputManifest,
-      Artifact runfilesManifest,
-      Artifact runfilesMiddleman,
-      Artifact sourcesManifest,
-      Artifact owningExecutable,
-      boolean createSymlinks,
-      CommandLine args) {
-    this.runfiles = runfiles;
-    this.runfilesInputManifest = runfilesInputManifest;
-    this.runfilesManifest = runfilesManifest;
-    this.runfilesMiddleman = runfilesMiddleman;
-    this.sourcesManifest = sourcesManifest;
-    this.owningExecutable = owningExecutable;
-    this.createSymlinks = createSymlinks;
     this.args = args;
   }
 
@@ -172,9 +138,8 @@ public final class RunfilesSupport {
   }
 
   /**
-   * Returns the exec path of the directory where the runfiles contained in this
-   * RunfilesSupport are generated. When the owning rule has no executable,
-   * returns null.
+   * Returns the exec path of the directory where the runfiles contained in this RunfilesSupport are
+   * generated.
    */
   public PathFragment getRunfilesDirectoryExecPath() {
     PathFragment executablePath = owningExecutable.getExecPath();
@@ -205,12 +170,8 @@ public final class RunfilesSupport {
     return runfilesInputManifest;
   }
 
-  private static Artifact createRunfilesInputManifestArtifact(
-      RuleContext context, Artifact owningExecutable) {
-    // The executable may be null for emptyRunfiles
-    PathFragment relativePath = (owningExecutable != null)
-        ? owningExecutable.getRootRelativePath()
-        : context.getPackageDirectory().getRelative(context.getLabel().getName());
+  private Artifact createRunfilesInputManifestArtifact(RuleContext context) {
+    PathFragment relativePath = owningExecutable.getRootRelativePath();
     String basename = relativePath.getBaseName();
     PathFragment inputManifestPath = relativePath.replaceName(basename + ".runfiles_manifest");
     return context.getDerivedArtifact(inputManifestPath,
@@ -329,12 +290,9 @@ public final class RunfilesSupport {
    * from different places, e.g. different package paths, generated files, etc.) into a single tree,
    * so that programs can access them using the workspace-relative name.
    */
-  private static Artifact createRunfilesAction(
-      ActionConstructionContext context,
-      Runfiles runfiles,
-      boolean createSymlinks,
-      Artifact inputManifest) {
+  private Artifact createRunfilesAction(ActionConstructionContext context, Runfiles runfiles) {
     // Compute the names of the runfiles directory and its MANIFEST file.
+    Artifact inputManifest = getRunfilesInputManifest();
     context.getAnalysisEnvironment().registerAction(
         SourceManifestAction.forRunfiles(
             ManifestType.SOURCE_SYMLINKS, context.getActionOwner(), inputManifest, runfiles));
@@ -371,8 +329,7 @@ public final class RunfilesSupport {
    * @param runfiles the runfiles
    * @return the Artifact representing the file write action.
    */
-  private static Artifact createSourceManifest(
-      ActionConstructionContext context, Runfiles runfiles, Artifact owningExecutable) {
+  private Artifact createSourceManifest(ActionConstructionContext context, Runfiles runfiles) {
     // Put the sources only manifest next to the MANIFEST file but call it SOURCES.
     PathFragment executablePath = owningExecutable.getRootRelativePath();
     PathFragment sourcesManifestPath = executablePath.getParentDirectory().getChild(
@@ -414,8 +371,11 @@ public final class RunfilesSupport {
    */
   public static RunfilesSupport withExecutable(
       RuleContext ruleContext, Runfiles runfiles, Artifact executable) {
-    return RunfilesSupport.create(
-        ruleContext, executable, runfiles, computeArgs(ruleContext, CommandLine.EMPTY));
+    return new RunfilesSupport(
+        ruleContext,
+        executable,
+        runfiles,
+        computeArgs(ruleContext, CommandLine.EMPTY));
   }
 
   /**
@@ -424,8 +384,11 @@ public final class RunfilesSupport {
    */
   public static RunfilesSupport withExecutable(
       RuleContext ruleContext, Runfiles runfiles, Artifact executable, List<String> appendingArgs) {
-    return RunfilesSupport.create(
-        ruleContext, executable, runfiles, computeArgs(ruleContext, CommandLine.of(appendingArgs)));
+    return new RunfilesSupport(
+        ruleContext,
+        executable,
+        runfiles,
+        computeArgs(ruleContext, CommandLine.of(appendingArgs)));
   }
 
   /**
@@ -434,8 +397,11 @@ public final class RunfilesSupport {
    */
   public static RunfilesSupport withExecutable(
       RuleContext ruleContext, Runfiles runfiles, Artifact executable, CommandLine appendingArgs) {
-    return RunfilesSupport.create(
-        ruleContext, executable, runfiles, computeArgs(ruleContext, appendingArgs));
+    return new RunfilesSupport(
+        ruleContext,
+        executable,
+        runfiles,
+        computeArgs(ruleContext, appendingArgs));
   }
 
   private static CommandLine computeArgs(

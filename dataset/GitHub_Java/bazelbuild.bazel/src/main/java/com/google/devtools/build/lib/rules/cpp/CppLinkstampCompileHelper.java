@@ -33,7 +33,7 @@ public class CppLinkstampCompileHelper {
       Artifact sourceFile,
       Artifact outputFile,
       Iterable<Artifact> compilationInputs,
-      Iterable<Artifact> nonCodeInputs,
+      ImmutableSet<Artifact> nonCodeInputs,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       Iterable<String> additionalLinkstampDefines,
       CcToolchainProvider ccToolchainProvider,
