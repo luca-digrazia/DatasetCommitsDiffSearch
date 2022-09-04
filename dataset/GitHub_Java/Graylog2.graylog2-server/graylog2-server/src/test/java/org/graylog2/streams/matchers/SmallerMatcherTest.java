@@ -1,116 +1,240 @@
 /**
- * Copyright 2011, 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.streams.matchers;
 
 import org.graylog2.plugin.Message;
-import org.bson.types.ObjectId;
-import com.mongodb.BasicDBObject;
-import org.graylog2.streams.StreamRuleImpl;
+import org.graylog2.plugin.streams.StreamRule;
+import org.graylog2.plugin.streams.StreamRuleType;
 import org.junit.Test;
-import static org.junit.Assert.*;
 
-public class SmallerMatcherTest {
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+public class SmallerMatcherTest extends MatcherTest {
     @Test
     public void testSuccessfulMatch() {
-        BasicDBObject mongoRule = new BasicDBObject();
-        mongoRule.put("_id", new ObjectId());
-        mongoRule.put("rule_type", StreamRuleImpl.TYPE_GREATER);
-        mongoRule.put("field", "something");
-        mongoRule.put("value", "100");
+        StreamRule rule = getSampleRule();
+        rule.setValue("100");
 
-        StreamRuleImpl rule = new StreamRuleImpl(mongoRule);
-
-        Message msg = new Message("foo", "bar", 0);
+        Message msg = getSampleMessage();
         msg.addField("something", "20");
 
-        SmallerMatcher matcher = new SmallerMatcher();
+        StreamRuleMatcher matcher = getMatcher(rule);
         assertTrue(matcher.match(msg, rule));
     }
-    
+
+    @Test
+    public void testSuccessfulDoubleMatch() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("100");
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "20.45");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertTrue(matcher.match(msg, rule));
+    }
+
+    @Test
+    public void testSuccessfulInvertedMatch() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("100");
+        rule.setInverted(true);
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "200");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertTrue(matcher.match(msg, rule));
+    }
+
     @Test
     public void testSuccessfulMatchWithNegativeValue() {
-        BasicDBObject mongoRule = new BasicDBObject();
-        mongoRule.put("_id", new ObjectId());
-        mongoRule.put("rule_type", StreamRuleImpl.TYPE_GREATER);
-        mongoRule.put("field", "something");
-        mongoRule.put("value", "-54354");
+        StreamRule rule = getSampleRule();
+        rule.setValue("-54354");
 
-        StreamRuleImpl rule = new StreamRuleImpl(mongoRule);
-
-        Message msg = new Message("foo", "bar", 0);
+        Message msg = getSampleMessage();
         msg.addField("something", "-90000");
 
-        SmallerMatcher matcher = new SmallerMatcher();
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertTrue(matcher.match(msg, rule));
+    }
+
+    @Test
+    public void testSuccessfulDoubleMatchWithNegativeValue() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("-54354.42");
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "-90000.12");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertTrue(matcher.match(msg, rule));
+    }
+
+    @Test
+    public void testSuccessfulInvertedMatchWithNegativeValue() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("-54354");
+        rule.setInverted(true);
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "-9000");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
         assertTrue(matcher.match(msg, rule));
     }
 
     @Test
     public void testMissedMatch() {
-        BasicDBObject mongoRule = new BasicDBObject();
-        mongoRule.put("_id", new ObjectId());
-        mongoRule.put("rule_type", StreamRuleImpl.TYPE_GREATER);
-        mongoRule.put("field", "something");
-        mongoRule.put("value", "26");
+        StreamRule rule = getSampleRule();
+        rule.setValue("25");
 
-        StreamRuleImpl rule = new StreamRuleImpl(mongoRule);
-
-        Message msg = new Message("foo", "bar", 0);
+        Message msg = getSampleMessage();
         msg.addField("something", "27");
 
-        SmallerMatcher matcher = new SmallerMatcher();
+        StreamRuleMatcher matcher = getMatcher(rule);
         assertFalse(matcher.match(msg, rule));
     }
-    
+
+    @Test
+    public void testMissedDoubleMatch() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("25");
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "27.45");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertFalse(matcher.match(msg, rule));
+    }
+
+    @Test
+    public void testMissedInvertedMatch() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("25");
+        rule.setInverted(true);
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "23");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertFalse(matcher.match(msg, rule));
+    }
+
     @Test
     public void testMissedMatchWithEqualValues() {
-        BasicDBObject mongoRule = new BasicDBObject();
-        mongoRule.put("_id", new ObjectId());
-        mongoRule.put("rule_type", StreamRuleImpl.TYPE_GREATER);
-        mongoRule.put("field", "something");
-        mongoRule.put("value", "-9001");
+        StreamRule rule = getSampleRule();
+        rule.setValue("-9001");
 
-        StreamRuleImpl rule = new StreamRuleImpl(mongoRule);
-
-        Message msg = new Message("foo", "bar", 0);
+        Message msg = getSampleMessage();
         msg.addField("something", "-9001");
 
-        SmallerMatcher matcher = new SmallerMatcher();
+        StreamRuleMatcher matcher = getMatcher(rule);
         assertFalse(matcher.match(msg, rule));
     }
-    
+
+    @Test
+    public void testMissedDoubleMatchWithEqualValues() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("-9001.23");
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "-9001.23");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertFalse(matcher.match(msg, rule));
+    }
+
+    @Test
+    public void testSuccessfullInvertedMatchWithEqualValues() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("-9001");
+        rule.setInverted(true);
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "-9001");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertTrue(matcher.match(msg, rule));
+    }
+
     @Test
     public void testMissedMatchWithInvalidValue() {
-        BasicDBObject mongoRule = new BasicDBObject();
-        mongoRule.put("_id", new ObjectId());
-        mongoRule.put("rule_type", StreamRuleImpl.TYPE_GREATER);
-        mongoRule.put("field", "something");
-        mongoRule.put("value", "LOL I AM NOT EVEN A NUMBER");
+        StreamRule rule = getSampleRule();
+        rule.setValue("LOL I AM NOT EVEN A NUMBER");
 
-        StreamRuleImpl rule = new StreamRuleImpl(mongoRule);
-
-        Message msg = new Message("foo", "bar", 0);
+        Message msg = getSampleMessage();
         msg.addField("something", "-9001");
 
-        SmallerMatcher matcher = new SmallerMatcher();
+        StreamRuleMatcher matcher = getMatcher(rule);
         assertFalse(matcher.match(msg, rule));
     }
-    
+
+    @Test
+    public void testMissedDoubleMatchWithInvalidValue() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("LOL I AM NOT EVEN A NUMBER");
+
+        Message msg = getSampleMessage();
+        msg.addField("something", "-9001.42");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertFalse(matcher.match(msg, rule));
+    }
+
+    @Test
+    public void testMissedMatchWithMissingField() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("42");
+
+        Message msg = getSampleMessage();
+        msg.addField("someother", "23");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertFalse(matcher.match(msg, rule));
+    }
+
+    @Test
+    public void testMissedInvertedMatchWithMissingField() {
+        StreamRule rule = getSampleRule();
+        rule.setValue("23");
+        rule.setInverted(true);
+
+        Message msg = getSampleMessage();
+        msg.addField("someother", "42");
+
+        StreamRuleMatcher matcher = getMatcher(rule);
+        assertFalse(matcher.match(msg, rule));
+    }
+
+    protected StreamRule getSampleRule() {
+        StreamRule rule = super.getSampleRule();
+        rule.setType(StreamRuleType.SMALLER);
+
+        return rule;
+    }
+
+    protected StreamRuleMatcher getMatcher(StreamRule rule) {
+        StreamRuleMatcher matcher = super.getMatcher(rule);
+
+        assertEquals(matcher.getClass(), SmallerMatcher.class);
+
+        return matcher;
+    }
 }

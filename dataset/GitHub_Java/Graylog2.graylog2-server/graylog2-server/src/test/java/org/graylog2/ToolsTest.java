@@ -1,33 +1,28 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@scopeport.org>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 /**
  * ToolsTest.java: Lennart Koopmann <lennart@scopeport.org> | Aug 5, 2010 6:49:52 PM
  */
 
 package org.graylog2;
 
-import org.graylog2.plugin.Tools;
 import com.google.common.collect.Lists;
+import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
-import org.joda.time.format.ISODateTimeFormat;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -39,7 +34,10 @@ import java.util.List;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * @author lennart
@@ -153,9 +151,12 @@ public class ToolsTest {
     @Test
     public void testGenerateServerId() {
         String id = Tools.generateServerId();
-        
-        assertTrue(id.startsWith(Tools.getLocalHostname() + "-"));
-        assertTrue(id.length() > (Tools.getLocalHostname() + "-").length());
+
+        /*
+         * Make sure it has dashes in it. We need that to build a short ID later.
+         * Short version: Everything falls apart if this is not an UUID-style ID.
+         */
+        assertTrue(id.contains("-"));
     }
     
     @Test
@@ -199,20 +200,29 @@ public class ToolsTest {
 
     @Test
     public void testGetInt() throws Exception {
-        assertEquals(null, Tools.getInt(null));
+        assertEquals(null, Tools.getDouble(null));
+        assertEquals(null, Tools.getDouble(""));
 
-        assertEquals((Integer) 0, Tools.getInt(0));
-        assertEquals((Integer) 1, Tools.getInt(1));
-        assertEquals((Integer) 9001, Tools.getInt(9001));
+        assertEquals(0.0, Tools.getDouble(0), 0);
+        assertEquals(1.0, Tools.getDouble(1), 0);
+        assertEquals(1.42, Tools.getDouble(1.42), 0);
+        assertEquals(9001.0, Tools.getDouble(9001), 0);
+        assertEquals(9001.23, Tools.getDouble(9001.23), 0);
 
-        assertEquals((Integer) 1253453, Tools.getInt((long) 1253453));
-        assertEquals(null, Tools.getInt((double) 5));
-        assertEquals(null, Tools.getInt(18.2));
+        assertEquals(1253453.0, Tools.getDouble((long) 1253453), 0);
 
-        assertEquals((Integer) 88, Tools.getInt("88"));
-        assertEquals(null, Tools.getInt("lol NOT A NUMBER"));
+        assertEquals(88.0, Tools.getDouble("88"), 0);
+        assertEquals(1.42, Tools.getDouble("1.42"), 0);
+        assertEquals(null, Tools.getDouble("lol NOT A NUMBER"));
 
-        assertEquals(null, Tools.getInt(new HashMap<String, String>()));
+        assertEquals(null, Tools.getDouble(new HashMap<String, String>()));
+
+        assertEquals(42.23, Tools.getDouble(new Object() {
+            @Override
+            public String toString() {
+                return "42.23";
+            }
+        }), 0);
     }
 
     @Test
@@ -223,9 +233,22 @@ public class ToolsTest {
          * to avoid problems on test systems in other time zones, that are not CEST and do
          * not end with a +02:00 or shit.)
          */
-        assert(DateTime.parse("2013-09-15 02-21-02", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.000+"));
-        assert(DateTime.parse("2013-09-15 02-21-02.123", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.123+"));
-        assert(DateTime.parse("2013-09-15 02-21-02.12", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.120+"));
-        assert(DateTime.parse("2013-09-15 02-21-02.1", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.100+"));
+        assertTrue(DateTime.parse("2013-09-15 02:21:02", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.000"));
+        assertTrue(DateTime.parse("2013-09-15 02:21:02.123", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.123"));
+        assertTrue(DateTime.parse("2013-09-15 02:21:02.12", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.120"));
+        assertTrue(DateTime.parse("2013-09-15 02:21:02.1", Tools.timeFormatterWithOptionalMilliseconds()).toString().startsWith("2013-09-15T02:21:02.100"));
+    }
+
+    @Test
+    public void testElasticSearchTimeFormatToISO8601() {
+        assertTrue(Tools.elasticSearchTimeFormatToISO8601("2014-07-31 14:21:02.000").equals("2014-07-31T14:21:02.000Z"));
+    }
+
+    @Test
+    public void testTimeFromDouble() {
+        assertTrue(Tools.dateTimeFromDouble(1381076986.306509).toString().startsWith("2013-10-06T"));
+        assertTrue(Tools.dateTimeFromDouble(1381076986).toString().startsWith("2013-10-06T"));
+        assertTrue(Tools.dateTimeFromDouble(1381079085.6).toString().startsWith("2013-10-06T"));
+        assertTrue(Tools.dateTimeFromDouble(1381079085.06).toString().startsWith("2013-10-06T"));
     }
 }
