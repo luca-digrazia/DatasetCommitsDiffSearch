@@ -13,11 +13,10 @@ import android.view.TextureView;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
-import com.shuyu.gsyvideoplayer.render.GSYRenderView;
-import com.shuyu.gsyvideoplayer.render.view.GSYVideoGLView;
+import com.shuyu.gsyvideoplayer.GSYRenderView;
+import com.shuyu.gsyvideoplayer.GSYVideoGLView;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
-import com.shuyu.gsyvideoplayer.render.effect.NoEffect;
-import com.shuyu.gsyvideoplayer.render.glrender.GSYVideoGLViewBaseRender;
+import com.shuyu.gsyvideoplayer.effect.NoEffect;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
 
 /**
@@ -42,13 +41,8 @@ public abstract class GSYTextureRenderView extends FrameLayout implements Textur
     //滤镜
     protected GSYVideoGLView.ShaderInterface mEffectFilter = new NoEffect();
 
-    protected float[] mMatrixGL = null;
-
     //画面选择角度
     protected int mRotate;
-
-    //自定义渲染
-    protected GSYVideoGLViewBaseRender mRenderer;
 
     public GSYTextureRenderView(@NonNull Context context) {
         super(context);
@@ -61,8 +55,6 @@ public abstract class GSYTextureRenderView extends FrameLayout implements Textur
     public GSYTextureRenderView(@NonNull Context context, @Nullable AttributeSet attrs, @AttrRes int defStyleAttr) {
         super(context, attrs, defStyleAttr);
     }
-
-    /******************** start render  listener****************************/
 
     /******************** TextureView  ****************************/
 
@@ -119,8 +111,6 @@ public abstract class GSYTextureRenderView extends FrameLayout implements Textur
         pauseLogic(surface, false);
     }
 
-    /******************** end render listener****************************/
-
     /**
      * 暂停逻辑
      */
@@ -143,7 +133,7 @@ public abstract class GSYTextureRenderView extends FrameLayout implements Textur
             mTextureView.addSurfaceView(getContext(), mTextureViewContainer, mRotate, this);
             return;
         } else if (GSYVideoType.getRenderType() == GSYVideoType.GLSURFACE) {
-            mTextureView.addGLView(getContext(), mTextureViewContainer, mRotate, this, mEffectFilter, mMatrixGL, mRenderer);
+            mTextureView.addGLView(getContext(), mTextureViewContainer, mRotate, this, mEffectFilter);
             return;
         }
         mTextureView.addTextureView(getContext(), mTextureViewContainer, mRotate, this);
@@ -190,7 +180,7 @@ public abstract class GSYTextureRenderView extends FrameLayout implements Textur
 
     protected GSYVideoGLView getGSYVideoGLSView() {
         if (mTextureView.getShowView() instanceof GSYVideoGLView) {
-            return (GSYVideoGLView) mTextureView.getShowView();
+            return (GSYVideoGLView)mTextureView.getShowView();
         }
         return null;
     }
@@ -210,49 +200,9 @@ public abstract class GSYTextureRenderView extends FrameLayout implements Textur
     }
 
     /**
-     * 获取渲染的代理层
-     */
-    public GSYRenderView getRenderProxy() {
-        return mTextureView;
-    }
-
-    /**
      * 设置滤镜效果
      */
     public void setEffectFilter(GSYVideoGLView.ShaderInterface effectFilter) {
         this.mEffectFilter = effectFilter;
-        if (mTextureView != null && mTextureView.getShowView() instanceof GSYVideoGLView) {
-            GSYVideoGLView gsyVideoGLView =
-                    (GSYVideoGLView) mTextureView.getShowView();
-            gsyVideoGLView.setEffect(effectFilter);
-        }
-    }
-
-    /**
-     * GL模式下的画面matrix效果
-     *
-     * @param matrixGL 16位长度
-     */
-    public void setMatrixGL(float[] matrixGL) {
-        this.mMatrixGL = matrixGL;
-        if (mTextureView != null && mTextureView.getShowView() instanceof GSYVideoGLView
-                && mMatrixGL != null && mMatrixGL.length == 16) {
-            GSYVideoGLView gsyVideoGLView =
-                    (GSYVideoGLView) mTextureView.getShowView();
-            gsyVideoGLView.setMVPMatrix(mMatrixGL);
-        }
-    }
-
-    /**
-     * 自定义GL的渲染render
-     */
-    public void setCustomGLRenderer(GSYVideoGLViewBaseRender renderer) {
-        this.mRenderer = renderer;
-        if (mTextureView != null && mRenderer != null &&
-                mTextureView.getShowView() instanceof GSYVideoGLView) {
-            GSYVideoGLView gsyVideoGLView =
-                    (GSYVideoGLView) mTextureView.getShowView();
-            gsyVideoGLView.setCustomRenderer(mRenderer);
-        }
     }
 }

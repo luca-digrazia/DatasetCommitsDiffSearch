@@ -3,9 +3,8 @@ package com.shuyu.gsyvideoplayer.builder;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 
-import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
-import com.shuyu.gsyvideoplayer.render.view.GSYVideoGLView;
-import com.shuyu.gsyvideoplayer.render.effect.NoEffect;
+import com.shuyu.gsyvideoplayer.GSYVideoGLView;
+import com.shuyu.gsyvideoplayer.effect.NoEffect;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.listener.StandardVideoAllCallBack;
 import com.shuyu.gsyvideoplayer.listener.VideoAllCallBack;
@@ -96,9 +95,6 @@ public class GSYVideoOptionBuilder {
     //是否需要变速不变调
     protected boolean mSounchTouch;
 
-    //是否需要lazy的setup
-    protected boolean mSetUpLazy = false;
-
     //播放的tag，防止错误，因为普通的url也可能重复
     protected String mPlayTag = "";
 
@@ -143,10 +139,6 @@ public class GSYVideoOptionBuilder {
 
     //滤镜
     protected GSYVideoGLView.ShaderInterface mEffectFilter = new NoEffect();
-
-    //进度回调
-    protected GSYVideoProgressListener mGSYVideoProgressListener;
-
 
     /**
      * 全屏动画
@@ -386,15 +378,6 @@ public class GSYVideoOptionBuilder {
         return this;
     }
 
-    /**
-     * 进度回调
-     */
-    public GSYVideoOptionBuilder setGSYVideoProgressListener(GSYVideoProgressListener videoProgressListener) {
-        this.mGSYVideoProgressListener = videoProgressListener;
-        return this;
-    }
-
-
     /***
      * 设置封面
      */
@@ -490,14 +473,6 @@ public class GSYVideoOptionBuilder {
         return this;
     }
 
-    /**
-     * 在播放前才真正执行setup
-     */
-    public GSYVideoOptionBuilder setSetUpLazy(boolean setUpLazy) {
-        this.mSetUpLazy = setUpLazy;
-        return this;
-    }
-
     public void build(StandardGSYVideoPlayer gsyVideoPlayer) {
         if (mStandardVideoAllCallBack != null) {
             gsyVideoPlayer.setStandardVideoAllCallBack(mStandardVideoAllCallBack);
@@ -552,9 +527,6 @@ public class GSYVideoOptionBuilder {
         if (mStandardVideoAllCallBack == null) {
             gsyVideoPlayer.setVideoAllCallBack(mVideoAllCallBack);
         }
-        if (mGSYVideoProgressListener != null) {
-            gsyVideoPlayer.setGSYVideoProgressListener(mGSYVideoProgressListener);
-        }
         gsyVideoPlayer.setRotateViewAuto(mRotateViewAuto);
         gsyVideoPlayer.setLockLand(mLockLand);
         gsyVideoPlayer.setSpeed(mSpeed, mSounchTouch);
@@ -572,11 +544,7 @@ public class GSYVideoOptionBuilder {
         gsyVideoPlayer.setShowPauseCover(mShowPauseCover);
         gsyVideoPlayer.setSeekRatio(mSeekRatio);
         gsyVideoPlayer.setRotateWithSystem(mRotateWithSystem);
-        if(mSetUpLazy) {
-            gsyVideoPlayer.setUpLazy(mUrl, mCacheWithPlay, mCachePath, mMapHeadData, mVideoTitle);
-        } else {
-            gsyVideoPlayer.setUp(mUrl, mCacheWithPlay, mCachePath, mMapHeadData, mVideoTitle);
-        }
+        gsyVideoPlayer.setUp(mUrl, mCacheWithPlay, mCachePath, mMapHeadData, mVideoTitle);
     }
 
 }
