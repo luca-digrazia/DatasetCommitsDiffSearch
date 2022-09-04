@@ -1,33 +1,42 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.transports;
 
 import com.google.common.util.concurrent.Uninterruptibles;
-import com.rabbitmq.client.*;
-import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
-import org.graylog2.plugin.buffers.ProcessingDisabledException;
-import org.graylog2.plugin.inputs.MessageInput2;
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.DefaultConsumer;
+import com.rabbitmq.client.Envelope;
+import com.rabbitmq.client.ShutdownListener;
+import com.rabbitmq.client.ShutdownSignalException;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.journal.RawMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.util.Locale;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -46,20 +55,27 @@ public class AmqpConsumer {
 
     private final String queue;
     private final String exchange;
+    private final boolean exchangeBind;
     private final String routingKey;
+    private final boolean requeueInvalid;
 
     private Connection connection;
     private Channel channel;
 
-    private final MessageInput2 sourceInput;
+    private final int heartbeatTimeout;
+    private final MessageInput sourceInput;
+    private final int parallelQueues;
+    private final boolean tls;
+    private AmqpTransport amqpTransport;
 
     private AtomicLong totalBytesRead = new AtomicLong(0);
     private AtomicLong lastSecBytesRead = new AtomicLong(0);
     private AtomicLong lastSecBytesReadTmp = new AtomicLong(0);
 
     public AmqpConsumer(String hostname, int port, String virtualHost, String username, String password,
-                        int prefetchCount, String queue, String exchange, String routingKey,
-                        MessageInput2 sourceInput, ScheduledExecutorService scheduler) {
+                        int prefetchCount, String queue, String exchange, boolean exchangeBind, String routingKey,int parallelQueues,
+                        boolean tls, boolean requeueInvalid, int heartbeatTimeout, MessageInput sourceInput,
+                        ScheduledExecutorService scheduler, AmqpTransport amqpTransport) {
         this.hostname = hostname;
         this.port = port;
         this.virtualHost = virtualHost;
@@ -69,9 +85,15 @@ public class AmqpConsumer {
 
         this.queue = queue;
         this.exchange = exchange;
+        this.exchangeBind = exchangeBind;
         this.routingKey = routingKey;
+        this.heartbeatTimeout = heartbeatTimeout;
 
         this.sourceInput = sourceInput;
+        this.parallelQueues = parallelQueues;
+        this.tls = tls;
+        this.requeueInvalid = requeueInvalid;
+        this.amqpTransport = amqpTransport;
 
         scheduler.scheduleAtFixedRate(new Runnable() {
             @Override
@@ -86,39 +108,46 @@ public class AmqpConsumer {
             connect();
         }
 
-        channel.basicConsume(queue, false, new DefaultConsumer(channel) {
+        for (int i = 0; i < parallelQueues; i++) {
+            final String queueName = String.format(Locale.ENGLISH, queue, i);
+            channel.queueDeclare(queueName, true, false, false, null);
+            if (exchangeBind) {
+                channel.queueBind(queueName, exchange, routingKey);
+            }
+            channel.basicConsume(queueName, false, new DefaultConsumer(channel) {
                 @Override
                 public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                    final long deliveryTag = envelope.getDeliveryTag();
-
+                    long deliveryTag = envelope.getDeliveryTag();
                     try {
                         totalBytesRead.addAndGet(body.length);
                         lastSecBytesReadTmp.addAndGet(body.length);
 
-                        final RawMessage rawMessage = new RawMessage("radio-msgpack", sourceInput.getId(), null, body);
-                        sourceInput.processRawMessageFailFast(rawMessage);
+                        final RawMessage rawMessage = new RawMessage(body);
+
+                        // TODO figure out if we want to unsubscribe after a certain time, or if simply blocking is enough here
+                        if (amqpTransport.isThrottled()) {
+                            amqpTransport.blockUntilUnthrottled();
+                        }
+
+                        sourceInput.processRawMessage(rawMessage);
                         channel.basicAck(deliveryTag, false);
-                    } catch (BufferOutOfCapacityException e) {
-                        LOG.debug("Input buffer full, requeuing message. Delaying 10 ms until trying next message.");
-                        if (channel.isOpen()) {
-                            channel.basicNack(deliveryTag, false, true);
-                            Uninterruptibles.sleepUninterruptibly(10, TimeUnit.MILLISECONDS); // TODO magic number
-                        }
-                    } catch (ProcessingDisabledException e) {
-                        LOG.debug("Message processing is disabled, requeuing message. Delaying 100 ms until trying next message.");
-                        if (channel.isOpen()) {
-                            channel.basicNack(deliveryTag, false, true);
-                            Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS); // TODO magic number
-                        }
                     } catch (Exception e) {
-                        LOG.error("Error while trying to process AMQP message, requeuing message", e);
+                        LOG.error("Error while trying to process AMQP message", e);
                         if (channel.isOpen()) {
-                            channel.basicNack(deliveryTag, false, true);
+                            channel.basicNack(deliveryTag, false, requeueInvalid);
+
+                            if (LOG.isDebugEnabled()) {
+                                if (requeueInvalid) {
+                                    LOG.debug("Re-queue message with delivery tag {}", deliveryTag);
+                                } else {
+                                    LOG.debug("Message with delivery tag {} not re-queued", deliveryTag);
+                                }
+                            }
                         }
                     }
                 }
-            }
-        );
+            });
+        }
     }
 
     public void connect() throws IOException {
@@ -126,17 +155,32 @@ public class AmqpConsumer {
         factory.setHost(hostname);
         factory.setPort(port);
         factory.setVirtualHost(virtualHost);
+        factory.setRequestedHeartbeat(heartbeatTimeout);
+
+        if (tls) {
+            try {
+                LOG.info("Enabling TLS for AMQP input [{}/{}].", sourceInput.getName(), sourceInput.getId());
+                factory.useSslProtocol();
+            } catch (NoSuchAlgorithmException | KeyManagementException e) {
+                throw new IOException("Couldn't enable TLS for AMQP input.", e);
+            }
+        }
 
         // Authenticate?
-        if(!isNullOrEmpty(username) && !isNullOrEmpty(password)) {
+        if (!isNullOrEmpty(username) && !isNullOrEmpty(password)) {
             factory.setUsername(username);
             factory.setPassword(password);
         }
 
-        connection = factory.newConnection();
+        try {
+            connection = factory.newConnection();
+        } catch (TimeoutException e) {
+            throw new IOException("Timeout while opening new AMQP connection", e);
+        }
+
         channel = connection.createChannel();
 
-        if(null == channel) {
+        if (null == channel) {
             LOG.error("No channel descriptor available!");
         }
 
@@ -167,7 +211,7 @@ public class AmqpConsumer {
 
                         LOG.info("Consumer running.");
                         break;
-                    } catch(IOException e) {
+                    } catch (IOException e) {
                         LOG.error("Could not re-connect to AMQP broker.", e);
                     }
                 }
@@ -178,7 +222,12 @@ public class AmqpConsumer {
 
     public void stop() throws IOException {
         if (channel != null && channel.isOpen()) {
-            channel.close();
+            try {
+                channel.close();
+            } catch (TimeoutException e) {
+                LOG.error("Timeout when closing AMQP channel", e);
+                channel.abort();
+            }
         }
 
         if (connection != null && connection.isOpen()) {
