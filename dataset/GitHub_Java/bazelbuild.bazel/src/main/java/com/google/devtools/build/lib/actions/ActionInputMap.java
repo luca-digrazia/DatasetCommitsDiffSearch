@@ -26,13 +26,17 @@ import javax.annotation.Nullable;
  * <p>This class is thread-compatible.
  */
 public final class ActionInputMap implements MetadataProvider {
-  private ActionInput[] keys;
-  private FileArtifactValue[] values;
+  /**
+   * {@link ActionInput} keys stored in even indices
+   *
+   * <p>{@link FileArtifactValue} values stored in odd indices
+   */
+  private Object[] data;
 
   /** Number of contained elements. */
   private int size;
 
-  /** Length of keys = 2^(numBits+1) */
+  /** Length of data = 2^(numBits+1) */
   private int numBits;
 
   /** Mask to use to perform the modulo operation since the table size is a power of 2. */
@@ -44,8 +48,7 @@ public final class ActionInputMap implements MetadataProvider {
       ++numBits;
     }
     this.mask = (1 << numBits) - 1;
-    this.keys = new ActionInput[1 << numBits];
-    this.values = new FileArtifactValue[1 << numBits];
+    this.data = new Object[1 << (numBits + 1)];
     this.size = 0;
   }
 
@@ -59,10 +62,11 @@ public final class ActionInputMap implements MetadataProvider {
   public FileArtifactValue getMetadata(String execPathString) {
     int hashCode = execPathString.hashCode();
     int probe = getProbe(hashCode);
-    while (keys[probe] != null) {
-      String execPath = keys[probe].getExecPathString();
-      if (hashCode == execPath.hashCode() && execPath.equals(execPathString)) {
-        return values[probe];
+    ActionInput nextKey;
+    while ((nextKey = (ActionInput) data[probe]) != null) {
+      if (hashCode == nextKey.getExecPathString().hashCode()
+          && nextKey.getExecPathString().equals(execPathString)) {
+        return (FileArtifactValue) data[probe + 1];
       }
       probe = incProbe(probe);
     }
@@ -74,10 +78,11 @@ public final class ActionInputMap implements MetadataProvider {
   public ActionInput getInput(String execPathString) {
     int hashCode = execPathString.hashCode();
     int probe = getProbe(hashCode);
-    while (keys[probe] != null) {
-      String execPath = keys[probe].getExecPathString();
-      if (hashCode == execPath.hashCode() && execPath.equals(execPathString)) {
-        return keys[probe];
+    ActionInput nextKey;
+    while ((nextKey = (ActionInput) data[probe]) != null) {
+      if (hashCode == nextKey.getExecPathString().hashCode()
+          && nextKey.getExecPathString().equals(execPathString)) {
+        return nextKey;
       }
       probe = incProbe(probe);
     }
@@ -92,27 +97,24 @@ public final class ActionInputMap implements MetadataProvider {
   /** @return true if an entry was added, false if the map already contains {@code input} */
   public boolean put(ActionInput input, FileArtifactValue metadata) {
     Preconditions.checkNotNull(input);
-    if (size * 2 >= keys.length) {
+    if (size * 4 >= data.length) {
       resize();
     }
     return putImpl(input, metadata);
   }
 
   public void clear() {
-    Arrays.fill(keys, null);
-    Arrays.fill(values, null);
+    Arrays.fill(data, null);
     size = 0;
   }
 
   private void resize() {
-    ActionInput[] oldKeys = keys;
-    FileArtifactValue[] oldValues = values;
-    keys = new ActionInput[keys.length * 2];
-    values = new FileArtifactValue[values.length * 2];
+    Object[] oldData = data;
+    data = new Object[data.length * 2];
     ++numBits;
     mask = (1 << numBits) - 1;
-    for (int i = 0; i < oldKeys.length; i++) {
-      ActionInput key = oldKeys[i];
+    for (int i = 0; i < oldData.length; i += 2) {
+      ActionInput key = (ActionInput) oldData[i];
       if (key == null) {
         continue;
       }
@@ -120,9 +122,9 @@ public final class ActionInputMap implements MetadataProvider {
       int probe = getProbe(hashCode);
       while (true) {
         // Only checks for empty slots because all map keys are known to be unique.
-        if (keys[probe] == null) {
-          keys[probe] = key;
-          values[probe] = oldValues[i];
+        if (data[probe] == null) {
+          data[probe] = key;
+          data[probe + 1] = oldData[i + 1];
           break;
         }
         probe = incProbe(probe);
@@ -133,16 +135,16 @@ public final class ActionInputMap implements MetadataProvider {
   /**
    * Unlike the public version, this doesn't resize.
    *
-   * <p>REQUIRES: there are free positions in {@link keys}.
+   * <p>REQUIRES: there are free positions in {@link data}.
    */
   private boolean putImpl(ActionInput key, FileArtifactValue value) {
     int hashCode = key.getExecPathString().hashCode();
     int probe = getProbe(hashCode);
     while (true) {
-      ActionInput next = keys[probe];
+      ActionInput next = (ActionInput) data[probe];
       if (next == null) {
-        keys[probe] = key;
-        values[probe] = value;
+        data[probe] = key;
+        data[probe + 1] = value;
         ++size;
         return true;
       }
@@ -155,10 +157,14 @@ public final class ActionInputMap implements MetadataProvider {
   }
 
   private int getProbe(int hashCode) {
-    return hashCode & mask;
+    return (hashCode & mask) << 1;
   }
 
   private int incProbe(int probe) {
-    return (probe + 1) & mask;
+    probe += 2;
+    if (probe >= data.length) {
+      probe -= data.length;
+    }
+    return probe;
   }
 }
