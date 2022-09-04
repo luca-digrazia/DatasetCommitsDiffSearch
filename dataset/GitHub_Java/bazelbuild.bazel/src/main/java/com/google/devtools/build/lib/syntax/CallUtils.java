@@ -37,7 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 
@@ -197,20 +196,11 @@ public final class CallUtils {
    * method of the given object (the {@link SkylarkCallable} method with {@link
    * SkylarkCallable#selfCall()} set to true). Returns null if no such method exists.
    */
+  // TODO(adonovan): eliminate sole use in docgen.
   @Nullable
-  static MethodDescriptor getSelfCallMethodDescriptor(
+  public static MethodDescriptor getSelfCallMethodDescriptor(
       StarlarkSemantics semantics, Class<?> objClass) {
     return getCacheValue(objClass, semantics).selfCall;
-  }
-
-  /**
-   * Returns the annotation from the SkylarkCallable-annotated self-call method of the specified
-   * class, or null if not found.
-   */
-  public static SkylarkCallable getSelfCallAnnotation(Class<?> objClass) {
-    MethodDescriptor selfCall =
-        getSelfCallMethodDescriptor(StarlarkSemantics.DEFAULT_SEMANTICS, objClass);
-    return selfCall == null ? null : selfCall.getAnnotation();
   }
 
   /**
@@ -279,7 +269,8 @@ public final class CallUtils {
       Object value;
 
       if (param.isDisabledInCurrentSemantics()) {
-        value = evalDefault(param.getName(), param.getValueOverride());
+        value =
+            SkylarkSignatureProcessor.getDefaultValue(param.getName(), param.getValueOverride());
         builder.add(value);
         continue;
       }
@@ -318,7 +309,8 @@ public final class CallUtils {
           if (param.getDefaultValue().isEmpty()) {
             throw unspecifiedParameterException(call, param, method, objClass, kwargs);
           }
-          value = evalDefault(param.getName(), param.getDefaultValue());
+          value =
+              SkylarkSignatureProcessor.getDefaultValue(param.getName(), param.getDefaultValue());
         }
       }
       if (!param.isNoneable() && value instanceof NoneType) {
@@ -612,40 +604,4 @@ public final class CallUtils {
         call.getLocation(), "'" + EvalUtils.getDataTypeName(fn) + "' object is not callable");
   }
 
-  // A memoization of evalDefault, keyed by expression.
-  // This cache is manually maintained (instead of using LoadingCache),
-  // as default values may sometimes be recursively requested.
-  private static final ConcurrentHashMap<String, Object> defaultValueCache =
-      new ConcurrentHashMap<>();
-
-  // Evaluates the default value expression for a parameter.
-  private static Object evalDefault(String name, String expr) {
-    if (expr.isEmpty()) {
-      return Starlark.NONE;
-    }
-    Object x = defaultValueCache.get(expr);
-    if (x != null) {
-      return x;
-    }
-    try (Mutability mutability = Mutability.create("initialization")) {
-      // Note that this Starlark thread ignores command line flags.
-      StarlarkThread thread =
-          StarlarkThread.builder(mutability)
-              .useDefaultSemantics()
-              .setGlobals(Module.createForBuiltins(Starlark.UNIVERSE))
-              .build()
-              .update("unbound", Starlark.UNBOUND);
-      x = EvalUtils.eval(ParserInput.fromLines(expr), thread);
-      defaultValueCache.put(expr, x);
-      return x;
-    } catch (Exception ex) {
-      if (ex instanceof InterruptedException) {
-        Thread.currentThread().interrupt();
-      }
-      throw new IllegalArgumentException(
-          String.format(
-              "while evaluating default value %s of parameter %s: %s",
-              expr, name, ex.getMessage()));
-    }
-  }
 }
