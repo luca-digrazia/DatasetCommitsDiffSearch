@@ -174,7 +174,7 @@ public final class CustomCommandLine extends CommandLine {
 
       private SimpleVectorArg(Builder builder, @Nullable Collection<T> values) {
         this(
-            /* isNestedSet= */ false,
+            false /* isNestedSet */,
             values == null || values.isEmpty(),
             values != null ? values.size() : 0,
             builder.formatEach,
@@ -185,9 +185,9 @@ public final class CustomCommandLine extends CommandLine {
 
       private SimpleVectorArg(Builder builder, @Nullable NestedSet<T> values) {
         this(
-            /* isNestedSet= */ true,
+            true /* isNestedSet */,
             values == null || values.isEmpty(),
-            /* count= */ -1,
+            -1 /* count */,
             builder.formatEach,
             builder.beforeEach,
             builder.joinWith,

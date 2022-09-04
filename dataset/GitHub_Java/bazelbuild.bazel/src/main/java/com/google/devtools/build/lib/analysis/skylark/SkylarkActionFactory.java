@@ -327,9 +327,10 @@ public class SkylarkActionFactory implements SkylarkValue {
           @ParamType(type = SkylarkNestedSet.class),
         },
         generic1 = Artifact.class,
-        defaultValue = "unbound",
+        defaultValue = "None",
         named = true,
         positional = false,
+        noneable = true,
         doc =
             "List or depset of any tools needed by the action. Tools are inputs with additional "
                 + "runfiles that are automatically made available to the action."
@@ -518,9 +519,10 @@ public class SkylarkActionFactory implements SkylarkValue {
           @ParamType(type = SkylarkNestedSet.class),
         },
         generic1 = Artifact.class,
-        defaultValue = "unbound",
+        defaultValue = "None",
         named = true,
         positional = false,
+        noneable = true,
         doc =
             "List or depset of any tools needed by the action. Tools are inputs with additional "
                 + "runfiles that are automatically made available to the action."
@@ -762,7 +764,7 @@ public class SkylarkActionFactory implements SkylarkValue {
     }
     builder.addOutputs(outputs.getContents(Artifact.class, "outputs"));
 
-    if (toolsUnchecked != Runtime.UNBOUND) {
+    if (toolsUnchecked != Runtime.NONE) {
       final Iterable<Artifact> toolsIterable;
       if (toolsUnchecked instanceof SkylarkList) {
         toolsIterable = ((SkylarkList) toolsUnchecked).getContents(Artifact.class, "tools");
