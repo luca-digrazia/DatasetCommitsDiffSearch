@@ -134,7 +134,6 @@ public class PathPackageLocator implements Serializable {
         Path buildFile =
             outputBase
                 .getRelative(LabelConstants.EXTERNAL_REPOSITORY_LOCATION)
-                .getRelative(packageIdentifier.getRepository().strippedName())
                 .getRelative(packageIdentifier.getSourceRoot())
                 .getRelative(buildFileName.getFilenameFragment());
         try {
