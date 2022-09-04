@@ -20,11 +20,11 @@ import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.openapi.OASFilter;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
+
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.BeanContainerListener;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.annotations.Template;
-
 import io.smallrye.openapi.api.OpenApiConfig;
 import io.smallrye.openapi.api.OpenApiConfigImpl;
 import io.smallrye.openapi.api.OpenApiDocument;
@@ -43,7 +43,8 @@ public class SmallRyeOpenApiTemplate {
                 Config config = ConfigProvider.getConfig();
                 OpenApiConfig openApiConfig = new OpenApiConfigImpl(config);
 
-                OpenAPI readerModel = OpenApiProcessor.modelFromReader(openApiConfig, Quarkus.class.getClassLoader());
+                OpenAPI readerModel = OpenApiProcessor.modelFromReader(openApiConfig,
+                        Thread.currentThread().getContextClassLoader());
 
                 OpenApiDocument document = createDocument(openApiConfig);
                 document.modelFromAnnotations(annotationModel);
@@ -64,6 +65,7 @@ public class SmallRyeOpenApiTemplate {
     }
 
     private OASFilter filter(OpenApiConfig openApiConfig) {
-        return OpenApiProcessor.getFilter(openApiConfig, Quarkus.class.getClassLoader());
+        return OpenApiProcessor.getFilter(openApiConfig,
+                Thread.currentThread().getContextClassLoader());
     }
 }
