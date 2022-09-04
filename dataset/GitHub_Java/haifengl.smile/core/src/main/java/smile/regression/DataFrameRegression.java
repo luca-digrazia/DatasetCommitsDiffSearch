@@ -27,18 +27,13 @@ import smile.data.type.StructType;
  *
  * @author Haifeng Li
  */
-public interface DataFrameRegression extends Regression<Tuple> {
+public interface DataFrameRegression {
     /**
-     * Returns the model formula.
-     * @return the model formula.
+     * Predicts the dependent variable of a tuple instance.
+     * @param x a tuple instance.
+     * @return the predicted value of dependent variable.
      */
-    Formula formula();
-
-    /**
-     * Returns the schema of predictors.
-     * @return the schema of predictors.
-     */
-    StructType schema();
+    double predict(Tuple x);
 
     /**
      * Predicts the dependent variables of a data frame.
@@ -50,6 +45,23 @@ public interface DataFrameRegression extends Regression<Tuple> {
         // Binds the formula to the data frame's schema in case that
         // it is different from that of training data.
         formula().bind(data.schema());
-        return data.stream().mapToDouble(this::predict).toArray();
+        int n = data.size();
+        double[] y = new double[n];
+        for (int i = 0; i < n; i++) {
+            y[i] = predict(data.get(i));
+        }
+        return y;
     }
+
+    /**
+     * Returns the model formula.
+     * @return the model formula.
+     */
+    Formula formula();
+
+    /**
+     * Returns the schema of predictors.
+     * @return the schema of predictors.
+     */
+    StructType schema();
 }

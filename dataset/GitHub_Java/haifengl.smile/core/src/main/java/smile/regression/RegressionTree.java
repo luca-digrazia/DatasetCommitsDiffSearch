@@ -77,7 +77,7 @@ import smile.math.MathEx;
  *
  * @author Haifeng Li
  */
-public class RegressionTree extends CART implements DataFrameRegression {
+public class RegressionTree extends CART implements Regression<Tuple>, DataFrameRegression {
     private static final long serialVersionUID = 2L;
 
     /** The dependent variable. */
@@ -292,13 +292,13 @@ public class RegressionTree extends CART implements DataFrameRegression {
      * </ul>
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @return the model.
      */
-    public static RegressionTree fit(Formula formula, DataFrame data, Properties params) {
-        int maxDepth = Integer.parseInt(params.getProperty("smile.cart.max_depth", "20"));
-        int maxNodes = Integer.parseInt(params.getProperty("smile.cart.max_nodes", String.valueOf(data.size() / 5)));
-        int nodeSize = Integer.parseInt(params.getProperty("smile.cart.node_size", "5"));
+    public static RegressionTree fit(Formula formula, DataFrame data, Properties prop) {
+        int maxDepth = Integer.parseInt(prop.getProperty("smile.cart.max.depth", "20"));
+        int maxNodes = Integer.parseInt(prop.getProperty("smile.cart.max.nodes", String.valueOf(data.size() / 5)));
+        int nodeSize = Integer.parseInt(prop.getProperty("smile.cart.node.size", "5"));
         return fit(formula, data, maxDepth, maxNodes, nodeSize);
     }
 

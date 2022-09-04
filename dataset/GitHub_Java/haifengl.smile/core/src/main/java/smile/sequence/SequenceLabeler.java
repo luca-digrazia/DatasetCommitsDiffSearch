@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.sequence;
 
@@ -27,9 +27,9 @@ import java.io.Serializable;
 public interface SequenceLabeler<T> extends Serializable {
     /**
      * Predicts the sequence labels.
-     * @param x a sequence. At each position, it may be the original symbol or
+     * @param x the sequence. At each position, it may be the original symbol or
      * a feature set about the symbol, its neighborhood, and/or other information.
-     * @return the predicted sequence labels.
+     * @return the sequence labels.
      */
     int[] predict(T[] x);
 }

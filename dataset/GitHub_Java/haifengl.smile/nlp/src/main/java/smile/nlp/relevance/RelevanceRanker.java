@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.nlp.relevance;
 
@@ -27,22 +27,24 @@ import smile.nlp.TextTerms;
  */
 public interface RelevanceRanker {
     /**
-     * Returns a relevance score between a term and a document based on a corpus.
+     * Returns the relevance score between a term and a document based on a corpus.
      * @param corpus the corpus.
      * @param doc the document to rank.
      * @param term the searching term.
      * @param tf the term frequency in the document.
      * @param n the number of documents containing the given term in the corpus;
+     * @return the relevance score.
      */
     double rank(Corpus corpus, TextTerms doc, String term, int tf, int n);
 
     /**
-     * Returns a relevance score between a set of terms and a document based on a corpus.
+     * Returns the relevance score between a set of terms and a document based on a corpus.
      * @param corpus the corpus.
      * @param doc the document to rank.
      * @param terms the searching terms.
      * @param tf the term frequencies in the document.
      * @param n the number of documents containing the given term in the corpus;
+     * @return the relevance score.
      */
     double rank(Corpus corpus, TextTerms doc, String[] terms, int[] tf, int n);
 }

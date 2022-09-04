@@ -154,15 +154,6 @@ public class LASSO {
         return new LinearModel(formula, schema, X, y, w, b);
     }
 
-    /**
-     * Fits the LASSO model.
-     * @param x the design matrix.
-     * @param y the responsible variable.
-     * @param lambda the shrinkage/regularization parameter.
-     * @param tol the tolerance for stopping iterations (relative target duality gap).
-     * @param maxIter the maximum number of IPM (Newton) iterations.
-     * @return the model.
-     */
     static double[] train(Matrix x, double[] y, double lambda, double tol, int maxIter) {
         if (lambda < 0.0) {
             throw new IllegalArgumentException("Invalid shrinkage/regularization parameter lambda = " + lambda);
@@ -240,7 +231,7 @@ public class LASSO {
         double[] prb = new double[p];
         double[] prs = new double[p];
 
-        PCG pcg = new PCG(x, d1, d2, prb, prs);
+        PCGMatrix pcg = new PCGMatrix(x, d1, d2, prb, prs);
 
         // MAIN LOOP
         int ntiter = 0;
@@ -371,7 +362,7 @@ public class LASSO {
 
     /**
      * Returns sum(log(-f)).
-     * @param f the matrix.
+     * @param f a matrix.
      * @return sum(log(-f))
      */
     private static double sumlogneg(double[][] f) {
@@ -385,38 +376,19 @@ public class LASSO {
         return sum;
     }
 
-    /**
-     * Preconditioned conjugate gradients matrix.
-     */
-    static class PCG extends DMatrix implements Preconditioner {
-        /** The design matrix. */
+    static class PCGMatrix extends DMatrix implements Preconditioner {
+
         Matrix A;
-        /** A' * A */
         Matrix AtA;
-        /** The number of columns of A. */
         int p;
-        /** The right bottom of Hessian matrix. */
         double[] d1;
-        /** The last row/column of Hessian matrix. */
         double[] d2;
-        /** The vector used in preconditioner. */
         double[] prb;
-        /** The vector used in preconditioner. */
         double[] prs;
-        /** A * x */
         double[] ax;
-        /** A' * A * x. */
         double[] atax;
 
-        /**
-         * Constructor.
-         * @param A
-         * @param d1
-         * @param d2
-         * @param prb
-         * @param prs
-         */
-        PCG(Matrix A, double[] d1, double[] d2, double[] prb, double[] prs) {
+        PCGMatrix(Matrix A, double[] d1, double[] d2, double[] prb, double[] prs) {
             this.A = A;
             this.d1 = d1;
             this.d2 = d2;
@@ -477,6 +449,7 @@ public class LASSO {
         @Override
         public void solve(double[] b, double[] x) {
             // COMPUTE P^{-1}X (PCG)
+            //
             // y = P^{-1} * x
             for (int i = 0; i < p; i++) {
                 x[i]   = ( d1[i] * b[i] -  d2[i] * b[i+p]) / prs[i];
