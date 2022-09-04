@@ -29,17 +29,17 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 
+import org.jboss.protean.gizmo.BytecodeCreator;
+import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.ClassOutput;
+import org.jboss.protean.gizmo.FieldDescriptor;
+import org.jboss.protean.gizmo.MethodCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 import org.objectweb.asm.Opcodes;
 import org.wildfly.common.Assert;
 
 import io.quarkus.deployment.AccessorFinder;
-import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.ClassOutput;
-import io.quarkus.gizmo.FieldDescriptor;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -273,18 +273,17 @@ public class ConfigDefinition extends CompoundConfigType {
         } else if (valueClass.isAnnotationPresent(ConfigGroup.class)) {
             processConfigGroup(NO_CONTAINING_NAME, mct, true, subKey, valueClass, accessorFinder);
         } else if (valueClass == List.class) {
-            if (!(mapValueType instanceof ParameterizedType))
-                throw reportError(containingElement, "List must be parameterized");
             final ObjectListConfigType leaf = new ObjectListConfigType(NO_CONTAINING_NAME, mct, consumeSegment, "",
-                    rawTypeOfParameter(mapValueType, 0));
+                    rawTypeOfParameter(typeOfParameter(mapValueType, 1), 0));
             container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
         } else if (valueClass == Optional.class || valueClass == OptionalInt.class || valueClass == OptionalDouble.class
                 || valueClass == OptionalLong.class) {
             throw reportError(containingElement, "Optionals are not allowed as a map value type");
         } else {
-            // treat as a plain object
+            // treat as a plain object, hope for the best
+            // TODO, REVISIT THIS
             final ObjectConfigType leaf = new ObjectConfigType(NO_CONTAINING_NAME, mct, true, "", valueClass);
-            container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
+            //container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
         }
         return mct;
     }
