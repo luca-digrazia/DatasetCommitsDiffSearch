@@ -14,93 +14,121 @@
 
 package com.google.testing.junit.runner.model;
 
-import static com.google.common.base.Predicates.notNull;
-import static com.google.common.collect.Maps.filterValues;
-import static com.google.common.collect.Maps.transformValues;
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
-import com.google.common.base.Ticker;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.MapMaker;
 import com.google.testing.junit.junit4.runner.DynamicTestException;
 import com.google.testing.junit.runner.sharding.ShardingEnvironment;
 import com.google.testing.junit.runner.sharding.ShardingFilters;
+import com.google.testing.junit.runner.util.TestClock;
+import com.google.testing.junit.runner.util.TestClock.TestInstant;
+import com.google.testing.junit.runner.util.TestIntegrationsRunnerIntegration;
 import com.google.testing.junit.runner.util.TestPropertyRunnerIntegration;
-
-import org.junit.runner.Description;
-import org.junit.runner.manipulation.Filter;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.StringWriter;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import javax.annotation.Nullable;
 import javax.inject.Inject;
+import org.junit.runner.Description;
+import org.junit.runner.manipulation.Filter;
 
 /**
- * Model of the tests that will be run. The model is agnostic of the particular
- * type of test run (JUnit3 or JUnit4). The test runner uses this class to build
- * the model, and then updates the model during the test run.
+ * Model of the tests that will be run. The model is agnostic of the particular type of test run
+ * (JUnit3 or JUnit4). The test runner uses this class to build the model, and then updates the
+ * model during the test run.
  *
  * <p>The leaf nodes in the model are test cases; the other nodes are test suites.
  */
 public class TestSuiteModel {
   private final TestSuiteNode rootNode;
-  private final ImmutableMap<Description, TestCaseNode> testCaseMap;
-  private final ImmutableMap<Description, TestNode> testsMap;
-  private final Ticker ticker;
+  private final Map<Description, TestCaseNode> testCaseMap;
+  private final Map<Description, TestNode> testsMap;
+  private final TestClock testClock;
   private final AtomicBoolean wroteXml = new AtomicBoolean(false);
   private final XmlResultWriter xmlResultWriter;
   @Nullable private final Filter shardingFilter;
 
   private TestSuiteModel(Builder builder) {
     rootNode = builder.rootNode;
-    testsMap = ImmutableMap.copyOf(builder.testsMap);
-    testCaseMap = ImmutableMap.copyOf(filterTestCases(builder.testsMap));
-    ticker = builder.ticker;
+    testsMap = builder.testsMap;
+    testCaseMap = filterTestCases(builder.testsMap);
+    testClock = builder.testClock;
     shardingFilter = builder.shardingFilter;
     xmlResultWriter = builder.xmlResultWriter;
   }
 
-  @VisibleForTesting
+  // VisibleForTesting
   public List<TestNode> getTopLevelTestSuites() {
     return rootNode.getChildren();
   }
 
-  /**
-   * Gets the sharding filter to use; {@link Filter#ALL} if not sharding.
-   */
+  // VisibleForTesting
+  public Description getTopLevelDescription() {
+    return rootNode.getDescription();
+  }
+
+  /** Gets the sharding filter to use; {@link Filter#ALL} if not sharding. */
   public Filter getShardingFilter() {
     return shardingFilter;
   }
 
   /**
-   * Returns the test case node with the given test description.<p>
+   * Returns the test case node with the given test description.
    *
-   * Note that in theory this should never return {@code null}, but
-   * if it did we would not want to throw a {@code NullPointerException}
-   * because JUnit4 would catch the exception and remove our test
-   * listener!
+   * <p>Note that in theory this should never return {@code null}, but if it did we would not want
+   * to throw a {@code NullPointerException} because JUnit4 would catch the exception and remove our
+   * test listener!
    */
   private TestCaseNode getTestCase(Description description) {
-    return testCaseMap.get(description);
+    // The description shouldn't be null, but in the test runner code we avoid throwing exceptions.
+    return description == null ? null : testCaseMap.get(description);
   }
 
   private TestNode getTest(Description description) {
-    return testsMap.get(description);
+    // The description shouldn't be null, but in the test runner code we avoid throwing exceptions.
+    return description == null ? null : testsMap.get(description);
   }
 
-  @VisibleForTesting
+  // VisibleForTesting
   public int getNumTestCases() {
     return testCaseMap.size();
+  }
+
+  /**
+   * Indicate that the test run has started. This should be called after all filtering has been
+   * completed.
+   *
+   * @param topLevelDescription the root {@link Description} node.
+   */
+  public void testRunStarted(Description topLevelDescription) {
+    markChildrenAsPending(topLevelDescription);
+  }
+
+  private void markChildrenAsPending(Description node) {
+    if (node.isTest()) {
+      testPending(node);
+    } else {
+      for (Description child : node.getChildren()) {
+        markChildrenAsPending(child);
+      }
+    }
+  }
+
+  /**
+   * Indicate that the test case with the given key is scheduled to start.
+   *
+   * @param description key for a test case
+   */
+  private void testPending(Description description) {
+    TestCaseNode testCase = getTestCase(description);
+    if (testCase != null) {
+      testCase.pending();
+    }
   }
 
   /**
@@ -111,21 +139,22 @@ public class TestSuiteModel {
   public void testStarted(Description description) {
     TestCaseNode testCase = getTestCase(description);
     if (testCase != null) {
-      testCase.started(currentMillis());
+      testCase.started(now());
       TestPropertyRunnerIntegration.setTestCaseForThread(testCase);
+      TestIntegrationsRunnerIntegration.setTestCaseForThread(testCase);
     }
   }
 
-  /**
-   * Indicate that the entire test run was interrupted.
-   */
+  /** Indicate that the entire test run was interrupted. */
   public void testRunInterrupted() {
-    rootNode.testInterrupted(currentMillis());
+    rootNode.testInterrupted(now());
   }
 
   /**
-   * Indicate that the test case with the given key has requested that
-   * a property be written in the XML.<p>
+   * Indicate that the test case with the given key has requested that a property be written in the
+   * XML.
+   *
+   * <p>
    *
    * @param description key for a test case
    * @param name The property name.
@@ -139,8 +168,8 @@ public class TestSuiteModel {
   }
 
   /**
-   * Adds a failure to the test with the given key. If the specified test is suite, the failure
-   * will be added to all its children.
+   * Adds a failure to the test with the given key. If the specified test is suite, the failure will
+   * be added to all its children.
    *
    * @param description key for a test case
    */
@@ -149,10 +178,9 @@ public class TestSuiteModel {
     if (test != null) {
       if (throwable instanceof DynamicTestException) {
         DynamicTestException dynamicFailure = (DynamicTestException) throwable;
-        test.dynamicTestFailure(
-            dynamicFailure.getTest(), dynamicFailure.getCause(), currentMillis());
+        test.dynamicTestFailure(dynamicFailure.getTest(), dynamicFailure.getCause(), now());
       } else {
-        test.testFailure(throwable, currentMillis());
+        test.testFailure(throwable, now());
       }
     }
   }
@@ -165,10 +193,9 @@ public class TestSuiteModel {
   public void testSkipped(Description description) {
     TestNode test = getTest(description);
     if (test != null) {
-      test.testSkipped(currentMillis());
+      test.testSkipped(now());
     }
   }
-  
 
   /**
    * Indicates that the test case with the given key was ignored or suppressed
@@ -178,17 +205,15 @@ public class TestSuiteModel {
   public void testSuppressed(Description description) {
     TestNode test = getTest(description);
     if (test != null) {
-      test.testSuppressed(currentMillis());
+      test.testSuppressed(now());
     }
   }
 
-  /**
-   * Indicate that the test case with the given description has finished.
-   */
+  /** Indicate that the test case with the given description has finished. */
   public void testFinished(Description description) {
     TestCaseNode testCase = getTestCase(description);
     if (testCase != null) {
-      testCase.finished(currentMillis());
+      testCase.finished(now());
     }
 
     /*
@@ -198,8 +223,8 @@ public class TestSuiteModel {
      */
   }
 
-  private long currentMillis() {
-    return NANOSECONDS.toMillis(ticker.read());
+  private TestInstant now() {
+    return testClock.now();
   }
 
   /**
@@ -212,8 +237,8 @@ public class TestSuiteModel {
     write(new XmlWriter(outputStream));
   }
 
-  @VisibleForTesting
-  void write(XmlWriter writer) throws IOException {
+  // VisibleForTesting
+  public void write(XmlWriter writer) throws IOException {
     if (wroteXml.compareAndSet(false, true)) {
       xmlResultWriter.writeTestSuites(writer, rootNode.getResult());
     }
@@ -249,12 +274,10 @@ public class TestSuiteModel {
     }
   }
 
-  /**
-   * A builder for creating a model of a test suite.
-   */
+  /** A builder for creating a model of a test suite. */
   public static class Builder {
-    private final Ticker ticker;
-    private final Map<Description, TestNode> testsMap = new MapMaker().makeMap();
+    private final TestClock testClock;
+    private final Map<Description, TestNode> testsMap = new ConcurrentHashMap<>();
     private final ShardingEnvironment shardingEnvironment;
     private final ShardingFilters shardingFilters;
     private final XmlResultWriter xmlResultWriter;
@@ -263,29 +286,50 @@ public class TestSuiteModel {
     private boolean buildWasCalled = false;
 
     @Inject
-    public Builder(Ticker ticker, ShardingFilters shardingFilters,
-        ShardingEnvironment shardingEnvironment, XmlResultWriter xmlResultWriter) {
-      this.ticker = ticker;
+    public Builder(
+        TestClock testClock,
+        ShardingFilters shardingFilters,
+        ShardingEnvironment shardingEnvironment,
+        XmlResultWriter xmlResultWriter) {
+      this.testClock = testClock;
       this.shardingFilters = shardingFilters;
       this.shardingEnvironment = shardingEnvironment;
       this.xmlResultWriter = xmlResultWriter;
     }
 
+    /**
+     * Build a model with the given name, including the given suites. This method should be called
+     * before any command line filters are applied.
+     */
     public TestSuiteModel build(String suiteName, Description... topLevelSuites) {
-      Preconditions.checkState(!buildWasCalled, "Builder.build() was already called");
+      return build(suiteName, Collections.emptyMap(), topLevelSuites);
+    }
+
+    /**
+     * Build a model with the given name, including the given suites. This method should be called
+     * before any command line filters are applied.
+     *
+     * <p>The given {@code properties} map will be applied to the root {@link TestSuiteNode}.
+     */
+    public TestSuiteModel build(
+        String suiteName, Map<String, String> properties, Description... topLevelSuites) {
+      if (buildWasCalled) {
+        throw new IllegalStateException("Builder.build() was already called");
+      }
       buildWasCalled = true;
       if (shardingEnvironment.isShardingEnabled()) {
         shardingFilter = getShardingFilter(topLevelSuites);
       }
-      rootNode = new TestSuiteNode(Description.createSuiteDescription(suiteName));
+      rootNode = new TestSuiteNode(Description.createSuiteDescription(suiteName), properties);
       for (Description topLevelSuite : topLevelSuites) {
         addTestSuite(rootNode, topLevelSuite);
+        rootNode.getDescription().addChild(topLevelSuite);
       }
       return new TestSuiteModel(this);
     }
 
     private Filter getShardingFilter(Description... topLevelSuites) {
-      Collection<Description> tests = Lists.newLinkedList();
+      Collection<Description> tests = new LinkedList<>();
       for (Description suite : topLevelSuites) {
         collectTests(suite, tests);
       }
@@ -320,7 +364,9 @@ public class TestSuiteModel {
     }
 
     private void addTestCase(TestSuiteNode parentSuite, Description testCaseDesc) {
-      Preconditions.checkArgument(testCaseDesc.isTest());
+      if (!testCaseDesc.isTest()) {
+        throw new IllegalArgumentException();
+      }
       if (!shardingFilter.shouldRun(testCaseDesc)) {
         return;
       }
@@ -330,16 +376,18 @@ public class TestSuiteModel {
     }
   }
 
+  /**
+   * Converts the values of the Map from {@link TestNode} to {@link TestCaseNode} filtering out null
+   * values.
+   */
   private static Map<Description, TestCaseNode> filterTestCases(Map<Description, TestNode> tests) {
-    return filterValues(transformValues(tests, toTestCaseNode()), notNull());
-  }
-
-  private static Function<TestNode, TestCaseNode> toTestCaseNode() {
-    return new Function<TestNode, TestCaseNode>() {
-      @Override
-      public TestCaseNode apply(TestNode test) {
-        return test instanceof TestCaseNode ? (TestCaseNode) test : null;
+    Map<Description, TestCaseNode> filteredAndConvertedTests = new HashMap<>();
+    for (Description key : tests.keySet()) {
+      TestNode testNode = tests.get(key);
+      if (testNode instanceof TestCaseNode) {
+        filteredAndConvertedTests.put(key, (TestCaseNode) testNode);
       }
-    };
+    }
+    return filteredAndConvertedTests;
   }
 }

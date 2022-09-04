@@ -14,31 +14,33 @@
 
 package com.google.testing.junit.runner.model;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.testing.junit.runner.model.TestResult.Status;
-
-import org.joda.time.Interval;
-import org.junit.runner.Description;
-
+import com.google.testing.junit.runner.util.TestClock.TestInstant;
+import com.google.testing.junit.runner.util.TestIntegration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import org.junit.runner.Description;
 
 /**
  * A parent node in the test suite model.
  */
 class TestSuiteNode extends TestNode {
   private final List<TestNode> children = new ArrayList<>();
+  private final Map<String, String> properties;
 
   TestSuiteNode(Description description) {
-    super(description);
+    this(description, Collections.emptyMap());
   }
 
-  @VisibleForTesting
+  TestSuiteNode(Description description, Map<String, String> properties) {
+    super(description);
+    this.properties = properties;
+  }
+
+  // VisibleForTesting
   @Override
   public List<TestNode> getChildren() {
     return Collections.unmodifiableList(children);
@@ -50,35 +52,35 @@ class TestSuiteNode extends TestNode {
   }
 
   @Override
-  public void testFailure(Throwable throwable, long now) {
+  public void testFailure(Throwable throwable, TestInstant now) {
     for (TestNode child : getChildren()) {
       child.testFailure(throwable, now);
     }
   }
 
   @Override
-  public void dynamicTestFailure(Description test, Throwable throwable, long now) {
+  public void dynamicTestFailure(Description test, Throwable throwable, TestInstant now) {
     for (TestNode child : getChildren()) {
       child.dynamicTestFailure(test, throwable, now);
     }
   }
 
   @Override
-  public void testInterrupted(long now) {
+  public void testInterrupted(TestInstant now) {
     for (TestNode child : getChildren()) {
       child.testInterrupted(now);
     }
   }
 
   @Override
-  public void testSkipped(long now) {
+  public void testSkipped(TestInstant now) {
     for (TestNode child : getChildren()) {
       child.testSkipped(now);
     }
   }
 
   @Override
-  public void testSuppressed(long now) {
+  public void testSuppressed(TestInstant now) {
     for (TestNode child : getChildren()) {
       child.testSuppressed(now);
     }
@@ -94,8 +96,9 @@ class TestSuiteNode extends TestNode {
 
   @Override
   protected TestResult buildResult() {
-    Interval runTime = null;
-    int numTests = 0, numFailures = 0;
+    TestInterval runTime = null;
+    int numTests = 0;
+    int numFailures = 0;
     LinkedList<TestResult> childResults = new LinkedList<>();
 
     for (TestNode child : children) {
@@ -104,25 +107,23 @@ class TestSuiteNode extends TestNode {
       numTests += childResult.getNumTests();
       numFailures += childResult.getNumFailures();
 
-      Optional<Interval> optionalChildRunTime = childResult.getRunTimeInterval();
-      if (optionalChildRunTime.isPresent()) {
-        Interval childRunTime = optionalChildRunTime.get();
-        runTime = runTime == null ? childRunTime
-            : new Interval(Math.min(runTime.getStartMillis(), childRunTime.getStartMillis()),
-                         Math.max(runTime.getEndMillis(), childRunTime.getEndMillis()));
+      TestInterval childRunTime = childResult.getRunTimeInterval();
+      if (childRunTime != null) {
+        runTime = runTime == null ? childRunTime : TestInterval.around(runTime, childRunTime);
       }
     }
 
     return new TestResult.Builder()
         .name(getDescription().getDisplayName())
         .className("")
-        .properties(ImmutableMap.<String, String>of())
-        .failures(ImmutableList.<Throwable>of())
-        .runTimeInterval(Optional.fromNullable(runTime))
+        .properties(properties)
+        .failures(Collections.<Throwable>emptyList())
+        .runTimeInterval(runTime)
         .status(Status.SKIPPED)
         .numTests(numTests)
         .numFailures(numFailures)
         .childResults(childResults)
+        .integrations(Collections.<TestIntegration>emptySet())
         .build();
   }
 }
