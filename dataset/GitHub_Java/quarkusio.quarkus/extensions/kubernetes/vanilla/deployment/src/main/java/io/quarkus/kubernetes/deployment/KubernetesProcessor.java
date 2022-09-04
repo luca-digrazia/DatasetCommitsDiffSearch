@@ -1,10 +1,8 @@
 package io.quarkus.kubernetes.deployment;
 
-import static io.quarkus.kubernetes.deployment.Constants.DEFAULT_HTTP_PORT;
 import static io.quarkus.kubernetes.deployment.Constants.DEFAULT_S2I_IMAGE_NAME;
 import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT;
 import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_CONFIG;
-import static io.quarkus.kubernetes.deployment.Constants.HTTP_PORT;
 import static io.quarkus.kubernetes.deployment.Constants.KNATIVE;
 import static io.quarkus.kubernetes.deployment.Constants.KUBERNETES;
 import static io.quarkus.kubernetes.deployment.Constants.OPENSHIFT;
@@ -45,7 +43,6 @@ import io.dekorate.kubernetes.decorator.AddAwsElasticBlockStoreVolumeDecorator;
 import io.dekorate.kubernetes.decorator.AddAzureDiskVolumeDecorator;
 import io.dekorate.kubernetes.decorator.AddAzureFileVolumeDecorator;
 import io.dekorate.kubernetes.decorator.AddConfigMapVolumeDecorator;
-import io.dekorate.kubernetes.decorator.AddEnvVarDecorator;
 import io.dekorate.kubernetes.decorator.AddImagePullSecretDecorator;
 import io.dekorate.kubernetes.decorator.AddInitContainerDecorator;
 import io.dekorate.kubernetes.decorator.AddLabelDecorator;
@@ -123,24 +120,24 @@ class KubernetesProcessor {
 
     @BuildStep(onlyIf = IsNormal.class)
     public void build(ApplicationInfoBuildItem applicationInfo,
-            ArchiveRootBuildItem archiveRoot,
-            OutputTargetBuildItem outputTarget,
+            ArchiveRootBuildItem archiveRootBuildItem,
+            OutputTargetBuildItem outputTargetBuildItem,
             PackageConfig packageConfig,
             KubernetesConfig kubernetesConfig,
             OpenshiftConfig openshiftConfig,
             KnativeConfig knativeConfig,
-            List<KubernetesEnvBuildItem> kubernetesEnvs,
-            List<KubernetesRoleBuildItem> kubernetesRoles,
-            List<KubernetesPortBuildItem> kubernetesPorts,
-            List<KubernetesDeploymentTargetBuildItem> kubernetesDeploymentTargets,
-            Optional<BaseImageInfoBuildItem> baseImage,
-            Optional<ContainerImageInfoBuildItem> containerImage,
-            Optional<KubernetesCommandBuildItem> command,
-            Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPath,
-            Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPath,
+            List<KubernetesEnvBuildItem> kubernetesEnvBuildItems,
+            List<KubernetesRoleBuildItem> kubernetesRoleBuildItems,
+            List<KubernetesPortBuildItem> kubernetesPortBuildItems,
+            List<KubernetesDeploymentTargetBuildItem> kubernetesDeploymentTargetBuildItems,
+            Optional<BaseImageInfoBuildItem> baseImageBuildItem,
+            Optional<ContainerImageInfoBuildItem> containerImageBuildItem,
+            Optional<KubernetesCommandBuildItem> commandBuildItem,
+            Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPathBuildItem,
+            Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPathBuildItem,
             BuildProducer<GeneratedFileSystemResourceBuildItem> generatedResourceProducer) {
 
-        if (kubernetesPorts.isEmpty()) {
+        if (kubernetesPortBuildItems.isEmpty()) {
             log.debug("The service is not an HTTP service so no Kubernetes manifests will be generated");
             return;
         }
@@ -153,12 +150,12 @@ class KubernetesProcessor {
         }
 
         Map<String, Object> config = KubernetesConfigUtil.toMap(kubernetesConfig, openshiftConfig, knativeConfig);
-        Set<String> deploymentTargets = kubernetesDeploymentTargets.stream()
+        Set<String> deploymentTargets = kubernetesDeploymentTargetBuildItems.stream()
                 .map(KubernetesDeploymentTargetBuildItem::getName)
                 .collect(Collectors.toSet());
 
-        Path artifactPath = archiveRoot.getArchiveRoot().resolve(
-                String.format(OUTPUT_ARTIFACT_FORMAT, outputTarget.getBaseName(), packageConfig.runnerSuffix));
+        Path artifactPath = archiveRootBuildItem.getArchiveRoot().resolve(
+                String.format(OUTPUT_ARTIFACT_FORMAT, outputTargetBuildItem.getBaseName(), packageConfig.runnerSuffix));
 
         final Map<String, String> generatedResourcesMap;
         // by passing false to SimpleFileWriter, we ensure that no files are actually written during this phase
@@ -185,14 +182,14 @@ class KubernetesProcessor {
                 openshiftConfig,
                 knativeConfig,
                 deploymentTargets,
-                kubernetesEnvs,
-                kubernetesRoles,
-                kubernetesPorts,
-                baseImage,
-                containerImage,
-                command,
-                kubernetesHealthLivenessPath,
-                kubernetesHealthReadinessPath);
+                kubernetesEnvBuildItems,
+                kubernetesRoleBuildItems,
+                kubernetesPortBuildItems,
+                baseImageBuildItem,
+                containerImageBuildItem,
+                commandBuildItem,
+                kubernetesHealthLivenessPathBuildItem,
+                kubernetesHealthReadinessPathBuildItem);
 
         // write the generated resources to the filesystem
         generatedResourcesMap = session.close();
@@ -288,7 +285,7 @@ class KubernetesProcessor {
 
         //EnvVars
         config.getEnvVars().entrySet().forEach(e -> {
-            session.resources().decorate(target, new AddEnvVarDecorator(EnvConverter.convert(e)));
+            session.resources().decorate(target, new ApplyEnvVarDecorator(EnvConverter.convert(e)));
         });
 
         config.getWorkingDir().ifPresent(w -> {
@@ -309,7 +306,7 @@ class KubernetesProcessor {
         });
 
         //Image Pull
-        session.resources().decorate(target, new ApplyImagePullPolicyDecorator(config.getImagePullPolicy()));
+        session.resources().decorate(new ApplyImagePullPolicyDecorator(config.getImagePullPolicy()));
         config.getImagePullSecrets().ifPresent(l -> {
             l.forEach(s -> session.resources().decorate(target, new AddImagePullSecretDecorator(name, s)));
         });
@@ -359,39 +356,36 @@ class KubernetesProcessor {
             OpenshiftConfig openshiftConfig,
             KnativeConfig knativeConfig,
             Set<String> deploymentTargets,
-            List<KubernetesEnvBuildItem> kubernetesEnvs,
-            List<KubernetesRoleBuildItem> kubernetesRoles,
-            List<KubernetesPortBuildItem> kubernetesPorts,
-            Optional<BaseImageInfoBuildItem> baseImage,
-            Optional<ContainerImageInfoBuildItem> containerImage,
-            Optional<KubernetesCommandBuildItem> command,
-            Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPath,
-            Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPath) {
+            List<KubernetesEnvBuildItem> kubernetesEnvBuildItems,
+            List<KubernetesRoleBuildItem> kubernetesRoleBuildItems,
+            List<KubernetesPortBuildItem> kubernetesPortBuildItems,
+            Optional<BaseImageInfoBuildItem> baseImageBuildItem,
+            Optional<ContainerImageInfoBuildItem> containerImageBuildItem,
+            Optional<KubernetesCommandBuildItem> commandBuildItem,
+            Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPathBuildItem,
+            Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPathBuildItem) {
 
         String kubernetesName = kubernetesConfig.name.orElse(name);
         String openshiftName = openshiftConfig.name.orElse(name);
         String knativeName = knativeConfig.name.orElse(name);
 
-        Map<String, PlatformConfiguration> configMap = new HashMap<>();
-        configMap.put(KUBERNETES, kubernetesConfig);
-        configMap.put(OPENSHIFT, openshiftConfig);
-        configMap.put(KNATIVE, knativeConfig);
+        session.resources().decorate(KNATIVE, new AddMissingContainerNameDecorator(knativeName, knativeName));
 
-        containerImage.ifPresent(c -> {
+        containerImageBuildItem.ifPresent(c -> {
             session.resources().decorate(OPENSHIFT, new ApplyContainerImageDecorator(openshiftName, c.getImage()));
             session.resources().decorate(KUBERNETES, new ApplyContainerImageDecorator(kubernetesName, c.getImage()));
             session.resources().decorate(KNATIVE, new ApplyContainerImageDecorator(knativeName, c.getImage()));
         });
 
-        kubernetesEnvs.forEach(e -> {
-            session.resources().decorate(e.getTarget(), new AddEnvVarDecorator(new EnvBuilder()
+        kubernetesEnvBuildItems.forEach(e -> {
+            session.resources().decorate(e.getTarget(), new ApplyEnvVarDecorator(new EnvBuilder()
                     .withName(e.getKey())
                     .withValue(e.getValue())
                     .build()));
         });
 
         //Handle Command and arguments
-        command.ifPresent(c -> {
+        commandBuildItem.ifPresent(c -> {
             session.resources()
                     .decorate(new ApplyCommandDecorator(kubernetesName, new String[] { c.getCommand() }));
             session.resources().decorate(KUBERNETES, new ApplyArgsDecorator(kubernetesName, c.getArgs()));
@@ -406,29 +400,22 @@ class KubernetesProcessor {
         });
 
         //Handle ports
-        final Map<String, Integer> ports = verifyPorts(kubernetesPorts);
+        final Map<String, Integer> ports = verifyPorts(kubernetesPortBuildItems);
         ports.entrySet().stream()
                 .map(e -> new PortBuilder().withName(e.getKey()).withContainerPort(e.getValue()).build())
                 .forEach(p -> session.configurators().add(new AddPort(p)));
 
         //Handle RBAC
-        if (!kubernetesPorts.isEmpty()) {
+        if (!kubernetesPortBuildItems.isEmpty()) {
             session.resources().decorate(new ApplyServiceAccountNamedDecorator());
             session.resources().decorate(new AddServiceAccountResourceDecorator());
-            kubernetesRoles
+            kubernetesRoleBuildItems
                     .forEach(r -> session.resources().decorate(new AddRoleBindingResourceDecorator(r.getRole())));
         }
 
-        session.resources().decorate(KUBERNETES,
-                new ApplyServiceTypeDecorator(kubernetesName, kubernetesConfig.getServiceType().name()));
-        session.resources().decorate(OPENSHIFT,
-                new ApplyServiceTypeDecorator(openshiftName, openshiftConfig.getServiceType().name()));
-        session.resources().decorate(KNATIVE,
-                new ApplyServiceTypeDecorator(knativeName, knativeConfig.getServiceType().name()));
-
         //Handle custom s2i builder images
         if (deploymentTargets.contains(OPENSHIFT)) {
-            baseImage.map(BaseImageInfoBuildItem::getImage).ifPresent(builderImage -> {
+            baseImageBuildItem.map(BaseImageInfoBuildItem::getImage).ifPresent(builderImage -> {
                 String builderImageName = ImageUtil.getName(builderImage);
                 S2iBuildConfig s2iBuildConfig = new S2iBuildConfigBuilder().withBuilderImage(builderImage).build();
                 if (!DEFAULT_S2I_IMAGE_NAME.equals(builderImageName)) {
@@ -439,48 +426,39 @@ class KubernetesProcessor {
             });
         }
 
-        // only use the probe config
-        deploymentTargets.forEach(target -> {
-            kubernetesHealthLivenessPath.ifPresent(l -> {
-                session.resources().decorate(target, new AddLivenessProbeDecorator(name, ProbeConverter
-                        .builder(configMap.get(target).getLivenessProbe()).withHttpActionPath(l.getPath()).build()));
+        // only use the probe config 
+        kubernetesConfig.deploymentTarget.forEach(target -> {
+            kubernetesHealthLivenessPathBuildItem.ifPresent(l -> {
+                session.resources().decorate(target, new AddLivenessProbeDecorator(name,
+                        ProbeConverter.builder(kubernetesConfig.livenessProbe).withHttpActionPath(l.getPath()).build()));
             });
-            kubernetesHealthReadinessPath.ifPresent(l -> {
-                session.resources().decorate(target, new AddReadinessProbeDecorator(name, ProbeConverter
-                        .builder(configMap.get(target).getReadinessProbe()).withHttpActionPath(l.getPath()).build()));
+            kubernetesHealthReadinessPathBuildItem.ifPresent(l -> {
+                session.resources().decorate(target, new AddReadinessProbeDecorator(name,
+                        ProbeConverter.builder(kubernetesConfig.readinessProbe).withHttpActionPath(l.getPath()).build()));
             });
         });
-        handleProbes(name, kubernetesConfig, openshiftConfig, knativeConfig, ports, kubernetesHealthLivenessPath,
-                kubernetesHealthReadinessPath, session);
+        handleProbes(name, kubernetesConfig, openshiftConfig, knativeConfig, kubernetesHealthLivenessPathBuildItem,
+                kubernetesHealthReadinessPathBuildItem, session);
     }
 
     private void handleProbes(String name, KubernetesConfig kubernetesConfig, OpenshiftConfig openshiftConfig,
-            KnativeConfig knativeConfig,
-            Map<String, Integer> ports,
-            Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPathBuildItem,
-            Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPathBuildItem,
-            Session session) {
+            KnativeConfig knativeConfig, Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPathBuildItem,
+            Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPathBuildItem, Session session) {
         if (kubernetesConfig.deploymentTarget.contains(KUBERNETES)) {
             handleLivenessProbe(name, KUBERNETES, kubernetesConfig.livenessProbe, kubernetesHealthLivenessPathBuildItem,
                     session);
             handleReadinessProbe(name, KUBERNETES, kubernetesConfig.readinessProbe, kubernetesHealthReadinessPathBuildItem,
                     session);
-            session.resources().decorate(KUBERNETES,
-                    new ApplyHttpGetActionPortDecorator(ports.getOrDefault(HTTP_PORT, DEFAULT_HTTP_PORT)));
         }
         if (kubernetesConfig.deploymentTarget.contains(OPENSHIFT)) {
             handleLivenessProbe(name, OPENSHIFT, openshiftConfig.livenessProbe, kubernetesHealthLivenessPathBuildItem, session);
             handleReadinessProbe(name, OPENSHIFT, openshiftConfig.readinessProbe, kubernetesHealthReadinessPathBuildItem,
                     session);
-            session.resources().decorate(OPENSHIFT,
-                    new ApplyHttpGetActionPortDecorator(ports.getOrDefault(HTTP_PORT, DEFAULT_HTTP_PORT)));
         }
         if (kubernetesConfig.deploymentTarget.contains(KNATIVE)) {
             handleLivenessProbe(name, KNATIVE, knativeConfig.livenessProbe, kubernetesHealthLivenessPathBuildItem, session);
             handleReadinessProbe(name, KNATIVE, knativeConfig.readinessProbe, kubernetesHealthReadinessPathBuildItem,
                     session);
-            session.resources().decorate(KNATIVE,
-                    new ApplyHttpGetActionPortDecorator(ports.getOrDefault(HTTP_PORT, DEFAULT_HTTP_PORT)));
         }
     }
 
@@ -504,10 +482,12 @@ class KubernetesProcessor {
             Optional<KubernetesHealthReadinessPathBuildItem> healthReadinessPathBuildItem, Session session) {
         AddReadinessProbeDecorator readinessProbeDecorator = null;
         if (readinessProbe.hasUserSuppliedAction()) {
-            readinessProbeDecorator = new AddReadinessProbeDecorator(name, ProbeConverter.convert(readinessProbe));
+            readinessProbeDecorator = new AddReadinessProbeDecorator(name,
+                    ProbeConverter.convert(readinessProbe));
         } else if (healthReadinessPathBuildItem.isPresent()) {
-            readinessProbeDecorator = new AddReadinessProbeDecorator(name, ProbeConverter.builder(readinessProbe)
-                    .withHttpActionPath(healthReadinessPathBuildItem.get().getPath()).build());
+            readinessProbeDecorator = new AddReadinessProbeDecorator(name,
+                    ProbeConverter.builder(readinessProbe)
+                            .withHttpActionPath(healthReadinessPathBuildItem.get().getPath()).build());
         }
         if (readinessProbeDecorator != null) {
             session.resources().decorate(target, readinessProbeDecorator);
