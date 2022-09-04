@@ -171,16 +171,13 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     }
 
     for (CompiledFile.Symbol exportedSymbol : compiledFile.getExportedSymbolList()) {
-      if (!exportedSymbol.getResourceName().startsWith("android:")) {
-        // Skip writing resource xml's for resources in the sdk
-        FullyQualifiedName symbolFqn =
-            fqnFactory.create(
-                ResourceType.ID, exportedSymbol.getResourceName().replaceFirst("id/", ""));
+      FullyQualifiedName symbolFqn =
+          fqnFactory.create(
+              ResourceType.ID, exportedSymbol.getResourceName().replaceFirst("id/", ""));
 
-        DataResourceXml dataResourceXml =
-            DataResourceXml.from(null, dataSource, ResourceType.ID, null);
-        consumers.combiningConsumer.accept(symbolFqn, dataResourceXml);
-      }
+      DataResourceXml dataResourceXml =
+          DataResourceXml.from(null, dataSource, ResourceType.ID, null);
+      consumers.combiningConsumer.accept(symbolFqn, dataResourceXml);
     }
   }
 

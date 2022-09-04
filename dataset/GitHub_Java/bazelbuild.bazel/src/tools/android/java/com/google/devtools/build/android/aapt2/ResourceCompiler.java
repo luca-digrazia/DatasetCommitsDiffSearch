@@ -215,34 +215,17 @@ public class ResourceCompiler {
     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
       // Ignore directories and "hidden" files that start with .
       if (!Files.isDirectory(file) && !file.getFileName().toString().startsWith(".")) {
-        // Creates a relative output path based on the input path under the
-        // compiledResources path.
-        Path outputDirectory = Files.createDirectories(
-            compiledResources.resolve(
-                (file.isAbsolute() ? file.getRoot().relativize(file) : file)
-                    .getParent()
-                    .getParent()));
-
-        String resFolder = file.getParent().getFileName().toString().toLowerCase();
-
-        // Aapt cannot interpret these regions so we rename them to get them to compile
-        String renamedResFolder = resFolder
-            .replaceFirst("sr[_\\-]r?latn", "b+sr+Latn")
-            .replaceFirst("es[_\\-]419", "b+es+419");
-
-        if (!renamedResFolder.equals(resFolder)) {
-          file = Files.copy(
-              file,
-              Files.createDirectory(
-                  outputDirectory.resolve(renamedResFolder))
-                  .resolve(file.getFileName()));
-        }
-
         tasks.add(
             executorService.submit(
                 new CompileTask(
                     file,
-                    outputDirectory,
+                    // Creates a relative output path based on the input path under the
+                    // compiledResources path.
+                    Files.createDirectories(
+                        compiledResources.resolve(
+                            (file.isAbsolute() ? file.getRoot().relativize(file) : file)
+                                .getParent()
+                                .getParent())),
                     aapt2,
                     buildToolsVersion)));
       }
