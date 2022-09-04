@@ -25,7 +25,6 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.PreferenceClick;
-import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.HasPreferences;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
@@ -54,9 +53,7 @@ public class PreferenceClickHandler extends AbstractPreferenceListenerHandler {
 
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
-		validatorHelper.param //
-				.type(CanonicalNameConstants.PREFERENCE).optional() //
-				.validate(executableElement, valid);
+		validatorHelper.param.zeroOrOnePreferenceParameter(executableElement, valid);
 	}
 
 	@Override

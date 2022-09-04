@@ -133,8 +133,6 @@ public class AnnotationHandlers {
 		add(new PreferenceByKeyHandler(processingEnvironment));
 		add(new PreferenceChangeHandler(processingEnvironment));
 		add(new PreferenceClickHandler(processingEnvironment));
-		/* After preference injection methods must be after preference injections */
-		add(new AfterPreferencesHandler(processingEnvironment));
 
 		if (optionsHelper.shouldLogTrace()) {
 			add(new TraceHandler(processingEnvironment));
