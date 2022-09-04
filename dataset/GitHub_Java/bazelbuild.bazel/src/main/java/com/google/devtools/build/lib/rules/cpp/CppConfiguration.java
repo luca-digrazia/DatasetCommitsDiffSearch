@@ -108,10 +108,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.enableLinkoptsInUserLinkFlags;
   }
 
-  public boolean disableEmittingStaticLibgcc() {
-    return cppOptions.disableEmittingStaticLibgcc;
-  }
-
   /**
    * An enumeration of all the tools that comprise a toolchain.
    */
@@ -240,6 +236,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   private final CompilationMode compilationMode;
 
   private final boolean shouldProvideMakeVariables;
+  private final boolean dropFullyStaticLinkingMode;
 
   private final CppToolchainInfo cppToolchainInfo;
 
@@ -316,6 +313,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
                 && compilationMode == CompilationMode.FASTBUILD)),
         compilationMode,
         params.commonOptions.makeVariableSource == MakeVariableSource.CONFIGURATION,
+        cppOptions.dropFullyStaticLinkingMode,
         cppToolchainInfo);
   }
 
@@ -348,6 +346,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       boolean stripBinaries,
       CompilationMode compilationMode,
       boolean shouldProvideMakeVariables,
+      boolean dropFullyStaticLinkingMode,
       CppToolchainInfo cppToolchainInfo) {
     this.crosstoolTop = crosstoolTop;
     this.crosstoolFile = crosstoolFile;
@@ -376,6 +375,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     this.stripBinaries = stripBinaries;
     this.compilationMode = compilationMode;
     this.shouldProvideMakeVariables = shouldProvideMakeVariables;
+    this.dropFullyStaticLinkingMode = dropFullyStaticLinkingMode;
     this.cppToolchainInfo = cppToolchainInfo;
   }
 
@@ -689,6 +689,13 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     }
   }
 
+  public boolean hasStaticLinkOption() {
+    if (dropFullyStaticLinkingMode()) {
+      return false;
+    }
+    return linkopts.contains("-static");
+  }
+
   public boolean hasSharedLinkOption() {
     return linkopts.contains("-shared");
   }
@@ -851,6 +858,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return stlLabel;
   }
 
+  public boolean dropFullyStaticLinkingMode() {
+    return dropFullyStaticLinkingMode;
+  }
+
   public boolean isFdo() {
     return cppOptions.isFdo();
   }
@@ -930,6 +941,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   /** Returns true if --start_end_lib is set on this build. */
   public boolean startEndLibIsRequested() {
     return cppOptions.useStartEndLib;
+  }
+
+  public boolean forceIgnoreDashStatic() {
+    return cppOptions.forceIgnoreDashStatic;
   }
 
   public boolean legacyWholeArchive() {
@@ -1224,9 +1239,5 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
           "The built-in sysroot '" + builtInSysroot + "' is not normalized.");
     }
     return PathFragment.create(builtInSysroot);
-  }
-
-  boolean enableCcToolchainConfigInfoFromSkylark() {
-    return cppOptions.enableCcToolchainConfigInfoFromSkylark;
   }
 }
