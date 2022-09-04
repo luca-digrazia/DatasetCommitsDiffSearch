@@ -22,14 +22,12 @@ import com.facebook.stetho.inspector.elements.NodeType;
 import com.facebook.stetho.inspector.helper.ChromePeerManager;
 import com.facebook.stetho.inspector.helper.ObjectIdMapper;
 import com.facebook.stetho.inspector.helper.PeersRegisteredListener;
-import com.facebook.stetho.inspector.jsonrpc.JsonRpcException;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcResult;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsMethod;
 import com.facebook.stetho.json.ObjectMapper;
 import com.facebook.stetho.json.annotation.JsonProperty;
-import com.facebook.stetho.json.annotation.JsonValue;
 
 import org.json.JSONObject;
 
@@ -103,27 +101,6 @@ public class DOM implements ChromeDevtoolsDomain {
     mDOMProvider.hideHighlight();
   }
 
-  @ChromeDevtoolsMethod
-  public ResolveNodeResponse resolveNode(JsonRpcPeer peer, JSONObject params)
-      throws JsonRpcException {
-    ResolveNodeRequest request = mObjectMapper.convertValue(params, ResolveNodeRequest.class);
-    Object object = mObjectIdMapper.getObjectForId(request.nodeId);
-
-    int mappedObjectId = Runtime.mapObject(peer, object);
-
-    Runtime.RemoteObject remoteObject = new Runtime.RemoteObject();
-    remoteObject.type = Runtime.ObjectType.OBJECT;
-    remoteObject.subtype = Runtime.ObjectSubType.NODE;
-    remoteObject.className = remoteObject.getClass().getName();
-    remoteObject.value = null; // not a primitive
-    remoteObject.description = null; // not sure what this does...
-    remoteObject.objectId = String.valueOf(mappedObjectId);
-    ResolveNodeResponse response = new ResolveNodeResponse();
-    response.object = remoteObject;
-
-    return response;
-  }
-
   private Node createNodeForElement(Object element) {
     NodeDescriptor descriptor = mDOMProvider.getNodeDescriptor(element);
 
@@ -163,11 +140,6 @@ public class DOM implements ChromeDevtoolsDomain {
   }
 
   private void removeElementTree(Object element) {
-    if (!mObjectIdMapper.containsObject(element)) {
-      LogUtil.w("DOM.removeElementTree() called for a non-mapped node: element=%s", element);
-      return;
-    }
-
     NodeDescriptor descriptor = mDOMProvider.getNodeDescriptor(element);
     int childCount = descriptor.getChildCount(element);
     for (int i = 0; i < childCount; ++i) {
@@ -387,18 +359,5 @@ public class DOM implements ChromeDevtoolsDomain {
 
       return Color.argb(alpha, this.r, this.g, this.b);
     }
-  }
-
-  private static class ResolveNodeRequest {
-    @JsonProperty(required = true)
-    public int nodeId;
-
-    @JsonProperty
-    public String objectGroup;
-  }
-
-  private static class ResolveNodeResponse implements JsonRpcResult {
-    @JsonProperty(required = true)
-    public Runtime.RemoteObject object;
   }
 }

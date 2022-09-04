@@ -4,10 +4,10 @@ package com.facebook.stetho.inspector.helper;
 
 import android.util.SparseArray;
 
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 public class ObjectIdMapper {
@@ -38,26 +38,12 @@ public class ObjectIdMapper {
     }
   }
 
-  public boolean containsId(int id) {
-    synchronized (mSync) {
-      return mIdToObjectMap.get(id) != null;
-    }
-  }
-
-  public boolean containsObject(Object object) {
-    synchronized (mSync) {
-      return mObjectToIdMap.containsKey(object);
-    }
-  }
-
-  @Nullable
   public Object getObjectForId(int id) {
     synchronized (mSync) {
       return mIdToObjectMap.get(id);
     }
   }
 
-  @Nullable
   public Integer getIdForObject(Object object) {
     synchronized (mSync) {
       return mObjectToIdMap.get(object);
@@ -82,25 +68,6 @@ public class ObjectIdMapper {
     return id;
   }
 
-  @Nullable
-  public Object removeObjectById(int id) {
-    Object object;
-
-    synchronized (mSync) {
-      object = mIdToObjectMap.get(id);
-      if (object == null) {
-        return null;
-      }
-
-      mIdToObjectMap.remove(id);
-      mObjectToIdMap.remove(object);
-    }
-
-    onUnmapped(object, id);
-    return object;
-  }
-
-  @Nullable
   public Integer removeObject(Object object) {
     Integer id;
 
