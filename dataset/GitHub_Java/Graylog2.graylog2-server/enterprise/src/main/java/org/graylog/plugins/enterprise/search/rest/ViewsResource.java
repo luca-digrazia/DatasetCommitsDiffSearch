@@ -8,11 +8,8 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog.plugins.enterprise.audit.EnterpriseAuditEventTypes;
 import org.graylog.plugins.enterprise.search.views.ViewDTO;
-import org.graylog.plugins.enterprise.search.views.ViewParameterSummaryDTO;
 import org.graylog.plugins.enterprise.search.views.ViewService;
-import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.database.PaginatedList;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
@@ -41,7 +38,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -52,7 +48,6 @@ import static java.util.Locale.ENGLISH;
 @Path("/views")
 @Produces(MediaType.APPLICATION_JSON)
 @RequiresAuthentication
-@RequiresPermissions(EnterpriseSearchRestPermissions.VIEW_USE)
 public class ViewsResource extends RestResource implements PluginRestResource {
     private static final Logger LOG = LoggerFactory.getLogger(ViewsResource.class);
     private static final ImmutableMap<String, SearchQueryField> SEARCH_FIELD_MAPPING = ImmutableMap.<String, SearchQueryField>builder()
@@ -117,24 +112,15 @@ public class ViewsResource extends RestResource implements PluginRestResource {
     @POST
     @ApiOperation("Create a new view")
     @RequiresPermissions(EnterpriseSearchRestPermissions.VIEW_CREATE)
-    @AuditEvent(type = EnterpriseAuditEventTypes.VIEW_CREATE)
     public ViewDTO create(@ApiParam @Valid ViewDTO dto) throws ValidationException {
         final ViewDTO savedDto = dbService.save(dto);
         ensureUserPermissions(savedDto);
         return savedDto;
     }
 
-    @POST
-    @Path("forValue")
-    @ApiOperation("Get all views that match given parameter value")
-    public Collection<ViewParameterSummaryDTO> forParameter() {
-        return dbService.forValue();
-    }
-
     @PUT
     @Path("{id}")
     @ApiOperation("Update view")
-    @AuditEvent(type = EnterpriseAuditEventTypes.VIEW_UPDATE)
     public ViewDTO update(@ApiParam @PathParam("id") @NotEmpty String id,
                           @ApiParam @Valid ViewDTO dto) {
         checkPermission(EnterpriseSearchRestPermissions.VIEW_EDIT, id);
@@ -145,7 +131,6 @@ public class ViewsResource extends RestResource implements PluginRestResource {
     @PUT
     @Path("{id}/default")
     @ApiOperation("Configures the view as default view")
-    @AuditEvent(type = EnterpriseAuditEventTypes.DEFAULT_VIEW_SET)
     public void setDefault(@ApiParam @PathParam("id") @NotEmpty String id) {
         checkPermission(EnterpriseSearchRestPermissions.VIEW_READ, id);
         checkPermission(EnterpriseSearchRestPermissions.DEFAULT_VIEW_SET);
@@ -155,7 +140,6 @@ public class ViewsResource extends RestResource implements PluginRestResource {
     @DELETE
     @Path("{id}")
     @ApiOperation("Delete view")
-    @AuditEvent(type = EnterpriseAuditEventTypes.VIEW_DELETE)
     public ViewDTO delete(@ApiParam @PathParam("id") @NotEmpty String id) {
         checkPermission(EnterpriseSearchRestPermissions.VIEW_DELETE, id);
         final ViewDTO dto = loadView(id);

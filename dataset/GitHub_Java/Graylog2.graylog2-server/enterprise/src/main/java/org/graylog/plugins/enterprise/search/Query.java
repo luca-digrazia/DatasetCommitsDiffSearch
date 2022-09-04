@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder;
@@ -57,27 +57,32 @@ public abstract class Query {
     @JsonProperty("search_types")
     public abstract ImmutableSet<SearchType> searchTypes();
 
+    @Nonnull
+    @JsonProperty
+    public abstract ImmutableSet<Parameter> parameters();
+
     public abstract Builder toBuilder();
 
     public static Builder builder() {
         return new AutoValue_Query.Builder()
-                .searchTypes(of());
+                .searchTypes(of())
+                .parameters(of());
     }
 
-    public Query applyExecutionState(ObjectMapper objectMapper, JsonNode state) {
-        if (state.isMissingNode()) {
+    public Query applyExecutionState(ObjectMapper objectMapper, Map<String, Object> state) {
+        if (state == null) {
             return this;
         }
-        final boolean hasTimerange = state.hasNonNull("timerange");
-        final boolean hasSearchTypes = state.hasNonNull("search_types");
+        final boolean hasTimerange = state.containsKey("timerange");
+        final boolean hasSearchTypes = state.containsKey("search_types");
         if (hasTimerange || hasSearchTypes) {
             final Builder builder = toBuilder();
             if (hasTimerange) {
                 try {
-                    final Object rawTimerange = state.path("timerange");
-                    final TimeRange newTimeRange = objectMapper.convertValue(rawTimerange, TimeRange.class);
+                    final Object rawTimerange = state.get("timerange");
+                    final TimeRange newTimeRange = objectMapper.treeToValue(objectMapper.valueToTree(rawTimerange), TimeRange.class);
                     builder.timerange(newTimeRange);
-                } catch (Exception e) {
+                } catch (JsonProcessingException e) {
                     LOG.error("Unable to deserialize execution state for time range", e);
                 }
             }
@@ -85,12 +90,15 @@ public abstract class Query {
                 // copy all existing search types, we'll update them by id if necessary below
                 Map<String, SearchType> updatedSearchTypes = Maps.newHashMap(searchTypesIndex);
 
-                state.path("search_types").fields().forEachRemaining(stateEntry -> {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> searchTypeStates = (Map<String, Object>) state.get("search_types");
+                for (Map.Entry<String, Object> stateEntry : searchTypeStates.entrySet()) {
                     final String id = stateEntry.getKey();
                     final SearchType searchType = searchTypesIndex.get(id);
-                    final SearchType updatedSearchType = searchType.applyExecutionContext(objectMapper, stateEntry.getValue());
+                    @SuppressWarnings("unchecked")
+                    final SearchType updatedSearchType = searchType.applyExecutionContext(objectMapper, (Map<String, Object>) stateEntry.getValue());
                     updatedSearchTypes.put(id, updatedSearchType);
-                });
+                }
                 builder.searchTypes(ImmutableSet.copyOf(updatedSearchTypes.values()));
             }
             return builder.build();
@@ -125,11 +133,14 @@ public abstract class Query {
         @JsonProperty("search_types")
         public abstract Builder searchTypes(@Nullable Set<SearchType> searchTypes);
 
+        @JsonProperty
+        public abstract Builder parameters(ImmutableSet<Parameter> parameters);
+
         abstract Query autoBuild();
 
         @JsonCreator
         public static Builder createWithDefaults() {
-            return Query.builder();
+            return Query.builder().parameters(ImmutableSet.of());
         }
 
         public Query build() {

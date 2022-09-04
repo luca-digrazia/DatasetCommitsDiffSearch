@@ -3,8 +3,6 @@ package org.graylog.plugins.enterprise.search;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 
@@ -15,7 +13,7 @@ import java.util.Map;
  * Parameters describe variable inputs to queries.
  * <p>
  * They consist of a declaration and a binding. Parameters without a binding are called "free" or "unbound" parameters.
- * In order to execute a query all of its non-optional parameters must have a binding associated with them, i.e. be "bound".
+ * In order to execute a query all of its non-optional parameters must have a binding asscociated with them, i.e. be "bound".
  * <p>
  * The caller is expected to provide a {@link Parameter} object when binding previously declared parameters.
  * In that case the declaration elements do not need to be repeated, only its {@link Parameter#name() name} property.
@@ -26,14 +24,6 @@ public abstract class Parameter {
 
     @JsonProperty
     public abstract String name();
-
-    @Nullable
-    @JsonProperty
-    public abstract String title();
-
-    @Nullable
-    @JsonProperty
-    public abstract String description();
 
     @JsonProperty("data_type")
     public abstract String dataType();
@@ -59,18 +49,6 @@ public abstract class Parameter {
 
     public abstract Builder toBuilder();
 
-    public Parameter applyExecutionState(ObjectMapper objectMapper, JsonNode state) {
-        final JsonNode bindingState = state.path(name());
-
-        if (bindingState.isMissingNode()) {
-            return this;
-        }
-
-        final Binding binding = objectMapper.convertValue(bindingState, Binding.class);
-
-        return toBuilder().binding(binding).build();
-    }
-
     @JsonTypeInfo(
             use = JsonTypeInfo.Id.NAME,
             include = JsonTypeInfo.As.PROPERTY,
@@ -88,12 +66,6 @@ public abstract class Parameter {
     public abstract static class Builder {
         @JsonProperty
         public abstract Builder name(String name);
-
-        @JsonProperty
-        public abstract Builder title(String title);
-
-        @JsonProperty
-        public abstract Builder description(String description);
 
         @JsonProperty
         public abstract Builder dataType(String dataType);
