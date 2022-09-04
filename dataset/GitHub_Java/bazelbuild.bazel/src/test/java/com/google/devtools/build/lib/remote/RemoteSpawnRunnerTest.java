@@ -14,8 +14,8 @@
 package com.google.devtools.build.lib.remote;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -37,7 +37,6 @@ import build.bazel.remote.execution.v2.LogFile;
 import build.bazel.remote.execution.v2.Platform;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
@@ -48,7 +47,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLines.ParamFileActionInput;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
@@ -400,8 +398,12 @@ public class RemoteSpawnRunnerTest {
     IOException err = new IOException("local execution error");
     when(localRunner.exec(eq(spawn), eq(policy))).thenThrow(err);
 
-    IOException e = assertThrows(IOException.class, () -> runner.exec(spawn, policy));
-    assertThat(e).isSameAs(err);
+    try {
+      runner.exec(spawn, policy);
+      fail("expected IOException to be raised");
+    } catch (IOException e) {
+      assertThat(e).isSameAs(err);
+    }
 
     verify(localRunner).exec(eq(spawn), eq(policy));
   }
@@ -423,8 +425,12 @@ public class RemoteSpawnRunnerTest {
     IOException err = new IOException("local execution error");
     when(localRunner.exec(eq(spawn), eq(policy))).thenThrow(err);
 
-    IOException e = assertThrows(IOException.class, () -> runner.exec(spawn, policy));
-    assertThat(e).isSameAs(err);
+    try {
+      runner.exec(spawn, policy);
+      fail("expected IOException to be raised");
+    } catch (IOException e) {
+      assertThat(e).isSameAs(err);
+    }
 
     verify(localRunner).exec(eq(spawn), eq(policy));
   }
@@ -444,8 +450,12 @@ public class RemoteSpawnRunnerTest {
     IOException err = new IOException("local execution error");
     when(localRunner.exec(eq(spawn), eq(policy))).thenThrow(err);
 
-    IOException e = assertThrows(IOException.class, () -> runner.exec(spawn, policy));
-    assertThat(e).isSameAs(err);
+    try {
+      runner.exec(spawn, policy);
+      fail("expected IOException to be raised");
+    } catch (IOException e) {
+      assertThat(e).isSameAs(err);
+    }
 
     verify(localRunner).exec(eq(spawn), eq(policy));
   }
@@ -731,9 +741,14 @@ public class RemoteSpawnRunnerTest {
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionContext policy = new FakeSpawnExecutionContext(spawn);
 
-    SpawnExecException e = assertThrows(SpawnExecException.class, () -> runner.exec(spawn, policy));
-    assertThat(e.getSpawnResult().exitCode()).isEqualTo(ExitCode.REMOTE_ERROR.getNumericExitCode());
-    assertThat(e.getSpawnResult().getDetailMessage("", "", false, false)).contains("reasons");
+    try {
+      runner.exec(spawn, policy);
+      fail("Exception expected");
+    } catch (SpawnExecException e) {
+      assertThat(e.getSpawnResult().exitCode())
+          .isEqualTo(ExitCode.REMOTE_ERROR.getNumericExitCode());
+      assertThat(e.getSpawnResult().getDetailMessage("", "", false, false)).contains("reasons");
+    }
   }
 
   @Test
@@ -750,9 +765,14 @@ public class RemoteSpawnRunnerTest {
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionContext policy = new FakeSpawnExecutionContext(spawn);
 
-    SpawnExecException e = assertThrows(SpawnExecException.class, () -> runner.exec(spawn, policy));
-    assertThat(e.getSpawnResult().exitCode()).isEqualTo(ExitCode.REMOTE_ERROR.getNumericExitCode());
-    assertThat(e.getSpawnResult().getDetailMessage("", "", false, false)).contains("reasons");
+    try {
+      runner.exec(spawn, policy);
+      fail("Exception expected");
+    } catch (SpawnExecException e) {
+      assertThat(e.getSpawnResult().exitCode())
+          .isEqualTo(ExitCode.REMOTE_ERROR.getNumericExitCode());
+      assertThat(e.getSpawnResult().getDetailMessage("", "", false, false)).contains("reasons");
+    }
   }
 
   @Test
@@ -774,8 +794,7 @@ public class RemoteSpawnRunnerTest {
             executor,
             retrier,
             digestUtil,
-            logDir,
-            /* topLevelOutputs= */ ImmutableSet.of());
+            logDir);
 
     ExecuteResponse succeeded =
         ExecuteResponse.newBuilder()
@@ -895,71 +914,35 @@ public class RemoteSpawnRunnerTest {
     SpawnExecutionContext policy = new FakeSpawnExecutionContext(spawn);
 
     // act
-    SpawnExecException e = assertThrows(SpawnExecException.class, () -> runner.exec(spawn, policy));
-    assertThat(e.getMessage()).isEqualTo(downloadFailure.getMessage());
+    try {
+      runner.exec(spawn, policy);
+      fail("expected exception");
+    } catch (SpawnExecException e) {
+      assertThat(e.getMessage()).isEqualTo(downloadFailure.getMessage());
+    }
 
     // assert
     verify(cache).downloadMinimal(eq(succeededAction), anyCollection(), any(), any(), any(), any());
     verify(cache, never()).download(any(ActionResult.class), any(Path.class), eq(outErr));
   }
 
-  @Test
-  public void testDownloadTopLevel() throws Exception {
-    // arrange
-    RemoteOptions options = Options.getDefaults(RemoteOptions.class);
-    options.remoteOutputsMode = RemoteOutputsMode.TOPLEVEL;
-
-    ArtifactRoot outputRoot = ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("outs"));
-    Artifact topLevelOutput = new Artifact(outputRoot.getRoot().getRelative("foo.bin"), outputRoot);
-
-    ActionResult succeededAction = ActionResult.newBuilder().setExitCode(0).build();
-    when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(succeededAction);
-
-    RemoteSpawnRunner runner = newSpawnRunner(ImmutableSet.of(topLevelOutput));
-
-    Spawn spawn = newSimpleSpawn(topLevelOutput);
-    SpawnExecutionContext policy = new FakeSpawnExecutionContext(spawn);
-
-    // act
-    SpawnResult result = runner.exec(spawn, policy);
-    assertThat(result.exitCode()).isEqualTo(0);
-    assertThat(result.status()).isEqualTo(Status.SUCCESS);
-
-    // assert
-    verify(cache).download(eq(succeededAction), any(Path.class), eq(outErr));
-    verify(cache, never())
-        .downloadMinimal(eq(succeededAction), anyCollection(), any(), any(), any(), any());
-  }
-
-  private static Spawn newSimpleSpawn(Artifact... outputs) {
+  private static Spawn newSimpleSpawn() {
     return new SimpleSpawn(
         new FakeOwner("foo", "bar"),
         /*arguments=*/ ImmutableList.of(),
         /*environment=*/ ImmutableMap.of(),
         /*executionInfo=*/ ImmutableMap.of(),
         /*inputs=*/ ImmutableList.of(),
-        /*outputs=*/ ImmutableList.copyOf(outputs),
+        /*outputs=*/ ImmutableList.<ActionInput>of(),
         ResourceSet.ZERO);
   }
 
   private RemoteSpawnRunner newSpawnRunner() {
-    return newSpawnRunner(
-        /* verboseFailures= */ false,
-        executor,
-        /* reporter= */ null,
-        /* topLevelOutputs= */ ImmutableSet.of());
-  }
-
-  private RemoteSpawnRunner newSpawnRunner(ImmutableSet<Artifact> topLevelOutputs) {
-    return newSpawnRunner(
-        /* verboseFailures= */ false, executor, /* reporter= */ null, topLevelOutputs);
+    return newSpawnRunner(/* verboseFailures= */ false, executor, /* reporter= */ null);
   }
 
   private RemoteSpawnRunner newSpawnRunner(
-      boolean verboseFailures,
-      @Nullable GrpcRemoteExecutor executor,
-      @Nullable Reporter reporter,
-      ImmutableSet<Artifact> topLevelOutputs) {
+      boolean verboseFailures, @Nullable GrpcRemoteExecutor executor, @Nullable Reporter reporter) {
     return new RemoteSpawnRunner(
         execRoot,
         remoteOptions,
@@ -973,24 +956,15 @@ public class RemoteSpawnRunnerTest {
         executor,
         retrier,
         digestUtil,
-        logDir,
-        topLevelOutputs);
+        logDir);
   }
 
   private RemoteSpawnRunner newSpawnRunnerWithoutExecutor() {
-    return newSpawnRunner(
-        /* verboseFailures= */ false,
-        /* executor= */ null,
-        /* reporter= */ null,
-        /* topLevelOutputs= */ ImmutableSet.of());
+    return newSpawnRunner(/* verboseFailures= */ false, /* executor= */ null, /* reporter= */ null);
   }
 
   private RemoteSpawnRunner newSpawnRunnerWithoutExecutor(Reporter reporter) {
-    return newSpawnRunner(
-        /* verboseFailures= */ false,
-        /* executor= */ null,
-        reporter,
-        /* topLevelOutputs= */ ImmutableSet.of());
+    return newSpawnRunner(/* verboseFailures= */ false, /* executor= */ null, reporter);
   }
 
   // TODO(buchgr): Extract a common class to be used for testing.
